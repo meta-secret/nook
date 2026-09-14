@@ -42,6 +42,10 @@ variable "SIMULATED_SCCACHE_SANITIZES_ERROR_LOG" {
   default = "1"
 }
 
+variable "SIMULATED_SCCACHE_NEXT_HEAD_HITS" {
+  default = "1"
+}
+
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
@@ -66,6 +70,7 @@ compile_solve_args = {
   SIMULATED_SCCACHE_CLIENT_SIDE = SIMULATED_SCCACHE_CLIENT_SIDE
   SIMULATED_SCCACHE_ERROR_LOG = SIMULATED_SCCACHE_ERROR_LOG
   SIMULATED_SCCACHE_SANITIZES_ERROR_LOG = SIMULATED_SCCACHE_SANITIZES_ERROR_LOG
+  SIMULATED_SCCACHE_NEXT_HEAD_HITS = SIMULATED_SCCACHE_NEXT_HEAD_HITS
 }
 
 target "compile-warm" {

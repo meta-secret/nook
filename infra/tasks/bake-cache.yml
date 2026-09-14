@@ -246,6 +246,7 @@ tasks:
           local client_side="${9:-1}"
           local error_log="${10:-}"
           local sanitizes_error_log="${11:-1}"
+          local next_head_hits="${12:-1}"
           local -a compile_targets=(compile-warm)
           if [ -n "$cache_write" ] && [ -z "$dependency_available" ]; then
             compile_targets=(compile-dependency-cache compile-warm)
@@ -260,6 +261,7 @@ tasks:
             SIMULATED_SCCACHE_CLIENT_SIDE="$client_side" \
             SIMULATED_SCCACHE_ERROR_LOG="$error_log" \
             SIMULATED_SCCACHE_SANITIZES_ERROR_LOG="$sanitizes_error_log" \
+            SIMULATED_SCCACHE_NEXT_HEAD_HITS="$next_head_hits" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
@@ -269,6 +271,7 @@ tasks:
             --set "*.args.SIMULATED_SCCACHE_CLIENT_SIDE=$client_side" \
             --set "*.args.SIMULATED_SCCACHE_ERROR_LOG=$error_log" \
             --set "*.args.SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=$sanitizes_error_log" \
+            --set "*.args.SIMULATED_SCCACHE_NEXT_HEAD_HITS=$next_head_hits" \
             --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             --set "compile-dependency-cache.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             "${compile_targets[@]}" >"$log_file" 2>&1
@@ -394,15 +397,12 @@ tasks:
         test "$(registry_ref_code)" = 200
         echo "rust-deps no-op: cached=6 uncached=0 writes=1 ref=${stable_repository}:buildcache"
 
-        echo "== Publication guard: zero errors plus zero writes remains terminal =="
+        echo "== Client-side cold publication: zero errors plus zero writes is pending verification =="
         create_builder "nook-bake-sim-compile-zero-writes-${suffix}"
-        if bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
-          "cccccccccccccccccccccccccccccccccccccccc" "" "0"; then
-          echo "zero-write publication fault unexpectedly succeeded" >&2
-          exit 1
-        fi
-        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' "$proof_log"
-        echo "compile publication fault: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
+        bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
+          "cccccccccccccccccccccccccccccccccccccccc" "" "1"
+        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION {"client_side":true,"counter_reliability":"backend_incomplete","cache_errors":0,"cache_writes":0}' "$proof_log"
+        echo "compile cold publication: cache_errors=0 cache_writes=0 status=publication_pending_verification"
 
         echo "== Publication guard: inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion =="
         create_builder "nook-bake-sim-compile-error-log-conflict-${suffix}"
@@ -461,6 +461,17 @@ tasks:
         compile_source_b_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_b}/manifests/buildcache"
         test "$(compile_registry_ref_code "$compile_source_b_manifest")" = 200
         echo "compile next-head publish: sccache_mode=READ_WRITE cache_hits=required writes=permitted elapsed=${compile_elapsed}s limit=300s"
+
+        echo "== Repeated next-head zero hits: publication verification fails =="
+        printf 'second-nook-wasm-source-only-edit\n' >"$compile_nook_input"
+        create_builder "nook-bake-sim-compile-source-c-zero-hits-${suffix}"
+        if bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
+          "cccccccccccccccccccccccccccccccccccccccc" "1" "1" "" "1" "0"; then
+          echo "next-head zero-hit verification unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE {"cache_hits":0,"reason":"next_head_zero_hits"}' "$proof_log"
+        echo "compile next-head verification: cache_hits=0 status=failed"
 
         echo "== Read-only replay: exact BuildKit reuse and zero writes =="
         create_builder "nook-bake-sim-compile-source-b-read-only-${suffix}"

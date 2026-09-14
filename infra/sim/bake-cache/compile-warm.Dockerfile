@@ -14,6 +14,7 @@ ARG SIMULATED_BUILD_PROFILE=production
 ARG SIMULATED_SCCACHE_CLIENT_SIDE=1
 ARG SIMULATED_SCCACHE_ERROR_LOG=
 ARG SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=1
+ARG SIMULATED_SCCACHE_NEXT_HEAD_HITS=1
 ENV SCCACHE_S3_RW_MODE=READ_ONLY
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
@@ -29,6 +30,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     || { echo 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' >&2; exit 1; }; } \
   && { test -z "$SIMULATED_SCCACHE_ERROR_LOG" \
     || echo bake-sim-sccache-error-log-sanitized; } \
+  && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" != 1 \
+    || echo 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION {"client_side":true,"counter_reliability":"backend_incomplete","cache_errors":0,"cache_writes":0}'; } \
   && echo bake-sim-sccache-write \
   && echo 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' \
   && cat /opt/compile-toolchain >/opt/compile-native-dependencies \
@@ -103,6 +106,8 @@ RUN cat /tmp/nook-wasm-source.txt >/opt/compile-nook-wasm-source \
 FROM compile-nook-wasm-source AS compile-nook-wasm-build
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
+  && { test "$SIMULATED_SCCACHE_NEXT_HEAD_HITS" = 1 \
+    || { echo 'NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE {"cache_hits":0,"reason":"next_head_zero_hits"}' >&2; exit 1; }; } \
   && echo bake-sim-sccache-hit \
   && cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
   && sleep 1 \

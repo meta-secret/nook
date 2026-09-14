@@ -65,6 +65,14 @@ behavior for packets issued by SRE Team Gizmo.
 - Treat remote `sccache` in `READ_WRITE` mode as required publication
   infrastructure. Startup, credential, read, and write failures remain
   terminal.
+- With sccache client-side mode enabled, treat aggregate write and compile-request
+  counters as backend-incomplete evidence. A cold publisher with zero cache
+  errors and zero reported writes emits `publication_pending_verification`
+  instead of failing solely on the write counter. Actual cache errors remain
+  terminal. The definitive publication proof is a changed-head successor with
+  compiler hits; repeated changed-head zero-hit evidence is terminal. This
+  follows the upstream client-side statistics limitation tracked in
+  `mozilla/sccache#2804`.
 - Carry sccache read/write authority through a stable-ID runtime secret (or an
   equivalently cache-key-neutral runtime input) mounted identically by publish
   and read-only compiler vertices. Never encode publisher versus consumer mode

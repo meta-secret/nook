@@ -16,7 +16,7 @@ const telemetry = (job, overrides = {}) => ({
     compile_source: { scope: "source", available: true, write_enabled: false, export_enabled: false },
     imports: { probes_complete: true, availability: [{ name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: true }] },
   },
-  sccache: { report_count: 1, compile_requests: 10, requests_executed: 10, cache_hits: 8, cache_misses: 2, cache_errors: 0, cache_writes: 0, hit_rate_percent: 80 },
+  sccache: { report_count: 1, baked_runtime_mode: "READ_ONLY", runtime_mode: "READ_ONLY", runtime_mode_source: "runtime_secret", client_side: true, counter_reliability: "backend_incomplete", publication_status: "not_applicable", compile_requests: 10, requests_executed: 10, cache_hits: 8, cache_misses: 2, cache_errors: 0, cache_write_errors: 0, cache_writes: 0, hit_rate_percent: 80 },
   buildkit: {
     build_record_count: 1,
     completed_steps: 100,
@@ -85,6 +85,12 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
 
 void test("records a legitimate cold build without applying the warm threshold", () => {
   const cold = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      runtime_mode: "READ_WRITE",
+      publication_status: "pending_verification",
+      cache_hits: 0,
+    },
     cache_scope: {
       ...telemetry("rust").cache_scope,
       imports: {
@@ -109,6 +115,29 @@ void test("records a legitimate cold build without applying the warm threshold",
   });
   assert.equal(model.gate.verdict, "pass");
   assert.ok(model.warnings.includes("rust:cold_cache_no_available_imports"));
+  assert.ok(model.warnings.includes("rust:publication_pending_verification"));
+});
+
+void test("fails changed-head zero-hit verification and cache write errors", () => {
+  const successor = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      runtime_mode: "READ_WRITE",
+      publication_status: "pending_verification",
+      cache_hits: 0,
+      cache_write_errors: 1,
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [successor],
+  });
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(model.gate.reasons.includes("rust:sccache_write_errors:1"));
+  assert.ok(model.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
+  assert.ok(!model.gate.reasons.includes("rust:telemetry_incomplete"));
 });
 
 void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {

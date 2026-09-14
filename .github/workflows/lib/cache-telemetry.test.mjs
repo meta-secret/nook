@@ -293,11 +293,15 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     baked_runtime_mode: "READ_ONLY",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 12,
     requests_executed: 10,
     cache_hits: 8,
     cache_misses: 2,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 2,
   };
   const second = {
@@ -305,11 +309,15 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     baked_runtime_mode: "READ_ONLY",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 6,
     requests_executed: 5,
     cache_hits: 3,
     cache_misses: 2,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 2,
   };
   /** @param {object} payload @param {string} vertex @param {string} timestamp */
@@ -332,11 +340,15 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     baked_runtime_mode: "READ_ONLY",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 18,
     requests_executed: 15,
     cache_hits: 11,
     cache_misses: 4,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 4,
     hit_rate_percent: 73.33,
   });
@@ -348,11 +360,15 @@ void test("retains read-only runtime-secret authority in sccache telemetry", () 
     baked_runtime_mode: "READ_ONLY",
     runtime_mode: "READ_ONLY",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 4,
     requests_executed: 4,
     cache_hits: 4,
     cache_misses: 0,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 0,
   });
 
@@ -361,14 +377,42 @@ void test("retains read-only runtime-secret authority in sccache telemetry", () 
     baked_runtime_mode: "READ_ONLY",
     runtime_mode: "READ_ONLY",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "not_applicable",
     compile_requests: 4,
     requests_executed: 4,
     cache_hits: 4,
     cache_misses: 0,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 0,
     hit_rate_percent: 100,
   });
+});
+
+void test("marks client-side zero-write publication counters pending verification", () => {
+  const report = CacheTelemetry.normalizeSccacheReport({
+    stage: "compile-native",
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "pending_verification",
+    compile_requests: 0,
+    requests_executed: 279,
+    cache_hits: 0,
+    cache_misses: 275,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+  });
+
+  const summary = CacheTelemetry.summarizeSccache([report]);
+  assert.equal(summary.counter_reliability, "backend_incomplete");
+  assert.equal(summary.publication_status, "pending_verification");
+  assert.equal(summary.requests_executed, 279);
 });
 
 void test("rejects mixed effective sccache authority across reports", () => {
@@ -376,11 +420,15 @@ void test("rejects mixed effective sccache authority across reports", () => {
     stage: "compile-native",
     baked_runtime_mode: "READ_ONLY",
     runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "not_applicable",
     compile_requests: 1,
     requests_executed: 1,
     cache_hits: 0,
     cache_misses: 1,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 1,
   };
   const publish = CacheTelemetry.normalizeSccacheReport({

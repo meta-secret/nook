@@ -1118,7 +1118,7 @@ tasks:
     }
 
     expect(proof).toContain(
-      "Publication guard: zero errors plus zero writes remains terminal",
+      "Client-side cold publication: zero errors plus zero writes is pending verification",
     );
     expect(proof).toContain(
       "Cold normal publish: no seed prerequisite, sccache READ_WRITE",
@@ -1128,6 +1128,9 @@ tasks:
     );
     expect(proof).toContain(
       "Next unseeded head: dependency reuse plus cross-commit sccache hits",
+    );
+    expect(proof).toContain(
+      "Repeated next-head zero hits: publication verification fails",
     );
     expect(proof).toContain(
       "Read-only replay: exact BuildKit reuse and zero writes",

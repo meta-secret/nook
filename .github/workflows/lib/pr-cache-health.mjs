@@ -16,7 +16,7 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {{job: string}} github
  * @property {{persistent: boolean}} cache_backend
  * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
- * @property {{cache_errors: number, cache_writes: number, cache_hits: number, cache_misses: number}} sccache
+ * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
  * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
  * @property {{complete: boolean}} collection
  */
@@ -81,6 +81,10 @@ export class PrCacheHealth {
         reasons.push(
           `${job.id}:sccache_errors:${record.sccache.cache_errors}`,
         );
+      if (record.sccache.cache_write_errors > 0)
+        reasons.push(
+          `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
+        );
       if (record.buildkit.cache_export.incomplete_failures > 0)
         reasons.push(`${job.id}:cache_export_incomplete`);
       if (job.readOnly && record.buildkit.cache_export.attempts > 0)
@@ -98,6 +102,17 @@ export class PrCacheHealth {
       const hasAvailableImport = imports.availability.some(
         (candidate) => candidate.available,
       );
+      if (
+        job.buildExpected &&
+        !job.readOnly &&
+        record.sccache.publication_status === "pending_verification"
+      ) {
+        if (hasAvailableImport && record.sccache.cache_hits === 0) {
+          reasons.push(`${job.id}:sccache_next_head_zero_hits`);
+        } else if (!hasAvailableImport) {
+          warnings.push(`${job.id}:publication_pending_verification`);
+        }
+      }
       if (job.buildExpected && steps > 0 && steps < this.minimumCompletedSteps) {
         warnings.push(
           `${job.id}:cache_sample_too_small:${steps}<${this.minimumCompletedSteps}`,

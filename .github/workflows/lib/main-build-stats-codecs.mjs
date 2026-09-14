@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 /** @typedef {Record<string, unknown>} JsonRecord */
 /** @typedef {{component: string, reference: string, message: string}} CacheCollectionFailure */
 /** @typedef {{attempts: number, completed: number, bytes: number, duration_ms: number, incomplete_failures: number}} CacheExportSummary */
-/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile', persistent: boolean, reason: string}, sccache: {report_count: number, compile_requests: number, requests_executed: number, cache_hits: number, cache_misses: number, cache_errors: number, cache_writes: number, hit_rate_percent?: number}, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export?: CacheExportSummary, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[], failures: CacheCollectionFailure[]}}} AdmittedCacheTelemetry */
+/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile', persistent: boolean, reason: string}, sccache: {report_count: number, compile_requests: number, requests_executed: number, cache_hits: number, cache_misses: number, cache_errors: number, cache_write_errors: number, cache_writes: number, hit_rate_percent?: number}, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export?: CacheExportSummary, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[], failures: CacheCollectionFailure[]}}} AdmittedCacheTelemetry */
 
 export class MainBuildStatsCodec {
   /** @this {void} @param {string} moduleUrl @param {string | undefined} argument @returns {boolean} */
@@ -161,6 +161,10 @@ export class MainBuildStatsCodec {
         cache_errors: this.requireInteger(
           sccache.cache_errors,
           "sccache cache errors",
+        ),
+        cache_write_errors: this.requireInteger(
+          sccache.cache_write_errors,
+          "sccache cache write errors",
         ),
         cache_writes: this.requireInteger(
           sccache.cache_writes,
