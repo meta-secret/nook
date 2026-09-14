@@ -237,13 +237,11 @@ scope, ownership, or handoff rule.
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
     transferred.
-- **Trusted publisher**
-  - The trusted-publisher exception does not grant publication authority to
-    an ordinary worker.
-  - The `rust-dependency-updates.yml` bounded editor has no Git or external
-    delivery authority.
-  - The `rust-dependency-updates.yml` job rejects persisted checkout
-    credentials.
+- **Autonomous dependency audit**
+  - The `rust-dependency-updates.yml` workflow is a read-only audit. It may
+    publish an outdated-dependency report artifact for manual triage, but it
+    has no editor, Git mutation, or external delivery authority.
+  - The workflow rejects persisted checkout credentials.
 - **Repository constraints**
   - Moving unit tests or making arbitrary fragments is not source-size
     compliance.
@@ -280,8 +278,7 @@ scope, ownership, or handoff rule.
   for PR, repository, run, and Workbench operations.
 - This is an agent execution rule, not a credential sandbox. Shared tools and
   credentials do not enforce technical isolation.
-- Repository-owned autonomous CI and the remaining trusted publisher retain
-  their established execution contracts.
+- Repository-owned autonomous CI retains its established execution contracts.
 
 ### Prohibited actions
 

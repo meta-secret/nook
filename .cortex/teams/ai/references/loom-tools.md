@@ -227,15 +227,15 @@ Validate and publish use `agentStats.validate` / `agentStats.publish` with
 by Git commit and worktree. See
 [Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
-### prLand (status / validate / ready / mergeCheck)
+### prLand (status / validate)
 
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
-`prLand.validate` dispatches hosted validation first. It explicitly opts the
-final coherent head into exact-head Codex review. Its `nextStep` requires the
-repository-owned checks and opted-in review to settle before `prLand.ready`.
+`prLand.status` reports the current pull-request state. `prLand.validate`
+dispatches hosted validation and directs the caller to return the resulting
+repository-owned check evidence to the dev manager.
 
 ### toolsCall
 

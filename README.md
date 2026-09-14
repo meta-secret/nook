@@ -456,15 +456,12 @@ branch head. Gizmo then runs focused builds/tests with
 and **`task remote TASK_NAME=web:e2e`**. Single `preflight`, `rust:ci`, and
 `arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
 selectors execute separately in exact-image Kubernetes Pods; compatible
-build-only selectors may share one ARC batch. When the head is ready, Gizmo
-explicitly starts complete PR validation with
+build-only selectors may share one ARC batch. Gizmo explicitly starts complete
+PR validation with
 **`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
-pipeline. Ordinary validation does not contact Codex. Set `CODEX_REVIEW=1` only
-for the final coherent head. Validation dispatches hosted checks before the
-opted-in exact-head review. Use review stabilization only after dispatch while
-those checks run. Its default performs one bounded feedback snapshot. Local
-Task mirrors below remain available for humans. Main-fix PRs use `FULL_E2E=1`
-to request the Main-equivalent browser suites.
+pipeline. Validation dispatches hosted checks. Local Task mirrors below remain
+available for humans. Main-fix PRs use `FULL_E2E=1` to request the
+Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
@@ -526,9 +523,8 @@ task remote TASK_NAME=preflight # repository invariant checks on exact pushed HE
 task remote TASK_NAME=web:build # direct-Pod web build
 task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
-task pr:validate PR=410    # complete exact-head validation without Codex review
-task pr:validate PR=410 CODEX_REVIEW=1 # final coherent head plus Codex review
-task pr:validate PR=410 FULL_E2E=1 CODEX_REVIEW=1 # final Main-fix gate and review
+task pr:validate PR=410    # complete exact-head validation
+task pr:validate PR=410 FULL_E2E=1 # final Main-fix validation gate
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
