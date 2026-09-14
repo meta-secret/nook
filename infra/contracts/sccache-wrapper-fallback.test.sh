@@ -21,7 +21,10 @@ if [ "${1:-}" = --start-server ]; then
   exit "${FAKE_START_STATUS:-0}"
 fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
-  success) exec "$@" ;;
+  success)
+    test "${SCCACHE_CLIENT_SIDE:-}" = 1
+    exec "$@"
+    ;;
   transport)
     printf 'sccache: error: failed to execute compile\nCaused by: error sending request: dns lookup timed out\n' >&2
     exit 2
@@ -133,5 +136,6 @@ done
 test "$(wc -l <"$healthy_start_count" | tr -d ' ')" -eq 1
 test "$(grep -Fc 'direct compiler invoked' "$healthy_log")" -eq 2
 echo 'Sccache healthy startup: two compiler invocations performed one startup probe'
+grep -Fq 'direct compiler invoked' "$healthy_log"
 
 echo 'sccache wrapper fallback contract: ok'

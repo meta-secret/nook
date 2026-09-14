@@ -91,6 +91,7 @@ tasks:
         repo_root="$(git rev-parse --show-toplevel)"
         echo 'Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults'
         bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"
+        bash "$repo_root/infra/contracts/sccache-publication.test.sh"
         echo 'Sccache best-effort proof: complete'
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"
@@ -240,6 +241,7 @@ tasks:
           local source_version="${6:-v3}"
           local extension_commit="${7:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
           local dependency_available="${8:-}"
+          local client_side="${9:-1}"
           local -a compile_targets=(compile-warm)
           if [ -n "$cache_write" ] && [ -z "$dependency_available" ]; then
             compile_targets=(compile-dependency-cache compile-warm)
@@ -251,12 +253,14 @@ tasks:
             COMPILE_SOURCE_CACHE_WRITE_ENABLED="$cache_write" \
             COMPILE_SOURCE_CACHE_VERSION="$source_version" \
             SIMULATED_EXTENSION_COMMIT="$extension_commit" \
+            SIMULATED_SCCACHE_CLIENT_SIDE="$client_side" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
             --set "*.context=$sim_dir" \
             --set "compile-warm.args.SIMULATED_BUILD_PROFILE=production" \
             --set "compile-warm.args.SIMULATED_EXTENSION_COMMIT=$extension_commit" \
+            --set "*.args.SIMULATED_SCCACHE_CLIENT_SIDE=$client_side" \
             --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             --set "compile-dependency-cache.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             "${compile_targets[@]}" >"$log_file" 2>&1
@@ -362,6 +366,16 @@ tasks:
         require_cache_write "$proof_log"
         test "$(registry_ref_code)" = 200
         echo "rust-deps no-op: cached=6 uncached=0 writes=1 ref=${stable_repository}:buildcache"
+
+        echo "== Publication guard: zero errors plus zero writes remains terminal =="
+        create_builder "nook-bake-sim-compile-zero-writes-${suffix}"
+        if bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
+          "cccccccccccccccccccccccccccccccccccccccc" "" "0"; then
+          echo "zero-write publication fault unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' "$proof_log"
+        echo "compile publication fault: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
 
         echo "== Cold normal publish: no seed prerequisite, sccache READ_WRITE =="
         create_builder "nook-bake-sim-compile-source-a-${suffix}"

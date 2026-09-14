@@ -57,6 +57,9 @@ ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
 ENV SCCACHE_REGION=auto
 ENV SCCACHE_S3_USE_SSL=true
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
+# sccache 0.17 waits for compiler-side cache work before returning. This makes
+# publication statistics final when the following report command runs.
+ENV SCCACHE_CLIENT_SIDE=1
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
 # short-lived local sccache daemons isolated even while their S3 storage is shared.
 ENV SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock

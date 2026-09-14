@@ -998,6 +998,19 @@ tasks:
     expect(
       this.read("nook-app/nook-platform/docker/sccache-report.sh"),
     ).toContain("NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE");
+    expect(
+      this.read("nook-app/nook-platform/docker/sccache-wrapper.sh"),
+    ).toContain("SCCACHE_CLIENT_SIDE:=1");
+    const publicationContract = this.read(
+      "infra/contracts/sccache-publication.test.sh",
+    );
+    expect(publicationContract).toContain('"compile_requests":339');
+    expect(publicationContract).toContain(
+      '"cache_misses":{"counts":{"Rust":275}',
+    );
+    expect(publicationContract).toContain('"cache_errors":0');
+    expect(publicationContract).toContain('"cache_writes":0');
+    expect(publicationContract).toContain('"cache_writes":275');
 
     expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
     expect(productionDockerfile.match(/id=sccache_runtime_mode/g)).toHaveLength(
@@ -1052,6 +1065,9 @@ tasks:
       expect(dependencyTarget).not.toContain(sourceStage);
     }
 
+    expect(proof).toContain(
+      "Publication guard: zero errors plus zero writes remains terminal",
+    );
     expect(proof).toContain(
       "Cold normal publish: no seed prerequisite, sccache READ_WRITE",
     );

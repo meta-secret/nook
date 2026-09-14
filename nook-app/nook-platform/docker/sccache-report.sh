@@ -2,7 +2,8 @@
 set -u
 
 stage="${1:-unknown}"
-if stats_json="$(/usr/local/bin/nook-sccache --show-stats --stats-format=json 2>/dev/null)"; then
+sccache_binary="${NOOK_SCCACHE_REPORT_BINARY:-/usr/local/bin/nook-sccache}"
+if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)"; then
   report="$(
     jq -c --arg stage "$stage" '
       def count_values: ([.counts[]?] | add) // 0;

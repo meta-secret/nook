@@ -10,6 +10,15 @@ fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-di
 ready_marker="${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}"
 startup_lock="${NOOK_SCCACHE_START_LOCK:-/dev/shm/nook-sccache-start-lock}"
 
+# sccache 0.17's client-side architecture keeps each compiler invocation alive
+# until its cache service has returned final statistics to the daemon. Without
+# it, a fast Rust compile can finish while every remote upload is still queued,
+# and the publication guard observes misses with zero writes and zero errors.
+# Keep this identical for readers and publishers so cache authority remains a
+# secret-only runtime input and cannot divide BuildKit compiler keys.
+: "${SCCACHE_CLIENT_SIDE:=1}"
+export SCCACHE_CLIENT_SIDE
+
 # Compile-cache publishers and consumers mount this same secret ID at the same
 # path. Secret contents are deliberately absent from BuildKit cache checksums,
 # so runtime write authority cannot split otherwise-identical compiler keys.

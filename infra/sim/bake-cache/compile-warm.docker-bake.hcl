@@ -30,6 +30,10 @@ variable "SIMULATED_EXTENSION_COMMIT" {
   default = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
+variable "SIMULATED_SCCACHE_CLIENT_SIDE" {
+  default = "1"
+}
+
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
@@ -51,6 +55,7 @@ compile_source_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
 compile_solve_args = {
   SIMULATED_BUILD_PROFILE    = SIMULATED_BUILD_PROFILE
   SIMULATED_EXTENSION_COMMIT = SIMULATED_EXTENSION_COMMIT
+  SIMULATED_SCCACHE_CLIENT_SIDE = SIMULATED_SCCACHE_CLIENT_SIDE
 }
 
 target "compile-warm" {
