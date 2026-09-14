@@ -14,6 +14,12 @@ RUN cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-hive-dependencies
 
+FROM compile-hive-dependencies AS compile-hive-source
+COPY inputs/compile-hive-source.txt /tmp/hive-source.txt
+RUN cat /tmp/hive-source.txt >/opt/compile-hive-source \
+  && sleep 1 \
+  && echo bake-sim-compile-hive-source
+
 FROM compile-toolchain AS compile-wasm-dependencies
 COPY inputs/compile-wasm-manifest.txt /tmp/wasm-manifest.txt
 RUN cat /tmp/wasm-manifest.txt >/opt/compile-wasm-dependencies \
@@ -48,7 +54,11 @@ RUN cat /opt/compile-companion-wasm-source >/opt/compile-companion-wasm-build \
   && sleep 1 \
   && echo bake-sim-compile-companion-wasm-build
 
-FROM scratch AS compile
+FROM scratch AS compile-dependencies
 COPY --from=compile-hive-dependencies /opt/compile-hive-dependencies /compile/hive
+COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
+
+FROM scratch AS compile
+COPY --from=compile-hive-source /opt/compile-hive-source /compile/hive
 COPY --from=compile-nook-wasm-build /opt/compile-nook-wasm-build /compile/nook-wasm
 COPY --from=compile-companion-wasm-build /opt/compile-companion-wasm-build /compile/companion-wasm

@@ -22,6 +22,10 @@ variable "SCCACHE_S3_MODE" {
   default = "external"
 }
 
+variable "SCCACHE_S3_RW_MODE" {
+  default = "READ_WRITE"
+}
+
 // Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
 // remote registry credentials exist. CI sets it from nook-docker-setup after
 // registry login. Separate refs keep sibling BuildKit lineages from overwriting
@@ -166,6 +170,7 @@ write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache"
 target "_sccache" {
   args = {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
+    SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
     SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
     SCCACHE_BUCKET   = SCCACHE_BUCKET
   }

@@ -16,11 +16,6 @@ is_buildkit_transport_flake() {
   # Match only infrastructure transport failures. These can occur while loading
   # the frontend, transferring the source context, or exporting a verified cache.
   grep -Eiq \
-    -e 'failed to read dockerfile' \
-    -e 'error reading dockerfile' \
-    -e 'failed to load LLB definition' \
-    -e 'dockerfile: parse error' \
-    -e 'error from sender' \
     -e 'rpc error: code = Unavailable' \
     -e 'rpc error: code = DeadlineExceeded' \
     -e 'rpc error: code = Canceled' \
@@ -46,17 +41,30 @@ is_unattributed_syntax_frontend_exit() {
     && grep -Eiq 'failed to solve: exit code: 2' "$log_file"
 }
 
-is_frontend_authorization_timeout() {
+is_registry_authorization_transport_flake() {
   local log_file="$1"
-  # Docker Hub token lookup can fail before the pinned Dockerfile frontend is
-  # loaded. Require the transient transport error on that same BuildKit vertex
-  # so a later application vertex cannot reuse a successful frontend marker.
+  # Authorization transport can fail before a frontend pull or while an exact
+  # cache ref is imported/exported. Require an approved registry operation and
+  # its transient error on the same BuildKit vertex. Credential rejections are
+  # permanent and intentionally do not match.
   awk '
-    /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
-      frontend_vertex = $1
-    }
-    /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {
-      found = 1
+    $1 ~ /^#[0-9]+$/ {
+      approved_operation = \
+        $0 ~ /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ || \
+        $0 ~ /importing cache manifest from .*registry\.dev\.nokey\.sh/ || \
+        $0 ~ /exporting cache to registry/
+      if (approved_operation) registry_vertex[$1] = 1
+
+      transient_authorization = \
+        $0 ~ /TLS handshake timeout/ || \
+        $0 ~ /connection reset by peer/ || \
+        $0 ~ /unexpected EOF/ || \
+        $0 ~ /i\/o timeout/ || \
+        $0 ~ /429 Too Many Requests/ || \
+        $0 ~ /5[0-9][0-9] (Bad Gateway|Service Unavailable|Gateway Timeout)/
+      if (registry_vertex[$1] && /failed to authorize:/ && transient_authorization) {
+        found = 1
+      }
     }
     END { exit(found ? 0 : 1) }
   ' "$log_file"
@@ -113,7 +121,7 @@ for attempt in 1 2; do
   fi
   if ! is_buildkit_transport_flake "$log_file" \
     && ! is_unattributed_syntax_frontend_exit "$log_file" \
-    && ! is_frontend_authorization_timeout "$log_file"; then
+    && ! is_registry_authorization_transport_flake "$log_file"; then
     echo "task ${label}: non-transient BuildKit failure; not retrying" >&2
     exit "$status"
   fi

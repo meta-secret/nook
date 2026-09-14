@@ -37,7 +37,17 @@ registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
-
+compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
+compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
+compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
+if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
+  echo "build:compile requires an exact-commit BuildKit source scope" >&2
+  exit 2
+fi
+if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v2-[0-9a-f]{40}$ ]]; then
+  echo "build:compile requires the fingerprinted Rust dependency scope" >&2
+  exit 2
+fi
 bake_args=(
   --allow="fs.read=${repo_root}"
   -f "${repo_root}/nook-app/docker-bake.hcl"
@@ -50,6 +60,7 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
+  --set "rust-base.args.SCCACHE_S3_RW_MODE=${SCCACHE_S3_RW_MODE:-READ_ONLY}"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
   --set "build-compile.args.WASM_BUILD_MODE=${wasm_build_mode}"
@@ -80,6 +91,20 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
+if [ -z "$compile_deps_available" ]; then
+  compile_deps_cache_write=""
+  if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = "publish" ]; then
+    compile_deps_cache_write=1
+  fi
+  GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED="$compile_deps_cache_write" \
+    bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
+      "build:compile dependencies" \
+      "$docker_bin" buildx bake "${bake_args[@]}" \
+      build-compile-dependencies
+else
+  echo "Dependency cache already exists; skipping duplicate dependency solve/export"
+fi
+
 bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-  "build:compile" \
+  "build:compile source" \
   "$docker_bin" buildx bake "${bake_args[@]}" build-compile

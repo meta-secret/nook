@@ -77,6 +77,10 @@ jobs:
       - name: Publish exact-source Hive console browser image
         run: task hive:console:image
 
+      - name: Preserve Hive console cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   console:
     name: Hive Control Center verification
     if: >-
@@ -192,6 +196,10 @@ jobs:
         env:
           HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache,mode=max,timeout=15m
         run: task hive:cache:publish
+
+      - name: Preserve Hive cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   verify-fork:
     name: Hive Rust and infrastructure verification

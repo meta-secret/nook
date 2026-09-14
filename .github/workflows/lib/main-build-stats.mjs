@@ -39,8 +39,10 @@ const COVERAGE_STEPS = new Set([
 /** @typedef {{workflow_name: 'Main', workflow_id: number, run_id: number, run_attempt: number, url: string, event: 'push', head_branch: 'main', head_sha: string, conclusion: string, created_at: string, started_at: string, completed_at: string}} MainBuildSource */
 /** @typedef {{queue_seconds: number, execution_seconds: number, wall_seconds: number, job_count: number, step_count: number, build_seconds?: number, deployment_seconds?: number, coverage_seconds?: number}} MainBuildSummary */
 /** @typedef {{baseline_runs: {run_id: number, run_attempt: number}[], baseline_quality: string, baseline_note: string, wall_seconds_change_percent?: number, execution_seconds_change_percent?: number, build_seconds_change_percent?: number, regression: boolean, regression_reasons: string[]}} MainBuildComparison */
-/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile' | 'local_fallback', persistent: boolean, reason: string}, sccache: {report_count: number, compile_requests: number, requests_executed: number, cache_hits: number, cache_misses: number, cache_errors: number, cache_writes: number, hit_rate_percent?: number}, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[]}}} MainBuildCacheJob */
-/** @typedef {{totals: {job_count: number, remote_backend_job_count: number, direct_compile_job_count?: number, local_fallback_job_count?: number, sccache_compile_requests: number, sccache_cache_hits: number, sccache_cache_misses: number, sccache_hit_rate_percent?: number, buildkit_completed_steps: number, buildkit_cached_steps: number, buildkit_cache_hit_rate_percent?: number}, jobs: MainBuildCacheJob[], collection: {complete: boolean, warnings: string[]}}} MainBuildCacheTelemetry */
+/** @typedef {{component: string, reference: string, message: string}} CacheCollectionFailure */
+/** @typedef {{attempts: number, completed: number, bytes: number, duration_ms: number, incomplete_failures: number}} CacheExportSummary */
+/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile' | 'local_fallback', persistent: boolean, reason: string}, sccache: {report_count: number, compile_requests: number, requests_executed: number, cache_hits: number, cache_misses: number, cache_errors: number, cache_writes: number, hit_rate_percent?: number}, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export?: CacheExportSummary, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[], failures?: CacheCollectionFailure[]}}} MainBuildCacheJob */
+/** @typedef {{totals: {job_count: number, remote_backend_job_count: number, direct_compile_job_count?: number, local_fallback_job_count?: number, sccache_compile_requests: number, sccache_cache_hits: number, sccache_cache_misses: number, sccache_hit_rate_percent?: number, buildkit_completed_steps: number, buildkit_cached_steps: number, buildkit_cache_hit_rate_percent?: number, cache_export: CacheExportSummary}, jobs: MainBuildCacheJob[], collection: {complete: boolean, warnings: string[], failures: CacheCollectionFailure[]}}} MainBuildCacheTelemetry */
 /** @typedef {{schema_version: 1 | 2 | 3, recorded_at: string, source_run: MainBuildSource, source_pull_requests: {number: number, url: string, title: string}[], summary: MainBuildSummary, cache_telemetry: MainBuildCacheTelemetry, jobs: MainBuildJob[], comparison: MainBuildComparison}} MainBuildRecord */
 /** @typedef {{runId?: number, runAttempt?: number}} MainBuildExpectation */
 /** @typedef {{baseline?: number, changePercent?: number, regression: boolean}} MetricComparison */
@@ -292,6 +294,26 @@ export class MainBuildStats {
       jobs.length === 0
         ? ["cache_telemetry_artifact_unavailable"]
         : jobs.flatMap((job) => job.collection.warnings);
+    const cacheExport = jobs.reduce(
+      (total, job) => ({
+        attempts: total.attempts + (job.buildkit.cache_export?.attempts || 0),
+        completed:
+          total.completed + (job.buildkit.cache_export?.completed || 0),
+        bytes: total.bytes + (job.buildkit.cache_export?.bytes || 0),
+        duration_ms:
+          total.duration_ms + (job.buildkit.cache_export?.duration_ms || 0),
+        incomplete_failures:
+          total.incomplete_failures +
+          (job.buildkit.cache_export?.incomplete_failures || 0),
+      }),
+      {
+        attempts: 0,
+        completed: 0,
+        bytes: 0,
+        duration_ms: 0,
+        incomplete_failures: 0,
+      },
+    );
 
     return {
       totals: {
@@ -321,12 +343,14 @@ export class MainBuildStats {
               buildkit_cache_hit_rate_percent:
                 Math.round((buildkitCached / buildkitCompleted) * 10_000) / 100,
             }),
+        cache_export: cacheExport,
       },
       jobs,
       collection: {
         complete:
           jobs.length > 0 && jobs.every((job) => job.collection.complete),
         warnings,
+        failures: jobs.flatMap((job) => job.collection.failures),
       },
     };
   }
@@ -747,6 +771,9 @@ export class MainBuildStats {
       if (!Array.isArray(telemetry.collection.warnings)) {
         throw new Error("cache_telemetry.collection.warnings must be an array");
       }
+      if (!Array.isArray(telemetry.collection.failures)) {
+        throw new Error("cache_telemetry.collection.failures must be an array");
+      }
       const totals = telemetry.totals;
       if (!totals || typeof totals !== "object") {
         throw new Error("cache_telemetry.totals is required");
@@ -770,6 +797,22 @@ export class MainBuildStats {
       }
       if (totals.job_count !== telemetry.jobs.length) {
         throw new Error("cache_telemetry.totals.job_count mismatch");
+      }
+      const cacheExport = MainBuildStatsCodec.requireRecord(
+        totals.cache_export,
+        "cache_telemetry.totals.cache_export",
+      );
+      for (const field of [
+        "attempts",
+        "completed",
+        "bytes",
+        "duration_ms",
+        "incomplete_failures",
+      ]) {
+        MainBuildStatsCodec.requireInteger(
+          cacheExport[field],
+          `cache_telemetry.totals.cache_export.${field}`,
+        );
       }
       for (const job of telemetry.jobs) {
         MainBuildStatsCodec.requireString(job.job, "cache_telemetry.job.job");
@@ -806,6 +849,9 @@ export class MainBuildStats {
       );
       if (!isDeepStrictEqual(expected.totals, totals)) {
         throw new Error("cache_telemetry.totals mismatch");
+      }
+      if (!isDeepStrictEqual(expected.collection, telemetry.collection)) {
+        throw new Error("cache_telemetry.collection mismatch");
       }
     }
 
@@ -940,6 +986,53 @@ export class MainBuildStats {
             delete job.buildkit?.cache_hit_rate_percent;
           }
         }
+      }
+    }
+
+    if (normalized.cache_telemetry) {
+      const telemetry = normalized.cache_telemetry;
+      const { jobs: telemetryJobs = [] } = telemetry;
+      /** @type {CacheCollectionFailure[]} */
+      const normalizedFailures = [];
+      for (const job of telemetryJobs) {
+        const jobFailures = job.collection?.failures;
+        if (!Array.isArray(jobFailures)) {
+          job.collection.failures = [];
+          continue;
+        }
+        normalizedFailures.push(...jobFailures);
+      }
+      telemetry.collection.complete =
+        telemetryJobs.length > 0 &&
+        telemetryJobs.every((job) => job.collection.complete);
+      telemetry.collection.warnings =
+        telemetryJobs.length === 0
+          ? ["cache_telemetry_artifact_unavailable"]
+          : telemetryJobs.flatMap((job) => job.collection.warnings);
+      telemetry.collection.failures = normalizedFailures;
+      if (!telemetry.totals?.cache_export) {
+        telemetry.totals.cache_export = telemetryJobs.reduce(
+          (total, job) => ({
+            attempts:
+              total.attempts + (job.buildkit?.cache_export?.attempts || 0),
+            completed:
+              total.completed + (job.buildkit?.cache_export?.completed || 0),
+            bytes: total.bytes + (job.buildkit?.cache_export?.bytes || 0),
+            duration_ms:
+              total.duration_ms +
+              (job.buildkit?.cache_export?.duration_ms || 0),
+            incomplete_failures:
+              total.incomplete_failures +
+              (job.buildkit?.cache_export?.incomplete_failures || 0),
+          }),
+          {
+            attempts: 0,
+            completed: 0,
+            bytes: 0,
+            duration_ms: 0,
+            incomplete_failures: 0,
+          },
+        );
       }
     }
 

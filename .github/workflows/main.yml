@@ -65,8 +65,6 @@ jobs:
   preflight:
     name: Repository preflight
     if: inputs.product_changed
-    outputs:
-      cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     permissions:
@@ -93,14 +91,6 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: ""
 
-      - name: Publish verified preflight BuildKit cache
-        id: publish_preflight_cache
-        continue-on-error: true
-        run: task ci:main:publish-preflight-cache
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
@@ -111,21 +101,30 @@ jobs:
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     steps:
-      - name: Require successful preflight cache publication
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: preflight
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+      - name: Publish verified preflight BuildKit cache
+        run: task ci:main:publish-preflight-cache
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}
-        run: |
-          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
-            echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
-            exit 1
-          fi
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   rust:
     name: Native Rust verification
     needs: [preflight]
     if: inputs.product_changed
-    outputs:
-      cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
     # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
@@ -175,15 +174,6 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Publish verified native BuildKit cache
-        id: publish_native_cache
-        continue-on-error: true
-        run: task ci:main:publish-native-cache
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          WASM_BUILD_MODE: dev
-
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
@@ -194,20 +184,30 @@ jobs:
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     steps:
-      - name: Require successful native cache publication
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: native
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+      - name: Publish verified native BuildKit cache
+        run: task ci:main:publish-native-cache
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}
-        run: |
-          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
-            echo "Native cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
-            exit 1
-          fi
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          WASM_BUILD_MODE: dev
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   wasm:
     name: WASM verification and artifact
-    needs: [rust, preflight]
-    outputs:
-      cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
+    needs: [preflight]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     permissions:
@@ -264,17 +264,6 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
-      - name: Publish verified WASM BuildKit cache
-        id: publish_wasm_cache
-        continue-on-error: true
-        run: task ci:main:publish-wasm-cache
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes source state from the verified job-scoped graph. The
-          # portable dependency ref is owned by the later writer/proof job.
-          WASM_BUILD_MODE: dev
-
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
@@ -285,14 +274,26 @@ jobs:
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     steps:
-      - name: Require successful WASM cache publication
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: wasm
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+      - name: Publish verified WASM BuildKit cache
+        run: task ci:main:publish-wasm-cache
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}
-        run: |
-          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
-            echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
-            exit 1
-          fi
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          WASM_BUILD_MODE: dev
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof
@@ -329,6 +330,10 @@ jobs:
           NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"
           NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web:
     name: Verify web build
@@ -408,13 +413,28 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
+  web-cache-publish:
+    name: Web cache publication
+    needs: [web]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: web-e2e
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Publish verified web BuildKit cache
-        if: success()
         run: task ci:main:publish-web-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e
@@ -555,7 +575,7 @@ jobs:
 
   deploy:
     name: Deploy development
-    needs: [web, web-e2e, wasm-cache-proof]
+    needs: [web, web-e2e]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     environment:

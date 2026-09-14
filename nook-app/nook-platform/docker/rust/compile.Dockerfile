@@ -60,7 +60,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-event-log \
       -p nook-companion-core \
       -p nook-core \
-    && nook-sccache-report compile-native-dependencies
+    && nook-sccache-report compile-native-dependencies \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-native-dependencies
 
 FROM compile-platform-manifests AS compile-wasm-dependencies
 
@@ -69,7 +71,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm \
       -p nook-companion-wasm \
-    && nook-sccache-report compile-wasm-dependencies
+    && nook-sccache-report compile-wasm-dependencies \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-wasm-dependencies
 
 # Copy in dependency order so an edit in a leaf package reuses earlier native
 # compile layers on the persistent ARC BuildKit worker.
@@ -225,7 +229,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked --release -p hive \
       --features observer-contract-export --lib \
-    && nook-sccache-report compile-hive-dependencies
+    && nook-sccache-report compile-hive-dependencies \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-hive-dependencies
 
 FROM compile-minds-dependencies AS compile-minds-source
 
@@ -240,13 +246,18 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       --output /opt/nook/hive-observer-contract \
     && touch /opt/nook/hive-compile-passed
 
-FROM web-base AS compile-hive-console
+FROM web-base AS compile-hive-console-dependencies
 
 WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
+COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
+RUN bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-hive-console-dependencies
+
+FROM compile-hive-console-dependencies AS compile-hive-console
+
 COPY --from=compile-minds-source /opt/nook/hive-observer-contract /opt/nook/hive-observer-contract
 ENV HIVE_OBSERVER_CONTRACT_INPUT=/opt/nook/hive-observer-contract
-COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
-RUN bun install --frozen-lockfile
 COPY agentic-ai/minds/hive-console/index.html \
      agentic-ai/minds/hive-console/svelte.config.js \
      agentic-ai/minds/hive-console/tsconfig.json \
@@ -391,6 +402,15 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
+
+FROM scratch AS compile-dependencies
+
+COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
+COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
+COPY --from=compile-minds-dependencies /opt/nook/compile-hive-dependencies /compile/hive
+COPY --from=compile-hive-console-dependencies /opt/nook/compile-hive-console-dependencies /compile/hive-console
+COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /compile/web-app-deps
+COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules /compile/web-research-deps
 
 FROM scratch AS compile
 

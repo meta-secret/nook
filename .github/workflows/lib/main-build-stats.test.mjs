@@ -199,11 +199,46 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
         completed_steps: 50,
         cached_steps: 35,
         cache_hit_rate_percent: 70,
+        cache_export: {
+          attempts: 2,
+          completed: 1,
+          bytes: 987654321,
+          duration_ms: 45678,
+          incomplete_failures: 1,
+        },
         measurement: "buildx_target_record_steps",
       },
-      collection: { complete: true, warnings: [] },
+      collection: {
+        complete: false,
+        warnings: ["buildkit_cache_export_incomplete:1"],
+        failures: [
+          {
+            component: "buildkit_cache_export",
+            reference: "nook-native-source",
+            message: "cache export did not complete",
+          },
+        ],
+      },
     },
   ];
+  input.cacheTelemetry.push({
+    ...structuredClone(MainBuildStatsFixture.first(input.cacheTelemetry)),
+    github: {
+      ...MainBuildStatsFixture.first(input.cacheTelemetry).github,
+      job: "cache-publish",
+    },
+    buildkit: {
+      ...MainBuildStatsFixture.first(input.cacheTelemetry).buildkit,
+      cache_export: {
+        attempts: 3,
+        completed: 3,
+        bytes: 123456789,
+        duration_ms: 12345,
+        incomplete_failures: 0,
+      },
+    },
+    collection: { complete: true, warnings: [], failures: [] },
+  });
 
   const record = MainBuildStats.build(input);
 
@@ -217,7 +252,32 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
     record.cache_telemetry.totals.buildkit_cache_hit_rate_percent,
     70,
   );
-  assert.equal(record.cache_telemetry.collection.complete, true);
+  assert.deepEqual(record.cache_telemetry.totals.cache_export, {
+    attempts: 5,
+    completed: 4,
+    bytes: 1111111110,
+    duration_ms: 58023,
+    incomplete_failures: 1,
+  });
+  assert.deepEqual(
+    MainBuildStatsFixture.at(record.cache_telemetry.jobs, 1).buildkit
+      .cache_export,
+    {
+      attempts: 2,
+      completed: 1,
+      bytes: 987654321,
+      duration_ms: 45678,
+      incomplete_failures: 1,
+    },
+  );
+  assert.deepEqual(record.cache_telemetry.collection.failures, [
+    {
+      component: "buildkit_cache_export",
+      reference: "nook-native-source",
+      message: "cache export did not complete",
+    },
+  ]);
+  assert.equal(record.cache_telemetry.collection.complete, false);
 });
 
 void test("marks cache telemetry unavailable instead of inventing hit rates", () => {
@@ -293,6 +353,35 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
     "direct_compile",
   );
   MainBuildStats.validate(normalized);
+});
+
+void test("normalizes omitted cache collection failures without retaining undefined entries", () => {
+  const record = MainBuildStats.build(MainBuildStatsFixture.create());
+  record.schema_version = 2;
+  delete record.cache_telemetry.collection.failures;
+  for (const job of record.cache_telemetry.jobs) {
+    delete job.collection.failures;
+  }
+
+  const normalized = MainBuildStats.normalizeLegacy(record);
+
+  assert.deepEqual(normalized.cache_telemetry.collection.failures, []);
+  assert.ok(
+    normalized.cache_telemetry.jobs.every((job) =>
+      Array.isArray(job.collection.failures),
+    ),
+  );
+  MainBuildStats.validate(normalized);
+});
+
+void test("rejects malformed cache collection failure entries", () => {
+  const record = MainBuildStats.build(MainBuildStatsFixture.create());
+  record.cache_telemetry.collection.failures = [undefined];
+
+  assert.throws(
+    () => MainBuildStats.validate(record),
+    /cache_telemetry\.collection mismatch|collection\.failures/,
+  );
 });
 
 void test("retains incomplete failed steps without inventing duration", () => {

@@ -80,6 +80,48 @@ if ! bash "$retry_script" mirror-frontend-authorization \
 fi
 assert_equals "$(<"$mirror_authorization_count")" 2 'mirror frontend authorization retry count'
 
+registry_transport_count="$test_dir/registry-transport-count"
+registry_transport_command="$test_dir/registry-transport-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'if [ "$count" -eq 1 ]; then' \
+  '  printf "%s\n" "#19 exporting cache to registry" "#19 ERROR: failed to authorize: failed to fetch oauth token: unexpected status from GET request to https://registry.dev.nokey.sh/token: 503 Service Unavailable"' \
+  '  exit 1' \
+  'fi' >"$registry_transport_command"
+chmod +x "$registry_transport_command"
+if ! bash "$retry_script" registry-authorization-transport \
+  "$registry_transport_command" "$registry_transport_count"; then
+  echo 'registry authorization 503 should retry' >&2
+  exit 1
+fi
+assert_equals "$(<"$registry_transport_count")" 2 'registry transport retry count'
+
+registry_denied_count="$test_dir/registry-denied-count"
+registry_denied_command="$test_dir/registry-denied-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'printf "%s\n" "#19 exporting cache to registry" "#19 ERROR: failed to authorize: unexpected status from POST request: 401 Unauthorized"' \
+  'exit 1' >"$registry_denied_command"
+chmod +x "$registry_denied_command"
+if bash "$retry_script" registry-authorization-denied \
+  "$registry_denied_command" "$registry_denied_count"; then
+  echo 'registry authorization rejection must not retry or succeed' >&2
+  exit 1
+fi
+assert_equals "$(<"$registry_denied_count")" 1 'registry denied retry count'
+
 foreign_mirror_count="$test_dir/foreign-mirror-count"
 foreign_mirror_command="$test_dir/foreign-mirror-command"
 printf '%s\n' \
@@ -187,6 +229,25 @@ if bash "$retry_script" application-failure "$application_command" "$application
   exit 1
 fi
 assert_equals "$(<"$application_count")" 1 'application retry count'
+
+parse_count="$test_dir/parse-count"
+parse_command="$test_dir/parse-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'printf "%s\n" "Dockerfile:24" "ERROR: dockerfile parse error on line 24: unknown instruction: RNU"' \
+  'exit 1' >"$parse_command"
+chmod +x "$parse_command"
+if bash "$retry_script" dockerfile-parse "$parse_command" "$parse_count"; then
+  echo 'Dockerfile parse failures must not retry or succeed' >&2
+  exit 1
+fi
+assert_equals "$(<"$parse_count")" 1 'Dockerfile parse retry count'
 
 later_vertex_count="$test_dir/later-vertex-count"
 later_vertex_command="$test_dir/later-vertex-command"

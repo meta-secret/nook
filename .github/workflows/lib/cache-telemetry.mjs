@@ -52,7 +52,16 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {number} completed_steps
  * @property {number} cached_steps
  * @property {number} [cache_hit_rate_percent]
+ * @property {CacheExportSummary} cache_export
  * @property {'buildx_target_record_steps'} measurement
+ */
+/**
+ * @typedef {object} CacheExportSummary
+ * @property {number} attempts
+ * @property {number} completed
+ * @property {number} bytes
+ * @property {number} duration_ms
+ * @property {number} incomplete_failures
  */
 /**
  * @typedef {object} CacheBackend
@@ -68,7 +77,13 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
- * @property {{complete: boolean, warnings: readonly string[]}} collection
+ * @property {{complete: boolean, warnings: readonly string[], failures: readonly CollectionFailure[]}} collection
+ */
+/**
+ * @typedef {object} CollectionFailure
+ * @property {'buildx_history' | 'buildx_logs' | 'buildkit_cache_export' | 'collector'} component
+ * @property {string} reference
+ * @property {string} message
  */
 /**
  * @typedef {object} RawJsonProgress
@@ -105,6 +120,114 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {string | number} [runAttempt]
  * @property {NodeJS.ProcessEnv} [environment]
  */
+
+export class BuildkitCacheExportTelemetry {
+  /** @param {readonly JsonRecord[]} events */
+  constructor(events) {
+    this.events = events;
+  }
+
+  /** @param {unknown} value @returns {value is JsonRecord} */
+  isJsonRecord(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  /** @param {unknown} value @returns {number} */
+  nonNegativeInteger(value) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  /** @returns {CacheExportSummary} */
+  summary() {
+    /** @type {Map<string, {started?: string, completed?: string, failed: boolean}>} */
+    const exportsByVertex = new Map();
+    /** @type {Map<string, number>} */
+    const bytesByStatus = new Map();
+    for (const event of this.events) {
+      const historyReference =
+        typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
+      const vertexes = Array.isArray(event.vertexes) ? event.vertexes : [];
+      for (const candidate of vertexes) {
+        if (!this.isJsonRecord(candidate)) continue;
+        const digest =
+          typeof candidate.digest === "string" ? candidate.digest : "";
+        const name = typeof candidate.name === "string" ? candidate.name : "";
+        if (!digest || !/exporting cache to registry/i.test(name)) continue;
+        const vertexKey = `${historyReference}:${digest}`;
+        const previous = exportsByVertex.get(vertexKey) || { failed: false };
+        exportsByVertex.set(vertexKey, {
+          ...(typeof candidate.started === "string"
+            ? { started: candidate.started }
+            : previous.started
+              ? { started: previous.started }
+              : {}),
+          ...(typeof candidate.completed === "string"
+            ? { completed: candidate.completed }
+            : previous.completed
+              ? { completed: previous.completed }
+              : {}),
+          failed:
+            previous.failed ||
+            (typeof candidate.error === "string" && candidate.error.length > 0),
+        });
+      }
+    }
+    for (const event of this.events) {
+      const historyReference =
+        typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
+      const statuses = Array.isArray(event.statuses) ? event.statuses : [];
+      const historyHasCacheExport = [...exportsByVertex.keys()].some(
+        (key) => key.startsWith(`${historyReference}:`),
+      );
+      for (const candidate of statuses) {
+        if (!this.isJsonRecord(candidate)) continue;
+        const vertex =
+          typeof candidate.vertex === "string" ? candidate.vertex : "";
+        const vertexKey = `${historyReference}:${vertex}`;
+        const id = typeof candidate.id === "string" ? candidate.id : "";
+        const name = typeof candidate.name === "string" ? candidate.name : "";
+        const belongsToCacheExport =
+          exportsByVertex.has(vertexKey) ||
+          (historyHasCacheExport &&
+            /(push|upload|writ).*(cache|manifest|blob|layer)|(cache|manifest|blob|layer).*(push|upload|writ)/i.test(
+              `${id} ${name}`,
+            ));
+        if (!belongsToCacheExport) continue;
+        // Completed BuildKit status records may retain only `total`, or reset
+        // `current` to zero after the transfer. Either is measured evidence.
+        const observedCurrent = this.nonNegativeInteger(candidate.current);
+        const current =
+          observedCurrent > 0
+            ? observedCurrent
+            : this.nonNegativeInteger(candidate.total);
+        const key = `${vertexKey}:${id}`;
+        bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
+      }
+    }
+    let completed = 0;
+    let durationMs = 0;
+    let incompleteFailures = 0;
+    for (const cacheExport of exportsByVertex.values()) {
+      if (cacheExport.completed && !cacheExport.failed) completed += 1;
+      if (cacheExport.failed || !cacheExport.completed) incompleteFailures += 1;
+      if (cacheExport.started && cacheExport.completed) {
+        const started = Date.parse(cacheExport.started);
+        const finished = Date.parse(cacheExport.completed);
+        if (Number.isFinite(started) && Number.isFinite(finished)) {
+          durationMs += Math.max(0, finished - started);
+        }
+      }
+    }
+    return {
+      attempts: exportsByVertex.size,
+      completed,
+      bytes: [...bytesByStatus.values()].reduce((sum, value) => sum + value, 0),
+      duration_ms: durationMs,
+      incomplete_failures: incompleteFailures,
+    };
+  }
+}
 
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
@@ -376,8 +499,12 @@ export class CacheTelemetry {
     };
   }
 
-  /** @param {readonly BuildHistoryRecord[]} records @returns {BuildkitSummary} */
-  static summarizeBuildkit(records) {
+  /**
+   * @param {readonly BuildHistoryRecord[]} records
+   * @param {readonly JsonRecord[]} [events]
+   * @returns {BuildkitSummary}
+   */
+  static summarizeBuildkit(records, events = []) {
     const completedSteps = records.reduce(
       (total, record) => total + record.completed_steps,
       0,
@@ -395,6 +522,7 @@ export class CacheTelemetry {
         cachedSteps,
         completedSteps,
       ),
+      cache_export: new BuildkitCacheExportTelemetry(events).summary(),
       measurement: "buildx_target_record_steps",
     };
   }
@@ -537,12 +665,17 @@ export class CacheTelemetry {
       environment.NOOK_SCCACHE_BACKEND === "remote"
         ? "remote"
         : "direct_compile";
+    const configuredReason =
+      environment.NOOK_SCCACHE_BACKEND_REASON ||
+      (kind === "remote" ? "persistent_service" : "credentials_unavailable");
+    const reason =
+      kind === "remote" && environment.SCCACHE_S3_RW_MODE === "READ_ONLY"
+        ? `${configuredReason}_read_only`
+        : configuredReason;
     return {
       kind,
       persistent: kind === "remote",
-      reason:
-        environment.NOOK_SCCACHE_BACKEND_REASON ||
-        (kind === "remote" ? "persistent_service" : "credentials_unavailable"),
+      reason,
     };
   }
 
@@ -644,6 +777,25 @@ export class CacheTelemetry {
       "cache_hit_rate_percent",
       "buildkit",
     );
+    const cacheExport = buildkit.cache_export;
+    if ("cache_export" in buildkit) {
+      if (!CacheTelemetry.isJsonRecord(cacheExport)) {
+        throw new Error("telemetry buildkit.cache_export must be an object");
+      }
+      for (const [field, value] of Object.entries({
+        attempts: cacheExport.attempts,
+        completed: cacheExport.completed,
+        bytes: cacheExport.bytes,
+        duration_ms: cacheExport.duration_ms,
+        incomplete_failures: cacheExport.incomplete_failures,
+      })) {
+        if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
+          throw new Error(
+            `telemetry buildkit.cache_export.${field} must be a non-negative integer`,
+          );
+        }
+      }
+    }
     const collection = record.collection;
     if (
       !CacheTelemetry.isJsonRecord(collection) ||
@@ -656,6 +808,19 @@ export class CacheTelemetry {
       !collection.warnings.every((warning) => typeof warning === "string")
     ) {
       throw new Error("telemetry collection.warnings must be an array");
+    }
+    if (
+      "failures" in collection &&
+      (!Array.isArray(collection.failures) ||
+        !collection.failures.every(
+          (failure) =>
+            CacheTelemetry.isJsonRecord(failure) &&
+            typeof failure.component === "string" &&
+            typeof failure.reference === "string" &&
+            typeof failure.message === "string",
+        ))
+    ) {
+      throw new Error("telemetry collection.failures must be an array");
     }
     return record;
   }
@@ -691,6 +856,12 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     const warnings = [...baselineWarnings];
+    /** @type {CollectionFailure[]} */
+    const failures = baselineWarnings.map((warning) => ({
+      component: "buildx_history",
+      reference: "baseline",
+      message: warning,
+    }));
     /** @type {BuildHistoryRecord[]} */
     let records = [];
     try {
@@ -702,13 +873,19 @@ export class CacheTelemetry {
       records = selection.records;
       warnings.push(...selection.warnings);
     } catch (error) {
-      warnings.push(
-        `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
-      );
+      const message = CacheTelemetry.errorMessage(error);
+      warnings.push(`buildx_history_unavailable: ${message}`);
+      failures.push({
+        component: "buildx_history",
+        reference: "current",
+        message,
+      });
     }
 
     /** @type {SccacheReport[]} */
     const reports = [];
+    /** @type {JsonRecord[]} */
+    const historyEvents = [];
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -735,13 +912,36 @@ export class CacheTelemetry {
           warnings.push(
             `buildx_logs_unavailable:${result.record.ref}: ${result.message}`,
           );
+          failures.push({
+            component: "buildx_logs",
+            reference: result.record.ref,
+            message: result.message,
+          });
           break;
         case HistoryLogCollectionKind.Collected:
+          historyEvents.push(
+            ...result.events.map((event) => ({
+              ...event,
+              nook_history_ref: result.record.ref,
+            })),
+          );
           reports.push(
             ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
           );
           break;
       }
+    }
+
+    const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    if (buildkit.cache_export.incomplete_failures > 0) {
+      warnings.push(
+        `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
+      );
+      failures.push({
+        component: "buildkit_cache_export",
+        reference: "registry",
+        message: `${buildkit.cache_export.incomplete_failures} cache export attempts did not complete`,
+      });
     }
 
     return {
@@ -753,11 +953,12 @@ export class CacheTelemetry {
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
       sccache: CacheTelemetry.summarizeSccache(reports),
-      buildkit: CacheTelemetry.summarizeBuildkit(records),
+      buildkit,
       buildkit_records: records,
       collection: {
         complete: warnings.length === 0,
         warnings,
+        failures,
       },
     };
   }
@@ -787,6 +988,13 @@ export class CacheTelemetry {
       collection: {
         complete: false,
         warnings: [String(warning)],
+        failures: [
+          {
+            component: "collector",
+            reference: "cache-telemetry",
+            message: String(warning),
+          },
+        ],
       },
     };
   }
@@ -823,6 +1031,7 @@ export class CacheTelemetry {
         `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
+        `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
         "",
       ].join("\n"),
     );

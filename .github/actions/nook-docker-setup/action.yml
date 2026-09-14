@@ -25,16 +25,17 @@ inputs:
     description: >-
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
       git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps ordinary large graphs in its node-local persistent shard; only the
-      authorized remote build:compile publication handoff may publish its stable cache
-      ref. A read-only build:compile verification never exports a registry cache.
+      keeps ordinary large graphs in its node-local persistent shard. The
+      authorized remote build:compile publication handoff writes only its
+      exact-commit source ref; dependency inputs retain a separate fingerprinted
+      boundary. A read-only build:compile verification never exports a registry cache.
       Other jobs never write Main's protected refs.
     required: false
     default: "false"
   publish-compile-cache:
     description: >-
-      Build-only compile cache contract: true publishes the stable mode=max cache;
-      false imports that cache without exporting it. This input is valid only for
+      Build-only compile cache contract: true publishes the exact-head source cache;
+      false imports caches without exporting them. This input is valid only for
       the remote build:compile task.
     required: false
     default: "true"
@@ -199,16 +200,17 @@ runs:
             ;;
         esac
         remote_compile_cache_write=""
+        remote_compile_scope=""
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-          # The feature build has one stable BuildKit cache ref. Do not derive
-          # another key from its source branch or commit SHA.
-          isolated_cache_write=false
+          remote_compile_scope=1
+          # Feature source output is exact-head scoped. Dependencies use their
+          # content fingerprint below, and Hive retains its own lineage.
           if [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
-            echo "build:compile publication mode enables the stable mode=max cache export"
+            echo "build:compile publication mode enables exact-head cache export"
           else
-            echo "build:compile read-only verification imports the stable cache without registry export"
+            echo "build:compile read-only verification imports caches without registry export"
           fi
         elif [ "$publish_compile_cache" != "true" ]; then
           echo "publish-compile-cache=false requires the remote build:compile task" >&2
@@ -219,7 +221,7 @@ runs:
         else
           echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
         fi
-        if [ "$isolated_cache_write" = "true" ]; then
+        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
@@ -257,7 +259,9 @@ runs:
         # ARC retains its solved graph in the persistent shard for ordinary PR and
         # validation jobs. Keep that node-local behavior everywhere except the
         # explicitly authorized remote build:compile handoff above.
-        if [ "${NOOK_ARC_RUNNER:-}" = "1" ] && [ -z "$remote_compile_cache_write" ]; then
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \
+          && [ -z "$remote_compile_cache_write" ] \
+          && [ "$NOOK_REMOTE_TASK_SELECTION" != "hive:verify" ]; then
           isolated_cache_write=false
           echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
         fi
@@ -265,7 +269,10 @@ runs:
         scope_suffix=""
         fallback_enabled=""
         hive_remote_ref=""
-        if [ "$isolated_cache_write" = "true" ]; then
+        # Exact source identity is required for both publication and read-only
+        # verification. ARC may disable write authorization above, but that must
+        # not erase the scope/probes exported to the later task step.
+        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
@@ -287,7 +294,11 @@ runs:
               hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
               ;;
           esac
-          echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
+          if [ "$isolated_cache_write" = "true" ]; then
+            echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
+          else
+            echo "Remote compile read-only verification uses exact source scope $scope_suffix"
+          fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
@@ -371,12 +382,19 @@ runs:
           fi
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+          compile_deps_scope="nook-rust-compile-deps-v2-$rust_deps_fingerprint"
+          echo "GHA_RUST_COMPILE_DEPS_SCOPE=$compile_deps_scope" >> "$GITHUB_ENV"
           ;;
         esac
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
           # Main source also owns fresh dependency-only restores after publication.
+          if [ "$cache_selection" = "general" ] \
+            && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+            publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
+            publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v2$scope_suffix"
+          fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
@@ -421,12 +439,14 @@ runs:
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
-          # web-deps is an aggregate of independent app/research lockfile stages. Probe the
-          # child scopes so their standalone targets can restore exact-or-Main without merging
-          # both generations into one importer set.
+          # Keep the aggregate dependency graph and its independent lockfile
+          # children distinct from the source-bearing browser image. Each
+          # importer selects exact-or-Main rather than merging generations.
+          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
           if [ -n "$scope_suffix" ]; then
+            publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
           fi
