@@ -4,10 +4,19 @@ set -eu
 
 access_file=/run/secrets/sccache_s3_access_key
 secret_file=/run/secrets/sccache_s3_secret_key
+runtime_mode_file=/run/secrets/sccache_runtime_mode
 sccache_binary="${NOOK_SCCACHE_BINARY:-/usr/local/bin/sccache}"
 fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-disabled}"
 ready_marker="${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}"
 startup_lock="${NOOK_SCCACHE_START_LOCK:-/dev/shm/nook-sccache-start-lock}"
+
+# Compile-cache publishers and consumers mount this same secret ID at the same
+# path. Secret contents are deliberately absent from BuildKit cache checksums,
+# so runtime write authority cannot split otherwise-identical compiler keys.
+if [ -r "$runtime_mode_file" ]; then
+  SCCACHE_S3_RW_MODE="$(cat "$runtime_mode_file")"
+  export SCCACHE_S3_RW_MODE
+fi
 
 # Runtime commands and cache-missed BuildKit compiler vertices mount the same
 # stable secret IDs. BuildKit excludes secret contents from cache checksums; the

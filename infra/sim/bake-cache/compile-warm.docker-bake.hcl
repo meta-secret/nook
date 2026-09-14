@@ -74,6 +74,11 @@ compile_generation_cache_to = COMPILE_GENERATION_CACHE_WRITE_ENABLED != "" && CO
   "type=registry,ref=${compile_generation_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=5m",
 ] : []
 
+compile_solve_args = {
+  SIMULATED_BUILD_PROFILE    = SIMULATED_BUILD_PROFILE
+  SIMULATED_EXTENSION_COMMIT = SIMULATED_EXTENSION_COMMIT
+}
+
 target "compile-dependencies" {
   context = "."
   dockerfile = "compile-warm.Dockerfile"
@@ -82,6 +87,7 @@ target "compile-dependencies" {
   contexts = {
     toolchain-base = "target:compile-toolchain-context"
   }
+  args = compile_solve_args
   cache-from = [
     "type=registry,ref=${compile_deps_cache_ref},ignore-error=true",
   ]
@@ -97,10 +103,7 @@ target "compile-warm" {
   contexts = {
     toolchain-base = "target:compile-toolchain-context"
   }
-  args = {
-    SIMULATED_BUILD_PROFILE    = SIMULATED_BUILD_PROFILE
-    SIMULATED_EXTENSION_COMMIT = SIMULATED_EXTENSION_COMMIT
-  }
+  args = compile_solve_args
   cache-from = compile_cache_from
   cache-to = compile_source_cache_to
   output = ["type=cacheonly"]
@@ -108,6 +111,7 @@ target "compile-warm" {
 
 target "compile-generation" {
   inherits = ["compile-warm"]
+  args = compile_solve_args
   cache-to = compile_generation_cache_to
 }
 

@@ -128,6 +128,10 @@ tasks:
         compile_web_legal_input_orig="$(cat "$compile_web_legal_input")"
         compile_policy_input="$sim_dir/inputs/compile-policy-catalog.txt"
         compile_policy_input_orig="$(cat "$compile_policy_input")"
+        sccache_seed_mode="$(mktemp)"
+        sccache_consumer_mode="$(mktemp)"
+        printf '%s\n' READ_WRITE >"$sccache_seed_mode"
+        printf '%s\n' READ_ONLY >"$sccache_consumer_mode"
 
         cleanup() {
           set +e
@@ -148,6 +152,7 @@ tasks:
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
           fi
+          rm -f "$sccache_seed_mode" "$sccache_consumer_mode"
           rm -rf -- "$trusted_docker_config"
         }
         trap cleanup EXIT
@@ -238,6 +243,9 @@ tasks:
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
             --set "*.context=$sim_dir" \
+            --set "compile-dependencies.args.SIMULATED_BUILD_PROFILE=production" \
+            --set "compile-dependencies.args.SIMULATED_EXTENSION_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+            --set "compile-dependencies.secrets=id=sccache_runtime_mode,src=$sccache_seed_mode" \
             compile-dependencies >"$log_file" 2>&1
           local bake_status=$?
           set -e
@@ -267,6 +275,8 @@ tasks:
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
             --set "*.context=$sim_dir" \
             --set "compile-warm.args.SIMULATED_BUILD_PROFILE=production" \
+            --set "compile-warm.args.SIMULATED_EXTENSION_COMMIT=$extension_commit" \
+            --set "compile-warm.secrets=id=sccache_runtime_mode,src=$sccache_consumer_mode" \
             compile-warm >"$log_file" 2>&1
           local bake_status=$?
           set -e
@@ -286,6 +296,7 @@ tasks:
             --set "*.context=$sim_dir" \
             --set "compile-generation.args.SIMULATED_BUILD_PROFILE=production" \
             --set "compile-generation.args.SIMULATED_EXTENSION_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+            --set "compile-generation.secrets=id=sccache_runtime_mode,src=$sccache_seed_mode" \
             compile-generation >"$log_file" 2>&1
           local bake_status=$?
           set -e
@@ -393,6 +404,7 @@ tasks:
         echo "== Separate seed boundary: cold compile dependencies publish before the product SLO =="
         create_builder "nook-bake-sim-compile-deps-${suffix}"
         bake_compile_dependencies "$proof_log"
+        grep -Fq -- 'bake-sim-sccache-write' "$proof_log"
         for marker in \
           bake-sim-compile-toolchain \
           bake-sim-compile-native-dependencies \
@@ -463,6 +475,10 @@ tasks:
           require_uncached_step "$proof_log" "$marker"
         done
         require_cache_write "$proof_log"
+        if grep -Fq -- 'bake-sim-sccache-write' "$proof_log"; then
+          echo 'generation solve missed dependency keys shared by dependency seed' >&2
+          exit 1
+        fi
         test "$(compile_registry_ref_code "$compile_generation_manifest")" = 200
         echo "compile generation A: cached=7 uncached=8 writes=1 mode=max"
 

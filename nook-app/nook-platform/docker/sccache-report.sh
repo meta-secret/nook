@@ -19,6 +19,16 @@ if stats_json="$(/usr/local/bin/nook-sccache --show-stats --stats-format=json 2>
   )" || report=""
   if [ -n "$report" ]; then
     printf 'NOOK_SCCACHE_STATS %s\n' "$report"
+    runtime_mode="${SCCACHE_S3_RW_MODE:-READ_ONLY}"
+    if [ -r /run/secrets/sccache_runtime_mode ]; then
+      runtime_mode="$(cat /run/secrets/sccache_runtime_mode)"
+    fi
+    if [ "$runtime_mode" = READ_WRITE ] \
+      && jq -e '.cache_errors > 0 or (.cache_misses > 0 and .cache_writes == 0)' \
+        >/dev/null 2>&1 <<<"$report"; then
+      printf 'NOOK_SCCACHE_PUBLICATION_FAILURE %s\n' "$report" >&2
+      exit 1
+    fi
     exit 0
   fi
 fi

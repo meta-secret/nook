@@ -217,11 +217,11 @@ jobs:
       inputs.publish_compile_cache != false
     name: Remote / build:compile-cache-seed
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 25
+    timeout-minutes: 8
     env:
       REQUESTED_REMOTE_TASKS: build:compile-cache-seed
       REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
-      SCCACHE_S3_RW_MODE: READ_ONLY
+      SCCACHE_S3_RW_MODE: READ_WRITE
     steps:
       - uses: actions/checkout@v7
         with:
@@ -255,7 +255,7 @@ jobs:
           isolated-cache-write: "false"
       - name: Seed missing immutable compile baselines
         shell: bash
-        run: timeout --kill-after=1m 22m bash .github/scripts/compile-deps-cache-seed.sh
+        run: timeout --kill-after=30s 7m bash .github/scripts/compile-deps-cache-seed.sh
       - name: Preserve compile cache seed telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry

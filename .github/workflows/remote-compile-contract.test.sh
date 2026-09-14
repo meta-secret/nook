@@ -144,9 +144,9 @@ for required in \
 done
 
 # Bake inheritance is resolved before command-line target overrides. The
-# maintenance target therefore needs the same explicit build arguments as the
-# ordinary consumer; setting only build-compile.args.* creates different LLB
-# vertex keys even though build-compile-generation inherits the HCL target.
+# maintenance targets therefore need the same explicit build arguments as the
+# ordinary consumer. A successful manifest import with different target args
+# has zero reusable compiler keys.
 for argument in \
   SCCACHE_S3_MODE \
   SCCACHE_ENDPOINT \
@@ -162,9 +162,28 @@ for argument in \
   NOOK_EXTENSION_VERSION \
   NOOK_EXTENSION_COMMIT \
   NOOK_EXTENSION_SITE_URL; do
-  grep -Fq -- "build-compile-generation.args.${argument}=" "$seed_script" \
-    || { echo "remote compile contract: generation seed omits consumer argument: $argument" >&2; exit 1; }
+  for target in build-compile build-compile-dependencies build-compile-generation; do
+    grep -Fq -- "${target}.args.${argument}=" "$seed_script" \
+      || { echo "remote compile contract: $target omits solve argument: $argument" >&2; exit 1; }
+  done
 done
+test "$(grep -Ec '^[[:space:]]*args[[:space:]]*=[[:space:]]*compile_solve_args$' "$compile_bake")" -eq 3 \
+  || { echo 'remote compile contract: all three compile targets must share one HCL argument map' >&2; exit 1; }
+test "$(grep -Fc 'platforms  = ["linux/amd64"]' "$compile_bake")" -eq 2 \
+  || { echo 'remote compile contract: dependency and consumer platform shape diverged' >&2; exit 1; }
+test "$(grep -Fc 'output     = ["type=cacheonly"]' "$compile_bake")" -eq 2 \
+  || { echo 'remote compile contract: dependency and consumer output shape diverged' >&2; exit 1; }
+
+for boundary in "$compile_script" "$seed_script"; do
+  grep -Fq -- 'id=sccache_runtime_mode' "$boundary" \
+    || { echo 'remote compile contract: runtime sccache authority secret is missing' >&2; exit 1; }
+done
+grep -Fq -- "printf '%s\\n' READ_ONLY" "$compile_script" \
+  || { echo 'remote compile contract: ordinary compile must be read-only at runtime' >&2; exit 1; }
+grep -Fq -- "printf '%s\\n' READ_WRITE" "$seed_script" \
+  || { echo 'remote compile contract: maintenance seed must publish sccache entries' >&2; exit 1; }
+test "$(grep -c '^RUN --mount=type=secret,id=sccache_runtime_mode,required=false' "$compile_dockerfile")" -eq 18 \
+  || { echo 'remote compile contract: every compiler RUN must mount cache-neutral runtime authority' >&2; exit 1; }
 
 grep -Fq -- "cache-selection: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile'" "$remote" \
   || { echo 'remote compile contract: build:compile must select its bounded cache probe profile' >&2; exit 1; }
@@ -187,9 +206,9 @@ grep -Fq -- '^nook-rust-compile-deps-v3-' "$compile_script" \
 seed_job="$(sed -n '/^  compile-cache-seed:$/,/^  web-verify:$/p' "$remote")"
 for required in \
   "inputs.task == 'build:compile-cache-seed'" \
-  'timeout-minutes: 25' \
+  'timeout-minutes: 8' \
   'ref: ${{ inputs.source_sha }}' \
-  'timeout --kill-after=1m 22m bash .github/scripts/compile-deps-cache-seed.sh' \
+  'timeout --kill-after=30s 7m bash .github/scripts/compile-deps-cache-seed.sh' \
   'artifact-suffix: compile-cache-seed' \
   'cache-selection: compile-seed' \
   'cache-write: "false"' \

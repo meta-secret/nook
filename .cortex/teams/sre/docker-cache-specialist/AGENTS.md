@@ -19,6 +19,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Accept cache and remote-build performance packets from SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
 - Enforce a three-minute remote-build latency SLO and workflow timeout.
+- Enforce a seven-minute hard ceiling for a cold immutable compiler-generation
+  seed; a seed that cannot populate remote compiler entries inside that bound
+  is failed evidence, not an acceptable maintenance path.
 - Diagnose cache telemetry before changing cache topology.
 - Preserve separate cache identities:
   - immutable recipe/dependency-fingerprint generation scopes own exactly one
@@ -77,6 +80,11 @@ behavior for packets issued by SRE Team Gizmo.
 - Treat remote `sccache` in `READ_WRITE` mode as required publication
   infrastructure. Startup, credential, read, and write failures remain
   terminal.
+- Carry sccache read/write authority through a stable-ID runtime secret (or an
+  equivalently cache-key-neutral runtime input) mounted identically by seed
+  and consumer compiler vertices. Never encode publisher versus consumer mode
+  in an ARG, ENV, target context, platform, output, or command shape that
+  divides their BuildKit keys.
 - Use `mode=min` for exact source-cache exports.
 - Bound cache exports and transport retries.
 - Preserve ordinary new-commit reuse when no optional exact source cache

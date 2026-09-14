@@ -33,6 +33,10 @@ for forbidden_pattern in "${forbidden_compile_patterns[@]}"; do
 done
 
 docker_bin="${DOCKER:-docker}"
+runtime_mode_file="${RUNNER_TEMP:-/tmp}/nook-sccache-runtime-mode-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+printf '%s\n' READ_ONLY >"$runtime_mode_file"
+chmod 600 "$runtime_mode_file"
+trap 'rm -f -- "$runtime_mode_file"' EXIT
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
@@ -67,7 +71,7 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
-  --set "rust-base.args.SCCACHE_S3_RW_MODE=${SCCACHE_S3_RW_MODE:-READ_ONLY}"
+  --set "rust-base.args.SCCACHE_S3_RW_MODE=READ_ONLY"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
   --set "build-compile.args.WASM_BUILD_MODE=${wasm_build_mode}"
@@ -90,8 +94,10 @@ if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
   bake_args+=(
     "--allow=fs.read=${access_key_file}"
     "--allow=fs.read=${secret_key_file}"
+    "--allow=fs.read=${runtime_mode_file}"
     "--set=*.secrets=id=sccache_s3_access_key,src=${access_key_file}"
     "--set=*.secrets+=id=sccache_s3_secret_key,src=${secret_key_file}"
+    "--set=*.secrets+=id=sccache_runtime_mode,src=${runtime_mode_file}"
   )
 elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   echo "build:compile requires readable SCCACHE_S3_ACCESS_KEY_FILE and SCCACHE_S3_SECRET_KEY_FILE in hosted CI" >&2

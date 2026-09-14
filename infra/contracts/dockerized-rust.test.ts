@@ -985,6 +985,9 @@ tasks:
     expect(compileSeed).toContain("build-compile-dependencies");
     expect(compileSeed).toContain("build-compile");
     expect(compileSeed).toContain("build-compile-generation.args.WASM_BUILD_MODE");
+    expect(compileSeed).toContain(
+      "build-compile-dependencies.args.WASM_BUILD_MODE",
+    );
     expect(compileSeed).toContain("build-compile-generation.args.VITE_BASE");
     expect(compileSeed).toContain(
       "build-compile-generation.args.NOOK_EXTENSION_COMMIT",
@@ -1005,7 +1008,16 @@ tasks:
       "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1",
     );
     expect(remoteWorkflow).toContain("compile-cache-seed:");
-    expect(remoteWorkflow).toContain("timeout-minutes: 25");
+    expect(remoteWorkflow).toContain("timeout-minutes: 8");
+    expect(remoteWorkflow).toContain(
+      "timeout --kill-after=30s 7m bash .github/scripts/compile-deps-cache-seed.sh",
+    );
+    expect(compileSeed).toContain("printf '%s\\n' READ_WRITE");
+    expect(compileSeed).toContain("id=sccache_runtime_mode");
+    expect(productionDockerfile.match(/id=sccache_runtime_mode/g)).toHaveLength(
+      18,
+    );
+    expect(proof).toContain("generation solve missed dependency keys");
     expect(remoteWorkflow).toContain(
       "== 'build:compile' && 'compile'",
     );

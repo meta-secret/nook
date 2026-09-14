@@ -63,6 +63,25 @@ compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_BUIL
 
 compile_effective_cache_from = concat(compile_cache_from, compile_fingerprint_cache_from)
 
+// Every entry point uses one solve contract. Bake applies CLI overrides after
+// inheritance, so callers also mirror overrides on each named target.
+compile_solve_args = {
+  SCCACHE_S3_MODE         = SCCACHE_S3_MODE
+  SCCACHE_ENDPOINT        = SCCACHE_ENDPOINT
+  SCCACHE_BUCKET          = SCCACHE_BUCKET
+  WASM_BUILD_MODE         = WASM_BUILD_MODE
+  VITE_BASE               = VITE_BASE
+  VITE_SITE_URL           = VITE_SITE_URL
+  VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
+  VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
+  VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
+  NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
+  NOOK_EXTENSION_CHANNEL  = NOOK_EXTENSION_CHANNEL
+  NOOK_EXTENSION_VERSION  = NOOK_EXTENSION_VERSION
+  NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
+  NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
+}
+
 compile_cache_to = (GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" || GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED != "") && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // The fingerprint ref owns the maximal dependency closure. Keep the exact
   // source handoff minimal so publication does not serialize that graph twice.
@@ -96,19 +115,7 @@ target "build-compile" {
     rust-base = "target:rust-base"
     web-base  = "target:web-base"
   }
-  args = {
-    WASM_BUILD_MODE         = WASM_BUILD_MODE
-    VITE_BASE               = VITE_BASE
-    VITE_SITE_URL           = VITE_SITE_URL
-    VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
-    VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
-    VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
-    NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
-    NOOK_EXTENSION_CHANNEL  = NOOK_EXTENSION_CHANNEL
-    NOOK_EXTENSION_VERSION  = NOOK_EXTENSION_VERSION
-    NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
-    NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
-  }
+  args       = compile_solve_args
   cache-from = compile_effective_cache_from
   cache-to   = compile_cache_to
   output     = ["type=cacheonly"]
@@ -119,6 +126,7 @@ target "build-compile" {
 // current-SHA mode=min publication after a green solve.
 target "build-compile-generation" {
   inherits = ["build-compile"]
+  args = compile_solve_args
   cache-from = compile_effective_cache_from
   cache-to = compile_generation_cache_to
 }
@@ -136,6 +144,7 @@ target "build-compile-dependencies" {
     rust-base = "target:rust-base"
     web-base  = "target:web-base"
   }
+  args       = compile_solve_args
   cache-from = compile_deps_cache_from
   cache-to   = compile_deps_cache_to
   output     = ["type=cacheonly"]

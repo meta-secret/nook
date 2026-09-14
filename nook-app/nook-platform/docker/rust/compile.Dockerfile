@@ -50,7 +50,8 @@ RUN --network=default cargo fetch --locked
 # --all-targets, test runner, Clippy, coverage, or test-only package is used.
 FROM compile-platform-manifests AS compile-native-dependencies
 
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked \
       -p nook-app-common \
@@ -69,7 +70,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # results remain addressable records instead of marker-only scratch inputs.
 FROM compile-native-dependencies AS compile-wasm-dependencies
 
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm \
@@ -86,7 +88,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 FROM compile-native-dependencies AS compile-native-source
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-app-common -type f -name '*.rs' -exec touch {} + \
     && \
@@ -94,35 +97,40 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked -p nook-authenticator-domain -p nook-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-replication -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked -p nook-replication
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-event-log -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked -p nook-event-log
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-core -type f -name '*.rs' -exec touch {} + \
     && \
     cargo build --locked -p nook-companion-core
 
 COPY nook-app/nook-platform/nook-core nook-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-core -type f -name '*.rs' -exec touch {} + \
     && \
@@ -135,7 +143,8 @@ FROM compile-wasm-dependencies AS compile-wasm-source
 ARG WASM_BUILD_MODE=dev
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-app-common -type f -name '*.rs' -exec touch {} + \
     && \
@@ -144,7 +153,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
     && \
@@ -152,7 +162,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-replication -type f -name '*.rs' -exec touch {} + \
     && \
@@ -160,7 +171,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-event-log -type f -name '*.rs' -exec touch {} + \
     && \
@@ -168,7 +180,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-core -type f -name '*.rs' -exec touch {} + \
     && \
@@ -176,7 +189,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-core nook-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-core -type f -name '*.rs' -exec touch {} + \
     && \
@@ -184,7 +198,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
     && \
@@ -192,7 +207,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-wasm nook-wasm
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find nook-wasm -type f -name '*.rs' -exec touch {} + \
     && \
@@ -231,7 +247,8 @@ COPY agentic-ai/minds/hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p hive/src/bin \
     && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs
 RUN --network=default cargo fetch --locked
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked --release -p hive \
       --features observer-contract-export --lib \
@@ -278,7 +295,8 @@ RUN cd nook-app/nook-web/nook-web-research \
 FROM compile-minds-dependencies AS compile-minds-source
 
 COPY agentic-ai/minds/hive/src hive/src
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     find hive/src -type f -name '*.rs' -exec touch {} + \
     && cargo build --locked --release -p hive \

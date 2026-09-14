@@ -17,34 +17,42 @@ RUN test "$SIMULATED_BUILD_PROFILE" = production
 # target. This models the production root contract instead of a scratch marker
 # join that can discard the reusable compiler records.
 FROM compile-toolchain AS compile-native-dependencies
-RUN cat /opt/compile-toolchain >/opt/compile-native-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
+  && echo bake-sim-sccache-write \
+  && cat /opt/compile-toolchain >/opt/compile-native-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-native-dependencies
 
 FROM compile-native-dependencies AS compile-wasm-dependencies
 COPY inputs/compile-wasm-manifest.txt /tmp/wasm-manifest.txt
-RUN cat /tmp/wasm-manifest.txt >/opt/compile-wasm-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    cat /tmp/wasm-manifest.txt >/opt/compile-wasm-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-wasm-dependencies
 
 FROM compile-wasm-dependencies AS compile-hive-dependencies
 COPY inputs/compile-hive-lock.txt /tmp/hive-lock.txt
-RUN cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-hive-dependencies
 
 FROM compile-hive-dependencies AS compile-hive-console-dependencies
-RUN cat /opt/compile-hive-dependencies >/opt/compile-hive-console-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    cat /opt/compile-hive-dependencies >/opt/compile-hive-console-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-hive-console-dependencies
 
 FROM compile-hive-console-dependencies AS compile-web-app-dependencies
-RUN cat /opt/compile-hive-console-dependencies >/opt/compile-web-app-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    cat /opt/compile-hive-console-dependencies >/opt/compile-web-app-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-web-app-dependencies
 
 FROM compile-web-app-dependencies AS compile-web-dependencies
-RUN cat /opt/compile-web-app-dependencies >/opt/compile-web-dependencies \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    cat /opt/compile-web-app-dependencies >/opt/compile-web-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-web-dependencies
 
