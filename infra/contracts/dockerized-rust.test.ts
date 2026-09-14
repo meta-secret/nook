@@ -337,8 +337,9 @@ class DockerizedRustContract {
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(3);
+          expect(calls.trim().split("\n")).toHaveLength(4);
           expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-deps-v1");
           expect(calls).toContain("nook-web-app-deps-v1");
           expect(calls).toContain("nook-web-research-deps-v1");
         }

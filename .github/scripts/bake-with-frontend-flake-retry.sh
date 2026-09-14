@@ -16,6 +16,7 @@ is_buildkit_transport_flake() {
   # Match only infrastructure transport failures. These can occur while loading
   # the frontend, transferring the source context, or exporting a verified cache.
   grep -Eiq \
+    -e 'failed to read dockerfile' \
     -e 'rpc error: code = Unavailable' \
     -e 'rpc error: code = DeadlineExceeded' \
     -e 'rpc error: code = Canceled' \
@@ -41,7 +42,7 @@ is_unattributed_syntax_frontend_exit() {
     && grep -Eiq 'failed to solve: exit code: 2' "$log_file"
 }
 
-is_registry_authorization_transport_flake() {
+is_frontend_authorization_timeout() {
   local log_file="$1"
   # Authorization transport can fail before a frontend pull or while an exact
   # cache ref is imported/exported. Require an approved registry operation and
@@ -121,7 +122,7 @@ for attempt in 1 2; do
   fi
   if ! is_buildkit_transport_flake "$log_file" \
     && ! is_unattributed_syntax_frontend_exit "$log_file" \
-    && ! is_registry_authorization_transport_flake "$log_file"; then
+    && ! is_frontend_authorization_timeout "$log_file"; then
     echo "task ${label}: non-transient BuildKit failure; not retrying" >&2
     exit "$status"
   fi
