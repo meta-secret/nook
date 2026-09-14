@@ -30,7 +30,6 @@ const pullRequestListEntrySchema = z.object({
   url: z.string(),
   isDraft: z.boolean(),
   headRepository: repositoryReferenceSchema,
-  baseRepository: repositoryReferenceSchema,
   isCrossRepository: z.boolean(),
 });
 const pullRequestListSchema = z.array(pullRequestListEntrySchema);
@@ -744,6 +743,8 @@ export class DevelopmentPullRequestGateway {
   private openPullRequests(
     workingDirectory: string,
   ): Result<readonly PullRequestSelection[], DevFailure> {
+    const repository = this.repository(workingDirectory);
+    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
@@ -756,8 +757,10 @@ export class DevelopmentPullRequestGateway {
         'main',
         '--limit',
         '10',
+        '--repo',
+        repository.value.value(),
         '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,baseRepository,isCrossRepository',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,isCrossRepository',
       ],
       workingDirectory,
     });
@@ -766,14 +769,11 @@ export class DevelopmentPullRequestGateway {
       pullRequestListSchema,
     );
     if (decoded.isErr()) return err(decoded.error);
-    const repository = this.repository(workingDirectory);
-    if (repository.isErr()) return err(repository.error);
     const selections: PullRequestSelection[] = [];
     for (const raw of decoded.value) {
       if (
         raw.isCrossRepository ||
-        raw.headRepository.nameWithOwner !== repository.value.value() ||
-        raw.baseRepository.nameWithOwner !== repository.value.value()
+        raw.headRepository.nameWithOwner !== repository.value.value()
       )
         continue;
       const number = PullRequestNumber.parse(raw.number);
@@ -786,11 +786,15 @@ export class DevelopmentPullRequestGateway {
   private readPullRequest(
     request: PullRequestReadRequest,
   ): Result<AdmittedDevelopmentPullRequest, DevFailure> {
+    const repository = this.repository(request.workingDirectory);
+    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
         'view',
         String(request.number.value()),
+        '--repo',
+        repository.value.value(),
         '--json',
         'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,isCrossRepository,reviewDecision',
       ],
@@ -803,25 +807,23 @@ export class DevelopmentPullRequestGateway {
     if (decoded.isErr()) return err(decoded.error);
     return this.admitDevelopmentPullRequest({
       view: decoded.value,
-      workingDirectory: request.workingDirectory,
+      repository: repository.value,
     });
   }
 
   private admitDevelopmentPullRequest(request: {
     readonly view: PullRequestView;
-    readonly workingDirectory: string;
+    readonly repository: RepositorySlug;
   }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
-    const { view } = request;
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
-    // `gh pr view` is scoped to the current repository, so the supported
-    // `isCrossRepository` field proves that the base repository is this repo.
+    const { repository, view } = request;
+    // `--repo` binds the PR number and base repository to this repository;
+    // `isCrossRepository` and `headRepository` then prove the head identity.
     if (
       view.state !== PullRequestState.Open ||
       view.headRefName !== 'dev' ||
       view.baseRefName !== 'main' ||
       view.isCrossRepository ||
-      view.headRepository.nameWithOwner !== repository.value.value()
+      view.headRepository.nameWithOwner !== repository.value()
     ) {
       return err({
         kind: DevFailureKind.GitHub,
@@ -840,7 +842,7 @@ export class DevelopmentPullRequestGateway {
       headSha: headSha.value,
       baseSha: baseSha.value,
       url: view.url,
-      repository: repository.value,
+      repository,
       isDraft: view.isDraft,
       reviewDecision: this.reviewDecision(view.reviewDecision),
     });
