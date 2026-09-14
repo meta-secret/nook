@@ -64,6 +64,7 @@ variable "CONSUMER_EXACT_AVAILABLE" {
   default = ""
 }
 
+variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"
 }
 
