@@ -292,9 +292,13 @@ export class CortexDocumentStructure {
           ) {
             continue;
           }
-          const graphPaths = indexedDocumentGraphs.get(indexedPath) ?? [];
-          graphPaths.push(graphPath);
-          indexedDocumentGraphs.set(indexedPath, graphPaths);
+          const graphPaths = indexedDocumentGraphs.get(indexedPath);
+          if (graphPaths) {
+            graphPaths.push(graphPath);
+            continue;
+          }
+          const firstGraphPaths = [graphPath];
+          indexedDocumentGraphs.set(indexedPath, firstGraphPaths);
         }
       }
       for (const [indexedPath, graphPaths] of indexedDocumentGraphs) {

@@ -334,14 +334,14 @@ class ImmutableGitCommandPolicy {
       (command === 'merge-base' &&
         arguments_.length === 3 &&
         arguments_[0] === '--is-ancestor' &&
-        ImmutableGitCommandPolicy.isRevision(arguments_[1]) &&
-        ImmutableGitCommandPolicy.isRevision(arguments_[2])) ||
+        ImmutableGitCommandPolicy.isRevision(arguments_[1] || false) &&
+        ImmutableGitCommandPolicy.isRevision(arguments_[2] || false)) ||
       (command === 'rev-parse' &&
         ((arguments_.length === 1 &&
-          ImmutableGitCommandPolicy.isRevision(arguments_[0])) ||
+          ImmutableGitCommandPolicy.isRevision(arguments_[0] || false)) ||
           (arguments_.length === 2 &&
             arguments_[0] === '--verify' &&
-            ImmutableGitCommandPolicy.isRevision(arguments_[1])))) ||
+            ImmutableGitCommandPolicy.isRevision(arguments_[1] || false)))) ||
       (command === 'status' &&
         arguments_.length === 2 &&
         arguments_[0] === '--porcelain' &&
@@ -354,10 +354,12 @@ class ImmutableGitCommandPolicy {
     });
   }
 
-  private static isRevision(value: string | undefined): boolean {
-    if (value === undefined) return false;
-    return /^(?:[0-9a-f]{40}|HEAD(?:\^\{commit\})?|refs\/remotes\/origin\/main\^\{commit\})$/u.test(
-      value,
+  private static isRevision(value: string | false): boolean {
+    return (
+      typeof value === 'string' &&
+      /^(?:[0-9a-f]{40}|HEAD(?:\^\{commit\})?|refs\/remotes\/origin\/main\^\{commit\})$/u.test(
+        value,
+      )
     );
   }
 }

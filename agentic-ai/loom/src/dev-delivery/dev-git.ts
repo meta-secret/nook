@@ -357,35 +357,35 @@ export class DevGitRepository {
     if (records.isErr()) return err(records.error);
     const repositoryIdentity = this.repositoryIdentityAt(this.request.root);
     if (repositoryIdentity.isErr()) return err(repositoryIdentity.error);
-    const mainPath = this.bootstrapWorktreePath(
-      request.mainPath === undefined
+    const mainPathRequest =
+      typeof request.mainPath === 'string'
         ? {
-            branch: ManagedBranch.Main,
-            records: records.value,
-            repositoryIdentity: repositoryIdentity.value,
-          }
-        : {
             branch: ManagedBranch.Main,
             requestedPath: request.mainPath,
             records: records.value,
             repositoryIdentity: repositoryIdentity.value,
-          },
-    );
+          }
+        : {
+            branch: ManagedBranch.Main,
+            records: records.value,
+            repositoryIdentity: repositoryIdentity.value,
+          };
+    const mainPath = this.bootstrapWorktreePath(mainPathRequest);
     if (mainPath.isErr()) return err(mainPath.error);
-    const devPath = this.bootstrapWorktreePath(
-      request.devPath === undefined
+    const devPathRequest =
+      typeof request.devPath === 'string'
         ? {
             branch: ManagedBranch.Dev,
+            requestedPath: request.devPath,
             records: records.value,
             repositoryIdentity: repositoryIdentity.value,
           }
         : {
             branch: ManagedBranch.Dev,
-            requestedPath: request.devPath,
             records: records.value,
             repositoryIdentity: repositoryIdentity.value,
-          },
-    );
+          };
+    const devPath = this.bootstrapWorktreePath(devPathRequest);
     if (devPath.isErr()) return err(devPath.error);
 
     const main = this.synchronizeWorktree({

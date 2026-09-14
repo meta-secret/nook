@@ -546,7 +546,8 @@ export class SkillProviderBoundedPackageLoaderScenario {
       const parameterDeclaration = functionDeclaration.parameters[0];
       if (
         !functionName ||
-        functionDeclaration.parameters.length !== 1 ||
+        (functionDeclaration.parameters.length !== 1 &&
+          functionDeclaration.parameters.length !== 2) ||
         !parameterDeclaration ||
         !ts.isIdentifier(parameterDeclaration.name) ||
         !functionDeclaration.body
@@ -554,6 +555,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         continue;
       }
       const parameter = parameterDeclaration.name;
+      const validationParameterDeclaration = functionDeclaration.parameters[1];
       for (const resolvedDeclaration of variableDeclarations.values()) {
         if (
           !resolvedDeclaration.initializer ||
@@ -613,6 +615,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
           functionDeclaration,
           functionName,
           parameter,
+          validationParameter:
+            validationParameterDeclaration &&
+            ts.isIdentifier(validationParameterDeclaration.name)
+              ? validationParameterDeclaration.name
+              : false,
           pathToFileUrlBinding: dynamicArgument.expression.expression,
           requireBinding: requireDeclaration.name,
           requireDeclaration,
@@ -704,8 +711,18 @@ export class SkillProviderBoundedPackageLoaderScenario {
       dynamicArgument.expression.arguments[0],
     ];
     const allowedPathToFileUrlReference = dynamicArgument.expression.expression;
+    const validationParameter = candidate.validationParameter;
+    const declaredFunctionNames = new Set<string>();
+    const collectFunctionNames = (node: ts.Node): void => {
+      if (ts.isFunctionDeclaration(node) && node.name) {
+        declaredFunctionNames.add(node.name.text);
+      }
+      ts.forEachChild(node, collectFunctionNames);
+    };
+    collectFunctionNames(validation.sourceFile);
     let safe = true;
     let callCount = 0;
+    let validationCallCount = 0;
     const visit = (node: ts.Node): void => {
       if (!safe) return;
       if (ts.isIdentifier(node) && node.text === candidate.functionName.text) {
@@ -723,8 +740,16 @@ export class SkillProviderBoundedPackageLoaderScenario {
                 specifier: argument.text,
               }
             : false;
+        const validationArgument = parent.arguments[1];
+        const hasValidValidationArgument =
+          validationParameter === false
+            ? parent.arguments.length === 1
+            : parent.arguments.length === 2 &&
+              !!validationArgument &&
+              ts.isIdentifier(validationArgument) &&
+              declaredFunctionNames.has(validationArgument.text);
         if (
-          parent.arguments.length !== 1 ||
+          !hasValidValidationArgument ||
           !argument ||
           !ts.isStringLiteralLike(argument) ||
           !SAFE_PACKAGE_SPECIFIER.test(argument.text) ||
@@ -751,7 +776,8 @@ export class SkillProviderBoundedPackageLoaderScenario {
         ts.isIdentifier(node) &&
         node.text === candidate.parameter.text &&
         node !== candidate.parameter &&
-        node !== allowedParameterReference
+        node !== allowedParameterReference &&
+        !ts.isTemplateSpan(node.parent)
       ) {
         safe = false;
         return;
@@ -764,6 +790,26 @@ export class SkillProviderBoundedPackageLoaderScenario {
       ) {
         safe = false;
         return;
+      }
+      if (
+        validationParameter !== false &&
+        ts.isIdentifier(node) &&
+        node.text === validationParameter.text &&
+        node !== validationParameter
+      ) {
+        const parent = node.parent;
+        if (
+          !ts.isCallExpression(parent) ||
+          parent.expression !== node ||
+          parent.arguments.length !== 1 ||
+          !parent.arguments[0] ||
+          !ts.isIdentifier(parent.arguments[0]) ||
+          parent.arguments[0].text !== 'imported'
+        ) {
+          safe = false;
+          return;
+        }
+        validationCallCount += 1;
       }
       if (
         ts.isIdentifier(node) &&
@@ -786,7 +832,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
       ts.forEachChild(node, visit);
     };
     visit(validation.sourceFile);
-    return safe && callCount > 0;
+    return (
+      safe &&
+      callCount > 0 &&
+      (validationParameter === false || validationCallCount > 0)
+    );
   }
 
   static isRepositoryBackedPackage(
@@ -854,6 +904,7 @@ type BoundedLoaderCandidate = {
   readonly functionDeclaration: ts.FunctionDeclaration;
   readonly functionName: ts.Identifier;
   readonly parameter: ts.Identifier;
+  readonly validationParameter: ts.Identifier | false;
   readonly pathToFileUrlBinding: ts.Identifier;
   readonly requireBinding: ts.Identifier;
   readonly requireDeclaration: ts.VariableDeclaration;

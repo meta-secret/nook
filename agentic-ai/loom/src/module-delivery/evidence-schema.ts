@@ -759,9 +759,7 @@ export class ModuleDeliveryEvidenceSchema {
         const childIdentityDepth = current.isIdentityArray
           ? current.identityDepth + 1
           : current.identityDepth;
-        for (let index = current.node.length - 1; index >= 0; index -= 1) {
-          const node = current.node[index];
-          if (node === undefined) continue;
+        for (const node of [...current.node].reverse()) {
           pending.push({
             node,
             depth: childDepth,
@@ -783,17 +781,13 @@ export class ModuleDeliveryEvidenceSchema {
           MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
         );
       const childDepth = current.depth + 1;
-      for (let index = keys.length - 1; index >= 0; index -= 1) {
-        const key = keys[index];
-        if (key === undefined) continue;
+      for (const [key, child] of Object.entries(object).reverse()) {
         if (key.length > MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS)
           ModuleDeliveryEvidenceSchema.throwDecodeLimit(
             ModuleDeliveryEvidenceDecodeErrorCode.StringSizeLimit,
             key.length,
             MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
           );
-        const child = object[key];
-        if (child === undefined) continue;
         pending.push({
           node: child,
           depth: childDepth,

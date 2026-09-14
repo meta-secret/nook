@@ -72,23 +72,35 @@ export class CanonicalFeatureBranchContract {
     const segments = components.slice(1);
     const valid =
       (segments.length === 1 &&
-        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
+        (CanonicalFeatureBranchContract.isKebabSegment(
+          segments[0] || false,
+          10,
+          20,
+        ) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
-        CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
-        CanonicalFeatureBranchContract.isCanonicalTeam(segments[1]) &&
-        CanonicalFeatureBranchContract.isCanonicalRole(
-          segments[1],
-          segments[2],
+        CanonicalFeatureBranchContract.isKebabSegment(
+          segments[0] || false,
+          10,
+          20,
         ) &&
-        CanonicalFeatureBranchContract.isKebabSegment(segments[3], 20, 50) &&
+        CanonicalFeatureBranchContract.isCanonicalTeam(segments[1] || false) &&
+        CanonicalFeatureBranchContract.isCanonicalRole(
+          segments[1] || false,
+          segments[2] || false,
+        ) &&
+        CanonicalFeatureBranchContract.isKebabSegment(
+          segments[3] || false,
+          20,
+          50,
+        ) &&
         segments[3] !== 'cleanup');
     return valid;
   }
 
   private static isKebabSegment(
     ...[segment, minimum, maximum]: [
-      segment: string | undefined,
+      segment: string | false,
       minimum: number,
       maximum: number,
     ]
@@ -101,7 +113,7 @@ export class CanonicalFeatureBranchContract {
     );
   }
 
-  private static isCanonicalTeam(team: string | undefined): boolean {
+  private static isCanonicalTeam(team: string | false): boolean {
     return (
       team === 'ai' ||
       team === 'dev-core' ||
@@ -113,7 +125,7 @@ export class CanonicalFeatureBranchContract {
   }
 
   private static isCanonicalRole(
-    ...[team, role]: [team: string | undefined, role: string | undefined]
+    ...[team, role]: [team: string | false, role: string | false]
   ): boolean {
     if (typeof team !== 'string' || typeof role !== 'string') return false;
     switch (team) {

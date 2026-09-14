@@ -100,7 +100,7 @@ const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 test('keeps Delivery Pipeline out of ordinary product ownership', () => {
   for (const team of Object.values(TeamKey))
-    expect(ORDINARY_TASK_WRITE_ROOTS[team]).toBeDefined();
+    expect(Array.isArray(ORDINARY_TASK_WRITE_ROOTS[team])).toBe(true);
   expect(ORDINARY_TASK_WRITE_ROOTS[TeamKey.DeliveryPipeline]).toEqual([]);
   expect(
     ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(

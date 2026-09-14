@@ -43,7 +43,7 @@ test('pre-importing capability assertions cannot preempt coordinator minting', a
 
     const coordinator =
       await import('../../src/module-delivery/integration.ts');
-    expect(coordinator.ModuleIntegrationCoordinator).toBeDefined();
+    expect(typeof coordinator.ModuleIntegrationCoordinator).toBe('function');
     expect(forgedBridges).toHaveLength(1);
 
     const { ModuleDeliveryEvidenceScenario } =

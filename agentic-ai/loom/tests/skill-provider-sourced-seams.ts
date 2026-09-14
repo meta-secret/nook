@@ -129,14 +129,14 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   [
     '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
-    'f91b1066198b1fb0d63103e89e8ba503e1df449afe0c68f667d6e87e7df0bced',
+    'f1f5ccdf4018460774b17dc012b4e7fb197bcaf578be2834fd44ca30f1786151',
   ],
 ]);
 
 const AUDITED_COMMAND_EXECUTING_FIND = new Map([
   [
     '.github/workflows/agent-implement.yml',
-    '9352d8821e1b529f715372f6486695b47de0cd7ca248287903bf65a1799f4183',
+    '4c35abb4a664edd5ab1100016b08ec637dd9ac0d75bebbb0a84df70a8c0e170f',
   ],
 ]);
 
@@ -159,11 +159,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '7231c8dda8fa05bbcb3dea34011aeeea2e895878158de4c91b3bb3f319796d84',
+    '3900ff7f3e0c9c3a86f6fd07c062e4b1d733f3961e0348b56d18bdcf6b4340b1',
   ],
   [
     'agentic-ai/loom/src/lib/run.ts',
-    'b3c2f301897a110a0ce9aeedcc1de795d1f1b48a8c693ffb45ef0030e8d3eb24',
+    '8bee6ac341fecf756a0323ecaa509bf82617cc9b4a51f9999ec3a5709a4c25f3',
   ],
   [
     'agentic-ai/loom/src/module-experts/repository-snapshot.ts',
@@ -183,7 +183,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '9c354590048e367cd6b9829772ec3167ac083211d9e93fcf1b9cf79467403d91',
+    'c0b006496b915562166f663b7e1b93aa9ac275cbe9109f9f7c0631938202b59f',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -199,7 +199,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/formatting/format-host-apply.test.sh',
-    'a204837c5157046a566f6925191e387fae8de45324c014aa5593bb2cb412d78f',
+    '073947efded4373ef02d7ca9d017ea9d82cad28b4329cf664acaca7ca723e2b2',
   ],
   [
     'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
@@ -247,7 +247,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    '733ddc1c96230b73e248c8117d0315e47d6f6e5c851cf02c0c05c3e70b633e43',
+    '2fefe136040aaa20f96fa95a0712539b240195d31f4ef20f30935bf237a8743c',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',

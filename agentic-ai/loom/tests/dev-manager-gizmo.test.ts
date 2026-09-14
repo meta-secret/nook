@@ -56,7 +56,7 @@ class DevManagerGizmoRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
   private remoteDevPresent: boolean;
   private remoteDevSha: string;
-  private pullRequest: PullRequestFixture | undefined;
+  private pullRequest: PullRequestFixture | false = false;
   private readonly originMainSha: string;
   private fetchedOriginMainSha?: string;
   private pullRequestListCount = 0;
@@ -72,7 +72,7 @@ class DevManagerGizmoRunner implements CommandRunner {
   ) {
     this.remoteDevPresent = request.options.remoteDevPresent !== false;
     this.remoteDevSha = request.options.remoteDevSha;
-    this.pullRequest = request.options.pullRequest;
+    this.pullRequest = request.options.pullRequest || false;
     this.originMainSha = request.options.originMainSha || SHA_MAIN;
   }
 
@@ -235,7 +235,9 @@ class DevManagerGizmoRunner implements CommandRunner {
     ) {
       return this.output({ stdout: '[]' });
     }
-    const headSha = this.pullRequest?.headSha || this.request.options.localSha;
+    const headSha = this.pullRequest
+      ? this.pullRequest.headSha
+      : this.request.options.localSha;
     return this.output({
       stdout: JSON.stringify([
         {
@@ -264,7 +266,7 @@ class DevManagerGizmoRunner implements CommandRunner {
         number: 42,
         headRefName: 'dev',
         baseRefName: 'main',
-        headRefOid: pullRequest?.headSha || this.remoteDevSha,
+        headRefOid: pullRequest ? pullRequest.headSha : this.remoteDevSha,
         baseRefOid: this.originMainSha,
         url: 'https://github.example/pr/42',
         isDraft: false,

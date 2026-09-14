@@ -125,7 +125,7 @@ export class ProcessCommandRunner implements CommandRunner {
   ] as const;
 
   constructor(request: { readonly repositoryRoot?: string } = {}) {
-    if (request.repositoryRoot !== undefined)
+    if (typeof request.repositoryRoot === 'string')
       this.repositoryRoot = request.repositoryRoot;
   }
 

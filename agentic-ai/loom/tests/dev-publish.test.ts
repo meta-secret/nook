@@ -113,10 +113,13 @@ class PublishRunner implements CommandRunner {
       return ok(this.output({ stdout: 'nook/example\n' }));
     }
     if (args[0] === 'pr' && args[1] === 'list') {
-      const next = this.request.pullRequests[this.pullRequestIndex] ?? false;
+      const next = this.request.pullRequests[this.pullRequestIndex] || false;
       this.pullRequestIndex += 1;
-      const candidates =
-        this.request.pullRequestCandidates ?? (next ? [next] : []);
+      const candidates = this.request.pullRequestCandidates
+        ? this.request.pullRequestCandidates
+        : next
+          ? [next]
+          : [];
       this.currentPullRequest =
         candidates.find(
           (candidate) =>
@@ -255,7 +258,7 @@ class DevPublishPublicationScenario {
       root,
       devPath,
       pullRequests: request.pullRequests,
-      ...(request.pullRequestCandidates === undefined
+      ...(request.pullRequestCandidates
         ? {}
         : { pullRequestCandidates: request.pullRequestCandidates }),
       ciStatuses: request.ciStatuses || ['completed'],

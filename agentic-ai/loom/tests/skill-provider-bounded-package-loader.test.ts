@@ -24,7 +24,7 @@ test('specializes only closed finite external package loaders', async () => {
       inspection,
     );
   expect(specialized).toContain("from 'bounded-package-loader'");
-  expect(specialized).toContain('return Promise.resolve(false)');
+  expect(specialized).toContain('await Promise.resolve(false)');
   const sourceInspection = {
     allowUnprovenComputedDataAccess: true as const,
     filePath: path,

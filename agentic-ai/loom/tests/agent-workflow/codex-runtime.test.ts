@@ -266,7 +266,11 @@ describe('Team Agent Codex settings', () => {
     });
 
     expect(configured.config?.service_tier).toBe('fast');
-    expect(codexOptions.config?.service_tier).toBeUndefined();
+    expect(
+      codexOptions.config
+        ? Object.hasOwn(codexOptions.config, 'service_tier')
+        : false,
+    ).toBe(false);
   });
 
   test('resolves canonical Team Gizmo and leaf runtime profiles', () => {
@@ -320,7 +324,11 @@ describe('Team Agent Codex settings', () => {
       serviceTier: AgentServiceTier.Fast,
     });
     expect(configured.codexOptions.config?.service_tier).toBe('fast');
-    expect(codexOptions.config?.service_tier).toBeUndefined();
+    expect(
+      codexOptions.config
+        ? Object.hasOwn(codexOptions.config, 'service_tier')
+        : false,
+    ).toBe(false);
   });
 
   test('rejects drifted canonical runtime profiles', () => {

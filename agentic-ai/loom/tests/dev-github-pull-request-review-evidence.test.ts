@@ -25,7 +25,8 @@ const BASE = '1111111111111111111111111111111111111111';
 const REPOSITORY = 'nook/example';
 const externalNull = (): JsonTransportNull => {
   const value = new URLSearchParams().get('missing');
-  if (value !== null) throw new Error('review fixture null sentinel changed');
+  if (typeof value !== 'object' || value)
+    throw new Error('review fixture null sentinel changed');
   return value;
 };
 const EXTERNAL_NULL = externalNull();
@@ -156,7 +157,8 @@ class ReviewEvidenceRunner implements CommandRunner {
           : EXTERNAL_NULL,
       reviews: request.reviews.map((review) => ({
         ...review,
-        commit: review.commit ?? EXTERNAL_NULL,
+        commit:
+          typeof review.commit === 'string' ? review.commit : EXTERNAL_NULL,
       })),
     };
   }
