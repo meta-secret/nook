@@ -36,26 +36,28 @@ impl ObserverContractExport<'_> {
         .map(|name| format!("export type {{ {name} }} from './{name}';\n"))
         .collect::<String>();
         fs::write(self.output.join("index.ts"), declarations)?;
+        let alert_kind = ValueExport {
+            name: "AlertKind",
+            values: &[
+                AlertKind::TaskFailed,
+                AlertKind::DependencyFailed,
+                AlertKind::DependencyBlocked,
+                AlertKind::ActivityStale,
+                AlertKind::CancellationStuck,
+            ],
+        }
+        .declaration()?;
+        fs::write(self.output.join("AlertKind.ts"), alert_kind)?;
+        let alert_severity = ValueExport {
+            name: "AlertSeverity",
+            values: &[AlertSeverity::Critical, AlertSeverity::Warning],
+        }
+        .declaration()?;
+        fs::write(self.output.join("AlertSeverity.ts"), alert_severity)?;
         let mut values = String::from("// Generated from canonical Rust observer values.\n");
+        values.push_str("export { AlertKind as ObservedAlertKind } from './AlertKind';\n");
         values.push_str(
-            &ValueExport {
-                name: "ObservedAlertKind",
-                values: &[
-                    AlertKind::TaskFailed,
-                    AlertKind::DependencyFailed,
-                    AlertKind::DependencyBlocked,
-                    AlertKind::ActivityStale,
-                    AlertKind::CancellationStuck,
-                ],
-            }
-            .declaration()?,
-        );
-        values.push_str(
-            &ValueExport {
-                name: "ObservedAlertSeverity",
-                values: &[AlertSeverity::Critical, AlertSeverity::Warning],
-            }
-            .declaration()?,
+            "export { AlertSeverity as ObservedAlertSeverity } from './AlertSeverity';\n",
         );
         values.push_str(
             &ValueExport {
@@ -83,7 +85,7 @@ struct ValueExport<'a, T> {
 }
 impl<T: Serialize> ValueExport<'_, T> {
     fn declaration(self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut source = format!("export const {} = {{\n", self.name);
+        let mut source = format!("export enum {} {{\n", self.name);
         for value in self.values {
             let serialized = serde_json::to_value(value)?;
             let wire = serialized.as_str().ok_or_else(|| {
@@ -102,13 +104,34 @@ impl<T: Serialize> ValueExport<'_, T> {
                     })
                 })
                 .collect::<String>();
-            source.push_str(&format!(
-                "  {}: {},\n",
-                serde_json::to_string(&key)?,
-                serde_json::to_string(wire)?
-            ));
+            source.push_str(&format!("  {} = {},\n", key, serde_json::to_string(wire)?));
         }
-        source.push_str("} as const;\n");
+        source.push_str("}\n");
         Ok(source)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ObserverContractExport;
+    use std::fs;
+
+    #[test]
+    fn alert_vocabularies_export_as_runtime_enums() {
+        let output = tempfile::tempdir().expect("contract directory");
+        ObserverContractExport {
+            output: output.path(),
+        }
+        .write()
+        .expect("observer contract export");
+
+        let kind =
+            fs::read_to_string(output.path().join("AlertKind.ts")).expect("alert kind output");
+        let severity = fs::read_to_string(output.path().join("AlertSeverity.ts"))
+            .expect("alert severity output");
+        assert!(kind.starts_with("export enum AlertKind"));
+        assert!(kind.contains("TaskFailed = \"task-failed\""));
+        assert!(severity.starts_with("export enum AlertSeverity"));
+        assert!(severity.contains("Critical = \"critical\""));
     }
 }

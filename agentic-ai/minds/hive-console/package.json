@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"scripts/**/*.ts\" \"locales/**/*.json\" \"*.{ts,js,json,md,html}\" .prettierrc",
     "test:e2e": "playwright test",
     "contracts": "bun scripts/generate-observer-contract.ts",
+    "test:contracts": "bun test scripts/generate-observer-contract.test.ts",
     "lint": "eslint .",
     "typecheck": "failed=0; svelte-check --tsconfig ./tsconfig.json || failed=1; tsc -p tsconfig.json || failed=1; exit \"$failed\""
   },
