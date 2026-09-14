@@ -28,7 +28,8 @@ This document provides a comprehensive guide to Nook's architecture, package bou
 - **Subsystems at repository root:**
   - `infra`: infrastructure composition root, cluster definitions, persistent services, and deployment operations.
   - `nook-app`: application product code, Rust domain/platform workspace, WASM bridge, and web frontends.
-  - `agentic-ai`: agent tooling, deterministic Cortex runner (Loom), CI agent, and isolated worker environments.
+  - `agentic-ai`: deterministic Cortex tooling and validation through Loom,
+    plus bounded CI-agent automation for GitHub Actions.
   - `preflight`: standalone repository invariant verification tests.
 - **Dynamic exploration:** Detailed internal directory structures are dynamic.
   Agents must investigate directory trees directly using exploration tools rather
