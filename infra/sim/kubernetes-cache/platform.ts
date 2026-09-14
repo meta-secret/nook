@@ -93,7 +93,7 @@ class RegistrySecretManifest {
 kind: Secret
 metadata:
   name: nook-zot-htpasswd
-  namespace: hive-data
+  namespace: nook-infra
 type: Opaque
 stringData:
   htpasswd: |-
@@ -152,7 +152,7 @@ export class CachePlatformDeployment {
     }).apply();
     if (applied.isErr()) return err(applied.error);
     for (const command of [
-      ["-n", "hive-data", "rollout", "status", "deployment/nook-zot"],
+      ["-n", "nook-infra", "rollout", "status", "deployment/nook-zot"],
       ["-n", "arc-runners", "rollout", "status", "statefulset/nook-buildkit"],
     ]) {
       const [workload = "workload"] = command.slice(-1);
@@ -190,14 +190,14 @@ export class CachePlatformBoundary {
     const zotResult = new KubectlCommand({
       kubeconfigPath,
       label: "inspect simulated Zot Deployment",
-      command: ["-n", "hive-data", "get", "deployment/nook-zot", "-o", "yaml"],
+      command: ["-n", "nook-infra", "get", "deployment/nook-zot", "-o", "yaml"],
     }).run();
     if (zotResult.isErr()) return err(zotResult.error);
     const zot = zotResult.value.stdout;
     const zotConfigResult = new KubectlCommand({
       kubeconfigPath,
       label: "inspect simulated Zot configuration",
-      command: ["-n", "hive-data", "get", "configmap/nook-zot", "-o", "yaml"],
+      command: ["-n", "nook-infra", "get", "configmap/nook-zot", "-o", "yaml"],
     }).run();
     if (zotConfigResult.isErr()) return err(zotConfigResult.error);
     const zotConfig = zotConfigResult.value.stdout;

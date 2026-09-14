@@ -9,9 +9,6 @@ This index catalogs the durable design authorities and their current status.
 - **[core-beliefs.md](core-beliefs.md)**
   - Description: Agent-first core operating principles
   - Status: Verified
-- **[hive-isolated-agent-platform.md](../../../teams/sre/design-docs/hive-isolated-agent-platform.md)**
-  - Description: Stateful k0s/Kata Hive architecture, components, trust boundaries, task DAG, Main repair delivery, caching, and Taskfile operations
-  - Status: Implemented
 - **[arc-kata-runner-platform.md](../../../teams/sre/design-docs/arc-kata-runner-platform.md)**
   - Description: Disposable regular ARC runners, one persistent rootless BuildKit shard per node, cache distribution, and credential ownership
   - Status: Implemented

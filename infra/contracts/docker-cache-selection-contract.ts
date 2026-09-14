@@ -20,14 +20,11 @@ enum DockerCacheSelection {
   EcosystemPolicyTools = "ecosystem-policy-tools",
   EcosystemSmoke = "ecosystem-smoke",
   General = "general",
-  Hive = "hive",
   Native = "native",
   Preflight = "preflight",
   Wasm = "wasm",
   WasmProof = "wasm-proof",
   WebE2e = "web-e2e",
-  WebResearchDependencies = "web-research-deps",
-  WebResearchImage = "web-research-image",
 }
 
 const cacheActionSchema = z.object({
@@ -73,7 +70,7 @@ export class DockerCacheSelectionContract {
     if (script.isErr()) return err(script.error);
     const closed = this.assertClosedSet(script.value.run);
     if (closed.isErr()) return err(closed.error);
-    return this.assertHiveProfile(script.value.run);
+    return ok();
   }
 
   private selectionStep(
@@ -99,7 +96,7 @@ export class DockerCacheSelectionContract {
       source,
     });
     const admitted = contract.requireAll([
-      `general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
+      `general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
       "cache-selection is outside the closed consumer profile set",
     ]);
     if (admitted.isErr()) return err(admitted.error);
@@ -132,56 +129,4 @@ export class DockerCacheSelectionContract {
     return ok();
   }
 
-  private assertHiveProfile(
-    source: string,
-  ): Result<void, OperationalContractFailure> {
-    const profileEnd = source.indexOf(
-      'echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"',
-    );
-    const hiveStart = source.indexOf('if [ -n "$hive_remote_ref" ]; then');
-    if (profileEnd < 0 || hiveStart < profileEnd) {
-      return err({
-        kind: OperationalContractFailureKind.Requirement,
-        message: "Hive probe must follow bounded profile probes",
-      });
-    }
-    const profile = new TextContract({
-      label: "Docker non-Hive cache profiles",
-      source: source.slice(0, profileEnd),
-    });
-    const admitted = profile.requireAll([
-      "general|native|wasm|wasm-proof)",
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then',
-      '[ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \\',
-      '|| [ "$cache_selection" = "web-research-image" ]; then',
-      'if [ "$cache_selection" = "web-research-deps" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
-      "general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)",
-    ]);
-    if (admitted.isErr()) return err(admitted.error);
-    const hive = source.slice(hiveStart);
-    for (const probe of [
-      "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
-      "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
-      "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE",
-      "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
-      "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
-      "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
-      "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
-    ]) {
-      if (hive.includes(probe)) {
-        return err({
-          kind: OperationalContractFailureKind.Requirement,
-          message: `Hive cache profile consumes unrelated probe ${probe}`,
-        });
-      }
-    }
-    return ok();
-  }
 }

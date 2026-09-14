@@ -18,7 +18,7 @@ const { PATH: executablePath = "" } = process.env;
 const taskfile = resolve(root, "infra/tasks/k0s.yml");
 const start = '        cni_migrated="$cni_was_unmasqueraded"\n';
 const end =
-  "        if sudo -n test -e /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then\n";
+  "        sudo -n k0s kubectl get secrets --all-namespaces -o json |\n";
 
 class CniMigrationSource {
   read(): Result<string, OperationalContractFailure> {
@@ -49,12 +49,7 @@ class CniMigrationFixture {
     const manifestResult = new FixtureFile(namespaceManifest).read();
     if (manifestResult.isErr()) return err(manifestResult.error);
     const manifest = manifestResult.value;
-    for (const fragment of [
-      "name: hive-data",
-      "hive.nook.sh/role: data",
-      "name: hive-system",
-      "hive.nook.sh/role: workers",
-    ]) {
+    for (const fragment of ["name: nook-infra", "nook.nokey.sh/role: data"]) {
       if (!manifest.includes(fragment))
         return err({
           kind: OperationalContractFailureKind.Requirement,
@@ -143,22 +138,6 @@ ${fixtureMigration}
         kind: OperationalContractFailureKind.Requirement,
         message: `missing command: ${namespaceApply}`,
       });
-    for (const deployment of [
-      "hive",
-      "hive-workbench-dispatcher",
-      "hive-reaper-controller",
-    ]) {
-      for (const command of [
-        `k0s kubectl rollout restart deployment/${deployment} --namespace hive-system`,
-        `k0s kubectl rollout status deployment/${deployment} --namespace hive-system --timeout=10m`,
-      ]) {
-        if (!commands.includes(command))
-          return err({
-            kind: OperationalContractFailureKind.Requirement,
-            message: `missing command: ${command}`,
-          });
-      }
-    }
     if (!commands.includes("k0s kubectl rollout restart deployment/coredns")) {
       return err({
         kind: OperationalContractFailureKind.Requirement,

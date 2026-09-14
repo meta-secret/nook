@@ -133,12 +133,7 @@ const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   ],
 ]);
 
-const AUDITED_COMMAND_EXECUTING_FIND = new Map([
-  [
-    '.github/workflows/agent-implement.yml',
-    '4c35abb4a664edd5ab1100016b08ec637dd9ac0d75bebbb0a84df70a8c0e170f',
-  ],
-]);
+const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
@@ -148,10 +143,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/workbench-publish.cjs',
     '13ea52eb03efd9af5133fc810aeb67a85176d1dd30bb7f884a159d05be3280f1',
-  ],
-  [
-    '.github/scripts/agent-implement-publish-workbench.cjs',
-    'ded9bf5f319642fe3efcf456f144ada3e282beda01d5a8f89ae6a0fa7d2e2eb7',
   ],
   [
     '.github/workflows/lib/linear-ui-demo.cjs',
@@ -178,10 +169,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'c72e41342aa7fe2ae312e90a9f28e3baad62600c24d8744ac6b26962b1d55376',
   ],
   [
-    'agentic-ai/ci-agent/src/main/process.ts',
-    '9860d5fd66331e7a0c154b1544a6a015248fdde9940b1073669e0e96d7357da7',
-  ],
-  [
     'infra/contracts/dockerized-rust.test.ts',
     '2b93470a397275447a8cdf13dc9dfec1fe9ebe2caf78900561e0723a0b4c2b40',
   ],
@@ -190,20 +177,8 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '4476880c01a245ebf6aa42b3e15a7a4f8dfa433c2d43f5bfb80265aa83fb6989',
   ],
   [
-    'infra/contracts/arc-hive-render-contract.ts',
-    '6e3f9ec99a5f65a720e8af6e9c9331d76750148c58d3cecdc9569352a9b93ad1',
-  ],
-  [
     'infra/sim/kubernetes-cache/contracts.ts',
     'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
-  ],
-  [
-    '.github/formatting/format-host-apply.test.sh',
-    '073947efded4373ef02d7ca9d017ea9d82cad28b4329cf664acaca7ca723e2b2',
-  ],
-  [
-    'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
-    '04d7882c2251f37d2ebf80913200487c835524a23ef5119ca62f24f0f24a755e',
   ],
   [
     '.github/scripts/with-healthy-buildkit.sh',
@@ -272,13 +247,6 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     specifier: '/etc/os-release',
     targetPath: '/etc/os-release',
   })),
-  {
-    digest: 'd0414467deac76fd3d5ba4b36a2de6ee4813f7a99bbb6db83b4ef58d3a0cb0bd',
-    marker: '$HIVE_TASK_DIR/prepare-sccache-context.sh',
-    sourcePath: 'agentic-ai/minds/hive/Taskfile.yml',
-    specifier: '$HIVE_TASK_DIR/prepare-sccache-context.sh',
-    targetPath: 'agentic-ai/minds/hive/prepare-sccache-context.sh',
-  },
   {
     digest: '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
     marker: '$SCRIPT_DIR/hosted-extension.sh',

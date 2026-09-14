@@ -13,7 +13,6 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     ".github/scripts/with-remote-buildkit.sh",
     ".github/scripts/ci-release-deploy-vaults.sh",
     ".github/scripts/remote-task-batch.sh",
-    ".github/scripts/wait-hive-neo4j.sh",
     "nook-app/ci/Taskfile.yml",
 ];
 

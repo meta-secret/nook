@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
-import { DockerizedRustToolingContract } from "./dockerized-rust-tooling.fixture";
 
 const actionSchema = z.object({
   runs: z.object({
@@ -171,26 +170,6 @@ class DockerizedRustContract {
     expect(product).toContain(
       "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
     );
-    const hive = this.read("agentic-ai/minds/hive/Dockerfile");
-    const dependencies = hive
-      .split("FROM fetched-dependencies AS observer-contract-dependencies")[1]
-      ?.split(
-        "FROM observer-contract-dependencies AS observer-contract-exporter",
-      )[0];
-    expect(dependencies).toContain(
-      "COPY --from=chef-planner /build/recipe.json recipe.json",
-    );
-    expect(dependencies).toContain("cargo chef cook --locked");
-    expect(dependencies).toContain(
-      "--features observer-contract-export --bin hive-export-observer-contract",
-    );
-    expect(dependencies).not.toContain("COPY hive/src");
-    expect(hive).toContain(
-      "FROM observer-contract-dependencies AS observer-contract-exporter\nCOPY hive/src hive/src",
-    );
-    expect(hive).toContain(
-      "--bin hive-export-observer-contract -- --output /observer-contract",
-    );
   }
 
   workflowTooling(): void {
@@ -231,9 +210,6 @@ class DockerizedRustContract {
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
     );
-    expect(this.read("agentic-ai/minds/hive/Dockerfile")).toContain(
-      "prettier-skill.json",
-    );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
     expect(audit).toContain('no-cache-filter = ["audit"]');
     expect(audit).not.toContain("no-cache = true");
@@ -268,11 +244,8 @@ class DockerizedRustContract {
       for (const profile of [
         "preflight",
         "web-e2e",
-        "web-research-deps",
-        "web-research-image",
         "connection-only",
         "native",
-        "hive",
         "ecosystem-dylint",
         "ecosystem-fuzz",
         "ecosystem-policy-tools",
@@ -290,7 +263,6 @@ class DockerizedRustContract {
             "a".repeat(40),
           )
           .replaceAll("${{ inputs.isolated-cache-write }}", "true")
-          .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.main-cache-only }}", "true")
           .replaceAll("${{ inputs.cache-write }}", "false")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
@@ -312,28 +284,16 @@ class DockerizedRustContract {
             GITHUB_ENV: environment,
             GITHUB_WORKSPACE: this.root,
             NOOK_ARC_RUNNER: "1",
-            NOOK_REMOTE_TASK_SELECTION: "",
             NOOK_SELECTED_BUILDER: "test-builder",
           },
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        const expectedScope =
-          profile === "web-research-deps" || profile === "web-research-image"
-            ? `GHA_CACHE_SCOPE_SUFFIX=-git-${"a".repeat(40)}\n`
-            : "GHA_CACHE_SCOPE_SUFFIX=\n";
-        expect(values).toContain(expectedScope);
+        expect(values).toContain("GHA_CACHE_SCOPE_SUFFIX=\n");
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
-        expect(values).not.toContain("HIVE_CACHE_TO=");
         const calls = readFileSync(probes, "utf8");
-        if (
-          profile === "web-research-deps" ||
-          profile === "web-research-image"
-        )
-          expect(calls).toContain("-git-");
-        else expect(calls).not.toContain("-git-");
-        if (profile === "connection-only" || profile === "hive")
-          expect(calls).toBe("");
+        expect(calls).not.toContain("-git-");
+        if (profile === "connection-only") expect(calls).toBe("");
         if (profile === "ecosystem-smoke") {
           expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
@@ -347,15 +307,9 @@ class DockerizedRustContract {
           expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-preflight-v1");
         }
-        if (profile === "web-e2e" || profile === "web-research-image") {
-          expect(calls.trim().split("\n")).toHaveLength(4);
-          expect(calls).toContain("nook-web-e2e-v1");
-          expect(calls).toContain("nook-web-deps-v1");
-          expect(calls).toContain("nook-web-app-deps-v1");
-          expect(calls).toContain("nook-web-research-deps-v1");
-        } else if (profile === "web-research-deps") {
+        if (profile === "web-e2e") {
           expect(calls.trim().split("\n")).toHaveLength(1);
-          expect(calls).toContain("nook-web-research-deps-v1");
+          expect(calls).toContain("nook-web-e2e-v1");
         }
       }
     } finally {
@@ -686,11 +640,7 @@ class DockerizedRustContract {
     const groupedTask = webTasks.tasks["_web:test:e2e:run-groups"];
     const webOnlyTask = ciTasks.tasks["_ci:main:web:e2e-only"];
     const fullTask = ciTasks.tasks["_ci:main"];
-    if (
-      !groupedTask?.cmds ||
-      !webOnlyTask?.cmds ||
-      !fullTask?.cmds
-    ) {
+    if (!groupedTask?.cmds || !webOnlyTask?.cmds || !fullTask?.cmds) {
       throw new Error("E2E completion task definitions are missing");
     }
     const grouped = z.string().parse(groupedTask.cmds[0]);
@@ -897,6 +847,77 @@ tasks:
     }
   }
 
+  toolingStaticInstallsBeforeChecks(): void {
+    const command = z
+      .object({
+        tasks: z.object({
+          "tooling:static": z.object({ cmds: z.array(z.string()) }),
+        }),
+      })
+      .parse(Bun.YAML.parse(this.read(".task/static-checks.yml"))).tasks[
+      "tooling:static"
+    ].cmds[0];
+    if (!command) throw new Error("Static tooling command missing");
+    const temporary = mkdtempSync(join(tmpdir(), "nook-tooling-static-"));
+    try {
+      const packages = [
+        ".",
+        "agentic-ai/loom",
+        ".cortex/teams/ai/dynamic-skills/example/scripts",
+      ];
+      for (const directory of packages) {
+        mkdirSync(join(temporary, directory), { recursive: true });
+        writeFileSync(join(temporary, directory, "package.json"), "{}\n");
+      }
+      const bin = join(temporary, "bin");
+      const probe = join(temporary, "probe.log");
+      mkdirSync(bin);
+      const executable = join(bin, "bun");
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+directory="$3"
+action="$1"
+if [ "$action" = run ]; then action="$4"; fi
+printf '%s:%s:%s\\n' "$(basename "$0")" "$action" "$directory" >> "$PROBE_LOG"
+if [ "$action" = install ] && [ "$directory" = "${"${FAIL_INSTALL:-}"}" ]; then exit 1; fi
+`,
+        { mode: 0o755 },
+      );
+      symlinkSync(executable, join(bin, "npm"));
+      for (const scenario of [
+        { environment: process.env, succeeds: true },
+        {
+          environment: { ...process.env, FAIL_INSTALL: "agentic-ai/loom" },
+          succeeds: false,
+        },
+      ]) {
+        writeFileSync(probe, "");
+        const result = spawnSync("bash", ["-c", command], {
+          cwd: temporary,
+          encoding: "utf8",
+          env: {
+            ...scenario.environment,
+            PATH: `${bin}:${process.env.PATH}`,
+            PROBE_LOG: probe,
+          },
+        });
+        const output = readFileSync(probe, "utf8");
+        expect(result.status === 0, result.stderr).toBe(scenario.succeeds);
+        expect(output.lastIndexOf(":install:")).toBeLessThan(
+          output.indexOf(":lint:"),
+        );
+        expect(output).toContain(
+          "bun:check:.cortex/teams/ai/dynamic-skills/example/scripts",
+        );
+        if (!scenario.succeeds)
+          expect(output).not.toContain("bun:lint:agentic-ai/loom");
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -912,7 +933,6 @@ tasks:
 }
 
 const contract = new DockerizedRustContract();
-const toolingContract = new DockerizedRustToolingContract();
 test(
   "PR browser scheduling preserves covering extension and Node gates",
   contract.previewGates.bind(contract),
@@ -922,7 +942,7 @@ test(
   contract.ecosystemResults.bind(contract),
 );
 test(
-  "PR dedup retains standalone coverage and source-correct Hive exports",
+  "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
 );
 test(
@@ -957,5 +977,5 @@ test(
 );
 test(
   "tooling installs every package before checking successful installs",
-  toolingContract.toolingStaticInstallsBeforeChecks.bind(toolingContract),
+  contract.toolingStaticInstallsBeforeChecks.bind(contract),
 );

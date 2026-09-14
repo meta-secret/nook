@@ -22,8 +22,6 @@ vars:
   K9S_AMD64_SHA256: c3752ad51a5a4015a113819c4eeb6e55a4d0e4b8e652494797532f6fc8161dd7
   KATA_VERSION: 4.0.0
   KATA_CHART_SHA256: 68ee406af84761d85ddd6942bd3f0b11ba4f19ce19bf46ec2a4ea29f93926a4b
-  NEO4J_VERSION: 2026.6.0
-  NEO4J_CHART_SHA256: 62de9ecce52cc0078742a7b98649719cdb55c0458df69ee16230e26b010aedd9
 
 includes:
   providers:
@@ -70,10 +68,6 @@ includes:
     taskfile: tasks/kata.yml
     dir: ..
     flatten: true
-  neo4j:
-    taskfile: tasks/neo4j.yml
-    dir: ..
-    flatten: true
   registry:
     taskfile: tasks/registry.yml
     dir: ..
@@ -92,14 +86,6 @@ includes:
     flatten: true
   sccache:
     taskfile: tasks/sccache.yml
-    dir: ..
-    flatten: true
-  hive:
-    taskfile: tasks/hive.yml
-    dir: ..
-    flatten: true
-  hive-queue:
-    taskfile: tasks/hive-queue.yml
     dir: ..
     flatten: true
   operations:

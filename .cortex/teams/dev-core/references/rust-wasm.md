@@ -61,10 +61,8 @@ universal vault startup.
 
 **Rust quality capabilities**
 
-Labeled product PR validation, merged-head Main execution, and thin
-`rust-ecosystem.yml` specialist entry points share the same ecosystem gates.
-Main includes minds-only pushes but skips its product chain for them. Those
-gates supplement Clippy, unit tests, and coverage with:
+The dev-to-main slow validation stage supplements Clippy, unit tests, and
+coverage with:
 
 - cargo-deny and RustSec dependency policy;
 - Proptest generated invariants;
@@ -74,8 +72,8 @@ gates supplement Clippy, unit tests, and coverage with:
 - Kani bounded proofs; and
 - pinned Dylint libraries.
 
-See [quality.md](../../sre/workflows/quality.md#quality-and-release) for the selection
-rules and cost tiers.
+See [quality.md](../../sre/workflows/quality.md#quality-and-release) for the
+current selection rules and cost tiers.
 
 - **Toolchain:** Install `wasm-pack` in Docker through the
   [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/)

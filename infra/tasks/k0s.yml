@@ -203,14 +203,36 @@ tasks:
         mv "$download_dir/$k0s_asset.next" "$download_dir/$k0s_asset"
 
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/registry.dev.nokey.sh
-        sudo -n install -d -m 0700 /var/lib/hive/k0s-recovery
-        if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml &&
-          sudo -n test -s /var/lib/hive/k0s-recovery/encryption-provider.yaml; then
-          sudo -n install -D -m 0600 \
-            /var/lib/hive/k0s-recovery/encryption-provider.yaml \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml
+        sudo -n install -d -m 0700 /var/lib/nook/k0s-recovery
+        encryption_provider=/var/lib/k0s/pki/nook-encryption-provider.yaml
+        legacy_provider_source=""
+        for candidate in \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml \
+          /var/lib/hive/k0s-recovery/encryption-provider.yaml \
+          /var/lib/nook/k0s-recovery/encryption-provider.yaml; do
+          if ! sudo -n test -s "$candidate"; then
+            continue
+          fi
+          if test -z "$legacy_provider_source"; then
+            legacy_provider_source="$candidate"
+          elif ! sudo -n cmp --silent "$legacy_provider_source" "$candidate"; then
+            echo "Refusing divergent legacy k0s encryption-provider files" >&2
+            exit 1
+          fi
+        done
+        if sudo -n test -s "$encryption_provider" &&
+          test -n "$legacy_provider_source" &&
+          ! sudo -n cmp --silent "$encryption_provider" "$legacy_provider_source"; then
+          echo "Refusing divergent current and legacy k0s encryption providers" >&2
+          exit 1
         fi
-        if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml; then
+        if ! sudo -n test -s "$encryption_provider" &&
+          test -n "$legacy_provider_source"; then
+          sudo -n install -D -m 0600 \
+            "$legacy_provider_source" \
+            "$encryption_provider"
+        fi
+        if ! sudo -n test -s "$encryption_provider"; then
           encryption_key="$(openssl rand -base64 32)"
           encryption_config="$(mktemp)"
           umask 077
@@ -223,13 +245,13 @@ tasks:
             providers:
               - aesgcm:
                   keys:
-                    - name: hive-key-1
+                    - name: nook-key-1
                       secret: $encryption_key
               - identity: {}
         EOF
           sudo -n install -D -m 0600 \
             "$encryption_config" \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml
+            "$encryption_provider"
           rm -f "$encryption_config"
           encryption_config=""
         fi
@@ -269,103 +291,6 @@ tasks:
         sudo -n systemctl is-active --quiet nook-k0s-api-address.service
         sudo -n ip -4 address show dev lo |
           grep -F '10.201.0.1/32' >/dev/null
-        if sudo -n systemctl is-active --quiet k0scontroller; then
-          if sudo -n k0s kubectl get deployment hive \
-            --namespace hive-system >/dev/null 2>&1 &&
-            ! sudo -n k0s kubectl get networkpolicy hive-worker-kubernetes-api \
-              --namespace hive-system >/dev/null 2>&1; then
-            cat <<'YAML' |
-        apiVersion: networking.k8s.io/v1
-        kind: NetworkPolicy
-        metadata:
-          name: hive-worker-kubernetes-api
-          namespace: hive-system
-        spec:
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: hive
-          policyTypes: [Egress]
-          egress:
-            - to:
-                - ipBlock:
-                    cidr: 10.96.0.1/32
-              ports:
-                - protocol: TCP
-                  port: 443
-            - to:
-                - ipBlock:
-                    cidr: {{.K0S_API_ADDRESS}}/32
-              ports:
-                - protocol: TCP
-                  port: 6443
-        YAML
-              sudo -n k0s kubectl apply -f -
-          fi
-          for policy in \
-            hive-worker-kubernetes-api \
-            hive-reaper-controller; do
-            if ! sudo -n k0s kubectl get networkpolicy "$policy" \
-              --namespace hive-system >/dev/null 2>&1; then
-              continue
-            fi
-            policy_json="$(
-              sudo -n k0s kubectl get networkpolicy "$policy" \
-                --namespace hive-system \
-                -o json
-            )"
-            if jq -e \
-              --arg cidr "{{.K0S_API_ADDRESS}}/32" \
-              '[.spec.egress[]?.to[]?.ipBlock.cidr] | index($cidr) != null' \
-              <<<"$policy_json" >/dev/null; then
-              continue
-            fi
-            egress_index="$(
-              jq -r '
-                .spec.egress
-                | to_entries[]
-                | select(any(.value.ports[]?; .port == 6443))
-                | .key
-              ' <<<"$policy_json"
-            )"
-            case "$egress_index" in
-              '')
-                patch="$(
-                  jq -cn \
-                    --arg cidr "{{.K0S_API_ADDRESS}}/32" \
-                    '[{
-                      op: "add",
-                      path: "/spec/egress/-",
-                      value: {
-                        to: [{ipBlock: {cidr: $cidr}}],
-                        ports: [{protocol: "TCP", port: 6443}]
-                      }
-                    }]'
-                )"
-                ;;
-              *[!0-9]*)
-                echo "Refusing ambiguous API egress rules in policy: $policy" >&2
-                exit 1
-                ;;
-              *)
-                patch="$(
-                  jq -cn \
-                    --arg path "/spec/egress/$egress_index/to/-" \
-                    --arg cidr "{{.K0S_API_ADDRESS}}/32" \
-                    '[{
-                      op: "add",
-                      path: $path,
-                      value: {ipBlock: {cidr: $cidr}}
-                    }]'
-                )"
-                ;;
-            esac
-            sudo -n k0s kubectl patch networkpolicy "$policy" \
-              --namespace hive-system \
-              --type=json \
-              --patch "$patch"
-          done
-        fi
-
         if ! sudo -n test -f /etc/systemd/system/k0scontroller.service; then
           sudo -n k0s install controller \
             --enable-worker \
@@ -374,14 +299,14 @@ tasks:
         fi
         sudo -n test "$(id -u kube-apiserver)" -ge 1
         sudo -n chown root:root \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml
+          /var/lib/k0s/pki/nook-encryption-provider.yaml
         sudo -n setfacl --remove-all \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml
+          /var/lib/k0s/pki/nook-encryption-provider.yaml
         sudo -n chmod 0600 \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml
+          /var/lib/k0s/pki/nook-encryption-provider.yaml
         sudo -n setfacl \
           --modify user:kube-apiserver:r--,mask::r-- \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml
+          /var/lib/k0s/pki/nook-encryption-provider.yaml
         cni_config=/etc/cni/net.d/10-kuberouter.conflist
         cni_was_unmasqueraded=false
         if sudo -n test -s "$cni_config" &&
@@ -457,63 +382,6 @@ tasks:
           --timeout=5m
         sudo -n k0s kubectl apply \
           -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
-        if test "$cni_migrated" = true; then
-          for deployment in \
-            hive \
-            hive-workbench-dispatcher \
-            hive-reaper-controller; do
-            if sudo -n k0s kubectl get "deployment/$deployment" \
-              --namespace hive-system >/dev/null 2>&1; then
-              sudo -n k0s kubectl rollout restart "deployment/$deployment" \
-                --namespace hive-system
-              sudo -n k0s kubectl rollout status "deployment/$deployment" \
-                --namespace hive-system \
-                --timeout=10m
-            fi
-          done
-        fi
-        if sudo -n test -e /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc; then
-          sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc
-          sudo -n test -s /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
-          recovery_key="$(mktemp)"
-          encrypted_backup="$(mktemp)"
-          expected_mac="$(mktemp)"
-          umask 077
-          sudo -n awk '/secret:/ {print $2; exit}' \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml |
-            tr -d '\r\n' > "$recovery_key"
-          sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
-            > "$encrypted_backup"
-          sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac \
-            > "$expected_mac"
-          test -s "$recovery_key"
-          master_hex="$(od -An -vtx1 "$recovery_key" | tr -d ' \n')"
-          mac_key_hex="$(
-            printf '%s' 'nook-hive-recovery-hmac-v1' |
-              openssl dgst -sha256 -mac HMAC -macopt "hexkey:$master_hex" -binary |
-              od -An -vtx1 | tr -d ' \n'
-          )"
-          actual_mac="$(
-            openssl dgst -sha256 -mac HMAC -macopt "hexkey:$mac_key_hex" \
-              "$encrypted_backup" | awk '{print $NF}'
-          )"
-          expected_mac_value="$(tr -d '\r\n' < "$expected_mac")"
-          test "$actual_mac" = "$expected_mac_value" || {
-            printf '%s\n' 'Neo4j recovery snapshot authentication failed' >&2
-            exit 1
-          }
-          sudo -n openssl enc -d -aes-256-cbc -pbkdf2 \
-            -pass "file:$recovery_key" \
-            -in "$encrypted_backup" |
-            sudo -n k0s kubectl apply -f -
-          sudo -n rm -f \
-            /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
-            /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac
-          rm -f "$recovery_key" "$encrypted_backup" "$expected_mac"
-          recovery_key=""
-          encrypted_backup=""
-          expected_mac=""
-        fi
         sudo -n k0s kubectl get secrets --all-namespaces -o json |
           sudo -n k0s kubectl replace -f -
         storage_node="$(
@@ -523,8 +391,8 @@ tasks:
         )"
         test -n "$storage_node"
         sudo -n k0s kubectl label node "$storage_node" \
-          hive.nook.sh/storage=local \
-          hive.nook.sh/kata=enabled \
+          nook.nokey.sh/storage=local \
+          nook.nokey.sh/kata=enabled \
           --overwrite
         replace_k0s_firewall_rules committed
         sudo -n nft list chain inet bynull_filter input |
@@ -546,7 +414,7 @@ tasks:
       - task: kubernetes:access:configure
 
   k0s:status:
-    desc: Show k0s, node, runtime, storage, and Hive workload state.
+    desc: Show k0s, node, runtime, storage, and Nook workload state.
     cmds:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
@@ -613,16 +481,6 @@ tasks:
         kubectl rollout status deployment/coredns \
           --namespace kube-system \
           --timeout=5m
-        for deployment in hive hive-workbench-dispatcher hive-reaper-controller; do
-          if kubectl get "deployment/$deployment" \
-            --namespace hive-system >/dev/null 2>&1; then
-            kubectl rollout restart "deployment/$deployment" \
-              --namespace hive-system
-            kubectl rollout status "deployment/$deployment" \
-              --namespace hive-system \
-              --timeout=10m
-          fi
-        done
         REMOTE
 
   k0s:diagnose:
@@ -643,9 +501,9 @@ tasks:
         sudo -n ss -lntp \
           '( sport = :6443 )' || true
         sudo -n namei -l \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml || true
+          /var/lib/k0s/pki/nook-encryption-provider.yaml || true
         sudo -n getfacl --absolute-names \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml || true
+          /var/lib/k0s/pki/nook-encryption-provider.yaml || true
         id kube-apiserver || true
         ip -brief address || true
         sudo -n systemctl cat nftables || true
@@ -694,7 +552,7 @@ tasks:
         REMOTE
 
   k0s:uninstall:
-    desc: Uninstall k0s only when forced; preserve Neo4j and Zot data.
+    desc: Uninstall k0s only when forced; preserve Zot data.
     silent: true
     cmds:
       - |
@@ -706,70 +564,6 @@ tasks:
         fi
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        recovery_dir=/var/lib/hive/k0s-recovery
-        sudo -n install -d -m 0700 "$recovery_dir"
-        sudo -n install -m 0600 \
-          /var/lib/k0s/pki/hive-encryption-provider.yaml \
-          "$recovery_dir/encryption-provider.yaml"
-        secret_backup="$(mktemp)"
-        trap 'rm -f "$secret_backup"' EXIT
-        found_secret=false
-        for secret in \
-          hive-data/hive-neo4j-auth \
-          hive-data/hive-neo4j-tls \
-          hive-system/hive-neo4j-client \
-          hive-system/hive-neo4j-ca \
-          hive-system/hive-codex-auth \
-          hive-system/hive-github-publication; do
-          namespace="${secret%%/*}"
-          name="${secret#*/}"
-          if sudo -n k0s kubectl get secret "$name" \
-            --namespace "$namespace" >/dev/null 2>&1; then
-            if test "$found_secret" = true; then
-              printf '%s\n' '---' >> "$secret_backup"
-            fi
-            sudo -n k0s kubectl get secret "$name" \
-              --namespace "$namespace" \
-              -o json |
-              jq 'del(
-                .metadata.uid,
-                .metadata.resourceVersion,
-                .metadata.creationTimestamp,
-                .metadata.managedFields,
-                .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"
-              )' >> "$secret_backup"
-            found_secret=true
-          fi
-        done
-        if test "$found_secret" = true; then
-          encrypted_backup="$(mktemp)"
-          backup_mac="$(mktemp)"
-          recovery_key="$(mktemp)"
-          trap 'rm -f "$secret_backup" "$encrypted_backup" "$backup_mac" "$recovery_key"' EXIT
-          umask 077
-          sudo -n awk '/secret:/ {print $2; exit}' \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml |
-            tr -d '\r\n' > "$recovery_key"
-          test -s "$recovery_key"
-          openssl enc -aes-256-cbc -salt -pbkdf2 \
-            -pass "file:$recovery_key" \
-            -in "$secret_backup" \
-            -out "$encrypted_backup"
-          master_hex="$(od -An -vtx1 "$recovery_key" | tr -d ' \n')"
-          mac_key_hex="$(
-            printf '%s' 'nook-hive-recovery-hmac-v1' |
-              openssl dgst -sha256 -mac HMAC -macopt "hexkey:$master_hex" -binary |
-              od -An -vtx1 | tr -d ' \n'
-          )"
-          openssl dgst -sha256 -mac HMAC -macopt "hexkey:$mac_key_hex" \
-            "$encrypted_backup" | awk '{print $NF}' > "$backup_mac"
-          sudo -n install -m 0600 \
-            "$encrypted_backup" \
-            "$recovery_dir/neo4j-secrets.yaml.enc"
-          sudo -n install -m 0600 \
-            "$backup_mac" \
-            "$recovery_dir/neo4j-secrets.yaml.hmac"
-        fi
         sudo -n systemctl disable --now nook-zot-registry-loopback.service \
           >/dev/null 2>&1 || true
         sudo -n rm -f \
@@ -793,12 +587,6 @@ tasks:
           while read -r handle; do
             sudo -n nft delete rule inet bynull_filter forward handle "$handle"
           done
-        rm -f \
-          "$secret_backup" \
-          "${encrypted_backup:-}" \
-          "${backup_mac:-}" \
-          "${recovery_key:-}"
-        trap - EXIT
         firewall_config="$(mktemp)"
         trap 'rm -f "$firewall_config"' EXIT
         sudo -n awk \
@@ -826,8 +614,7 @@ tasks:
         fi
         rm -f "$firewall_config"
         trap - EXIT
-        test -d /var/lib/hive/neo4j
-        test -d /var/lib/hive/zot
-        echo "k0s removed; retained /var/lib/hive/neo4j and /var/lib/hive/zot"
+        test -d /var/lib/nook/zot
+        echo "k0s removed; retained /var/lib/nook/zot"
         REMOTE
         BASH

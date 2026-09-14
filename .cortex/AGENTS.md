@@ -332,20 +332,7 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Agents mutate only their owned feature.
   - See
     [agent feature ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md).
-- **Trusted publishers**
-  - Exactly two trusted GitHub Actions agent publishers are narrow exceptions
-    to the committed worker-handoff path:
-    - `agent-implement.yml` uses trusted host tooling for publication.
-      - The tooling formats the change.
-      - It validates change budget and canonical feature-branch identity.
-      - It publishes and returns the exact head.
-    - `rust-dependency-updates.yml` may publish only through
-      `task ci-agent:fix` with
-      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
-      - It freezes HEAD and index.
-      - It accepts only declared Rust dependency files.
-      - It verifies the exact fix-branch ref and remote SHA before
-        publication; it does not create a pull request.
+- **Delivery controls**
   - The manager-only `dev:pr-manager` command/workflow is the sole path that
     creates or updates the aggregate `dev` to `main` pull request. It is not
     part of feature-agent publication and is not delegated to a Team Agent.
@@ -376,9 +363,6 @@ The active harness owns dynamic admission capacity and actual spawn results.
     worker execution.
   - Separate Codex tasks, threads, cloud tasks, and ordinary external agents
     must not serve as delegation, communication, or handoff transport.
-  - This ordinary-transport prohibition preserves the two trusted publisher
-    handoffs above.
-  - Those publishers are not ordinary delegation transport.
 - **Parent and worker ownership**
   - Parent-owned policy and control decisions do not create functional Team
     Agent work. The bounded Delivery Pipeline operation is the sole operational
@@ -389,7 +373,7 @@ The active harness owns dynamic admission capacity and actual spawn results.
     full repository validation locally, whether directly or through a Task
     target or script.
   - The local prohibition includes preflight, Rust/WASM compilation and tests,
-    web builds, browser end-to-end suites, Hive verification, full Loom
+    web builds, browser end-to-end suites, full Loom
     verification, and combined repository or PR validation.
   - Do not bypass the prohibition by invoking an underlying compiler, test
     runner, package script, or workflow script directly.
@@ -402,15 +386,6 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
     transferred.
-- **Trusted publishers**
-  - Neither trusted-publisher exception grants publication authority to an
-    ordinary worker.
-  - The `agent-implement.yml` bounded editor has no Git or external delivery
-    authority.
-  - The `rust-dependency-updates.yml` bounded editor has no Git or external
-    delivery authority.
-  - The `rust-dependency-updates.yml` job rejects persisted checkout
-    credentials.
 - **Repository constraints**
   - Moving unit tests or making arbitrary fragments is not source-size
     compliance.
@@ -494,7 +469,6 @@ The remote task selectors map local validation work to hosted execution:
 - `loom:verify` runs the full Loom suite.
 - `web:build` runs the web product build.
 - `web:e2e` and `extension:e2e` run browser suites.
-- `hive:verify` runs Hive verification.
 - `check`, `ci:pr`, and `ci:pr:e2e` run combined repository and PR validation.
 - `arc:runtime` runs the ARC runtime smoke check.
 
@@ -707,8 +681,8 @@ rerun once. No individual fix may trigger a push or validation rerun.
   Use reactive event hints instead of routine GitHub polling.
   The PR Lifecycle Agent's five-minute-inactivity check is the narrow read-only exception.
   Do not materialize this ephemeral plan as a Codex scheduled task.
-- Repository-owned GitHub Actions, Workbench automation fields, and Hive
-  reconciliation are separate systems governed by their existing authorities.
+- Repository-owned GitHub Actions and Workbench automation fields are separate
+  systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active
   delivery task. Have Delivery Pipeline Team Gizmo route bounded observation
   to the PR Lifecycle Agent.

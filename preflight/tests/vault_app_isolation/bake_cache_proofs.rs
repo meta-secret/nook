@@ -47,7 +47,6 @@ fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
     for relative in [
         ".github/workflows/pr.yml",
         ".github/workflows/rust-ecosystem-checks.yml",
-        ".github/workflows/hive.yml",
         ".github/workflows/repository-policy.yml",
     ] {
         let workflow = root.read(relative);
@@ -525,10 +524,16 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     assert!(
         setup.contains("scope_suffix=\"-git-$scope_sha\"")
             && setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\"")
+            && !setup.contains("isolated_cache_write=false")
             && setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled")
             && setup.contains("fallback_enabled=1")
             && setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"),
-        "PR/Remote isolated writes must use -git-<40-char head SHA> with cold-scope Main fallback enabled"
+        "PR/Remote isolated scopes must remain -git-<40-char head SHA> on both hosted and ARC runners"
+    );
+    assert!(
+        setup.contains("ARC skips general exact-SHA registry export")
+            && setup.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then"),
+        "ARC must retain the exact source scope while disabling only registry export"
     );
     assert!(
         setup.contains("docker buildx imagetools inspect")
@@ -541,7 +546,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     assert!(
-        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani")
+        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|nook|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani")
             && setup.contains("[ \"$cache_selection\" = \"native\" ]")
             && setup.contains("[ \"$cache_selection\" = \"wasm\" ]")
             && setup.contains("[ \"$cache_selection\" = \"preflight\" ]")
@@ -649,204 +654,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let app_bake = root.read("nook-app/docker-bake.hcl");
-    let compile_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
-    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_bake = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    let web_toolchain = root.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-
-    let compile_from = assignment_body(&compile_bake, "compile_cache_from")?;
-    let compile_to = assignment_body(&compile_bake, "compile_cache_to")?;
-    let compile_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache";
-    let compile_ref_assignment = assignment_body(&compile_bake, "compile_source_cache_ref")?;
-    assert_eq!(
-        compile_ref_assignment,
-        format!("\"{compile_ref}\""),
-        "build:compile must name its stable remote registry scope explicitly"
-    );
-    assert!(
-        app_bake.contains("variable \"NOOK_COMPILE_CACHE_MODE\"")
-            && compile_bake.contains("NOOK_COMPILE_CACHE_MODE == \"publish\"")
-            && app_bake.contains("default = \"publish\""),
-        "build:compile must expose an explicit publication/read-only cache mode"
-    );
-    assert_eq!(
-        compile_from.matches("type=registry,ref=").count(),
-        2,
-        "build:compile must import either its exact source graph or its fingerprinted dependency graph"
-    );
-    assert_eq!(
-        compile_to.matches("type=registry,ref=").count(),
-        1,
-        "build:compile must export one registry cache"
-    );
-    assert!(
-        compile_from.contains("${compile_source_cache_ref}")
-            && compile_from.contains("${compile_deps_cache_ref}")
-            && compile_to.contains("${compile_source_cache_ref}")
-            && !compile_bake.contains("write_cache_repository")
-            && compile_bake.contains("remote-buildcache")
-            && compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "build:compile must keep exact-source publication separate from fingerprinted dependency restoration"
-    );
-
-    let build_compile = bake_target_body(&compile_bake, "build-compile");
-    assert!(
-        build_compile.contains("rust-base = \"target:rust-base\"")
-            && build_compile.contains("web-base  = \"target:web-base\"")
-            && build_compile.contains("web-deps  = \"target:web-deps-compile\""),
-        "build:compile must use bare context targets rather than component restore targets"
-    );
-    for (bake, target) in [
-        (&compile_bake, "web-deps-compile"),
-        (&rust_bake, "rust-base"),
-        (&web_bake, "web-base"),
-    ] {
-        let body = bake_target_body(bake, target);
-        assert!(
-            !body.is_empty() && !body.contains("cache-from") && !body.contains("cache-to"),
-            "build:compile context target {target} must not declare registry cache I/O"
-        );
-    }
-
-    assert!(
-        bake_target_body(&rust_bake, "rust-base-restore").contains("cache-from")
-            && bake_target_body(&web_toolchain, "web-deps").contains("cache-from")
-            && bake_target_body(&web_toolchain, "web-deps-publish")
-                .contains("cache-to   = web_deps_cache_to"),
-        "component restore/publish targets must retain their independent cache behavior"
-    );
-    Ok(())
-}
-
-#[test]
-fn theorem_build_compile_always_compiles_hive_without_validation_work() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
-    let dependencies = dockerfile
-        .split("FROM compile-minds-base AS compile-minds-dependencies")
-        .nth(1)
-        .and_then(|body| {
-            body.split("FROM compile-minds-dependencies AS compile-minds-source")
-                .next()
-        })
-        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive dependency stage"))?;
-    let source = dockerfile
-        .split("FROM compile-minds-dependencies AS compile-minds-source")
-        .nth(1)
-        .and_then(|body| body.split("FROM web-base AS compile-hive-console").next())
-        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive source stage"))?;
-    let console = dockerfile
-        .split("FROM web-base AS compile-hive-console")
-        .nth(1)
-        .and_then(|body| body.split("FROM web-base AS compile-web").next())
-        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive console stage"))?;
-    let active_instructions = dockerfile
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    assert!(!dockerfile.contains("NOOK_COMPILE_HIVE"));
-    assert!(dependencies.contains("cargo build --locked --release -p hive"));
-    assert!(source.contains("cargo build --locked --release -p hive"));
-    assert!(source.contains("hive-export-observer-contract"));
-    assert!(console.contains("bun install --frozen-lockfile"));
-    assert!(console.contains("node_modules/.bin/vite build"));
-    for forbidden in [
-        "cargo test",
-        "cargo clippy",
-        "coverage",
-        "e2e",
-        "preflight",
-        "--mount=type=cache",
-    ] {
-        assert!(
-            !active_instructions.contains(forbidden),
-            "build-only graph contains {forbidden}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
-    let workflow = root.read(".github/workflows/hive.yml");
-    let tasks = root.read("agentic-ai/minds/hive/Taskfile.yml");
-
-    assert!(
-        setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
-            && setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed")
-            && setup.contains("hive_export_mode=min")
-            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m")
-            && setup.contains("Exact Hive cache available; Main seed suppressed")
-            && !setup.contains("if [ \"$event_name\" != \"pull_request\" ]; then"),
-        "isolated PR setup must use exact Hive alone when present, otherwise Main, and publish only the exact SHA"
-    );
-    assert!(
-        workflow.contains("uses: ./.github/actions/nook-docker-setup")
-            && workflow.contains("runs-on: nook-k0s-hive")
-            && workflow.contains(
-                "main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-            )
-            && workflow.contains(
-                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-            )
-            && tasks.contains("${NOOK_ARC_HIVE:-}"),
-        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and publish only its isolated exact cache"
-    );
-    let verify = taskfile_task_body(&tasks, "verify")?;
-    assert!(
-        verify.contains("--cache-from \"$HIVE_CACHE_FROM\"")
-            && verify.contains("--cache-from \"$HIVE_CACHE_SEED_FROM\"")
-            && verify.contains("--cache-to \"$HIVE_CACHE_TO\""),
-        "Hive verification must retain optional exact/Main importer and exporter capabilities for hosted fallback and Main publication"
-    );
-    assert!(
-        workflow.contains(
-            "if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'"
-        ) && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
-            && workflow.matches("Publish verified Hive cache").count() == 1
-            && !workflow.contains("verify-hosted:")
-            && workflow.contains("verify-fork:")
-            && workflow.contains("console-untrusted:")
-            && workflow.contains("Set up untrusted cache-free BuildKit")
-            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 3
-            && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
-        "trusted Main must publish from ARC, while untrusted PR and console validation remain secret-free on the hosted boundary"
-    );
-    Ok(())
-}
-
-#[test]
-fn theorem_trusted_hive_verification_has_a_bounded_cold_layer_budget() {
-    let root = RepositoryFixture::repository_root();
-    let workflow = root.read(".github/workflows/hive.yml");
-    let trusted_verify = workflow
-        .split("\n  verify:\n")
-        .nth(1)
-        .and_then(|body| body.split("\n  verify-fork:\n").next())
-        .expect("Hive workflow must declare the trusted verify job before verify-fork");
-    let hosted_verify = workflow
-        .split("\n  verify-fork:\n")
-        .nth(1)
-        .expect("Hive workflow must declare the hosted verify-fork job");
-
-    assert!(
-        trusted_verify.contains("timeout-minutes: 20"),
-        "trusted Hive verification must retain a bounded budget above the measured 13m45s cold-layer path"
-    );
-    assert!(
-        hosted_verify.contains("timeout-minutes: 10"),
-        "the trusted ARC cold-layer budget must not broaden the hosted fork timeout"
-    );
-}
-
-#[test]
 fn theorem_product_source_leaves_use_one_internal_dockerfile_lineage() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
@@ -878,10 +685,7 @@ fn theorem_product_source_leaves_use_one_internal_dockerfile_lineage() -> anyhow
         "FROM chef-deps AS builder-wasm-deps",
         "FROM builder-wasm-deps AS builder-core-deps",
         "FROM builder-core-deps AS builder-debug",
-        "FROM builder-wasm-deps AS builder-wasm-source-base",
-        "FROM builder-wasm-source-base AS builder-wasm-source",
-        "FROM builder-wasm-source-base AS builder-nook-wasm-source",
-        "FROM builder-wasm-source-base AS builder-companion-wasm-source",
+        "FROM builder-wasm-deps AS builder-wasm-source",
         "FROM builder-wasm-build AS focused-web-artifacts-source",
         "FROM rust-platform AS rust-ecosystem-deterministic",
         "FROM rust-base AS rust-kani-toolchain",

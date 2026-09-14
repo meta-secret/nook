@@ -71,35 +71,3 @@ fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inp
         );
     }
 }
-
-#[test]
-fn hive_build_keeps_non_secret_sccache_prefix_out_of_docker_env_scanning() {
-    let root = RepositoryFixture::repository_root();
-    let dockerfile = root.read("agentic-ai/minds/hive/Dockerfile");
-    let wrapper = root.read("nook-app/nook-platform/docker/sccache-wrapper.sh");
-
-    assert!(
-        !dockerfile.contains("ENV SCCACHE_S3_KEY_PREFIX"),
-        "the non-secret cache namespace must not use a secret-shaped Docker ENV"
-    );
-    assert!(
-        dockerfile.contains("ARG NOOK_BUILD_CACHE_NAMESPACE=nook-hive")
-            && dockerfile.contains("ENV NOOK_BUILD_CACHE_NAMESPACE=${NOOK_BUILD_CACHE_NAMESPACE}"),
-        "Hive build stages must retain their fixed cache namespace through a neutral ENV"
-    );
-    assert!(
-        wrapper.contains("SCCACHE_S3_KEY_PREFIX=\"$NOOK_BUILD_CACHE_NAMESPACE\"")
-            && wrapper.contains("export SCCACHE_S3_KEY_PREFIX"),
-        "the shared sccache wrapper must apply the namespace to every compiler invocation"
-    );
-    assert!(
-        dockerfile.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache")
-            && dockerfile.contains("ENTRYPOINT [\"/usr/local/bin/hive\"]"),
-        "Hive compiler stages must use the shared wrapper and keep the normal runtime entrypoint"
-    );
-    assert!(
-        dockerfile.contains("cargo llvm-cov show-env --sh")
-            && !dockerfile.contains("cargo llvm-cov show-env --export-prefix"),
-        "Hive must use cargo-llvm-cov's current shell export alias"
-    );
-}

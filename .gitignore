@@ -5,9 +5,6 @@
 /.DS_Store
 /.idea/
 
-agentic-ai/ci-agent/node_modules/
-agentic-ai/ci-agent/dist/
-agentic-ai/ci-agent/dist-test/
 agentic-ai/loom/node_modules/
 .agents/skills/node_modules/
 

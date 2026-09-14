@@ -60,9 +60,9 @@ tasks:
         grep -Eq "^${username}"':[$]2[ay][$]' "$htpasswd_file"
         grep -Eq "^${remote_username}"':[$]2[ay][$]' "$htpasswd_file"
 
-        kubectl create namespace hive-data --dry-run=client -o yaml |
+        kubectl create namespace nook-infra --dry-run=client -o yaml |
           kubectl apply -f -
-        kubectl -n hive-data create secret generic nook-zot-htpasswd \
+        kubectl -n nook-infra create secret generic nook-zot-htpasswd \
           --from-file=htpasswd="$htpasswd_file" \
           --dry-run=client -o yaml |
           kubectl apply -f -
@@ -410,7 +410,32 @@ tasks:
         sudo -n systemctl daemon-reload || true
         sudo -n rm -rf /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
 
-        sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot
+        legacy_zot_dir=/var/lib/hive/zot
+        zot_dir=/var/lib/nook/zot
+        if kubectl get deployment nook-zot --namespace hive-data >/dev/null 2>&1; then
+          kubectl scale deployment/nook-zot --namespace hive-data --replicas=0
+          kubectl rollout status deployment/nook-zot --namespace hive-data --timeout=10m
+        fi
+        if sudo -n test -d "$legacy_zot_dir"; then
+          if sudo -n test -d "$zot_dir"; then
+            legacy_has_data="$(sudo -n find "$legacy_zot_dir" -mindepth 1 -print -quit)"
+            current_has_data="$(sudo -n find "$zot_dir" -mindepth 1 -print -quit)"
+            if test -n "$legacy_has_data" && test -n "$current_has_data"; then
+              echo "Refusing to merge populated legacy and current Zot stores" >&2
+              exit 1
+            fi
+            if test -n "$legacy_has_data"; then
+              sudo -n rmdir "$zot_dir"
+              sudo -n mv "$legacy_zot_dir" "$zot_dir"
+            elif test -z "$current_has_data"; then
+              sudo -n rmdir "$legacy_zot_dir"
+            fi
+          else
+            sudo -n install -d -m 0750 /var/lib/nook
+            sudo -n mv "$legacy_zot_dir" "$zot_dir"
+          fi
+        fi
+        sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/nook/zot
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/{{.NOOK_REGISTRY_HOST}}
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
@@ -418,11 +443,41 @@ tasks:
         test ! -e /etc/k0s/containerd.d/registry-auth.toml
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        legacy_pvc=false
+        current_pvc=false
+        if kubectl get pvc nook-zot-data --namespace hive-data >/dev/null 2>&1; then
+          legacy_pvc=true
+        fi
+        if kubectl get pvc nook-zot-data --namespace nook-infra >/dev/null 2>&1; then
+          current_pvc=true
+        fi
+        if test "$legacy_pvc" = true && test "$current_pvc" = true; then
+          echo "Refusing ambiguous Zot PVCs in both legacy and current namespaces" >&2
+          exit 1
+        fi
+        if test "$legacy_pvc" = true; then
+          legacy_volume="$(kubectl get pvc nook-zot-data --namespace hive-data -o jsonpath='{.spec.volumeName}')"
+          test "$legacy_volume" = nook-zot-data
+          legacy_path="$(kubectl get pv nook-zot-data -o jsonpath='{.spec.local.path}')"
+          test "$legacy_path" = /var/lib/hive/zot
+          kubectl delete deployment,service,configmap,networkpolicy \
+            --namespace hive-data \
+            --selector app.kubernetes.io/name=nook-zot \
+            --ignore-not-found=true
+          kubectl delete pvc nook-zot-data --namespace hive-data --wait=true
+          kubectl delete pv nook-zot-data --wait=true
+        elif kubectl get pv nook-zot-data >/dev/null 2>&1; then
+          existing_path="$(kubectl get pv nook-zot-data -o jsonpath='{.spec.local.path}')"
+          if test "$existing_path" = /var/lib/hive/zot; then
+            echo "Refusing orphaned legacy Zot PV without its expected PVC" >&2
+            exit 1
+          fi
+        fi
         kubectl delete networkpolicy nook-zot-default-deny \
-          --namespace hive-data \
+          --namespace nook-infra \
           --ignore-not-found=true
         kubectl apply -f "$rendered_manifest"
-        for namespace in hive-data hive-system; do
+        for namespace in nook-infra; do
           kubectl -n "$namespace" create secret docker-registry nook-registry \
             --docker-server="{{.NOOK_REGISTRY_HOST}}" \
             --docker-username="$(cat "$remote_dir/secrets/registry-username")" \
@@ -433,17 +488,17 @@ tasks:
         kubectl delete secret nook-registry \
           --namespace arc-runners \
           --ignore-not-found=true
-        kubectl rollout restart deployment/nook-zot --namespace hive-data
+        kubectl rollout restart deployment/nook-zot --namespace nook-infra
         kubectl rollout status deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --timeout=10m
-        kubectl get svc nook-zot --namespace hive-data
+        kubectl get svc nook-zot --namespace nook-infra
         test "$(
-          kubectl get svc nook-zot --namespace hive-data \
+          kubectl get svc nook-zot --namespace nook-infra \
             -o jsonpath='{.spec.clusterIP}'
         )" = "{{.NOOK_REGISTRY_CLUSTER_IP}}"
         test "$(
-          kubectl get pvc nook-zot-data --namespace hive-data \
+          kubectl get pvc nook-zot-data --namespace nook-infra \
             -o jsonpath='{.status.phase}'
         )" = Bound
 
@@ -504,16 +559,16 @@ tasks:
         fi
 
         sudo -n k0s kubectl rollout status deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --timeout=2m
         test "$(
           sudo -n k0s kubectl get pvc nook-zot-data \
-            --namespace hive-data \
+            --namespace nook-infra \
             -o jsonpath='{.status.phase}'
         )" = Bound
         test "$(
           sudo -n k0s kubectl get svc nook-zot \
-            --namespace hive-data \
+            --namespace nook-infra \
             -o jsonpath='{.spec.clusterIP}'
         )" = "{{.NOOK_REGISTRY_CLUSTER_IP}}"
 
@@ -531,9 +586,9 @@ tasks:
         anonymous_private_read="$(curl -sS -o /dev/null -w '%{http_code}' \
           "https://$host/v2/nook/buildcache/nook-authz-probe/manifests/missing")"
         test "$anonymous_private_read" = 401
-        anonymous_hive_read="$(curl -sS -o /dev/null -w '%{http_code}' \
-          "https://$host/v2/nook-hive/manifests/missing")"
-        test "$anonymous_hive_read" = 401
+        anonymous_nook_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/v2/nook-infra/manifests/missing")"
+        test "$anonymous_nook_read" = 401
         anonymous_mirror_write="$(curl -sS -o /dev/null -w '%{http_code}' \
           -X POST \
           "https://$host/v2/library/nook-authz-probe/blobs/uploads/")"
@@ -595,11 +650,11 @@ tasks:
           'sport = :443' || true
         docker compose -f "$remote_dir/compose.yaml" ps || true
         sudo -n k0s kubectl get deployment,pod,svc,pv,pvc \
-          --namespace hive-data \
+          --namespace nook-infra \
           -l app.kubernetes.io/name=nook-zot \
           -o wide || true
         sudo -n k0s kubectl logs deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --tail=100 || true
         curl -sS -D- -o /dev/null "https://{{.NOOK_REGISTRY_HOST}}/v2/" || true
         REMOTE

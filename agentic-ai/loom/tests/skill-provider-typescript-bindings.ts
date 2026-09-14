@@ -444,7 +444,7 @@ type DynamicCwdExemption = {
 
 const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   {
-    digest: '3f7ebcaa85a8b281beebf41e8cde824002b0cea1b3d6c8bbaae79b91eb290bb8',
+    digest: '97006296741baaf862880c9f64045df91a89cbbbdb83da23457cf67c87d27612',
     className: 'RepositoryCommand',
     functionName: 'execute',
     path: 'agentic-ai/loom/src/lib/run.ts',
@@ -457,16 +457,7 @@ const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   },
 ];
 
-const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
-  // The exact helper builds the isolated environment for one fixed GitHub
-  // HTTPS publication invocation.
-  {
-    digest: '256631cabb7e78e27ff6861282442815f8f717f1d7b4670241d15f862fd06468',
-    className: 'CiRepository',
-    functionName: 'pushAuthenticatedBranch',
-    path: 'agentic-ai/ci-agent/src/main/git.ts',
-  },
-];
+const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [];
 
 export type BindingCollectionRequest = {
   readonly node: ts.Node;

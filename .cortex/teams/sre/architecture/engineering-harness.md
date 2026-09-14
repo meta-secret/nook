@@ -56,51 +56,7 @@ Playwright and CI keep isolated loopback-HTTP transport when real passkey, OAuth
 
 ---
 
-## 3. PR Delivery Helpers
-
-PR delivery helpers live in `agentic-ai/ci-agent`.
-
-### Commands
-
-- `task pr:preflight`
-- `task pr:review`
-- `task pr:review:stabilize`
-- `task pr:review-local`
-- `task pr:ready`
-
-### Review and audit behavior
-
-- The local review command runs advisory Codex review against `origin/main`.
-- The review command posts an idempotent SHA-bound Codex request.
-- Complete validation applies its hosted validation label before requesting
-  exact-head review.
-- The review request never waits before hosted dispatch.
-- Hosted checks and exact-head review proceed concurrently.
-- Codex's eye reaction is liveness evidence only. It never settles review.
-- A Codex usage limit does not activate another review provider.
-- After checks and review settle, the agent batches current review findings and
-  failed checks into one repair iteration.
-- Three Cloud-review finding batches open a circuit breaker. The agent performs
-  comprehensive stabilization before requesting another review.
-- Review results are not required for readiness.
-- Audit commands emit machine-readable exact-head state.
-- Audit commands do not wait for an external reviewer.
-- Audit commands never merge a PR.
-
-### Merge policy
-
-- Nook has no event-driven PR auto-merger.
-- Workflows do not merge blindly from check events.
-- The dev manager requires full slow PR checks and review/security acceptance.
-- Guarded promotion must fast-forward main to the tested dev SHA.
-- This requires the integrated publication tooling defined by the
-  [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md).
-
-Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace the audit binary between build and readiness execution.
-
----
-
-## 4. Remote Execution and Validation
+## 3. Remote Execution and Validation
 
 - Extension iteration and other heavy agent feedback use named GitHub Actions Task targets.
 - Required product validation runs on GitHub Actions only.
@@ -137,7 +93,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 5. Split Rust/WASM and Web Images
+## 4. Split Rust/WASM and Web Images
 
 ### Rust/WASM Lineage
 
@@ -184,7 +140,6 @@ legacy registered `nook` runner is not used.
   layers can exceed 15 GiB and concurrent uploads overload the registry HDD.
 - They restore Main's registry lineage and reuse compiler objects through
   SeaweedFS sccache.
-- Hive retains a small minimal exact-SHA handoff for fast retries.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -218,7 +173,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 6. `task setup` Solve Flow
+## 5. `task setup` Solve Flow
 
 `task setup` has two solves:
 
@@ -244,7 +199,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 7. Container Limits and Host Prerequisites
+## 6. Container Limits and Host Prerequisites
 
 - **Container file descriptors:** Nook runtime containers set `nofile=1048576`. `DOCKER_NOFILE_LIMIT` can override that value.
 - **Inotify ownership:** Inotify sysctls are kernel-wide. Docker rejects them as per-container `--sysctl` options.
@@ -267,7 +222,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 8. Build Export & Docker Driver
+## 7. Build Export & Docker Driver
 
 - **Split lineages:** Rust and web caches remain in independent BuildKit lineages.
   - Only the WASM package and coverage outputs cross from Rust to web.
@@ -317,10 +272,6 @@ legacy registered `nook` runner is not used.
 - Concurrent jobs share BuildKit's content-addressed store on that node.
 - Main and pull requests retain separate registry publication refs.
 - Zot remains the cross-node bootstrap and recovery source.
-- Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
-  Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
-  so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
-  its independent Zot cache publication because its workflow may overlap Main.
 - Registry transfer time and local snapshot materialization time are separate
   performance dimensions.
 - A manifest lookup proves index availability. It does not prove that a fresh
@@ -338,7 +289,7 @@ legacy registered `nook` runner is not used.
 ### Rust Compiler Cache (`sccache`)
 
 - Wrapped by pinned `sccache` backed by SeaweedFS S3 at `https://sccache.dev.nokey.sh`.
-- Local builds, Hive, and Main write compiler objects.
+- Local builds and Main write compiler objects.
 - Explicit Remote tasks use read-only credentials.
 - Fork and untrusted jobs receive no S3 credentials and fall back to clean compilation.
 
@@ -348,8 +299,6 @@ legacy registered `nook` runner is not used.
 - Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
 - Trusted ARC PR jobs read Main and exact-SHA refs.
 - General trusted ARC PR jobs do not write registry cache refs.
-- Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
-  `nook/remote-buildcache/**`.
 - Their runner Pods reuse the persistent BuildKit shard on the selected node.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
@@ -361,7 +310,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 9. Docker Cache Model
+## 8. Docker Cache Model
 
 - **Rust/web/browser layers**
   - **Cache Strategy:** Local builder store; hosted BuildKit registry refs
@@ -396,7 +345,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 10. Execution Consequences
+## 9. Execution Consequences
 
 - **Diff emission:** Source-sealed images emit `git diff` outputs instead of directly mutating host files.
 - **`task format` host application:** The agent/developer entrypoint runs one
@@ -407,7 +356,7 @@ legacy registered `nook` runner is not used.
 
 ---
 
-## 11. Build & Verify
+## 10. Build & Verify
 
 - **Native linking:** Uses `mold` linker for `x86_64-unknown-linux-gnu` in `rust-base`.
 - **Wasm compilation:** `builder-wasm` compiles `nook-wasm` and `nook-companion-wasm` via `wasm-pack`. `WASM_BUILD_MODE=dev` is default; `prod` runs for release.

@@ -6,6 +6,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
+import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 
@@ -49,6 +50,7 @@ export {
 };
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
+export { ExtensionPairingApprovedMessageAdmissionFailure };
 
 export type { ExtensionPairingVaultType } from "./nook-companion-wasm/nook_companion_wasm.js";
 
@@ -70,26 +72,6 @@ export type ExtensionPairingApprovedGrant = Omit<
   providers: ExtensionPairingStorageProviderPayload[];
 };
 export type ExtensionPairingStorageProviderPayload = StorageProvider;
-export enum ExtensionPairingApprovedMessageAdmissionFailure {
-  ApprovedAt = "invalid-pairing-grant-approved-at",
-  DeviceId = "invalid-pairing-grant-device-id",
-  DeviceLabel = "invalid-pairing-grant-device-label",
-  DevicePublicKey = "invalid-pairing-grant-device-public-key",
-  DeviceSigningPublicKey = "invalid-pairing-grant-device-signing-public-key",
-  EventLogRecordEvent = "invalid-pairing-grant-event-log-record-event",
-  EventLogRecordEventId = "invalid-pairing-grant-event-log-record-event-id",
-  EventLogRecordPath = "invalid-pairing-grant-event-log-record-path",
-  EventLogRecordSchemaVersion = "invalid-pairing-grant-event-log-record-schema-version",
-  EventLogRecordsEmpty = "invalid-pairing-grant-event-log-records-empty",
-  EventLogRecordsNotArray = "invalid-pairing-grant-event-log-records-not-array",
-  MessageEnvelope = "invalid-pairing-grant-message-envelope",
-  Payload = "invalid-pairing-grant-payload",
-  Providers = "invalid-pairing-grant-providers",
-  Scopes = "invalid-pairing-grant-scopes",
-  VaultName = "invalid-pairing-grant-vault-name",
-  VaultStoreId = "invalid-pairing-grant-vault-store-id",
-  VaultType = "invalid-pairing-grant-vault-type",
-}
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
   static parse(

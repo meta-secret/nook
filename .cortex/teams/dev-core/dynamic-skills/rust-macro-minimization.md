@@ -42,13 +42,14 @@ Does not apply to:
 
 ## Examples
 
-- Before: `agentic-ai/minds/hive/src/model.rs` generated four identifier types
-  through `string_id!`.
-- After: each identifier is an explicit struct with its own constructor,
+- Before: `nook-auth2/src/wire.rs` generated typed wire strings through
+  `transparent_str_newtype!`.
+- After: each wire type is an explicit struct with its own constructor,
   accessor, serialization contract, and display implementation.
-- Before: Hive error macros hid `return Err(...)` and conditional branches.
-- After: call sites construct `HiveError` and return it through ordinary Rust
-  control flow.
+- Before: `nook-core/src/sync/sync_provider_store/state.rs` generated semantic
+  provider states through `semantic_string_state!`.
+- After: each provider state is an explicit enum with its own conversions and
+  accessors.
 
 ## Application procedure
 

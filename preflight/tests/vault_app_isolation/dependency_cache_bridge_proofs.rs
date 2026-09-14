@@ -323,11 +323,6 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
 
     for input in [
         "nook-app/nook-platform/Cargo.lock",
-        "agentic-ai/minds/Cargo.lock",
-        "agentic-ai/minds/hive/Cargo.toml",
-        "agentic-ai/minds/vendor/**",
-        "agentic-ai/minds/hive-console/package.json",
-        "agentic-ai/minds/hive-console/bun.lock",
         "nook-app/nook-web/nook-web-app/package.json",
         "nook-app/nook-web/nook-web-app/bun.lock",
         "nook-app/nook-web/nook-web-research/package.json",
@@ -348,13 +343,35 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
             )
             && setup.contains(
                 "compile_deps_scope=\"nook-rust-compile-deps-v2-$compile_deps_fingerprint\"",
+            )
+            && setup.contains(
+                "publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE \"$compile_deps_scope\"",
+            )
+            && setup.contains(
+                "publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE \"nook-build-compile-v2$scope_suffix\"",
             ),
-        "compile dependency scope must use the complete graph fingerprint"
+        "compile dependency and source scopes must use immutable fingerprints and publish exact availability"
     );
     assert!(
         !script.contains("nook-app/nook-web/nook-web-app/src")
             && !script.contains("nook-app/nook-web/nook-web-research/src"),
         "compile dependency fingerprint must exclude ordinary product source"
+    );
+    let compile_dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
+    let dependency_aggregate = compile_dockerfile
+        .split_once("FROM web-deps AS compile-dependencies")
+        .and_then(|(_, tail)| {
+            tail.split_once("FROM compile-native-dependencies AS compile-native-source")
+        })
+        .map(|(stage, _)| stage)
+        .unwrap_or_else(|| panic!("compile dependency aggregate stage is missing"));
+    assert!(
+        dependency_aggregate.contains(
+            "COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native",
+        ) && dependency_aggregate.contains(
+            "COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm",
+        ) && !dependency_aggregate.contains("COPY nook-app/"),
+        "compile dependency aggregate must retain every dependency sibling without product source"
     );
     Ok(())
 }

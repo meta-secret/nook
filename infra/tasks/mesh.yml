@@ -82,9 +82,9 @@ tasks:
         sudo -n apt-get update -qq
         sudo -n apt-get install -y -qq ca-certificates curl gpg
         curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg |
-          sudo -n gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          sudo -n gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-arcnook-keyring.gpg
         . /etc/os-release
-        printf '%s\n' "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main" |
+        printf '%s\n' "deb [signed-by=/usr/share/keyrings/cloudflare-warp-arcnook-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main" |
           sudo -n tee /etc/apt/sources.list.d/cloudflare-client.list >/dev/null
         sudo -n apt-get update -qq
         sudo -n apt-get install -y -qq cloudflare-warp

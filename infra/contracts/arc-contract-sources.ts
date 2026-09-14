@@ -25,7 +25,6 @@ export interface ArcContractSources {
   mainWorkflow: TextContract;
   prWorkflow: TextContract;
   authSensitiveJob: TextContract;
-  hiveWorkflow: TextContract;
   repositoryPolicySource: string;
   repositoryPolicyWorkflow: TextContract;
   webResearchWorkflow: TextContract;
@@ -237,14 +236,6 @@ export class ArcContractSourceInventory {
       label: "PR extension e2e job",
       source: prWorkflowSource.slice(),
     });
-    const readSource9 = await new OperationalContractSource(
-      resolve(this.root, ".github/workflows/hive.yml"),
-    ).read();
-    if (readSource9.isErr()) return err(readSource9.error);
-    const hiveWorkflow = new TextContract({
-      label: "Hive workflow",
-      source: readSource9.value,
-    });
     const readSource8 = await new OperationalContractSource(
       resolve(this.root, ".github/workflows/repository-policy.yml"),
     ).read();
@@ -330,7 +321,6 @@ export class ArcContractSourceInventory {
       mainWorkflow,
       prWorkflow,
       authSensitiveJob,
-      hiveWorkflow,
       repositoryPolicySource,
       repositoryPolicyWorkflow,
       webResearchWorkflow,

@@ -134,7 +134,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let skills_workspace = root.read(".cortex/package.json");
     for required in [
         "@nook/executable-skills-workspace",
-        "gizmo-prime/dynamic-skills/*/scripts",
+        "gizmo/dynamic-skills/*/scripts",
         "shared/dynamic-skills/*/scripts",
         "teams/*/dynamic-skills/*/scripts",
     ] {
@@ -178,18 +178,11 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
     assert!(
         format_contract
-            .contains("bash \"{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh\"")
-            && format_contract.contains(
-                "bun install --cwd \"{{.REPO_ROOT}}\" --frozen-lockfile --ignore-scripts"
-            )
-            && format_contract.contains(
-                "bun install --cwd \"{{.REPO_ROOT}}/.github/formatting\" --frozen-lockfile --ignore-scripts"
-            )
-            && format_contract.matches("bun install").count() == 2
+            .contains("bun test \"{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts\"")
             && !format_contract.contains("deps:")
-            && !format_contract.contains("||")
+            && !format_contract.contains("install")
             && !format_contract.contains("loom:"),
-        "the formatter contract must install its repository and detached formatter dependencies from pinned, frozen manifests without a fallback"
+        "the formatter contract must be a detached, install-free preflight task"
     );
 
     let skills_manifest =

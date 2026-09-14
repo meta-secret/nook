@@ -64,7 +64,6 @@ import {
   ExtensionPairedVaultIdentityHandoffRequestMessageType,
   ExtensionPairedVaultIdentityStatusMessageStatus,
   ExtensionPairedVaultUnlockRequestMessageType,
-  ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionIdentityHandoffRequestMessageType,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
@@ -81,10 +80,20 @@ import {
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "./extension-pairing-delivery";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
 export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "./extension-pairing-delivery";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -159,60 +168,6 @@ enum ExtensionMessageDeliveryKind {
 type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | { kind: ExtensionMessageDeliveryKind.Received; response: unknown };
-
-export enum ExtensionPairingDeliveryKind {
-  Delivered = "delivered",
-  MessagingUnavailable = "messaging-unavailable",
-  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
-  Rejected = "rejected",
-}
-
-export enum ExtensionPairingRejectionReason {
-  AuthenticationSurfaceRefreshFailed = "authentication-surface-refresh-failed",
-  EventLogAccessNotGranted = "event-log-access-not-granted",
-  EventLogImportFailed = "event-log-import-failed",
-  ExtensionSessionDocumentClosed = "extension-session-document-closed",
-  ExtensionSessionDocumentClosureFailed = "extension-session-document-closure-failed",
-  ExtensionSessionDocumentCreationFailed = "extension-session-document-creation-failed",
-  ExtensionSessionDocumentObservationFailed = "extension-session-document-observation-failed",
-  ExtensionSessionDeliveryFailed = "extension-session-delivery-failed",
-  ExtensionRuntimeUnavailable = "extension-runtime-unavailable",
-  ExtensionVaultImportFailed = "extension-vault-import-failed",
-  ForbiddenSender = "forbidden-sender",
-  InvalidPairingGrant = "invalid-pairing-grant",
-  InvalidPairingGrantApprovedAt = ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
-  InvalidPairingGrantDeviceId = ExtensionPairingApprovedMessageAdmissionFailure.DeviceId,
-  InvalidPairingGrantDeviceLabel = ExtensionPairingApprovedMessageAdmissionFailure.DeviceLabel,
-  InvalidPairingGrantDevicePublicKey = ExtensionPairingApprovedMessageAdmissionFailure.DevicePublicKey,
-  InvalidPairingGrantDeviceSigningPublicKey = ExtensionPairingApprovedMessageAdmissionFailure.DeviceSigningPublicKey,
-  InvalidPairingGrantEventLogRecordEvent = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
-  InvalidPairingGrantEventLogRecordEventId = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
-  InvalidPairingGrantEventLogRecordPath = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
-  InvalidPairingGrantEventLogRecordSchemaVersion = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
-  InvalidPairingGrantEventLogRecordsEmpty = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsEmpty,
-  InvalidPairingGrantEventLogRecordsNotArray = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
-  InvalidPairingGrantMessageEnvelope = ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
-  InvalidPairingGrantPayload = ExtensionPairingApprovedMessageAdmissionFailure.Payload,
-  InvalidPairingGrantProviders = ExtensionPairingApprovedMessageAdmissionFailure.Providers,
-  InvalidPairingGrantScopes = ExtensionPairingApprovedMessageAdmissionFailure.Scopes,
-  InvalidPairingGrantVaultName = ExtensionPairingApprovedMessageAdmissionFailure.VaultName,
-  InvalidPairingGrantVaultStoreId = ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId,
-  InvalidPairingGrantVaultType = ExtensionPairingApprovedMessageAdmissionFailure.VaultType,
-  InvalidProviderPayload = "invalid-provider-payload",
-  PairingGrantAdmissionFailed = "pairing-grant-admission-failed",
-}
-
-export type ExtensionPairingDelivery =
-  | {
-      readonly kind: Exclude<
-        ExtensionPairingDeliveryKind,
-        ExtensionPairingDeliveryKind.Rejected
-      >;
-    }
-  | {
-      readonly kind: ExtensionPairingDeliveryKind.Rejected;
-      readonly reason?: ExtensionPairingRejectionReason;
-    };
 
 function isAcceptedIdentityHandoffResponse(value: unknown): value is {
   readonly ok: true;
@@ -495,11 +450,12 @@ class ExtensionConnectionBrowser {
         reason: admittedReason,
       };
     }
-    return {
-      kind: migrationRequired
-        ? ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
-        : ExtensionPairingDeliveryKind.Rejected,
-    };
+    if (migrationRequired) {
+      return {
+        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+      };
+    }
+    return { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
   async deliverExtensionPairingApproval({

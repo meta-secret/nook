@@ -7,7 +7,7 @@ task_timeout_minutes() {
     build:compile) echo 30 ;;
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
-    rust:ci|hive:verify) echo 20 ;;
+    rust:ci) echo 20 ;;
     web:verify) echo 10 ;;
     web:build) echo 25 ;;
     web:e2e|web:e2e:debug|extension:e2e) echo 180 ;;
@@ -61,7 +61,6 @@ run_task() {
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
     web:e2e:debug) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e-debug" NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
-    hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;
     ci:pr) run_with_timeout "$timeout_minutes" task ci:pr ;;
     ci:pr:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/ci-pr-e2e" task ci:pr:e2e ;;

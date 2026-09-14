@@ -17,20 +17,26 @@ import type {
 import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 
 export { ExtensionIdentityRequestSource };
+export {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "$lib/extension/extension-pairing-delivery";
 
-/**
- * Compile-time compatibility for shared presentation that is unreachable in
- * Sentinel. Values deliberately describe the disabled boundary and cannot be
- * mistaken for extension protocol capabilities.
- */
-export enum ExtensionConnectScope {
-  VaultAccess = "sentinel-extension-vault-access-disabled",
-  PasswordFilling = "sentinel-extension-password-filling-disabled",
-  PasskeyManagement = "sentinel-extension-passkey-management-disabled",
-  SyncProviderCredentials = "sentinel-extension-provider-secret-sharing-disabled",
+export type ExtensionConnectScope = ProtocolExtensionConnectScope;
+
+/** Owns Sentinel's fail-closed facade for unreachable extension scope access. */
+class SentinelExtensionConnectScopeCatalog {
+  get SyncProviderCredentials(): ExtensionConnectScope {
+    throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
+  }
 }
+
+export const ExtensionConnectScope =
+  new SentinelExtensionConnectScopeCatalog();
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ProtocolExtensionConnectScope>;
@@ -99,10 +105,6 @@ export async function requestPairedExtensionUnlock(
   return false;
 }
 
-export function scopeLabel(): never {
-  throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
-}
-
 export async function adoptExtensionIdentity(
   args: ExtensionIdentityAdoption,
 ): Promise<Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>> {
@@ -121,7 +123,9 @@ export const extensionConnectionBrowser = {
   requestPairedExtensionUnlock,
   adoptExtensionIdentity,
   // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  async deliverExtensionPairingApproval(_request: unknown): Promise<never> {
+  async deliverExtensionPairingApproval(
+    _request: unknown,
+  ): Promise<ExtensionPairingDelivery> {
     void _request;
     throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
   },

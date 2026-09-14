@@ -137,8 +137,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest =
         RepositoryFixture::repository_root().read("nook-app/nook-platform/fuzz/Cargo.toml")?;
-    let readiness =
-        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/github.ts")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
@@ -153,14 +151,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
         "Central ci.yml must call the shared Rust ecosystem checks"
     );
-    assert!(
-        entry.contains("agentic-ai/minds/*"),
-        "Central ci.yml must keep labeled minds-only PR coverage"
-    );
     for marker in [
-        "needs.scope.outputs.product == 'false'",
-        "needs.scope.outputs.minds == 'true'",
-        "github.event.label.name == 'ci:validate'",
+        "github.event_name == 'schedule'",
+        "github.event_name == 'workflow_dispatch'",
     ] {
         assert!(
             entry.contains(marker),
@@ -255,7 +248,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let platform_tasks =
         RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml")?;
     let preflight_tasks = RepositoryFixture::repository_root().read("preflight/Taskfile.yml")?;
-    let minds_tasks = RepositoryFixture::repository_root().read("agentic-ai/minds/Taskfile.yml")?;
     let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml")?;
     for marker in [
         "docker:rust-base:",
@@ -283,7 +275,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task: docker:ci:cache:publish:rust-base",
         "task: preflight:dependency-policy",
         "task: fuzz:dependency-policy",
-        "task: minds:dependency-policy",
         "preflight-test",
         "GHA_CACHE_WRITE_ENABLED",
     ] {
@@ -309,9 +300,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && platform_tasks.contains("fuzz:dependency-policy:")
             && platform_tasks.contains("WORKSPACE: nook-app/nook-platform/fuzz")
             && preflight_tasks.contains("preflight:dependency-policy:")
-            && minds_tasks.contains("minds:dependency-policy:")
             && !root_tasks.contains("taskfile: fuzz/Taskfile.yml")
-            && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml")
             && docker_tasks
                 .contains("task: dylint:dependency-policy\n      - task: rust:dependency-policy",),
         "each Rust workspace must own dependency-policy in its Taskfile"
@@ -604,7 +593,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for relative in [
         "nook-app/nook-platform/clippy.toml",
         "preflight/clippy.toml",
-        "agentic-ai/minds/clippy.toml",
         "nook-app/nook-platform/fuzz/clippy.toml",
     ] {
         let clippy = RepositoryFixture::repository_root().read(relative)?;
@@ -617,8 +605,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "{relative} must deny unwrap in tests"
         );
     }
-    assert!(readiness.contains("workflowFile: \"ci.yml\""));
-    assert!(readiness.contains("new PullRequestChangedPath(path).isMainPrIgnoredPath()"));
     Ok(())
 }
 

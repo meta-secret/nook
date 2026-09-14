@@ -272,11 +272,6 @@ class PublicRegistryContract {
     ).execute();
     if (criRegistryResult.isErr()) return err(criRegistryResult.error);
     const criRegistry = criRegistryResult.value;
-    const hiveResult = await new RegistryContractSource(
-      "infra/tasks/hive.yml",
-    ).execute();
-    if (hiveResult.isErr()) return err(hiveResult.error);
-    const hive = hiveResult.value;
     const sccacheResult = await new RegistryContractSource(
       "infra/tasks/sccache.yml",
     ).execute();
@@ -601,7 +596,7 @@ class PublicRegistryContract {
       '"preserveDigest": true',
       '"anonymousPolicy": ["read"]',
       '"actions": ["read"]',
-      '"nook-hive": {',
+      '"nook-infra": {',
       '"users": ["__NOOK_REGISTRY_USERNAME__"]',
       "kind: Service",
       'requests:\n              cpu: "2"\n              memory: 4Gi',
@@ -772,7 +767,7 @@ class PublicRegistryContract {
           "complete deploy must reconcile controller, then worker, then registry auth",
       });
     }
-    for (const source of [hosts, hive]) {
+    for (const source of [hosts]) {
       const assertion = {
         source,
         fragment: "127.0.0.1:5000",
@@ -781,13 +776,6 @@ class PublicRegistryContract {
       const admission28 = new ForbiddenRegistryFragment(assertion).execute();
       if (admission28.isErr()) return err(admission28.error);
     }
-    const hiveAssertion = {
-      source: hive,
-      fragment: "registry.dev.nokey.sh/nook-hive",
-      message: "Hive must publish through the public Zot endpoint",
-    };
-    const admission29 = new RequiredRegistryFragment(hiveAssertion).execute();
-    if (admission29.isErr()) return err(admission29.error);
     const admission30 = new RequiredRegistryFragment({
       source: sccacheBucketEnsure,
       fragment: "docker.io/amazon/aws-cli:2.27.50@sha256:",
