@@ -14,7 +14,6 @@ const companionWasmPath = join(
   process.cwd(),
   '../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
 )
-const extensionMetadataPath = '/downloads/extension.json'
 Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
 const wasmFetch = new Proxy(globalThis.fetch, {
@@ -33,11 +32,6 @@ const wasmFetch = new Proxy(globalThis.fetch, {
       return new Response(readFileSync(companionWasmPath), {
         headers: { 'Content-Type': 'application/wasm' },
       })
-    }
-    if (
-      new URL(url, globalThis.location.href).pathname === extensionMetadataPath
-    ) {
-      return new Response('', { status: 404 })
     }
     return Reflect.apply(target, thisArgument, [input, init])
   },

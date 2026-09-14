@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { ProviderSyncFreshness } from '$app-wasm'
 import type { Page } from '@playwright/test'
 import { describe, expect, test, vi } from 'vitest'
