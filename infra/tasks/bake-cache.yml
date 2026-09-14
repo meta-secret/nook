@@ -270,6 +270,25 @@ tasks:
           return "$bake_status"
         }
 
+        bake_compile_missing_dependency_secret() {
+          local log_file="$1"
+          local runtime_mode="$2"
+          set +e
+          env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
+            COMPILE_SOURCE_SCOPE="$compile_source_a" \
+            COMPILE_SOURCE_CACHE_WRITE_ENABLED=1 \
+            "$docker_cli" buildx bake \
+            --progress=plain \
+            -f "$sim_dir/compile-warm.docker-bake.hcl" \
+            --set "*.context=$sim_dir" \
+            --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
+            compile-dependency-cache compile-warm >"$log_file" 2>&1
+          local bake_status=$?
+          set -e
+          cat "$log_file"
+          return "$bake_status"
+        }
+
         registry_ref_code() {
           "$docker_cli" run --rm --network "$network" curlimages/curl:8.12.1 \
             -sS -o /dev/null -w "%{http_code}" \
@@ -378,6 +397,15 @@ tasks:
         echo "compile publication fault: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
 
         echo "== Cold normal publish: no seed prerequisite, sccache READ_WRITE =="
+        echo "== Target-specific authority: a sibling without its secret fails distinctly =="
+        create_builder "nook-bake-sim-compile-missing-sibling-secret-${suffix}"
+        if bake_compile_missing_dependency_secret "$proof_log" "$sccache_publish_mode"; then
+          echo "dependency-cache sibling without runtime authority unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -Fq -- 'secret sccache_runtime_mode: not found' "$proof_log"
+        echo "compile target secret isolation: dependency-cache sibling status=failed reason=missing-runtime-authority"
+
         create_builder "nook-bake-sim-compile-source-a-${suffix}"
         compile_started="$(date +%s)"
         bake_compile_source "$proof_log" "$compile_source_a" "" "1" "$sccache_publish_mode" "v3" \

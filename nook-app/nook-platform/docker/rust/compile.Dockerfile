@@ -54,7 +54,10 @@ RUN mkdir -p \
       nook-companion-wasm/src/lib.rs \
       nook-wasm/src/lib.rs \
       nook-wasm-composition-tests/src/lib.rs
-RUN --network=default cargo fetch --locked
+# `cargo fetch` may query rustc for target metadata. It is not a compiler-cache
+# vertex, so bypass the inherited wrapper rather than requiring cache authority
+# outside the 18 explicitly secret-mounted compiler vertices below.
+RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 
 # These sibling stages warm only ordinary library dependencies. No --tests,
 # --all-targets, test runner, Clippy, coverage, or test-only package is used.
@@ -255,7 +258,7 @@ COPY agentic-ai/minds/vendor vendor
 COPY agentic-ai/minds/hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p hive/src/bin \
     && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs
-RUN --network=default cargo fetch --locked
+RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \

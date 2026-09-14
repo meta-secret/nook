@@ -28,12 +28,19 @@ grep -Fq -- 'workflow_args+=(--raw-field "tasks=$requested_tasks")' "$remote_tas
 for required in 'publication requires READ_WRITE compiler-cache authority' 'verification requires READ_ONLY compiler-cache authority' 'id=sccache_runtime_mode' 'No remote BuildKit cache is available; performing a cold solve with sccache'; do
   grep -Fq -- "$required" "$compile_script"
 done
-runtime_secret_line="$(grep -nF -- '--set=*.secrets=id=sccache_runtime_mode,src=${runtime_mode_file}' "$compile_script" | cut -d: -f1)"
+runtime_secret_line="$(grep -nF -- '--set=build-compile.secrets=id=sccache_runtime_mode,src=${runtime_mode_file}' "$compile_script" | cut -d: -f1)"
 credential_branch_line="$(grep -nF -- 'if [ -n "$access_key_file" ]' "$compile_script" | cut -d: -f1)"
 test -n "$runtime_secret_line"
 test -n "$credential_branch_line"
 test "$runtime_secret_line" -lt "$credential_branch_line"
-grep -Fq -- '--set=*.secrets+=id=sccache_s3_access_key,src=${access_key_file}' "$compile_script"
+for compile_target in build-compile build-compile-dependency-cache; do
+  for secret_binding in \
+    "secrets=id=sccache_runtime_mode,src=\${runtime_mode_file}" \
+    "secrets+=id=sccache_s3_access_key,src=\${access_key_file}" \
+    "secrets+=id=sccache_s3_secret_key,src=\${secret_key_file}"; do
+    grep -Fq -- "--set=${compile_target}.${secret_binding}" "$compile_script"
+  done
+done
 for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true'; do
   grep -Fq -- "$required" "$setup"
 done
@@ -57,6 +64,7 @@ for semantic_input in docs/privacy-policy.md docs/terms-of-service.md nook-app/n
 done
 grep -Fq -- 'ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret' "$compile_dockerfile"
 test "$(grep -Fc -- 'id=sccache_runtime_mode,required=true' "$compile_dockerfile")" -eq 18
+test "$(grep -Fc -- 'RUSTC_WRAPPER= cargo fetch --locked' "$compile_dockerfile")" -eq 2
 if grep -Fq -- 'id=sccache_runtime_mode,required=false' "$compile_dockerfile"; then
   echo 'compile vertex permits missing runtime authority secret' >&2
   exit 1
@@ -73,7 +81,7 @@ for required in cache_hits cache_misses cache_writes NOOK_SCCACHE_PUBLICATION_FA
 for required in 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'READ_WRITE failure silently lost publication authority' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
   grep -Fq -- "$required" "$sccache_fallback_contract"
 done
-for required in 'Publication guard: zero errors plus zero writes remains terminal' 'cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'bake-sim-sccache-hit' 'Read-only replay: exact BuildKit reuse and zero writes' 'cache_writes=0 registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
+for required in 'Publication guard: zero errors plus zero writes remains terminal' 'cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'bake-sim-sccache-hit' 'Read-only replay: exact BuildKit reuse and zero writes' 'cache_writes=0 registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"
