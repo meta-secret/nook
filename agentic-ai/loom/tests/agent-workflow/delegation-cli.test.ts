@@ -129,7 +129,7 @@ export class AgentWorkflowDelegationCliScenario {
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
-const FEATURE_BRANCH = 'codex/hive-delegation-cli-tests';
+const FEATURE_BRANCH = 'codex/delegation-cli-tests';
 
 describe('delegated agent journal CLI', () => {
   test('records an ordinary delegated attempt with its semantic view', async () => {

@@ -170,7 +170,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '2b93470a397275447a8cdf13dc9dfec1fe9ebe2caf78900561e0723a0b4c2b40',
+    'ba4a2c8759b77612e45514a356a56d81deefd45556afc9abc711294ef4ab3876',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -178,7 +178,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
-    'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
+    '5a2c6e4011c5364ab9343a5959f8c439c31d7bfb772c8265d2f74b1e98415daf',
   ],
   [
     '.github/scripts/with-healthy-buildkit.sh',
@@ -194,7 +194,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/k0s-cni-migration-test.ts',
-    '95a0b4d0988be5f2948a1bf8e7895c14d0bb7b405d30c619d93481f272baf0ba',
+    '82c1c6aaca4ab333799786181bf8641d350fc99b2d877e9378921f92e52c3e5d',
   ],
   [
     'infra/contracts/k0s-firewall-rollback-test.ts',
@@ -202,7 +202,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'fb545bae3ce8b7e4fabcdc8f15e5efb7220e7389e10cb8670f012a992543f1a4',
+    'fce68cf9521286b606bb064a89c7b88e4f9173e09ddaa16b572e4eaac4878f59',
   ],
   [
     'infra/operator-ssh.ts',
