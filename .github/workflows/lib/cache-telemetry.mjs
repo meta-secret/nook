@@ -395,11 +395,42 @@ export class CacheTelemetry {
       runtime_mode: runtimeMode = "",
       runtime_mode_source: runtimeModeSource = "",
     } = report;
+    const normalizedStage = String(stage);
+    const normalizedBakedRuntimeMode = String(bakedRuntimeMode);
+    const normalizedRuntimeMode = String(runtimeMode);
+    const normalizedRuntimeModeSource = String(runtimeModeSource);
+    if (!normalizedStage)
+      throw new Error("sccache report is missing its stage");
+    if (
+      normalizedBakedRuntimeMode !== "READ_ONLY" &&
+      normalizedBakedRuntimeMode !== "READ_WRITE"
+    ) {
+      throw new Error(
+        `sccache report has invalid baked_runtime_mode: ${normalizedBakedRuntimeMode}`,
+      );
+    }
+    if (
+      normalizedRuntimeMode !== "READ_ONLY" &&
+      normalizedRuntimeMode !== "READ_WRITE"
+    ) {
+      throw new Error(
+        `sccache report has invalid runtime_mode: ${normalizedRuntimeMode}`,
+      );
+    }
+    if (
+      normalizedRuntimeModeSource !== "environment" &&
+      normalizedRuntimeModeSource !== "runtime_secret"
+    ) {
+      throw new Error(
+        `sccache report has invalid runtime_mode_source: ${normalizedRuntimeModeSource}`,
+      );
+    }
+    /** @type {SccacheReport} */
     const normalized = {
-      stage: String(stage),
-      baked_runtime_mode: String(bakedRuntimeMode),
-      runtime_mode: String(runtimeMode),
-      runtime_mode_source: String(runtimeModeSource),
+      stage: normalizedStage,
+      baked_runtime_mode: normalizedBakedRuntimeMode,
+      runtime_mode: normalizedRuntimeMode,
+      runtime_mode_source: normalizedRuntimeModeSource,
       compile_requests: CacheTelemetry.nonNegativeInteger(
         report.compile_requests,
       ),
@@ -411,29 +442,12 @@ export class CacheTelemetry {
       cache_errors: CacheTelemetry.nonNegativeInteger(report.cache_errors),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
     };
-    if (!normalized.stage)
-      throw new Error("sccache report is missing its stage");
-    for (const [field, value] of Object.entries({
-      baked_runtime_mode: normalized.baked_runtime_mode,
-      runtime_mode: normalized.runtime_mode,
-    })) {
-      if (value !== "READ_ONLY" && value !== "READ_WRITE") {
-        throw new Error(`sccache report has invalid ${field}: ${value}`);
-      }
-    }
-    if (
-      normalized.runtime_mode_source !== "environment" &&
-      normalized.runtime_mode_source !== "runtime_secret"
-    ) {
-      throw new Error(
-        `sccache report has invalid runtime_mode_source: ${normalized.runtime_mode_source}`,
-      );
-    }
     return normalized;
   }
 
   /** @param {readonly SccacheReport[]} reports @returns {SccacheSummary} */
   static summarizeSccache(reports) {
+    /** @type {SccacheSummary} */
     const summary = {
       report_count: reports.length,
       baked_runtime_mode: "UNAVAILABLE",
@@ -446,18 +460,18 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_writes: 0,
     };
-    if (reports.length > 0) {
-      const [first] = reports;
+    const first = reports[0];
+    if (first) {
       summary.baked_runtime_mode = first.baked_runtime_mode;
       summary.runtime_mode = first.runtime_mode;
       summary.runtime_mode_source = first.runtime_mode_source;
     }
     for (const report of reports) {
-      for (const field of [
+      for (const field of /** @type {const} */ ([
         "baked_runtime_mode",
         "runtime_mode",
         "runtime_mode_source",
-      ]) {
+      ])) {
         if (report[field] !== summary[field]) {
           throw new Error(
             `inconsistent sccache ${field}: ${summary[field]} != ${report[field]}`,
@@ -723,13 +737,17 @@ export class CacheTelemetry {
     if (!CacheTelemetry.isJsonRecord(sccache)) {
       throw new Error("telemetry sccache summary is required");
     }
-    const availableAuthority = sccache.report_count > 0;
+    const availableAuthority =
+      typeof sccache.report_count === "number" && sccache.report_count > 0;
     const allowedRuntimeModes = availableAuthority
       ? ["READ_ONLY", "READ_WRITE"]
       : ["UNAVAILABLE"];
     for (const field of ["baked_runtime_mode", "runtime_mode"]) {
       const value = sccache[field];
-      if (!allowedRuntimeModes.includes(value)) {
+      if (
+        typeof value !== "string" ||
+        !allowedRuntimeModes.includes(value)
+      ) {
         throw new Error(`telemetry sccache.${field} is invalid`);
       }
     }
@@ -737,6 +755,7 @@ export class CacheTelemetry {
       ? ["environment", "runtime_secret"]
       : ["unavailable"];
     if (
+      typeof sccache.runtime_mode_source !== "string" ||
       !allowedRuntimeModeSources.includes(sccache.runtime_mode_source)
     ) {
       throw new Error("telemetry sccache.runtime_mode_source is invalid");
