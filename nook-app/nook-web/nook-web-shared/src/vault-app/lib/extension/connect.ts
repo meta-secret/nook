@@ -281,7 +281,7 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private static runtimeHasLastError(runtime: ChromeRuntimeHost): boolean {
+  private runtimeReportedMessageFailure(runtime: ChromeRuntimeHost): boolean {
     if (!("lastError" in runtime)) return false;
     const lastError = runtime.lastError;
     return (
@@ -401,8 +401,9 @@ class ExtensionConnectionBrowser {
         wait: responseWait,
         resolve,
       });
+      const browserConnection = this;
       function receiveExtensionResponse(response?: unknown): void {
-        if (ExtensionConnectionBrowser.runtimeHasLastError(runtime)) {
+        if (browserConnection.runtimeReportedMessageFailure(runtime)) {
           pending.unavailable();
           return;
         }
@@ -711,7 +712,7 @@ class ExtensionConnectionBrowser {
           request.extensionRuntimeId,
           message,
           (response) => {
-            if (ExtensionConnectionBrowser.runtimeHasLastError(runtime)) {
+            if (this.runtimeReportedMessageFailure(runtime)) {
               resolve(
                 err(
                   new VaultStorageFailure(
