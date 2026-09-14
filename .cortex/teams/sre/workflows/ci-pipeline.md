@@ -139,26 +139,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 - Audits every direct dependency in each Rust root.
 - The roots are `nook-app/nook-platform/`, its fuzz workspace, and `preflight/`.
-- When an update exists, an AI agent updates all outdated Rust dependencies.
-- Runs the full deterministic suite and opens a PR for explicit review.
-
-**`agent-implement.yml`**
-
-- Requires exactly one explicit `issue_path` or `prompt`.
-- Resolves and atomically claims only the requested ready agent issue.
-- Requires an assigned Nook GitHub collaborator for issue mode.
-- Pins executable workflow tooling to `github.workflow_sha`; unreviewed
-  implementation source lives only in a separate bounded worktree.
-- Classifies and publishes the planning result before implementation.
-- An unauthorized major direction publishes a validated blocker and stops.
-- An authorized or ordinary bounded task continues through Cursor SDK
-  implementation → PR opened → owner assigned and mentioned → Workbench
-  progress/worklog published → workflow exits.
-
-**`ci-agent-smoke.yml`**
-
-- Runs the maintained npm-based ci-agent unit suite through Task.
-- Proves that `exitCiAgent` terminates open handles.
+- Uploads an artifact when outdated direct dependencies need manual triage.
 
 **`e2e-pr.yml`**
 
@@ -469,9 +450,6 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Purpose: Elastic delivery with persistent node-local BuildKit and private Zot recovery.
   - Runner: ARC for trusted sources; GitHub-hosted only for untrusted sources.
   - Purpose: Independent architecture and package verification
-- **`agent-implement.yml`, `ci-agent-smoke.yml`**
-  - Runner: general ARC
-  - Purpose: Background implementation and bounded smoke work
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: general ARC plus container ARC for Playwright
   - Purpose: Manual and research work scales independently
@@ -497,69 +475,9 @@ Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults l
 ## Rust dependency updates
 
 [`rust-dependency-updates.yml`](../../../../.github/workflows/rust-dependency-updates.yml)
-runs weekly and can be started manually. It installs the pinned
-`cargo-outdated` orchestration tool and runs it with `--workspace
---root-deps-only` in every Rust root. Those roots are:
-
-The audit covers every direct library declared in those `Cargo.toml` manifests.
-It does not audit only the current lockfile's transitive graph.
-
-On an outdated result, `task ci-agent:fix` runs on general ARC with
-`CI_AGENT_FIX_PROFILE=rust-dependency-update`. This narrow trusted Actions
-publisher is not an ordinary Team Agent: its isolated editor updates every
-outdated direct dependency and necessary compatibility code without Git,
-validation, credentials, or publication authority.
-
-Before any push, trusted workflow tooling runs the required broad validation
-remotely against that isolated update:
-
-```bash
-WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-task docker:ecosystem:fuzz FUZZ_SECONDS=20
-```
-
-The trusted host fails closed unless:
-
-- the diff contains only regular Rust dependency mission files and compatibility
-  changes;
-- trusted workflow checkout uses `persist-credentials: false`; the isolated
-  editor never receives the PAT. An existing-PR rerun may apply the token
-  only to a host Git fetch of the audited refs, then remove it before
-  isolated validation;
-- frozen HEAD, index, Git/common directories, and effective configuration remain
-  exact after editing and validation, while trusted Git disables hooks,
-  filesystem monitors, and signing;
-- validation's fresh HOME contains no publication, registry, or compiler-cache
-  credentials. The immutable Docker wrapper injects `network=none` for the
-  `docker run` form used by trusted validation and rejects unknown wrapper
-  operations. Alternate Docker CLI forms are not the trusted validation path;
-- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
-  for validation/publication; and
-- exact branch/PR identity is unambiguous and the publisher returns its verified
-  remote head SHA to Gizmo after commit, push, and PR creation.
-
-That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
-hosted review, replacement exact-head validation, readiness, and merge. The
-publisher's pre-push security validation remains required but does not replace
-those exact-head gates.
-
-`ci:pr:e2e` validates the product path:
-
-- repository preflight;
-- Rust coverage and unit tests;
-- WASM checks;
-- web checks, unit tests, and builds;
-- the complete local-provider Playwright suite;
-- extension e2e.
-
-- The additional targets validate the separate fuzz workspace.
-- Credentialed real-provider `sync-live` e2e remains a separate manual
-  validation.
-  - It creates disposable external-provider state.
-  - It requires provider secrets.
-- No workflow merges the harness-owned PR from a check event.
-  - The dev manager requires all slow checks and review/security verdicts.
-  - Promotion requires guarded fast-forward publication of the tested dev SHA.
+runs weekly and can be started manually. It runs pinned `cargo-outdated`
+tooling with `--workspace --root-deps-only` in every Rust root and uploads an
+artifact when direct dependencies are outdated. Updates are handled manually.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -850,7 +768,6 @@ authenticator-domain to 90 percent.
   it until checks finish.
 - Claude, CodeRabbit, Cursor Bugbot, and other optional services are not
   requested or awaited.
-- The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**
 

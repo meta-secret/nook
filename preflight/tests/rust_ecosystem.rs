@@ -137,8 +137,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest =
         RepositoryFixture::repository_root().read("nook-app/nook-platform/fuzz/Cargo.toml")?;
-    let readiness =
-        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/github.ts")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
@@ -153,7 +151,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
         "Central ci.yml must call the shared Rust ecosystem checks"
     );
-    for marker in ["github.event_name == 'schedule'", "github.event_name == 'workflow_dispatch'"] {
+    for marker in [
+        "github.event_name == 'schedule'",
+        "github.event_name == 'workflow_dispatch'",
+    ] {
         assert!(
             entry.contains(marker),
             "central CI routing missing: {marker}"
@@ -604,8 +605,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "{relative} must deny unwrap in tests"
         );
     }
-    assert!(readiness.contains("workflowFile: \"ci.yml\""));
-    assert!(readiness.contains("new PullRequestChangedPath(path).isMainPrIgnoredPath()"));
     Ok(())
 }
 

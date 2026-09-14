@@ -244,17 +244,6 @@ RUN cd nook-app/nook-web/nook-web-extension \
 RUN cd nook-app/nook-web/nook-web-research && bun run build
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
-FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS compile-ci-agent
-
-WORKDIR /meta-secret/nook/agentic-ai/ci-agent
-COPY agentic-ai/ci-agent/package.json agentic-ai/ci-agent/package-lock.json ./
-RUN npm ci --ignore-scripts
-COPY agentic-ai/ci-agent/tsconfig.json ./
-COPY agentic-ai/ci-agent/src/main src/main
-RUN npm run build \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/ci-agent-compile-passed
-
 FROM web-base AS compile-repository-tooling
 
 WORKDIR /meta-secret/nook
@@ -281,6 +270,5 @@ FROM scratch AS compile
 COPY --from=compile-native-source /opt/nook/compile-native-passed /compile/native
 COPY --from=compile-wasm-source /opt/nook/wasm-compile-passed /compile/wasm
 COPY --from=compile-web /opt/nook/web-compile-passed /compile/web
-COPY --from=compile-ci-agent /opt/nook/ci-agent-compile-passed /compile/ci-agent
 COPY --from=compile-repository-tooling /opt/nook/repository-tooling-compile-passed /compile/repository-tooling
 COPY --from=compile-loom /opt/nook/loom-compile-passed /compile/loom

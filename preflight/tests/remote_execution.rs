@@ -139,12 +139,6 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         "pr:review-local:",
         "codex review --base origin/main",
         "Cloud review remains Codex-only; hosted validation dispatch never waits for it.",
-        "pr:review:",
-        "CI_AGENT_CMD: pr-review",
-        "pr:review:stabilize:",
-        "CI_AGENT_CMD: pr-review-stabilize",
-        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default \"0\" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'",
-        "REVIEW_WAIT_SECONDS: '{{default \"0\" .REVIEW_WAIT_SECONDS}}'",
     ] {
         assert!(
             agentic_tasks.contains(required),

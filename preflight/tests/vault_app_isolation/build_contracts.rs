@@ -319,17 +319,6 @@ fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
 }
 
 #[test]
-fn main_failures_do_not_trigger_an_ai_repair_agent() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let main = root.read(".github/workflows/main.yml");
-    assert!(
-        !main.contains("\n  ci-fix:") && !main.contains("task ci-agent:fix"),
-        "main failures must remain visible for manual handling"
-    );
-    Ok(())
-}
-
-#[test]
 fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     assert!(
@@ -872,22 +861,21 @@ fi
 }
 
 #[test]
-fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> anyhow::Result<()> {
+fn rust_dependency_updates_report_outdated_direct_dependencies() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/rust-dependency-updates.yml");
     for required in [
         "- cron: \"0 9 * * 1\"",
         "task rust:deps:outdated",
-        "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
-        "uses: ./.github/actions/nook-node-setup",
-        "uses: go-task/setup-task@v2",
-        "task ci-agent:fix",
+        "uses: actions/upload-artifact@v4",
+        "name: rust-deps-outdated",
     ] {
         assert!(
             workflow.contains(required),
-            "dependency update workflow missing required contract: {required}"
+            "dependency audit workflow missing: {required}"
         );
     }
+    assert!(!workflow.contains("CURSOR_API_KEY") && !workflow.contains("contents: write"));
     assert!(
         root.read(".github/docker/rust-maintenance.Dockerfile")
             .contains("cargo install cargo-outdated --version 0.19.0 --locked")
@@ -906,22 +894,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
         assert!(
             audit_script.contains(required),
             "dependency update audit script missing required contract: {required}"
-        );
-    }
-
-    let prompt = root.read(".github/prompts/rust-dependency-update-agent.md");
-    for required in [
-        "`nook-app/nook-platform/`",
-        "`nook-app/nook-platform/fuzz/`",
-        "`preflight/`",
-        "all outdated direct Rust dependencies",
-        "WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000",
-        "task docker:ecosystem:fuzz FUZZ_SECONDS=20",
-        "every local-provider Playwright e2e spec, and the\n   extension e2e",
-    ] {
-        assert!(
-            prompt.contains(required),
-            "dependency update agent prompt missing required contract: {required}"
         );
     }
     Ok(())

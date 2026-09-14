@@ -211,7 +211,6 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
 )]
 fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for path in [
-        ".github/workflows/agent-implement.yml",
         ".github/workflows/e2e-pr.yml",
         ".github/workflows/release.yml",
         ".github/workflows/rust-dependency-updates.yml",
