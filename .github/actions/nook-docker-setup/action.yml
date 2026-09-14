@@ -386,8 +386,9 @@ runs:
 
         case "$cache_selection" in
           general|native|wasm|wasm-proof)
-          # Use the same worktree-content fingerprint as local sealed formatting.
-          # Bake cache wiring and source files do not rotate this dependency scope.
+          # Keep the shared Rust dependency identity for native/WASM consumers.
+          # build:compile composes a complete source-free graph identity below
+          # so its Hive and Bun dependency layers cannot reuse a Rust-only scope.
           rust_deps_fingerprint="$(
             NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
               bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
@@ -399,6 +400,17 @@ runs:
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
           compile_deps_scope="nook-rust-compile-deps-v2-$rust_deps_fingerprint"
+          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+            compile_deps_fingerprint="$({
+              NOOK_COMPILE_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
+                bash "${{ github.action_path }}/../../scripts/compile-deps-cache-fingerprint.sh"
+            })"
+            if [[ ! "$compile_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Could not fingerprint the hosted compile dependency graph" >&2
+              exit 1
+            fi
+            compile_deps_scope="nook-rust-compile-deps-v2-$compile_deps_fingerprint"
+          fi
           echo "GHA_RUST_COMPILE_DEPS_SCOPE=$compile_deps_scope" >> "$GITHUB_ENV"
           ;;
         esac
