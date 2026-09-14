@@ -915,18 +915,22 @@ tasks:
     expect(production).toContain(
       "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != \"\"",
     );
+    expect(production).toContain(
+      "GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX",
+    );
+    expect(production).toContain("compile_ancestor_source_cache_ref");
     expect(production).toContain("timeout=2m");
     expect(simulator).toContain("COMPILE_SOURCE_CACHE_AVAILABLE != \"\"");
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
     expect(proof).toContain(
-      "New exact source: fall back only to fingerprinted dependencies",
+      "New exact source: reuse unchanged layers from its immutable ancestor",
     );
     expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",
     );
     expect(proof).toContain("bake-sim-compile-hive-source");
     expect(proof).toContain(
-      "compile source B: cached=3 uncached=6 writes=1",
+      "compile source B: cached=7 uncached=2 writes=1",
     );
     expect(proof).toContain("compile warm: cached=9 uncached=0 writes=0");
     expect(proof).toContain('bake_compile_source "$proof_log" "$compile_source_b" "1" ""');

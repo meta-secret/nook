@@ -16,6 +16,10 @@ variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
   default = ""
 }
 
+variable "GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX" {
+  default = ""
+}
+
 variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
   default = ""
 }
@@ -25,12 +29,22 @@ variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
 // graph. There is deliberately no trusted Main source fallback.
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_DEPS_SCOPE}:buildcache"
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX}:buildcache"
 
 compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",
-] : GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+] : GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX != "" ? [
+  // Import the nearest immutable first-parent source graph and the current
+  // lockfile fingerprint together. BuildKit reuses unchanged source/compiler
+  // vertices while the fingerprint ref remains authoritative for dependencies.
+  "type=registry,ref=${compile_ancestor_source_cache_ref}",
+] : []
+
+compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
   "type=registry,ref=${compile_deps_cache_ref}",
 ] : []
+
+compile_effective_cache_from = concat(compile_cache_from, compile_fingerprint_cache_from)
 
 compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // The fingerprint ref owns the maximal dependency closure. Keep the exact
@@ -75,7 +89,7 @@ target "build-compile" {
     NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
     NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
   }
-  cache-from = compile_cache_from
+  cache-from = compile_effective_cache_from
   cache-to   = compile_cache_to
   output     = ["type=cacheonly"]
 }

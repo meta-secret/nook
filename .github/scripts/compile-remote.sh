@@ -40,6 +40,7 @@ extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
 compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
 compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
+ancestor_scope_suffix="${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
@@ -47,6 +48,20 @@ fi
 if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v2-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires the fingerprinted Rust dependency scope" >&2
   exit 2
+fi
+if [ -n "$ancestor_scope_suffix" ]; then
+  if [[ ! "$ancestor_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
+    echo "build:compile ancestor source scope is malformed" >&2
+    exit 2
+  fi
+  ancestor_scope_sha="${ancestor_scope_suffix#-git-}"
+  if [ "$ancestor_scope_sha" = "$(git rev-parse HEAD)" ] \
+    || ! git merge-base --is-ancestor "$ancestor_scope_sha" HEAD \
+    || ! git rev-list --first-parent HEAD \
+      | awk -v expected="$ancestor_scope_sha" '$0 == expected { found = 1 } END { exit found ? 0 : 1 }'; then
+    echo "build:compile ancestor source scope is outside HEAD's first-parent history" >&2
+    exit 2
+  fi
 fi
 bake_args=(
   --allow="fs.read=${repo_root}"
