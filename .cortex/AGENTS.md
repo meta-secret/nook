@@ -641,6 +641,15 @@ mechanics to the PR Lifecycle Agent for the owning controller. Promotion
 fast-forwards main to the tested dev SHA. A worker commit alone does not
 complete feature delivery. Every change passes through dev.
 
+When a dev PR validation wave fails, the terminal evidence must include every
+failed or cancelled required GitHub Actions job before repair begins. Gizmo
+Prime groups the complete diagnostics by owning team and coherent competence
+area, then dispatches affected Team Gizmos in parallel. Team Gizmos give one
+agent each consolidated area list and batch all known test, compiler, and
+static-analysis fixes into one iteration. Prime integrates all team clusters
+into local dev before one new snapshot is published and full validation is
+rerun once. No individual fix may trigger a push or validation rerun.
+
 ### Scheduled-task and PR scope
 
 - Codex scheduled tasks are prohibited. Do not create, suggest, or update a

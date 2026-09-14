@@ -545,6 +545,11 @@ Gizmo and Team Agents never create or update PRs, decide policy verdicts, or
 replace the active harness. Local `dev` may continue receiving features while
 the published `origin/dev` SHA remains frozen for its validation cycle.
 
+After the dev PR validation wave reaches terminal state, PR Lifecycle collects
+every failed or cancelled required GitHub Actions job before any repair starts.
+The Dev Manager forwards the complete inventory to Gizmo Prime. A first-failure
+report is incomplete.
+
 ### Flow
 
 ```mermaid
@@ -558,8 +563,13 @@ flowchart LR
     Checks["GitHub:<br/>full slow checks"]
     SlowRequest["Dev Manager:<br/>requests exact-SHA slow-check observation"]
     SlowObserve["PR Lifecycle Agent:<br/>observes exact-SHA slow checks"]
+    Collect["PR Lifecycle Agent:<br/>collects every failed/cancelled<br/>required job"]
+    Analyze["Gizmo Prime:<br/>analyzes complete terminal inventory<br/>and groups by owner/competence"]
     Green{"Green?"}
-    Fix["Dev Manager:<br/>starts repair Gizmo"]
+    RepairWave["Gizmo Prime:<br/>dispatches affected Team Gizmos<br/>in parallel"]
+    TeamWave["Team Gizmos:<br/>one agent receives each<br/>consolidated area list"]
+    Integrate["Gizmo Prime + Delivery Pipeline:<br/>integrate all team clusters<br/>into local dev"]
+    PublishRepair["Dev Manager:<br/>publishes one new snapshot"]
     Promote["Dev Manager:<br/>authorizes dev:promote"]
     PromoteTask["PR Lifecycle Agent:<br/>runs guarded fast-forward"]
     Main([Main updated])
@@ -569,8 +579,8 @@ flowchart LR
     Verified["Dev Manager:<br/>receives actual merged PR state"]
 
     Dev --> Select --> Publish --> Pipeline --> PublishTask --> PR --> Checks
-    Checks --> SlowRequest --> Pipeline --> SlowObserve --> Pipeline --> Green
-    Green -- No --> Fix --> Dev
+    Checks --> SlowRequest --> Pipeline --> SlowObserve --> Collect --> Pipeline --> Analyze --> Green
+    Green -- No --> RepairWave --> TeamWave --> Integrate --> PublishRepair --> PR --> Checks
     Green -- Yes --> Promote --> Pipeline --> PromoteTask --> Main --> VerifyRequest --> Pipeline --> VerifyObserve --> PRState --> Pipeline --> Verified
 ```
 
@@ -586,7 +596,9 @@ sequenceDiagram
 
     box Dev management
         participant Manager as agent:dev-manager
-        participant Repair as gizmo:repair-dev
+        participant Prime as gizmo-prime:mission-root
+        participant Team as affected:team-gizmos
+        participant Agent as bounded:team-agents
     end
 
     box Authorized mechanics
@@ -615,12 +627,33 @@ sequenceDiagram
     Manager->>Pipeline: Authorize exact-SHA slow-check observation
     Pipeline->>Steward: Dispatch observation packet through active harness
     Steward->>CI: Observe exact-SHA slow-check result
-    CI-->>Steward: Exact-SHA check evidence or blocker
+    CI-->>Steward: Terminal exact-SHA check evidence
     Steward-->>Pipeline: Exact-SHA check evidence or blocker
-    Pipeline-->>Manager: Exact-SHA slow-check evidence or blocker
+    Pipeline-->>Manager: Complete terminal inventory of every failed/cancelled required job
 
-    Manager->>Repair: On failure, repair current local dev
-    Repair->>Dev: Land repair through Levels 1 through 4
+    Manager->>Prime: Forward complete terminal job diagnostics
+    Prime->>Prime: Group diagnostics by owning team and coherent competence area
+    par Affected competence areas
+        Prime->>Team: Dispatch one bounded packet with the complete area list
+        Team->>Agent: Give one agent the consolidated list for its area
+        Agent->>Agent: Fix all known test/compiler/static-analysis errors in one iteration
+        Agent-->>Team: Committed complete area iteration
+        Team-->>Prime: Integrated team cluster or blocker
+    end
+    Prime->>Pipeline: Authorize serialized integration of all team clusters
+    Pipeline->>Steward: Dispatch canonical dev:land packet
+    Steward->>Dev: Integrate all clusters into local dev
+    Dev-->>Prime: Complete repair wave integrated
+    Prime-->>Manager: All team clusters are ready for one new snapshot
+    Manager->>Pipeline: Authorize one dev:publish for the new snapshot
+    Pipeline->>Steward: Dispatch bounded publication packet
+    Steward->>OriginDev: Publish one new origin/dev snapshot
+    OriginDev-->>Steward: Frozen repaired origin/dev SHA
+    Steward-->>Pipeline: One-snapshot publication evidence
+    Pipeline-->>Manager: New frozen SHA
+    Manager->>PRManager: Invoke dev:pr-manager once for the new snapshot
+    PRManager->>PR: Update the single dev-to-main PR
+    PR->>CI: Rerun full validation once
 
     Manager->>Pipeline: Authorize guarded dev:promote after approval
     Pipeline->>Steward: Dispatch frozen-SHA promotion packet
@@ -637,6 +670,7 @@ sequenceDiagram
 
     Note over Dev,OriginDev: Local dev may advance while origin/dev is frozen
     Note over Manager,PRManager: Only the Dev Manager invokes manager-only dev:pr-manager; Team Gizmo and PR Lifecycle Agent never create or update the PR or decide policy verdicts
+    Note over Prime,Agent: No push or validation rerun occurs after an individual fix; all known area errors are batched before integration
     Note over Pipeline,Main: No PR merge substitute; squash, rebase, force-push, and promotion merge commits are prohibited
 ```
 

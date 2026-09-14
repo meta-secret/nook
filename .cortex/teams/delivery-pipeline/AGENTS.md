@@ -59,6 +59,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - Require the PR Lifecycle Agent to verify the live target and current branch
   head before acting. An observed SHA identifies run evidence; it is not
   cross-stage feature authority.
+- After a dev PR validation wave reaches terminal state, collect every failed or
+  cancelled required GitHub Actions job and return its diagnostics through Team
+  Gizmo. Do not stop collection at the first failure.
 - Keep feature-stage remote execution build-only. Tests, coverage, e2e, and
   preflight remain outside that stage.
 - Keep `dev:land` serialized and limited to the uniquely discovered local
@@ -106,7 +109,10 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   Gizmo Prime. It does not write implementation code or make policy
   decisions.
 - **PR Lifecycle Agent:** executes packetized external GitHub, pull-request,
-  check, review, status, publication, and promotion mechanics. Under a
+  check, review, status, publication, and promotion mechanics. For terminal dev
+  validation, it returns the complete failed/cancelled required-job inventory
+  and diagnostics without choosing functional ownership or a policy verdict.
+  Under a
   Prime-authorized feature packet, it re-fetches the canonical feature ref,
   resolves its latest committed head, pushes that ref, and invokes the remote
   task for that head. It also runs

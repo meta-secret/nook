@@ -197,10 +197,27 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
    - Freeze the published SHA until this attempt has an outcome.
    - Keep review and security verdicts bound to that SHA.
 3. On failure, delegate the repair to a feature Gizmo.
-   - The repair follows the same feature compilation and local integration path.
-   - Local dev can accumulate the repair alongside other complete features.
-   - Select and publish a new snapshot only after the prior attempt finishes.
-   - Repeat full validation for the newly published SHA.
+   - Wait for the validation wave to reach terminal state before starting repair.
+   - Require PR Lifecycle's terminal evidence to list every failed or cancelled
+     required GitHub Actions job, with its diagnostics and captured source SHA.
+     A first-failure-only report is incomplete.
+   - Forward the complete inventory to Gizmo Prime. Prime groups diagnostics by
+     owning team and coherent competence area.
+   - Prime dispatches affected Team Gizmos in parallel through the active
+     harness. Each Team Gizmo gives one Team Agent the consolidated list for its
+     area. Use multiple agents only for genuinely distinct, disjoint areas.
+   - Each Team Agent fixes all known test, compiler, and static-analysis errors
+     in its area in one iteration and commits the complete result.
+   - Team Gizmos integrate their committed area results and report one cluster
+     or blocker to Prime.
+   - Prime integrates all team clusters into local dev through the normal
+     branch-authoritative Levels 1 through 4 path.
+   - Do not push or rerun validation after an individual fix or before the
+     complete repair wave is integrated.
+   - After integration, publish one new snapshot and rerun full validation once
+     through Dev Manager -> Delivery Pipeline Team Gizmo -> PR Lifecycle Agent.
+   - If that new terminal wave fails, collect its complete job inventory before
+     opening another repair wave.
 4. On success, authorize fast-forward promotion for the tested SHA.
    - Require all slow checks and required review/security verdicts to pass.
    - An older success does not validate a newer local or remote dev SHA.

@@ -151,6 +151,15 @@ branch/head evidence and blockers, and reports the high-level result to Prime. I
 not make functional ownership, readiness, promotion, or final delivery
 decisions.
 
+For a terminal dev-validation failure, Prime receives the complete inventory of
+every failed or cancelled required job. Prime groups the diagnostics by owning
+team and coherent competence area, then dispatches affected Team Gizmos in
+parallel. Each Team Gizmo gives one Team Agent the consolidated list for its
+area. Multiple agents require genuinely distinct, disjoint competence areas.
+Prime integrates all returned team clusters into local dev before the Dev
+Manager publishes one new snapshot and requests one full validation rerun.
+Prime never pushes or reruns validation after an individual fix.
+
 The active harness owns admission and actual spawn results. Prime immediately
 attempts every dependency-ready Team Gizmo with a disjoint scope concurrently. A temporary
 admission refusal queues the work for retry when capacity releases. Host or
