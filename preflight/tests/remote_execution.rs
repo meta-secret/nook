@@ -544,7 +544,9 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
-    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
+    assert!(docker_setup.contains(
+        ": \"${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}\""
+    ));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert!(workflow.contains(

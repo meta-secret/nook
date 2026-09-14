@@ -116,9 +116,9 @@ fn assert_docker_setup_contract(root: &Path) {
     );
     assert!(
         setup.contains("web-research-deps|web-research-image)")
-            && setup.contains("arc_exact_scope_required=1")
+            && setup.contains("arc_exact_scope_required=\"$NOOK_REMOTE_TASK_SELECTION\"")
             && setup.contains("|| [ -n \"$arc_exact_scope_required\" ]"),
-        "ARC research producers and consumers must preserve their exact-head cache scope"
+        "ARC research producers and consumers must preserve PR exact-head cache scopes without forcing Main's stable research cache through the remote-task path"
     );
     assert!(
         container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")

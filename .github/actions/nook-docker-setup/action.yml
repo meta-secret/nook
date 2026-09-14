@@ -270,7 +270,9 @@ runs:
         arc_exact_scope_required=""
         case "$cache_selection" in
           web-research-deps|web-research-image)
-            arc_exact_scope_required=1
+            # PR research jobs hand an exact source cache across ARC Pods.
+            # Main publishes stable scopes and has no remote task selection.
+            arc_exact_scope_required="$NOOK_REMOTE_TASK_SELECTION"
             ;;
         esac
         if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \
@@ -294,9 +296,8 @@ runs:
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
             scope_sha="${{ github.event.pull_request.head.sha }}"
           else
-            if [ -z "$NOOK_REMOTE_TASK_SELECTION" ]; then
-              echo "isolated-cache-write requires a dispatched task selection" >&2
-              exit 1
+            if [ -n "$arc_exact_scope_required" ]; then
+              : "${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}"
             fi
             scope_sha="$(git rev-parse HEAD)"
           fi
