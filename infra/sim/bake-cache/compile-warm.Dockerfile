@@ -67,15 +67,19 @@ RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
 # file in this build context must not participate in this COPY digest.
 FROM compile-toolchain AS compile-web-source
 COPY inputs/compile-web-source.txt /tmp/web-source.txt
+COPY inputs/compile-web-legal.txt /tmp/web-legal.txt
 RUN cat /tmp/web-source.txt >/opt/compile-web-source \
+  && cat /tmp/web-legal.txt >>/opt/compile-web-source \
   && sleep 1 \
   && echo bake-sim-compile-web-source
 
 # The real commit identity belongs only to extension packaging. Declaring the
 # ARG earlier would make every preceding web RUN vary for each repository head.
 FROM compile-web-source AS compile-extension-package
+COPY inputs/compile-extension-locales.txt /tmp/extension-locales.txt
 ARG SIMULATED_EXTENSION_COMMIT=
 RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
+  && test -s /tmp/extension-locales.txt \
   && printf '%s\n' "$SIMULATED_EXTENSION_COMMIT" >/opt/compile-extension-package \
   && sleep 1 \
   && echo bake-sim-compile-extension-package

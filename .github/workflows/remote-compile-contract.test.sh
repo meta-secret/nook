@@ -61,12 +61,45 @@ if grep -Eq -- '^[[:space:]]*COPY[[:space:]]+\.[[:space:]]+\.' "$compile_dockerf
 fi
 grep -Fq -- 'COPY nook-app/nook-web nook-app/nook-web' "$compile_dockerfile" \
   || { echo 'remote compile contract: web compiler must copy only its product domain' >&2; exit 1; }
+for legal_document in docs/privacy-policy.md docs/terms-of-service.md; do
+  grep -Fq -- "COPY ${legal_document} ${legal_document}" "$compile_dockerfile" \
+    || { echo "remote compile contract: web compiler omits semantic input: ${legal_document}" >&2; exit 1; }
+  if grep -Fq -- "$legal_document" "$compile_fingerprint"; then
+    echo "remote compile contract: per-source legal input must not rotate the dependency generation: ${legal_document}" >&2
+    exit 1
+  fi
+done
+web_typecheck_line="$(grep -nF 'node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json' "$compile_dockerfile" | sed -n '2s/:.*//p')"
+test -n "$web_typecheck_line" \
+  || { echo 'remote compile contract: web type-check boundary is missing' >&2; exit 1; }
+for legal_document in docs/privacy-policy.md docs/terms-of-service.md; do
+  legal_copy_line="$(grep -nF "COPY ${legal_document} ${legal_document}" "$compile_dockerfile" | cut -d: -f1)"
+  test "$legal_copy_line" -lt "$web_typecheck_line" \
+    || { echo "remote compile contract: legal input must enter before web compilation: ${legal_document}" >&2; exit 1; }
+done
+for extension_locale in en ru; do
+  locale_path="nook-app/nook-platform/nook-app-common/locales/${extension_locale}.json"
+  grep -Fq -- "COPY ${locale_path} ${locale_path}" "$compile_dockerfile" \
+    || { echo "remote compile contract: extension packaging omits semantic input: ${locale_path}" >&2; exit 1; }
+  if grep -Fq -- "$locale_path" "$compile_fingerprint"; then
+    echo "remote compile contract: per-source locale input must not rotate the dependency generation: ${locale_path}" >&2
+    exit 1
+  fi
+done
 extension_arg_line="$(grep -nFx 'ARG NOOK_EXTENSION_COMMIT=' "$compile_dockerfile" | cut -d: -f1)"
 extension_build_line="$(grep -nF 'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"' "$compile_dockerfile" | cut -d: -f1)"
+last_web_build_line="$(grep -nF 'nook-web-research && node_modules/.bin/vite build' "$compile_dockerfile" | cut -d: -f1)"
 test -n "$extension_arg_line" && test -n "$extension_build_line" \
   && test "$extension_arg_line" -lt "$extension_build_line" \
   && test $((extension_build_line - extension_arg_line)) -le 8 \
   || { echo 'remote compile contract: per-head extension commit must be declared only at the extension packaging boundary' >&2; exit 1; }
+for extension_locale in en ru; do
+  locale_path="nook-app/nook-platform/nook-app-common/locales/${extension_locale}.json"
+  locale_copy_line="$(grep -nF "COPY ${locale_path} ${locale_path}" "$compile_dockerfile" | cut -d: -f1)"
+  test -n "$last_web_build_line" && test "$locale_copy_line" -gt "$last_web_build_line" \
+    && test "$locale_copy_line" -lt "$extension_arg_line" \
+    || { echo "remote compile contract: extension locale must enter only at packaging: ${locale_path}" >&2; exit 1; }
+done
 
 for required in \
   'nook-rust-compile-deps-input-v3' \

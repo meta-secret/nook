@@ -970,6 +970,22 @@ tasks:
     expect(productionDockerfile).toContain(
       "COPY nook-app/nook-web nook-app/nook-web",
     );
+    for (const legalDocument of [
+      "docs/privacy-policy.md",
+      "docs/terms-of-service.md",
+    ]) {
+      expect(productionDockerfile).toContain(
+        `COPY ${legalDocument} ${legalDocument}`,
+      );
+      expect(compileFingerprint).not.toContain(legalDocument);
+    }
+    for (const extensionLocale of ["en", "ru"]) {
+      const localePath = `nook-app/nook-platform/nook-app-common/locales/${extensionLocale}.json`;
+      expect(productionDockerfile).toContain(
+        `COPY ${localePath} ${localePath}`,
+      );
+      expect(compileFingerprint).not.toContain(localePath);
+    }
     expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
     const extensionCommitArgument = productionDockerfile.indexOf(
       "ARG NOOK_EXTENSION_COMMIT=",
@@ -977,9 +993,25 @@ tasks:
     const extensionPackage = productionDockerfile.indexOf(
       'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"',
     );
+    const webSourceBoundary = productionDockerfile.indexOf(
+      "FROM web-base AS compile-web",
+    );
     const webTypeCheck = productionDockerfile.indexOf(
       "node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json",
+      webSourceBoundary,
     );
+    const legalInput = productionDockerfile.indexOf(
+      "COPY docs/privacy-policy.md docs/privacy-policy.md",
+    );
+    const lastWebBuild = productionDockerfile.indexOf(
+      "nook-web-research && node_modules/.bin/vite build",
+    );
+    const extensionLocaleInput = productionDockerfile.indexOf(
+      "COPY nook-app/nook-platform/nook-app-common/locales/en.json",
+    );
+    expect(legalInput).toBeLessThan(webTypeCheck);
+    expect(extensionLocaleInput).toBeGreaterThan(lastWebBuild);
+    expect(extensionLocaleInput).toBeLessThan(extensionCommitArgument);
     expect(extensionCommitArgument).toBeGreaterThan(webTypeCheck);
     expect(extensionPackage).toBeGreaterThan(extensionCommitArgument);
     expect(simulatorDockerfile).toContain(
@@ -987,6 +1019,10 @@ tasks:
     );
     expect(simulatorDockerfile).toContain(
       "FROM compile-nook-wasm-build AS compile",
+    );
+    expect(simulatorDockerfile).toContain("inputs/compile-web-legal.txt");
+    expect(simulatorDockerfile).toContain(
+      "inputs/compile-extension-locales.txt",
     );
     expect(simulator).toContain('COMPILE_SOURCE_CACHE_AVAILABLE != ""');
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
@@ -1027,6 +1063,9 @@ tasks:
     );
     expect(proof).toContain(
       "compile source D: cached=9 uncached=2 writes=1 domain=web",
+    );
+    expect(proof).toContain(
+      "compile legal E: cached=9 uncached=2 writes=1 domain=web-legal",
     );
     expect(proof).toContain(
       "compile generation rotation: old_available=1 current_available=0 selected=0",

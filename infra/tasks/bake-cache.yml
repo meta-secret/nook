@@ -103,6 +103,7 @@ tasks:
         compile_source_b="git-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         compile_source_c="git-cccccccccccccccccccccccccccccccccccccccc"
         compile_source_d="git-dddddddddddddddddddddddddddddddddddddddd"
+        compile_source_e="git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
         compile_generation="generation-v1-fingerprint-a"
         compile_generation_repository="nook/remote-buildcache/nook-bake-sim-compile-${compile_generation}"
         compile_generation_manifest="${registry_ref}/v2/${compile_generation_repository}/manifests/buildcache"
@@ -120,6 +121,8 @@ tasks:
         compile_hive_input_orig="$(cat "$compile_hive_input")"
         compile_web_input="$sim_dir/inputs/compile-web-source.txt"
         compile_web_input_orig="$(cat "$compile_web_input")"
+        compile_web_legal_input="$sim_dir/inputs/compile-web-legal.txt"
+        compile_web_legal_input_orig="$(cat "$compile_web_legal_input")"
         compile_policy_input="$sim_dir/inputs/compile-policy-catalog.txt"
         compile_policy_input_orig="$(cat "$compile_policy_input")"
 
@@ -129,6 +132,7 @@ tasks:
           printf '%s\n' "$compile_nook_input_orig" >"$compile_nook_input"
           printf '%s\n' "$compile_hive_input_orig" >"$compile_hive_input"
           printf '%s\n' "$compile_web_input_orig" >"$compile_web_input"
+          printf '%s\n' "$compile_web_legal_input_orig" >"$compile_web_legal_input"
           printf '%s\n' "$compile_policy_input_orig" >"$compile_policy_input"
           if [ -n "$builder" ]; then
             "$docker_cli" buildx rm -f "$builder" >/dev/null 2>&1
@@ -555,6 +559,29 @@ tasks:
         require_cache_write "$proof_log"
         printf '%s\n' "$compile_web_input_orig" >"$compile_web_input"
         echo "compile source D: cached=9 uncached=2 writes=1 domain=web"
+
+        echo "== Unseeded commit E: legal document edit invalidates only the web lineage =="
+        printf 'legal-document-source-only-edit\n' >"$compile_web_legal_input"
+        create_builder "nook-bake-sim-compile-source-e-${suffix}"
+        bake_compile_source "$proof_log" "$compile_source_e" "" "1" "1" "v3" \
+          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        for marker in \
+          bake-sim-compile-toolchain \
+          bake-sim-compile-hive-dependencies \
+          bake-sim-compile-hive-source \
+          bake-sim-compile-wasm-dependencies \
+          bake-sim-compile-wasm-source-base \
+          bake-sim-compile-nook-wasm-source \
+          bake-sim-compile-companion-wasm-source \
+          bake-sim-compile-nook-wasm-build \
+          bake-sim-compile-companion-wasm-build; do
+          require_cached_step "$proof_log" "$marker"
+        done
+        require_uncached_step "$proof_log" bake-sim-compile-web-source
+        require_uncached_step "$proof_log" bake-sim-compile-extension-package
+        require_cache_write "$proof_log"
+        printf '%s\n' "$compile_web_legal_input_orig" >"$compile_web_legal_input"
+        echo "compile legal E: cached=9 uncached=2 writes=1 domain=web-legal"
 
         echo "== Recipe rotation: old generation is not current =="
         rotated_generation_manifest="${registry_ref}/v2/nook/remote-buildcache/nook-bake-sim-compile-generation-v1-fingerprint-b/manifests/buildcache"

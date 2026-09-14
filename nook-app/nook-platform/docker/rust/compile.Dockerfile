@@ -292,9 +292,12 @@ RUN mkdir -p \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
 # Keep policy, workflow, Cortex, and unrelated product changes out of every web
-# compiler key. The complete web workspace is the only repository source this
-# stage consumes; generated WASM crosses through the explicit handoff below.
+# compiler key. The web workspace and its two imported legal documents are the
+# only repository sources consumed before compilation; generated WASM crosses
+# through the explicit handoff below.
 COPY nook-app/nook-web nook-app/nook-web
+COPY docs/privacy-policy.md docs/privacy-policy.md
+COPY docs/terms-of-service.md docs/terms-of-service.md
 COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
@@ -354,6 +357,11 @@ RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
 # The commit is deliberately introduced at the narrow extension packaging
 # boundary. It varies for every head and must not invalidate type checks or the
 # preceding site/application builds when product sources are unchanged.
+# Extension packaging reads exactly these locale catalogs from outside the web
+# workspace. Introduce them at this boundary so locale edits do not invalidate
+# the preceding web compilers.
+COPY nook-app/nook-platform/nook-app-common/locales/en.json nook-app/nook-platform/nook-app-common/locales/en.json
+COPY nook-app/nook-platform/nook-app-common/locales/ru.json nook-app/nook-platform/nook-app-common/locales/ru.json
 ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
 ARG NOOK_EXTENSION_CHANNEL=production
 ARG NOOK_EXTENSION_VERSION=1.0.0
