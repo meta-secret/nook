@@ -182,7 +182,10 @@ tasks:
   loom:pre-push:
     desc: Retain the legacy pre-push task contract through Loom's retired request path.
     deps: [loom:install, tooling:install]
+    requires:
+      vars: [PR]
     cmds:
+      - bun agentic-ai/loom/src/commands/pr-authored-budget.ts "{{.PR}}"
       - task loom:default FAMILY=prePush
 
   loom:cortex-audit:

@@ -13,6 +13,8 @@ ${AGENT_TASK}
 These exact recorded commit identities are required before planning. Use
 `pinnedLocalDevSha` as the only feature source and require the chain
 `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
+The pinned local-dev SHA is the feature base. The fetched `origin/main` SHA is
+ancestry evidence only.
 The canonical remote feature ref must equal `featureHeadSha` exactly; an initial
 frontier equal to the pinned base is valid, as are descendant reruns. Treat
 `originMainSha` as fetched-main ancestry evidence and fail closed when any
@@ -139,7 +141,7 @@ Gizmo record a stable lowercase-hyphenated ID and a unique human-readable name. 
 feature slice
 on its own consecutively numbered line as
 `<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <non-negative integer>; Acceptance evidence: <observable proof>`.
-The first feature-slice estimate must equal `Current PR estimated authored
+The first slice estimate must equal `Current PR estimated authored
 changed lines`. For a one-slice plan, it must also equal `Estimated authored
 changed lines`. For sequential feature slices, every slice estimate must be
 positive and at most 2,000. Their sum must equal the complete estimate. These
@@ -165,8 +167,8 @@ record, not a process, agent, worker attempt, or controller. The Feature Gizmo
 owns one canonical feature branch/frontier for the feature. A feature slice is
 implementation scope on that frontier, not a feature pull request. Delivery
 Pipeline handles build-only checks and local dev landing. Only the Dev Manager
-creates or updates the single dev-to-main pull request. Team Agent count never
-determines Gizmo count or pull-request count.
+creates or updates the single dev-to-main pull request. Team Agent count never determines
+Gizmo count or pull-request count.
 Published records are never updated in place; changes require a superseding new
 immutable Workbench plan.
 Gizmo Prime assigns bounded Team Agent tasks through the existing harness,
