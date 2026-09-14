@@ -107,19 +107,11 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
 fi
 
 if [ -z "$compile_deps_available" ]; then
-  compile_deps_cache_write=""
-  if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = "publish" ]; then
-    compile_deps_cache_write=1
-  fi
-  GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED="$compile_deps_cache_write" \
-    bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-      "build:compile dependencies" \
-      "$docker_bin" buildx bake "${bake_args[@]}" \
-      build-compile-dependencies
-else
-  echo "Dependency cache already exists; skipping duplicate dependency solve/export"
+  echo "build:compile requires a seeded immutable dependency cache; dispatch build:compile-cache-seed first" >&2
+  exit 2
 fi
 
+echo "Dependency cache is available; build:compile remains a cache consumer"
 bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \
   "$docker_bin" buildx bake "${bake_args[@]}" build-compile

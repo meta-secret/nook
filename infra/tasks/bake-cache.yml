@@ -343,7 +343,7 @@ tasks:
         test "$(registry_ref_code)" = 200
         echo "rust-deps no-op: cached=6 uncached=0 writes=1 ref=${stable_repository}:buildcache"
 
-        echo "== Cold compile dependencies: seed the fingerprinted source-free scope =="
+        echo "== Separate seed boundary: cold compile dependencies publish before the product SLO =="
         create_builder "nook-bake-sim-compile-deps-${suffix}"
         bake_compile_dependencies "$proof_log"
         for marker in \
@@ -355,6 +355,15 @@ tasks:
         require_cache_write "$proof_log"
         test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
         echo "compile deps cold: cached=0 uncached=3 writes=1 ref=${compile_deps_repository}:fingerprint-lock-and-recipe-inputs"
+
+        echo "== Separate seed replay: existing immutable fingerprint skips solve and export =="
+        printf 'seed-boundary-manifest-present\n' >"$proof_log"
+        if [ "$(compile_registry_ref_code "$compile_deps_manifest")" != 200 ]; then
+          bake_compile_dependencies "$proof_log"
+        fi
+        grep -Fxq 'seed-boundary-manifest-present' "$proof_log"
+        require_no_cache_write "$proof_log"
+        echo "compile deps replay: available=1 solves=0 writes=0"
 
         echo "== First exact source: import dependencies and publish mode=min =="
         create_builder "nook-bake-sim-compile-source-a-${suffix}"

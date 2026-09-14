@@ -8,6 +8,26 @@ import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
 
+export class CacheScopeTelemetry {
+  /** @param {NodeJS.ProcessEnv} environment */
+  constructor(environment) {
+    this.environment = environment;
+  }
+
+  record() {
+    return {
+      scope: this.environment.GHA_RUST_COMPILE_DEPS_SCOPE || "",
+      compile_dependencies: {
+        available: Boolean(
+          this.environment.GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE,
+        ),
+        write_enabled:
+          this.environment.GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED === "1",
+      },
+    };
+  }
+}
+
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const HISTORY_LOG_CONCURRENCY = 8;
 const HISTORY_LOG_TIMEOUT_MS = 4_000;
@@ -71,6 +91,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
+ * @property {{scope: string, compile_dependencies: {available: boolean, write_enabled: boolean}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
@@ -831,6 +852,7 @@ export class CacheTelemetry {
         job: String(job),
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
+      cache_scope: new CacheScopeTelemetry(environment).record(),
       sccache: CacheTelemetry.summarizeSccache(reports),
       buildkit,
       buildkit_records: records,
@@ -861,6 +883,7 @@ export class CacheTelemetry {
         job: String(job),
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
+      cache_scope: new CacheScopeTelemetry(environment).record(),
       sccache: CacheTelemetry.summarizeSccache([]),
       buildkit: CacheTelemetry.summarizeBuildkit([]),
       buildkit_records: [],

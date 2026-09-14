@@ -10,6 +10,7 @@ inputs:
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
+      compile-deps probes only the recipe-aware source-free compile graph;
       web-research-deps probes only the research Bun dependency lineage;
       web-research-image probes the exact research browser graph; hive probes
       only the Hive lineage; connection-only performs no registry cache probes.
@@ -174,7 +175,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|compile-deps|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -317,7 +318,7 @@ runs:
         # Probe each full-graph ref and use Main only while that exact ref is absent.
         registry_host="${{ inputs.registry-host }}"
         exact_repository="nook/buildcache"
-        if [ -n "$scope_suffix" ]; then
+        if [ -n "$scope_suffix" ] || [ "$cache_selection" = "compile-deps" ]; then
           exact_repository="nook/remote-buildcache"
         fi
         cache_ref_status() {
@@ -416,7 +417,7 @@ runs:
         }
 
         case "$cache_selection" in
-          general|native|wasm|wasm-proof)
+          general|native|wasm|wasm-proof|compile-deps)
           # Preserve the shared Rust dependency identity for its existing
           # consumers. build:compile composes a distinct recipe-aware identity
           # below because an existing manifest must never suppress publication
@@ -432,7 +433,8 @@ runs:
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
           compile_deps_scope=""
-          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+            || [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile-cache-seed" ]; then
             compile_deps_fingerprint="$(
               NOOK_COMPILE_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
                 bash "${{ github.action_path }}/../../scripts/compile-deps-cache-fingerprint.sh"
@@ -446,6 +448,19 @@ runs:
           fi
           ;;
         esac
+
+        if [ "$cache_selection" = "compile-deps" ]; then
+          if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile-cache-seed" ]; then
+            echo "compile-deps cache selection requires the dedicated seed selector" >&2
+            exit 1
+          fi
+          publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
+          if [ -z "$last_exact_available" ]; then
+            echo "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
+          else
+            echo "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+          fi
+        fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
@@ -522,7 +537,7 @@ runs:
           fi
         fi
         case "$cache_selection" in
-          general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
+          general|native|wasm|compile-deps|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac

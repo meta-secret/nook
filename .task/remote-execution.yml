@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run named tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>; PUBLISH_COMPILE_CACHE=false for read-only build:compile warm verification).
+    desc: Run named tasks in one configured remote job (TASK_NAME=build:compile-cache-seed seeds missing source-free dependencies; PUBLISH_COMPILE_CACHE=false selects read-only build:compile replay).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
       REQUESTED_PUBLISH_COMPILE_CACHE: '{{.PUBLISH_COMPILE_CACHE}}'
@@ -25,23 +25,29 @@ tasks:
           echo "Remote execution requires a pushed non-main branch." >&2
           exit 2
         fi
-        if [[ "$requested_tasks" == *build:compile* ]]; then
-          if [ "$requested_tasks" != "build:compile" ]; then
-            echo "build:compile must be dispatched as the only remote task." >&2
+        if [[ "$requested_tasks" == build:compile* ]]; then
+          if [ "$requested_tasks" != "build:compile" ] \
+            && [ "$requested_tasks" != "build:compile-cache-seed" ]; then
+            echo "compile selectors must be dispatched as one exact remote task." >&2
             exit 2
           fi
           if [ "$branch" = "dev" ]; then
             echo "build:compile is a feature-branch route and cannot run on dev." >&2
             exit 2
           fi
-          publish_compile_cache="${REQUESTED_PUBLISH_COMPILE_CACHE:-true}"
-          case "$publish_compile_cache" in
-            true|false) ;;
-            *)
-              echo "PUBLISH_COMPILE_CACHE must be true or false." >&2
-              exit 2
-              ;;
-          esac
+          if [ "$requested_tasks" = "build:compile" ]; then
+            publish_compile_cache="${REQUESTED_PUBLISH_COMPILE_CACHE:-true}"
+            case "$publish_compile_cache" in
+              true|false) ;;
+              *)
+                echo "PUBLISH_COMPILE_CACHE must be true or false." >&2
+                exit 2
+                ;;
+            esac
+          elif [ -n "${REQUESTED_PUBLISH_COMPILE_CACHE:-}" ]; then
+            echo "PUBLISH_COMPILE_CACHE is valid only with TASK_NAME=build:compile." >&2
+            exit 2
+          fi
         elif [ -n "${REQUESTED_PUBLISH_COMPILE_CACHE:-}" ]; then
           echo "PUBLISH_COMPILE_CACHE is valid only with TASK_NAME=build:compile." >&2
           exit 2
@@ -65,15 +71,16 @@ tasks:
           exit 2
         fi
 
-        if [ "$requested_tasks" != "build:compile" ]; then
+        if [[ "$requested_tasks" != build:compile* ]]; then
           .github/scripts/require-current-base.sh origin main
         fi
 
-        workflow_args=(
-          --ref "$branch"
-          --raw-field "tasks=$requested_tasks"
-          --raw-field "source_sha=$local_sha"
-        )
+        workflow_args=(--ref "$branch" --raw-field "source_sha=$local_sha")
+        if [ "$requested_tasks" = "build:compile-cache-seed" ]; then
+          workflow_args+=(--raw-field "task=$requested_tasks")
+        else
+          workflow_args+=(--raw-field "tasks=$requested_tasks")
+        fi
         if [ "$requested_tasks" = "build:compile" ]; then
           workflow_args+=(--raw-field "publish_compile_cache=$publish_compile_cache")
         fi

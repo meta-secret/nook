@@ -910,6 +910,13 @@ tasks:
     const compileFingerprint = this.read(
       ".github/scripts/compile-deps-cache-fingerprint.sh",
     );
+    const compileSeed = this.read(
+      ".github/scripts/compile-deps-cache-seed.sh",
+    );
+    const remoteWorkflow = this.read(".github/workflows/remote.yml");
+    const cacheTelemetry = this.read(
+      ".github/workflows/lib/cache-telemetry.mjs",
+    );
     const simulatorDockerfile = this.read(
       "infra/sim/bake-cache/compile-warm.Dockerfile",
     );
@@ -936,6 +943,17 @@ tasks:
     expect(compileFingerprint).toContain(
       "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
+    expect(compileSeed).toContain("build-compile-dependencies");
+    expect(compileSeed).toContain(
+      "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
+    );
+    expect(compileSeed).toContain("GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1");
+    expect(remoteWorkflow).toContain("compile-cache-seed:");
+    expect(remoteWorkflow).toContain("timeout-minutes: 15");
+    expect(cacheTelemetry).toContain("compile_dependencies");
+    expect(cacheTelemetry).toContain(
+      "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
+    );
     expect(productionDockerfile).toContain(
       "FROM compile-wasm-source AS compile",
     );
@@ -947,6 +965,11 @@ tasks:
     );
     expect(simulator).toContain("COMPILE_SOURCE_CACHE_AVAILABLE != \"\"");
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
+    expect(simulator).toContain("separate seed boundary");
+    expect(proof).toContain(
+      "Separate seed replay: existing immutable fingerprint skips solve and export",
+    );
+    expect(proof).toContain("compile deps replay: available=1 solves=0 writes=0");
     expect(proof).toContain(
       "New exact source: mode=min retains the ancestor compiler lineage",
     );

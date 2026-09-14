@@ -3,8 +3,23 @@ import test from "node:test";
 
 import {
   BuildkitCacheExportTelemetry,
+  CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
+
+void test("records the immutable compile dependency seed boundary", () => {
+  assert.deepEqual(
+    new CacheScopeTelemetry({
+      GHA_RUST_COMPILE_DEPS_SCOPE: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
+      GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE: "",
+      GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED: "1",
+    }).record(),
+    {
+      scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
+      compile_dependencies: { available: false, write_enabled: true },
+    },
+  );
+});
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {
   const record = CacheTelemetry.buildUnavailableTelemetry({
