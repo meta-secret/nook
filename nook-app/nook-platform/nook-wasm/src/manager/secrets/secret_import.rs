@@ -634,9 +634,12 @@ mod import_tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn exact_existing_duplicate_prepares_no_operations() -> anyhow::Result<()> {
         let fixture = ImportFixture::new()?;
@@ -647,9 +650,12 @@ mod import_tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn metadata_enrichment_prepares_an_encrypted_replacement() -> anyhow::Result<()> {
         let fixture = ImportFixture::new()?;
@@ -676,9 +682,12 @@ mod import_tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn malformed_existing_record_rejects_preparation() -> anyhow::Result<()> {
         let mut fixture = ImportFixture::new()?;
@@ -699,9 +708,12 @@ mod import_tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn same_batch_provider_notes_are_coalesced_without_losing_metadata() -> anyhow::Result<()> {
         let items = vec![
@@ -732,9 +744,12 @@ mod import_tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn import_sources_keep_status_actions_and_labels_aligned() {
         let cases = [
@@ -817,9 +832,12 @@ mod prepared_page_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
         let identity = DeviceIdentity::generate()?;

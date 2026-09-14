@@ -142,9 +142,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn access_verification_rejects_empty_token_before_network() -> anyhow::Result<()> {
         let Err(error) = DriveStorageClient::new("  ").verify_drive_access().await else {

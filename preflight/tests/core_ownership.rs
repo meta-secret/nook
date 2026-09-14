@@ -35,6 +35,42 @@ fn rust_wasm_callables_keep_their_authored_names_in_javascript() -> anyhow::Resu
 }
 
 #[test]
+fn wasm_custom_dylint_suppressions_stay_in_the_dylint_driver_boundary() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    for crate_name in ["nook-wasm", "nook-companion-wasm"] {
+        let source_root = root.join(format!("nook-app/nook-platform/{crate_name}/src"));
+        for entry in ignore::WalkBuilder::new(source_root).build() {
+            let entry = entry?;
+            if !entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "rs")
+            {
+                continue;
+            }
+            let source = fs::read_to_string(entry.path())?;
+            assert!(
+                !source.contains("unknown_lints"),
+                "ordinary rustc and wasm-pack builds must not need a blanket unknown-lint suppression: {}",
+                entry.path().display()
+            );
+            for custom_lint in [
+                "#[expect(\n        unowned_function,",
+                "#[allow(\n        non_local_effect_before_unhandled_error,",
+                "#[allow(\n    non_local_effect_before_unhandled_error,",
+            ] {
+                assert!(
+                    !source.contains(custom_lint),
+                    "custom lint suppressions must activate only while their Dylint driver is loaded: {}",
+                    entry.path().display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn rust_tests_assert_known_json_through_typed_contracts() -> anyhow::Result<()> {
     let violations = (RustTestSources {
         root: &RepositoryFixture::repository_root(),
