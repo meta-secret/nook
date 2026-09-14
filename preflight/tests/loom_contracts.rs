@@ -179,10 +179,14 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     assert!(
         format_contract
             .contains("bash \"{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh\"")
+            && format_contract.contains(
+                "bun install --cwd \"{{.REPO_ROOT}}/.github/formatting\" --frozen-lockfile --ignore-scripts"
+            )
+            && format_contract.matches("bun install").count() == 1
             && !format_contract.contains("deps:")
-            && !format_contract.contains("install")
+            && !format_contract.contains("||")
             && !format_contract.contains("loom:"),
-        "the formatter contract must be a detached, install-free preflight task"
+        "the formatter contract must use its detached pinned, frozen bootstrap without a fallback"
     );
 
     let skills_manifest =

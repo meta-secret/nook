@@ -35,11 +35,10 @@ tasks:
     deps: [setup:web:focused]
     cmds:
       - task: docker:task
-        vars: { TASK: _web:static }
+        vars: { TASK: web:static:container }
 
-  _web:static:
-    internal: true
-    desc: Independently lint and typecheck all authored web sources against prepared WASM contracts.
+  web:static:container:
+    desc: Independently lint and typecheck all authored web sources inside the prepared web container.
     dir: "{{.ROOT_DIR}}/nook-app/nook-web"
     cmds:
       - |

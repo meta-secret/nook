@@ -45,6 +45,35 @@ impl RepositoryFixture {
     }
 }
 
+#[test]
+fn web_static_container_entrypoint_is_top_level_reachable() {
+    let tasks = RepositoryFixture::repository_root().read(".task/static-checks.yml");
+    let public_web_static = tasks
+        .split("\n  web:static:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  web:static:container:\n").next())
+        .unwrap_or_else(|| panic!("static checks must define the public web:static route"));
+    let container_entrypoint = tasks
+        .split("\n  web:static:container:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  hive:console:static:\n").next())
+        .unwrap_or_else(|| panic!("static checks must define a dedicated container entrypoint"));
+
+    assert!(
+        public_web_static.contains("vars: { TASK: web:static:container }"),
+        "web:static must launch its dedicated top-level container entrypoint"
+    );
+    assert!(
+        !container_entrypoint.contains("internal: true"),
+        "the selector launched as a top-level container command must be public"
+    );
+    assert!(
+        container_entrypoint.contains("nook-web-app/node_modules/.bin/eslint")
+            && container_entrypoint.contains("nook-web-app/node_modules/.bin/svelte-check"),
+        "the container entrypoint must retain the complete web static-check body"
+    );
+}
+
 fn read_fallible(path: &str) -> anyhow::Result<String> {
     fs::read_to_string(RepositoryFixture::repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))
