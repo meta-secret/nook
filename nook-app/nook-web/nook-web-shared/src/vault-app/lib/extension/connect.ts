@@ -241,7 +241,7 @@ class PendingExtensionResponse {
   constructor(
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     private readonly request: {
-      browser: typeof globalThis;
+      browser: ExtensionBrowserHost;
       wait: ExtensionMessageResponseWait;
       resolve: (delivery: ExtensionMessageDelivery) => void;
     },
@@ -395,6 +395,7 @@ class ExtensionConnectionBrowser {
         return;
       }
       const sendMessage = runtime.sendMessage.bind(runtime);
+      const messageRuntime = runtime;
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
@@ -403,7 +404,7 @@ class ExtensionConnectionBrowser {
       });
       const browserConnection = this;
       function receiveExtensionResponse(response?: unknown): void {
-        if (browserConnection.runtimeReportedMessageFailure(runtime)) {
+        if (browserConnection.runtimeReportedMessageFailure(messageRuntime)) {
           pending.unavailable();
           return;
         }
@@ -706,13 +707,15 @@ class ExtensionConnectionBrowser {
           ),
         ),
       );
+    const sendMessage = runtime.sendMessage.bind(runtime);
+    const messageRuntime = runtime;
     return new Promise((resolve) => {
       try {
-        runtime.sendMessage?.(
+        sendMessage(
           request.extensionRuntimeId,
           message,
           (response) => {
-            if (this.runtimeReportedMessageFailure(runtime)) {
+            if (this.runtimeReportedMessageFailure(messageRuntime)) {
               resolve(
                 err(
                   new VaultStorageFailure(
