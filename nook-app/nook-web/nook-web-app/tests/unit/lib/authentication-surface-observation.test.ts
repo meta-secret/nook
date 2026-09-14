@@ -322,7 +322,7 @@ describe('authentication surface mutation filtering', () => {
     const insertedFrame = document.createElement('iframe')
     insertedFrame.src = 'about:blank#recaptcha'
     const updatedFrame = document.createElement('iframe')
-    document.body.append(insertedFrame, updatedFrame)
+    updatedFrame.src = 'about:blank'
     updatedFrame.title = 'Complete CAPTCHA'
 
     for (const record of [

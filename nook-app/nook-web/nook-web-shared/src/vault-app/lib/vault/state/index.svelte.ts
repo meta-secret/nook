@@ -360,6 +360,7 @@ class VaultStateSlicesImplementation {
   }: VaultStateDelegation<State>): void {
     for (const key of keys) {
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
+        configurable: true,
         enumerable: true,
         get: () => {
           const value = state[key];
