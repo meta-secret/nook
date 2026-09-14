@@ -45,15 +45,27 @@ export enum DevCommitRelation {
   Diverged = 'diverged',
 }
 
+export enum DevManagerGizmoPublicationOperation {
+  DevPublish = 'dev:publish',
+}
+
+export enum DevManagerGizmoController {
+  DevManager = 'dev-manager',
+}
+
+export enum DevManagerGizmoRoute {
+  DeliveryPipelineGizmo = 'delivery-pipeline-gizmo',
+}
+
 /**
  * Exact manager authorization for Delivery Pipeline's bounded publication
  * operation. The Team Gizmo forwards this packet to PR Lifecycle; it does
  * not grant either child PR-management authority.
  */
 export interface DevManagerGizmoPublicationHandoff {
-  readonly operation: 'dev:publish';
-  readonly controller: 'dev-manager';
-  readonly route: 'delivery-pipeline-gizmo';
+  readonly operation: DevManagerGizmoPublicationOperation.DevPublish;
+  readonly controller: DevManagerGizmoController.DevManager;
+  readonly route: DevManagerGizmoRoute.DeliveryPipelineGizmo;
   readonly executor: 'pr-lifecycle';
   readonly repositoryRoot: string;
   readonly devPath: string;
@@ -83,7 +95,7 @@ interface DevManagerGizmoInspection extends DevSnapshot {
   readonly pinnedLocalDevSha: DevGitBootstrapEvidence['pinnedLocalDevSha'];
   readonly originDev: RemoteBranchSnapshot;
   readonly localToMain: DevCommitRelation;
-  readonly localToOriginDev: DevCommitRelation | undefined;
+  readonly localToOriginDev: DevCommitRelation | false;
 }
 
 interface DevManagerGizmoLocks {
@@ -200,7 +212,7 @@ export class DevManagerGizmoCommand {
       workingDirectory: worktree.path,
     });
     if (localToMain.isErr()) return err(localToMain.error);
-    let localToOriginDev: DevCommitRelation | undefined;
+    let localToOriginDev: DevCommitRelation | false = false;
     if (originDev.value.presence === RemoteBranchPresence.Present) {
       const relation = this.relation({
         base: originDev.value.sha,
@@ -247,7 +259,7 @@ export class DevManagerGizmoCommand {
 
     if (
       inspection.localToMain === DevCommitRelation.Equal &&
-      (inspection.localToOriginDev === undefined ||
+      (inspection.localToOriginDev === false ||
         inspection.localToOriginDev === DevCommitRelation.Equal)
     ) {
       return ok({
@@ -279,7 +291,7 @@ export class DevManagerGizmoCommand {
       });
     }
 
-    if (inspection.localToOriginDev === undefined) {
+    if (inspection.localToOriginDev === false) {
       return ok({
         kind: DevManagerGizmoPlanKind.Publish,
         inspection,
@@ -350,9 +362,9 @@ export class DevManagerGizmoCommand {
     inspection: DevManagerGizmoInspection,
   ): DevManagerGizmoPublicationHandoff {
     return {
-      operation: 'dev:publish',
-      controller: 'dev-manager',
-      route: 'delivery-pipeline-gizmo',
+      operation: DevManagerGizmoPublicationOperation.DevPublish,
+      controller: DevManagerGizmoController.DevManager,
+      route: DevManagerGizmoRoute.DeliveryPipelineGizmo,
       executor: 'pr-lifecycle',
       repositoryRoot: this.workspace.root,
       devPath: inspection.devPath,
@@ -383,7 +395,7 @@ export class DevManagerGizmoCommand {
     readonly pullRequestUrl?: string;
   }): DevManagerGizmoOutcome {
     const pullRequestUrl = request.pullRequestUrl;
-    const pullRequestLine = pullRequestUrl ?? 'not observed';
+    const pullRequestLine = pullRequestUrl || 'not observed';
     return {
       state: request.state,
       action: request.action,
@@ -463,7 +475,7 @@ export class DevManagerGizmoCommand {
   }
 
   private localToOriginDevText(inspection: DevManagerGizmoInspection): string {
-    return inspection.localToOriginDev ?? 'unpublished';
+    return inspection.localToOriginDev || 'unpublished';
   }
 
   private acquireLocks(): Result<DevManagerGizmoLocks, DevFailure> {

@@ -26,7 +26,7 @@ interface PullRequestFixture {
 }
 
 type DevPublishPublicationRequest = {
-  readonly pullRequests: readonly (PullRequestFixture | undefined)[];
+  readonly pullRequests: readonly (PullRequestFixture | false)[];
   readonly ciStatuses?: readonly string[];
 };
 
@@ -35,14 +35,14 @@ class PublishRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
   private remoteDevSha = SHA_PRIOR;
   private pullRequestIndex = 0;
-  private currentPullRequest: PullRequestFixture | undefined;
+  private currentPullRequest: PullRequestFixture | false = false;
   private ciIndex = 0;
 
   constructor(
     private readonly request: {
       readonly root: string;
       readonly devPath: string;
-      readonly pullRequests: readonly (PullRequestFixture | undefined)[];
+      readonly pullRequests: readonly (PullRequestFixture | false)[];
       readonly ciStatuses: readonly string[];
     },
   ) {}
@@ -56,9 +56,8 @@ class PublishRunner implements CommandRunner {
 
   private git(request: CommandRequest): Result<CommandOutput, never> {
     const args = request.args;
+    if (!args[0]) return ok(this.output());
     switch (args[0]) {
-      case undefined:
-        return ok(this.output());
       case 'rev-parse':
         return ok(
           this.output({
@@ -110,7 +109,7 @@ class PublishRunner implements CommandRunner {
       return ok(this.output({ stdout: 'nook/example\n' }));
     }
     if (args[0] === 'pr' && args[1] === 'list') {
-      const next = this.request.pullRequests[this.pullRequestIndex];
+      const next = this.request.pullRequests[this.pullRequestIndex] ?? false;
       this.pullRequestIndex += 1;
       this.currentPullRequest = next;
       return ok(this.pullRequestList(next));
@@ -120,8 +119,8 @@ class PublishRunner implements CommandRunner {
     }
     if (args[0] === 'run' && args[1] === 'list') {
       const status =
-        this.request.ciStatuses[this.ciIndex] ??
-        this.request.ciStatuses.at(-1) ??
+        this.request.ciStatuses[this.ciIndex] ||
+        this.request.ciStatuses.at(-1) ||
         'completed';
       this.ciIndex += 1;
       return ok(
@@ -144,7 +143,7 @@ class PublishRunner implements CommandRunner {
   }
 
   private pullRequestList(
-    pullRequest: PullRequestFixture | undefined,
+    pullRequest: PullRequestFixture | false,
   ): CommandOutput {
     if (!pullRequest) return this.output({ stdout: '[]' });
     return this.output({
@@ -157,13 +156,16 @@ class PublishRunner implements CommandRunner {
           baseRefOid: SHA_MAIN,
           url: pullRequest.url,
           isDraft: false,
+          headRepository: { nameWithOwner: 'nook/example' },
+          baseRepository: { nameWithOwner: 'nook/example' },
+          isCrossRepository: false,
         },
       ]),
     });
   }
 
   private pullRequestView(
-    pullRequest: PullRequestFixture | undefined,
+    pullRequest: PullRequestFixture | false,
   ): CommandOutput {
     if (!pullRequest) return this.output({ stdout: '{}' });
     return this.output({
@@ -187,8 +189,8 @@ class PublishRunner implements CommandRunner {
     request: { readonly stdout?: string; readonly exitCode?: number } = {},
   ): CommandOutput {
     return {
-      exitCode: request.exitCode ?? 0,
-      stdout: request.stdout ?? '',
+      exitCode: typeof request.exitCode === 'number' ? request.exitCode : 0,
+      stdout: typeof request.stdout === 'string' ? request.stdout : '',
       stderr: '',
     };
   }
@@ -211,9 +213,9 @@ class DevPublishPullRequestFixture {
   private execute(): PullRequestFixture {
     const request = this.request;
     return {
-      number: request.number ?? 42,
-      headSha: request.headSha ?? SHA_PRIOR,
-      url: `https://github.example/pr/${request.number ?? 42}`,
+      number: request.number || 42,
+      headSha: request.headSha || SHA_PRIOR,
+      url: `https://github.example/pr/${request.number || 42}`,
     };
   }
 }
@@ -232,7 +234,7 @@ class DevPublishPublicationScenario {
       root,
       devPath,
       pullRequests: request.pullRequests,
-      ciStatuses: request.ciStatuses ?? ['completed'],
+      ciStatuses: request.ciStatuses || ['completed'],
     });
     const workspace = new DevDeliveryWorkspace({ root, runner });
     const expectedSha = CommitSha.parse(SHA_SELECTED);
@@ -247,7 +249,7 @@ class DevPublishPublicationScenario {
 
 test('publication rejects a PR that appears before the final push boundary', () => {
   const { result, runner } = new DevPublishPublicationScenario({
-    pullRequests: [undefined, DevPublishPullRequestFixture.from()],
+    pullRequests: [false, DevPublishPullRequestFixture.from()],
   }).execute();
 
   expect(result.isErr()).toBe(true);

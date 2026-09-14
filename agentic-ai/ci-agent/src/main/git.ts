@@ -389,8 +389,8 @@ export class CiRepository {
     log.info(`Pushing fix branch ${fixBranch}`);
     const target = this.resolvePushTarget({
       fixBranch,
-      ...(remoteRef === undefined ? {} : { remoteRef }),
-      ...(remoteUrl === undefined ? {} : { remoteUrl }),
+      ...(typeof remoteRef === "string" ? { remoteRef } : {}),
+      ...(typeof remoteUrl === "string" ? { remoteUrl } : {}),
     });
     if (target.isErr()) return err(target.error);
     const checkout = await this.trustedGit({
@@ -471,8 +471,8 @@ export class CiRepository {
     const expectedRemoteUrl = `https://github.com/${repository}.git`;
     const expectedRemoteRef = `refs/heads/${fixBranch}`;
     if (
-      (remoteUrl !== undefined && remoteUrl.trim() !== expectedRemoteUrl) ||
-      (remoteRef !== undefined && remoteRef.trim() !== expectedRemoteRef)
+      (typeof remoteUrl === "string" && remoteUrl.trim() !== expectedRemoteUrl) ||
+      (typeof remoteRef === "string" && remoteRef.trim() !== expectedRemoteRef)
     )
       return err({
         kind: CiFailureKind.Configuration,

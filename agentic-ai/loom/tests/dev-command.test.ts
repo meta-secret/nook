@@ -80,7 +80,7 @@ exit 0
 `,
     );
     chmodSync(fakeGit, 0o755);
-    process.env.PATH = `${bin}:${previousPath ?? '/usr/bin:/bin'}`;
+    process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
     process.env.NOOK_GITHUB_PAT = 'delivery-secret';
     process.env.GIT_CONFIG_PARAMETERS = 'hostile-config';
@@ -120,14 +120,14 @@ exit 0
     expect(output).toContain(`${SHA}:refs/heads/dev`);
     expect(output).not.toContain('delivery-secret');
   } finally {
-    if (previousPath === undefined) delete process.env.PATH;
+    if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
-    if (previousToken === undefined) delete process.env.NOOK_GITHUB_PAT;
+    if (typeof previousToken !== 'string') delete process.env.NOOK_GITHUB_PAT;
     else process.env.NOOK_GITHUB_PAT = previousToken;
-    if (previousCapture === undefined)
+    if (typeof previousCapture !== 'string')
       delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
-    if (previousConfig === undefined) delete process.env.GIT_CONFIG_PARAMETERS;
+    if (typeof previousConfig !== 'string') delete process.env.GIT_CONFIG_PARAMETERS;
     else process.env.GIT_CONFIG_PARAMETERS = previousConfig;
     rmSync(root, { recursive: true, force: true });
   }
@@ -164,11 +164,11 @@ exit 0
 `,
     );
     chmodSync(fakeGit, 0o755);
-    process.env.PATH = `${bin}:${previousPath ?? '/usr/bin:/bin'}`;
+    process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
 
-    for (const token of [undefined, ''] as const) {
-      if (token === undefined) delete process.env.NOOK_GITHUB_PAT;
+    for (const token of [false, ''] as const) {
+      if (token === false) delete process.env.NOOK_GITHUB_PAT;
       else process.env.NOOK_GITHUB_PAT = token;
       const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
         executable: CommandExecutable.Git,
@@ -196,12 +196,12 @@ exit 0
     expect(output).not.toContain('evil-ca');
     expect(output).not.toContain('evil-cookie');
   } finally {
-    if (previousPath === undefined) delete process.env.PATH;
+    if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
-    if (previousCapture === undefined)
+    if (typeof previousCapture !== 'string')
       delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
-    if (previousToken === undefined) delete process.env.NOOK_GITHUB_PAT;
+    if (typeof previousToken !== 'string') delete process.env.NOOK_GITHUB_PAT;
     else process.env.NOOK_GITHUB_PAT = previousToken;
     rmSync(root, { recursive: true, force: true });
   }
@@ -295,7 +295,7 @@ exit 0
 `,
     );
     chmodSync(fakeGit, 0o755);
-    process.env.PATH = `${bin}:${previousPath ?? '/usr/bin:/bin'}`;
+    process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
     const runner = new ProcessCommandRunner({ repositoryRoot: root });
     expect(
@@ -317,9 +317,9 @@ exit 0
     expect(output).toContain('refs/heads/main:refs/remotes/origin/main');
     expect(output.match(/\+refs\/heads\/\*:refs\/remotes\/origin\/\*/g)?.length).toBe(1);
   } finally {
-    if (previousPath === undefined) delete process.env.PATH;
+    if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
-    if (previousCapture === undefined) delete process.env.NOOK_DEV_COMMAND_CAPTURE;
+    if (typeof previousCapture !== 'string') delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
     rmSync(root, { recursive: true, force: true });
   }

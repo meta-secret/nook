@@ -100,6 +100,10 @@ export class ModuleExpertIsolation {
       request.sourceCommit,
     );
     if (source.isErr()) return err(source.error);
+    const featureHead = ModuleExpertIsolation.assertSourceCommit(
+      request.featureHeadSha,
+    );
+    if (featureHead.isErr()) return err(featureHead.error);
     const [temporaryRoot = tmpdir()] = [request.temporaryRoot];
     let codexHome;
     try {
@@ -128,6 +132,7 @@ export class ModuleExpertIsolation {
         const repositorySnapshotRequest: RepositorySnapshotRequest = {
           codexHome,
           sourceCommit: request.sourceCommit,
+          featureHeadSha: request.featureHeadSha,
           excludedPaths: request.snapshot.excludedPaths,
           optionalScopePaths: request.snapshot.optionalScopePaths,
           scopePaths: request.snapshot.scopePaths,

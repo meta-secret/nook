@@ -81,6 +81,7 @@ export class ModuleDeliveryCliScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
+      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
@@ -179,7 +180,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     );
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":4');
+    expect(firstResult).toContain('"inputVersion":5');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
     const legacyCommand = [
@@ -198,7 +199,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     expect(legacy.exitCode).not.toBe(0);
     expect(
       ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('Canonical CLI admission requires plan version 4.');
+    ).toContain('Canonical CLI admission requires plan version 5.');
 
     const rejectedCommand = [
       'task',

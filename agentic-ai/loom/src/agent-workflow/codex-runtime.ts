@@ -143,9 +143,9 @@ export class TeamAgentRuntimeProfile {
       TeamAgentRuntimeProfile.reasoningEffort(profile);
     if (
       request.profile.reasoningEffort !== canonicalReasoningEffort ||
-      (request.profile.model !== undefined &&
+      (typeof request.profile.model === 'string' &&
         request.profile.model !== profile.model) ||
-      (request.profile.serviceTier !== undefined &&
+      (typeof request.profile.serviceTier === 'string' &&
         request.profile.serviceTier !== AgentServiceTier.Fast)
     ) {
       throw new Error(

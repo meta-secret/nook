@@ -36,6 +36,7 @@ import type {
   UntrustedYamlNode,
 } from '../lib/guards.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 import { DelegationFinalizationRecordReader } from './delegation-aggregation-support.ts';
 import type {
   DelegationBarrierEvidence,
@@ -67,6 +68,11 @@ export type {
   DelegationRunResultV1,
   FinalizeDelegationRunInput,
 } from './delegation-aggregation-support.ts';
+
+export type DelegationRunResultMigrationRequest = PinnedDevBaseEvidence & {
+  readonly result: DelegationRunResultV1;
+  readonly featureHeadSha: string;
+};
 
 /** Owns the delegation run finalization registry and its capability transitions. */
 export class DelegationRunFinalization {
@@ -137,8 +143,6 @@ export class DelegationRunFinalization {
     'schemaVersion',
     'runId',
     'sourceCommit',
-    'originMainSha',
-    'pinnedLocalDevSha',
     'planSha256',
     'rootMaterializer',
     'attempts',
@@ -172,8 +176,6 @@ export class DelegationRunFinalization {
     const common = {
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
-      originMainSha: reader.string('originMainSha'),
-      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       planSha256: reader.sha256('planSha256'),
       rootMaterializer: DelegationRunFinalization.decodeIdentity(
         reader.node('rootMaterializer'),
@@ -199,6 +201,8 @@ export class DelegationRunFinalization {
       schemaVersion:
         DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
       ...common,
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       featureHeadSha: reader.string('featureHeadSha'),
     };
     PinnedDevBaseEvidenceContract.assertShape({
@@ -223,11 +227,9 @@ export class DelegationRunFinalization {
 
   /** Creates a current result from V1 evidence without rewriting the V1 value. */
   static migrateDelegationRunResult(
-    ...[result, featureHeadSha]: [
-      result: DelegationRunResultV1,
-      featureHeadSha: string,
-    ]
+    request: DelegationRunResultMigrationRequest,
   ): DelegationRunResult {
+    const { result, featureHeadSha, originMainSha, pinnedLocalDevSha } = request;
     if (
       result.schemaVersion !==
       DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION
@@ -236,11 +238,13 @@ export class DelegationRunFinalization {
         'Only delegation run result schema 1.0.0 can be migrated.',
       );
     PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha: result.originMainSha,
-      pinnedLocalDevSha: result.pinnedLocalDevSha,
+      originMainSha,
+      pinnedLocalDevSha,
     });
     return {
       ...result,
+      originMainSha,
+      pinnedLocalDevSha,
       schemaVersion:
         DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
       featureHeadSha,
@@ -749,7 +753,7 @@ export class DelegationRunFinalization {
       const authorKind = Object.values(MaterializedViewAuthorKind).find(
         (candidate) => candidate === reader.string('authorKind'),
       );
-      if (authorKind === undefined)
+      if (!authorKind)
         throw new Error('Delegation materialized view author is invalid.');
       return {
         presence,

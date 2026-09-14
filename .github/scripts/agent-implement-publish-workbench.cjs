@@ -6,25 +6,9 @@ const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getB
 const moduleApi = /** @type {typeof import('node:module')} */ (loadBuiltin('node:module'))
 const moduleLoader = moduleApi.createRequire(__filename)
 
-/**
- * @template T
- * @param {string} modulePath
- * @returns {T}
- */
-function loadModule(modulePath) {
-  const loaded = /** @type {unknown} */ (moduleLoader(modulePath))
-  if (!loaded || typeof loaded !== 'object') {
-    throw new Error('module has an invalid contract')
-  }
-  return /** @type {T} */ (loaded)
-}
-
 /** @type {typeof import('node:fs')} */
 const fs = /** @type {typeof import('node:fs')} */ (loadBuiltin('node:fs'))
 /** @typedef {(candidate: string, kind: string, secrets?: string[], sourceTask?: string, metadata?: { assignedGizmoId?: string }) => string} ValidateAgentRecord */
-/** @type {{ validateAgentRecord: ValidateAgentRecord }} */
-const recordsModule = loadModule('./workbench-records.cjs')
-const { validateAgentRecord } = recordsModule
 
 /**
  * @typedef {{ created_at: string }} GithubWorkflowRun
@@ -83,8 +67,23 @@ class AgentImplementWorkbenchPublisher {
     this.github = github
     this.context = context
     this.core = core
+    /** @type {{ validateAgentRecord: ValidateAgentRecord }} */
+    this.recordsModule = AgentImplementWorkbenchPublisher.loadModule('./workbench-records.cjs')
     /** @type {AgentImplementEnvironment} */
     this.environment = this.readEnvironment(process.env)
+  }
+
+  /**
+   * @template T
+   * @param {string} modulePath
+   * @returns {T}
+   */
+  static loadModule(modulePath) {
+    const loaded = /** @type {unknown} */ (moduleLoader(modulePath))
+    if (!loaded || typeof loaded !== 'object') {
+      throw new Error('module has an invalid contract')
+    }
+    return /** @type {T} */ (loaded)
   }
 
   /**
@@ -220,44 +219,28 @@ class AgentImplementWorkbenchPublisher {
   const summaryPath = implementationSummaryExists
     ? implementationSummaryPath
     : planningSummaryPath
-  const fallbackSummary = [
-        '# Automated agent work summary',
-        '',
-        '## Outcome',
-        '',
-        success ? `Published canonical feature branch \`${featureBranch}\` at observed head \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish a feature branch.',
-        '',
-        '## Progress',
-        '',
-        '- See the linked workflow run for the execution boundary.',
-        '',
-        '## Implementation problems',
-        '',
-        success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before publishing a feature branch.',
-        '',
-        '## Decisions',
-        '',
-        '- None recorded.',
-        '',
-        '## Validation',
-        '',
-        `- [Agent implement run ${context.runId}](${runUrl})`,
-        '',
-        '## Remaining work',
-        '',
-        success ? `- Feature Gizmo must dispatch remote build-only compilation for the current head of \`${featureBranch}\`, then land it into local dev.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
-      ].join('\n')
-  let summary = fallbackSummary
-  if (fs.existsSync(summaryPath)) {
-    const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
-    const secrets = [env.CURSOR_SECRET, env.NOOK_SECRET]
-    const rejection = validateAgentRecord(candidate, 'worklog', secrets, env.AGENT_PROMPT)
-    if (rejection) {
-      core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
-    } else {
-      summary = candidate
-    }
+  if (!fs.existsSync(summaryPath)) {
+    core.setFailed('Required Workbench summary artifact is missing.')
+    return
   }
+  const artifact = fs.lstatSync(summaryPath)
+  if (!artifact.isFile() || artifact.isSymbolicLink() || artifact.size > 65536) {
+    core.setFailed('Rejected unsafe Workbench summary artifact.')
+    return
+  }
+  const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
+  const secrets = [env.CURSOR_SECRET, env.NOOK_SECRET]
+  const rejection = this.recordsModule.validateAgentRecord(
+    candidate,
+    'worklog',
+    secrets,
+    env.AGENT_PROMPT,
+  )
+  if (rejection) {
+    core.setFailed(`Rejected agent-authored Workbench summary: ${rejection}`)
+    return
+  }
+  let summary = candidate
   const budgetBlocker = env.BUDGET_BLOCKER_B64
     ? Buffer.from(env.BUDGET_BLOCKER_B64, 'base64').toString('utf8')
     : ''

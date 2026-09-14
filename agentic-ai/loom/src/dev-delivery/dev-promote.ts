@@ -38,8 +38,8 @@ export class DevPromoteCommand {
     }
     const result = this.promoteInsideLock();
     const localReleased = localLease.value.release();
-    if (localReleased.isErr()) return err(localReleased.error);
     const publicationReleased = publicationLease.value.release();
+    if (localReleased.isErr()) return err(localReleased.error);
     if (publicationReleased.isErr()) return err(publicationReleased.error);
     return result;
   }
@@ -145,14 +145,6 @@ export class DevPromoteCommand {
       });
       if (pushed.isErr()) return err(pushed.error);
     }
-
-    const development = workspace.developmentWorktree();
-    if (development.isErr()) return err(development.error);
-    const localDev = workspace.git.fastForwardTo({
-      path: development.value.path,
-      target: this.request.expectedSha,
-    });
-    if (localDev.isErr()) return err(localDev.error);
 
     const after = this.remoteManagedBranches();
     if (after.isErr()) return err(after.error);

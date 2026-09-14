@@ -54,9 +54,7 @@ Model text.
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
   expect(markdown).not.toContain('teams/dev-manager-gizmo/');
-  expect(markdown).not.toContain(
-    'teams/delivery-pipeline/internal/',
-  );
+  expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
@@ -73,26 +71,19 @@ Model text.
     '`git fetch --prune origin`; a fetch failure fails closed.',
   );
   expect(markdown).toContain(
-    'strictly from the exact `pinnedLocalDevSha`',
+    'Base and head SHAs are observational evidence only, not required packet',
   );
   expect(markdown).not.toContain(
     ['unless the user explicitly selects', 'another base'].join(' '),
   );
-  expect(markdown).toContain('`originMainSha`');
-  expect(markdown).toContain('`pinnedLocalDevSha`');
-  expect(markdown).toContain('`featureHeadSha`');
   expect(markdown).toContain(
-    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+    'Prime authorizes the canonical feature branch name, which is the',
   );
   expect(markdown).toContain(
-    'detached implementation HEAD must equal `featureHeadSha` exactly.',
-  );
-  expect(markdown).toContain('Descendant frontiers are valid for reruns.');
-  expect(markdown).toContain(
-    'Team Gizmos and leaves consume all three pinned identities.',
+    'Delivery re-fetches and resolves the latest committed branch head',
   );
   expect(markdown).toContain(
-    'Missing, stale, mismatched, or unprovable evidence fails closed.',
+    'follow the latest head and rerun affected evidence.',
   );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
@@ -134,9 +125,11 @@ test('renders the complete canonical Cortex context router', () => {
 
   expect(markdown).toContain('return to the selected owning context');
   expect(markdown).toContain(
-    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+    'Base and head SHAs are observational evidence only, not required packet',
   );
-  expect(markdown).toContain('Prime creates every new feature');
+  expect(markdown).toContain(
+    'Prime authorizes the canonical feature branch name, which is the',
+  );
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });

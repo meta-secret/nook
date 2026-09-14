@@ -195,6 +195,7 @@ describe('repository snapshot Git isolation', () => {
             excludedPaths: [],
             optionalScopePaths: ['optional.txt'],
             sourceCommit,
+            featureHeadSha: sourceCommit,
             scopePaths: ['tracked.txt'],
             workingDirectory: repository,
           }).materialize();
@@ -211,10 +212,10 @@ describe('repository snapshot Git isolation', () => {
           ).toThrow();
           expect(() => readFileSync(marker)).toThrow();
         } finally {
-          if (previousGlobal === undefined)
+          if (typeof previousGlobal !== 'string')
             delete process.env.GIT_CONFIG_GLOBAL;
           else process.env.GIT_CONFIG_GLOBAL = previousGlobal;
-          if (previousSystem === undefined)
+          if (typeof previousSystem !== 'string')
             delete process.env.GIT_CONFIG_SYSTEM;
           else process.env.GIT_CONFIG_SYSTEM = previousSystem;
         }

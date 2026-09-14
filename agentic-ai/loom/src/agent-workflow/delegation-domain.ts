@@ -308,6 +308,7 @@ export type DelegationAdmissionRequest = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
   readonly featureBranch: CanonicalFeatureBranch;
+  readonly featureHeadSha: string;
   readonly identity: DelegationAttemptIdentity;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
@@ -328,8 +329,6 @@ export type DelegationPlanV1 = {
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly runId: string;
   readonly sourceCommit: string;
-  readonly originMainSha: string;
-  readonly pinnedLocalDevSha: string;
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationAttemptDeclaration[];
 };

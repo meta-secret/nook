@@ -8,16 +8,22 @@ import {
 import { resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 import { workflowSchema } from "./arc-manifest-model";
+
+enum HostedRunnerBoundary {
+  Trusted = "trusted",
+  Untrusted = "untrusted",
+}
+
 export class ArcWorkflowPlacementContract {
   constructor(private readonly root: string) {}
   async assert(): Promise<Result<void, OperationalContractFailure>> {
-    const hostedRunnerBoundaries = new Map<string, "trusted" | "untrusted">([
-      ["ci.yml#scope", "untrusted"],
-      ["hive.yml#verify-fork", "untrusted"],
-      ["hive.yml#console-untrusted", "untrusted"],
-      ["web-research.yml#validate-untrusted", "untrusted"],
-      ["dev-pr-manager.yml#manage", "trusted"],
-      ["repository-delivery-policy.yml#verify", "trusted"],
+    const hostedRunnerBoundaries = new Map<string, HostedRunnerBoundary>([
+      ["ci.yml#scope", HostedRunnerBoundary.Untrusted],
+      ["hive.yml#verify-fork", HostedRunnerBoundary.Untrusted],
+      ["hive.yml#console-untrusted", HostedRunnerBoundary.Untrusted],
+      ["web-research.yml#validate-untrusted", HostedRunnerBoundary.Untrusted],
+      ["dev-pr-manager.yml#manage", HostedRunnerBoundary.Trusted],
+      ["repository-delivery-policy.yml#verify", HostedRunnerBoundary.Trusted],
     ]);
     const workflowsDir = resolve(this.root, ".github/workflows");
     let entries: string[];
@@ -69,7 +75,7 @@ export class ArcWorkflowPlacementContract {
           ]);
           const { if: condition = "" } = job;
           if (
-            boundary === "untrusted" &&
+            boundary === HostedRunnerBoundary.Untrusted &&
             identity !== "ci.yml#scope" &&
             (!condition.includes("head.repo.full_name") ||
               !condition.includes("dependabot[bot]"))

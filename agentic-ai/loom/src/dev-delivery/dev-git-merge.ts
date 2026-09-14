@@ -15,38 +15,13 @@ import {
 } from './dev-types.ts';
 
 /** Stable discriminator for a feature branch that moved after compilation. */
-export const BranchAdvanced = 'branch-advanced' as const;
+const BRANCH_ADVANCED_CODE = 'branch-advanced' as const;
 
 export interface BranchAdvancedFailure extends DevFailure {
   readonly kind: DevFailureKind.Race;
-  readonly code: typeof BranchAdvanced;
+  readonly code: typeof BRANCH_ADVANCED_CODE;
   readonly branch: BranchName;
   readonly currentHead: CommitSha;
-}
-
-export function branchAdvancedFailure(
-  ...[branch, currentHead]: [branch: BranchName, currentHead: CommitSha]
-): BranchAdvancedFailure {
-  return {
-    kind: DevFailureKind.Race,
-    code: BranchAdvanced,
-    branch,
-    currentHead,
-    message:
-      `The canonical feature branch ${branch.value()} advanced to ${currentHead.value()} after build:compile evidence; rerun build:compile before landing`,
-  };
-}
-
-export function isBranchAdvancedFailure(
-  failure: DevFailure,
-): failure is BranchAdvancedFailure {
-  return (
-    failure.kind === DevFailureKind.Race &&
-    'code' in failure &&
-    failure.code === BranchAdvanced &&
-    'currentHead' in failure &&
-    typeof failure.currentHead === 'object'
-  );
 }
 
 export interface MergeRequest {
@@ -57,7 +32,7 @@ export interface MergeRequest {
 interface MergeInputs {
   readonly devHead: CommitSha;
   readonly devExists: boolean;
-  readonly devPath: string | undefined;
+  readonly devPath: string | false;
   readonly originMainSha: CommitSha;
   readonly localMainSha: CommitSha;
 }
@@ -79,6 +54,33 @@ interface MergeBoundaryDependencies {
 export class DevGitMergeBoundary {
   constructor(private readonly dependencies: MergeBoundaryDependencies) {}
 
+  static readonly BranchAdvanced = BRANCH_ADVANCED_CODE;
+
+  static branchAdvancedFailure(
+    ...[branch, currentHead]: [branch: BranchName, currentHead: CommitSha]
+  ): BranchAdvancedFailure {
+    return {
+      kind: DevFailureKind.Race,
+      code: BRANCH_ADVANCED_CODE,
+      branch,
+      currentHead,
+      message:
+        `The canonical feature branch ${branch.value()} advanced to ${currentHead.value()} after build:compile evidence; rerun build:compile before landing`,
+    };
+  }
+
+  static isBranchAdvancedFailure(
+    failure: DevFailure,
+  ): failure is BranchAdvancedFailure {
+    return (
+      failure.kind === DevFailureKind.Race &&
+      'code' in failure &&
+      failure.code === BRANCH_ADVANCED_CODE &&
+      'currentHead' in failure &&
+      typeof failure.currentHead === 'object'
+    );
+  }
+
   mergeInto(request: MergeRequest): Result<CommitSha, DevFailure> {
     const refreshed = this.dependencies.repository.refreshManagedRefs({
       prune: true,
@@ -88,7 +90,7 @@ export class DevGitMergeBoundary {
     const before = this.verifyMergeInputs(request);
     if (before.isErr()) return err(before.error);
 
-    const landingDirectory = before.value.devPath ?? this.dependencies.featurePath;
+    const landingDirectory = before.value.devPath || this.dependencies.featurePath;
     const alreadyPresent = this.dependencies.repository.ancestry({
       ancestor: request.featureHead,
       descendant: before.value.devHead,
@@ -143,7 +145,7 @@ export class DevGitMergeBoundary {
       ManagedBranch.Dev,
     );
     if (afterDev.isErr()) return err(afterDev.error);
-    if (afterDev.value === undefined) {
+    if (afterDev.value === false) {
       return err({
         kind: DevFailureKind.Race,
         message: 'refs/heads/dev disappeared after the landing mutation',
@@ -162,7 +164,7 @@ export class DevGitMergeBoundary {
     );
     if (afterMain.isErr()) return err(afterMain.error);
     if (
-      afterMain.value === undefined ||
+      afterMain.value === false ||
       !afterMain.value.equals(before.value.localMainSha)
     ) {
       return err({
@@ -185,7 +187,7 @@ export class DevGitMergeBoundary {
       });
     }
 
-    if (final.value.devPath !== undefined) {
+    if (final.value.devPath !== false) {
       const afterAssigned = this.dependencies.repository.managedWorktreeAt(
         final.value.devPath,
         ManagedBranch.Dev,
@@ -234,7 +236,7 @@ export class DevGitMergeBoundary {
       const afterWorktree =
         this.dependencies.repository.developmentWorktreeForLanding();
       if (afterWorktree.isErr()) return err(afterWorktree.error);
-      if (afterWorktree.value !== undefined) {
+      if (afterWorktree.value !== false) {
         return err({
           kind: DevFailureKind.Race,
           message: 'A checked-out local dev worktree appeared during landing',
@@ -310,7 +312,7 @@ export class DevGitMergeBoundary {
     const checkedOut =
       this.dependencies.repository.developmentWorktreeForLanding();
     if (checkedOut.isErr()) return err(checkedOut.error);
-    if (checkedOut.value !== undefined) {
+    if (checkedOut.value !== false) {
       return err({
         kind: DevFailureKind.Race,
         message:
@@ -380,7 +382,10 @@ export class DevGitMergeBoundary {
     }
     if (!remoteFeature.value.sha.equals(request.featureHead)) {
       return err(
-        branchAdvancedFailure(request.featureBranch, remoteFeature.value.sha),
+        DevGitMergeBoundary.branchAdvancedFailure(
+          request.featureBranch,
+          remoteFeature.value.sha,
+        ),
       );
     }
 
@@ -395,7 +400,7 @@ export class DevGitMergeBoundary {
     }
     const localMain = repository.localBranchHead(ManagedBranch.Main);
     if (localMain.isErr()) return err(localMain.error);
-    if (localMain.value === undefined) {
+    if (localMain.value === false) {
       return err({
         kind: DevFailureKind.Configuration,
         message: 'Local refs/heads/main must exist before landing into dev',
@@ -419,8 +424,8 @@ export class DevGitMergeBoundary {
 
     let devHead: CommitSha;
     let devExists: boolean;
-    let devPath: string | undefined;
-    if (selectedDevelopment.value !== undefined) {
+    let devPath: string | false = false;
+    if (selectedDevelopment.value !== false) {
       const assigned = repository.managedWorktreeAt(
         selectedDevelopment.value.path,
         ManagedBranch.Dev,
@@ -451,7 +456,7 @@ export class DevGitMergeBoundary {
       if (head.isErr()) return err(head.error);
       const ref = repository.localBranchHead(ManagedBranch.Dev);
       if (ref.isErr()) return err(ref.error);
-      if (ref.value === undefined || !head.value.equals(ref.value)) {
+      if (ref.value === false || !head.value.equals(ref.value)) {
         return err({
           kind: DevFailureKind.Race,
           message:
@@ -464,14 +469,14 @@ export class DevGitMergeBoundary {
     } else {
       const ref = repository.localBranchHead(ManagedBranch.Dev);
       if (ref.isErr()) return err(ref.error);
-      devHead = ref.value ?? localMain.value;
-      devExists = ref.value !== undefined;
+      devHead = ref.value || localMain.value;
+      devExists = ref.value !== false;
     }
 
     const devFromOrigin = repository.ancestry({
       ancestor: originMain.value.sha,
       descendant: devHead,
-      workingDirectory: devPath ?? this.dependencies.featurePath,
+      workingDirectory: devPath || this.dependencies.featurePath,
     });
     if (devFromOrigin.isErr()) return err(devFromOrigin.error);
     if (devFromOrigin.value !== Ancestry.Ancestor) {
@@ -483,7 +488,7 @@ export class DevGitMergeBoundary {
     const featureFromOrigin = repository.ancestry({
       ancestor: originMain.value.sha,
       descendant: request.featureHead,
-      workingDirectory: devPath ?? this.dependencies.featurePath,
+      workingDirectory: devPath || this.dependencies.featurePath,
     });
     if (featureFromOrigin.isErr()) return err(featureFromOrigin.error);
     if (featureFromOrigin.value !== Ancestry.Ancestor) {

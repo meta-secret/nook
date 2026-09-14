@@ -87,6 +87,7 @@ class BootstrapReplacementFixture {
   }
 
   head(commit: string): void {
+    rmSync(join(this.root, "fixture.txt"), { force: true });
     this.git("update-ref", "refs/heads/fixture", commit);
     this.git("symbolic-ref", "HEAD", "refs/heads/fixture");
   }
@@ -256,7 +257,7 @@ void test("publication output records the pinned and published identities as JSO
     assert.equal(lines.feature_head_sha, FEATURE_HEAD_SHA);
     assert.equal(lines.published_feature_sha, PUBLISHED_FEATURE_SHA);
     const publicationJson = lines.publication_json;
-    if (publicationJson === undefined) {
+    if (typeof publicationJson !== "string") {
       throw new Error("Missing publication JSON");
     }
     assert.deepEqual(JSON.parse(publicationJson), {
@@ -320,7 +321,7 @@ void test("implementation phases are single-use", async () => {
 
 void describe("resolveDeliveryTarget", () => {
   void it(
-    "records the bootstrap chain and uses the pinned local-dev base for budget",
+    "records the bootstrap chain and measures each slice from feature head",
     () => {
       assert.deepEqual(
         CiResultAssertions.assertSuccess(
@@ -336,7 +337,7 @@ void describe("resolveDeliveryTarget", () => {
           originMainSha: ORIGIN_MAIN_SHA,
           pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
           featureHeadSha: FEATURE_HEAD_SHA,
-          budgetBaseRef: PINNED_LOCAL_DEV_SHA,
+          budgetBaseRef: FEATURE_HEAD_SHA,
         },
       );
     },
@@ -359,7 +360,7 @@ void describe("resolveDeliveryTarget", () => {
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
         featureHeadSha: FEATURE_HEAD_SHA,
-        budgetBaseRef: PINNED_LOCAL_DEV_SHA,
+        budgetBaseRef: FEATURE_HEAD_SHA,
       },
     );
   });
@@ -459,7 +460,7 @@ void describe("resolveTargetFromEnvironment", () => {
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       featureHeadSha: FEATURE_HEAD_SHA,
-      budgetBaseRef: PINNED_LOCAL_DEV_SHA,
+      budgetBaseRef: FEATURE_HEAD_SHA,
     });
   });
 
@@ -484,6 +485,7 @@ void test("bootstrap verification rejects replacement-ref ancestry bypasses", as
       "refs/remotes/origin/codex/agent-branching",
       pinnedLocalDevSha,
     );
+    rmSync(join(fixture.root, "fixture.txt"), { force: true });
     fixture.git("checkout", "-q", "--detach", pinnedLocalDevSha);
     fixture.replaceCommit(pinnedLocalDevSha, originMainSha);
 
@@ -498,7 +500,7 @@ void test("bootstrap verification rejects replacement-ref ancestry bypasses", as
     }).execute();
     CiResultAssertions.assertFailure(
       result,
-      /not based on the Prime-pinned local-dev SHA/u,
+      /not based on the fetched originMainSha/u,
     );
   } finally {
     fixture.dispose();

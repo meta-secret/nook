@@ -72,7 +72,7 @@ export class CanonicalFeatureBranchContract {
     const segments = components.slice(1);
     const valid =
       (segments.length === 1 &&
-        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 50) ||
+        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
@@ -94,7 +94,7 @@ export class CanonicalFeatureBranchContract {
     ]
   ): boolean {
     return (
-      segment !== undefined &&
+      typeof segment === 'string' &&
       segment.length >= minimum &&
       segment.length <= maximum &&
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(segment)
@@ -115,6 +115,7 @@ export class CanonicalFeatureBranchContract {
   private static isCanonicalRole(
     ...[team, role]: [team: string | undefined, role: string | undefined]
   ): boolean {
+    if (typeof team !== 'string' || typeof role !== 'string') return false;
     switch (team) {
       case 'ai':
         return (
@@ -148,8 +149,6 @@ export class CanonicalFeatureBranchContract {
         return (
           role === 'gizmo' || role === 'dev-manager' || role === 'pr-lifecycle'
         );
-      case undefined:
-        return false;
       default:
         return false;
     }
@@ -160,7 +159,7 @@ export class CanonicalFeatureBranchContract {
   ): boolean {
     if (segments.length !== 1) return false;
     const segment = segments[0];
-    if (segment === undefined || !segment.startsWith('hive-')) return false;
+    if (typeof segment !== 'string' || !segment.startsWith('hive-')) return false;
     const suffix = segment.slice('hive-'.length);
     return (
       suffix.length > 0 &&
@@ -207,7 +206,7 @@ export class PinnedDevBaseEvidenceContract {
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
     });
-    if (request.sourceCommit !== undefined) {
+    if (request.sourceCommit) {
       PinnedDevBaseEvidenceContract.assertCommitShape(
         'sourceCommit',
         request.sourceCommit,
@@ -221,7 +220,7 @@ export class PinnedDevBaseEvidenceContract {
       message:
         'pinnedLocalDevSha must include the fetched origin/main commit as an ancestor.',
     });
-    if (request.sourceCommit !== undefined) {
+    if (request.sourceCommit) {
       PinnedDevBaseEvidenceContract.assertAncestor({
         ancestor: request.pinnedLocalDevSha,
         descendant: request.sourceCommit,

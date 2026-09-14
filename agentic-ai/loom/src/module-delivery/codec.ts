@@ -145,7 +145,7 @@ export class ModuleDeliveryPlanSchema {
         continue;
       }
       if (
-        current.node === null ||
+        (typeof current.node === 'object' && !current.node) ||
         typeof current.node === 'boolean' ||
         typeof current.node === 'number'
       )
@@ -278,6 +278,7 @@ export class ModuleDeliveryPlanSchema {
       parentJoinRequest,
     );
     if (version === 1) {
+      const maxConcurrency = fields.positiveInteger('maxConcurrency');
       const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
         values: nodeValues,
         legacy: true,
@@ -288,6 +289,7 @@ export class ModuleDeliveryPlanSchema {
       const plan: LegacyModuleDeliveryPlan = {
         version: 1,
         sourceCommit,
+        maxConcurrency,
         maxAgentDepth,
         maxAttempts,
         parentOwnedResources,
@@ -319,7 +321,12 @@ export class ModuleDeliveryPlanSchema {
       edgeContracts,
     };
     if (version === 2) {
-      const plan: ModuleDeliveryPlanV2 = { version: 2, ...common };
+      const maxConcurrency = fields.positiveInteger('maxConcurrency');
+      const plan: ModuleDeliveryPlanV2 = {
+        version: 2,
+        ...common,
+        maxConcurrency,
+      };
       return {
         status: ModuleDeliveryCompatibilityStatus.Decoded,
         inputVersion: version,
@@ -395,7 +402,7 @@ export class ModuleDeliveryPlanSchema {
   ): RejectedCompatibleModuleDeliveryPlan {
     const issue: ModuleDeliveryIssue = {
       code: request.code,
-      path: request.path ?? '$',
+      path: request.path || '$',
       message: request.message,
     };
     return {

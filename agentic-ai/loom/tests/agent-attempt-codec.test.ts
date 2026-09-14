@@ -56,9 +56,14 @@ test('decodes concrete terminal and journal variants without retaining transport
 });
 
 test('decodes and migrates the historical v4 journal without mutating it', () => {
-  const { featureHeadSha: _featureHeadSha, ...startedWithoutFeature } = started;
+  const {
+    featureHeadSha: _featureHeadSha,
+    originMainSha: _originMainSha,
+    pinnedLocalDevSha: _pinnedLocalDevSha,
+    ...startedWithoutEvidence
+  } = started;
   const historical: LegacyAgentAttemptEvent = {
-    ...startedWithoutFeature,
+    ...startedWithoutEvidence,
     workflowVersion: BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
   };
   const decoded = AgentAttemptTransport.decodeCompatibleEvent(
@@ -70,11 +75,15 @@ test('decodes and migrates the historical v4 journal without mutating it', () =>
     AgentAttemptDecodeError,
   );
   const migrated = AgentAttemptTransport.migrateEvent(
-    decoded as LegacyAgentAttemptEvent,
-    'b'.repeat(40),
+    {
+      event: decoded as LegacyAgentAttemptEvent,
+      featureHeadSha: 'b'.repeat(40),
+      originMainSha: 'a'.repeat(40),
+      pinnedLocalDevSha: 'a'.repeat(40),
+    },
   );
   expect(historical).toEqual({
-    ...startedWithoutFeature,
+    ...startedWithoutEvidence,
     workflowVersion: BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
   });
   expect(migrated.workflowVersion).toBe(CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION);

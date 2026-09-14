@@ -59,8 +59,6 @@ describe('ordinary delegation run aggregation', () => {
         DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION,
       runId: 'run-1',
       sourceCommit: 'a'.repeat(40),
-      originMainSha: 'b'.repeat(40),
-      pinnedLocalDevSha: 'c'.repeat(40),
       planSha256: 'd'.repeat(64),
       rootMaterializer: { task: 'root', agent: 'agent', attempt: 1 },
       attempts: [],
@@ -80,15 +78,19 @@ describe('ordinary delegation run aggregation', () => {
       ),
     ).toThrow('schema version is unsupported');
     const migrated = DelegationRunFinalization.migrateDelegationRunResult(
-      historical,
-      'f'.repeat(40),
+      {
+        result: historical,
+        featureHeadSha: 'f'.repeat(40),
+        originMainSha: 'b'.repeat(40),
+        pinnedLocalDevSha: 'c'.repeat(40),
+      },
     );
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(
       DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
     );
-    expect(migrated.originMainSha).toBe(historical.originMainSha);
-    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.originMainSha).toBe('b'.repeat(40));
+    expect(migrated.pinnedLocalDevSha).toBe('c'.repeat(40));
     expect(migrated.featureHeadSha).toBe('f'.repeat(40));
   });
 

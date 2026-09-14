@@ -6,10 +6,9 @@ import { ok, type Result } from 'neverthrow';
 
 import { DevGitRepository } from '../src/dev-delivery/dev-git.ts';
 import {
-  BranchAdvanced,
   DevLandCommand,
-  isBranchAdvancedFailure,
 } from '../src/dev-delivery/dev-land.ts';
+import { DevGitMergeBoundary } from '../src/dev-delivery/dev-git-merge.ts';
 import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   BranchName,
@@ -33,13 +32,13 @@ test('dev:land exposes branch advancement as a typed runtime failure', () => {
 
   const failure = {
     kind: DevFailureKind.Race,
-    code: BranchAdvanced,
+    code: DevGitMergeBoundary.BranchAdvanced,
     branch: featureBranch.value,
     currentHead: currentHead.value,
     message: 'branch advanced',
   };
-  expect(isBranchAdvancedFailure(failure)).toBe(true);
-  if (isBranchAdvancedFailure(failure)) {
+  expect(DevGitMergeBoundary.isBranchAdvancedFailure(failure)).toBe(true);
+  if (DevGitMergeBoundary.isBranchAdvancedFailure(failure)) {
     expect(failure.branch.value()).toBe('codex/agent-branching');
     expect(failure.currentHead.value()).toBe(SHA_B);
   }

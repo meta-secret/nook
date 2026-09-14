@@ -108,6 +108,7 @@ export class AgentWorkflowDelegationAdmissionScenario {
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
       featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+      featureHeadSha: SOURCE_COMMIT,
       identity: declaration.identity,
       depth: declaration.depth,
       parent: declaration.parent,
@@ -176,7 +177,12 @@ describe('ordinary delegation admission', () => {
 
   test('decodes and migrates the historical v1 plan without mutating it', () => {
     const current = AgentWorkflowDelegationAdmissionScenario.validPlan();
-    const { featureBranch: _featureBranch, ...withoutFeature } = current;
+    const {
+      featureBranch: _featureBranch,
+      originMainSha: _originMainSha,
+      pinnedLocalDevSha: _pinnedLocalDevSha,
+      ...withoutFeature
+    } = current;
     const historical: DelegationPlanV1 = {
       ...withoutFeature,
       schemaVersion: LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
@@ -191,13 +197,17 @@ describe('ordinary delegation admission', () => {
       DelegationJournalSchema.decodeDelegationPlan(JSON.stringify(historical)),
     ).toThrow('schema version is unsupported');
     const migrated = DelegationJournalSchema.migrateDelegationPlan(
-      historical,
-      FEATURE_BRANCH,
+      {
+        plan: historical,
+        featureBranch: FEATURE_BRANCH,
+        originMainSha: SOURCE_COMMIT,
+        pinnedLocalDevSha: SOURCE_COMMIT,
+      },
     );
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(DELEGATION_PLAN_SCHEMA_VERSION);
-    expect(migrated.originMainSha).toBe(historical.originMainSha);
-    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.originMainSha).toBe(SOURCE_COMMIT);
+    expect(migrated.pinnedLocalDevSha).toBe(SOURCE_COMMIT);
     expect(migrated.featureBranch).toBe(
       CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
     );
@@ -313,6 +323,7 @@ describe('ordinary delegation admission', () => {
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
       featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+      featureHeadSha: SOURCE_COMMIT,
       identity: ROOT,
       depth: 2,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },

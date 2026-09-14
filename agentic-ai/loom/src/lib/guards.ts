@@ -50,7 +50,7 @@ export class UntrustedYamlBoundary {
   /** JSON.parse guarantees that every descendant is a JSON transport value. */
   static isJsonValue(value: unknown): value is UntrustedYamlNode {
     return (
-      value === null ||
+      (typeof value === 'object' && !value) ||
       typeof value === 'string' ||
       typeof value === 'number' ||
       typeof value === 'boolean' ||
@@ -102,7 +102,7 @@ export type UntrustedYamlNode =
   | UntrustedYamlMap;
 
 /** The host's concrete empty scalar without exporting it to domain APIs. */
-type JsonTransportNull = Exclude<ReturnType<URLSearchParams['get']>, string>;
+export type JsonTransportNull = Exclude<ReturnType<URLSearchParams['get']>, string>;
 
 /** Untrusted object map from YAML/JSON. */
 export type UntrustedYamlMap = {

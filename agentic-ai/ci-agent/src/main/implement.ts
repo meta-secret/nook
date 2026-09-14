@@ -453,7 +453,7 @@ class AgentImplementationIsValidBranch {
     return this.isRegisteredRole(team, role);
   }
 
-  private isFeatureSegment(segment: string | undefined): boolean {
+  private isFeatureSegment(segment: unknown): boolean {
     return (
       typeof segment === "string" &&
       segment.length >= 10 &&
@@ -462,7 +462,7 @@ class AgentImplementationIsValidBranch {
     );
   }
 
-  private isWorkSegment(segment: string | undefined): boolean {
+  private isWorkSegment(segment: unknown): boolean {
     return (
       typeof segment === "string" &&
       segment.length >= 20 &&
@@ -471,7 +471,7 @@ class AgentImplementationIsValidBranch {
     );
   }
 
-  private isKebabSegment(segment: string | undefined): segment is string {
+  private isKebabSegment(segment: unknown): segment is string {
     return (
       typeof segment === "string" &&
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(segment)
@@ -479,8 +479,8 @@ class AgentImplementationIsValidBranch {
   }
 
   private isRegisteredRole(
-    team: string | undefined,
-    role: string | undefined,
+    team: unknown,
+    role: unknown,
   ): boolean {
     return (
       typeof team === "string" &&
@@ -493,30 +493,31 @@ class AgentImplementationIsValidBranch {
     const canonicalTeam = Object.keys(CANONICAL_TEAM_ROLES).find(
       (candidate): candidate is CanonicalTeam => candidate === team,
     );
-    return canonicalTeam === undefined ? [] : CANONICAL_TEAM_ROLES[canonicalTeam];
+    return canonicalTeam ? CANONICAL_TEAM_ROLES[canonicalTeam] : [];
   }
 }
 
-type CanonicalTeam =
-  | "ai"
-  | "dev-core"
-  | "security"
-  | "sre"
-  | "web-dev"
-  | "delivery-pipeline";
+enum CanonicalTeam {
+  Ai = "ai",
+  DevCore = "dev-core",
+  Security = "security",
+  Sre = "sre",
+  WebDev = "web-dev",
+  DeliveryPipeline = "delivery-pipeline",
+}
 
 const CANONICAL_TEAM_ROLES: Readonly<Record<CanonicalTeam, readonly string[]>> =
   {
-    ai: ["gizmo", "loom-specialist", "cortex-specialist"],
-    "dev-core": ["gizmo", "rust-core-developer", "rust-auth2-developer"],
-    security: [
+    [CanonicalTeam.Ai]: ["gizmo", "loom-specialist", "cortex-specialist"],
+    [CanonicalTeam.DevCore]: ["gizmo", "rust-core-developer", "rust-auth2-developer"],
+    [CanonicalTeam.Security]: [
       "gizmo",
       "cryptography-specialist",
       "security-review-specialist",
     ],
-    sre: ["gizmo", "provisioning", "cloud-native"],
-    "web-dev": ["gizmo", "typescript-specialist", "svelte-specialist"],
-    "delivery-pipeline": ["gizmo", "dev-manager", "pr-lifecycle"],
+    [CanonicalTeam.Sre]: ["gizmo", "provisioning", "cloud-native"],
+    [CanonicalTeam.WebDev]: ["gizmo", "typescript-specialist", "svelte-specialist"],
+    [CanonicalTeam.DeliveryPipeline]: ["gizmo", "dev-manager", "pr-lifecycle"],
   };
 
 export class AgentImplementationResolveDeliveryTarget {
@@ -536,8 +537,8 @@ export class AgentImplementationResolveDeliveryTarget {
       featureHeadSha: input.featureHeadSha,
     }).execute();
     if (evidence.isErr()) return err(evidence.error);
-    const budgetBaseRef = new PinnedLocalDevShaParser(
-      evidence.value.pinnedLocalDevSha,
+    const budgetBaseRef = new FeatureHeadShaParser(
+      evidence.value.featureHeadSha,
     ).parse();
     if (budgetBaseRef.isErr()) return err(budgetBaseRef.error);
     return ok({
@@ -644,14 +645,14 @@ type ImplementDeliveryTargetInput = {
 
 declare const PINNED_LOCAL_DEV_SHA: unique symbol;
 
-class PinnedLocalDevShaParser {
+class FeatureHeadShaParser {
   constructor(private readonly value: string) {}
   parse(): Result<PinnedLocalDevSha, CiFailure> {
-    if (!PinnedLocalDevShaParser.isValid(this.value)) {
+    if (!FeatureHeadShaParser.isValid(this.value)) {
       return err({
         kind: CiFailureKind.Configuration,
         message:
-          "PINNED_LOCAL_DEV_SHA must be an exact lowercase 40-hex commit SHA",
+          "FEATURE_HEAD_SHA must be an exact lowercase 40-hex commit SHA",
       });
     }
     return ok(this.value);

@@ -88,8 +88,6 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = Readonly<{
   functionalOwner: ModuleDeliveryOwnerIdentity;
   acceptanceOwner: ModuleDeliveryOwnerIdentity;
   sourceCommit: string;
-  originMainSha: string;
-  pinnedLocalDevSha: string;
   verifiedHeadCommit: string;
   artifactIdentity: string;
   artifactDigest: string;

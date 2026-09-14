@@ -556,7 +556,7 @@ describe('Codex agent source stability', () => {
       } finally {
         for (const name of configNames) {
           const value = previousEnvironment.get(name);
-          if (value === undefined) delete process.env[name];
+          if (typeof value !== 'string') delete process.env[name];
           else process.env[name] = value;
         }
       }

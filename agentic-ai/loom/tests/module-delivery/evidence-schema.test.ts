@@ -93,17 +93,38 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     const historicalIdentity = (
       identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
     ): ModuleDeliveryAcceptedProviderEvidenceIdentityV1 => {
+      const {
+        originMainSha: _originMainSha,
+        pinnedLocalDevSha: _pinnedLocalDevSha,
+        ...withoutBaseEvidence
+      } = identity;
       return {
-        ...identity,
+        ...withoutBaseEvidence,
         schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
         acceptedProviderEvidence:
           identity.acceptedProviderEvidence.map(historicalIdentity),
       };
     };
     const historicalDeepest = historicalIdentity(deepestCurrentCanonical);
-    const historicalNested = historicalIdentity(nestedCurrentCanonical);
+    const historicalNestedBase = historicalIdentity(nestedCurrentCanonical);
+    const historicalNested: ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = {
+      ...historicalNestedBase,
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: historicalNestedBase.artifactIdentity,
+          evidence: nestedEvidence,
+          acceptanceRequirements: historicalNestedBase.acceptanceRequirements,
+          acceptedProviderEvidence: [historicalDeepest],
+        }),
+      acceptedProviderEvidence: [historicalDeepest],
+    };
+    const {
+      originMainSha: _originMainSha,
+      pinnedLocalDevSha: _pinnedLocalDevSha,
+      ...withoutBaseEvidence
+    } = current;
     const historical: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
-      ...current,
+      ...withoutBaseEvidence,
       schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       acceptedProviderEvidence: [historicalNested],
       artifactDigest:
@@ -125,6 +146,8 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     expect(() =>
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission({
         submission: historical,
+        originMainSha: current.originMainSha,
+        pinnedLocalDevSha: current.pinnedLocalDevSha,
       }),
     ).toThrow(MigrationEvidenceRequired);
     const migrationEvidence: readonly ModuleDeliveryEvidenceMigrationPayload[] =
@@ -143,14 +166,16 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     const migrated =
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission({
         submission: historical,
+        originMainSha: current.originMainSha,
+        pinnedLocalDevSha: current.pinnedLocalDevSha,
         migrationEvidence,
       });
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(
       MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
     );
-    expect(migrated.originMainSha).toBe(historical.originMainSha);
-    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.originMainSha).toBe(current.originMainSha);
+    expect(migrated.pinnedLocalDevSha).toBe(current.pinnedLocalDevSha);
     expect(Object.hasOwn(migrated, 'featureHeadSha')).toBe(false);
     const migratedNested = migrated.acceptedProviderEvidence[0];
     const migratedDeepest = migratedNested?.acceptedProviderEvidence[0];
@@ -219,6 +244,8 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     expect(() =>
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission({
         submission: tamperedRoot,
+        originMainSha: current.originMainSha,
+        pinnedLocalDevSha: current.pinnedLocalDevSha,
         migrationEvidence,
       }),
     ).toThrow('Historical evidence artifact digest is invalid.');

@@ -447,7 +447,7 @@ const TEAM_AUTHORITY_MARKERS = [
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
   'exactly one team identity',
-  'final verdict is bound to the exact pull-request head',
+  'The branch name is the workflow authority.',
 ] as const;
 
 const GIZMO_PROHIBITION_HEADING = 'Gizmo does not:';
