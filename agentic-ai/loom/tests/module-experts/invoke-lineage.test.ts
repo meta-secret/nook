@@ -4,9 +4,18 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { existsSync } from 'node:fs';
 
-import { readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 
 import type { RmOptions } from 'node:fs';
+
+import { tmpdir } from 'node:os';
 
 import { join, resolve } from 'node:path';
 
@@ -609,6 +618,45 @@ test('rejects invalid, corrupted, or symlinked parents before runtime', async ()
       runtime.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
+  }
+});
+
+test('reports parent authorization before an invalid catalog', async () => {
+  const request = ModuleExpertsInvokeLineageScenario.directRequest(
+    `invalid-catalog-parent-${randomUUID()}`,
+  );
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-invalid-catalog-'));
+  const parent = ModuleExpertsInvokeLineageScenario.directParent(request);
+  const unauthorized = {
+    ...ModuleExpertsInvokeLineageScenario.authorization(request),
+    expert: 'different_expert',
+  };
+  try {
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt({
+      repoRoot: fixtureRoot,
+      runId: request.runId,
+      sourceCommit: request.sourceCommit,
+      task: parent.task,
+      agent: parent.agent,
+      attempt: parent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          unauthorized,
+        ]),
+    });
+
+    const controller = new AbortController();
+    await expect(
+      ModuleExpertInvocation.invokeModuleExpert({
+        repoRoot: fixtureRoot,
+        request,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('parent authorization failed');
+  } finally {
+    await rm(fixtureRoot, REMOVE_RECURSIVELY);
   }
 });
 

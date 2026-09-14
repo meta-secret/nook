@@ -35,8 +35,6 @@ import { WorkflowRuntimeActivityKind } from '../agent-workflow/events.ts';
 import type { RuntimeActivityObservation } from '../agent-workflow/events.ts';
 import type { AgentExecutionCompletion } from '../agent-workflow/runtime.ts';
 import { WorkflowResultSchema } from '../agent-workflow/structured-result-codec.ts';
-import { ModuleExpertContract } from './audit.ts';
-import type { AuditModuleExpertsArgs } from './audit.ts';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 import { ModuleExpertParentAuthorization } from './parent-authorization.ts';
@@ -72,11 +70,6 @@ export class ModuleExpertInvocation {
     if (!profile) {
       throw new Error('Requested module expert is not registered.');
     }
-    const auditArgs: AuditModuleExpertsArgs = { repoRoot };
-    const audit = ModuleExpertContract.auditModuleExperts(auditArgs);
-    if (!audit.auditOk) {
-      throw new Error('Module expert catalog validation failed.');
-    }
     const runDirectory = join(
       repoRoot,
       'workflow',
@@ -87,6 +80,8 @@ export class ModuleExpertInvocation {
     if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
       ModuleExpertInvocation.invalidRequest();
     }
+    // The runtime session performs the final catalog audit before consuming
+    // this capability; reject malformed lineage at its own boundary first.
     const childRequest: ModuleExpertChildRequest = {
       runId: request.runId,
       sourceCommit: request.sourceCommit,

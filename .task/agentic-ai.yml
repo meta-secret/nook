@@ -179,6 +179,12 @@ tasks:
     cmds:
       - bun run --cwd agentic-ai/loom loom -- --default "{{.FAMILY}}"
 
+  loom:pre-push:
+    desc: Retain the legacy pre-push task contract through Loom's retired request path.
+    deps: [loom:install, tooling:install]
+    cmds:
+      - task loom:default FAMILY=prePush
+
   loom:cortex-audit:
     desc: Audit .cortex via Loom (optional CONFIG YAML, otherwise in-code default).
     deps: [loom:install]
