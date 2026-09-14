@@ -22,7 +22,7 @@ tasks:
       vars: [FEATURE_BRANCH]
     env:
       FEATURE_BRANCH: '{{.FEATURE_BRANCH}}'
-      LOCAL_BUILD_TASK: '{{default "app:build" .LOCAL_BUILD_TASK}}'
+      LOCAL_BUILD_TASK: '{{default "rust:build" .LOCAL_BUILD_TASK}}'
       LOCAL_BUILD_TASK_ID: '{{default "" .LOCAL_BUILD_TASK_ID}}'
       LOCAL_BUILD_ATTEMPT: '{{default "1" .LOCAL_BUILD_ATTEMPT}}'
       LOCAL_BUILD_EVIDENCE_PATH: '{{default "" .LOCAL_BUILD_EVIDENCE_PATH}}'

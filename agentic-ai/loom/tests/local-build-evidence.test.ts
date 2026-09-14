@@ -16,6 +16,7 @@ import {
   LocalBuildEvidenceAdmission,
   LocalBuildEvidenceGenerator,
   LocalBuildEvidenceStore,
+  LOCAL_BUILD_TASKS,
   type LocalBuildCommandOutput,
   type LocalBuildCommandRequest,
   type LocalBuildCommandRunner,
@@ -68,7 +69,7 @@ class LocalBuildEvidenceScenario {
     return {
       repositoryRoot: root,
       source: { branch: branch.value, commit: commit.value },
-      task: { id: 'local-build-test', attempt: 1, name: 'app:build' as const },
+      task: { id: 'local-build-test', attempt: 1, name: 'rust:build' as const },
       outputPath: LocalBuildEvidenceStore.defaultPath({
         repositoryRoot: root,
         sourceSha: commit.value,
@@ -76,6 +77,28 @@ class LocalBuildEvidenceScenario {
     };
   }
 }
+
+test('local evidence allowlist matches the repository-owned native Taskfile gates', () => {
+  const repositoryRoot = join(import.meta.dir, '../../..');
+  const appTaskfile = readFileSync(
+    join(repositoryRoot, 'nook-app/Taskfile.yml'),
+    'utf8',
+  );
+  const platformTaskfile = readFileSync(
+    join(repositoryRoot, 'nook-app/nook-platform/Taskfile.yml'),
+    'utf8',
+  );
+  const devTaskfile = readFileSync(
+    join(repositoryRoot, '.task/dev.yml'),
+    'utf8',
+  );
+
+  expect(LOCAL_BUILD_TASKS).toEqual(['build', 'rust:build']);
+  expect(appTaskfile).toMatch(/\n {2}build:\n/u);
+  expect(platformTaskfile).toMatch(/\n {2}rust:build:\n/u);
+  expect(devTaskfile).toContain('default "rust:build"');
+  expect(devTaskfile).not.toMatch(/app:build|platform:rust:build/u);
+});
 
 test('generator writes an exact-head proof from command success without secrets', () => {
   const root = mkdtempSync(join(tmpdir(), 'nook-local-build-evidence-'));
@@ -100,7 +123,7 @@ test('generator writes an exact-head proof from command success without secrets'
     expect(runner.requests).toEqual([
       {
         executable: 'task',
-        args: ['app:build'],
+        args: ['rust:build'],
         workingDirectory: root,
       },
     ]);

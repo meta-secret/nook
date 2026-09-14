@@ -45,12 +45,7 @@ export const LOCAL_BUILD_EVIDENCE_DEFAULT_LIFETIME_MS = 15 * 60 * 1000;
 export const LOCAL_BUILD_EVIDENCE_MAX_LIFETIME_MS = 60 * 60 * 1000;
 export const LOCAL_BUILD_EVIDENCE_MAX_BYTES = 256 * 1024;
 
-export const LOCAL_BUILD_TASKS = [
-  'app:build',
-  'platform:rust:build',
-  'web:build',
-  'extension:build',
-] as const;
+export const LOCAL_BUILD_TASKS = ['build', 'rust:build'] as const;
 export type LocalBuildTaskName = (typeof LOCAL_BUILD_TASKS)[number];
 
 const localBuildTaskSchema = z.enum(LOCAL_BUILD_TASKS);

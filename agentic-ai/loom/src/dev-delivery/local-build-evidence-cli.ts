@@ -61,7 +61,7 @@ export class LocalBuildEvidenceCli {
   }
 
   private static taskName(): Result<LocalBuildTaskName, DevFailure> {
-    const raw = process.env.LOCAL_BUILD_TASK || 'app:build';
+    const raw = process.env.LOCAL_BUILD_TASK || 'rust:build';
     const task = LOCAL_BUILD_TASKS.find((candidate) => candidate === raw);
     if (task) return ok(task);
     return err({
