@@ -216,7 +216,6 @@ export const RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS: readonly ValidationComm
       args: ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
       environment: {},
     },
-    { args: ["hive:verify"], environment: {} },
   ];
 
 export type ValidationRunner = (
@@ -225,21 +224,15 @@ export type ValidationRunner = (
   options: { cwd: string; env: NodeJS.ProcessEnv },
 ) => Promise<Result<void, CiFailure>>;
 
-enum IsolatedValidation {
-  Hive,
-  Fuzz,
-}
 class IsolatedValidationProcess {
-  constructor(private readonly scenario: IsolatedValidation) {}
   execute(): Promise<Result<void, CiFailure>> {
     return new Promise((resolveRun) => {
       try {
-        const child =
-          this.scenario === IsolatedValidation.Fuzz
-            ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
-                stdio: "inherit",
-              })
-            : spawn("task", ["hive:verify"], { stdio: "inherit" });
+        const child = spawn(
+          "task",
+          ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
+          { stdio: "inherit" },
+        );
         child.once("error", () =>
           resolveRun(
             err({
@@ -279,16 +272,11 @@ export const runValidationCommand: ValidationRunner = async (
       kind: CiFailureKind.Configuration,
       message: "Isolated validation may only invoke task",
     });
-  let scenario: IsolatedValidation;
-  if (args[0] === "hive:verify" && args.length === 1)
-    scenario = IsolatedValidation.Hive;
-  else if (
-    args[0] === "docker:ecosystem:fuzz" &&
-    args[1] === "FUZZ_SECONDS=20" &&
-    args.length === 2
+  if (
+    args[0] !== "docker:ecosystem:fuzz" ||
+    args[1] !== "FUZZ_SECONDS=20" ||
+    args.length !== 2
   )
-    scenario = IsolatedValidation.Fuzz;
-  else
     return err({
       kind: CiFailureKind.Configuration,
       message: "Isolated validation command is not allowlisted",
@@ -301,7 +289,7 @@ export const runValidationCommand: ValidationRunner = async (
     snapshot: options.env,
     environment: process.env,
   }).execute();
-  const outcome = await new IsolatedValidationProcess(scenario).execute();
+  const outcome = await new IsolatedValidationProcess().execute();
   new AgentRuntimeRestoreHostEnvironment({
     snapshot: hostEnvironment,
     environment: process.env,

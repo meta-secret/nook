@@ -450,7 +450,7 @@ test('dynamic and malformed env options fail closed', () => {
 
 test('repository explicit Taskfile selection preserves relative cwd', () => {
   const repositorySelectionRequest = {
-    commands: ['task --taskfile agentic-ai/minds/hive/Taskfile.yml format'],
+    commands: ['task --taskfile nook-app/Taskfile.yml format'],
     importer: '.task/agentic-ai.yml',
     sources: new Map<string, string>(),
     workingDirectory: '',
@@ -466,7 +466,7 @@ test('repository explicit Taskfile selection preserves relative cwd', () => {
       required: true,
       requiresExecuteMode: false,
       shellRuntime: false,
-      specifier: '../agentic-ai/minds/hive/Taskfile.yml',
+      specifier: '../nook-app/Taskfile.yml',
       taskInclude: true,
       workingDirectory: '',
     },

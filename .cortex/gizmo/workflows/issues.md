@@ -111,9 +111,7 @@ Every focused issue follows
 - links to relevant Nook code, PRs, and historical discussions.
 
 Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
-`cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
-reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
-dispatcher. The bounded implementation workflow must not claim those records.
+`cancelled`. `automation` is `manual` or `agent`.
 
 This combination makes a record eligible for explicit dispatch to the bounded
 Nook implementation worker:
@@ -139,10 +137,6 @@ At least one ownership unit must use that ID.
 - Creating or editing any other record must not start implementation.
 - The worker claims an eligible record by committing `status: in_progress`
   before it runs.
-- Main-failure handoff records use `status: ready` with `automation: hive`.
-
-Existing Hive metadata belongs to its separately documented paused platform.
-It does not start a dev manager or authorize automatic repair work.
 The manually run manager routes slow-stage failures through feature Gizmos.
 
 ## Choose update versus create

@@ -244,7 +244,7 @@ scope, ownership, or handoff rule.
     full repository validation locally, whether directly or through a Task
     target or script.
   - The local prohibition includes preflight, Rust/WASM compilation and tests,
-    web builds, browser end-to-end suites, Hive verification, full Loom
+    web builds, browser end-to-end suites, full Loom
     verification, and combined repository or PR validation.
   - Do not bypass the prohibition by invoking an underlying compiler, test
     runner, package script, or workflow script directly.
@@ -332,7 +332,6 @@ The remote task selectors map local validation work to hosted execution:
 - `loom:verify` runs the full Loom suite.
 - `web:build` runs the web product build.
 - `web:e2e` and `extension:e2e` run browser suites.
-- `hive:verify` runs Hive verification.
 - `check`, `ci:pr`, and `ci:pr:e2e` run combined repository and PR validation.
 - `arc:runtime` runs the ARC runtime smoke check.
 
@@ -507,8 +506,8 @@ alone does not complete feature delivery. Every change passes through dev.
   Use reactive event hints instead of routine GitHub polling.
   PR Steward's five-minute-inactivity check is the narrow read-only exception.
   Do not materialize this ephemeral plan as a Codex scheduled task.
-- Repository-owned GitHub Actions, Workbench automation fields, and Hive
-  reconciliation are separate systems governed by their existing authorities.
+- Repository-owned GitHub Actions and Workbench automation fields are separate
+  systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active
   delivery task. Have PR Steward perform bounded observation of that PR.
   The dev manager controls dev PR observation, readiness, and promotion in

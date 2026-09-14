@@ -127,10 +127,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '4476880c01a245ebf6aa42b3e15a7a4f8dfa433c2d43f5bfb80265aa83fb6989',
   ],
   [
-    'infra/contracts/arc-hive-render-contract.ts',
-    '6e3f9ec99a5f65a720e8af6e9c9331d76750148c58d3cecdc9569352a9b93ad1',
-  ],
-  [
     'infra/sim/kubernetes-cache/contracts.ts',
     'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
   ],
@@ -209,13 +205,6 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     specifier: '/etc/os-release',
     targetPath: '/etc/os-release',
   })),
-  {
-    digest: 'd0414467deac76fd3d5ba4b36a2de6ee4813f7a99bbb6db83b4ef58d3a0cb0bd',
-    marker: '$HIVE_TASK_DIR/prepare-sccache-context.sh',
-    sourcePath: 'agentic-ai/minds/hive/Taskfile.yml',
-    specifier: '$HIVE_TASK_DIR/prepare-sccache-context.sh',
-    targetPath: 'agentic-ai/minds/hive/prepare-sccache-context.sh',
-  },
   {
     digest: '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
     marker: '$SCRIPT_DIR/hosted-extension.sh',

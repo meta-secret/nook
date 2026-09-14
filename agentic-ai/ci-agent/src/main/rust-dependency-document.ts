@@ -1,7 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "./failure.js";
 const RUST_DEPENDENCY_ROOTS = [
-  "agentic-ai/minds/",
   "nook-app/nook-platform/",
   "preflight/",
 ] as const;

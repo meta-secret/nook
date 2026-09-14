@@ -91,50 +91,6 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
 
 const SOURCE_COMMIT = '1'.repeat(40);
 
-test('limits Development Core minds writes to Rust-owned surfaces', () => {
-  expect(
-    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
-      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
-        team: TeamKey.DevelopmentCore,
-        moduleRoot: 'agentic-ai/minds/hive/src',
-        write: 'agentic-ai/minds/hive/src/model.rs',
-      }),
-    ),
-  ).toBe(true);
-  for (const [moduleRoot, write] of [
-    ['agentic-ai/minds', 'agentic-ai/minds/README.md'],
-    [
-      'agentic-ai/minds/hive/controller',
-      'agentic-ai/minds/hive/controller/reaper.ts',
-    ],
-    [
-      'agentic-ai/minds/hive-console',
-      'agentic-ai/minds/hive-console/src/App.svelte',
-    ],
-  ] as const)
-    expect(
-      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
-        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
-          team: TeamKey.DevelopmentCore,
-          moduleRoot,
-          write,
-        }),
-      ),
-    ).toBe(false);
-});
-
-test('routes Hive Console writes to Web Development', () => {
-  expect(
-    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
-      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
-        team: TeamKey.WebDevelopment,
-        moduleRoot: 'agentic-ai/minds/hive-console',
-        write: 'agentic-ai/minds/hive-console/src/App.svelte',
-      }),
-    ),
-  ).toBe(true);
-});
-
 test('requires bounded ordinary write claims and admits exact extensionless paths', () => {
   for (const write of ['infra'])
     expect(
@@ -161,15 +117,6 @@ test('requires bounded ordinary write claims and admits exact extensionless path
         }),
       ),
     ).toBe(true);
-  expect(
-    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
-      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
-        team: TeamKey.DevelopmentCore,
-        moduleRoot: 'agentic-ai/minds/Cargo.lock',
-        write: 'agentic-ai/minds/Cargo.lock',
-      }),
-    ),
-  ).toBe(true);
 });
 
 test('routes the web Docker subtree exclusively to SRE', () => {
@@ -299,7 +246,6 @@ test('rejects globs spanning multiple owners', () => {
 
 test('routes app build orchestration exclusively to SRE', () => {
   for (const write of [
-    'agentic-ai/minds/Taskfile.yml',
     'nook-app/Taskfile.yml',
     'nook-app/docker-bake.hcl',
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',

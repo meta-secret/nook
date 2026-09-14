@@ -148,7 +148,7 @@ void test("validation isolates secrets, preserves wrapper vars, and denies netwo
             },
           })
           .then(CiResultAssertions.assertSuccess);
-        assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
+        assert.deepEqual(names, ["docker:ecosystem:fuzz"]);
 
         return ok();
       },
@@ -202,7 +202,6 @@ void test("networked fetch steps materialize manifests before offline compilatio
   for (const path of [
     "nook-app/nook-platform/docker/rust/product.Dockerfile",
     "preflight/Dockerfile",
-    "agentic-ai/minds/hive/Dockerfile",
   ]) {
     const source = await readFile(join(repo, path), "utf8");
     const fetch = source.indexOf("RUN --network=default");
@@ -265,7 +264,7 @@ void test("dependency update scope accepts only regular Rust mission files", asy
   try {
     const allowed = [
       "nook-app/nook-platform/Cargo.toml",
-      "agentic-ai/minds/hive/src/lib.rs",
+      "nook-app/nook-platform/nook-replication/src/lib.rs",
       "preflight/tests/policy.rs",
     ];
     for (const path of allowed) {

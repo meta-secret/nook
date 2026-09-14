@@ -34,10 +34,6 @@ void test("requiredPrCheckNames maps changed paths to repository-owned gates", (
     ["CI"],
   );
   assert.deepEqual(
-    new PullRequestCheckSelection(["agentic-ai/minds/Cargo.lock"]).names(),
-    ["CI"],
-  );
-  assert.deepEqual(
     new PullRequestCheckSelection([
       "nook-app/nook-web/nook-web-research/src/main.ts",
     ]).names(),
@@ -66,23 +62,6 @@ void test("requiredPrCheckNames maps changed paths to repository-owned gates", (
         ],
         workflowFile: "ci.yml",
         workflowName: "CI",
-      },
-    ],
-  );
-  assert.deepEqual(
-    new PullRequestWorkflowSelection(["agentic-ai/minds/Cargo.lock"]).names(),
-    [
-      {
-        checkName: "CI",
-        workflowFile: "ci.yml",
-        workflowName: "CI",
-        requiredJobs: [
-          "Rust ecosystem / Dependency policy and RustSec",
-          "Rust ecosystem / Proptest, Insta, and Loom",
-          "Rust ecosystem / Cargo fuzz smoke",
-          "Rust ecosystem / Kani bounded proofs",
-          "Rust ecosystem / Dylint repository lints",
-        ],
       },
     ],
   );

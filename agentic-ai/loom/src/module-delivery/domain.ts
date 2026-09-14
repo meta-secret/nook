@@ -43,7 +43,6 @@ export enum ModuleDeliveryTaskProfile {
 export class ModuleTaskOwnership {
   private constructor() {}
   static readonly SRE_EXACT_OPERATIONAL_FILES = [
-    'agentic-ai/minds/Taskfile.yml',
     'nook-app/Taskfile.yml',
     'nook-app/docker-bake.hcl',
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
@@ -61,10 +60,6 @@ export class ModuleTaskOwnership {
   private static readonly ORDINARY_TASK_FILE_ROOTS = new Set<string>([
     ...ModuleTaskOwnership.SRE_EXACT_OPERATIONAL_FILES,
     '.task/agentic-ai.yml',
-    'agentic-ai/minds/Cargo.lock',
-    'agentic-ai/minds/Cargo.toml',
-    'agentic-ai/minds/clippy.toml',
-    'agentic-ai/minds/hive/Cargo.toml',
     'nook-app/nook-platform/Cargo.lock',
     'nook-app/nook-platform/Cargo.toml',
     'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
@@ -178,12 +173,6 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'preflight/tests/loom_contracts.rs',
   ],
   [TeamKey.DevelopmentCore]: [
-    'agentic-ai/minds/Cargo.lock',
-    'agentic-ai/minds/Cargo.toml',
-    'agentic-ai/minds/clippy.toml',
-    'agentic-ai/minds/hive/Cargo.toml',
-    'agentic-ai/minds/hive/src',
-    'agentic-ai/minds/hive/tests',
     'nook-app/nook-platform/Cargo.lock',
     'nook-app/nook-platform/Cargo.toml',
     'nook-app/nook-platform/fuzz',
@@ -222,10 +211,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     '.task',
     'agentic-ai/ci-agent',
   ],
-  [TeamKey.WebDevelopment]: [
-    'nook-app/nook-web',
-    'agentic-ai/minds/hive-console',
-  ],
+  [TeamKey.WebDevelopment]: ['nook-app/nook-web'],
 } as const;
 
 export type ModuleDeliveryTaskTeamRequest = {

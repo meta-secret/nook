@@ -367,8 +367,8 @@ cannot consume each other's handoff; Rust `target/` and the compiler toolchain
 never enter `nook-web:local`.
 
 Rust compilation can use authenticated SeaweedFS S3 sccache deployed from
-[`infra/`](infra/) at `https://sccache.dev.nokey.sh`. Authorized local, Hive,
-and trusted Main builds write `nook-sccache`; manually dispatched Remote tasks
+[`infra/`](infra/) at `https://sccache.dev.nokey.sh`. Authorized local and
+trusted Main builds write `nook-sccache`; manually dispatched Remote tasks
 use a separately authorized read-only identity for that bucket. Branch builds
 reuse trusted compiler objects but cannot replace them.
 Run `task infra:sccache:credential:sync` and
@@ -555,7 +555,7 @@ task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
-task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
+task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, and Neo4j
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile a declared OVH worker and join k0s/ARC
 task infra:ssh:home:configure # install and prove pinned browserless LAN SSH for the home worker
 task infra:ssh:home:status # verify the home worker remains reachable without interactive authentication
@@ -565,21 +565,13 @@ task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-host
 task infra:kubernetes-cache:prove # prove production-derived Zot and BuildKit behavior on ephemeral k3d
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
-task infra:k0s:status       # inspect the remote Hive cluster and workloads
+task infra:k0s:status       # inspect the remote k0s cluster and workloads
 task infra:k0s:diagnose     # bounded k0s, CNI, firewall, and control-plane evidence
 task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migration
 task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
-task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
-task infra:hive:dashboard   # open the cluster-private Hive Control Center locally
-task infra:hive:queue:status # inspect durable task and latest/previous attempt state
-task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded budget per Hive release
-task infra:hive:queue:cancel HIVE_TASK_ID=... HIVE_CANCEL_REASON=... # retire a superseded or unsolvable task
-HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate # quiesce Hive and explicitly replace Codex auth
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
-task hive:check             # format-check and lint the Rust Hive worker
-task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
 task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 ```
@@ -593,14 +585,6 @@ After successful exact-head PR checks, a later advance of `main` does not by
 itself require a rebase or another expensive validation cycle. Re-run
 `task pr:ready PR=<number>` and merge when the PR remains conflict-free and has
 no unhandled review feedback. A later push still invalidates the prior checks.
-
-Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
-authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit
-`infra:hive:auth:rotate` command above only when intentionally replacing that
-credential; a shared infrastructure lock serializes the operation with Hive
-and Neo4j deployment, while rotation stops the warm pool before publication
-and restores it afterward. Credential input is streamed into that cleanup-armed
-remote transaction rather than retained as a reusable host-side file.
 
 Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
@@ -671,9 +655,8 @@ new ARC scheduling while it converges host prerequisites. It persists
 verifies every host before reactivating any node. Operators need passwordless
 sudo for `sysctl`, `install`, and the existing k0s administration commands.
 
-Hive Rust uses the dedicated `nook-k0s-hive` ARC set with pinned Neo4j and
-Trixie test-runtime sidecars. Fork PRs, Dependabot PRs, releases, and unsupported
-runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
+Fork PRs, Dependabot PRs, releases, and unsupported runtime lanes remain on
+fresh GitHub-hosted VMs. Main publishes shared Zot refs.
 Pull requests use exact-SHA refs under `nook/remote-buildcache`.
 Same-repository PR jobs may publish only exact-SHA generations under
 `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM writer
@@ -701,7 +684,7 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use authenticated SeaweedFS S3 to reuse compatible
 source-sensitive compiler outputs whenever credentials are available.
-Same-repository Main, Hive, PR, Rust ecosystem, and Remote jobs mount those
+Same-repository Main, PR, Rust ecosystem, and Remote jobs mount those
 credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
 cache Cargo downloads or Docker layers.
 PR CI also uploads the small native coverage and generated WASM handoffs. After
@@ -725,11 +708,9 @@ runs concurrently and waits only at the first WASM-consuming step. A successful
 run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
-The authenticated Zot registry in [`infra/`](infra/) publishes the exact Hive
-worker image and BuildKit cache manifests. ARC jobs connect to the persistent
-rootless BuildKit shard on the same k0s node, so warm solves avoid an external
-data path while retaining the public TLS registry identity for portable cache
-fallback. Details:
+ARC jobs connect to the persistent rootless BuildKit shard on the same k0s node,
+so warm solves avoid an external data path while retaining the public TLS
+registry identity for portable cache fallback. Details:
 [`.cortex/shared/architecture/system.md`](.cortex/shared/architecture/system.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

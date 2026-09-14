@@ -74,24 +74,6 @@ test('repository PATH cannot shadow the trusted Docker CLI', async () => {
   ).toThrow('Command-scoped PATH mutation');
 });
 
-test('pins the sole repository source helper', () => {
-  const graph: ConfigurationScriptGraph = {
-    executablePaths: new Set(),
-    roots: ['agentic-ai/minds/hive/Taskfile.yml'],
-    sources: new Map([
-      [
-        'agentic-ai/minds/hive/Taskfile.yml',
-        'tasks: {x: {cmds: [. "$HIVE_TASK_DIR/prepare-sccache-context.sh"]}}',
-      ],
-      ['agentic-ai/minds/hive/prepare-sccache-context.sh', 'echo unsafe'],
-    ]),
-    symlinkPaths: new Set(),
-  };
-  expect(() =>
-    SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('helper has drifted');
-});
-
 test('bounds action manifests and package metadata before parsing', () => {
   const manifest: ActionRuntimeGraph = {
     roots: ['action.yml'],

@@ -545,7 +545,6 @@ export class PullRequestChangedPath {
       path.startsWith("nook-app/nook-platform/.cargo/") ||
       path.startsWith("nook-app/nook-platform/fuzz/") ||
       path.startsWith("preflight/") ||
-      path.startsWith("agentic-ai/minds/") ||
       (path.startsWith("nook-app/") &&
         (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
     );
@@ -592,12 +591,6 @@ export class PullRequestWorkflowSelection {
       paths.some((path) => new PullRequestChangedPath(path).isWebResearchPath())
     ) {
       requiredJobs.push("Web research / Build and deploy research catalog");
-    }
-    if (
-      !product &&
-      paths.some((path) => path.startsWith("agentic-ai/minds/"))
-    ) {
-      requiredJobs.push(...REQUIRED_RUST_ECOSYSTEM_JOBS);
     }
     return requiredJobs.length === 0
       ? []

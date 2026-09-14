@@ -5,8 +5,7 @@
 Follow the [dev delivery contract](../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks. Paused Hive remains outside the manual manager
-lifecycle and must not be reactivated by this delivery change.
+feature-stage slow checks.
 
 ## Overview
 
@@ -394,42 +393,3 @@ All development tasks and builds in Nook run containerized via a unified `Taskfi
 See [architecture/engineering-harness.md](../../teams/sre/architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
 
 ---
-
-## 8. Hive isolated agent platform
-
-- **Ownership boundaries:** Normal Team Agents use the active harness and the
-  current shared branch. Loom provides deterministic tools and audits. Hive is
-  a separate durable Main-repair platform and does not govern normal Team Agent
-  delivery.
-Hive lives in `agentic-ai/minds/hive` and is deployed only through the
-domain-owned Hive commands flattened into the `infra/Taskfile.yml` command
-surface for the dedicated k0s host. It is a
-stateful platform built from persistent Neo4j coordination and disposable
-Kata-backed execution Pods:
-
-- a token-free dispatcher reconciles trusted Main-failure Workbench incidents;
-- Neo4j owns the DAG, readiness, claims, leases, attempts, results, and bounded
-  Git-patch artifacts;
-- Hive is intentionally paused with zero worker replicas while its
-  single-incident and single-repair invariants are revalidated;
-- when re-enabled, each `kata-dragonball` worker gives one task a separate
-  guest kernel and one embedded Codex thread;
-- Hive treats its Codex agents as trusted operators and gives Main-repair
-  agents a repository-scoped GitHub credential for standard `git` and `gh`
-  delivery; custom publication brokers or mailbox protocols must not be added
-  solely to hide that credential from the agent;
-- the coordinator and authentication services remain only where they provide
-  durable coordination or Codex-session lifecycle behavior, not as a general
-  distrust boundary around the agent;
-- the worker image carries the native Rust, Bun, Node, and Task toolchain, so
-  mandatory `task format` runs directly in the Kata guest without any Docker
-  daemon or socket; and
-- repair delivery follows the feature path into local dev;
-- the manually run dev manager owns slow dev PR checks and guarded
-  fast-forward promotion of the tested SHA to main;
-- incident completion retains required Main verification and Workbench evidence.
-
-See
-[design-docs/hive-isolated-agent-platform.md](../../teams/sre/design-docs/hive-isolated-agent-platform.md)
-for the complete component model, task lifecycle, trust boundaries, recovery
-semantics, cache topology, and deployment command surface.
