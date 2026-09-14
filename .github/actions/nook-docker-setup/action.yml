@@ -265,7 +265,14 @@ runs:
 
         # ARC retains its solved graph in the persistent shard for ordinary PR and
         # validation jobs. Keep that node-local behavior everywhere except the
-        # explicitly authorized remote build:compile handoff above.
+        # explicitly authorized remote build:compile handoff above and the
+        # research producer/consumer pair whose exact registry scope crosses Pods.
+        arc_exact_scope_required=""
+        case "$cache_selection" in
+          web-research-deps|web-research-image)
+            arc_exact_scope_required=1
+            ;;
+        esac
         if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \
           && [ -z "$remote_compile_cache_write" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" != "hive:verify" ]; then
@@ -279,7 +286,9 @@ runs:
         # Exact source identity is required for both publication and read-only
         # verification. ARC may disable write authorization above, but that must
         # not erase the scope/probes exported to the later task step.
-        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
+        if [ "$isolated_cache_write" = "true" ] \
+          || [ -n "$arc_exact_scope_required" ] \
+          || [ -n "$remote_compile_scope" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
@@ -453,7 +462,8 @@ runs:
           publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
+          if [ -n "$scope_suffix" ] \
+            && [ "$cache_selection" != "web-research-image" ]; then
             publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
@@ -461,9 +471,6 @@ runs:
         fi
         if [ "$cache_selection" = "web-research-deps" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
-          fi
         fi
         case "$cache_selection" in
           general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)

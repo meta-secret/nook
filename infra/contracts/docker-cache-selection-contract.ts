@@ -26,6 +26,8 @@ enum DockerCacheSelection {
   Wasm = "wasm",
   WasmProof = "wasm-proof",
   WebE2e = "web-e2e",
+  WebResearchDependencies = "web-research-deps",
+  WebResearchImage = "web-research-image",
 }
 
 const cacheActionSchema = z.object({
@@ -97,7 +99,7 @@ export class DockerCacheSelectionContract {
       source,
     });
     const admitted = contract.requireAll([
-      `general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
+      `general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
       "cache-selection is outside the closed consumer profile set",
     ]);
     if (admitted.isErr()) return err(admitted.error);
@@ -152,13 +154,15 @@ export class DockerCacheSelectionContract {
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then',
-      'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then',
+      '[ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \\',
+      '|| [ "$cache_selection" = "web-research-image" ]; then',
+      'if [ "$cache_selection" = "web-research-deps" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
       'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then',
-      "general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)",
+      "general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)",
     ]);
     if (admitted.isErr()) return err(admitted.error);
     const hive = source.slice(hiveStart);
