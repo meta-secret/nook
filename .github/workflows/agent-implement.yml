@@ -8,6 +8,9 @@ name: Agent implement
 
 on:
   workflow_dispatch:
+    # The canonical feature branch is the dispatch authority. The two SHA
+    # inputs are immutable bootstrap evidence and are checked after fresh
+    # fetches; a caller cannot select a feature head by SHA.
     inputs:
       issue_path:
         description: Required unless prompt is supplied (issues/<feature>/<issue>.md)
@@ -31,15 +34,15 @@ on:
         type: boolean
         default: false
       pinned_local_dev_sha:
-        description: Required canonical local-dev base SHA pinned by Gizmo Prime
+        description: Required canonical local-dev base SHA pinned by Gizmo Prime; bootstrap evidence only
         required: true
         type: string
       origin_main_sha:
-        description: Required fetched origin/main SHA pinned by Gizmo Prime
+        description: Required fetched origin/main SHA pinned by Gizmo Prime; bootstrap evidence only
         required: true
         type: string
       feature_branch:
-        description: Required prepublished canonical Prime feature branch
+        description: Required prepublished canonical Prime feature branch; branch is dispatch authority
         required: true
         type: string
 

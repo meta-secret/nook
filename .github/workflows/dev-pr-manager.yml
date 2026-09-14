@@ -7,6 +7,10 @@ on:
         description: 'Manager-selected origin/dev commit to publish'
         required: true
         type: string
+      controller:
+        description: 'Required Dev Manager controller identity for this packet'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +28,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
       EXPECTED_DEV_SHA: ${{ inputs.expected_dev_sha }}
+      CONTROLLER: ${{ inputs.controller }}
     steps:
       - name: Checkout trusted manager tooling
         uses: actions/checkout@v7
@@ -40,7 +45,19 @@ jobs:
             exit 1
           fi
 
-      - name: Verify current dev snapshot
+      - name: Verify manager dispatch packet
+        run: |
+          set -euo pipefail
+          if [[ "$CONTROLLER" != "dev-manager" ]]; then
+            echo "::error::Only the Dev Manager controller may invoke this workflow."
+            exit 1
+          fi
+          if ! printf '%s' "$EXPECTED_DEV_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::expected_dev_sha must be an exact 40-character lowercase commit SHA."
+            exit 1
+          fi
+
+      - name: Verify selected dev commit
         id: snapshot
         run: |
           set -euo pipefail
@@ -73,7 +90,8 @@ jobs:
           body="$(cat <<EOF
           ## Summary
 
-          - Promote the selected origin/dev snapshot to main through guarded fast-forward publication.
+          - Promote the selected origin/dev commit to main through guarded fast-forward publication.
+          - Controller: $CONTROLLER
 
           ## Agent task provenance
 
@@ -89,7 +107,7 @@ jobs:
 
           ## Validation
 
-          - Selected origin/dev SHA: $DEV_SHA
+          - Selected origin/dev commit SHA: $DEV_SHA
           - origin/main ancestor checked: $MAIN_SHA
           - Full slow validation and final promotion are separate manager operations.
           EOF
@@ -105,7 +123,7 @@ jobs:
             head="$(jq -r '.[0].headRefOid' <<<"$pulls")"
             base="$(jq -r '.[0].baseRefOid' <<<"$pulls")"
             if [ "$head" != "$DEV_SHA" ] || [ "$base" != "$MAIN_SHA" ]; then
-              echo "::error::The existing dev-to-main PR does not describe the current origin/dev and origin/main snapshots."
+              echo "::error::The existing dev-to-main PR does not describe the selected origin/dev and origin/main commits."
               exit 1
             fi
             gh pr edit "$number" --repo "$GITHUB_REPOSITORY" \

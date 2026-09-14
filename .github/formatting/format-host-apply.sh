@@ -4,6 +4,7 @@
 # The image is shared by every worktree and contains only pinned Rustfmt,
 # Prettier, and their plugins. It never contains project source, compiles a
 # product, or reads or publishes a remote build cache.
+# Required input: PINNED_LOCAL_DEV_SHA is the exact local-dev commit used as the formatting base.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -58,7 +59,7 @@ trap 'rm -f "$changed_files"' EXIT
 } >"$changed_files"
 
 if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
-  FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed
+  PINNED_LOCAL_DEV_SHA="$PINNED_LOCAL_DEV_SHA" FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed
   GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null \
     GIT_NO_REPLACE_OBJECTS=1 \

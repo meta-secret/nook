@@ -17,7 +17,9 @@ if ! command -v "$gh_bin" >/dev/null 2>&1; then
   exit 2
 fi
 
-expect_repository_setting() {
+# GitHubRepositoryDeliveryPolicy owns repository-level merge and retention
+# settings required by exact-commit, non-squashing promotion.
+verify_github_repository_delivery_policy() {
   local setting="$1"
   local expected="$2"
   local actual
@@ -30,7 +32,9 @@ expect_repository_setting() {
   echo "Repository delivery policy: ${setting}=${actual}"
 }
 
-expect_branch_setting() {
+# GitHubBranchProtectionPolicy owns branch-level mutation and history settings
+# required by exact-commit, non-squashing promotion.
+verify_github_branch_protection_policy() {
   local branch="$1"
   local setting="$2"
   local expected="$3"
@@ -49,15 +53,15 @@ expect_branch_setting() {
 
 # GitHub's ordinary merge button remains available for unrelated workflows,
 # while this repository's manager promotes by an exact non-forced fast-forward.
-expect_repository_setting allow_merge_commit true
-expect_repository_setting allow_squash_merge false
-expect_repository_setting allow_rebase_merge false
-expect_repository_setting delete_branch_on_merge false
+verify_github_repository_delivery_policy allow_merge_commit true
+verify_github_repository_delivery_policy allow_squash_merge false
+verify_github_repository_delivery_policy allow_rebase_merge false
+verify_github_repository_delivery_policy delete_branch_on_merge false
 
 for branch in main dev; do
-  expect_branch_setting "$branch" allow_force_pushes.enabled false
-  expect_branch_setting "$branch" allow_deletions.enabled false
-  expect_branch_setting "$branch" required_linear_history.enabled false
+  verify_github_branch_protection_policy "$branch" allow_force_pushes.enabled false
+  verify_github_branch_protection_policy "$branch" allow_deletions.enabled false
+  verify_github_branch_protection_policy "$branch" required_linear_history.enabled false
 done
 
 echo "GitHub delivery policy is compatible with exact-commit, non-squashing promotion."

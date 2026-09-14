@@ -36,6 +36,8 @@ printf '%s\n' "$script" | grep -q 'docker run' \
 printf '%s\n' "$script" | grep -q '/tmp/nook-format-files:ro' \
   || { echo 'format-host-apply test: expected bounded changed-file input' >&2; exit 1; }
 for required in \
+  '# Required input: PINNED_LOCAL_DEV_SHA is the exact local-dev commit used as the formatting base.' \
+  'PINNED_LOCAL_DEV_SHA="$PINNED_LOCAL_DEV_SHA" FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed' \
   '[[ ! "${PINNED_LOCAL_DEV_SHA:-}" =~ ^[0-9a-f]{40}$ ]]' \
   'GIT_CONFIG_NOSYSTEM=1' \
   'GIT_CONFIG_GLOBAL=/dev/null' \

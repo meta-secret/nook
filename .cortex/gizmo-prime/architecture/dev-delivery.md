@@ -27,7 +27,7 @@ behind that architecture.
 Gizmo Prime is the mission/root coordinator. Every team has a Team Gizmo that
 reports upward to Prime, receives high-level packets, decomposes only its
 team's mechanics, dispatches internal Team Agents through the active harness,
-and returns synthesized exact-SHA evidence or blockers. A Team Gizmo is not a
+and returns consolidated exact-SHA evidence or blockers. A Team Gizmo is not a
 second Prime and never decides functional ownership, readiness, promotion, or
 final delivery.
 
@@ -103,8 +103,13 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     published origin/dev SHA.
   - Only the dev manager invokes this manager operation. Feature Gizmos and
     Team Agents never invoke it or create PRs.
+  - The workflow packet must name controller `dev-manager` and carry the
+    immutable selected SHA; the manager compares that SHA with freshly fetched
+    `origin/dev` before any PR mutation.
 - **`dev:promote`**
   - Guarded ordinary fast-forward publication of the tested dev SHA to main.
+  - Move main directly to that unchanged, fully validated commit; promotion
+    evidence must name its exact commit SHA.
   - Only the Dev Manager authorizes the Delivery Pipeline packet to PR Lifecycle
     Agent.
   - Require full slow PR checks, review/security verdicts, and main ancestry.
@@ -238,7 +243,7 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
 
 ## Fast-forward promotion procedure
 
-1. Capture the successful dev SHA and its complete validation evidence.
+1. Capture the successful dev commit SHA and its complete validation evidence.
 2. Re-read remote main, remote dev, and the PR identity.
    - Remote dev must still equal the tested SHA.
    - Remote main must be an ancestor of the tested SHA.
@@ -246,12 +251,15 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
      feature path, publish a fresh snapshot, and repeat full validation.
 3. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle Agent's
    guarded fast-forward promotion to push the tested SHA to main.
+   - Move remote main directly to the unchanged, fully validated dev commit.
    - This is an actual fast-forward ref move preserving the tested commit SHA.
    - It preserves the complete graph, including existing feature merge commits.
    - It does not promise a linear commit graph.
+   - Do not create a synthetic replacement commit (snapshot, merge, or
+     tree-equivalent).
    - Protection rejection stops promotion visibly.
    - A concurrent main change requires fresh ancestry and evidence review.
-4. Verify remote main equals the tested SHA.
+4. Verify that remote main equals that exact validated commit SHA.
 5. Have PR Lifecycle Agent verify the remote PR status through Delivery
    Pipeline Team Gizmo.
    - Report an unmerged or unavailable PR status as a distinct incomplete result.
