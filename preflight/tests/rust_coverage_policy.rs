@@ -194,7 +194,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
     ));
     assert!(hive.contains("sha256sum -c -"));
-    assert!(hive.contains("cargo llvm-cov show-env --export-prefix"));
+    assert!(hive.contains("cargo llvm-cov show-env --sh"));
+    assert!(!hive.contains("cargo llvm-cov show-env --export-prefix"));
     assert!(hive.contains("CARGO_TARGET_DIR=target/llvm-cov-target cargo test"));
     assert!(hive.contains("COPY --from=hive-coverage-profiles"));
     assert!(hive.contains("mkdir -p target/llvm-cov-target"));
