@@ -78,6 +78,7 @@ bake_args=(
   --set "*.context=${repo_root}"
   --set "build-compile.args.NOOK_COMPILE_HIVE=${compile_hive}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
+  --set "rust-base.args.SCCACHE_S3_RW_MODE=${SCCACHE_S3_RW_MODE:-READ_ONLY}"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
   --set "build-compile.args.WASM_BUILD_MODE=${wasm_build_mode}"

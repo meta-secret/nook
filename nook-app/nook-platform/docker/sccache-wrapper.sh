@@ -28,7 +28,15 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   : "${SCCACHE_ENDPOINT:=https://sccache.dev.nokey.sh}"
   : "${SCCACHE_REGION:=auto}"
   : "${SCCACHE_S3_USE_SSL:=true}"
-  export SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL
+  : "${SCCACHE_S3_RW_MODE:=READ_WRITE}"
+  case "$SCCACHE_S3_RW_MODE" in
+    READ_ONLY|READ_WRITE) ;;
+    *)
+      echo "unsupported SCCACHE_S3_RW_MODE: $SCCACHE_S3_RW_MODE" >&2
+      exit 2
+      ;;
+  esac
+  export SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL SCCACHE_S3_RW_MODE
   # SeaweedFS serves path-style buckets; do not enable virtual-host style.
   unset SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE || true
 fi

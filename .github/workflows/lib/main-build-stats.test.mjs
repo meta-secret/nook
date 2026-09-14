@@ -355,6 +355,35 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
   MainBuildStats.validate(normalized);
 });
 
+void test("normalizes omitted cache collection failures without retaining undefined entries", () => {
+  const record = MainBuildStats.build(MainBuildStatsFixture.create());
+  record.schema_version = 2;
+  delete record.cache_telemetry.collection.failures;
+  for (const job of record.cache_telemetry.jobs) {
+    delete job.collection.failures;
+  }
+
+  const normalized = MainBuildStats.normalizeLegacy(record);
+
+  assert.deepEqual(normalized.cache_telemetry.collection.failures, []);
+  assert.ok(
+    normalized.cache_telemetry.jobs.every((job) =>
+      Array.isArray(job.collection.failures),
+    ),
+  );
+  MainBuildStats.validate(normalized);
+});
+
+void test("rejects malformed cache collection failure entries", () => {
+  const record = MainBuildStats.build(MainBuildStatsFixture.create());
+  record.cache_telemetry.collection.failures = [undefined];
+
+  assert.throws(
+    () => MainBuildStats.validate(record),
+    /cache_telemetry\.collection mismatch|collection\.failures/,
+  );
+});
+
 void test("retains incomplete failed steps without inventing duration", () => {
   const input = MainBuildStatsFixture.create();
   input.run.conclusion = "cancelled";

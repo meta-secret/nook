@@ -183,16 +183,16 @@ void test("extracts structured registry cache bytes, timings, and incomplete fai
       ],
       statuses: [
         {
-          vertex: "sha256:complete",
+          vertex: "sha256:complete-transfer",
           id: "push",
           name: "pushing cache manifest",
           current: 4096,
           total: 4096,
         },
         {
-          vertex: "sha256:failed",
+          vertex: "sha256:failed-transfer",
           id: "push",
-          name: "pushing cache manifest",
+          name: "pushing layers",
           current: 1024,
           total: 8192,
         },
@@ -281,8 +281,13 @@ void test("reports the selected persistent or fallback Redis backend without cre
     CacheTelemetry.cacheBackendFromEnvironment({
       NOOK_SCCACHE_BACKEND: "remote",
       NOOK_SCCACHE_BACKEND_REASON: "persistent_service",
+      SCCACHE_S3_RW_MODE: "READ_ONLY",
     }),
-    { kind: "remote", persistent: true, reason: "persistent_service" },
+    {
+      kind: "remote",
+      persistent: true,
+      reason: "persistent_service_read_only",
+    },
   );
   assert.deepEqual(CacheTelemetry.cacheBackendFromEnvironment({}), {
     kind: "direct_compile",

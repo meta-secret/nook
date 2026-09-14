@@ -177,13 +177,23 @@ export class BuildkitCacheExportTelemetry {
       const historyReference =
         typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
       const statuses = Array.isArray(event.statuses) ? event.statuses : [];
+      const historyHasCacheExport = [...exportsByVertex.keys()].some(
+        (key) => key.startsWith(`${historyReference}:`),
+      );
       for (const candidate of statuses) {
         if (!this.isJsonRecord(candidate)) continue;
         const vertex =
           typeof candidate.vertex === "string" ? candidate.vertex : "";
         const vertexKey = `${historyReference}:${vertex}`;
-        if (!exportsByVertex.has(vertexKey)) continue;
         const id = typeof candidate.id === "string" ? candidate.id : "";
+        const name = typeof candidate.name === "string" ? candidate.name : "";
+        const belongsToCacheExport =
+          exportsByVertex.has(vertexKey) ||
+          (historyHasCacheExport &&
+            /(push|upload|writ).*(cache|manifest|blob|layer)|(cache|manifest|blob|layer).*(push|upload|writ)/i.test(
+              `${id} ${name}`,
+            ));
+        if (!belongsToCacheExport) continue;
         const current = this.nonNegativeInteger(candidate.current);
         const key = `${vertexKey}:${id}`;
         bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
@@ -649,12 +659,17 @@ export class CacheTelemetry {
       environment.NOOK_SCCACHE_BACKEND === "remote"
         ? "remote"
         : "direct_compile";
+    const configuredReason =
+      environment.NOOK_SCCACHE_BACKEND_REASON ||
+      (kind === "remote" ? "persistent_service" : "credentials_unavailable");
+    const reason =
+      kind === "remote" && environment.SCCACHE_S3_RW_MODE === "READ_ONLY"
+        ? `${configuredReason}_read_only`
+        : configuredReason;
     return {
       kind,
       persistent: kind === "remote",
-      reason:
-        environment.NOOK_SCCACHE_BACKEND_REASON ||
-        (kind === "remote" ? "persistent_service" : "credentials_unavailable"),
+      reason,
     };
   }
 

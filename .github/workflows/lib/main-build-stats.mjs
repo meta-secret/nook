@@ -992,15 +992,18 @@ export class MainBuildStats {
     if (normalized.cache_telemetry) {
       const telemetry = normalized.cache_telemetry;
       const { jobs: telemetryJobs = [] } = telemetry;
+      /** @type {CacheCollectionFailure[]} */
+      const normalizedFailures = [];
       for (const job of telemetryJobs) {
-        if (!Array.isArray(job.collection?.failures)) {
+        const jobFailures = job.collection?.failures;
+        if (!Array.isArray(jobFailures)) {
           job.collection.failures = [];
+          continue;
         }
+        normalizedFailures.push(...jobFailures);
       }
       if (!Array.isArray(telemetry.collection?.failures)) {
-        telemetry.collection.failures = telemetryJobs.flatMap(
-          (job) => job.collection.failures,
-        );
+        telemetry.collection.failures = normalizedFailures;
       }
       if (!telemetry.totals?.cache_export) {
         telemetry.totals.cache_export = telemetryJobs.reduce(

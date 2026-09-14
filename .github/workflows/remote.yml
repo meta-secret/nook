@@ -99,6 +99,7 @@ jobs:
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
       REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
       REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
+      SCCACHE_S3_RW_MODE: READ_ONLY
       HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
       HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
       HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
