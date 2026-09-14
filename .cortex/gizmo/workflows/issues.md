@@ -229,12 +229,11 @@ The plan must contain:
 - feature branch and integration provenance where applicable; and
 - a safety review excluding raw prompts, secrets, private data, and raw logs.
 
-Each ownership unit uses the exact field order from
-`.github/prompts/agent-plan.md`. It names one functional owner and capability
-acceptance contract. When an expertise provider will change files, it also
-enumerates exact repository-relative code, test, and forbidden paths,
-consumer interfaces, and provider-owned evidence. Otherwise every expertise
-field is `None`.
+Each ownership unit uses the exact field order below. It names one functional
+owner and capability acceptance contract. When an expertise provider will
+change files, it also enumerates exact repository-relative code, test, and
+forbidden paths, consumer interfaces, and provider-owned evidence. Otherwise
+every expertise field is `None`.
 
 The plan contract uses these validator-recognized labels:
 

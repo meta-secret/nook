@@ -192,16 +192,6 @@ scope, ownership, or handoff rule.
   - Agents mutate only their owned feature.
   - See
     [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
-- **Trusted publishers**
-  - The trusted GitHub Actions publisher is a narrow exception to the
-    committed worker-handoff path:
-    - `agent-implement.yml` uses trusted host tooling for publication.
-      - The tooling formats the change.
-      - It validates change budget and PR identity.
-      - It publishes and returns the exact head.
-  - Gizmo owns feature review and acceptance for the returned head.
-  - The dev manager owns subsequent dev PR readiness and promotion.
-  - PR Steward performs only the owning controller's authorized mechanics.
 - **Repository constraints**
   - The source-size limit is a non-bypassable hard rule.
   - Every authored source file stays at or below the **1,000-line delivery
@@ -225,9 +215,6 @@ scope, ownership, or handoff rule.
     worker execution.
   - Separate Codex tasks, threads, cloud tasks, and ordinary external agents
     must not serve as delegation, communication, or handoff transport.
-  - This ordinary-transport prohibition preserves the trusted publisher
-    handoff above.
-  - That publisher is not ordinary delegation transport.
 - **Parent and worker ownership**
   - Parent-owned policy and control decisions do not create functional Team
     Agent work. The bounded PR Steward operation is the sole operational
@@ -250,11 +237,9 @@ scope, ownership, or handoff rule.
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
     transferred.
-- **Trusted publishers**
-  - Neither trusted-publisher exception grants publication authority to an
-    ordinary worker.
-  - The `agent-implement.yml` bounded editor has no Git or external delivery
-    authority.
+- **Trusted publisher**
+  - The trusted-publisher exception does not grant publication authority to
+    an ordinary worker.
   - The `rust-dependency-updates.yml` bounded editor has no Git or external
     delivery authority.
   - The `rust-dependency-updates.yml` job rejects persisted checkout
@@ -295,7 +280,7 @@ scope, ownership, or handoff rule.
   for PR, repository, run, and Workbench operations.
 - This is an agent execution rule, not a credential sandbox. Shared tools and
   credentials do not enforce technical isolation.
-- Repository-owned autonomous CI and the existing trusted publishers retain
+- Repository-owned autonomous CI and the remaining trusted publisher retain
   their established execution contracts.
 
 ### Prohibited actions

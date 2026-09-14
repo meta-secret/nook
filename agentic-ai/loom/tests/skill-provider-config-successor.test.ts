@@ -850,20 +850,14 @@ test('repository-backed bare package imports fail closed', () => {
   ).toThrow('Runnable repository package import is unsupported');
 });
 
-test('AGENT_EOF exemptions reject wrong provenance and content', () => {
+test('AGENT_EOF shell payloads fail closed', () => {
   const source = 'delim="AGENT_EOF_123"; payload="safe"';
-  for (const path of [
-    '.github/workflows/not-agent-implement.yml',
-    '.github/workflows/agent-implement.yml',
-  ])
-    expect(
-      () =>
-        SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
-          source,
-          path,
-        ]),
-      path,
-    ).toThrow('Unaudited AGENT_EOF shell exemption');
+  expect(() =>
+    SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
+      source,
+      '.github/workflows/example.yml',
+    ]),
+  ).toThrow('Unaudited AGENT_EOF shell exemption');
 });
 
 test('successor launches preserve package cwd through child-process cd', () => {
