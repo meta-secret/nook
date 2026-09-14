@@ -30,7 +30,6 @@ const pullRequestListEntrySchema = z.object({
   url: z.string(),
   isDraft: z.boolean(),
   headRepository: repositoryReferenceSchema,
-  baseRepository: repositoryReferenceSchema,
   isCrossRepository: z.boolean(),
 });
 const pullRequestListSchema = z.array(pullRequestListEntrySchema);
@@ -759,7 +758,7 @@ export class DevelopmentPullRequestGateway {
         '--limit',
         '10',
         '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,baseRepository,isCrossRepository',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,isCrossRepository',
       ],
       workingDirectory,
     });
@@ -774,8 +773,7 @@ export class DevelopmentPullRequestGateway {
     for (const raw of decoded.value) {
       if (
         raw.isCrossRepository ||
-        raw.headRepository.nameWithOwner !== repository.value.value() ||
-        raw.baseRepository.nameWithOwner !== repository.value.value()
+        raw.headRepository.nameWithOwner !== repository.value.value()
       )
         continue;
       const number = PullRequestNumber.parse(raw.number);
