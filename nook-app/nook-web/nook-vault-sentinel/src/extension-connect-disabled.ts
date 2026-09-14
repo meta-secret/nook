@@ -17,8 +17,14 @@ import type {
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 
 export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "$lib/extension/extension-pairing-delivery";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -52,25 +58,6 @@ export type InstalledExtensionRuntime =
   | {
       kind: InstalledExtensionRuntimeKind.Installed;
       extensionRuntimeId: string;
-    };
-
-export enum ExtensionPairingDeliveryKind {
-  Delivered = "delivered",
-  MessagingUnavailable = "messaging-unavailable",
-  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
-  Rejected = "rejected",
-}
-
-export type ExtensionPairingDelivery =
-  | {
-      readonly kind: Exclude<
-        ExtensionPairingDeliveryKind,
-        ExtensionPairingDeliveryKind.Rejected
-      >;
-    }
-  | {
-      readonly kind: ExtensionPairingDeliveryKind.Rejected;
-      readonly reason?: string;
     };
 
 export const isExtensionConnectPath: (pathname: string) => boolean = () =>
