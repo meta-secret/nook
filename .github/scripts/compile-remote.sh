@@ -78,6 +78,8 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
+  # Stable neutral value only: compile.Dockerfile requires the runtime secret
+  # and the wrapper replaces this before any sccache daemon/client command.
   --set "rust-base.args.SCCACHE_S3_RW_MODE=READ_ONLY"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
@@ -117,15 +119,17 @@ done
 
 access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
 secret_key_file="${SCCACHE_S3_SECRET_KEY_FILE:-}"
+bake_args+=(
+  "--allow=fs.read=${runtime_mode_file}"
+  "--set=*.secrets=id=sccache_runtime_mode,src=${runtime_mode_file}"
+)
 if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
   && [ -n "$secret_key_file" ] && [ -r "$secret_key_file" ]; then
   bake_args+=(
     "--allow=fs.read=${access_key_file}"
     "--allow=fs.read=${secret_key_file}"
-    "--allow=fs.read=${runtime_mode_file}"
-    "--set=*.secrets=id=sccache_s3_access_key,src=${access_key_file}"
+    "--set=*.secrets+=id=sccache_s3_access_key,src=${access_key_file}"
     "--set=*.secrets+=id=sccache_s3_secret_key,src=${secret_key_file}"
-    "--set=*.secrets+=id=sccache_runtime_mode,src=${runtime_mode_file}"
   )
 elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   echo "build:compile requires readable SCCACHE_S3_ACCESS_KEY_FILE and SCCACHE_S3_SECRET_KEY_FILE in hosted CI" >&2

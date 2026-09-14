@@ -4,7 +4,7 @@ set -eu
 
 access_file=/run/secrets/sccache_s3_access_key
 secret_file=/run/secrets/sccache_s3_secret_key
-runtime_mode_file=/run/secrets/sccache_runtime_mode
+runtime_mode_file="${NOOK_SCCACHE_RUNTIME_MODE_FILE:-/run/secrets/sccache_runtime_mode}"
 sccache_binary="${NOOK_SCCACHE_BINARY:-/usr/local/bin/sccache}"
 fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-disabled}"
 ready_marker="${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}"
@@ -22,10 +22,22 @@ export SCCACHE_CLIENT_SIDE
 # Compile-cache publishers and consumers mount this same secret ID at the same
 # path. Secret contents are deliberately absent from BuildKit cache checksums,
 # so runtime write authority cannot split otherwise-identical compiler keys.
+if [ "${NOOK_SCCACHE_RUNTIME_AUTHORITY:-legacy}" = secret ] \
+  && [ ! -r "$runtime_mode_file" ]; then
+  echo 'nook-sccache: required runtime authority secret is unavailable' >&2
+  exit 2
+fi
 if [ -r "$runtime_mode_file" ]; then
   SCCACHE_S3_RW_MODE="$(cat "$runtime_mode_file")"
   export SCCACHE_S3_RW_MODE
 fi
+case "${SCCACHE_S3_RW_MODE:-}" in
+  READ_ONLY|READ_WRITE) ;;
+  *)
+    echo "unsupported SCCACHE_S3_RW_MODE: ${SCCACHE_S3_RW_MODE:-unset}" >&2
+    exit 2
+    ;;
+esac
 
 # Runtime commands and cache-missed BuildKit compiler vertices mount the same
 # stable secret IDs. BuildKit excludes secret contents from cache checksums; the
@@ -56,13 +68,6 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   : "${SCCACHE_REGION:=auto}"
   : "${SCCACHE_S3_USE_SSL:=true}"
   : "${SCCACHE_S3_RW_MODE:=READ_WRITE}"
-  case "$SCCACHE_S3_RW_MODE" in
-    READ_ONLY|READ_WRITE) ;;
-    *)
-      echo "unsupported SCCACHE_S3_RW_MODE: $SCCACHE_S3_RW_MODE" >&2
-      exit 2
-      ;;
-  esac
   export SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL SCCACHE_S3_RW_MODE
   # A remote read is an optimization, not a compiler availability boundary.
   # One SDK attempt prevents transient DNS/HTTP failures from consuming the

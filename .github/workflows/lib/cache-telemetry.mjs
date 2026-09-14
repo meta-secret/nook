@@ -85,6 +85,9 @@ const HistoryLogCollectionKind = Object.freeze({
 /**
  * @typedef {object} SccacheReport
  * @property {string} stage
+ * @property {'READ_ONLY' | 'READ_WRITE'} baked_runtime_mode
+ * @property {'READ_ONLY' | 'READ_WRITE'} runtime_mode
+ * @property {'environment' | 'runtime_secret'} runtime_mode_source
  * @property {number} compile_requests
  * @property {number} requests_executed
  * @property {number} cache_hits
@@ -95,6 +98,9 @@ const HistoryLogCollectionKind = Object.freeze({
 /**
  * @typedef {object} SccacheSummary
  * @property {number} report_count
+ * @property {'READ_ONLY' | 'READ_WRITE' | 'UNAVAILABLE'} baked_runtime_mode
+ * @property {'READ_ONLY' | 'READ_WRITE' | 'UNAVAILABLE'} runtime_mode
+ * @property {'environment' | 'runtime_secret' | 'unavailable'} runtime_mode_source
  * @property {number} compile_requests
  * @property {number} requests_executed
  * @property {number} cache_hits
@@ -383,9 +389,17 @@ export class CacheTelemetry {
 
   /** @param {JsonRecord} report @returns {SccacheReport} */
   static normalizeSccacheReport(report) {
-    const { stage = "" } = report;
+    const {
+      stage = "",
+      baked_runtime_mode: bakedRuntimeMode = "",
+      runtime_mode: runtimeMode = "",
+      runtime_mode_source: runtimeModeSource = "",
+    } = report;
     const normalized = {
       stage: String(stage),
+      baked_runtime_mode: String(bakedRuntimeMode),
+      runtime_mode: String(runtimeMode),
+      runtime_mode_source: String(runtimeModeSource),
       compile_requests: CacheTelemetry.nonNegativeInteger(
         report.compile_requests,
       ),
@@ -399,6 +413,22 @@ export class CacheTelemetry {
     };
     if (!normalized.stage)
       throw new Error("sccache report is missing its stage");
+    for (const [field, value] of Object.entries({
+      baked_runtime_mode: normalized.baked_runtime_mode,
+      runtime_mode: normalized.runtime_mode,
+    })) {
+      if (value !== "READ_ONLY" && value !== "READ_WRITE") {
+        throw new Error(`sccache report has invalid ${field}: ${value}`);
+      }
+    }
+    if (
+      normalized.runtime_mode_source !== "environment" &&
+      normalized.runtime_mode_source !== "runtime_secret"
+    ) {
+      throw new Error(
+        `sccache report has invalid runtime_mode_source: ${normalized.runtime_mode_source}`,
+      );
+    }
     return normalized;
   }
 
@@ -406,6 +436,9 @@ export class CacheTelemetry {
   static summarizeSccache(reports) {
     const summary = {
       report_count: reports.length,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
       compile_requests: 0,
       requests_executed: 0,
       cache_hits: 0,
@@ -413,7 +446,24 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_writes: 0,
     };
+    if (reports.length > 0) {
+      const [first] = reports;
+      summary.baked_runtime_mode = first.baked_runtime_mode;
+      summary.runtime_mode = first.runtime_mode;
+      summary.runtime_mode_source = first.runtime_mode_source;
+    }
     for (const report of reports) {
+      for (const field of [
+        "baked_runtime_mode",
+        "runtime_mode",
+        "runtime_mode_source",
+      ]) {
+        if (report[field] !== summary[field]) {
+          throw new Error(
+            `inconsistent sccache ${field}: ${summary[field]} != ${report[field]}`,
+          );
+        }
+      }
       summary.compile_requests += report.compile_requests;
       summary.requests_executed += report.requests_executed;
       summary.cache_hits += report.cache_hits;
@@ -672,6 +722,24 @@ export class CacheTelemetry {
     const sccache = record.sccache;
     if (!CacheTelemetry.isJsonRecord(sccache)) {
       throw new Error("telemetry sccache summary is required");
+    }
+    const availableAuthority = sccache.report_count > 0;
+    const allowedRuntimeModes = availableAuthority
+      ? ["READ_ONLY", "READ_WRITE"]
+      : ["UNAVAILABLE"];
+    for (const field of ["baked_runtime_mode", "runtime_mode"]) {
+      const value = sccache[field];
+      if (!allowedRuntimeModes.includes(value)) {
+        throw new Error(`telemetry sccache.${field} is invalid`);
+      }
+    }
+    const allowedRuntimeModeSources = availableAuthority
+      ? ["environment", "runtime_secret"]
+      : ["unavailable"];
+    if (
+      !allowedRuntimeModeSources.includes(sccache.runtime_mode_source)
+    ) {
+      throw new Error("telemetry sccache.runtime_mode_source is invalid");
     }
     for (const [field, value] of Object.entries({
       report_count: sccache.report_count,
@@ -967,6 +1035,7 @@ export class CacheTelemetry {
         "### Cache telemetry",
         "",
         `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
+        `- sccache authority: baked=\`${record.sccache.baked_runtime_mode}\`, effective=\`${record.sccache.runtime_mode}\`, source=\`${record.sccache.runtime_mode_source}\``,
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
         `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,

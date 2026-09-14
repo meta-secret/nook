@@ -23,6 +23,7 @@ fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
   success)
     test "${SCCACHE_CLIENT_SIDE:-}" = 1
+    printf 'effective sccache mode: %s\n' "${SCCACHE_S3_RW_MODE:-unset}" >&2
     exec "$@"
     ;;
   transport)
@@ -36,6 +37,19 @@ case "${FAKE_SCCACHE_RESULT:-success}" in
 esac
 EOF
 chmod 0755 "$fixture_dir/compiler" "$fixture_dir/sccache"
+
+runtime_publish_mode="$fixture_dir/runtime-publish-mode"
+printf '%s\n' READ_WRITE >"$runtime_publish_mode"
+authority_log="$fixture_dir/runtime-authority.log"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_RUNTIME_AUTHORITY=secret \
+NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=success \
+  "$wrapper" "$fixture_dir/compiler" 2>"$authority_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$authority_log"
+echo 'Sccache runtime authority: publish secret overrides the neutral baked value'
 
 fallback_log="$fixture_dir/fallback.log"
 fallback_marker="$fixture_dir/remote-disabled"

@@ -12,6 +12,7 @@ FROM toolchain-base AS compile-toolchain
 
 ARG SIMULATED_BUILD_PROFILE=production
 ARG SIMULATED_SCCACHE_CLIENT_SIDE=1
+ENV SCCACHE_S3_RW_MODE=READ_ONLY
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
 # Every dependency compiler is a direct ancestor of the exported dependency
@@ -23,6 +24,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" = 1 \
     || { echo 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' >&2; exit 1; }; } \
   && echo bake-sim-sccache-write \
+  && echo 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' \
   && cat /opt/compile-toolchain >/opt/compile-native-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-native-dependencies

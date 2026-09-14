@@ -995,12 +995,25 @@ tasks:
     expect(cacheTelemetry).toContain("compile_dependencies");
     expect(cacheTelemetry).toContain("compile_source");
     expect(cacheTelemetry).not.toContain("compile_generation");
+    expect(cacheTelemetry).toContain("baked_runtime_mode");
+    expect(cacheTelemetry).toContain("runtime_mode_source");
+    expect(cacheTelemetry).toContain("inconsistent sccache ${field}");
+    expect(cacheTelemetry).toContain("sccache authority: baked=");
     expect(
       this.read("nook-app/nook-platform/docker/sccache-report.sh"),
     ).toContain("NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE");
     expect(
       this.read("nook-app/nook-platform/docker/sccache-wrapper.sh"),
     ).toContain("SCCACHE_CLIENT_SIDE:=1");
+    expect(productionDockerfile).toContain(
+      "ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret",
+    );
+    expect(
+      productionDockerfile.match(/id=sccache_runtime_mode,required=true/g),
+    ).toHaveLength(18);
+    expect(productionDockerfile).not.toContain(
+      "id=sccache_runtime_mode,required=false",
+    );
     const publicationContract = this.read(
       "infra/contracts/sccache-publication.test.sh",
     );
@@ -1011,6 +1024,14 @@ tasks:
     expect(publicationContract).toContain('"cache_errors":0');
     expect(publicationContract).toContain('"cache_writes":0');
     expect(publicationContract).toContain('"cache_writes":275');
+    expect(publicationContract).toContain(
+      '"baked_runtime_mode":"READ_ONLY"',
+    );
+    expect(publicationContract).toContain('"runtime_mode":"READ_WRITE"');
+    expect(publicationContract).toContain('"runtime_mode":"READ_ONLY"');
+    expect(publicationContract).toContain(
+      '"runtime_mode_source":"runtime_secret"',
+    );
 
     expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
     expect(productionDockerfile.match(/id=sccache_runtime_mode/g)).toHaveLength(

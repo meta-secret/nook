@@ -272,9 +272,12 @@ void test("accepts the documented Buildx JSON array and PascalCase fields", () =
   assert.equal(record.cache_hit_rate_percent, 25);
 });
 
-void test("deduplicates shared Buildx log markers and aggregates sccache hit rate", () => {
+void test("aggregates publish reports with effective READ_WRITE authority", () => {
   const first = {
     stage: "native-clippy",
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
     compile_requests: 12,
     requests_executed: 10,
     cache_hits: 8,
@@ -284,6 +287,9 @@ void test("deduplicates shared Buildx log markers and aggregates sccache hit rat
   };
   const second = {
     stage: "wasm-build",
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
     compile_requests: 6,
     requests_executed: 5,
     cache_hits: 3,
@@ -308,6 +314,9 @@ void test("deduplicates shared Buildx log markers and aggregates sccache hit rat
   assert.equal(reports.length, 2);
   assert.deepEqual(CacheTelemetry.summarizeSccache(reports), {
     report_count: 2,
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
     compile_requests: 18,
     requests_executed: 15,
     cache_hits: 11,
@@ -316,6 +325,63 @@ void test("deduplicates shared Buildx log markers and aggregates sccache hit rat
     cache_writes: 4,
     hit_rate_percent: 73.33,
   });
+});
+
+void test("retains read-only runtime-secret authority in sccache telemetry", () => {
+  const report = CacheTelemetry.normalizeSccacheReport({
+    stage: "compile-native",
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_ONLY",
+    runtime_mode_source: "runtime_secret",
+    compile_requests: 4,
+    requests_executed: 4,
+    cache_hits: 4,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_writes: 0,
+  });
+
+  assert.deepEqual(CacheTelemetry.summarizeSccache([report]), {
+    report_count: 1,
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode: "READ_ONLY",
+    runtime_mode_source: "runtime_secret",
+    compile_requests: 4,
+    requests_executed: 4,
+    cache_hits: 4,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_writes: 0,
+    hit_rate_percent: 100,
+  });
+});
+
+void test("rejects mixed effective sccache authority across reports", () => {
+  const base = {
+    stage: "compile-native",
+    baked_runtime_mode: "READ_ONLY",
+    runtime_mode_source: "runtime_secret",
+    compile_requests: 1,
+    requests_executed: 1,
+    cache_hits: 0,
+    cache_misses: 1,
+    cache_errors: 0,
+    cache_writes: 1,
+  };
+  const publish = CacheTelemetry.normalizeSccacheReport({
+    ...base,
+    runtime_mode: "READ_WRITE",
+  });
+  const readOnly = CacheTelemetry.normalizeSccacheReport({
+    ...base,
+    stage: "compile-wasm",
+    runtime_mode: "READ_ONLY",
+  });
+
+  assert.throws(
+    () => CacheTelemetry.summarizeSccache([publish, readOnly]),
+    /inconsistent sccache runtime_mode: READ_WRITE != READ_ONLY/,
+  );
 });
 
 void test("reports the selected persistent or fallback Redis backend without credentials", () => {
