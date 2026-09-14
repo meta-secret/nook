@@ -4,17 +4,51 @@ import { fileURLToPath } from "node:url";
 
 import { CacheTelemetry } from "./cache-telemetry.mjs";
 
+/**
+ * @typedef {object} PrCacheJob
+ * @property {string} id
+ * @property {string} result
+ * @property {boolean} buildExpected
+ * @property {boolean} readOnly
+ */
+/**
+ * @typedef {object} CacheTelemetryRecord
+ * @property {{job: string}} github
+ * @property {{persistent: boolean}} cache_backend
+ * @property {{imports?: {probes_complete: boolean, availability: Array<{available: boolean}>}}} cache_scope
+ * @property {{cache_errors: number, cache_writes: number, cache_hits: number, cache_misses: number}} sccache
+ * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
+ * @property {{complete: boolean}} collection
+ */
+/**
+ * @typedef {object} PrCacheHealthModel
+ * @property {1} schema_version
+ * @property {{minimum_buildkit_hit_rate_percent: number, minimum_completed_steps: number}} policy
+ * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
+ * @property {string[]} warnings
+ * @property {{verdict: "pass" | "fail", specialist_activation_required: boolean, reasons: string[]}} gate
+ */
+
 export class PrCacheHealth {
+  /**
+   * @param {{minimumBuildkitHitRate?: number, minimumCompletedSteps?: number}} [policy]
+   */
   constructor({ minimumBuildkitHitRate = 20, minimumCompletedSteps = 20 } = {}) {
     this.minimumBuildkitHitRate = minimumBuildkitHitRate;
     this.minimumCompletedSteps = minimumCompletedSteps;
   }
 
+  /**
+   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[]}} request
+   * @returns {PrCacheHealthModel}
+   */
   evaluate({ jobs, telemetry }) {
     const recordsByJob = new Map(
       telemetry.map((record) => [record.github.job, record]),
     );
+    /** @type {string[]} */
     const reasons = [];
+    /** @type {string[]} */
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
@@ -120,6 +154,7 @@ export class PrCacheHealth {
     };
   }
 
+  /** @param {PrCacheHealthModel} model */
   static renderMarkdown(model) {
     const lines = [
       "### PR Docker cache health",
@@ -132,8 +167,12 @@ export class PrCacheHealth {
       "| --- | --- | --- | ---: | ---: | ---: |",
     ];
     for (const job of model.jobs) {
-      const buildkit = job.counters.buildkit || {};
-      const sccache = job.counters.sccache || {};
+      const buildkit = /** @type {Partial<NonNullable<typeof job.counters.buildkit>>} */ (
+        job.counters.buildkit || {}
+      );
+      const sccache = /** @type {Partial<NonNullable<typeof job.counters.sccache>>} */ (
+        job.counters.sccache || {}
+      );
       lines.push(
         `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} |`,
       );
@@ -155,12 +194,26 @@ export class PrCacheHealth {
     return `${lines.join("\n")}\n`;
   }
 
+  /** @param {string} directory @returns {CacheTelemetryRecord[]} */
   static readTelemetry(directory) {
     if (!fs.existsSync(directory)) return [];
-    return fs.readdirSync(directory, { recursive: true, withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-      .map((entry) => path.join(entry.parentPath || entry.path, entry.name))
-      .map((filename) => JSON.parse(fs.readFileSync(filename, "utf8")));
+    /** @type {string[]} */
+    const directories = [directory];
+    /** @type {CacheTelemetryRecord[]} */
+    const telemetry = [];
+    while (directories.length > 0) {
+      const currentDirectory = directories.pop();
+      if (!currentDirectory) continue;
+      for (const entry of fs.readdirSync(currentDirectory, {
+        withFileTypes: true,
+      })) {
+        const entryPath = path.join(currentDirectory, entry.name);
+        if (entry.isDirectory()) directories.push(entryPath);
+        else if (entry.isFile() && entry.name.endsWith(".json"))
+          telemetry.push(JSON.parse(fs.readFileSync(entryPath, "utf8")));
+      }
+    }
+    return telemetry;
   }
 
   static main() {

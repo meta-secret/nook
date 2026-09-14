@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { PrCacheHealth } from "./pr-cache-health.mjs";
@@ -107,6 +109,24 @@ void test("records a legitimate cold build without applying the warm threshold",
   });
   assert.equal(model.gate.verdict, "pass");
   assert.ok(model.warnings.includes("rust:cold_cache_no_available_imports"));
+});
+
+void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-health-"));
+  const nestedDirectory = path.join(directory, "artifact", "nested");
+  fs.mkdirSync(nestedDirectory, { recursive: true });
+  fs.writeFileSync(
+    path.join(nestedDirectory, "telemetry.json"),
+    JSON.stringify(telemetry("nested")),
+  );
+  fs.writeFileSync(path.join(nestedDirectory, "ignored.txt"), "not json");
+  try {
+    assert.deepEqual(PrCacheHealth.readTelemetry(directory), [
+      telemetry("nested"),
+    ]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 void test("PR workflow covers every BuildKit-producing job without another build", () => {
