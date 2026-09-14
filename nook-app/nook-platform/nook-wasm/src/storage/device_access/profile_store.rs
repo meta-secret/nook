@@ -478,9 +478,9 @@ mod browser_tests {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::Unconditional,
-                update: |mut profile: DeviceAccessProfile| {
+                update: |profile: DeviceAccessProfile| {
                     called.set(true);
-                    profile = profile.record_verified_vault_access(
+                    let _ = profile.record_verified_vault_access(
                         &device_id,
                         &store_id,
                         IsoTimestamp::from_trusted("2026-09-06T13:33:41.000Z".to_owned()),
@@ -495,7 +495,7 @@ mod browser_tests {
         assert!(called.get());
         assert_eq!(
             fixture.read().await?,
-            StoredStringRecord::Stored((original.as_str().to_owned()))
+            StoredStringRecord::Stored(original.as_str().to_owned())
         );
         fixture.clear().await?;
         Ok(())
@@ -615,7 +615,7 @@ mod browser_tests {
             let stored = DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::Unconditional,
-                update: |mut profile: DeviceAccessProfile| {
+                update: |profile: DeviceAccessProfile| {
                     called.set(true);
                     assert_eq!(profile, DeviceAccessProfile::default());
                     Ok(profile)
