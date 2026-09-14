@@ -64,9 +64,29 @@ tasks:
 
   ci:pr:web:
     desc: Build and verify web/extension code from downloaded split-CI artifacts.
+    env:
+      CI_ARTIFACT_DIR: '{{.CI_ARTIFACT_DIR}}'
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:pr:web:host }
+      - |
+        artifacts="${CI_ARTIFACT_DIR:-}"
+        case "$artifacts" in
+          /*) ;;
+          *) artifacts="{{.REPO_ROOT}}/$artifacts" ;;
+        esac
+        if [ -z "${GITHUB_ACTIONS:-}" ] && {
+          [ -z "${CI_ARTIFACT_DIR:-}" ] ||
+          ! test -s "$artifacts/nook-wasm/nook_wasm.js" ||
+          ! test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        }; then
+          task --dir "{{.REPO_ROOT}}" ci:pr:web:local
+        else
+          task --dir "{{.REPO_ROOT}}" _buildx:healthy BUILD_TASK=_ci:pr:web:host
+        fi
+
+  ci:pr:web:local:
+    desc: Bounded local PR web verification; assemble the split WASM handoff without registry caches.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-pr-web-local.sh"
 
   _ci:pr:web:host:
     cmds:

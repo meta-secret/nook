@@ -13,6 +13,7 @@ ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50
 ARG SCCACHE_S3_MODE=external
 ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
+ARG NOOK_BUILD_CACHE_NAMESPACE=nook-hive
 ARG CARGO_CHEF_VERSION=0.1.77
 ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
 ARG LLVM_COV_VERSION=0.8.7
@@ -24,11 +25,11 @@ ENV CARGO_PROFILE_DEV_DEBUG=0
 ENV CARGO_PROFILE_TEST_DEBUG=0
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
 ENV NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}
+ENV NOOK_BUILD_CACHE_NAMESPACE=${NOOK_BUILD_CACHE_NAMESPACE}
 ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}
 ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
 ENV SCCACHE_REGION=auto
 ENV SCCACHE_S3_USE_SSL=true
-ENV SCCACHE_S3_KEY_PREFIX=nook-hive
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
 ENV SCCACHE_SERVER_UDS=/tmp/nook-hive-sccache.sock
 
@@ -247,7 +248,7 @@ FROM test-source AS test-compile
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
-    && eval "$(cargo llvm-cov show-env --export-prefix)" \
+    && eval "$(cargo llvm-cov show-env --sh)" \
     && CARGO_TARGET_DIR=target/llvm-cov-target cargo test --locked --workspace --no-run --message-format=json-render-diagnostics \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
