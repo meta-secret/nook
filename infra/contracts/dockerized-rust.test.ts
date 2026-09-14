@@ -897,6 +897,42 @@ tasks:
     }
   }
 
+  stableRemoteCompileCache(): void {
+    const production = this.read(
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    );
+    const simulator = this.read(
+      "infra/sim/bake-cache/compile-warm.docker-bake.hcl",
+    );
+    const proof = this.read("infra/tasks/bake-cache.yml");
+
+    for (const source of [production, simulator]) {
+      expect(source).toContain("compile_deps_cache_ref");
+      expect(source).toContain("compile_source_cache_ref");
+      expect(source).toContain("mode=max,compression=zstd");
+      expect(source).toContain("mode=min,compression=zstd");
+    }
+    expect(production).toContain(
+      "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != \"\"",
+    );
+    expect(production).toContain("timeout=2m");
+    expect(simulator).toContain("COMPILE_SOURCE_CACHE_AVAILABLE != \"\"");
+    expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
+    expect(proof).toContain(
+      "New exact source: fall back only to fingerprinted dependencies",
+    );
+    expect(proof).toContain(
+      "Exact source replay: read-only warm solve stays below two minutes",
+    );
+    expect(proof).toContain("bake-sim-compile-hive-source");
+    expect(proof).toContain(
+      "compile source B: cached=3 uncached=6 writes=1",
+    );
+    expect(proof).toContain("compile warm: cached=9 uncached=0 writes=0");
+    expect(proof).toContain('bake_compile_source "$proof_log" "$compile_source_b" "1" ""');
+    expect(proof).toContain('require_no_cache_write "$proof_log"');
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -954,6 +990,10 @@ test(
 test(
   "web verification aggregates compilers before starting unit suites",
   contract.compilerFirstWebVerification.bind(contract),
+);
+test(
+  "remote compile cache separates fingerprinted dependencies from exact source",
+  contract.stableRemoteCompileCache.bind(contract),
 );
 test(
   "tooling installs every package before checking successful installs",

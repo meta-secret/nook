@@ -95,8 +95,11 @@ tasks:
         registry_ref="${registry_host}:5000"
         stable_repository="nook/buildcache/nook-bake-sim-rust-deps-v1"
         stable_manifest="${registry_ref}/v2/${stable_repository}/manifests/buildcache"
-        compile_stable_repository="nook/buildcache/nook-bake-sim-compile-v1"
-        compile_stable_manifest="${registry_ref}/v2/${compile_stable_repository}/manifests/buildcache"
+        compile_deps_repository="nook/remote-buildcache/nook-bake-sim-compile-deps-v2"
+        compile_deps_manifest="${registry_ref}/v2/${compile_deps_repository}/manifests/fingerprint-lock-inputs"
+        compile_source_repository="nook/remote-buildcache/nook-bake-sim-compile-v2"
+        compile_source_a="git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        compile_source_b="git-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         suffix="$(date +%s)-$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')"
         network="nook-bake-sim-${suffix}"
         zot_name="nook-bake-sim-zot-${suffix}"
@@ -204,12 +207,32 @@ tasks:
           return "$bake_status"
         }
 
-        bake_compile() {
+        bake_compile_dependencies() {
           local log_file="$1"
-          local cache_write="$2"
           set +e
           env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
-            COMPILE_CACHE_WRITE_ENABLED="$cache_write" \
+            COMPILE_DEPS_CACHE_WRITE_ENABLED=1 \
+            "$docker_cli" buildx bake \
+            --progress=plain \
+            -f "$sim_dir/compile-warm.docker-bake.hcl" \
+            --set "*.context=$sim_dir" \
+            compile-dependencies >"$log_file" 2>&1
+          local bake_status=$?
+          set -e
+          cat "$log_file"
+          return "$bake_status"
+        }
+
+        bake_compile_source() {
+          local log_file="$1"
+          local source_scope="$2"
+          local source_available="$3"
+          local cache_write="$4"
+          set +e
+          env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
+            COMPILE_SOURCE_SCOPE="$source_scope" \
+            COMPILE_SOURCE_CACHE_AVAILABLE="$source_available" \
+            COMPILE_SOURCE_CACHE_WRITE_ENABLED="$cache_write" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
@@ -229,10 +252,11 @@ tasks:
         }
 
         compile_registry_ref_code() {
+          local manifest="$1"
           "$docker_cli" run --rm --network "$network" curlimages/curl:8.12.1 \
             -sS -o /dev/null -w "%{http_code}" \
             -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
-            "http://${compile_stable_manifest}"
+            "http://${manifest}"
         }
 
         buildkit_cfg="$(mktemp)"
@@ -317,13 +341,30 @@ tasks:
         test "$(registry_ref_code)" = 200
         echo "rust-deps no-op: cached=6 uncached=0 writes=1 ref=${stable_repository}:buildcache"
 
-        echo "== Cold compile-shaped graph: seed the stable complete scope =="
-        create_builder "nook-bake-sim-compile-cold-${suffix}"
-        bake_compile "$proof_log" "1"
+        echo "== Cold compile dependencies: seed the fingerprinted source-free scope =="
+        create_builder "nook-bake-sim-compile-deps-${suffix}"
+        bake_compile_dependencies "$proof_log"
         for marker in \
           bake-sim-compile-toolchain \
           bake-sim-compile-hive-dependencies \
-          bake-sim-compile-wasm-dependencies \
+          bake-sim-compile-wasm-dependencies; do
+          require_uncached_step "$proof_log" "$marker"
+        done
+        require_cache_write "$proof_log"
+        test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
+        echo "compile deps cold: cached=0 uncached=3 writes=1 ref=${compile_deps_repository}:fingerprint-lock-inputs"
+
+        echo "== First exact source: import dependencies and publish mode=min =="
+        create_builder "nook-bake-sim-compile-source-a-${suffix}"
+        bake_compile_source "$proof_log" "$compile_source_a" "" "1"
+        for marker in \
+          bake-sim-compile-toolchain \
+          bake-sim-compile-hive-dependencies \
+          bake-sim-compile-wasm-dependencies; do
+          require_cached_step "$proof_log" "$marker"
+        done
+        for marker in \
+          bake-sim-compile-hive-source \
           bake-sim-compile-wasm-source-base \
           bake-sim-compile-nook-wasm-source \
           bake-sim-compile-companion-wasm-source \
@@ -332,39 +373,46 @@ tasks:
           require_uncached_step "$proof_log" "$marker"
         done
         require_cache_write "$proof_log"
-        test "$(compile_registry_ref_code)" = 200
-        echo "compile cold: cached=0 uncached=8 writes=1 ref=${compile_stable_repository}:buildcache"
+        compile_source_a_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_a}/manifests/buildcache"
+        test "$(compile_registry_ref_code "$compile_source_a_manifest")" = 200
+        echo "compile source A: cached=3 uncached=6 writes=1 mode=min"
 
-        echo "== Package source edit: preserve dependency and sibling package layers =="
+        echo "== New exact source: fall back only to fingerprinted dependencies =="
         printf 'nook-wasm-source-only-edit\n' >"$compile_nook_input"
-        create_builder "nook-bake-sim-compile-source-${suffix}"
-        bake_compile "$proof_log" "1"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-companion-wasm-build; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        for marker in \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-nook-wasm-build; do
-          require_uncached_step "$proof_log" "$marker"
-        done
-        require_cache_write "$proof_log"
-        test "$(compile_registry_ref_code)" = 200
-        echo "compile package-source-only: cached=6 uncached=2 writes=1 ref=${compile_stable_repository}:buildcache"
-
-        echo "== No-op compile replay: read-only warm solve stays below two minutes =="
-        create_builder "nook-bake-sim-compile-warm-${suffix}"
+        create_builder "nook-bake-sim-compile-source-b-${suffix}"
         compile_started="$(date +%s)"
-        bake_compile "$proof_log" ""
+        bake_compile_source "$proof_log" "$compile_source_b" "" "1"
         compile_elapsed=$(( $(date +%s) - compile_started ))
         for marker in \
           bake-sim-compile-toolchain \
           bake-sim-compile-hive-dependencies \
+          bake-sim-compile-wasm-dependencies; do
+          require_cached_step "$proof_log" "$marker"
+        done
+        for marker in \
+          bake-sim-compile-hive-source \
+          bake-sim-compile-wasm-source-base \
+          bake-sim-compile-nook-wasm-source \
+          bake-sim-compile-companion-wasm-source \
+          bake-sim-compile-nook-wasm-build \
+          bake-sim-compile-companion-wasm-build; do
+          require_uncached_step "$proof_log" "$marker"
+        done
+        require_cache_write "$proof_log"
+        test "$compile_elapsed" -lt 120
+        compile_source_b_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_b}/manifests/buildcache"
+        test "$(compile_registry_ref_code "$compile_source_b_manifest")" = 200
+        echo "compile source B: cached=3 uncached=6 writes=1 elapsed=${compile_elapsed}s limit=120s mode=min"
+
+        echo "== Exact source replay: read-only warm solve stays below two minutes =="
+        create_builder "nook-bake-sim-compile-warm-${suffix}"
+        compile_started="$(date +%s)"
+        bake_compile_source "$proof_log" "$compile_source_b" "1" ""
+        compile_elapsed=$(( $(date +%s) - compile_started ))
+        for marker in \
+          bake-sim-compile-toolchain \
+          bake-sim-compile-hive-dependencies \
+          bake-sim-compile-hive-source \
           bake-sim-compile-wasm-dependencies \
           bake-sim-compile-wasm-source-base \
           bake-sim-compile-nook-wasm-source \
@@ -375,7 +423,7 @@ tasks:
         done
         require_no_cache_write "$proof_log"
         test "$compile_elapsed" -lt 120
-        test "$(compile_registry_ref_code)" = 200
-        echo "compile warm: cached=8 uncached=0 writes=0 elapsed=${compile_elapsed}s limit=120s ref=${compile_stable_repository}:buildcache"
+        test "$(compile_registry_ref_code "$compile_source_b_manifest")" = 200
+        echo "compile warm: cached=9 uncached=0 writes=0 elapsed=${compile_elapsed}s limit=120s ref=${compile_source_repository}-${compile_source_b}:buildcache"
 
         echo "bake-cache BuildKit proofs passed: rust dependency replay plus compile warm acceptance"

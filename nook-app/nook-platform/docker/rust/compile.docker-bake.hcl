@@ -35,7 +35,10 @@ compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPIL
 compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // The fingerprint ref owns the maximal dependency closure. Keep the exact
   // source handoff minimal so publication does not serialize that graph twice.
-  "type=registry,ref=${compile_source_cache_ref},mode=min,compression=zstd,force-compression=true,timeout=10m",
+  // Leave one minute of the workflow's three-minute budget for cache import,
+  // the compile solve, and teardown. A stalled exact-source handoff must fail
+  // instead of turning a fast build into an unbounded cache publication job.
+  "type=registry,ref=${compile_source_cache_ref},mode=min,compression=zstd,force-compression=true,timeout=2m",
 ] : []
 
 compile_deps_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
