@@ -749,23 +749,13 @@ authenticator-domain to 90 percent.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.
-- A final coherent head may add `CODEX_REVIEW=1` to request one idempotent
-  exact-head Codex review without waiting.
-- A requested review runs concurrently with hosted checks.
 - Focused tasks are optional for that head and never replace complete
   validation.
-- When review is requested, its current findings and failed checks form one
-  coherent repair batch after both settle.
-- Three finding batches open a circuit breaker and require comprehensive
-  stabilization before another review request.
-- Codex is the sole automatic provider. No fallback reviewer is requested.
-- `task pr:ready PR=<number>` remains the feedback and exact-head readiness
-  authority.
+- Humans may run `task pr:review-local` as an advisory local Codex review. It
+  does not dispatch hosted review and never gates validation or readiness.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- When review is requested, request it immediately after dispatch. Do not defer
-  it until checks finish.
 - Claude, CodeRabbit, Cursor Bugbot, and other optional services are not
   requested or awaited.
 

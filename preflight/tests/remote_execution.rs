@@ -102,22 +102,15 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
+fn complete_validation_dispatches_and_rechecks_exact_head() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let readme = read_fallible("README.md")?;
     let current_base_position = direct_validation
         .find(".github/scripts/require-current-base.sh origin \"$base_ref\"")
         .context("direct validation must require a current base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
-    let review_opt_in_position = direct_validation
-        .find("if [ \"$REQUEST_CODEX_REVIEW\" = \"1\" ]; then")
-        .context("direct validation must gate review behind an explicit opt-in")?;
-    let review_request_position = direct_validation
-        .find("if review_request_output=\"$(task pr:review \\")
-        .context("opted-in validation must request exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
@@ -126,10 +119,8 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         .context("direct validation must recheck base freshness after label dispatch")?;
     assert!(
         current_base_position < validation_label_position
-            && validation_label_position < review_opt_in_position
-            && review_opt_in_position < review_request_position
-            && review_request_position < dispatched_head_position,
-        "complete validation must dispatch before an opted-in review and then reject a head change"
+            && validation_label_position < dispatched_head_position,
+        "complete validation must dispatch and then reject a head change"
     );
     assert!(
         dispatched_head_position < dispatched_base_position,
@@ -145,33 +136,12 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
             "review delivery contract missing: {required}"
         );
     }
-    assert!(
-        !direct_validation.contains("pr:review:stabilize")
-            && !direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
-        "complete validation must not wait for review before dispatch"
-    );
-    for required in [
-        "REQUEST_CODEX_REVIEW: '{{default \"0\" .CODEX_REVIEW}}'",
-        "CODEX_REVIEW must be 0 or 1.",
-        "review_request_state=\"disabled\"",
-        "review_request_state=\"not-requested\"",
-        "grep -Fq '\"state\": \"requested\"'",
-        "Keep this validation running; collect or retry review separately without restarting validation.",
-        "Codex review opt-in: $REQUEST_CODEX_REVIEW.",
-        "Exact-head review request state: $review_request_state.",
-        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",
-    ] {
+    for removed in ["task pr:review", "CODEX_REVIEW", "REVIEW_CIRCUIT_BREAKER"] {
         assert!(
-            direct_validation.contains(required),
-            "post-dispatch review partial-state contract missing: {required}"
+            !direct_validation.contains(removed),
+            "direct validation must not dispatch the removed review tooling: {removed}"
         );
     }
-    assert!(
-        readme.contains(
-            "task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch"
-        ),
-        "public command catalog must place review stabilization after hosted dispatch"
-    );
     assert!(
         direct_validation.contains(
             "changed head or base while validation was dispatched; removed $validation_label from the replacement state."
