@@ -74,6 +74,30 @@ fn web_static_container_entrypoint_is_top_level_reachable() {
     );
 }
 
+#[test]
+fn parallel_web_verification_invokes_the_static_container_entrypoint() {
+    let root = RepositoryFixture::repository_root();
+    let app_tasks = root.read("nook-app/Taskfile.yml");
+    let parallel_verification = app_tasks
+        .split("\n  _verify:parallel:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  _lint:parallel:\n").next())
+        .unwrap_or_else(|| panic!("app tasks must define the parallel verification gate"));
+
+    assert!(
+        parallel_verification.contains(
+            "task --parallel web:static:container _lint:parallel _test:parallel || failed=1"
+        ),
+        "parallel verification must run the static container entrypoint concurrently within its bounded gate"
+    );
+
+    let web_dockerfile = root.read("nook-app/nook-web/nook-web-app/Dockerfile");
+    assert!(
+        web_dockerfile.contains("timeout --kill-after=10s 10m task _ci:pr"),
+        "the complete concurrent static, lint, and test gate must retain enough bounded runtime"
+    );
+}
+
 fn read_fallible(path: &str) -> anyhow::Result<String> {
     fs::read_to_string(RepositoryFixture::repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))

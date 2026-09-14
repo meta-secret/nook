@@ -229,8 +229,7 @@ tasks:
     cmds:
       - |
         failed=0
-        task _web:static || failed=1
-        task --parallel _lint:parallel _test:parallel || failed=1
+        task --parallel web:static:container _lint:parallel _test:parallel || failed=1
         exit "$failed"
 
   _lint:parallel:
