@@ -258,6 +258,72 @@ exit 0
   }
 });
 
+test('preserves only the configured GitHub CLI auth state for credential fallback', () => {
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-gh-auth-')),
+  );
+  const bin = join(root, 'bin');
+  const capture = join(root, 'capture');
+  const fakeGit = join(bin, 'git');
+  const previousPath = process.env.PATH;
+  const previousGhConfigDir = process.env.GH_CONFIG_DIR;
+  const previousHome = process.env.HOME;
+  const previousGithubToken = process.env.GITHUB_TOKEN;
+  const previousNookToken = process.env.NOOK_GITHUB_PAT;
+  try {
+    mkdirSync(bin);
+    GitFixture.initialize(root);
+    writeFileSync(
+      fakeGit,
+      `#!/bin/sh
+{
+  printf 'ghConfigDir=%s\\n' "$GH_CONFIG_DIR"
+  printf 'home=%s\\n' "$HOME"
+  printf 'githubToken=%s\\n' "$GITHUB_TOKEN"
+  printf 'args=%s\\n' "$*"
+} >> ${JSON.stringify(capture)}
+exit 0
+`,
+    );
+    chmodSync(fakeGit, 0o755);
+    process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
+    process.env.GH_CONFIG_DIR = join(root, 'gh-config');
+    process.env.HOME = join(root, 'unrelated-home');
+    process.env.GITHUB_TOKEN = 'unrelated-token';
+    delete process.env.NOOK_GITHUB_PAT;
+
+    const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
+      executable: CommandExecutable.Git,
+      args: ['ls-remote', '--refs', 'origin', 'refs/heads/main'],
+      workingDirectory: root,
+    });
+
+    expect(result.isOk()).toBe(true);
+    const output = readFileSync(capture, 'utf8');
+    expect(output).toContain(`ghConfigDir=${join(root, 'gh-config')}`);
+    expect(output).toContain(
+      'credential.https://github.com.helper=!gh auth git-credential',
+    );
+    expect(output).not.toContain(`home=${join(root, 'unrelated-home')}`);
+    expect(output).not.toContain('githubToken=unrelated-token');
+  } finally {
+    if (typeof previousPath !== 'string') delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    if (typeof previousGhConfigDir !== 'string')
+      delete process.env.GH_CONFIG_DIR;
+    else process.env.GH_CONFIG_DIR = previousGhConfigDir;
+    if (typeof previousHome !== 'string') delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (typeof previousGithubToken !== 'string')
+      delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = previousGithubToken;
+    if (typeof previousNookToken !== 'string')
+      delete process.env.NOOK_GITHUB_PAT;
+    else process.env.NOOK_GITHUB_PAT = previousNookToken;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('local merge and merge-tree cannot execute repository merge drivers or hooks', () => {
   const root = realpathSync(
     mkdtempSync(join(tmpdir(), 'nook-dev-command-merge-')),

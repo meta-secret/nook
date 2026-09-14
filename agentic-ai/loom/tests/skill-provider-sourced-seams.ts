@@ -159,7 +159,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '3900ff7f3e0c9c3a86f6fd07c062e4b1d733f3961e0348b56d18bdcf6b4340b1',
+    '964c2e9266957c1018efa21a5c23f0734245d01011505308f4e7222c6c7fb95e',
   ],
   [
     'agentic-ai/loom/src/lib/run.ts',

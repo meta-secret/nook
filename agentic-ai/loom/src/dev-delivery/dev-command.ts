@@ -299,12 +299,21 @@ export class ProcessCommandRunner implements CommandRunner {
     }
     if (remoteOperation) {
       const credential = process.env.NOOK_GITHUB_PAT?.trim();
-      if (
+      const hasSafeCredential =
         credential &&
         !credential.includes('\u0000') &&
-        !/[\r\n]/u.test(credential)
-      )
+        !/[\r\n]/u.test(credential);
+      if (hasSafeCredential) {
         environment.NOOK_GIT_EXTRAHEADER = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${credential}`).toString('base64')}`;
+      } else {
+        const ghConfigDir = process.env.GH_CONFIG_DIR?.trim();
+        if (
+          ghConfigDir &&
+          !ghConfigDir.includes('\u0000') &&
+          !/[\r\n]/u.test(ghConfigDir)
+        )
+          environment.GH_CONFIG_DIR = ghConfigDir;
+      }
     }
     return environment;
   }
