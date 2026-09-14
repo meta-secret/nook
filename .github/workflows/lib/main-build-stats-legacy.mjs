@@ -1,12 +1,18 @@
 import { MainBuildStatsCodec } from "./main-build-stats-codecs.mjs";
 
+/** @typedef {import("./main-build-stats.mjs").MainBuildRecord} MainBuildRecord */
+/** @typedef {import("./main-build-stats.mjs").MainBuildSummary} MainBuildSummary */
+/** @typedef {import("./main-build-stats.mjs").MainBuildComparison} MainBuildComparison */
+/** @typedef {import("./main-build-stats.mjs").MainBuildCacheTelemetry} MainBuildCacheTelemetry */
+/** @typedef {import("./main-build-stats.mjs").CacheCollectionFailure} CacheCollectionFailure */
+
 export class LegacyMainBuildRecord {
   /** @param {unknown} record */
   constructor(record) {
     this.record = record;
   }
 
-  /** @returns {Record<string, unknown>} */
+  /** @returns {MainBuildRecord} */
   normalize() {
     if (!this.hasRecordStructure()) {
       throw new Error("record must contain Main build sections");
@@ -15,6 +21,7 @@ export class LegacyMainBuildRecord {
     const { jobs = [] } = normalized;
 
     if (normalized.schema_version < 3) {
+      /** @type {(keyof MainBuildSummary)[]} */
       const summaryFields = [
         "build_seconds",
         "deployment_seconds",
@@ -25,6 +32,7 @@ export class LegacyMainBuildRecord {
           delete normalized.summary?.[field];
         }
       }
+      /** @type {(keyof MainBuildComparison)[]} */
       const comparisonFields = [
         "wall_seconds_change_percent",
         "execution_seconds_change_percent",
@@ -61,7 +69,7 @@ export class LegacyMainBuildRecord {
     return normalized;
   }
 
-  /** @returns {boolean} */
+  /** @returns {this is LegacyMainBuildRecord & {record: MainBuildRecord}} */
   hasRecordStructure() {
     const value = this.record;
     if (!MainBuildStatsCodec.isJsonRecord(value)) return false;
@@ -74,10 +82,11 @@ export class LegacyMainBuildRecord {
     );
   }
 
-  /** @param {Record<string, unknown>} telemetry */
+  /** @param {MainBuildCacheTelemetry} telemetry */
   removeUnmeasuredCacheRates(telemetry) {
     const telemetryTotals = telemetry.totals;
     const { jobs: telemetryJobs = [] } = telemetry;
+    /** @type {(keyof MainBuildCacheTelemetry['totals'])[]} */
     const telemetryFields = [
       "sccache_hit_rate_percent",
       "buildkit_cache_hit_rate_percent",
@@ -97,9 +106,10 @@ export class LegacyMainBuildRecord {
     }
   }
 
-  /** @param {Record<string, unknown>} telemetry */
+  /** @param {MainBuildCacheTelemetry} telemetry */
   normalizeCacheCollection(telemetry) {
     const { jobs: telemetryJobs = [] } = telemetry;
+    /** @type {CacheCollectionFailure[]} */
     const normalizedFailures = [];
     for (const job of telemetryJobs) {
       const jobFailures = job.collection?.failures;
@@ -143,7 +153,7 @@ export class LegacyMainBuildRecord {
     }
   }
 
-  /** @param {Record<string, unknown>} telemetry */
+  /** @param {MainBuildCacheTelemetry} telemetry */
   renameDirectCompileBackend(telemetry) {
     const totals = telemetry.totals;
     const { jobs: telemetryJobs = [] } = telemetry;
