@@ -21,10 +21,15 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
 - Consume the canonical feature branch name and bootstrap evidence issued by
   Gizmo Prime for the team worktree and every leaf. `originMainSha` identifies
-  the freshly fetched `origin/main`; `pinnedLocalDevSha` identifies the
-  synchronized local-dev feature base, and `originMainSha` must be its
-  ancestor. Prime creates the feature branch and worktree from that current
-  committed base and preserves it. The branch name is the workflow authority.
+  the freshly fetched `origin/main`. After canonical local `main` and `dev` are
+  synchronized, `pinnedLocalDevSha` identifies the exact latest committed
+  `refs/heads/dev^{commit}`. `originMainSha` must be its ancestor. Every new
+  feature mission, feature branch, and worktree must use that exact
+  post-synchronization canonical local `dev` commit as its base. A previously
+  pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or
+  another alternate base is invalid. If equality with post-synchronization
+  `refs/heads/dev` cannot be proved, fail closed. The base is preserved after
+  feature creation. The branch name is the workflow authority.
   Resolve the latest committed branch head before each stage. If the branch
   advances, follow the latest head and rerun affected evidence. Child worktrees
   start from the current parent frontier. Never use stale local refs or resolve

@@ -165,14 +165,19 @@ are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
 - It compares the working branch with the merge base of the canonical feature
-  branch resolved at audit time. The packet may carry `originMainSha` and
-  `pinnedLocalDevSha` as bootstrap evidence; require the former to be an
-  ancestor of the latter. Prime creates every feature branch and worktree from
-  the current committed local-dev feature base and preserves it. The branch
-  name is the workflow authority. Resolve its latest committed head before the
-  audit. If the branch advances, follow the latest head and rerun the audit.
-  Missing or unprovable bootstrap/branch evidence fails closed; observed SHAs
-  remain run evidence only.
+  branch resolved at audit time. The packet must carry `originMainSha` and
+  `pinnedLocalDevSha` as bootstrap evidence. After mandatory fetch and
+  synchronization, `pinnedLocalDevSha` must equal the latest committed
+  post-synchronization `refs/heads/dev^{commit}`. Every new feature mission,
+  feature branch, and worktree must use that exact latest committed canonical
+  local `dev` commit as its base. A previously pinned or otherwise older
+  local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. The base is preserved
+  after feature creation. The branch name is the workflow authority. Resolve
+  its latest committed head before the audit. If the branch advances, follow
+  the latest head and rerun the audit. Missing or unprovable
+  bootstrap/branch evidence fails closed; observed SHAs remain run evidence
+  only.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.

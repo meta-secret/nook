@@ -84,16 +84,22 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 `git fetch --prune origin`; a fetch failure fails the run closed.
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
-baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime authorizes the canonical feature branch name,
-which is the workflow authority. At creation, Prime starts the feature branch
-and worktree from the current committed local-dev feature base and preserves
-that base. Base and head SHAs are observational evidence only, not required
-packet fields. Delivery re-fetches and resolves the latest committed branch
-head before every remote dispatch, review, or landing operation. If the branch
-advances, follow the latest head and rerun affected evidence. Do not fail
-because an earlier observed SHA is stale. Team Gizmos and leaves keep
-temporary branches private.
+baseline under the dev-delivery workflow. If either synchronization cannot be
+proved, the run fails closed. Only after both synchronizations, Prime resolves
+the latest committed `refs/heads/dev^{commit}`. It records that exact
+post-synchronization commit as `pinnedLocalDevSha` for bootstrap evidence.
+Every new feature mission, feature branch, and worktree must use that exact
+latest committed canonical local `dev` commit as its base. A previously pinned
+or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another
+alternate base is invalid. If equality between `pinnedLocalDevSha` and the
+post-synchronization `refs/heads/dev` cannot be proved, the run fails closed.
+The base is preserved after feature creation. Prime authorizes the canonical
+feature branch name, which is the workflow authority. Observed base and head
+SHAs are evidence only, not required packet fields. Delivery re-fetches and
+resolves the latest committed branch head before every remote dispatch, review,
+or landing operation. If the branch advances, follow the latest head and rerun
+affected evidence. Do not fail because an earlier observed feature-head SHA is
+stale. Team Gizmos and leaves keep temporary branches private.
 
 ## Communication
 

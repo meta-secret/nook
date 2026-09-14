@@ -34,12 +34,19 @@ functional ownership, readiness, promotion, or final delivery.
   - Use `task remote TASK_NAME=web:build` and
     `task remote TASK_NAME=web:e2e` for focused web build and browser evidence.
   - Bind source checkouts and artifacts to the captured dev head SHA.
-  - Feature packets name the Prime-authorized canonical branch and may carry
+  - Feature packets name the Prime-authorized canonical branch and must carry
     bootstrap `originMainSha` and `pinnedLocalDevSha`; require
     `originMainSha` to be an ancestor of `pinnedLocalDevSha`.
-  - Prime creates every feature branch and worktree strictly from the exact
-    `pinnedLocalDevSha`; no alternate base is permitted, and that base is
-    preserved. Any `featureHeadSha` is observational run association only.
+  - Prime resolves the latest committed `refs/heads/dev^{commit}` for the
+    canonical local `dev` only after the mandatory fetch and synchronization.
+    It records that exact
+    post-synchronization commit as `pinnedLocalDevSha` for bootstrap evidence.
+    Every new feature mission, feature branch, and worktree must use that exact
+    latest committed canonical local `dev` commit as its base. A previously
+    pinned or otherwise older local-dev SHA,
+    `origin/dev`, `origin/main`, or another alternate base is invalid.
+    Preserve the base after feature creation. Any `featureHeadSha` is
+    observational run association only.
     Before remote dispatch, review, or landing, PR Lifecycle re-fetches and
     resolves the latest committed branch head; a branch advance follows the
     latest head and reruns affected evidence.
@@ -68,11 +75,12 @@ functional ownership, readiness, promotion, or final delivery.
 - Do not cancel an active dev validation run or introduce a custom scheduler.
 - Do not create stacked branches or pull requests. When a feature genuinely
   requires multiple slices, use one strictly sequential sequence from the
-  exact Prime-pinned local-dev feature base recorded for each slice and
-  complete this procedure for every slice. Each slice may record its observed
-  `featureHeadSha` for run association; the canonical branch name remains the
-  authority and later work follows its latest committed head.
-  The fetched `origin/main` SHA is ancestry evidence, not the feature base.
+  latest committed canonical local `dev` commit resolved after mandatory fetch
+  and synchronization. A previously pinned or otherwise older local-dev SHA
+  is invalid. Each slice may record its observed `featureHeadSha` for run
+  association; the canonical branch name remains the authority and later work
+  follows its latest committed head. The fetched `origin/main` SHA is ancestry
+  evidence, not the feature base.
 
 ## PR title and description
 

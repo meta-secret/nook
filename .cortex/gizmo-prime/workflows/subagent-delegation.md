@@ -33,19 +33,22 @@ Prime-to-Team-Gizmo dispatch chain.
   fail closed on failure.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main`, then brings canonical local `dev` onto or including that main
-  baseline under the dev-delivery workflow; stale local dev fails closed.
-  Prime records `originMainSha` for the exact freshly fetched main and
-  `pinnedLocalDevSha` for the exact synchronized local-dev SHA. An observed
-  `featureHeadSha` is run association only, not branch authority. Require
-  `originMainSha` to be an ancestor of `pinnedLocalDevSha`; preserve that
-  bootstrap/base evidence. Prime creates every new feature branch and worktree
-  strictly from the exact `pinnedLocalDevSha`; no alternate base is permitted.
-  The canonical branch name is the workflow authority. Before remote dispatch,
-  review, or landing, PR Lifecycle re-fetches and resolves the latest committed
-  branch head; a branch advance follows the latest head and reruns affected
-  evidence. Team Gizmos and leaves consume the branch name and bootstrap
-  evidence, not a pinned feature head. Missing or unprovable branch/bootstrap
-  evidence fails closed.
+  baseline under the dev-delivery workflow. If either synchronization cannot
+  be proved, the run fails closed. Only after both synchronizations, Prime
+  resolves the latest committed `refs/heads/dev^{commit}`. It records that
+  exact post-synchronization commit as `pinnedLocalDevSha` for bootstrap
+  evidence. Every new feature mission, feature branch, and worktree must use
+  that exact latest committed canonical local `dev` commit as its base. A
+  previously pinned or otherwise older local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. If equality between
+  `pinnedLocalDevSha` and the post-synchronization `refs/heads/dev` cannot be
+  proved, the run fails closed. The base is preserved after feature creation.
+  The canonical branch name is the workflow authority. Observed SHAs are run
+  evidence only. Before remote dispatch, review, or landing, PR Lifecycle
+  re-fetches and resolves the latest committed branch head. A branch advance
+  follows the latest head and reruns affected evidence. Team Gizmos and leaves
+  consume the branch name and bootstrap evidence, not a pinned feature head.
+  Missing or unprovable branch/bootstrap evidence fails closed.
 - Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
   every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.
@@ -72,9 +75,10 @@ Prime-to-Team-Gizmo dispatch chain.
   every child packet and handoff: `originMainSha` and `pinnedLocalDevSha`.
   An observed feature-head SHA may accompany a handoff as run evidence only.
 - Preserve the ordered bootstrap ancestry and branch authority in every child
-  handoff. Before each remote, review, or landing operation, re-resolve the
-  latest committed head; do not promote an observed SHA to authority or resolve
-  a base independently.
+  handoff. A child must not replace the exact post-synchronization local-dev
+  base with an older or merely pinned local-dev SHA. Before each remote, review,
+  or landing operation, re-resolve the latest committed head; do not promote an
+  observed SHA to authority or resolve a base independently.
 - Bind the child path and branch to the task and attempt identity.
 - The child worktree must be disjoint from the parent and every other active
   child worktree.

@@ -40,15 +40,21 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 `git fetch --prune origin`; a fetch failure fails the run closed.
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
-baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime authorizes the canonical feature branch name,
-which is the workflow authority. At creation, Prime starts the feature branch
-and worktree from the current committed local-dev feature base and preserves
-that base. Base and head SHAs are observational evidence only, not required
-packet fields. Delivery re-fetches and resolves the latest committed branch
-head before every remote dispatch, review, or landing operation. If the branch
-advances, follow the latest head and rerun affected evidence. Team Gizmos and
-leaves keep temporary branches private.
+baseline under the dev-delivery workflow. If either synchronization cannot be
+proved, the run fails closed. Only after both synchronizations, Prime resolves
+the latest committed `refs/heads/dev^{commit}`. It records that exact
+post-synchronization commit as `pinnedLocalDevSha` for bootstrap evidence.
+Every new feature mission, feature branch, and worktree must use that exact
+latest committed canonical local `dev` commit as its base. A previously pinned
+or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another
+alternate base is invalid. If equality between `pinnedLocalDevSha` and the
+post-synchronization `refs/heads/dev` cannot be proved, the run fails closed.
+The base is preserved after feature creation. Prime authorizes the canonical
+feature branch name, which is the workflow authority. Observed base and head
+SHAs are evidence only, not required packet fields. Delivery re-fetches and
+resolves the latest committed branch head before every remote dispatch, review,
+or landing operation. If the branch advances, follow the latest head and rerun
+affected evidence. Team Gizmos and leaves keep temporary branches private.
 
 ```mermaid
 sequenceDiagram
@@ -77,7 +83,7 @@ sequenceDiagram
             Dev-->>Prime: Dev/main currency failure
             Prime-->>User: Fail closed; no planning or edits
         else Local dev is current with main
-            Dev-->>Prime: Current committed local-dev feature base
+            Dev-->>Prime: Latest committed post-sync canonical local-dev base
             Prime->>Feature: Create or read the canonical feature ref by name
             Feature-->>Prime: Latest committed branch head
             Prime->>Prime: Record base and head SHAs as observations only
@@ -200,14 +206,16 @@ boundary.
 ### Flow
 
 The implementation packet carries the canonical feature branch name. Prime
-creates the branch and worktree from the current committed local-dev feature
-base and preserves that base. The branch name is the workflow authority.
-Workers keep temporary branches private. Base and head SHAs may be recorded as
-observational evidence, but are not packet authority. Delivery re-fetches and
-resolves the latest committed branch head before remote work, review, or
-landing. A branch advance follows the latest head and reruns affected
-evidence. No implementation worker creates work from `origin/main` or
-`origin/dev`.
+creates the branch and worktree from the exact latest committed canonical local
+`dev` commit resolved after the mandatory fetch and synchronization. A
+previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`,
+or another alternate base is invalid. The base is preserved after feature
+creation. The branch name is the workflow authority. Workers keep temporary
+branches private. Base and head SHAs may be recorded as observational
+evidence, but are not packet authority. Delivery re-fetches and resolves the
+latest committed branch head before remote work, review, or landing. A branch
+advance follows the latest head and reruns affected evidence. No
+implementation worker creates work from `origin/main` or `origin/dev`.
 
 ```mermaid
 flowchart LR
@@ -255,8 +263,8 @@ sequenceDiagram
         participant Checks as external:feature-checks
     end
 
-    Prime->>Prime: Bootstrap and record originMainSha and pinnedLocalDevSha; observe feature head
-    Prime->>Feature: Create from pinnedLocalDevSha or resolve latest committed head by branch name
+    Prime->>Prime: Fetch, synchronize main and dev, then record latest refs/heads/dev as pinnedLocalDevSha evidence
+    Prime->>Feature: Create from exact post-sync local-dev commit; resolve later head by branch name
     Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work
@@ -372,10 +380,13 @@ sequenceDiagram
 
 Every feature has an independent Feature Gizmo, feature branch, worktree, Team
 Agents, and external-check loop. Gizmo Prime routes each feature and its team
-packets. Each feature starts from its Prime-issued `pinnedLocalDevSha` and uses
-the Prime-authorized canonical branch name as workflow authority. Observed
-feature-head SHAs associate individual runs only; they do not pin the branch.
-No feature PR or global feature scheduler coordinates them.
+packets. Each feature starts from the exact latest committed canonical local
+`dev` commit resolved after bootstrap synchronization. Prime records that
+commit as `pinnedLocalDevSha` evidence only. A previously pinned or otherwise
+older local-dev SHA is invalid. The Prime-authorized canonical branch name is
+the workflow authority. Observed feature-head SHAs associate individual runs
+only; they do not pin the branch. No feature PR or global feature scheduler
+coordinates them.
 
 ### Flow
 
@@ -679,15 +690,22 @@ sequenceDiagram
 - Gizmo Prime is the mission/root coordinator. Every team reports through its
   Team Gizmo, which decomposes only team mechanics and returns exact-SHA
   evidence or blockers to Prime.
-- Every feature packet names the canonical feature branch and may carry
-  bootstrap `originMainSha` and `pinnedLocalDevSha`; require
-  `originMainSha` to be an ancestor of `pinnedLocalDevSha`. An observed
-  `featureHeadSha` is run association only, not branch authority.
-- Prime creates every feature branch and worktree strictly from the exact
-  `pinnedLocalDevSha`; no alternate base is permitted. The branch name is the
-  workflow authority. Before remote dispatch, review, or landing, delivery
-  re-fetches and resolves the latest committed branch head; a branch advance
-  follows the latest head and reruns affected evidence. Missing or unprovable
+- Every feature packet names the canonical feature branch and must carry
+  bootstrap `originMainSha` and `pinnedLocalDevSha`. `originMainSha` must be an
+  ancestor of `pinnedLocalDevSha`.
+- Prime must resolve the latest committed `refs/heads/dev^{commit}` only after
+  the mandatory fetch and synchronization. It records that exact commit as
+  `pinnedLocalDevSha` evidence. Every new feature mission, feature branch, and
+  worktree must use that exact latest committed canonical local `dev` commit
+  as its base.
+- A previously pinned or otherwise older local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. If the post-sync local
+  `dev` equality cannot be proved, bootstrap fails closed. The base is
+  preserved after feature creation.
+- The canonical branch name is the workflow authority. Observed SHAs are run
+  evidence only. Before remote dispatch, review, or landing, delivery re-fetches
+  and resolves the latest committed branch head. A branch advance follows the
+  latest head and reruns affected evidence. Missing or unprovable
   branch/bootstrap evidence fails closed.
 - Delivery Pipeline is the operational team for CI, PR lifecycle, dev
   publication, workflow execution, local landing, evidence, and guarded

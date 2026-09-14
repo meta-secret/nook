@@ -57,13 +57,26 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     pushes the branch, and performs the bounded dispatch.
   - PR Lifecycle Agent must not push a temporary leaf branch or dispatch while
     checked out on one.
-  - Bootstrap evidence may carry `originMainSha` and `pinnedLocalDevSha`.
-    Require `originMainSha` to be an ancestor of `pinnedLocalDevSha`.
-  - Prime creates every feature branch and worktree from the current committed
-    local-dev feature base represented by `pinnedLocalDevSha` and preserves
-    that base. Resolve the latest committed feature-branch head before each
-    stage. A branch advance follows the latest head and reruns affected
-    evidence; it is not a stale-authority failure.
+  - Feature bootstrap evidence must carry `originMainSha` and
+    `pinnedLocalDevSha`. Require `originMainSha` to be an ancestor of
+    `pinnedLocalDevSha`.
+  - After mandatory `git fetch --prune origin`, synchronize canonical local
+    `main` to fetched `origin/main`, then synchronize canonical local `dev` to
+    include that main baseline. If either synchronization cannot be proved,
+    fail closed.
+  - Only after synchronization, resolve the latest committed
+    `refs/heads/dev^{commit}`. Record that exact commit as `pinnedLocalDevSha`
+    for bootstrap evidence. Every new feature mission, feature branch, and
+    worktree must use that exact latest committed canonical local `dev` commit
+    as its base.
+  - A previously pinned or otherwise older local-dev SHA, `origin/dev`,
+    `origin/main`, or another alternate base is invalid. If the recorded
+    `pinnedLocalDevSha` does not equal post-synchronization `refs/heads/dev`,
+    fail closed. Preserve the base after feature creation.
+  - The canonical branch name remains the later-stage workflow authority.
+    Observed SHAs are evidence only. Resolve the latest committed
+    feature-branch head before each stage. A branch advance follows the latest
+    head and reruns affected evidence; it is not a stale-authority failure.
   - Missing or unprovable branch/bootstrap evidence fails closed.
   - No tests, coverage, e2e, or preflight may execute transitively.
 - **`dev:land`**

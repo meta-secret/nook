@@ -297,6 +297,10 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
+- [Gizmo Prime](gizmo-prime/AGENTS.md) is the first actor for each new user-originated
+  repository task. Follow-ups retain their current Gizmo owner.
+- Assigned workers use the owning team context in their bounded packet.
+- Gizmo routes manually requested dev operations to the dev manager.
 
 ## Canonical tree
 
@@ -308,26 +312,30 @@ Each Team Gizmo requests Fast mode with \`service_tier: fast\`, which resolves a
 \`priority\`. Each leaf Team Agent uses \`gpt-5.6-luna\` with \`xhigh\` reasoning. It
 requests Fast mode with \`service_tier: fast\`, which resolves as \`priority\`. Each
 leaf receives a separate issued child worktree. Each Team Gizmo owns one team
-worktree. Prime reuses a compatible existing Team Agent before spawning.
-Otherwise it issues separate child worktrees for required specialists. Team
-Gizmo integrates specialist commits into its feature branch.
+worktree. Prime reuses or creates a compatible Team Gizmo before dispatch. That
+Team Gizmo reuses or dispatches bounded internal leaf Team Agents, each in an
+issued child worktree, and integrates specialist commits into its feature
+branch.
 
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 \`git fetch --prune origin\`; a fetch failure fails closed. Delivery/Dev Manager
 then synchronizes canonical local \`main\` to the fetched \`origin/main\` and
 brings canonical local \`dev\` onto or including that main baseline under the
-dev-delivery workflow. If local dev is not current with main, the run fails
-closed. Prime records \`originMainSha\` for the exact freshly fetched
-\`origin/main\`, \`pinnedLocalDevSha\` for the exact synchronized local-dev
-commit, and \`featureHeadSha\` for the exact canonical feature frontier in the
-mission packet and every child handoff. Require the chain \`originMainSha\`
-ancestor of \`pinnedLocalDevSha\` ancestor of \`featureHeadSha\`; equality between
-the latter two is valid for the initial frontier. Prime creates every new
-feature branch and worktree strictly from the exact \`pinnedLocalDevSha\`; no
-alternate base is permitted. The existing canonical feature ref and
-detached implementation HEAD must equal \`featureHeadSha\` exactly. Descendant
-frontiers are valid for reruns. Team Gizmos and leaves consume all three pinned
-identities. Missing, stale, mismatched, or unprovable evidence fails closed.
+dev-delivery workflow. If either synchronization cannot be proved, the run
+fails closed. Only after both synchronizations, Prime resolves the latest
+committed \`refs/heads/dev^{commit}\`. It records that exact
+post-synchronization commit as \`pinnedLocalDevSha\` for bootstrap evidence.
+Every new feature mission, feature branch, and worktree must use that exact
+latest committed canonical local \`dev\` commit as its base. A previously pinned
+or otherwise older local-dev SHA, \`origin/dev\`, \`origin/main\`, or another
+alternate base is invalid. If equality between \`pinnedLocalDevSha\` and the
+post-synchronization \`refs/heads/dev\` cannot be proved, the run fails closed.
+The base is preserved after feature creation. Prime authorizes the canonical
+feature branch name, which is the workflow authority. Observed base and head
+SHAs are evidence only, not required packet fields. Delivery re-fetches and
+resolves the latest committed branch head before each remote dispatch, review,
+or landing operation. If the branch advances, follow the latest head and rerun
+affected evidence. Team Gizmos and leaves keep temporary branches private.
 
 Active harness admission is dynamic. Gizmo immediately attempts every
 dependency-ready Team Gizmo with a disjoint scope concurrently and uses the

@@ -42,12 +42,19 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   `git fetch --prune origin`; a fetch failure fails the run closed.
   Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
   `origin/main` and brings canonical local `dev` onto or including that main
-  baseline under the dev-delivery workflow. If local dev is not current with
-  main, the run fails closed. Prime authorizes the canonical feature branch
-  name, which is the workflow authority for feature publication and remote
-  work. At creation, Prime starts the feature branch and worktree from the
-  current committed local-dev feature base and preserves that base; observed
-  base and head SHAs are evidence only and are not required packet fields.
+  baseline under the dev-delivery workflow. If either synchronization cannot
+  be proved, the run fails closed. Only after both synchronizations, Prime
+  resolves the latest committed `refs/heads/dev^{commit}`. It records that
+  exact post-synchronization commit as `pinnedLocalDevSha` for bootstrap
+  evidence. Every new feature mission, feature branch, and worktree must use
+  that exact latest committed canonical local `dev` commit as its base. A
+  previously pinned or otherwise older local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. If equality between
+  `pinnedLocalDevSha` and the post-synchronization `refs/heads/dev` cannot be
+  proved, the run fails closed. The base is preserved after feature creation.
+  Prime authorizes the canonical feature branch name, which is the workflow
+  authority for feature publication and remote work. Observed base and head
+  SHAs are evidence only and are not required packet fields.
   Before every remote dispatch, review, or landing operation, Delivery
   re-fetches and resolves the latest committed head of that canonical branch.
   If the branch advances, the operation follows the latest head or reruns its
@@ -511,8 +518,11 @@ runner. Runtime-backed selectors and `arc:runtime` should be dispatched alone
 so their Task implementations receive the correct runner image.
 When a task requires a current base:
 
-  - It preserves the local-dev feature base selected when the branch was
-    created.
+  - The feature base is the exact latest committed canonical local `dev`
+    commit resolved after mandatory fetch and synchronization.
+  - A previously captured or pinned local-dev SHA is invalid when it is older
+    than the post-synchronization canonical local `dev` commit.
+  - It preserves that exact base after the feature branch is created.
   - It re-fetches the canonical branch and resolves its latest committed head
     immediately before dispatch.
   - It associates the run with the observed head SHA for diagnostics and

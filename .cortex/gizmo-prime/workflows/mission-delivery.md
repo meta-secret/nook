@@ -23,14 +23,21 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
   runs `git fetch --prune origin`; a fetch failure fails closed.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main` and brings canonical local `dev` onto or including that main
-  baseline under the dev-delivery workflow. If local dev is not current with
-  main, the run fails closed. Prime authorizes the canonical feature branch
-  name, which is the workflow authority. At creation, Prime starts the
-  feature branch and worktree from the current committed local-dev feature
-  base and preserves that base. Base and head SHAs are observational evidence
-  only and are not required packet fields. Delivery re-fetches and resolves
-  the latest committed branch head before every remote dispatch, review, or
-  landing operation. If the branch advances, follow the latest head and rerun
+  baseline under the dev-delivery workflow. If either synchronization cannot
+  be proved, the run fails closed. Only after both synchronizations, Prime
+  resolves the latest committed `refs/heads/dev^{commit}`. It records that
+  exact post-synchronization commit as `pinnedLocalDevSha` for bootstrap
+  evidence. Every new feature mission, feature branch, and worktree must use
+  that exact latest committed canonical local `dev` commit as its base. A
+  previously pinned or otherwise older local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. If equality between
+  `pinnedLocalDevSha` and the post-synchronization `refs/heads/dev` cannot be
+  proved, the run fails closed. The base is preserved after feature creation.
+  Prime authorizes the canonical feature branch name, which is the workflow
+  authority. Observed base and head SHAs are evidence only and are not
+  required packet fields. Delivery re-fetches and resolves the latest
+  committed branch head before every remote dispatch, review, or landing
+  operation. If the branch advances, follow the latest head and rerun
   affected evidence. Team Gizmos and leaves keep temporary branches private.
 - Preserve functional ownership and required security verdicts.
 - Use the active harness for Team Gizmo and internal Team Agent communication.
@@ -61,14 +68,19 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 
 1. **Bootstrap a fresh base.**
    - Run `git fetch --prune origin` before planning, delegation, worktree
-     creation, or edits; stop closed if it fails.
+     creation, or edits; fail closed if it fails.
    - Have Delivery/Dev Manager synchronize canonical local `main` to the
      fetched `origin/main`, then bring canonical local `dev` onto or including
-     that main baseline under the dev-delivery workflow. Stop closed if local
-     dev is not current with main.
-   - Resolve the current committed local-dev feature base and create the
-     canonical feature branch and worktree from it. Preserve that base for the
-     life of the feature.
+     that main baseline under the dev-delivery workflow. If either
+     synchronization cannot be proved, fail closed.
+   - Resolve `refs/heads/dev^{commit}` after both synchronizations complete.
+     This is the latest committed canonical local `dev` commit.
+   - Record that exact post-synchronization commit as `pinnedLocalDevSha` for
+     bootstrap evidence. A previously pinned or otherwise older local-dev SHA
+     is invalid. Fail closed when equality with `refs/heads/dev` cannot be
+     proved.
+   - Create every new feature branch and worktree from that exact commit.
+     Preserve the base for the life of the feature.
    - Record any base or branch-head SHA only as observational evidence.
    - Use the canonical branch name as the mission's feature-work authority.
      Do not require a head SHA in the packet.

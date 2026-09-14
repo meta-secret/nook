@@ -98,9 +98,15 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
 - Prime authorizes the canonical feature branch name. The branch name is the
   workflow authority for publication and remote work.
-- At creation, Prime starts the feature branch and worktree from the current
-  committed local-dev feature base and preserves that base. Base and head SHAs
-  are observational evidence only and are not required packet fields.
+- After the mandatory fetch and synchronization, Prime resolves the latest
+  committed `refs/heads/dev^{commit}`. Every new feature mission, feature
+  branch, and worktree must use that exact latest committed canonical local
+  `dev` commit as its base.
+  A previously pinned or otherwise older local-dev SHA, `origin/dev`,
+  `origin/main`, or another alternate base is invalid. If the
+  post-synchronization equality cannot be proved, creation fails closed. The
+  base is preserved after feature creation. Base and head SHAs are
+  observational evidence only and are not required packet fields.
 - Delivery re-fetches and resolves the latest committed branch head before
   remote dispatch, review, or landing. If the branch advances, follow the
   latest head and rerun affected evidence instead of failing on stale SHA

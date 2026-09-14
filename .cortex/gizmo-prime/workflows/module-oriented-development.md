@@ -47,20 +47,23 @@ ownership, readiness, promotion, or final delivery.
 Before this procedure, Gizmo Prime runs `git fetch --prune origin`; a fetch
 failure fails closed. Delivery/Dev Manager synchronizes canonical local `main`
 to the fetched `origin/main` and brings canonical local `dev` onto or including
-that main baseline under the dev-delivery workflow. If local dev is not current
-with main, the run fails closed. Prime records `originMainSha` for the exact
-fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
-local-dev SHA. Prime may record an observed `featureHeadSha` as run association
-only; it is not branch authority. Require `originMainSha` to be an ancestor of
-`pinnedLocalDevSha`, and preserve that bootstrap/base evidence. Prime creates
-every new feature branch and worktree strictly from the exact
-`pinnedLocalDevSha`; no alternate base is permitted. The canonical feature
-branch name is the workflow authority. Before remote dispatch, review, or
-landing, PR Lifecycle re-fetches and resolves the latest committed branch
-head; a branch advance follows the latest head and reruns affected evidence.
-Team Gizmos and leaves consume the branch name and bootstrap evidence, not a
-pinned feature head. Missing or unprovable branch/bootstrap evidence fails
-closed.
+that main baseline under the dev-delivery workflow. If either synchronization
+cannot be proved, the run fails closed. Prime records `originMainSha` for the
+exact fetched `origin/main`. Only after both synchronizations, Prime resolves
+the latest committed `refs/heads/dev^{commit}` and records that exact commit as
+`pinnedLocalDevSha` for bootstrap evidence. `originMainSha` must be an ancestor
+of `pinnedLocalDevSha`. Every new feature mission, feature branch, and worktree
+must use that exact latest committed canonical local `dev` commit as its base. A
+previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`,
+or another alternate base is invalid. If equality with post-synchronization
+`refs/heads/dev` cannot be proved, bootstrap fails closed. The base is
+preserved after feature creation. The canonical feature branch name is the
+workflow authority. Observed SHAs are run evidence only. Before remote
+dispatch, review, or landing, PR Lifecycle re-fetches and resolves the latest
+committed branch head. A branch advance follows the latest head and reruns
+affected evidence. Team Gizmos and leaves consume the branch name and
+bootstrap evidence, not a pinned feature head. Missing or unprovable
+branch/bootstrap evidence fails closed.
 
 1. Identify the modules and their provider-consumer order.
 2. Assign each implementation task to its functional owner.

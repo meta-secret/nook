@@ -5,6 +5,49 @@ import {
 } from '../src/cortex-index.ts';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../../../../../..');
+
+const normalizeMarkdown = (markdown: string): string =>
+  markdown.replace(/\s+/gu, ' ').trim();
+
+const FRESH_BASE_AUTHORITIES = [
+  '.cortex/AGENTS.md',
+  '.cortex/knowledge-graph.md',
+  '.cortex/gizmo-prime/AGENTS.md',
+  '.cortex/gizmo-prime/knowledge-graph.md',
+  '.cortex/gizmo-prime/architecture/dev-delivery.md',
+  '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
+  '.cortex/gizmo-prime/dynamic-skills/branch-naming.md',
+  '.cortex/gizmo-prime/workflows/mission-delivery.md',
+  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+  '.cortex/gizmo-prime/workflows/pull-requests.md',
+  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+  '.cortex/gizmo-prime/workflows/team-oriented-development.md',
+  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/knowledge-graph.md',
+  '.cortex/teams/ai/gizmo/AGENTS.md',
+  '.cortex/teams/ai/gizmo/knowledge-graph.md',
+  '.cortex/teams/ai/cortex-specialist/AGENTS.md',
+  '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
+  '.cortex/teams/ai/loom-specialist/AGENTS.md',
+  '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
+  '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
+] as const;
+
+const FRESH_BASE_BOOTSTRAP_AUTHORITIES = [
+  '.cortex/AGENTS.md',
+  '.cortex/knowledge-graph.md',
+  '.cortex/gizmo-prime/AGENTS.md',
+  '.cortex/gizmo-prime/knowledge-graph.md',
+  '.cortex/gizmo-prime/architecture/dev-delivery.md',
+  '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
+  '.cortex/gizmo-prime/workflows/mission-delivery.md',
+  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+  '.cortex/gizmo-prime/workflows/team-oriented-development.md',
+] as const;
 
 test('extracts index metadata and renders markdown', () => {
   const documents = [
@@ -72,30 +115,64 @@ Model text.
   expect(markdown).toContain(
     '`git fetch --prune origin`; a fetch failure fails closed.',
   );
-  expect(markdown).toContain(
-    'strictly from the exact `pinnedLocalDevSha`',
+  const normalized = normalizeMarkdown(markdown);
+  expect(normalized).toContain(
+    'Only after both synchronizations, Prime resolves the latest committed `refs/heads/dev^{commit}`.',
   );
-  expect(markdown).not.toContain(
-    ['unless the user explicitly selects', 'another base'].join(' '),
+  expect(normalized).toContain(
+    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
   );
-  expect(markdown).toContain('`originMainSha`');
-  expect(markdown).toContain('`pinnedLocalDevSha`');
-  expect(markdown).toContain('`featureHeadSha`');
-  expect(markdown).toContain(
-    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+  expect(normalized).toContain(
+    'A previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another alternate base is invalid.',
   );
-  expect(markdown).toContain(
-    'detached implementation HEAD must equal `featureHeadSha` exactly.',
+  expect(normalized).toContain('The base is preserved after feature creation.');
+  expect(normalized).toContain(
+    'Prime authorizes the canonical feature branch name, which is the workflow authority.',
   );
-  expect(markdown).toContain('Descendant frontiers are valid for reruns.');
-  expect(markdown).toContain(
-    'Team Gizmos and leaves consume all three pinned identities.',
-  );
-  expect(markdown).toContain(
-    'Missing, stale, mismatched, or unprovable evidence fails closed.',
+  expect(normalized).toContain(
+    'Observed base and head SHAs are evidence only, not required packet fields.',
   );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
+});
+
+test('requires every fresh-base authority to use the post-sync local dev head', () => {
+  const required = [
+    'post-synchronization',
+    'latest committed',
+    'canonical local `dev`',
+    'refs/heads/dev^{commit}',
+    'Every new feature mission, feature branch, and worktree must use',
+    'A previously pinned or otherwise older local-dev SHA',
+    'origin/dev`, `origin/main`, or another alternate base is invalid.',
+    'fails closed',
+  ] as const;
+
+  for (const relativePath of FRESH_BASE_AUTHORITIES) {
+    const markdown = normalizeMarkdown(
+      readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
+    );
+    for (const phrase of required) {
+      expect(markdown).toContain(phrase);
+    }
+    expect(markdown).not.toContain(
+      'unless the user explicitly selects another base',
+    );
+    expect(markdown).not.toContain(
+      'creates feature work from `pinnedLocalDevSha`',
+    );
+  }
+
+  for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
+    const markdown = normalizeMarkdown(
+      readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
+    );
+    expect(markdown).toContain('git fetch --prune origin');
+    expect(markdown).toContain('canonical local `main`');
+    expect(markdown).toContain('synchroniz');
+    expect(markdown).toContain('canonical local `dev`');
+    expect(markdown).toContain('fails closed');
+  }
 });
 
 test('renders the complete canonical Cortex context router', () => {
@@ -134,9 +211,9 @@ test('renders the complete canonical Cortex context router', () => {
 
   expect(markdown).toContain('return to the selected owning context');
   expect(markdown).toContain(
-    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
   );
-  expect(markdown).toContain('Prime creates every new feature');
+  expect(markdown).toContain('Every new feature mission');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });
