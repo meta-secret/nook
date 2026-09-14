@@ -48,11 +48,19 @@ require_text "$docker_setup" 'GHA_CACHE_EXACT_WEB_E2E_AVAILABLE'
 # verification/product chain. Node-local BuildKit provides in-run seeding;
 # registry exports seed later runs asynchronously.
 require_text "$main" 'needs: [preflight]'
-require_text "$main" 'needs: [rust, preflight]'
 require_text "$main" 'needs: [wasm]'
+reject_text "$main" 'needs: [rust, preflight]'
 reject_text "$main" 'needs: [preflight-cache-publish]'
 reject_text "$main" 'needs: [rust, native-cache-publish]'
 reject_text "$main" 'needs: [wasm, wasm-cache-publish]'
+require_text "$main" 'needs: [web, web-e2e]'
+reject_text "$main" 'needs: [web, web-e2e, wasm-cache-proof]'
+require_text "$main" 'name: Publish verified native BuildKit cache'
+require_text "$main" 'name: Publish verified WASM BuildKit cache'
+require_text "$main" 'name: Publish verified web BuildKit cache'
+reject_text "$main" 'cache_publication_outcome:'
+reject_text "$main" 'id: publish_native_cache'
+reject_text "$main" 'id: publish_wasm_cache'
 
 # Every trusted cache-bearing workflow preserves telemetry, including the
 # failure path where the build step itself did not complete.
