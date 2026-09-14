@@ -456,12 +456,9 @@ Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
 and complete PR validation belong to the Dev Manager's later dev-to-main CI
 cycle. That cycle explicitly starts **`task pr:validate PR=<number>`** for the
 selected published snapshot. Ordinary PR pushes do not start the complete
-pipeline. Ordinary validation does not contact Codex. Set `CODEX_REVIEW=1` only
-for the final coherent head. Validation dispatches hosted checks before the
-opted-in exact-head review. Use review stabilization only after dispatch while
-those checks run. Its default performs one bounded feedback snapshot. Local
-Task mirrors below remain available for humans. Main-fix PRs use `FULL_E2E=1`
-to request the Main-equivalent browser suites.
+pipeline. Ordinary validation does not contact Codex. Local Task mirrors below
+remain available for humans. Main-fix PRs use `FULL_E2E=1` to request the
+Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
@@ -523,8 +520,7 @@ task remote TASK_NAME=web:build # direct-Pod web build
 task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
 task pr:validate PR=410    # complete exact-head validation without Codex review
-task pr:validate PR=410 CODEX_REVIEW=1 # final coherent head plus Codex review
-task pr:validate PR=410 FULL_E2E=1 CODEX_REVIEW=1 # final Main-fix gate and review
+task pr:validate PR=410 FULL_E2E=1 # final Main-fix gate
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
@@ -548,7 +544,6 @@ task ci:pr:e2e             # explicit full web + extension e2e validation (optio
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:review PR=410      # optional circuit-guarded exact-head Codex review request
 task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch
-task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, and ARC
@@ -576,11 +571,6 @@ Expensive remote browser/full-suite dispatches and the initial
 `task pr:validate` request refresh the target base first and stop immediately
 when the branch is behind. Merge the reported `origin/<base>` into the delivery
 branch before spending hosted validation.
-
-After successful exact-head PR checks, a later advance of `main` does not by
-itself require a rebase or another expensive validation cycle. Re-run
-`task pr:ready PR=<number>` and merge when the PR remains conflict-free and has
-no unhandled review feedback. A later push still invalidates the prior checks.
 
 Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
