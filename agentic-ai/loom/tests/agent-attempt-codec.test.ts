@@ -71,17 +71,15 @@ test('decodes and migrates the historical v4 journal without mutating it', () =>
   );
   expect(decoded).toEqual(historical);
   expect(Object.hasOwn(decoded, 'featureHeadSha')).toBe(false);
-  expect(() => AgentAttemptTransport.decodeEvent(JSON.stringify(historical))).toThrow(
-    AgentAttemptDecodeError,
-  );
-  const migrated = AgentAttemptTransport.migrateEvent(
-    {
-      event: decoded as LegacyAgentAttemptEvent,
-      featureHeadSha: 'b'.repeat(40),
-      originMainSha: 'a'.repeat(40),
-      pinnedLocalDevSha: 'a'.repeat(40),
-    },
-  );
+  expect(() =>
+    AgentAttemptTransport.decodeEvent(JSON.stringify(historical)),
+  ).toThrow(AgentAttemptDecodeError);
+  const migrated = AgentAttemptTransport.migrateEvent({
+    event: decoded as LegacyAgentAttemptEvent,
+    featureHeadSha: 'b'.repeat(40),
+    originMainSha: 'a'.repeat(40),
+    pinnedLocalDevSha: 'a'.repeat(40),
+  });
   expect(historical).toEqual({
     ...startedWithoutEvidence,
     workflowVersion: BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,

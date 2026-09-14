@@ -74,12 +74,7 @@ export class RepositoryCommand {
 
   execute(): Result<CommandOutput, RepositoryCommandFailure> {
     const request = this.request;
-    const {
-      command,
-      rootDirectory,
-      workingDirectory,
-      outputPolicy,
-    } = request;
+    const { command, rootDirectory, workingDirectory, outputPolicy } = request;
     const resolvedRoot = path.resolve(rootDirectory);
     const resolvedWorkingDirectory = path.resolve(workingDirectory);
     const relativeWorkingDirectory = path.relative(

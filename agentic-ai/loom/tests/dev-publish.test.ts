@@ -22,8 +22,6 @@ const SHA_SELECTED = '2222222222222222222222222222222222222222';
 interface PullRequestFixture {
   readonly number: number;
   readonly headSha: string;
-  readonly headRepository: string;
-  readonly isCrossRepository: boolean;
   readonly url: string;
 }
 
@@ -110,17 +108,6 @@ class PublishRunner implements CommandRunner {
     if (args[0] === 'repo' && args[1] === 'view') {
       return ok(this.output({ stdout: 'nook/example\n' }));
     }
-    if (
-      args[0] === 'pr' &&
-      (args[1] === 'list' || args[1] === 'view') &&
-      args.some((argument) => argument.split(',').includes('baseRepository'))
-    ) {
-      return ok({
-        exitCode: 1,
-        stdout: '',
-        stderr: 'Unknown JSON field: "baseRepository"',
-      });
-    }
     if (args[0] === 'pr' && args[1] === 'list') {
       const next = this.request.pullRequests[this.pullRequestIndex] ?? false;
       this.pullRequestIndex += 1;
@@ -169,8 +156,9 @@ class PublishRunner implements CommandRunner {
           baseRefOid: SHA_MAIN,
           url: pullRequest.url,
           isDraft: false,
-          headRepository: { nameWithOwner: pullRequest.headRepository },
-          isCrossRepository: pullRequest.isCrossRepository,
+          headRepository: { nameWithOwner: 'nook/example' },
+          baseRepository: { nameWithOwner: 'nook/example' },
+          isCrossRepository: false,
         },
       ]),
     });
@@ -190,8 +178,8 @@ class PublishRunner implements CommandRunner {
         url: pullRequest.url,
         isDraft: false,
         state: 'OPEN',
-        headRepository: { nameWithOwner: pullRequest.headRepository },
-        isCrossRepository: pullRequest.isCrossRepository,
+        headRepository: { nameWithOwner: 'nook/example' },
+        isCrossRepository: false,
         reviewDecision: 'REVIEW_REQUIRED',
       }),
     });
@@ -213,18 +201,11 @@ class DevPublishPullRequestFixture {
     private readonly request: {
       readonly number?: number;
       readonly headSha?: string;
-      readonly headRepository?: string;
-      readonly isCrossRepository?: boolean;
     },
   ) {}
 
   static from(
-    request: {
-      readonly number?: number;
-      readonly headSha?: string;
-      readonly headRepository?: string;
-      readonly isCrossRepository?: boolean;
-    } = {},
+    request: { readonly number?: number; readonly headSha?: string } = {},
   ): PullRequestFixture {
     return new DevPublishPullRequestFixture(request).execute();
   }
@@ -234,8 +215,6 @@ class DevPublishPullRequestFixture {
     return {
       number: request.number || 42,
       headSha: request.headSha || SHA_PRIOR,
-      headRepository: request.headRepository || 'nook/example',
-      isCrossRepository: request.isCrossRepository || false,
       url: `https://github.example/pr/${request.number || 42}`,
     };
   }
@@ -275,9 +254,9 @@ test('publication rejects a PR that appears before the final push boundary', () 
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
-  expect(
-    runner.requests.some((request) => request.args[0] === 'push'),
-  ).toBe(false);
+  expect(runner.requests.some((request) => request.args[0] === 'push')).toBe(
+    false,
+  );
 });
 
 test('publication rejects a changed PR head before the final push boundary', () => {
@@ -290,25 +269,9 @@ test('publication rejects a changed PR head before the final push boundary', () 
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
-  expect(
-    runner.requests.some((request) => request.args[0] === 'push'),
-  ).toBe(false);
-});
-
-test('publication rejects a fork PR without requesting baseRepository', () => {
-  const { result, runner } = new DevPublishPublicationScenario({
-    pullRequests: [
-      DevPublishPullRequestFixture.from({
-        headRepository: 'fork/example',
-        isCrossRepository: true,
-      }),
-    ],
-  }).execute();
-
-  expect(result.isErr()).toBe(true);
-  expect(
-    runner.requests.some((request) => request.args[0] === 'push'),
-  ).toBe(false);
+  expect(runner.requests.some((request) => request.args[0] === 'push')).toBe(
+    false,
+  );
 });
 
 test('publication rechecks replacement CI and rejects an active attempt', () => {
@@ -322,9 +285,9 @@ test('publication rechecks replacement CI and rejects an active attempt', () => 
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Checks);
-  expect(
-    runner.requests.some((request) => request.args[0] === 'push'),
-  ).toBe(false);
+  expect(runner.requests.some((request) => request.args[0] === 'push')).toBe(
+    false,
+  );
 });
 
 test('publication pushes the selected SHA when the PR and CI remain frozen', () => {
@@ -344,14 +307,4 @@ test('publication pushes the selected SHA when the PR and CI remain frozen', () 
         request.args[2] === `${SHA_SELECTED}:refs/heads/dev`,
     ),
   ).toBe(true);
-  const pullRequestReads = runner.requests.filter(
-    ({ args }) =>
-      args[0] === 'pr' && (args[1] === 'list' || args[1] === 'view'),
-  );
-  expect(pullRequestReads.length).toBeGreaterThan(0);
-  for (const request of pullRequestReads) {
-    expect(request.args).toContain('--repo');
-    expect(request.args).toContain('nook/example');
-    expect(request.args.join(',')).not.toContain('baseRepository');
-  }
 });

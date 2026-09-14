@@ -174,9 +174,7 @@ export type TeamInternalAgentProfile = {
   readonly capabilityBoundary: string;
 };
 
-export type TeamRuntimeProfile =
-  | TeamGizmoProfile
-  | TeamInternalAgentProfile;
+export type TeamRuntimeProfile = TeamGizmoProfile | TeamInternalAgentProfile;
 
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
@@ -272,7 +270,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
-      'Reports high-level AI summaries and blockers to Gizmo Prime; it preserves Prime\'s controller and exact-SHA target without becoming a second root delivery owner.',
+      "Reports high-level AI summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
     capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
   },
   {
@@ -290,7 +288,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
-      'Reports high-level Development Core summaries and blockers to Gizmo Prime; it preserves Prime\'s controller and exact-SHA target without becoming a second root delivery owner.',
+      "Reports high-level Development Core summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
     capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
   },
   {
@@ -308,7 +306,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
-      'Reports high-level Security summaries and blockers to Gizmo Prime; it preserves Prime\'s controller and exact-SHA target without becoming a second root delivery owner.',
+      "Reports high-level Security summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
     capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
   },
   {
@@ -326,7 +324,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
-      'Reports high-level SRE summaries and blockers to Gizmo Prime; it preserves Prime\'s controller and exact-SHA target without becoming a second root delivery owner.',
+      "Reports high-level SRE summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
     capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
   },
   {
@@ -344,7 +342,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
-      'Reports high-level Web Development summaries and blockers to Gizmo Prime; it preserves Prime\'s controller and exact-SHA target without becoming a second root delivery owner.',
+      "Reports high-level Web Development summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
     capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
   },
   {

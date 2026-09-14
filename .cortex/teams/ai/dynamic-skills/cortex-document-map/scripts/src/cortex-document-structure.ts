@@ -75,8 +75,7 @@ export class CortexDocumentPath {
 
   owningKnowledgeGraphPath(): string {
     const childDirectory = this.childDirectoryPath();
-    if (childDirectory !== false)
-      return `${childDirectory}/knowledge-graph.md`;
+    if (childDirectory !== false) return `${childDirectory}/knowledge-graph.md`;
     if (this.filePath.startsWith('.cortex/gizmo-prime/')) {
       return '.cortex/gizmo-prime/knowledge-graph.md';
     }
@@ -92,8 +91,7 @@ export class CortexDocumentPath {
   }
 
   graphOwner(): string | false {
-    if (this.filePath.startsWith('.cortex/gizmo-prime/'))
-      return 'gizmo-prime';
+    if (this.filePath.startsWith('.cortex/gizmo-prime/')) return 'gizmo-prime';
     if (this.filePath.startsWith('.cortex/shared/')) return 'shared';
     const childTeam = this.childGraphTeam();
     if (childTeam !== false) return childTeam;
@@ -138,9 +136,10 @@ export class CortexChildGraphReference {
   private readonly graphPath: CortexDocumentPath;
   private readonly indexedPath: CortexDocumentPath;
 
-  constructor(
-    request: { readonly graphPath: string; readonly indexedPath: string },
-  ) {
+  constructor(request: {
+    readonly graphPath: string;
+    readonly indexedPath: string;
+  }) {
     this.graphPath = new CortexDocumentPath(request.graphPath);
     this.indexedPath = new CortexDocumentPath(request.indexedPath);
   }
@@ -283,7 +282,10 @@ export class CortexDocumentStructure {
         for (const indexedPath of indexedFiles) {
           if (
             new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
-            new CortexChildGraphReference({ graphPath, indexedPath }).isReadOnly()
+            new CortexChildGraphReference({
+              graphPath,
+              indexedPath,
+            }).isReadOnly()
           ) {
             continue;
           }
@@ -343,12 +345,16 @@ export class CortexDocumentStructure {
           }
         }
         for (const ownerGraphPath of ownerGraphPaths) {
-          const graphOwner = new CortexDocumentPath(ownerGraphPath).graphOwner();
+          const graphOwner = new CortexDocumentPath(
+            ownerGraphPath,
+          ).graphOwner();
           const [ownerIndexedFiles = new Set<string>()] = [
             indexedByGraph.get(ownerGraphPath),
           ];
           for (const indexedPath of ownerIndexedFiles) {
-            const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
+            const indexedOwner = new CortexDocumentPath(
+              indexedPath,
+            ).graphOwner();
             if (indexedOwner === false || indexedOwner === graphOwner) continue;
             const findingArgs: AddFindingArgs = {
               findings,

@@ -161,3 +161,41 @@ impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::RegisteredType;
+
+    #[test]
+    fn registered_validated_ids_are_exact_type_identities() {
+        for path in [
+            "nook_auth2::ids::CompactToken",
+            "nook_auth2::ids::AppId",
+            "nook_auth2::ids::StoreId",
+            "nook_auth2::ids::SecretId",
+            "nook_auth2::ids::AuthKeyId",
+        ] {
+            assert!(RegisteredType::validated_id(path));
+        }
+        assert!(!RegisteredType::validated_id("other::ids::AppId"));
+        assert!(!RegisteredType::validated_id(
+            "nook_auth2::ids::AppIdSuffix"
+        ));
+    }
+
+    #[test]
+    fn registered_secrets_are_exact_type_identities() {
+        for path in [
+            "nook_auth2::wire::SymmetricKey",
+            "nook_auth2::wire::SigningSeedHex",
+            "nook_auth2::wire::DecryptedPlaintext",
+            "nook_auth2::wire::DeviceIdentitySecret",
+        ] {
+            assert!(RegisteredType::secret(path));
+        }
+        assert!(!RegisteredType::secret("other::wire::SymmetricKey"));
+        assert!(!RegisteredType::secret(
+            "nook_auth2::wire::DeviceIdentitySecretSuffix"
+        ));
+    }
+}

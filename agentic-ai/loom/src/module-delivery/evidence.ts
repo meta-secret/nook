@@ -57,25 +57,25 @@ export type ModuleDeliveryEvidenceArtifactDigestRequest = {
 
 export type ModuleDeliveryAcceptedProviderEvidenceIdentity =
   PinnedDevBaseEvidence &
-  Readonly<{
-    schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
-    generation: number;
-    planDigest: string;
-    taskId: string;
-    attempt: number;
-    producerTeam: TeamKey;
-    functionalOwner: ModuleDeliveryOwnerIdentity;
-    acceptanceOwner: ModuleDeliveryOwnerIdentity;
-    sourceCommit: string;
-    verifiedHeadCommit: string;
-    artifactIdentity: string;
-    artifactDigest: string;
-    sourceProvenanceDigest: string;
-    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
-    claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
-    acceptanceRequirements: readonly string[];
-    acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-  }>;
+    Readonly<{
+      schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+      generation: number;
+      planDigest: string;
+      taskId: string;
+      attempt: number;
+      producerTeam: TeamKey;
+      functionalOwner: ModuleDeliveryOwnerIdentity;
+      acceptanceOwner: ModuleDeliveryOwnerIdentity;
+      sourceCommit: string;
+      verifiedHeadCommit: string;
+      artifactIdentity: string;
+      artifactDigest: string;
+      sourceProvenanceDigest: string;
+      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
+      claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+      acceptanceRequirements: readonly string[];
+      acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+    }>;
 
 /** Historical V1 evidence identity; it intentionally has no feature head. */
 export type ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = Readonly<{

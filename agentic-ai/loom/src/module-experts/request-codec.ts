@@ -112,12 +112,15 @@ export class ModuleExpertRequestDecoder {
     const expert = ModuleExpertRequestDecoder.requiredString(expertProperty);
     const sourceCommit =
       ModuleExpertRequestDecoder.requiredString(sourceCommitProperty);
-    const originMainSha =
-      ModuleExpertRequestDecoder.requiredString(originMainShaProperty);
-    const pinnedLocalDevSha =
-      ModuleExpertRequestDecoder.requiredString(pinnedLocalDevShaProperty);
-    const featureHeadSha =
-      ModuleExpertRequestDecoder.requiredString(featureHeadShaProperty);
+    const originMainSha = ModuleExpertRequestDecoder.requiredString(
+      originMainShaProperty,
+    );
+    const pinnedLocalDevSha = ModuleExpertRequestDecoder.requiredString(
+      pinnedLocalDevShaProperty,
+    );
+    const featureHeadSha = ModuleExpertRequestDecoder.requiredString(
+      featureHeadShaProperty,
+    );
     const task = ModuleExpertRequestDecoder.requiredString(taskProperty);
     const instruction =
       ModuleExpertRequestDecoder.requiredString(instructionProperty);

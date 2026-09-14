@@ -120,16 +120,14 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     findings: [
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file:
-          '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+        file: '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
         line: 1,
         message:
           'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md: .cortex/teams/delivery-pipeline/dev-manager/policy.md',
       },
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file:
-          '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
         line: 1,
         message:
           'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
@@ -154,7 +152,7 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     ...auditRequest,
     documents: auditRequest.documents.map((document) =>
       document.relativePath ===
-        '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md'
+      '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md'
         ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
         : document.relativePath ===
             '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md'
@@ -162,7 +160,7 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
               ...document,
               content: '# Owner Graph\n\n- [Policy](policy.md)\n',
             }
-        : document,
+          : document,
     ),
   };
   expect(

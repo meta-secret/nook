@@ -63,9 +63,7 @@ export class UntrustedYamlBoundary {
       throw new Error('Unsupported JSON syntax value.');
     return value;
   }
-  static isList(
-    value: unknown,
-  ): value is readonly UntrustedYamlNode[] {
+  static isList(value: unknown): value is readonly UntrustedYamlNode[] {
     return Array.isArray(value);
   }
   static isNonEmptyString(value: UntrustedYamlNode): value is string {
@@ -102,7 +100,10 @@ export type UntrustedYamlNode =
   | UntrustedYamlMap;
 
 /** The host's concrete empty scalar without exporting it to domain APIs. */
-export type JsonTransportNull = Exclude<ReturnType<URLSearchParams['get']>, string>;
+export type JsonTransportNull = Exclude<
+  ReturnType<URLSearchParams['get']>,
+  string
+>;
 
 /** Untrusted object map from YAML/JSON. */
 export type UntrustedYamlMap = {

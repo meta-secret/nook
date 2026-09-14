@@ -81,7 +81,10 @@ export class DevLandCommand {
     const development = this.validateBase(featureHead.value);
     if (development.isErr()) return err(development.error);
 
-    const proof = this.verifyBuildProof(request.featureBranch, featureHead.value);
+    const proof = this.verifyBuildProof(
+      request.featureBranch,
+      featureHead.value,
+    );
     if (proof.isErr()) return err(proof.error);
 
     const ancestry = this.workspace.git.ancestry({
@@ -90,10 +93,7 @@ export class DevLandCommand {
       workingDirectory: development.value.path,
     });
     if (ancestry.isErr()) return err(ancestry.error);
-    if (
-      development.value.exists &&
-      ancestry.value === Ancestry.Ancestor
-    ) {
+    if (development.value.exists && ancestry.value === Ancestry.Ancestor) {
       return ok({
         mode: DevLandMode.AlreadyPresent,
         featureSha: featureHead.value,
@@ -220,7 +220,9 @@ export class DevLandCommand {
           exists: true,
         };
       } else {
-        const localMain = this.workspace.git.localBranchHead(ManagedBranch.Main);
+        const localMain = this.workspace.git.localBranchHead(
+          ManagedBranch.Main,
+        );
         if (localMain.isErr()) return err(localMain.error);
         if (localMain.value === false) {
           return err({
@@ -342,8 +344,7 @@ export class DevLandCommand {
     if (!request || !request.featureBranch) {
       return err({
         kind: DevFailureKind.Configuration,
-        message:
-          'The landing packet must include featureBranch',
+        message: 'The landing packet must include featureBranch',
       });
     }
 
@@ -357,8 +358,7 @@ export class DevLandCommand {
     ) {
       return err({
         kind: DevFailureKind.Configuration,
-        message:
-          'The landing packet must include featureBranch',
+        message: 'The landing packet must include featureBranch',
       });
     }
     let branchValue: string;

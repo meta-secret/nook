@@ -16,7 +16,10 @@ import type {
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
 import { TeamKey } from '../team-agents/catalog.ts';
-import { ModuleDeliveryOwner, type ModuleDeliveryOwnerIdentity } from './domain.ts';
+import {
+  ModuleDeliveryOwner,
+  type ModuleDeliveryOwnerIdentity,
+} from './domain.ts';
 import {
   MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
   MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
@@ -289,7 +292,9 @@ export class ModuleDeliveryEvidenceSchema {
     if (kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence)
       throw new Error('Evidence handoff kind is unsupported.');
     const originMainSha = legacy ? false : reader.commit('originMainSha');
-    const pinnedLocalDevSha = legacy ? false : reader.commit('pinnedLocalDevSha');
+    const pinnedLocalDevSha = legacy
+      ? false
+      : reader.commit('pinnedLocalDevSha');
     const taskId = reader.string('taskId');
     const attempt = reader.positiveInteger('attempt');
     const generation = reader.positiveInteger('generation');
@@ -329,8 +334,9 @@ export class ModuleDeliveryEvidenceSchema {
         acceptanceOwner,
         acceptanceRequirements,
         claimIdentities,
-        acceptedProviderEvidence:
-          ModuleDeliveryEvidenceSchema.legacyIdentities(acceptedProviderEvidence),
+        acceptedProviderEvidence: ModuleDeliveryEvidenceSchema.legacyIdentities(
+          acceptedProviderEvidence,
+        ),
         artifactIdentity,
         artifactDigest,
         verdict,
@@ -338,8 +344,13 @@ export class ModuleDeliveryEvidenceSchema {
       };
       return submission;
     }
-    if (typeof originMainSha !== 'string' || typeof pinnedLocalDevSha !== 'string')
-      throw new Error('Current evidence handoff is missing bootstrap evidence.');
+    if (
+      typeof originMainSha !== 'string' ||
+      typeof pinnedLocalDevSha !== 'string'
+    )
+      throw new Error(
+        'Current evidence handoff is missing bootstrap evidence.',
+      );
     const submission: ModuleDeliveryReadOnlyEvidenceSubmission = {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -355,8 +366,9 @@ export class ModuleDeliveryEvidenceSchema {
       acceptanceOwner,
       acceptanceRequirements,
       claimIdentities,
-      acceptedProviderEvidence:
-        ModuleDeliveryEvidenceSchema.currentIdentities(acceptedProviderEvidence),
+      acceptedProviderEvidence: ModuleDeliveryEvidenceSchema.currentIdentities(
+        acceptedProviderEvidence,
+      ),
       artifactIdentity,
       artifactDigest,
       verdict,
@@ -511,17 +523,19 @@ export class ModuleDeliveryEvidenceSchema {
   }
 
   private static teamKey(value: string): TeamKey {
-    const team = Object.values(TeamKey).find((candidate) => candidate === value);
+    const team = Object.values(TeamKey).find(
+      (candidate) => candidate === value,
+    );
     if (!team) throw new Error('Evidence handoff team is invalid.');
     return team;
   }
 
   private static ownerIdentity(value: string): ModuleDeliveryOwnerIdentity {
-    const owner = [...Object.values(TeamKey), ...Object.values(ModuleDeliveryOwner)].find(
-      (candidate) => candidate === value,
-    );
-    if (!owner)
-      throw new Error('Evidence handoff owner is invalid.');
+    const owner = [
+      ...Object.values(TeamKey),
+      ...Object.values(ModuleDeliveryOwner),
+    ].find((candidate) => candidate === value);
+    if (!owner) throw new Error('Evidence handoff owner is invalid.');
     return owner;
   }
 
@@ -533,7 +547,10 @@ export class ModuleDeliveryEvidenceSchema {
   ): readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[] {
     const legacy: ModuleDeliveryAcceptedProviderEvidenceIdentityV1[] = [];
     for (const identity of identities) {
-      if (identity.schemaVersion !== LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION)
+      if (
+        identity.schemaVersion !==
+        LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
+      )
         throw new Error('Evidence handoff nested schema version is invalid.');
       legacy.push(identity);
     }
@@ -583,7 +600,9 @@ export class ModuleDeliveryEvidenceSchema {
     );
     const sourceCommit = reader.commit('sourceCommit');
     const originMainSha = legacy ? false : reader.commit('originMainSha');
-    const pinnedLocalDevSha = legacy ? false : reader.commit('pinnedLocalDevSha');
+    const pinnedLocalDevSha = legacy
+      ? false
+      : reader.commit('pinnedLocalDevSha');
     const verifiedHeadCommit = reader.commit('verifiedHeadCommit');
     const artifactIdentity = reader.string('artifactIdentity');
     const artifactDigest = reader.sha256('artifactDigest');
@@ -616,12 +635,18 @@ export class ModuleDeliveryEvidenceSchema {
         verdict,
         claimIdentities,
         acceptanceRequirements,
-        acceptedProviderEvidence:
-          ModuleDeliveryEvidenceSchema.legacyIdentities(acceptedProviderEvidence),
+        acceptedProviderEvidence: ModuleDeliveryEvidenceSchema.legacyIdentities(
+          acceptedProviderEvidence,
+        ),
       };
     }
-    if (typeof originMainSha !== 'string' || typeof pinnedLocalDevSha !== 'string')
-      throw new Error('Current evidence identity is missing bootstrap evidence.');
+    if (
+      typeof originMainSha !== 'string' ||
+      typeof pinnedLocalDevSha !== 'string'
+    )
+      throw new Error(
+        'Current evidence identity is missing bootstrap evidence.',
+      );
     return {
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       generation,
@@ -641,8 +666,9 @@ export class ModuleDeliveryEvidenceSchema {
       verdict,
       claimIdentities,
       acceptanceRequirements,
-      acceptedProviderEvidence:
-        ModuleDeliveryEvidenceSchema.currentIdentities(acceptedProviderEvidence),
+      acceptedProviderEvidence: ModuleDeliveryEvidenceSchema.currentIdentities(
+        acceptedProviderEvidence,
+      ),
     };
   }
 

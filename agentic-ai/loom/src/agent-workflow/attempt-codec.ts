@@ -130,7 +130,8 @@ export class AgentAttemptTransport {
       (!hasFeatureHead || !hasOriginMain || !hasPinnedLocalDev)
     )
       throw new AgentAttemptDecodeError();
-    const metadata: AgentAttemptEventMetadata | LegacyAgentAttemptEventMetadata =
+    const metadata:
+      AgentAttemptEventMetadata | LegacyAgentAttemptEventMetadata =
       hasFeatureHead
         ? {
             ...commonMetadata,
@@ -170,7 +171,8 @@ export class AgentAttemptTransport {
           node,
           fields: [...fields, 'kind', ...Object.keys(optional)],
         });
-        return { ...metadata, kind, ...optional } as AgentAttemptEvent | LegacyAgentAttemptEvent;
+        return { ...metadata, kind, ...optional } as
+          AgentAttemptEvent | LegacyAgentAttemptEvent;
       }
       case AgentAttemptEventKind.ResultProjected:
         AgentAttemptTransport.exactKeys({
@@ -225,9 +227,7 @@ export class AgentAttemptTransport {
     request: AgentAttemptEventMigrationRequest,
   ): AgentAttemptEvent {
     const { event, featureHeadSha, originMainSha, pinnedLocalDevSha } = request;
-    if (
-      event.workflowVersion !== BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION
-    )
+    if (event.workflowVersion !== BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION)
       throw new AgentAttemptDecodeError();
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha,

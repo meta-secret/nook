@@ -77,8 +77,7 @@ export class DevPublishCommand {
     if (!devSha.value.equals(expectedSha)) {
       return err({
         kind: DevFailureKind.Race,
-        message:
-          `Local dev is at ${devSha.value.value()}, but the publication packet requires ${expectedSha.value()}`,
+        message: `Local dev is at ${devSha.value.value()}, but the publication packet requires ${expectedSha.value()}`,
       });
     }
     return ok({ devPath: development.value.path, devSha: devSha.value });
@@ -183,9 +182,7 @@ export class DevPublishCommand {
           'The selected local dev worktree changed before its snapshot could be published',
       });
     }
-    const beforePushRemote = this.workspace.git.remoteBranch(
-      ManagedBranch.Dev,
-    );
+    const beforePushRemote = this.workspace.git.remoteBranch(ManagedBranch.Dev);
     if (beforePushRemote.isErr()) return err(beforePushRemote.error);
     if (!this.sameRemote(beforePushRemote.value, remote.value)) {
       return err({
@@ -194,9 +191,7 @@ export class DevPublishCommand {
           'origin/dev changed while the manager snapshot was being prepared for publication',
       });
     }
-    const beforePushMain = this.workspace.git.remoteBranch(
-      ManagedBranch.Main,
-    );
+    const beforePushMain = this.workspace.git.remoteBranch(ManagedBranch.Main);
     if (beforePushMain.isErr()) return err(beforePushMain.error);
     if (!this.sameRemote(beforePushMain.value, main.value)) {
       return err({
@@ -212,10 +207,7 @@ export class DevPublishCommand {
       });
     if (beforePushPullRequest.isErr()) return err(beforePushPullRequest.error);
     if (
-      !this.samePullRequest(
-        priorPullRequest.value,
-        beforePushPullRequest.value,
-      )
+      !this.samePullRequest(priorPullRequest.value, beforePushPullRequest.value)
     ) {
       return err({
         kind: DevFailureKind.Race,
@@ -259,10 +251,7 @@ export class DevPublishCommand {
   }
 
   private sameRemote(
-    ...[left, right]: [
-      left: RemoteBranchSnapshot,
-      right: RemoteBranchSnapshot,
-    ]
+    ...[left, right]: [left: RemoteBranchSnapshot, right: RemoteBranchSnapshot]
   ): boolean {
     if (left.presence !== right.presence) return false;
     if (left.presence === RemoteBranchPresence.Absent) return true;

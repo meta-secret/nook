@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 
 import { tmpdir } from 'node:os';
 
@@ -77,14 +71,12 @@ describe('ordinary delegation run aggregation', () => {
         JSON.stringify(historical),
       ),
     ).toThrow('schema version is unsupported');
-    const migrated = DelegationRunFinalization.migrateDelegationRunResult(
-      {
-        result: historical,
-        featureHeadSha: 'f'.repeat(40),
-        originMainSha: 'b'.repeat(40),
-        pinnedLocalDevSha: 'c'.repeat(40),
-      },
-    );
+    const migrated = DelegationRunFinalization.migrateDelegationRunResult({
+      result: historical,
+      featureHeadSha: 'f'.repeat(40),
+      originMainSha: 'b'.repeat(40),
+      pinnedLocalDevSha: 'c'.repeat(40),
+    });
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(
       DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,

@@ -91,30 +91,27 @@ class BranchOnlyRunner implements CommandRunner {
   }
 }
 
-test(
-  'observes only the authorized branch when constructing the dev:land request',
-  () => {
-    const runner = new BranchOnlyRunner();
-    const workspace = new DevDeliveryWorkspace({
-      root: '/tmp/nook-dev-land',
-      runner,
-    });
-    const featureBranch = BranchName.parseFeature(FEATURE_BRANCH);
-    expect(featureBranch.isOk()).toBe(true);
-    if (featureBranch.isErr()) return;
-    const packet = DevCli.observeDevLandRequest(workspace, {
-      featureBranch: featureBranch.value,
-    });
+test('observes only the authorized branch when constructing the dev:land request', () => {
+  const runner = new BranchOnlyRunner();
+  const workspace = new DevDeliveryWorkspace({
+    root: '/tmp/nook-dev-land',
+    runner,
+  });
+  const featureBranch = BranchName.parseFeature(FEATURE_BRANCH);
+  expect(featureBranch.isOk()).toBe(true);
+  if (featureBranch.isErr()) return;
+  const packet = DevCli.observeDevLandRequest(workspace, {
+    featureBranch: featureBranch.value,
+  });
 
-    expect(packet.isOk()).toBe(true);
-    if (packet.isErr()) return;
-    expect(Object.hasOwn(packet.value, 'featureHeadSha')).toBe(false);
-    expect(Object.hasOwn(packet.value, 'expectedFeatureSha')).toBe(false);
-    expect(runner.requests.some(({ args }) => args[0] === 'rev-parse')).toBe(
-      false,
-    );
-  },
-);
+  expect(packet.isOk()).toBe(true);
+  if (packet.isErr()) return;
+  expect(Object.hasOwn(packet.value, 'featureHeadSha')).toBe(false);
+  expect(Object.hasOwn(packet.value, 'expectedFeatureSha')).toBe(false);
+  expect(runner.requests.some(({ args }) => args[0] === 'rev-parse')).toBe(
+    false,
+  );
+});
 
 test('does not require a caller-selected dev checkout path', () => {
   const names = ['FEATURE_BRANCH'] as const;

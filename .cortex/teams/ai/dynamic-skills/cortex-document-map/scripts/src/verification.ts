@@ -248,8 +248,7 @@ export class CortexDocumentMapVerifier {
       for (const indexedPath of indexedPaths) {
         const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
         const graphOwner = new CortexDocumentPath(graphPath).graphOwner();
-        if (indexedOwner === false || indexedOwner === graphOwner)
-          continue;
+        if (indexedOwner === false || indexedOwner === graphOwner) continue;
         this.add(args.findings)({
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: graphPath,

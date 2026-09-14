@@ -57,7 +57,8 @@ export class WorktreeInventoryDecoder {
         continue;
       }
       if (block.kind === WorktreeBlockKind.Empty) continue;
-      if (line.startsWith('HEAD ')) block.value.head = line.slice('HEAD '.length);
+      if (line.startsWith('HEAD '))
+        block.value.head = line.slice('HEAD '.length);
       if (line.startsWith('branch '))
         block.value.branch = line.slice('branch '.length);
       if (line === 'detached') block.value.detached = true;
@@ -114,16 +115,16 @@ export class ManagedWorktreeSelection {
       branch: ManagedBranch,
     ]
   ): Result<WorktreeRecord, DevFailure> {
-    const candidates = records.filter((record) =>
-      !record.prunable &&
-      record.branch.kind === WorktreeBranchKind.Branch &&
-      record.branch.name.value() === branch,
+    const candidates = records.filter(
+      (record) =>
+        !record.prunable &&
+        record.branch.kind === WorktreeBranchKind.Branch &&
+        record.branch.name.value() === branch,
     );
     if (candidates.length === 0) {
       return err({
         kind: DevFailureKind.Configuration,
-        message:
-          `No usable local ${branch} worktree was found; create one explicitly before delivery`,
+        message: `No usable local ${branch} worktree was found; create one explicitly before delivery`,
       });
     }
     if (candidates.length > 1) {

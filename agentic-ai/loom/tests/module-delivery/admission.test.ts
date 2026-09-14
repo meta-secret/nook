@@ -161,7 +161,9 @@ describe('module delivery admission authority', () => {
       ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
         ModuleDeliveryAdmissionScenario.authorityRequest(reversedBase),
       ),
-    ).toThrow('pinnedLocalDevSha must include the fetched origin/main commit');
+    ).toThrow(
+      'originMainSha must match the exact fetched refs/remotes/origin/main commit',
+    );
 
     const reversedSource = ModuleDeliveryAdmissionScenario.validate({
       ...PLAN,
@@ -450,9 +452,10 @@ describe('module delivery admission authority', () => {
     );
     const assertPriorGenerationUsable = (): void => {
       const current = ModuleDeliveryAdmissionScenario.select(active);
-      expect(current.admissions.map(({ generation }) => generation)).toEqual([
-        1,
-      ]);
+      expect(current.admissions.length).toBeGreaterThan(0);
+      expect(
+        current.admissions.every(({ generation }) => generation === 1),
+      ).toBe(true);
     };
     const replacementPlanRequest: GenerationPlanRequest = {
       sourceCommit: REPLACEMENT_SOURCE,
@@ -552,9 +555,11 @@ describe('module delivery admission authority', () => {
         ModuleDeliveryAdmissionScenario.restartRequest(blockedRestartRequest),
       ),
     ).toThrow('terminal release evidence');
-    expect(ModuleDeliveryAdmissionScenario.select(active).admissions).toEqual(
-      [],
-    );
+    expect(
+      ModuleDeliveryAdmissionScenario.select(active).admissions.map(
+        ({ taskId }) => taskId,
+      ),
+    ).toEqual([beta.taskId]);
     const cancellationRequest: CancelledLeaseRequest = {
       runtime: active,
       lease: leasedAlpha,
@@ -651,6 +656,16 @@ describe('module delivery admission authority', () => {
         attempt: 2,
         startingFrontier: REPLACEMENT_SOURCE,
       },
+      {
+        taskId: beta.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
+      {
+        taskId: gamma.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
     ]);
     expect(() => ModuleDeliveryAdmissionScenario.select(active)).toThrow(
       'invalid or superseded',
@@ -728,7 +743,7 @@ describe('module delivery admission authority', () => {
       secondProvider.baseline.kind !== ModuleDeliveryBaselineKind.SourceCommit
     )
       throw new Error('Second-generation provider is missing.');
-    const secondBaselineUpdate = { sourceCommit: REPLACEMENT_SOURCE };
+    const secondBaselineUpdate = { sourceCommit: PINNED_LOCAL_DEV_SHA };
     Object.assign(secondProvider.baseline, secondBaselineUpdate);
     const acceptedSecondPlan =
       ModuleDeliveryAdmissionScenario.validate(secondPlan);

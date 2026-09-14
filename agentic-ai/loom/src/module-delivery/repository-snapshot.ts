@@ -204,7 +204,8 @@ export class ModuleDeliverySourceRepositorySnapshot {
       metadata.push(...fingerprint.metadata);
     }
     return {
-      contentDigest: ModuleDeliverySourceRepositorySnapshot.digestBuffers(content),
+      contentDigest:
+        ModuleDeliverySourceRepositorySnapshot.digestBuffers(content),
       metadataDigest:
         ModuleDeliverySourceRepositorySnapshot.digestBuffers(metadata),
     };
@@ -314,7 +315,9 @@ export class ModuleDeliverySourceRepositorySnapshot {
         readFileSync(indexPath),
       ]),
       refsDigest:
-        ModuleDeliverySourceRepositorySnapshot.relevantRefsDigest(repositoryRoot),
+        ModuleDeliverySourceRepositorySnapshot.relevantRefsDigest(
+          repositoryRoot,
+        ),
       configDigest: ModuleDeliverySourceRepositorySnapshot.digestBuffers([
         ModuleDeliverySourceRepositorySnapshot.gitBytes(configInvocation),
       ]),
@@ -354,6 +357,4 @@ export class ModuleDeliverySourceRepositorySnapshot {
       );
     }
   }
-
-
 }

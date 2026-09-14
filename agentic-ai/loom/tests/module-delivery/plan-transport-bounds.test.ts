@@ -38,7 +38,10 @@ test('rejects module-plan objects with too many keys before boundary conversion'
   const oversizedObject = Object.fromEntries(
     Array.from(
       { length: MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS + 1 },
-      (...[, index]: [ignored: number, index: number]) => [`extra-${index}`, true],
+      (...[, index]: [ignored: number, index: number]) => [
+        `extra-${index}`,
+        true,
+      ],
     ),
   );
   expectTransportLimit(

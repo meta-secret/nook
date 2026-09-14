@@ -18,9 +18,7 @@ import {
   ModulePlanV4RootField,
   ModulePlanV5RootField,
 } from './codec-schema.ts';
-import type {
-  RejectedModulePlanRequest,
-} from './codec-schema.ts';
+import type { RejectedModulePlanRequest } from './codec-schema.ts';
 import {
   MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
   MAX_MODULE_DELIVERY_NODES,
@@ -55,7 +53,8 @@ export class ModuleDeliveryPlanSchema {
     serialized: string,
   ): CompatibleModuleDeliveryPlanDecode {
     if (
-      Buffer.byteLength(serialized, 'utf8') > MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES
+      Buffer.byteLength(serialized, 'utf8') >
+      MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES
     ) {
       const error = new ModuleDeliveryPlanTransportLimit({
         code: ModuleDeliveryPlanTransportLimitCode.SerializedByteLimit,
@@ -107,9 +106,7 @@ export class ModuleDeliveryPlanSchema {
 
   /** Iteratively bounds parsed JSON before the recursive transport adapter. */
   private static assertTransportWithinBounds(node: unknown): void {
-    const pending: ModulePlanTransportFrame[] = [
-      { node, depth: 0, path: '$' },
-    ];
+    const pending: ModulePlanTransportFrame[] = [{ node, depth: 0, path: '$' }];
     let aggregateNodes = 0;
     let aggregateStringCodeUnits = 0;
     while (pending.length > 0) {
@@ -170,18 +167,16 @@ export class ModuleDeliveryPlanSchema {
       if (typeof current.node !== 'object') continue;
       if (!UntrustedYamlBoundary.isRecord(current.node)) continue;
       const object = current.node;
-      const keys = Object.keys(object);
-      if (keys.length > MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS)
+      const entries = Object.entries(object);
+      if (entries.length > MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS)
         ModuleDeliveryPlanSchema.throwTransportLimit({
           code: ModuleDeliveryPlanTransportLimitCode.ObjectKeyLimit,
-          observed: keys.length,
+          observed: entries.length,
           limit: MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
           path: current.path,
         });
       const childDepth = current.depth + 1;
-      for (let index = keys.length - 1; index >= 0; index -= 1) {
-        const key = keys[index];
-        if (key === undefined) continue;
+      for (const [key, value] of entries.reverse()) {
         aggregateStringCodeUnits += key.length;
         if (
           aggregateStringCodeUnits >
@@ -194,7 +189,7 @@ export class ModuleDeliveryPlanSchema {
             path: '$',
           });
         pending.push({
-          node: object[key],
+          node: value,
           depth: childDepth,
           path: current.path,
         });
@@ -274,9 +269,8 @@ export class ModuleDeliveryPlanSchema {
     const parentOwnedResources = fields.nonEmptyStringList(
       'parentOwnedResources',
     );
-    const parentJoin = ModuleDeliveryPlanNodeCodec.decodeParentJoin(
-      parentJoinRequest,
-    );
+    const parentJoin =
+      ModuleDeliveryPlanNodeCodec.decodeParentJoin(parentJoinRequest);
     if (version === 1) {
       const maxConcurrency = fields.positiveInteger('maxConcurrency');
       const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({

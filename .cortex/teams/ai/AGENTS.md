@@ -32,16 +32,10 @@ AI Team Gizmo and its leaves consume the canonical feature branch name and the
 bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
 before planning, delegation, worktree creation, or edits. It records
 `originMainSha` for the exact freshly fetched `origin/main` and
-`pinnedLocalDevSha` only after canonical local `main` and `dev` are
-synchronized. `originMainSha` must be an ancestor of `pinnedLocalDevSha`. Prime
-resolves the latest committed `refs/heads/dev^{commit}` and records that exact
-post-synchronization commit as `pinnedLocalDevSha` bootstrap evidence. Every
-new feature mission, feature branch, and worktree must use that exact latest
-committed canonical local `dev` commit as its base. A previously pinned or
-otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another
-alternate base is invalid. If equality with post-synchronization
-`refs/heads/dev` cannot be proved, the run fails closed. The base is preserved
-after feature creation. The branch name is the workflow authority. Before each
+`pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized;
+`originMainSha` must be an ancestor of `pinnedLocalDevSha`. Prime creates the
+feature branch and worktree from that current committed local-dev feature base
+and preserves it. The branch name is the workflow authority. Before each
 stage, delivery resolves the latest committed branch head. A branch advance
 follows the latest head and reruns affected evidence. SHAs observed during the
 run are evidence, not cross-stage authority. The AI team fails closed on

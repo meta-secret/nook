@@ -152,11 +152,7 @@ describe('pinned local-dev comparison evidence', () => {
         'local dev\n',
         'local dev',
       );
-      const featureSha = fixture.commit(
-        'feature.txt',
-        'feature\n',
-        'feature',
-      );
+      const featureSha = fixture.commit('feature.txt', 'feature\n', 'feature');
       fixture.originRef(originMainSha);
 
       fixture.git('checkout', '-q', '--detach', originMainSha);

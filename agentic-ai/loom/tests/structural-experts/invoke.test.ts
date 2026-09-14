@@ -378,6 +378,9 @@ test('out-of-snapshot evidence becomes a replayable sanitized failed terminal', 
   const request: StructuralEvidenceInvocationRequest = {
     ...base,
     sourceCommit: TRACKED_SOURCE_COMMIT,
+    originMainSha: TRACKED_SOURCE_COMMIT,
+    pinnedLocalDevSha: TRACKED_SOURCE_COMMIT,
+    featureHeadSha: TRACKED_SOURCE_COMMIT,
     evidencePaths: ['Taskfile.yml'],
   };
   const runDirectory = StructuralExpertsInvokeScenario.processingRunDirectory(

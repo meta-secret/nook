@@ -66,20 +66,6 @@ Use these workflows for AI-owned skills and cross-package changes.
 - [Loom specialist](loom-specialist/knowledge-graph.md) handles packeted AI-owned Loom work.
 - [Cortex specialist](cortex-specialist/knowledge-graph.md) handles packeted AI-owned Cortex work.
 
-For every new feature mission, Gizmo Prime first runs `git fetch --prune origin`
-and synchronizes canonical local `main` and `dev`. A fetch or synchronization
-failure fails closed. Only after synchronization does Prime resolve the latest
-committed `refs/heads/dev^{commit}`. That exact post-synchronization commit is
-recorded as `pinnedLocalDevSha` for bootstrap evidence, which every AI packet
-must carry. Every new feature mission, feature branch, and worktree must use
-that exact latest committed
-canonical local `dev` commit as its base. A previously pinned or otherwise
-older local-dev SHA, `origin/dev`, `origin/main`, or another alternate base is
-invalid. If equality with post-synchronization `refs/heads/dev` cannot be
-proved, bootstrap fails closed. The base is preserved after feature creation.
-The canonical branch name is the workflow authority. Observed SHAs are
-evidence only. Missing or unprovable bootstrap evidence fails closed.
-
 AI dispatch uses actual admission results from the active harness. Every
 dependency-ready disjoint specialist is attempted immediately and concurrently. Temporary
 admission refusals queue for retry when capacity releases. Host or session

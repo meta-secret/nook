@@ -99,8 +99,7 @@ export class PinnedDevBaseEnvironment {
     }).execute();
     if (result.isErr() || result.value.exitCode !== 0) {
       return err({
-        message:
-          `Unable to resolve ${args.ref} for pinned local-dev bootstrap evidence.`,
+        message: `Unable to resolve ${args.ref} for pinned local-dev bootstrap evidence.`,
       });
     }
     const sha = result.value.stdout.trim();

@@ -56,9 +56,7 @@ import type {
   ModuleDeliveryAuthorityRepositoryInspection,
   RecordModuleDeliveryAttemptDispositionRequest,
 } from './integration-provenance.ts';
-import type {
-  ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration-contracts.ts';
+import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration-contracts.ts';
 
 import type {
   AcceptedModuleDeliveryEvidenceInspection,
@@ -486,7 +484,8 @@ export class ModuleGenerationAuthority {
     };
     ModuleAdmissionStateRegistry.assertAdmissionStateCurrent(currentInspection);
     if (
-      inspection.state.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
+      inspection.state.originMainSha !==
+        authority.acceptedPlan.plan.originMainSha ||
       inspection.state.pinnedLocalDevSha !==
         authority.acceptedPlan.plan.pinnedLocalDevSha
     )
@@ -719,7 +718,8 @@ export class ModuleGenerationAuthority {
       ) !== inspection.lease ||
       inspection.lease.generation !== authority.acceptedPlan.plan.generation ||
       inspection.lease.planDigest !== authority.acceptedPlan.planDigest ||
-      inspection.lease.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
+      inspection.lease.originMainSha !==
+        authority.acceptedPlan.plan.originMainSha ||
       inspection.lease.pinnedLocalDevSha !==
         authority.acceptedPlan.plan.pinnedLocalDevSha
     )

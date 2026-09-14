@@ -125,7 +125,9 @@ class DevManagerGizmoRunner implements CommandRunner {
         return ok(
           this.output({
             stdout: `${
-              request.workingDirectory === this.request.mainPath ? 'main' : 'dev'
+              request.workingDirectory === this.request.mainPath
+                ? 'main'
+                : 'dev'
             }\n`,
           }),
         );
@@ -140,9 +142,9 @@ class DevManagerGizmoRunner implements CommandRunner {
                   ? `${this.fetchedOriginMainSha || this.originMainSha}\n`
                   : `${
                       request.workingDirectory === this.request.devPath
-                          ? (this.request.options.observedHeadSha ||
-                          this.request.options.localSha)
-                        : (this.request.options.mainSha || this.originMainSha)
+                        ? this.request.options.observedHeadSha ||
+                          this.request.options.localSha
+                        : this.request.options.mainSha || this.originMainSha
                     }\n`,
           }),
         );
@@ -166,7 +168,7 @@ class DevManagerGizmoRunner implements CommandRunner {
     if (reference === 'refs/heads/main') {
       return ok(
         this.output({
-                stdout: `${this.fetchedOriginMainSha || this.originMainSha} refs/heads/main\n`,
+          stdout: `${this.fetchedOriginMainSha || this.originMainSha} refs/heads/main\n`,
         }),
       );
     }
@@ -233,8 +235,7 @@ class DevManagerGizmoRunner implements CommandRunner {
     ) {
       return this.output({ stdout: '[]' });
     }
-    const headSha =
-      this.pullRequest?.headSha || this.request.options.localSha;
+    const headSha = this.pullRequest?.headSha || this.request.options.localSha;
     return this.output({
       stdout: JSON.stringify([
         {
@@ -565,8 +566,8 @@ test('rejects a mismatched existing PR before any PR mutation', () => {
       harness.runner.requests.some(
         (request) =>
           request.executable === CommandExecutable.GitHub &&
-          (request.args[0] === 'pr' &&
-            (request.args[1] === 'create' || request.args[1] === 'edit')),
+          request.args[0] === 'pr' &&
+          (request.args[1] === 'create' || request.args[1] === 'edit'),
       ),
     ).toBe(false);
   } finally {

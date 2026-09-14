@@ -5,9 +5,7 @@ import { expect, test } from 'bun:test';
 import { ok, type Result } from 'neverthrow';
 
 import { DevGitRepository } from '../src/dev-delivery/dev-git.ts';
-import {
-  DevLandCommand,
-} from '../src/dev-delivery/dev-land.ts';
+import { DevLandCommand } from '../src/dev-delivery/dev-land.ts';
 import { DevGitMergeBoundary } from '../src/dev-delivery/dev-git-merge.ts';
 import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
@@ -91,29 +89,28 @@ test('dev:land rejects a non-canonical feature branch before reading Git', () =>
 });
 
 test('merge boundary rejects a detached feature worktree before mutation', () => {
-    const root = mkdtempSync(join(tmpdir(), 'nook-dev-land-boundary-'));
-    const featureHead = CommitSha.parse(SHA_B);
-    const featureBranch = BranchName.parse('codex/agent-branching');
-    if (featureHead.isErr() || featureBranch.isErr()) {
-      rmSync(root, { recursive: true, force: true });
-      return;
-    }
-    const runner = new DetachedMergeRunner(root);
-    try {
-      const result = new DevGitRepository({ root, runner }).mergeInto({
-        featureHead: featureHead.value,
-        featureBranch: featureBranch.value,
-      });
+  const root = mkdtempSync(join(tmpdir(), 'nook-dev-land-boundary-'));
+  const featureHead = CommitSha.parse(SHA_B);
+  const featureBranch = BranchName.parse('codex/agent-branching');
+  if (featureHead.isErr() || featureBranch.isErr()) {
+    rmSync(root, { recursive: true, force: true });
+    return;
+  }
+  const runner = new DetachedMergeRunner(root);
+  try {
+    const result = new DevGitRepository({ root, runner }).mergeInto({
+      featureHead: featureHead.value,
+      featureBranch: featureBranch.value,
+    });
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
-      expect(
-        runner.requests.some(
-          ({ args }) => args[0] === 'merge' || args[0] === 'update-ref',
-        ),
-      ).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  },
-);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(
+      runner.requests.some(
+        ({ args }) => args[0] === 'merge' || args[0] === 'update-ref',
+      ),
+    ).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

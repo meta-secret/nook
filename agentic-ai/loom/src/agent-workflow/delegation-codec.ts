@@ -142,9 +142,8 @@ export class DelegationJournalSchema {
   ] as const;
 
   static decodeDelegationPlan(serialized: string): DelegationPlan {
-    const decoded = DelegationJournalSchema.decodeCompatibleDelegationPlan(
-      serialized,
-    );
+    const decoded =
+      DelegationJournalSchema.decodeCompatibleDelegationPlan(serialized);
     if (decoded.schemaVersion !== DELEGATION_PLAN_SCHEMA_VERSION)
       throw new Error('Delegation plan schema version is unsupported.');
     return decoded;
@@ -233,10 +232,10 @@ export class DelegationJournalSchema {
     });
     const withoutFeatureHead =
       plan.schemaVersion === FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION
-      ? (() => {
+        ? (() => {
             const { featureHeadSha: _observedFeatureHeadSha, ...rest } = plan;
             return rest;
-        })()
+          })()
         : plan;
     const migrated: DelegationPlan = {
       ...withoutFeatureHead,

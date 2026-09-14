@@ -294,7 +294,8 @@ export class ModuleIntegrationCoordinator {
       throw new Error('Provider lease belongs to an obsolete plan.');
     }
     if (
-      inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write &&
+      inspection.submission.kind ===
+        ModuleDeliveryProviderSubmissionKind.Write &&
       (inspection.submission.originMainSha !== inspection.lease.originMainSha ||
         inspection.submission.pinnedLocalDevSha !==
           inspection.lease.pinnedLocalDevSha)

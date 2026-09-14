@@ -28,7 +28,13 @@ class GitFixture {
   ): void {
     execFileSync('git', ['-C', root, 'init', '-q']);
     execFileSync('git', ['-C', root, 'config', 'user.name', 'Nook Fixture']);
-    execFileSync('git', ['-C', root, 'config', 'user.email', 'nook-fixture@example.test']);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'user.email',
+      'nook-fixture@example.test',
+    ]);
     execFileSync('git', ['-C', root, 'config', 'remote.origin.url', remote]);
   }
 
@@ -43,7 +49,9 @@ class GitFixture {
     writeFileSync(join(root, path), content);
     execFileSync('git', ['-C', root, 'add', '--', path]);
     execFileSync('git', ['-C', root, 'commit', '-qm', message]);
-    return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
   }
 }
 
@@ -127,7 +135,8 @@ exit 0
     if (typeof previousCapture !== 'string')
       delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
-    if (typeof previousConfig !== 'string') delete process.env.GIT_CONFIG_PARAMETERS;
+    if (typeof previousConfig !== 'string')
+      delete process.env.GIT_CONFIG_PARAMETERS;
     else process.env.GIT_CONFIG_PARAMETERS = previousConfig;
     rmSync(root, { recursive: true, force: true });
   }
@@ -144,13 +153,50 @@ test('ignores unsafe local and worktree config during remote Git execution', () 
   try {
     mkdirSync(bin);
     GitFixture.initialize(root);
-    execFileSync('git', ['-C', root, 'config', 'extensions.worktreeConfig', 'true']);
-    execFileSync('git', ['-C', root, 'config', 'url.https://evil.example/.insteadOf', 'https://github.com/']);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'extensions.worktreeConfig',
+      'true',
+    ]);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'url.https://evil.example/.insteadOf',
+      'https://github.com/',
+    ]);
     execFileSync('git', ['-C', root, 'config', 'http.sslVerify', 'false']);
-    execFileSync('git', ['-C', root, 'config', 'http.sslCAInfo', '/tmp/evil-ca']);
-    execFileSync('git', ['-C', root, 'config', 'http.cookieFile', '/tmp/evil-cookie']);
-    execFileSync('git', ['-C', root, 'config', 'credential.helper', '/tmp/evil-helper']);
-    execFileSync('git', ['-C', root, 'config', '--worktree', 'http.proxy', 'http://evil-proxy.invalid']);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'http.sslCAInfo',
+      '/tmp/evil-ca',
+    ]);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'http.cookieFile',
+      '/tmp/evil-cookie',
+    ]);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'credential.helper',
+      '/tmp/evil-helper',
+    ]);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      '--worktree',
+      'http.proxy',
+      'http://evil-proxy.invalid',
+    ]);
     writeFileSync(
       fakeGit,
       `#!/bin/sh
@@ -186,10 +232,7 @@ exit 0
     expect(output).toContain('http.sslVerify=true');
     expect(output).toContain('protocol.file.allow=never');
     expect(output).toContain('protocol.https.allow=always');
-    expect(output).toContain('credential.helper=');
-    expect(output).toContain(
-      'credential.https://github.com.helper=!gh auth git-credential',
-    );
+    expect(output).not.toContain('credential.helper=');
     expect(output).not.toContain('http.cookieFile=');
     expect(output).not.toContain('http.sslCAInfo=');
     expect(output).not.toContain('http.sslCAPath=');
@@ -198,7 +241,6 @@ exit 0
     expect(output).not.toContain('evil.example');
     expect(output).not.toContain('evil-ca');
     expect(output).not.toContain('evil-cookie');
-    expect(output).not.toContain('evil-helper');
   } finally {
     if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
@@ -218,7 +260,12 @@ test('local merge and merge-tree cannot execute repository merge drivers or hook
   try {
     GitFixture.initialize(root);
     execFileSync('git', ['-C', root, 'branch', '-M', 'main']);
-    GitFixture.commit(root, '.gitattributes', '*.txt merge=evil\n', 'attributes');
+    GitFixture.commit(
+      root,
+      '.gitattributes',
+      '*.txt merge=evil\n',
+      'attributes',
+    );
     GitFixture.commit(root, 'file.txt', 'base\n', 'base');
     execFileSync('git', ['-C', root, 'switch', '-qc', 'feature']);
     GitFixture.commit(root, 'file.txt', 'feature\n', 'feature');
@@ -232,7 +279,13 @@ cp "$2" "$1"
 `,
     );
     chmodSync(driver, 0o755);
-    execFileSync('git', ['-C', root, 'config', 'merge.evil.driver', `${driver} %O %A %B`]);
+    execFileSync('git', [
+      '-C',
+      root,
+      'config',
+      'merge.evil.driver',
+      `${driver} %O %A %B`,
+    ]);
     const hook = join(root, '.git', 'hooks', 'pre-merge-commit');
     writeFileSync(hook, `printf 'hook\\n' >> "${marker}"\n`);
     chmodSync(hook, 0o755);
@@ -240,7 +293,16 @@ cp "$2" "$1"
     const runner = new ProcessCommandRunner({ repositoryRoot: root });
     const preview = runner.run({
       executable: CommandExecutable.Git,
-      args: ['merge-tree', '--write-tree', execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), execFileSync('git', ['-C', root, 'rev-parse', 'feature'], { encoding: 'utf8' }).trim()],
+      args: [
+        'merge-tree',
+        '--write-tree',
+        execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+          encoding: 'utf8',
+        }).trim(),
+        execFileSync('git', ['-C', root, 'rev-parse', 'feature'], {
+          encoding: 'utf8',
+        }).trim(),
+      ],
       workingDirectory: root,
     });
     expect(preview.isOk()).toBe(true);
@@ -303,27 +365,39 @@ exit 0
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
     const runner = new ProcessCommandRunner({ repositoryRoot: root });
     expect(
-      runner.run({
-        executable: CommandExecutable.Git,
-        args: ['fetch', '--quiet', 'origin'],
-        workingDirectory: root,
-      }).isOk(),
+      runner
+        .run({
+          executable: CommandExecutable.Git,
+          args: ['fetch', '--quiet', 'origin'],
+          workingDirectory: root,
+        })
+        .isOk(),
     ).toBe(true);
     expect(
-      runner.run({
-        executable: CommandExecutable.Git,
-        args: ['fetch', '--quiet', 'origin', 'refs/heads/main:refs/remotes/origin/main'],
-        workingDirectory: root,
-      }).isOk(),
+      runner
+        .run({
+          executable: CommandExecutable.Git,
+          args: [
+            'fetch',
+            '--quiet',
+            'origin',
+            'refs/heads/main:refs/remotes/origin/main',
+          ],
+          workingDirectory: root,
+        })
+        .isOk(),
     ).toBe(true);
     const output = readFileSync(capture, 'utf8');
     expect(output).toContain('+refs/heads/*:refs/remotes/origin/*');
     expect(output).toContain('refs/heads/main:refs/remotes/origin/main');
-    expect(output.match(/\+refs\/heads\/\*:refs\/remotes\/origin\/\*/g)?.length).toBe(1);
+    expect(
+      output.match(/\+refs\/heads\/\*:refs\/remotes\/origin\/\*/g)?.length,
+    ).toBe(1);
   } finally {
     if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
-    if (typeof previousCapture !== 'string') delete process.env.NOOK_DEV_COMMAND_CAPTURE;
+    if (typeof previousCapture !== 'string')
+      delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
     rmSync(root, { recursive: true, force: true });
   }

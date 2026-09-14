@@ -79,10 +79,7 @@ export class DevCli {
   }
 
   /** Resolves the target identities required by the dev:land packet. */
-  static requiredDevLandPacket(): Result<
-    DevLandProvenancePacket,
-    DevFailure
-  > {
+  static requiredDevLandPacket(): Result<DevLandProvenancePacket, DevFailure> {
     const featureBranch = DevCli.requiredFeatureBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);
     return ok({
@@ -109,8 +106,7 @@ export class DevCli {
     if (!featureBranch.value.equals(packet.featureBranch)) {
       return err({
         kind: DevFailureKind.Configuration,
-        message:
-          `The feature worktree branch ${featureBranch.value.value()} does not match the authorized FEATURE_BRANCH ${packet.featureBranch.value()}`,
+        message: `The feature worktree branch ${featureBranch.value.value()} does not match the authorized FEATURE_BRANCH ${packet.featureBranch.value()}`,
       });
     }
     return ok(packet);

@@ -77,12 +77,7 @@ describe('run command', () => {
     const immutableReads = [
       ['rev-parse', 'HEAD'],
       ['rev-parse', '--verify', 'HEAD^{commit}'],
-      [
-        'merge-base',
-        '--is-ancestor',
-        'HEAD',
-        'HEAD',
-      ],
+      ['merge-base', '--is-ancestor', 'HEAD', 'HEAD'],
       ['status', '--porcelain', '--untracked-files=normal'],
     ];
     for (const args of immutableReads) {
@@ -99,34 +94,31 @@ describe('run command', () => {
     }
   });
 
-  test(
-    'rejects caller config, write, and network arguments for immutable Git',
-    () => {
-      const hostileArguments = [
-        ['rev-parse', 'HEAD', '-c', 'protocol.https.allow=always'],
-        [
-          'status',
-          '--porcelain',
-          '--untracked-files=normal',
-          '-c',
-          'core.pager=cat',
-        ],
-        ['commit', '-m', 'hostile write'],
-        ['fetch', 'origin'],
-        ['push', 'origin', 'HEAD'],
-      ];
-      for (const args of hostileArguments) {
-        const launch = new RepositoryCommand({
-          command: RepositoryCommandExecutable.Git,
-          args,
-          gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
-          rootDirectory: REPOSITORY_ROOT,
-          workingDirectory: REPOSITORY_ROOT,
-        }).execute();
+  test('rejects caller config, write, and network arguments for immutable Git', () => {
+    const hostileArguments = [
+      ['rev-parse', 'HEAD', '-c', 'protocol.https.allow=always'],
+      [
+        'status',
+        '--porcelain',
+        '--untracked-files=normal',
+        '-c',
+        'core.pager=cat',
+      ],
+      ['commit', '-m', 'hostile write'],
+      ['fetch', 'origin'],
+      ['push', 'origin', 'HEAD'],
+    ];
+    for (const args of hostileArguments) {
+      const launch = new RepositoryCommand({
+        command: RepositoryCommandExecutable.Git,
+        args,
+        gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
+        rootDirectory: REPOSITORY_ROOT,
+        workingDirectory: REPOSITORY_ROOT,
+      }).execute();
 
-        assert(launch.isErr());
-        expect(launch.error.message).toContain('Immutable Git policy');
-      }
-    },
-  );
+      assert(launch.isErr());
+      expect(launch.error.message).toContain('Immutable Git policy');
+    }
+  });
 });

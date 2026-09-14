@@ -205,7 +205,7 @@ test('remote build title fixture rejects unrelated run-name modes', () => {
       `Remote / build:compile @ ${SHA_A} / compile-cache=disabled / manual`,
     ),
   ).toBe(false);
-  expect(
-    titlePattern.test(`Remote / hive:verify @ ${SHA_A} / manual`),
-  ).toBe(false);
+  expect(titlePattern.test(`Remote / hive:verify @ ${SHA_A} / manual`)).toBe(
+    false,
+  );
 });

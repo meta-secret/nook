@@ -649,7 +649,6 @@ export class ModuleIntegrationProvenanceRegistry {
   }
 }
 
-
 export type SourceRepositorySnapshot = {
   readonly headCommit: string;
   readonly symbolicHead: string;

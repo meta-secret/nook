@@ -117,12 +117,13 @@ describe('module delivery source provenance', () => {
       workspace,
       cleanupHandle,
     });
-    const session = ModuleIntegrationProvenanceRegistry.createIntegrationSession({
-      cleanupHandle,
-      workspace,
-      integrationRef: '',
-      currentHead: state.headCommit,
-    });
+    const session =
+      ModuleIntegrationProvenanceRegistry.createIntegrationSession({
+        cleanupHandle,
+        workspace,
+        integrationRef: '',
+        currentHead: state.headCommit,
+      });
 
     ModuleIntegrationProvenanceRegistry.registerIntegrationState({
       authority: runtime.authority,
@@ -151,7 +152,11 @@ describe('module delivery source provenance', () => {
       Reflect.set(provenance.sourceSnapshot, 'contentDigest', 'f'.repeat(64)),
     ).toBe(false);
     expect(
-      Reflect.set(provenance.workspaceSnapshot, 'metadataDigest', 'f'.repeat(64)),
+      Reflect.set(
+        provenance.workspaceSnapshot,
+        'metadataDigest',
+        'f'.repeat(64),
+      ),
     ).toBe(false);
     const forgedProvenance = {
       ...provenance,

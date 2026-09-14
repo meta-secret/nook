@@ -634,7 +634,8 @@ class AgentJournalRecords<TTask extends string> {
       args.configuration.workflowVersion === args.identity.workflowVersion &&
       args.configuration.sourceCommit === args.identity.sourceCommit &&
       args.configuration.originMainSha === args.identity.originMainSha &&
-      args.configuration.pinnedLocalDevSha === args.identity.pinnedLocalDevSha &&
+      args.configuration.pinnedLocalDevSha ===
+        args.identity.pinnedLocalDevSha &&
       args.configuration.featureHeadSha === args.identity.featureHeadSha &&
       args.configuration.task === args.identity.task &&
       args.configuration.agent === args.identity.agent &&

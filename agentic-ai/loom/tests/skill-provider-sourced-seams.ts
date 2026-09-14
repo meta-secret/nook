@@ -116,11 +116,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '220e7aa593817fbc849cee1025b2d05ae608f9cfd2735d3f499e4cc020898324',
+    '7231c8dda8fa05bbcb3dea34011aeeea2e895878158de4c91b3bb3f319796d84',
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '694df9d56073e6a1b76593f7a9657905fc9a0f9b85789fcb5f0255fe38a74d80',
+    '9c354590048e367cd6b9829772ec3167ac083211d9e93fcf1b9cf79467403d91',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -136,7 +136,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/formatting/format-host-apply.test.sh',
-    'e44aea2003c2c450684c4a1ab5ae85d76d2adeba855840e77c2a2b1fd83ff280',
+    'a204837c5157046a566f6925191e387fae8de45324c014aa5593bb2cb412d78f',
   ],
   [
     'agentic-ai/ci-agent/scripts/exit-smoke.mjs',

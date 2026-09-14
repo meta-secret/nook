@@ -21,19 +21,11 @@ Load only the authority needed for the assigned Cortex packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-The packet names the canonical feature branch and must carry bootstrap evidence.
-`originMainSha` identifies the freshly fetched `origin/main`. After canonical
-local `main` and `dev` are synchronized, Prime resolves the latest committed
-`refs/heads/dev^{commit}` and records that exact commit as `pinnedLocalDevSha`.
-Every new feature mission, feature branch, and worktree must use that exact
-post-synchronization canonical local `dev` commit as its base. A previously
-pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or
-another alternate base is invalid. Require `originMainSha` to be an ancestor of
-`pinnedLocalDevSha`. If equality with post-synchronization
-`refs/heads/dev` cannot be proved, bootstrap fails closed. The base is preserved
-after feature creation. Use the current parent frontier for the specialist
-worktree. Resolve the latest committed branch head before each stage. A branch
-advance follows the latest head and reruns affected evidence. The canonical
-branch name is the workflow authority. SHAs observed in packets or results
-are run evidence only, not feature authority. Missing or unprovable
-bootstrap/branch evidence fails closed.
+The packet names the canonical feature branch and may carry bootstrap evidence:
+`originMainSha` for the freshly fetched `origin/main` and `pinnedLocalDevSha`
+for the synchronized local-dev feature base. Require the former to be an
+ancestor of the latter. Use the current parent frontier for the specialist
+worktree. Resolve the latest committed branch head before each stage; a branch
+advance follows the latest head and reruns affected evidence. SHAs observed in
+packets or results are run evidence only, not feature authority. Reject missing
+or unprovable bootstrap/branch evidence.

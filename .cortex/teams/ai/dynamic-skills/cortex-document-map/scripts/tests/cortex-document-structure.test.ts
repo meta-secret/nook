@@ -370,9 +370,14 @@ test('indexes Team Gizmo documents only through their owning graph', () => {
       devTarget: 'policy.md',
       gizmoTarget: 'policy.md',
     });
-  const graphPath =
-    '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
+  const graphPath = '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
   const policyPath = '.cortex/teams/delivery-pipeline/gizmo/policy.md';
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: graphPath,
+      content: '# Delivery Pipeline Team Gizmo\n',
+    }),
+  );
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: policyPath,

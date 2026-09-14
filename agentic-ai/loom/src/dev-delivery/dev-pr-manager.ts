@@ -60,9 +60,7 @@ export class DevPrManagerCommand {
         message: `Local dev is dirty; refusing to manage the selected SHA: ${development.value.path}`,
       });
     }
-    const developmentBranch = workspace.git.branchAt(
-      development.value.path,
-    );
+    const developmentBranch = workspace.git.branchAt(development.value.path);
     if (developmentBranch.isErr()) return err(developmentBranch.error);
     if (developmentBranch.value.value() !== ManagedBranch.Dev) {
       return err({
@@ -128,8 +126,7 @@ export class DevPrManagerCommand {
     });
     if (existingPullRequest.isErr()) return err(existingPullRequest.error);
     if (
-      existingPullRequest.value.kind ===
-      DevelopmentPullRequestLookupKind.Found
+      existingPullRequest.value.kind === DevelopmentPullRequestLookupKind.Found
     ) {
       const existing = existingPullRequest.value.pullRequest;
       if (
@@ -230,9 +227,7 @@ export class DevPrManagerCommand {
           'Local dev worktree branch changed immediately before manager PR mutation',
       });
     }
-    const localDevSha = request.workspace.git.headAt(
-      request.developmentPath,
-    );
+    const localDevSha = request.workspace.git.headAt(request.developmentPath);
     if (localDevSha.isErr()) return err(localDevSha.error);
     if (!localDevSha.value.equals(request.expectedSha)) {
       return err({

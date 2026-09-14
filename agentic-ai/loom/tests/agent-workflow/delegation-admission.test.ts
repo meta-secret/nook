@@ -196,14 +196,12 @@ describe('ordinary delegation admission', () => {
     expect(() =>
       DelegationJournalSchema.decodeDelegationPlan(JSON.stringify(historical)),
     ).toThrow('schema version is unsupported');
-    const migrated = DelegationJournalSchema.migrateDelegationPlan(
-      {
-        plan: historical,
-        featureBranch: FEATURE_BRANCH,
-        originMainSha: SOURCE_COMMIT,
-        pinnedLocalDevSha: SOURCE_COMMIT,
-      },
-    );
+    const migrated = DelegationJournalSchema.migrateDelegationPlan({
+      plan: historical,
+      featureBranch: FEATURE_BRANCH,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+    });
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(DELEGATION_PLAN_SCHEMA_VERSION);
     expect(migrated.originMainSha).toBe(SOURCE_COMMIT);

@@ -73,7 +73,6 @@ export class CanonicalFeatureBranchContract {
     const valid =
       (segments.length === 1 &&
         (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
-          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
@@ -85,13 +84,6 @@ export class CanonicalFeatureBranchContract {
         CanonicalFeatureBranchContract.isKebabSegment(segments[3], 20, 50) &&
         segments[3] !== 'cleanup');
     return valid;
-  }
-
-  /** Preserves the authorized delivery branch created before the current length bound. */
-  private static isEstablishedPrimeBranch(
-    segments: readonly string[],
-  ): boolean {
-    return segments.length === 1 && segments[0] === 'agentic-pipeline-delivery';
   }
 
   private static isKebabSegment(
@@ -167,7 +159,8 @@ export class CanonicalFeatureBranchContract {
   ): boolean {
     if (segments.length !== 1) return false;
     const segment = segments[0];
-    if (typeof segment !== 'string' || !segment.startsWith('hive-')) return false;
+    if (typeof segment !== 'string' || !segment.startsWith('hive-'))
+      return false;
     const suffix = segment.slice('hive-'.length);
     return (
       suffix.length > 0 &&
@@ -233,8 +226,7 @@ export class PinnedDevBaseEvidenceContract {
         ancestor: request.pinnedLocalDevSha,
         descendant: request.sourceCommit,
         workingDirectory: request.workingDirectory,
-        message:
-          'sourceCommit must be descended from the feature head.',
+        message: 'sourceCommit must be descended from the feature head.',
       });
     }
   }
@@ -250,7 +242,12 @@ export class PinnedDevBaseEvidenceContract {
   private static assertAncestor(request: AncestorCheckRequest): void {
     const result = new RepositoryCommand({
       command: RepositoryCommandExecutable.Git,
-      args: ['merge-base', '--is-ancestor', request.ancestor, request.descendant],
+      args: [
+        'merge-base',
+        '--is-ancestor',
+        request.ancestor,
+        request.descendant,
+      ],
       gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: request.workingDirectory,
       workingDirectory: request.workingDirectory,
@@ -265,11 +262,7 @@ export class PinnedDevBaseEvidenceContract {
   ): void {
     const result = new RepositoryCommand({
       command: RepositoryCommandExecutable.Git,
-      args: [
-        'rev-parse',
-        '--verify',
-        'refs/remotes/origin/main^{commit}',
-      ],
+      args: ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
       gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: request.workingDirectory,
       workingDirectory: request.workingDirectory,

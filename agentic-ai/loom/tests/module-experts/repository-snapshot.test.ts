@@ -103,127 +103,112 @@ class RepositorySnapshotFixture {
 }
 
 describe('repository snapshot Git isolation', () => {
-  test(
-    'archives and lists the requested commit without replace refs or config execution',
-    () => {
-      const fixtureRoot = mkdtempSync(
-        join(tmpdir(), 'loom-repository-snapshot-'),
+  test('archives and lists the requested commit without replace refs or config execution', () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), 'loom-repository-snapshot-'),
+    );
+    const repository = join(fixtureRoot, 'repository');
+    const codexHome = join(fixtureRoot, 'codex');
+    const marker = join(fixtureRoot, 'executed');
+    const script = join(fixtureRoot, 'attack.sh');
+    mkdirSync(repository);
+    mkdirSync(codexHome);
+    try {
+      RepositorySnapshotFixture.runGit(repository, ['init']);
+      writeFileSync(join(repository, 'tracked.txt'), 'source\n', 'utf8');
+      writeFileSync(
+        join(repository, 'optional.txt'),
+        'optional-source\n',
+        'utf8',
       );
-      const repository = join(fixtureRoot, 'repository');
-      const codexHome = join(fixtureRoot, 'codex');
-      const marker = join(fixtureRoot, 'executed');
-      const script = join(fixtureRoot, 'attack.sh');
-      mkdirSync(repository);
-      mkdirSync(codexHome);
-      try {
-        RepositorySnapshotFixture.runGit(repository, ['init']);
-        writeFileSync(join(repository, 'tracked.txt'), 'source\n', 'utf8');
-        writeFileSync(
-          join(repository, 'optional.txt'),
-          'optional-source\n',
-          'utf8',
-        );
-        RepositorySnapshotFixture.runGit(repository, ['add', '.']);
-        RepositorySnapshotFixture.runGit(repository, [
-          '-c',
-          'user.name=Loom Test',
-          '-c',
-          'user.email=loom@example.test',
-          'commit',
-          '-m',
-          'source',
-        ]);
-        const sourceCommit = RepositorySnapshotFixture.runGit(
-          repository,
-          ['rev-parse', 'HEAD'],
-        ).trim();
-        writeFileSync(
-          join(repository, 'tracked.txt'),
-          'replacement\n',
-          'utf8',
-        );
-        rmSync(join(repository, 'optional.txt'));
-        writeFileSync(
-          join(repository, 'replacement.txt'),
-          'replacement-only\n',
-          'utf8',
-        );
-        RepositorySnapshotFixture.runGit(repository, ['add', '-A']);
-        RepositorySnapshotFixture.runGit(repository, [
-          '-c',
-          'user.name=Loom Test',
-          '-c',
-          'user.email=loom@example.test',
-          'commit',
-          '-m',
-          'replacement',
-        ]);
-        const replacementCommit = RepositorySnapshotFixture.runGit(
-          repository,
-          ['rev-parse', 'HEAD'],
-        ).trim();
-        RepositorySnapshotFixture.runGit(repository, [
-          'replace',
-          sourceCommit,
-          replacementCommit,
-        ]);
-        RepositorySnapshotFixture.configureAttackSurface(
-          repository,
-          marker,
-          script,
-        );
+      RepositorySnapshotFixture.runGit(repository, ['add', '.']);
+      RepositorySnapshotFixture.runGit(repository, [
+        '-c',
+        'user.name=Loom Test',
+        '-c',
+        'user.email=loom@example.test',
+        'commit',
+        '-m',
+        'source',
+      ]);
+      const sourceCommit = RepositorySnapshotFixture.runGit(repository, [
+        'rev-parse',
+        'HEAD',
+      ]).trim();
+      writeFileSync(join(repository, 'tracked.txt'), 'replacement\n', 'utf8');
+      rmSync(join(repository, 'optional.txt'));
+      writeFileSync(
+        join(repository, 'replacement.txt'),
+        'replacement-only\n',
+        'utf8',
+      );
+      RepositorySnapshotFixture.runGit(repository, ['add', '-A']);
+      RepositorySnapshotFixture.runGit(repository, [
+        '-c',
+        'user.name=Loom Test',
+        '-c',
+        'user.email=loom@example.test',
+        'commit',
+        '-m',
+        'replacement',
+      ]);
+      const replacementCommit = RepositorySnapshotFixture.runGit(repository, [
+        'rev-parse',
+        'HEAD',
+      ]).trim();
+      RepositorySnapshotFixture.runGit(repository, [
+        'replace',
+        sourceCommit,
+        replacementCommit,
+      ]);
+      RepositorySnapshotFixture.configureAttackSurface(
+        repository,
+        marker,
+        script,
+      );
 
-        const globalConfig = join(fixtureRoot, 'global.gitconfig');
-        const systemConfig = join(fixtureRoot, 'system.gitconfig');
-        writeFileSync(
-          globalConfig,
-          `[core]\nfsmonitor = ${script}\n`,
-          'utf8',
+      const globalConfig = join(fixtureRoot, 'global.gitconfig');
+      const systemConfig = join(fixtureRoot, 'system.gitconfig');
+      writeFileSync(globalConfig, `[core]\nfsmonitor = ${script}\n`, 'utf8');
+      writeFileSync(systemConfig, `[core]\nsshCommand = ${script}\n`, 'utf8');
+      const previousGlobal = process.env.GIT_CONFIG_GLOBAL;
+      const previousSystem = process.env.GIT_CONFIG_SYSTEM;
+      process.env.GIT_CONFIG_GLOBAL = globalConfig;
+      process.env.GIT_CONFIG_SYSTEM = systemConfig;
+      try {
+        const result = new RepositorySnapshot({
+          codexHome,
+          excludedPaths: [],
+          optionalScopePaths: ['optional.txt'],
+          sourceCommit,
+          featureHeadSha: sourceCommit,
+          scopePaths: ['tracked.txt'],
+          workingDirectory: repository,
+        }).materialize();
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) return;
+        expect(readFileSync(join(result.value, 'tracked.txt'), 'utf8')).toBe(
+          'source\n',
         );
-        writeFileSync(
-          systemConfig,
-          `[core]\nsshCommand = ${script}\n`,
-          'utf8',
+        expect(readFileSync(join(result.value, 'optional.txt'), 'utf8')).toBe(
+          'optional-source\n',
         );
-        const previousGlobal = process.env.GIT_CONFIG_GLOBAL;
-        const previousSystem = process.env.GIT_CONFIG_SYSTEM;
-        process.env.GIT_CONFIG_GLOBAL = globalConfig;
-        process.env.GIT_CONFIG_SYSTEM = systemConfig;
-        try {
-          const result = new RepositorySnapshot({
-            codexHome,
-            excludedPaths: [],
-            optionalScopePaths: ['optional.txt'],
-            sourceCommit,
-            featureHeadSha: sourceCommit,
-            scopePaths: ['tracked.txt'],
-            workingDirectory: repository,
-          }).materialize();
-          expect(result.isOk()).toBe(true);
-          if (result.isErr()) return;
-          expect(readFileSync(join(result.value, 'tracked.txt'), 'utf8')).toBe(
-            'source\n',
-          );
-          expect(readFileSync(join(result.value, 'optional.txt'), 'utf8')).toBe(
-            'optional-source\n',
-          );
-          expect(() =>
-            readFileSync(join(result.value, 'replacement.txt')),
-          ).toThrow();
-          expect(() => readFileSync(marker)).toThrow();
-        } finally {
-          if (typeof previousGlobal !== 'string')
-            delete process.env.GIT_CONFIG_GLOBAL;
-          else process.env.GIT_CONFIG_GLOBAL = previousGlobal;
-          if (typeof previousSystem !== 'string')
-            delete process.env.GIT_CONFIG_SYSTEM;
-          else process.env.GIT_CONFIG_SYSTEM = previousSystem;
-        }
+        expect(() =>
+          readFileSync(join(result.value, 'replacement.txt')),
+        ).toThrow();
+        expect(() => readFileSync(marker)).toThrow();
       } finally {
-        rmSync(fixtureRoot, { force: true, recursive: true });
+        if (typeof previousGlobal !== 'string')
+          delete process.env.GIT_CONFIG_GLOBAL;
+        else process.env.GIT_CONFIG_GLOBAL = previousGlobal;
+        if (typeof previousSystem !== 'string')
+          delete process.env.GIT_CONFIG_SYSTEM;
+        else process.env.GIT_CONFIG_SYSTEM = previousSystem;
       }
-    },
-  );
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
+  });
 
   test('rejects context writes through an archived symlink ancestor', () => {
     const fixtureRoot = mkdtempSync(
@@ -237,7 +222,9 @@ describe('repository snapshot Git isolation', () => {
     symlinkSync(outside, join(snapshot, 'archived-link'), 'dir');
     try {
       const result = new SnapshotContextFiles({
-        contextFiles: [{ path: 'archived-link/context.md', content: 'blocked' }],
+        contextFiles: [
+          { path: 'archived-link/context.md', content: 'blocked' },
+        ],
         repositorySnapshot: snapshot,
       }).materialize();
       expect(result.isErr()).toBe(true);

@@ -198,7 +198,7 @@ export class ProcessCommandRunner implements CommandRunner {
     } catch {
       return err({
         kind: DevFailureKind.Command,
-          message: `${request.executable} command invocation failed`,
+        message: `${request.executable} command invocation failed`,
       });
     } finally {
       if (isolatedGitDirectory !== false) isolatedGitDirectory.cleanup();
@@ -239,21 +239,19 @@ export class ProcessCommandRunner implements CommandRunner {
       const hasExplicitRefspec = args
         .slice(remoteIndex + 1)
         .some((argument) => !argument.startsWith('-'));
-      if (!hasExplicitRefspec)
-        args.push('+refs/heads/*:refs/remotes/origin/*');
+      if (!hasExplicitRefspec) args.push('+refs/heads/*:refs/remotes/origin/*');
     }
     if (command === 'push' && !args.includes('--no-verify'))
       args.splice(1, 0, '--no-verify');
     const credential = process.env.NOOK_GITHUB_PAT?.trim();
     const credentialOption =
-      credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential)
-        ? ['--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER']
-        : [
-            '-c',
-            'credential.helper=',
-            '-c',
-            'credential.https://github.com.helper=!gh auth git-credential',
-          ];
+      credential &&
+      !credential.includes('\u0000') &&
+      !/[\r\n]/u.test(credential)
+        ? [
+            '--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER',
+          ]
+        : [];
     return ok([
       ...ProcessCommandRunner.remoteGitOptions,
       ...credentialOption,
@@ -298,7 +296,11 @@ export class ProcessCommandRunner implements CommandRunner {
     }
     if (remoteOperation) {
       const credential = process.env.NOOK_GITHUB_PAT?.trim();
-      if (credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential))
+      if (
+        credential &&
+        !credential.includes('\u0000') &&
+        !/[\r\n]/u.test(credential)
+      )
         environment.NOOK_GIT_EXTRAHEADER = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${credential}`).toString('base64')}`;
     }
     return environment;
@@ -310,10 +312,7 @@ export class ProcessCommandRunner implements CommandRunner {
     const configured =
       request.repositoryRoot || this.repositoryRoot || process.env.REPO_ROOT;
     const root = configured || request.workingDirectory;
-    const canonicalRoot = ProcessCommandRunner.canonicalPath(
-      root,
-      'REPO_ROOT',
-    );
+    const canonicalRoot = ProcessCommandRunner.canonicalPath(root, 'REPO_ROOT');
     if (canonicalRoot.isErr()) return err(canonicalRoot.error);
     if (configured && !isAbsolute(configured)) {
       return err({
@@ -335,7 +334,8 @@ export class ProcessCommandRunner implements CommandRunner {
       if (canonicalCandidate.value !== canonicalRoot.value) {
         return err({
           kind: DevFailureKind.Race,
-          message: 'Git delivery received conflicting repository-root identities',
+          message:
+            'Git delivery received conflicting repository-root identities',
         });
       }
     }
@@ -355,24 +355,22 @@ export class ProcessCommandRunner implements CommandRunner {
     return ok(metadata.value);
   }
 
-  private static requiresIsolatedRepository(
-    args: readonly string[],
-  ): boolean {
+  private static requiresIsolatedRepository(args: readonly string[]): boolean {
     const command = args.at(0);
     return command
       ? new Set([
-      'checkout',
-      'cherry-pick',
-      'commit',
-      'merge',
-      'merge-tree',
-      'rebase',
-      'reset',
-      'revert',
-      'symbolic-ref',
-      'tag',
-      'update-index',
-      'update-ref',
+          'checkout',
+          'cherry-pick',
+          'commit',
+          'merge',
+          'merge-tree',
+          'rebase',
+          'reset',
+          'revert',
+          'symbolic-ref',
+          'tag',
+          'update-index',
+          'update-ref',
         ]).has(command)
       : false;
   }
@@ -450,9 +448,7 @@ export class ProcessCommandRunner implements CommandRunner {
     });
   }
 
-  private static gitDirectory(
-    gitEntry: string,
-  ): Result<string, DevFailure> {
+  private static gitDirectory(gitEntry: string): Result<string, DevFailure> {
     let stats: ReturnType<typeof lstatSync>;
     try {
       stats = lstatSync(gitEntry);
@@ -524,9 +520,7 @@ export class ProcessCommandRunner implements CommandRunner {
         kind: DevFailureKind.Configuration,
         message: `Git common-directory metadata is malformed: ${commonFile}`,
       });
-    const candidate = isAbsolute(text)
-      ? text
-      : resolve(gitDirectory, text);
+    const candidate = isAbsolute(text) ? text : resolve(gitDirectory, text);
     const canonical = ProcessCommandRunner.canonicalPath(
       candidate,
       'Git common directory',

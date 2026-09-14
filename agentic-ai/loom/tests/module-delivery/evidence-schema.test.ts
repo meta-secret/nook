@@ -132,9 +132,7 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
           artifactIdentity: current.artifactIdentity,
           evidence: current.evidence,
           acceptanceRequirements: current.acceptanceRequirements,
-          acceptedProviderEvidence: [
-            historicalNested,
-          ],
+          acceptedProviderEvidence: [historicalNested],
         }),
     };
     const before = structuredClone(historical);
@@ -236,9 +234,7 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
           artifactIdentity: historical.artifactIdentity,
           evidence: historical.evidence,
           acceptanceRequirements: historical.acceptanceRequirements,
-          acceptedProviderEvidence: [
-            tamperedNested,
-          ],
+          acceptedProviderEvidence: [tamperedNested],
         }),
     };
     expect(() =>

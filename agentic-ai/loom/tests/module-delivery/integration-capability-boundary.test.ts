@@ -11,7 +11,10 @@ import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-suppo
 import type { ModuleDeliveryIntegratedWriterFrontierCapability } from '../../src/module-delivery/integration-contracts.ts';
 
 const CAPABILITY_MODULE_PATH = fileURLToPath(
-  new URL('../../src/module-delivery/integration-capabilities.ts', import.meta.url),
+  new URL(
+    '../../src/module-delivery/integration-capabilities.ts',
+    import.meta.url,
+  ),
 );
 const INTEGRATION_MODULE_PATH = fileURLToPath(
   new URL('../../src/module-delivery/integration.ts', import.meta.url),
@@ -32,10 +35,14 @@ test('keeps capability provenance closure-private across the ESM cycle', () => {
   expect(capabilitySource).not.toMatch(
     /\b(?:bindMintAuthority|accept(?:Integrated|Canonical)|register(?:Integrated|Canonical)|mint(?:Integrated|Canonical))/u,
   );
-  expect(capabilitySource).not.toMatch(/Symbol\.for|globalThis|Object\.defineProperty/u);
+  expect(capabilitySource).not.toMatch(
+    /Symbol\.for|globalThis|Object\.defineProperty/u,
+  );
   expect(integrationSource).toContain('ModuleIntegrationCapabilityProvenance');
   expect(integrationSource).toContain('ModuleIntegrationCapabilityAssertions');
-  expect(integrationSource).not.toMatch(/Symbol\.for|globalThis|Object\.defineProperty/u);
+  expect(integrationSource).not.toMatch(
+    /Symbol\.for|globalThis|Object\.defineProperty/u,
+  );
   expect(admissionAuthoritySource).toContain(
     'ModuleAdmissionStateCapabilityAuthorities',
   );
@@ -55,14 +62,14 @@ test('keeps capability minting behind the coordinator boundary', async () => {
     /ModuleIntegrationCapabilityMintAuthority|createModuleIntegrationCapabilityMintAuthority|CAPABILITY_AUTHORITY_PROOF|bindMintAuthority|CAPABILITY_MINT_AUTHORITY/u,
   );
 
-  const directModule = await import(
-    '../../src/module-delivery/integration-capabilities.ts'
-  );
-  const directCoordinator = await import(
-    '../../src/module-delivery/integration.ts'
-  );
+  const directModule =
+    await import('../../src/module-delivery/integration-capabilities.ts');
+  const directCoordinator =
+    await import('../../src/module-delivery/integration.ts');
   const directIndex = await import('../../src/module-delivery/index.ts');
-  expect(Object.hasOwn(directModule, 'mintIntegratedWriterFrontier')).toBe(false);
+  expect(Object.hasOwn(directModule, 'mintIntegratedWriterFrontier')).toBe(
+    false,
+  );
   expect(Object.hasOwn(directModule, 'registerIntegratedWriterFrontier')).toBe(
     false,
   );
@@ -95,17 +102,23 @@ test('keeps capability minting behind the coordinator boundary', async () => {
   ).toBe(false);
   expect(Object.hasOwn(directModule, 'bindMintAuthority')).toBe(false);
   expect(
-    Object.hasOwn(directModule.ModuleIntegrationCapabilityRegistry, 'bindMintAuthority'),
+    Object.hasOwn(
+      directModule.ModuleIntegrationCapabilityRegistry,
+      'bindMintAuthority',
+    ),
   ).toBe(false);
   expect(
-    Object.hasOwn(directIndex, 'createModuleIntegrationCapabilityMintAuthority'),
+    Object.hasOwn(
+      directIndex,
+      'createModuleIntegrationCapabilityMintAuthority',
+    ),
   ).toBe(false);
   expect(Object.hasOwn(directIndex, 'registerIntegratedWriterFrontier')).toBe(
     false,
   );
-  expect(Object.isFrozen(directCoordinator.ModuleIntegrationCapabilityAssertions)).toBe(
-    true,
-  );
+  expect(
+    Object.isFrozen(directCoordinator.ModuleIntegrationCapabilityAssertions),
+  ).toBe(true);
 
   const rawCapability: ModuleDeliveryIntegratedWriterFrontierCapability = {
     taskId: 'raw-task',
@@ -115,21 +128,22 @@ test('keeps capability minting behind the coordinator boundary', async () => {
     headCommit: 'raw-head',
     integratedTaskIds: Object.freeze([]),
   };
-  const fixture =
-    ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+  const fixture = ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
   try {
     const authority = ModuleDeliveryEvidenceScenario.runtime(fixture).authority;
     expect(() =>
-      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
-        authority,
-        capability: Object.freeze(rawCapability),
-        taskId: rawCapability.taskId,
-        attempt: rawCapability.attempt,
-        generation: rawCapability.generation,
-        planDigest: rawCapability.planDigest,
-        headCommit: rawCapability.headCommit,
-        integratedTaskIds: rawCapability.integratedTaskIds,
-      }),
+      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability(
+        {
+          authority,
+          capability: Object.freeze(rawCapability),
+          taskId: rawCapability.taskId,
+          attempt: rawCapability.attempt,
+          generation: rawCapability.generation,
+          planDigest: rawCapability.planDigest,
+          headCommit: rawCapability.headCommit,
+          integratedTaskIds: rawCapability.integratedTaskIds,
+        },
+      ),
     ).toThrow('capability is invalid');
 
     const reflectiveClone = Object.freeze({
@@ -139,16 +153,18 @@ test('keeps capability minting behind the coordinator boundary', async () => {
       ),
     });
     expect(() =>
-      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
-        authority,
-        capability: reflectiveClone,
-        taskId: rawCapability.taskId,
-        attempt: rawCapability.attempt,
-        generation: rawCapability.generation,
-        planDigest: rawCapability.planDigest,
-        headCommit: rawCapability.headCommit,
-        integratedTaskIds: rawCapability.integratedTaskIds,
-      }),
+      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability(
+        {
+          authority,
+          capability: reflectiveClone,
+          taskId: rawCapability.taskId,
+          attempt: rawCapability.attempt,
+          generation: rawCapability.generation,
+          planDigest: rawCapability.planDigest,
+          headCommit: rawCapability.headCommit,
+          integratedTaskIds: rawCapability.integratedTaskIds,
+        },
+      ),
     ).toThrow('capability is invalid');
 
     expect(() =>

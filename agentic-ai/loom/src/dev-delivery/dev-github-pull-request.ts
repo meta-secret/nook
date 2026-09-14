@@ -30,6 +30,7 @@ const pullRequestListEntrySchema = z.object({
   url: z.string(),
   isDraft: z.boolean(),
   headRepository: repositoryReferenceSchema,
+  baseRepository: repositoryReferenceSchema,
   isCrossRepository: z.boolean(),
 });
 const pullRequestListSchema = z.array(pullRequestListEntrySchema);
@@ -72,16 +73,15 @@ enum ReviewCommitBindingKind {
   Missing = 'missing',
 }
 
-const reviewCommitBindingSchema = z
-  .union([
-    z.object({ oid: z.string() }).transform((value) => ({
-      kind: ReviewCommitBindingKind.Present,
-      oid: value.oid,
-    })),
-    githubTransportNullSchema.transform(() => ({
-      kind: ReviewCommitBindingKind.Missing,
-    })),
-  ]);
+const reviewCommitBindingSchema = z.union([
+  z.object({ oid: z.string() }).transform((value) => ({
+    kind: ReviewCommitBindingKind.Present,
+    oid: value.oid,
+  })),
+  githubTransportNullSchema.transform(() => ({
+    kind: ReviewCommitBindingKind.Missing,
+  })),
+]);
 
 const reviewRecordSchema = z.object({
   state: z.string(),
@@ -107,38 +107,42 @@ const pullRequestReviewIdentitySchema = z.object({
 });
 
 const reviewPagesSchema = z.array(
-  z.object({
-    data: z.object({
-      repository: z.object({
-        nameWithOwner: z.string(),
-        pullRequest: pullRequestReviewIdentitySchema.extend({
-          reviews: z.object({
-            pageInfo: pageInfoSchema,
-            nodes: z.array(reviewRecordSchema),
+  z
+    .object({
+      data: z.object({
+        repository: z.object({
+          nameWithOwner: z.string(),
+          pullRequest: pullRequestReviewIdentitySchema.extend({
+            reviews: z.object({
+              pageInfo: pageInfoSchema,
+              nodes: z.array(reviewRecordSchema),
+            }),
           }),
         }),
       }),
-    }),
-  }).strict(),
+    })
+    .strict(),
 );
 type ReviewPage = z.infer<typeof reviewPagesSchema>[number];
 
 const reviewThreadsPagesSchema = z.array(
-  z.object({
-    data: z.object({
-      repository: z.object({
-        nameWithOwner: z.string(),
-        pullRequest: pullRequestReviewIdentitySchema.extend({
-          reviewThreads: z.object({
-            pageInfo: pageInfoSchema,
-            nodes: z.array(
-              z.object({ isResolved: z.boolean(), isOutdated: z.boolean() }),
-            ),
+  z
+    .object({
+      data: z.object({
+        repository: z.object({
+          nameWithOwner: z.string(),
+          pullRequest: pullRequestReviewIdentitySchema.extend({
+            reviewThreads: z.object({
+              pageInfo: pageInfoSchema,
+              nodes: z.array(
+                z.object({ isResolved: z.boolean(), isOutdated: z.boolean() }),
+              ),
+            }),
           }),
         }),
       }),
-    }),
-  }).strict(),
+    })
+    .strict(),
 );
 type ReviewThreadsPage = z.infer<typeof reviewThreadsPagesSchema>[number];
 
@@ -162,8 +166,7 @@ export enum DevelopmentPullRequestLookupKind {
   Absent = 'absent',
 }
 
-export interface AdmittedDevelopmentPullRequest
-  extends DevelopmentPullRequest {
+export interface AdmittedDevelopmentPullRequest extends DevelopmentPullRequest {
   readonly repository: RepositorySlug;
 }
 
@@ -401,8 +404,7 @@ export class DevelopmentPullRequestGateway {
           review,
           pullRequest: admitted.value,
         });
-        actionableReview ||=
-          disposition === ReviewRecordDisposition.Block;
+        actionableReview ||= disposition === ReviewRecordDisposition.Block;
       }
     }
 
@@ -418,9 +420,10 @@ export class DevelopmentPullRequestGateway {
         pullRequest: admitted.value,
       });
       if (threadIdentity.isErr()) return err(threadIdentity.error);
-      unresolvedCurrentThread ||= page.data.repository.pullRequest.reviewThreads.nodes.some(
-        (thread) => !thread.isResolved,
-      );
+      unresolvedCurrentThread ||=
+        page.data.repository.pullRequest.reviewThreads.nodes.some(
+          (thread) => !thread.isResolved,
+        );
     }
 
     const final = this.readPullRequest({
@@ -743,8 +746,6 @@ export class DevelopmentPullRequestGateway {
   private openPullRequests(
     workingDirectory: string,
   ): Result<readonly PullRequestSelection[], DevFailure> {
-    const repository = this.repository(workingDirectory);
-    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
@@ -757,10 +758,8 @@ export class DevelopmentPullRequestGateway {
         'main',
         '--limit',
         '10',
-        '--repo',
-        repository.value.value(),
         '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,isCrossRepository',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,baseRepository,isCrossRepository',
       ],
       workingDirectory,
     });
@@ -769,11 +768,14 @@ export class DevelopmentPullRequestGateway {
       pullRequestListSchema,
     );
     if (decoded.isErr()) return err(decoded.error);
+    const repository = this.repository(workingDirectory);
+    if (repository.isErr()) return err(repository.error);
     const selections: PullRequestSelection[] = [];
     for (const raw of decoded.value) {
       if (
         raw.isCrossRepository ||
-        raw.headRepository.nameWithOwner !== repository.value.value()
+        raw.headRepository.nameWithOwner !== repository.value.value() ||
+        raw.baseRepository.nameWithOwner !== repository.value.value()
       )
         continue;
       const number = PullRequestNumber.parse(raw.number);
@@ -786,15 +788,11 @@ export class DevelopmentPullRequestGateway {
   private readPullRequest(
     request: PullRequestReadRequest,
   ): Result<AdmittedDevelopmentPullRequest, DevFailure> {
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
         'view',
         String(request.number.value()),
-        '--repo',
-        repository.value.value(),
         '--json',
         'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,isCrossRepository,reviewDecision',
       ],
@@ -807,23 +805,25 @@ export class DevelopmentPullRequestGateway {
     if (decoded.isErr()) return err(decoded.error);
     return this.admitDevelopmentPullRequest({
       view: decoded.value,
-      repository: repository.value,
+      workingDirectory: request.workingDirectory,
     });
   }
 
   private admitDevelopmentPullRequest(request: {
     readonly view: PullRequestView;
-    readonly repository: RepositorySlug;
+    readonly workingDirectory: string;
   }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
-    const { repository, view } = request;
-    // `--repo` binds the PR number and base repository to this repository;
-    // `isCrossRepository` and `headRepository` then prove the head identity.
+    const { view } = request;
+    const repository = this.repository(request.workingDirectory);
+    if (repository.isErr()) return err(repository.error);
+    // `gh pr view` is scoped to the current repository, so the supported
+    // `isCrossRepository` field proves that the base repository is this repo.
     if (
       view.state !== PullRequestState.Open ||
       view.headRefName !== 'dev' ||
       view.baseRefName !== 'main' ||
       view.isCrossRepository ||
-      view.headRepository.nameWithOwner !== repository.value()
+      view.headRepository.nameWithOwner !== repository.value.value()
     ) {
       return err({
         kind: DevFailureKind.GitHub,
@@ -842,7 +842,7 @@ export class DevelopmentPullRequestGateway {
       headSha: headSha.value,
       baseSha: baseSha.value,
       url: view.url,
-      repository,
+      repository: repository.value,
       isDraft: view.isDraft,
       reviewDecision: this.reviewDecision(view.reviewDecision),
     });

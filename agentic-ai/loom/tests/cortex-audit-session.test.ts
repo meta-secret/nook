@@ -483,8 +483,8 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
       .map((slug) => `- [${slug}](dynamic-skills/${slug}.md)`)
       .join('\n');
     const gizmoIndexRows = gizmoSkillSlugs
-      .map((slug) =>
-        `- [${slug}](../../../gizmo-prime/dynamic-skills/${slug}.md)`,
+      .map(
+        (slug) => `- [${slug}](../../../gizmo-prime/dynamic-skills/${slug}.md)`,
       )
       .join('\n');
     const directoryOptions = { recursive: true } as const;

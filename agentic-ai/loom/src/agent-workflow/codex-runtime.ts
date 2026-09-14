@@ -165,9 +165,7 @@ export class TeamAgentRuntimeProfile {
       name: request.profile.key,
       instructionPrefix: request.instructionPrefix,
       workspacePolicy: AgentWorkspacePolicy.ReadOnly,
-      reasoningEffort: TeamAgentRuntimeProfile.reasoningEffort(
-        request.profile,
-      ),
+      reasoningEffort: TeamAgentRuntimeProfile.reasoningEffort(request.profile),
       model: request.profile.model,
       serviceTier: AgentServiceTier.Fast,
     });
@@ -187,8 +185,7 @@ export class TeamAgentRuntimeProfile {
     const expectedReasoningEffort = isGizmo ? 'low' : 'xhigh';
     const teamGizmoKey =
       profile.parent === 'Gizmo Prime' ? profile.key : profile.parent;
-    const teamGizmo =
-      TeamAuthorityCatalog.teamGizmoProfile(teamGizmoKey);
+    const teamGizmo = TeamAuthorityCatalog.teamGizmoProfile(teamGizmoKey);
     const hierarchyMatches =
       teamGizmo !== false &&
       teamGizmo.team === profile.team &&
@@ -233,9 +230,7 @@ export class AgentCodexOptions {
     };
   }
 
-  static forExpertProfile(
-    request: ExpertCodexOptionsRequest,
-  ): CodexOptions {
+  static forExpertProfile(request: ExpertCodexOptionsRequest): CodexOptions {
     return request.codexOptions;
   }
 

@@ -31,10 +31,7 @@ import type {
   LoadedDelegationRunState,
 } from './delegation-run-journal.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
-import type {
-  UntrustedYamlMap,
-  UntrustedYamlNode,
-} from '../lib/guards.ts';
+import type { UntrustedYamlMap, UntrustedYamlNode } from '../lib/guards.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 import { DelegationFinalizationRecordReader } from './delegation-aggregation-support.ts';
@@ -212,9 +209,7 @@ export class DelegationRunFinalization {
     return result;
   }
 
-  static decodeDelegationRunResult(
-    serialized: string,
-  ): DelegationRunResult {
+  static decodeDelegationRunResult(serialized: string): DelegationRunResult {
     const decoded =
       DelegationRunFinalization.decodeCompatibleDelegationRunResult(serialized);
     if (
@@ -229,7 +224,8 @@ export class DelegationRunFinalization {
   static migrateDelegationRunResult(
     request: DelegationRunResultMigrationRequest,
   ): DelegationRunResult {
-    const { result, featureHeadSha, originMainSha, pinnedLocalDevSha } = request;
+    const { result, featureHeadSha, originMainSha, pinnedLocalDevSha } =
+      request;
     if (
       result.schemaVersion !==
       DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION
@@ -419,11 +415,10 @@ export class DelegationRunFinalization {
       input.loaded.runDirectory,
     );
     DelegationRunFinalization.assertExactAdmissions(input.loaded);
-    const verifiedAttempts =
-      await DelegationRunFinalization.verifyEveryAttempt(
-        input.loaded,
-        input.featureHeadSha,
-      );
+    const verifiedAttempts = await DelegationRunFinalization.verifyEveryAttempt(
+      input.loaded,
+      input.featureHeadSha,
+    );
     await DelegationRunFinalization.assertExactAttemptStorage(input.loaded);
     const recursiveInput: RecursiveBarrierInput = {
       plan: input.loaded.plan,
@@ -709,9 +704,7 @@ export class DelegationRunFinalization {
       terminalKind: DelegationRunFinalization.requireTaskTerminalKind(
         reader.string('terminalKind'),
       ),
-      result: DelegationRunFinalization.decodeProjection(
-        reader.node('result'),
-      ),
+      result: DelegationRunFinalization.decodeProjection(reader.node('result')),
       view: DelegationRunFinalization.decodeView(reader.node('view')),
     };
   }

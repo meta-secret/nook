@@ -269,9 +269,7 @@ export class DevGitRepository {
   }
 
   /** Resolves the latest committed head of an authorized remote feature ref. */
-  resolveFeatureBranchHead(
-    branch: BranchName,
-  ): Result<CommitSha, DevFailure> {
+  resolveFeatureBranchHead(branch: BranchName): Result<CommitSha, DevFailure> {
     const snapshot = this.remoteBranch(branch);
     if (snapshot.isErr()) return err(snapshot.error);
     if (snapshot.value.presence !== RemoteBranchPresence.Present) {
@@ -496,7 +494,8 @@ export class DevGitRepository {
         workingDirectory: request.path,
       });
       if (targetIsAncestor.isErr()) return err(targetIsAncestor.error);
-      if (targetIsAncestor.value === Ancestry.Ancestor) return ok(current.value);
+      if (targetIsAncestor.value === Ancestry.Ancestor)
+        return ok(current.value);
       return err({
         kind: DevFailureKind.Conflict,
         message:

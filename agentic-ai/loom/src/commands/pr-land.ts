@@ -9,10 +9,7 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
-import {
-  RepositoryCommand,
-  RepositoryCommandExecutable,
-} from '../lib/run.ts';
+import { RepositoryCommand, RepositoryCommandExecutable } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -191,9 +188,7 @@ export class PullRequestValidationCommand {
       prNumber: request.prNumber,
       nextStep: PR_LAND_VALIDATE_NEXT_STEP,
       ready: false,
-      messages: [
-        (validated.stdout || 'pr:validate dispatched').trim(),
-      ],
+      messages: [(validated.stdout || 'pr:validate dispatched').trim()],
     });
   }
 }

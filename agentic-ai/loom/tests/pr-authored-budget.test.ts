@@ -133,10 +133,7 @@ void test('measures authored additions from the pinned local-dev commit', () => 
     fixture.git('commit', '-qm', 'prior dev');
     const pinnedLocalDevSha = fixture.git('rev-parse', 'HEAD');
 
-    writeFileSync(
-      join(fixture.root, 'feature.ts'),
-      'const feature = true;\n',
-    );
+    writeFileSync(join(fixture.root, 'feature.ts'), 'const feature = true;\n');
     fixture.git('add', '--', 'feature.ts');
     fixture.git('commit', '-qm', 'feature');
     const featureHeadSha = fixture.git('rev-parse', 'HEAD');

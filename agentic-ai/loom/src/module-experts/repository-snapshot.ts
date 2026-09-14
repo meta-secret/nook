@@ -146,9 +146,7 @@ export class RepositorySnapshot {
     let result: Result<string, ExpertIsolationFailure>;
     let cleanupFailed = false;
     try {
-      const optionalPaths = this.trackedOptionalPaths(
-        isolatedGit.value.path,
-      );
+      const optionalPaths = this.trackedOptionalPaths(isolatedGit.value.path);
       if (optionalPaths.isErr()) result = err(optionalPaths.error);
       else {
         const archived = new SnapshotCommand({
@@ -219,7 +217,8 @@ export class RepositorySnapshot {
     if (
       objectsPath.length === 0 ||
       !isAbsolute(objectsPath) ||
-      objectsPath.includes('\u0000') || /[\r\n]/u.test(objectsPath)
+      objectsPath.includes('\u0000') ||
+      /[\r\n]/u.test(objectsPath)
     )
       return err({
         kind: ExpertIsolationFailureKind.Snapshot,
@@ -405,7 +404,10 @@ export class SnapshotContextFiles {
         });
       const canonical = realpathSync(root);
       const canonicalMetadata = lstatSync(canonical);
-      if (canonicalMetadata.isSymbolicLink() || !canonicalMetadata.isDirectory())
+      if (
+        canonicalMetadata.isSymbolicLink() ||
+        !canonicalMetadata.isDirectory()
+      )
         return err({
           kind: ExpertIsolationFailureKind.ContextFiles,
           message: 'Read-only expert snapshot root is unsafe.',

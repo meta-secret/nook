@@ -169,8 +169,7 @@ export class DevManagerGizmoCommand {
     if (worktree.path !== bootstrap.value.devPath) {
       return err({
         kind: DevFailureKind.Race,
-        message:
-          `Development worktree changed during bootstrap: expected ${bootstrap.value.devPath}, found ${worktree.path}`,
+        message: `Development worktree changed during bootstrap: expected ${bootstrap.value.devPath}, found ${worktree.path}`,
       });
     }
     const state = this.workspace.git.stateAt(worktree.path);
@@ -200,8 +199,7 @@ export class DevManagerGizmoCommand {
     if (!localDevSha.value.equals(bootstrap.value.pinnedLocalDevSha)) {
       return err({
         kind: DevFailureKind.Race,
-        message:
-          `Local dev changed during bootstrap: expected ${bootstrap.value.pinnedLocalDevSha.value()}, found ${localDevSha.value.value()}`,
+        message: `Local dev changed during bootstrap: expected ${bootstrap.value.pinnedLocalDevSha.value()}, found ${localDevSha.value.value()}`,
       });
     }
     const originDev = this.workspace.git.remoteBranch(ManagedBranch.Dev);

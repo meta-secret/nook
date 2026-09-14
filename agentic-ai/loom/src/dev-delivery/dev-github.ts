@@ -238,12 +238,10 @@ export class DevGitHubGateway {
     return this.pullRequests.findDevelopmentPullRequest(request);
   }
 
-  readPullRequestStatus(
-    request: {
-      readonly number: PullRequestNumber;
-      readonly workingDirectory: string;
-    },
-  ): Result<PullRequestStatus, DevFailure> {
+  readPullRequestStatus(request: {
+    readonly number: PullRequestNumber;
+    readonly workingDirectory: string;
+  }): Result<PullRequestStatus, DevFailure> {
     return this.pullRequests.readPullRequestStatus(request);
   }
 

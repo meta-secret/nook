@@ -16,15 +16,9 @@ It handles only AI-owned Loom work named in the packet.
 
 - Accept the packet from AI Team Gizmo through the active harness.
 - Consume the Prime-issued canonical feature branch name and bootstrap
-  evidence. `originMainSha` identifies the freshly fetched `origin/main`.
-  After canonical local `main` and `dev` are synchronized, `pinnedLocalDevSha`
-  identifies the exact latest committed `refs/heads/dev^{commit}`. Every new
-  feature mission, feature branch, and worktree must use that exact
-  post-synchronization canonical local `dev` commit as its base. A previously
-  pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or
-  another alternate base is invalid. `originMainSha` must be its ancestor. If equality
-  with post-synchronization `refs/heads/dev` cannot be proved, fail closed. The
-  base is preserved after feature creation. The branch name is the workflow
+  evidence. `originMainSha` identifies the freshly fetched `origin/main` and
+  `pinnedLocalDevSha` identifies the synchronized local-dev feature base;
+  `originMainSha` must be its ancestor. The branch name is the workflow
   authority. Resolve its latest committed head before this stage and start
   from the current parent frontier. If the branch advances, follow the latest
   head and rerun affected evidence. Do not use stale local refs or resolve or

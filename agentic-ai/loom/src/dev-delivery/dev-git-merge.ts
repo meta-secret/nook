@@ -64,8 +64,7 @@ export class DevGitMergeBoundary {
       code: BRANCH_ADVANCED_CODE,
       branch,
       currentHead,
-      message:
-        `The canonical feature branch ${branch.value()} advanced to ${currentHead.value()} after build:compile evidence; rerun build:compile before landing`,
+      message: `The canonical feature branch ${branch.value()} advanced to ${currentHead.value()} after build:compile evidence; rerun build:compile before landing`,
     };
   }
 
@@ -90,17 +89,15 @@ export class DevGitMergeBoundary {
     const before = this.verifyMergeInputs(request);
     if (before.isErr()) return err(before.error);
 
-    const landingDirectory = before.value.devPath || this.dependencies.featurePath;
+    const landingDirectory =
+      before.value.devPath || this.dependencies.featurePath;
     const alreadyPresent = this.dependencies.repository.ancestry({
       ancestor: request.featureHead,
       descendant: before.value.devHead,
       workingDirectory: landingDirectory,
     });
     if (alreadyPresent.isErr()) return err(alreadyPresent.error);
-    if (
-      before.value.devExists &&
-      alreadyPresent.value === Ancestry.Ancestor
-    ) {
+    if (before.value.devExists && alreadyPresent.value === Ancestry.Ancestor) {
       return ok(before.value.devHead);
     }
 
@@ -154,8 +151,7 @@ export class DevGitMergeBoundary {
     if (!afterDev.value.equals(request.featureHead)) {
       return err({
         kind: DevFailureKind.Race,
-        message:
-          `refs/heads/dev did not finish at the expected feature head: expected ${request.featureHead.value()}, found ${afterDev.value.value()}`,
+        message: `refs/heads/dev did not finish at the expected feature head: expected ${request.featureHead.value()}, found ${afterDev.value.value()}`,
       });
     }
 
@@ -433,8 +429,7 @@ export class DevGitMergeBoundary {
       if (assigned.isErr()) {
         return err({
           kind: DevFailureKind.Race,
-          message:
-            `The discovered development worktree is no longer uniquely managed: ${selectedDevelopment.value.path}`,
+          message: `The discovered development worktree is no longer uniquely managed: ${selectedDevelopment.value.path}`,
         });
       }
       const state = repository.stateAt(assigned.value.path);

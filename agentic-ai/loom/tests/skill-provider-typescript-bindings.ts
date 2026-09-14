@@ -461,7 +461,7 @@ const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   // The exact helper builds the isolated environment for one fixed GitHub
   // HTTPS publication invocation.
   {
-    digest: 'da665ef68df931fe96fe9ea9e4dd9d7e5675bb1036d44db69058a130cc004537',
+    digest: '256631cabb7e78e27ff6861282442815f8f717f1d7b4670241d15f862fd06468',
     className: 'CiRepository',
     functionName: 'pushAuthenticatedBranch',
     path: 'agentic-ai/ci-agent/src/main/git.ts',

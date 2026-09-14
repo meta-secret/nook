@@ -22,9 +22,8 @@ test('pre-importing capability assertions cannot preempt coordinator minting', a
   });
   let fixture: GitFixture | false = false;
   try {
-    const preimport = await import(
-      '../../src/module-delivery/integration-capabilities.ts'
-    );
+    const preimport =
+      await import('../../src/module-delivery/integration-capabilities.ts');
     expect(Object.hasOwn(preimport, 'bindMintAuthority')).toBe(false);
     expect(Object.hasOwn(preimport, 'registerIntegratedWriterFrontier')).toBe(
       false,
@@ -42,15 +41,14 @@ test('pre-importing capability assertions cannot preempt coordinator minting', a
       ),
     ).toBe(false);
 
-    const coordinator = await import('../../src/module-delivery/integration.ts');
+    const coordinator =
+      await import('../../src/module-delivery/integration.ts');
     expect(coordinator.ModuleIntegrationCoordinator).toBeDefined();
     expect(forgedBridges).toHaveLength(1);
 
-    const { ModuleDeliveryEvidenceScenario } = await import(
-      './evidence-test-support.ts'
-    );
-    fixture =
-      ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+    const { ModuleDeliveryEvidenceScenario } =
+      await import('./evidence-test-support.ts');
+    fixture = ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
     const authority = ModuleDeliveryEvidenceScenario.runtime(fixture).authority;
 
     const capability: ModuleDeliveryIntegratedWriterFrontierCapability = {

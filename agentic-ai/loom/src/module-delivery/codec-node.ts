@@ -48,10 +48,7 @@ import {
   ModulePlanWorkspaceField,
   ModulePlanWriteNodeField,
 } from './codec-schema.ts';
-import {
-  ModulePlanDecodeFailure,
-  ModulePlanFields,
-} from './codec-fields.ts';
+import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
 import type {
   ModulePlanAcceptanceDecodeRequest,
   ModuleDeliveryOwnerDecodeRequest,
@@ -102,13 +99,11 @@ export class ModuleDeliveryPlanNodeCodec {
   static decodeNodes(
     request: ModulePlanNodeListRequest,
   ): readonly (LegacyModuleDeliveryNode | ModuleDeliveryNodeV2)[] {
-    ModuleDeliveryPlanNodeCodec.assertCollectionLimit(
-      {
-        values: request.values,
-        path: '$.nodes',
-        maximum: MAX_MODULE_DELIVERY_NODES,
-      },
-    );
+    ModuleDeliveryPlanNodeCodec.assertCollectionLimit({
+      values: request.values,
+      path: '$.nodes',
+      maximum: MAX_MODULE_DELIVERY_NODES,
+    });
     if (request.legacy) {
       const nodes: LegacyModuleDeliveryNode[] = [];
       for (const [index, value] of request.values.entries()) {
@@ -548,13 +543,11 @@ export class ModuleDeliveryPlanNodeCodec {
   static decodeEdgeContracts(
     values: ModulePlanTransportList,
   ): readonly ModuleDeliveryEdgeContract[] {
-    ModuleDeliveryPlanNodeCodec.assertCollectionLimit(
-      {
-        values,
-        path: '$.edgeContracts',
-        maximum: MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
-      },
-    );
+    ModuleDeliveryPlanNodeCodec.assertCollectionLimit({
+      values,
+      path: '$.edgeContracts',
+      maximum: MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+    });
     const contracts: ModuleDeliveryEdgeContract[] = [];
     for (const [index, value] of values.entries()) {
       const path = `$.edgeContracts[${index}]`;

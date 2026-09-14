@@ -162,12 +162,12 @@ class ReviewEvidenceRunner implements CommandRunner {
   }
 
   reviewResult() {
-    const result = new DevelopmentPullRequestGateway({ runner: this }).requireCleanReviews(
-      {
-        pullRequest: ReviewEvidenceRunner.admitted(),
-        workingDirectory: '/tmp/review-evidence-fixture',
-      },
-    );
+    const result = new DevelopmentPullRequestGateway({
+      runner: this,
+    }).requireCleanReviews({
+      pullRequest: ReviewEvidenceRunner.admitted(),
+      workingDirectory: '/tmp/review-evidence-fixture',
+    });
     return { result, runner: this };
   }
 
@@ -187,9 +187,7 @@ class ReviewEvidenceRunner implements CommandRunner {
     if (args[0] === 'pr' && args[1] === 'view') {
       this.pullRequestViews += 1;
       const head =
-        this.pullRequestViews > 1
-          ? (this.scenario.finalHead || HEAD)
-          : HEAD;
+        this.pullRequestViews > 1 ? this.scenario.finalHead || HEAD : HEAD;
       return this.output(JSON.stringify(this.pullRequestView(head)));
     }
     if (args[0] === 'api' && args[1] === 'graphql') {
@@ -296,7 +294,9 @@ test('accepts complete multi-page current-head review and thread evidence', () =
         reviews: [{ state: 'COMMENTED', body: '' }],
         pagination: { hasNextPage: true, endCursor: 'cursor-1' },
       }),
-      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'APPROVED', body: '' }],
+      }),
     ],
   }).reviewResult();
 
@@ -377,14 +377,17 @@ test('fails closed for unprovable unknown review bindings including stale', () =
       }).reviewResult();
 
       expect(result.isErr()).toBe(true);
-      if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+      if (result.isErr())
+        expect(result.error.kind).toBe(DevFailureKind.Reviews);
     }
   }
 
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
-        reviews: [{ state: 'UNRECOGNIZED', body: EXTERNAL_NULL, commit: STALE }],
+        reviews: [
+          { state: 'UNRECOGNIZED', body: EXTERNAL_NULL, commit: STALE },
+        ],
       }),
     ],
   }).reviewResult();
@@ -430,7 +433,9 @@ test('ignores stale non-actionable reviews but blocks unresolved threads', () =>
 
   const unresolved = new ReviewEvidenceRunner({
     reviewPages: [
-      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'APPROVED', body: '' }],
+      }),
     ],
     threadPages: [
       { hasNextPage: false, endCursor: EXTERNAL_NULL, unresolved: true },
@@ -448,7 +453,12 @@ test('ignores stale non-actionable reviews but blocks unresolved threads', () =>
       }),
     ],
     threadPages: [
-      { hasNextPage: false, endCursor: EXTERNAL_NULL, unresolved: true, outdated: true },
+      {
+        hasNextPage: false,
+        endCursor: EXTERNAL_NULL,
+        unresolved: true,
+        outdated: true,
+      },
     ],
   }).reviewResult();
   expect(outdated.result.isErr()).toBe(true);
@@ -460,7 +470,9 @@ test('ignores stale non-actionable reviews but blocks unresolved threads', () =>
 test('reports a pull-request head race after collecting review evidence', () => {
   const { result } = new ReviewEvidenceRunner({
     reviewPages: [
-      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'APPROVED', body: '' }],
+      }),
     ],
     finalHead: STALE,
   }).reviewResult();

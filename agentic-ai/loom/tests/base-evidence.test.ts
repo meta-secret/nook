@@ -31,7 +31,9 @@ class BaseEvidenceGitFixture {
     }).trim();
   }
 
-  gitWithInput(...[input, ...args]: [input: string, ...args: string[]]): string {
+  gitWithInput(
+    ...[input, ...args]: [input: string, ...args: string[]]
+  ): string {
     const environment = { ...process.env };
     delete environment.GIT_NO_REPLACE_OBJECTS;
     return execFileSync('git', ['-C', this.root, ...args], {
@@ -113,11 +115,7 @@ describe('pinned dev base Git identity', () => {
       assert.throws(
         () =>
           PinnedDevBaseEvidenceContract.assertAncestry(
-            fixture.request(
-              originMainSha,
-              pinnedLocalDevSha,
-              sourceCommit,
-            ),
+            fixture.request(originMainSha, pinnedLocalDevSha, sourceCommit),
           ),
         /pinnedLocalDevSha must include/u,
       );
@@ -156,11 +154,10 @@ describe('pinned dev base Git identity', () => {
 });
 
 describe('canonical feature branch identity', () => {
-  test('accepts established Prime, canonical child, and machine forms', () => {
+  test('accepts the Hive-compatible Prime, child, and machine forms', () => {
     const validBranches: readonly string[] = [
       'codex/repair-cache',
       'codex/abcdefghij',
-      'codex/agentic-pipeline-delivery',
       'codex/agent-branching/sre/provisioning/fix-hive-branch-compile',
       'codex/hive-main-failure-abc-run-42-attempt-1',
     ];
@@ -180,7 +177,7 @@ describe('canonical feature branch identity', () => {
       'codex/agent--branching',
       'codex/agent-branching/sre/provisioning/fix--hive-branch-compile',
       'codex/hive-main--failure',
-      'codex/agentic-pipeline-deliverx',
+      'codex/agentic-pipeline-delivery',
       'codex/Repair-cache',
       'codex/agent-branching/sre/provisioning/short',
       'codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile',
