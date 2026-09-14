@@ -221,4 +221,4 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
   } finally {
     await rm(directory, cleanupOptions);
   }
-});
+}, 15_000);

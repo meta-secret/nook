@@ -7,6 +7,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   unlink,
   writeFile,
@@ -381,8 +382,8 @@ describe('Team Agent Codex settings', () => {
 
 describe('Codex agent source stability', () => {
   test('fails closed for commit or worktree drift', async () => {
-    const workingDirectory = await mkdtemp(
-      join(tmpdir(), 'loom-agent-source-stability-'),
+    const workingDirectory = await realpath(
+      await mkdtemp(join(tmpdir(), 'loom-agent-source-stability-')),
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
@@ -434,6 +435,12 @@ describe('Codex agent source stability', () => {
       };
       const sourceCommit =
         AgentWorkflowCodexRuntimeScenario.runGit(headCommand);
+      AgentWorkflowCodexRuntimeScenario.runGit({
+        command: RepositoryCommandExecutable.Git,
+        args: ['update-ref', 'refs/remotes/origin/main', sourceCommit],
+        rootDirectory: workingDirectory,
+        workingDirectory,
+      });
       const stableCheck: AgentSourceStabilityCheck = {
         workingDirectory,
         sourceCommit,

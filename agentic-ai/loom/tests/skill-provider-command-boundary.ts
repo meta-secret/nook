@@ -19,6 +19,7 @@ import {
 } from './skill-provider-shell-dispatch.ts';
 
 import { SkillProviderShellEnvironmentScenario } from './skill-provider-shell-environment.ts';
+import { SkillProviderSourcedSeamsScenario } from './skill-provider-sourced-seams.ts';
 
 import {
   PROTECTED_SKILL_PATH,
@@ -402,6 +403,13 @@ export class SkillProviderCommandBoundaryScenario {
       return;
     }
     if (command.dynamic) {
+      if (
+        SkillProviderSourcedSeamsScenario.isAuditedDynamicExecutable({
+          executable: command.source,
+          sourcePath: request.state.sourcePath,
+        })
+      )
+        return;
       if (
         (command.value === '$@' || command.value === '${@}') &&
         request.state.positionalArguments === false

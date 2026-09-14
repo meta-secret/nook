@@ -1,4 +1,5 @@
 #![feature(rustc_private)]
+#![feature(coverage_attribute)]
 #![warn(unused_extern_crates)]
 
 extern crate rustc_ast;

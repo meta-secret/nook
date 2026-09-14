@@ -81,6 +81,31 @@ export class SkillProviderSourcedSeamsScenario {
       throw new Error(`Audited runtime source has drifted: ${request.path}`);
     return true;
   }
+
+  static isAuditedDynamicExecutable(request: {
+    readonly executable: string;
+    readonly sourcePath: string | false;
+  }): boolean {
+    if (request.sourcePath === false) return false;
+    const expected = AUDITED_DYNAMIC_EXECUTABLES.get(
+      `${request.sourcePath}:${request.executable}`,
+    );
+    if (typeof expected !== 'string') return false;
+    const source = readFileSync(
+      resolve(import.meta.dir, '../../..', request.sourcePath),
+    );
+    return createHash('sha256').update(source).digest('hex') === expected;
+  }
+
+  static isAuditedCommandExecutingFind(sourcePath: string | false): boolean {
+    if (sourcePath === false) return false;
+    const expected = AUDITED_COMMAND_EXECUTING_FIND.get(sourcePath);
+    if (typeof expected !== 'string') return false;
+    const source = readFileSync(
+      resolve(import.meta.dir, '../../..', sourcePath),
+    );
+    return createHash('sha256').update(source).digest('hex') === expected;
+  }
 }
 export type AuditedSourceSeam = {
   readonly digest: string | false;
@@ -101,6 +126,20 @@ export type AuditedRuntimeSourceRequest = {
   readonly source: string;
 };
 
+const AUDITED_DYNAMIC_EXECUTABLES = new Map([
+  [
+    '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
+    'f91b1066198b1fb0d63103e89e8ba503e1df449afe0c68f667d6e87e7df0bced',
+  ],
+]);
+
+const AUDITED_COMMAND_EXECUTING_FIND = new Map([
+  [
+    '.github/workflows/agent-implement.yml',
+    '9352d8821e1b529f715372f6486695b47de0cd7ca248287903bf65a1799f4183',
+  ],
+]);
+
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/actions/nook-cache-connect/main.js',
@@ -111,12 +150,36 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '13ea52eb03efd9af5133fc810aeb67a85176d1dd30bb7f884a159d05be3280f1',
   ],
   [
+    '.github/scripts/agent-implement-publish-workbench.cjs',
+    'ded9bf5f319642fe3efcf456f144ada3e282beda01d5a8f89ae6a0fa7d2e2eb7',
+  ],
+  [
     '.github/workflows/lib/linear-ui-demo.cjs',
     'a52477a1e74c01cebd9d4f9c8de03790e1426cd15e2ddffcd34a85e5e2052fa4',
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
     '7231c8dda8fa05bbcb3dea34011aeeea2e895878158de4c91b3bb3f319796d84',
+  ],
+  [
+    'agentic-ai/loom/src/lib/run.ts',
+    'b3c2f301897a110a0ce9aeedcc1de795d1f1b48a8c693ffb45ef0030e8d3eb24',
+  ],
+  [
+    'agentic-ai/loom/src/module-experts/repository-snapshot.ts',
+    'c4414d19cc693f76f5d282109af62b24336052a34780476fd13d7671a7b9117d',
+  ],
+  [
+    'agentic-ai/loom/src/agent-workflow/delegation-aggregation.ts',
+    'd91c6bda5de0c6285849d09868467b8520b4bf55f8587d9afe9ea411791e6311',
+  ],
+  [
+    'agentic-ai/loom/src/commands/pr-authored-budget.ts',
+    'c72e41342aa7fe2ae312e90a9f28e3baad62600c24d8744ac6b26962b1d55376',
+  ],
+  [
+    'agentic-ai/ci-agent/src/main/process.ts',
+    '9860d5fd66331e7a0c154b1544a6a015248fdde9940b1073669e0e96d7357da7',
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',

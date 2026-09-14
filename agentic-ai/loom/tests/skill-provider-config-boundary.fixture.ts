@@ -313,9 +313,17 @@ export class SkillProviderConfigBoundaryScenario {
               ),
             sourcePath: inspection.importer,
           };
-          return SkillProviderCommandBoundaryScenario.analyzeShellCommands(
-            shellInspection,
-          ).launches;
+          try {
+            return SkillProviderCommandBoundaryScenario.analyzeShellCommands(
+              shellInspection,
+            ).launches;
+          } catch (error) {
+            const detail =
+              error instanceof Error ? error.message : String(error);
+            throw new Error(`${inspection.importer}: ${detail}`, {
+              cause: error,
+            });
+          }
         },
       );
       const eslintRequest: EslintConfigurationRequest = {
@@ -397,14 +405,19 @@ export class SkillProviderConfigBoundaryScenario {
       path: inspection.importer,
       source: inspection.source,
     };
-    const subprocesses =
-      SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(
+    let subprocesses: readonly string[];
+    try {
+      subprocesses = SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(
         runtimeSourceRequest,
       )
         ? []
         : SkillProviderTypescriptSubprocessScenario.typescriptSubprocessCommands(
             subprocessInspection,
           );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`${inspection.importer}: ${detail}`, { cause: error });
+    }
     const launches = subprocesses.flatMap(
       (source): readonly ConfigurationReference[] => {
         const shellInspection = {

@@ -56,7 +56,7 @@ class GitFixture {
 }
 
 test('isolates Git delivery and pins its remote without exposing the token', () => {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-command-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'nook-dev-command-')));
   const bin = join(root, 'bin');
   const capture = join(root, 'capture');
   const fakeGit = join(bin, 'git');
@@ -83,7 +83,7 @@ test('isolates Git delivery and pins its remote without exposing the token', () 
   printf 'args='
   printf '%s ' "$@"
   printf '\\n'
-} >> "$NOOK_DEV_COMMAND_CAPTURE"
+} >> ${JSON.stringify(capture)}
 exit 0
 `,
     );
@@ -143,7 +143,9 @@ exit 0
 });
 
 test('ignores unsafe local and worktree config during remote Git execution', () => {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-command-unsafe-'));
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-unsafe-')),
+  );
   const bin = join(root, 'bin');
   const capture = join(root, 'capture');
   const fakeGit = join(bin, 'git');
@@ -205,7 +207,7 @@ test('ignores unsafe local and worktree config during remote Git execution', () 
   printf 'gitDir=%s\\n' "$GIT_DIR"
   printf 'workTree=%s\\n' "$GIT_WORK_TREE"
   printf 'args=%s\\n' "$*"
-} >> "$NOOK_DEV_COMMAND_CAPTURE"
+} >> ${JSON.stringify(capture)}
 exit 0
 `,
     );
@@ -254,7 +256,9 @@ exit 0
 });
 
 test('local merge and merge-tree cannot execute repository merge drivers or hooks', () => {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-command-merge-'));
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-merge-')),
+  );
   const marker = join(root, 'executed');
   const driver = join(root, 'merge-driver.sh');
   try {
@@ -344,7 +348,9 @@ test('does not treat absent merge metadata as an in-progress merge', () => {
 });
 
 test('fetch preserves explicit refspecs and adds only the managed default refspec', () => {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-command-fetch-'));
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-fetch-')),
+  );
   const bin = join(root, 'bin');
   const capture = join(root, 'capture');
   const fakeGit = join(bin, 'git');
@@ -356,7 +362,7 @@ test('fetch preserves explicit refspecs and adds only the managed default refspe
     writeFileSync(
       fakeGit,
       `#!/bin/sh
-printf '%s\\n' "$*" >> "$NOOK_DEV_COMMAND_CAPTURE"
+printf '%s\\n' "$*" >> ${JSON.stringify(capture)}
 exit 0
 `,
     );
@@ -404,7 +410,9 @@ exit 0
 });
 
 test('remote Git fails closed when the root, common directory, or origin identity mismatches', () => {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-command-binding-'));
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-binding-')),
+  );
   const canonical = join(root, 'canonical');
   const other = join(root, 'other');
   const alias = join(root, 'alias');

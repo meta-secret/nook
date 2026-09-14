@@ -20,14 +20,17 @@ export const CORTEX_OWNER_GRAPH_PATHS = [
 
 const CORTEX_TEAM_PATTERN =
   /^(?:ai|dev-core|security|sre|web-dev|delivery-pipeline)$/u;
-const CORTEX_TEAM_CHILDREN: Readonly<Record<string, readonly string[]>> = {
-  ai: ['gizmo', 'loom-specialist', 'cortex-specialist'],
-  'dev-core': ['gizmo', 'rust-core-developer', 'rust-auth2-developer'],
-  security: ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
-  sre: ['gizmo', 'provisioning', 'cloud-native'],
-  'web-dev': ['gizmo', 'typescript-specialist', 'svelte-specialist'],
-  'delivery-pipeline': ['gizmo', 'dev-manager', 'pr-lifecycle'],
-};
+const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
+  ['ai', ['gizmo', 'loom-specialist', 'cortex-specialist']],
+  ['dev-core', ['gizmo', 'rust-core-developer', 'rust-auth2-developer']],
+  [
+    'security',
+    ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
+  ],
+  ['sre', ['gizmo', 'provisioning', 'cloud-native']],
+  ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
+  ['delivery-pipeline', ['gizmo', 'dev-manager', 'pr-lifecycle']],
+]);
 const CORTEX_CHILD_DIRECTORY_PATTERN =
   /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;
 
@@ -115,7 +118,7 @@ export class CortexDocumentPath {
     const team = match?.[1];
     const child = match?.[2];
     if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
-    if (!CORTEX_TEAM_CHILDREN[team]?.includes(child)) return false;
+    if (!CORTEX_TEAM_CHILDREN.get(team)?.includes(child)) return false;
     return { team, child };
   }
 }

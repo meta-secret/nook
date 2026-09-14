@@ -66,6 +66,11 @@ impl RegisteredType {
     }
 }
 
+// The UI suite executes these rustc callbacks through the separately loaded
+// Dylint shared object. LLVM cannot reconcile that driver's profile with this
+// unit-test binary, so keep callback coverage owned by the behavior-focused UI
+// cases while measuring the registry decisions in this binary.
+#[coverage(off)]
 impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
     fn check_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx Item<'tcx>) {
         if !matches!(item.kind, ItemKind::Impl(_)) {

@@ -577,17 +577,17 @@ ${gizmoIndexRows}
         },
         {
           code: CortexStructureFindingCode.MissingIndex,
-          file: '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+          file: '.cortex/teams/delivery-pipeline/knowledge-graph.md',
           line: 1,
           message:
-            'Required owner knowledge graph is missing: .cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+            'Required owner knowledge graph is missing: .cortex/teams/delivery-pipeline/knowledge-graph.md',
         },
         {
           code: CortexStructureFindingCode.MissingFromIndex,
           file: '.cortex/knowledge-graph.md',
           line: 1,
           message:
-            'Root knowledge graph must link the owner graph: .cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+            'Root knowledge graph must link the owner graph: .cortex/teams/delivery-pipeline/knowledge-graph.md',
         },
       ],
       articleStructureFindings: [],

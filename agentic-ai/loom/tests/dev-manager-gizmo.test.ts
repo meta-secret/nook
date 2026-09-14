@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -257,7 +257,7 @@ class DevManagerGizmoRunner implements CommandRunner {
   private pullRequestView(): CommandOutput {
     const pullRequest = this.pullRequest;
     const foreign =
-      this.request.options.foreignPullRequestOnRecheck &&
+      this.request.options.foreignPullRequestOnRecheck === true &&
       this.pullRequestViewCount === 2;
     return this.output({
       stdout: JSON.stringify({
@@ -300,9 +300,13 @@ class DevManagerGizmoHarness {
   readonly workspace: DevDeliveryWorkspace;
 
   constructor(options: ScenarioOptions) {
-    this.root = mkdtempSync(join(tmpdir(), 'nook-dev-manager-gizmo-'));
+    this.root = realpathSync(
+      mkdtempSync(join(tmpdir(), 'nook-dev-manager-gizmo-')),
+    );
     this.mainPath = join(this.root, 'main');
     this.devPath = join(this.root, 'dev');
+    mkdirSync(this.mainPath);
+    mkdirSync(this.devPath);
     this.runner = new DevManagerGizmoRunner({
       root: this.root,
       mainPath: this.mainPath,
@@ -328,7 +332,9 @@ test('reports idle when local dev has no commits beyond refreshed main', () => {
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
-    expect(result.isOk()).toBe(true);
+    expect(result.isOk(), result.isErr() ? result.error.message : '').toBe(
+      true,
+    );
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.Idle);
     expect(result.value.action).toBe(DevManagerGizmoAction.NoAction);
@@ -488,7 +494,12 @@ test('uses the manager-only PR seam for an already frozen snapshot without obser
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
-    expect(result.isOk()).toBe(true);
+    expect(
+      result.isOk(),
+      result.isErr()
+        ? `${result.error.message}\n${JSON.stringify(harness.runner.requests)}`
+        : '',
+    ).toBe(true);
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
     expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);

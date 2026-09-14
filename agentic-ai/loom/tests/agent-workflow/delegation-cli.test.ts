@@ -2,6 +2,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -69,7 +70,9 @@ const FEATURE_BRANCH = 'codex/hive-delegation-cli-tests';
 
 describe('delegated agent journal CLI', () => {
   test('records an ordinary delegated attempt with its semantic view', async () => {
-    const workingDirectory = await mkdtemp(join(tmpdir(), 'loom-delegation-'));
+    const workingDirectory = await realpath(
+      await mkdtemp(join(tmpdir(), 'loom-delegation-')),
+    );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const cortexDirectory = join(workingDirectory, '.cortex');
@@ -98,6 +101,11 @@ describe('delegated agent journal CLI', () => {
       );
       const sourceCommit =
         AgentWorkflowDelegationCliScenario.commitFixture(workingDirectory);
+      execFileSync(
+        'git',
+        ['update-ref', 'refs/remotes/origin/main', sourceCommit],
+        { cwd: workingDirectory },
+      );
       const requestPath = join(workingDirectory, 'request.json');
       const request = {
         runId: 'ordinary-coding-run',
@@ -194,6 +202,7 @@ describe('delegated agent journal CLI', () => {
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
         featureBranch: FEATURE_BRANCH,
+        featureHeadSha: sourceCommit,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -213,7 +222,11 @@ describe('delegated agent journal CLI', () => {
         workingDirectory,
       ];
       const admissionProcess = Bun.spawn(admissionCommand, spawnOptions);
-      expect(await admissionProcess.exited).toBe(0);
+      const admissionExit = await admissionProcess.exited;
+      const admissionStderr = await new Response(
+        admissionProcess.stderr,
+      ).text();
+      expect(admissionExit, admissionStderr).toBe(0);
       await new Response(admissionProcess.stdout).text();
       const command = [
         process.execPath,

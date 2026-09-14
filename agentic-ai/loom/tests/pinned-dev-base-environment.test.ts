@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'bun:test';
@@ -11,7 +11,9 @@ class PinnedDevBaseEnvironmentFixture {
   private constructor(readonly root: string) {}
 
   static create(): PinnedDevBaseEnvironmentFixture {
-    const root = mkdtempSync(join(tmpdir(), 'nook-pinned-dev-base-'));
+    const root = realpathSync(
+      mkdtempSync(join(tmpdir(), 'nook-pinned-dev-base-')),
+    );
     const fixture = new PinnedDevBaseEnvironmentFixture(root);
     fixture.git('init', '-q');
     fixture.git('config', 'user.name', 'Loom Fixture');
@@ -167,7 +169,10 @@ describe('pinned local-dev comparison evidence', () => {
         repoRoot: fixture.root,
       });
       assert(rejected.isErr());
-      assert.match(rejected.error.message, /featureHeadSha|pinnedLocalDevSha/u);
+      assert.match(
+        rejected.error.message,
+        /sourceCommit|featureHeadSha|pinnedLocalDevSha/u,
+      );
       assert.notEqual(otherBase, pinnedLocalDevSha);
     } finally {
       fixture.dispose();

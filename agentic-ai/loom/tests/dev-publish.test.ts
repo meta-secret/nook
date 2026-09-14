@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -228,7 +228,7 @@ class DevPublishPublicationScenario {
     readonly result: ReturnType<DevPublishCommand['execute']>;
   } {
     const request = this.request;
-    const root = mkdtempSync(join(tmpdir(), 'nook-dev-publish-'));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'nook-dev-publish-')));
     const devPath = join(root, 'dev');
     const runner = new PublishRunner({
       root,
