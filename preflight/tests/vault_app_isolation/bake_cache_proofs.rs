@@ -823,6 +823,30 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
 }
 
 #[test]
+fn theorem_trusted_hive_verification_has_a_bounded_cold_layer_budget() {
+    let root = RepositoryFixture::repository_root();
+    let workflow = root.read(".github/workflows/hive.yml");
+    let trusted_verify = workflow
+        .split("\n  verify:\n")
+        .nth(1)
+        .and_then(|body| body.split("\n  verify-fork:\n").next())
+        .expect("Hive workflow must declare the trusted verify job before verify-fork");
+    let hosted_verify = workflow
+        .split("\n  verify-fork:\n")
+        .nth(1)
+        .expect("Hive workflow must declare the hosted verify-fork job");
+
+    assert!(
+        trusted_verify.contains("timeout-minutes: 20"),
+        "trusted Hive verification must retain a bounded budget above the measured 13m45s cold-layer path"
+    );
+    assert!(
+        hosted_verify.contains("timeout-minutes: 10"),
+        "the trusted ARC cold-layer budget must not broaden the hosted fork timeout"
+    );
+}
+
+#[test]
 fn theorem_product_source_leaves_use_one_internal_dockerfile_lineage() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
