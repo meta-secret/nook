@@ -8,7 +8,7 @@ use crate::HiveContext;
 use crate::model::{BootstrapEvidence, GitSha};
 
 #[derive(Debug)]
-pub(super) enum WorkspaceOrigin<'a> {
+pub(crate) enum WorkspaceOrigin<'a> {
     Fresh,
     ResumeBranch(&'a str),
 }
@@ -179,7 +179,7 @@ impl TaskWorkspace<'_> {
         .await?;
         let mut did_resume = false;
         if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            if branch != evidence.feature_branch.as_str() {
+            if *branch != evidence.feature_branch.as_str() {
                 return Err(crate::HiveError::message(
                     "resume branch does not match the canonical feature branch",
                 ));
