@@ -309,11 +309,6 @@ export default defineConfig(({ mode }) => {
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
-      poolOptions: {
-        forks: {
-          isolate: true,
-        },
-      },
     },
   }
 })

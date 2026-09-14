@@ -134,6 +134,7 @@ class SentinelFinalizationFixture {
     this.state.clearOauthSetupPreset()
     this.state.prepareLocalLogin = vi.fn()
     this.state.refreshSentinelUnlockStatus = vi.fn()
+    vi.spyOn(this.state, 'showLoginVaultPicker', 'get').mockReturnValue(false)
     this.state.openManager(this.manager)
     const immediateStorage = async <Value, Failure = Error>(
       operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,

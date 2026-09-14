@@ -1,4 +1,5 @@
 import { VaultState } from '$lib/vault.svelte'
+import type { Result } from 'neverthrow'
 
 /** Owns WASM-safe construction of the real reactive vault state in unit tests. */
 export class VaultStateTestFixture {
@@ -9,17 +10,12 @@ export class VaultStateTestFixture {
   static createFrom<State extends VaultState>(
     StateConstructor: new () => State,
   ): State {
-    const windowDescriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      'window',
-    )
-    Reflect.deleteProperty(globalThis, 'window')
-    try {
-      return new StateConstructor()
-    } finally {
-      if (windowDescriptor)
-        Object.defineProperty(globalThis, 'window', windowDescriptor)
-      else Reflect.deleteProperty(globalThis, 'window')
-    }
+    return new StateConstructor()
+  }
+
+  static runStorageImmediately(state: VaultState): void {
+    state.enqueueStorage = async <Value, Failure>(
+      operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+    ): Promise<Result<Value, Failure>> => operation()
   }
 }
