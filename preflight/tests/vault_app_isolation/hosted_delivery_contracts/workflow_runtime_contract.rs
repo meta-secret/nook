@@ -131,6 +131,7 @@ impl WorkflowRuntimeContract<'_> {
                 )
                 && research_image.contains("fetch-depth: 0")
                 && research_image.contains("cache-selection: web-research-image")
+                && research_image.contains("timeout-minutes: 20")
                 && research.contains("same-repository PRs retain the remote identity")
                 && research_dependencies.contains("name: Prepare research dependency cache")
                 && research_dependencies.contains("cache-selection: web-research-deps")
@@ -140,7 +141,7 @@ impl WorkflowRuntimeContract<'_> {
                 && !research.contains("task ci:main:publish-web-cache")
                 && !research.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
                 && !research.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
-            "trusted Main and hosted PR research jobs must publish only authorized web cache scopes"
+            "trusted Main and hosted PR research jobs must retain authorized cache scopes and enough bounded time to publish the browser image"
         );
         assert!(
             hive.contains("console-untrusted:")
