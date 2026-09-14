@@ -193,19 +193,12 @@ scope, ownership, or handoff rule.
   - See
     [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
 - **Trusted publishers**
-  - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
+  - The trusted GitHub Actions publisher is a narrow exception to the
     committed worker-handoff path:
     - `agent-implement.yml` uses trusted host tooling for publication.
       - The tooling formats the change.
       - It validates change budget and PR identity.
       - It publishes and returns the exact head.
-    - `rust-dependency-updates.yml` may publish only through
-      `task ci-agent:fix` with
-      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
-      - It freezes HEAD and index.
-      - It accepts only declared Rust dependency files.
-      - It verifies PR number, base, head ref, and remote SHA before
-        publication.
   - Gizmo owns feature review and acceptance for the returned head.
   - The dev manager owns subsequent dev PR readiness and promotion.
   - PR Steward performs only the owning controller's authorized mechanics.
@@ -232,9 +225,9 @@ scope, ownership, or handoff rule.
     worker execution.
   - Separate Codex tasks, threads, cloud tasks, and ordinary external agents
     must not serve as delegation, communication, or handoff transport.
-  - This ordinary-transport prohibition preserves the two trusted publisher
-    handoffs above.
-  - Those publishers are not ordinary delegation transport.
+  - This ordinary-transport prohibition preserves the trusted publisher
+    handoff above.
+  - That publisher is not ordinary delegation transport.
 - **Parent and worker ownership**
   - Parent-owned policy and control decisions do not create functional Team
     Agent work. The bounded PR Steward operation is the sole operational

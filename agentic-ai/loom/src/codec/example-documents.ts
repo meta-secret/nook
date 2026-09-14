@@ -162,18 +162,6 @@ export type PrLandStatusExampleDocument = {
   };
 };
 
-export type PrLandReadyExampleDocument = {
-  readonly prLand: {
-    readonly ready: PrLandPrRequest;
-  };
-};
-
-export type PrLandMergeCheckExampleDocument = {
-  readonly prLand: {
-    readonly mergeCheck: PrLandPrRequest;
-  };
-};
-
 export type PrLandValidateExamplePayload = {
   readonly prNumber: number;
   readonly runFullE2e: boolean;
@@ -200,8 +188,6 @@ export type ExampleDocument =
   | AgentStatsValidateExampleDocument
   | AgentStatsPublishExampleDocument
   | PrLandStatusExampleDocument
-  | PrLandReadyExampleDocument
-  | PrLandMergeCheckExampleDocument
   | PrLandValidateExampleDocument
   | ToolsCallExampleDocument;
 
@@ -298,19 +284,6 @@ export const PR_LAND_STATUS_EXAMPLE_DOCUMENT: PrLandStatusExampleDocument = {
   },
 };
 
-export const PR_LAND_READY_EXAMPLE_DOCUMENT: PrLandReadyExampleDocument = {
-  prLand: {
-    ready: PR_LAND_PR_EXAMPLE,
-  },
-};
-
-export const PR_LAND_MERGE_CHECK_EXAMPLE_DOCUMENT: PrLandMergeCheckExampleDocument =
-  {
-    prLand: {
-      mergeCheck: PR_LAND_PR_EXAMPLE,
-    },
-  };
-
 export const PR_LAND_VALIDATE_EXAMPLE_DOCUMENT: PrLandValidateExampleDocument =
   {
     prLand: {
@@ -384,18 +357,6 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     document: PR_LAND_VALIDATE_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Ready,
-    document: PR_LAND_READY_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.MergeCheck,
-    document: PR_LAND_MERGE_CHECK_EXAMPLE_DOCUMENT,
     dispatch: ExampleDispatchKind.Parameterized,
   },
   {

@@ -549,10 +549,6 @@ task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded C
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile (no vault setup)
 task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
-task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
-task pr:review PR=410      # optional circuit-guarded exact-head Codex review request
-task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch
-task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy Nook services plus the complete k0s/Kata platform
@@ -581,9 +577,8 @@ when the branch is behind. Merge the reported `origin/<base>` into the delivery
 branch before spending hosted validation.
 
 After successful exact-head PR checks, a later advance of `main` does not by
-itself require a rebase or another expensive validation cycle. Re-run
-`task pr:ready PR=<number>` and merge when the PR remains conflict-free and has
-no unhandled review feedback. A later push still invalidates the prior checks.
+itself require a rebase or another expensive validation cycle. A later push
+still invalidates the prior checks.
 
 Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore

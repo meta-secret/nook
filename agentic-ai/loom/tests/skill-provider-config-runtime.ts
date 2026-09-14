@@ -330,19 +330,7 @@ export class SkillProviderConfigRuntimeScenario {
     }
     const protectedPath =
       /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills)/u;
-    const trustedWorkspaceCommands =
-      sourcePath === '.github/workflows/agent-implement.yml'
-        ? source
-            .replaceAll(
-              'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit',
-              "node 'agentic-ai/ci-agent/dist/main/main.js' edit",
-            )
-            .replaceAll(
-              'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" deliver',
-              "node 'agentic-ai/ci-agent/dist/main/main.js' deliver",
-            )
-        : source;
-    const normalized = trustedWorkspaceCommands
+    const normalized = source
       .replaceAll('\\`', '')
       .replace(
         /\bformatter_root="\$\{NOOK_FORMATTER_ROOT:-\/opt\/nook-formatter\}"/gu,

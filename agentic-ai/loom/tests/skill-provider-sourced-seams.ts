@@ -131,10 +131,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
   ],
   [
-    'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
-    '04d7882c2251f37d2ebf80913200487c835524a23ef5119ca62f24f0f24a755e',
-  ],
-  [
     '.github/scripts/with-healthy-buildkit.sh',
     'c2d9895d55a3039a55f0ebe79932278879237a7638778b41f706fa653cdcf360',
   ],

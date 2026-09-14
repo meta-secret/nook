@@ -209,7 +209,6 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
     'preflight',
     '.task',
-    'agentic-ai/ci-agent',
   ],
   [TeamKey.WebDevelopment]: ['nook-app/nook-web'],
 } as const;

@@ -39,8 +39,6 @@ nook-core → nook-wasm → nook-web
 - Use Bun for Nook web and Loom JavaScript tooling.
 - Use remote Task execution for compilation and the manager's slow checks.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
-  - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
-    `package-lock.json`.
 
 ## New vault item type checklist
 
