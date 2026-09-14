@@ -49,7 +49,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Delivery BuildKit uses persistent node-local shards and portable Zot refs.**
   - Trusted same-repository PR Rust jobs and Main build producers use disposable
     ordinary ARC Pods.
-    concurrency.
   - The Docker CLI connects only to the rootless BuildKit shard on its node.
   - ARC runners receive no Docker daemon, Podman API, DinD process, host runtime
     socket, host path, or Kata runtime.
@@ -142,6 +141,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Remote exports only those Remote refs.
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
   - New commit dependency results persist in Zot.
+  - Trusted Main and local writers populate SeaweedFS.
   - `pr.yml` mounts SeaweedFS sccache for same-repository jobs.
   - `pr.yml` exports only git-commit `nook/remote-buildcache/**` refs.
   - Main restore stays available.

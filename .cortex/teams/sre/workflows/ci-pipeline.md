@@ -5,7 +5,7 @@
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-lifecycle and must not be reactivated by this delivery change.
+feature-stage slow checks.
 
 ## Overview
 
@@ -114,20 +114,20 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
+- Owns merged-head ecosystem cache seeding and statistics.
+- Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
+- Each lane serially exports its already-solved local BuildKit graph after validation.
+- Local-provider web e2e and extension e2e consume verified WASM on separate
+  runners.
+- Each browser E2E solve is read-only.
+- Headless UI-demo execution and new artifact publication are temporarily
+  disabled.
+- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
+
 **`main-build-stats.yml`**
 
 - Collects run/job/step timing and conclusions.
 - Commits one `stats/main-build/**` record directly to Nook Workbench.
-
-- Creates or refreshes one ready automated Workbench incident per failed Main revision.
-- Uses run metadata and failed job names only.
-- Includes browser E2E failures.
-
-- Fork and Dependabot console changes receive the same install, check, build,
-  and browser journey on a secret-free GitHub-hosted runner.
-- Runs pinned Docker format/Clippy and behavior tests against Neo4j.
-- Checks k0s manifests and the Taskfile command surface.
-- Console images warm observer-export dependencies from manifests and the lockfile.
 
 **`release.yml`**
 
@@ -136,6 +136,12 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**
+
+- Audits every direct dependency in each Rust root.
+- The roots are `nook-app/nook-platform/`, its fuzz workspace,
+  `agentic-ai/minds/`, and `preflight/`.
+- When an update exists, an AI agent updates all outdated Rust dependencies.
+- Runs the full deterministic suite and opens a PR for explicit review.
 
 **`agent-implement.yml`**
 
@@ -690,7 +696,8 @@ task web:test:e2e:github            # → sync-live
 `nook-app/nook-platform/nook-core/coverage-floor.json` is the exhaustive package
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
-and `nook-wasm` at 51 percent. The current registry raises
+PR #1319 staged companion WASM at 18, authenticator-domain at 87, and
+`nook-wasm` at 51 percent. The current registry raises
 authenticator-domain to 90 percent.
 
 **Image build:**
@@ -707,7 +714,6 @@ authenticator-domain to 90 percent.
 - The WASM lane gates companion separately, executes Chromium without cache
   credentials, and combines native and browser profiles for one `nook-wasm` report.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
-  Neo4j-enabled runtime, then imports their profiles for reporting.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;
   the portable aggregate diagnostic is not an update authority.

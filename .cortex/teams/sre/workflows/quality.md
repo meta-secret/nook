@@ -5,13 +5,163 @@
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-lifecycle and must not be reactivated by this delivery change.
+feature-stage slow checks.
 
 ## Overview
 
 Use this workflow for quality, CI, and deployment changes.
 
 ## Quality and release policy
+
+1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands.
+   - App commands live in `nook-app/Taskfile.yml`.
+   - App-wide tasks live in `nook-app/Taskfile.yml`; CI tasks in `nook-app/ci/Taskfile.yml`.
+   - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
+   - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`.
+   - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
+   - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
+   - Preflight uses the dedicated `nook-preflight-v1` Zot scope so chef cooks reuse across PR runs.
+   - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
+   - Do not also cache-from `rust-base` on the preflight target.
+   - That shorter parent importer orphans chef cook layers.
+   - Never clear `cache-from` or `cache-to` with an empty Bake override.
+   - Empty cache overrides are an architectural failure, not cache hygiene.
+   - Product Rust dependencies and source leaves live in `product.Dockerfile`.
+   - They use internal Dockerfile stages, not Bake-linked dependency contexts.
+   - Standalone `*-restore` and `*-publish` targets own dependency cache I/O.
+   - Keep expensive tools in the same Dockerfile as source-sensitive leaves.
+   - Put source COPY steps after the shared tool stage.
+   - Importing short rust-base during a nested leaf bake orphans nightly RUNs.
+   - Dedicated `*-publish` targets write scoped Main/PR Zot refs.
+   - Redesign scopes or Dockerfile lineage instead of wiping cache.
+   - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
+   - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
+   - Cargo-deny, cargo-audit, cargo-fuzz, and Dylint live in sibling Dockerfiles under `nook-app/nook-platform/docker/rust/`.
+   - Proptest, Insta, and Loom use the internal `rust-platform` stage in `product.Dockerfile`.
+   - They run through `task docker:ecosystem:*`.
+   - Precise stage tasks warm parents alone before leaves:
+     - `task docker:rust-base` (read-only; never publishes Zot)
+     - `task docker:ecosystem:policy-tools`
+   - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
+   - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
+   - `main.yml` owns all merged-head ecosystem execution.
+   - `ci.yml` owns schedule, manual, and labeled minds-only PR entry points.
+   - Main includes minds paths, then skips its product job chain when the push is minds-only.
+   - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
+   - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
+   - `task docker:ecosystem:kani` restores and publishes the complete
+     toolchain-plus-proof graph through its own BuildKit scope.
+2. Public Taskfile commands must run project builds/checks inside Docker.
+   - CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior.
+   - Prefer pinned release binaries on dedicated ecosystem stages (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) over `cargo install` on the runner.
+   - Keep those tools out of `rust-base`.
+   - Keep ecosystem Bake jobs exact-head merge gates and pin every compiler-coupled version.
+3. Build Docker images with Docker Buildx Bake.
+   - `nook-app/docker-bake.hcl` is a thin shared fragment:
+     GHA/registry/sccache vars, `_sccache`, and cross-lineage prepare groups.
+   - Platform Rust Zot scopes, ecosystem targets, and loadable `nook-rust*`
+     images live under `nook-app/nook-platform/**/docker-bake.hcl`.
+   - Web Zot scopes and loadable `nook-web*` images live under
+     `nook-app/nook-web/**/docker-bake.hcl`.
+   - Preflight Zot scopes live in `preflight/docker-bake.hcl`.
+   - Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs.
+   - The Rust dep cache and warm `target/` are baked into normal image layers.
+   - Workspace source is copied into the nook-web image (sealed image, no runtime mount).
+   - Authenticated SeaweedFS S3 `sccache` is a compiler-output optimization below Docker/cargo-chef and never a correctness input.
+   - See [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness).
+4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
+5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
+6. Preserve these gates unless the task explicitly changes them:
+   - `cd nook-app/nook-platform && cargo fmt --all -- --check`
+   - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
+     manifest. Native lint covers `nook-app-common`,
+     `nook-authenticator-domain`, `nook-auth2`, `nook-replication`,
+     `nook-event-log`, `nook-companion-core`, and `nook-core`. WASM lint covers
+     `nook-companion-wasm` and `nook-wasm` for `wasm32-unknown-unknown`.
+     The standalone `preflight` Clippy pass is also enforced with `-D warnings`.
+   - Rust coverage uses independent hosted native, WASM, Dylint, and preflight gates.
+   - `svelte-check`
+   - `eslint` — the web-family lint command uses a dedicated project that
+     includes every linted TypeScript and Svelte source, enables
+     promise/exhaustiveness type-aware rules, and rejects unsanitized DOM HTML
+     sinks outside test and e2e fixtures
+   - `bun audit --prod --audit-level=high` — every independently installed web
+     package runs the audit in its CI check path and rejects high-severity
+     production dependency advisories
+   - `knip` (`bun run unused`) — unused/unreachable files, exports, class
+     members, and dependencies in `nook-web-app` / `nook-web-research` (and any
+     package that runs Knip in its check/lint path)
+   - `jscpd` (`bun run duplicates`) — copy/paste clone detection across authored
+     `nook-app` and `preflight` sources; the checked-in threshold in
+     [`.jscpd.json`](../../../../.jscpd.json) is a no-regression ceiling, not a budget
+     agents may spend by raising it
+   - `prettier --check`
+   - `vitest run`
+   - `vite build`
+   - `task preflight` — repository-wide Rust invariant tests, before app setup
+   - `PR / Rust ecosystem / Dependency policy and RustSec` —
+     `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
+     `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
+     task (`dylint:dependency-policy`, `rust:dependency-policy`,
+     `preflight:dependency-policy`, `fuzz:dependency-policy`,
+     `minds:dependency-policy`) through the cache-only
+     `rust-ecosystem-dependency-policy` BuildKit target.
+     Never aggregate multiple workspaces into one Dockerfile RUN.
+     Never export or load the policy-tools image into a Docker daemon.
+     Tools Bake must not list `rust-base` in its own cache-from.
+     Never `cargo install` those tools on the runner host. Advisory exceptions
+     must name the RustSec IDs, identify the exact pinned upstream graph, and
+     state the dependency upgrade that removes them in both `deny.toml` and
+     the affected workspace's `.cargo/audit.toml`.
+     `agentic-ai/minds` has no active advisory exceptions. Its latest-derived
+     Codex source and Hickory compatibility source must resolve patched package
+     versions without hiding RustSec findings.
+   - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
+     `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
+     `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
+     cooked `builder-core-deps`) so
+     [`proptest`](https://proptest-rs.github.io/proptest/),
+     [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
+     reuse the sealed Rust dependency graph instead of a host toolchain.
+     `builder-core-deps` separately warms Loom's `cfg(loom)` release test graph
+     with manifest-only dummy sources. Main therefore supplies Cargo metadata
+     and compiler objects for that mode before the real deterministic source
+     leaf runs.
+     Lineage stays manifest-stable through `builder-*-deps`; `rust-platform` is
+     the shared source overlay for bulk leaves that do not need per-crate layers
+     (e.g. deterministic). Focused test/lint/coverage and `builder-debug` keep
+     per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
+     `builder-wasm-source` uses the same per-crate COPY+RUN order for wasm32
+     compiles before sibling clippy, package, and test stages.
+   - `PR / Rust ecosystem / Cargo fuzz smoke` —
+     `task docker:ecosystem:fuzz` warms `docker:rust-base`, then
+     Bakes the `rust-fuzz-smoke` stage from the same Dockerfile as the
+     toolchain-only `rust-ecosystem-nightly` stage with pinned
+     [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
+     The leaf stage owns the platform source copy after the shared tool stage.
+     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v4`.
+   - `PR / Rust ecosystem / Kani bounded proofs` —
+     [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
+     bounded proof harnesses with a pinned specialized toolchain.
+     `task docker:ecosystem:kani` Bakes the `rust-kani` internal stage.
+     `nook-rust-ecosystem-kani-v2` caches both installation and proof
+     compilation because Kani's compiler cannot use ordinary rustc sccache.
+   - `PR / Rust ecosystem / Dylint repository lints` —
+     `task docker:ecosystem:dylint` warms `docker:rust-base`,
+     Bakes `rust-dylint` from the same Dockerfile as `rust-ecosystem-nightly`,
+     then publishes only the full-graph dylint leaf when writes are enabled.
+     The leaf `mode=max` scope embeds the exact nightly tool lineage it consumes.
+     There is no linked nightly Bake context whose identity can change.
+     Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
+     `dylint-link` release binaries (no host `cargo install`).
+     The dylint leaf scope is `nook-rust-ecosystem-dylint-v4`.
+     Nightly stays toolchain-stable and source-free.
+     Dylint and fuzz copy sources in sibling stages after it.
+7. Build wasm before Svelte checks or web builds.
+8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
+9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
+10. **CI policy** — see subsections below. Gizmo follows
+    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -113,10 +263,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free
       dependencies without cold `cargo install`.
-      scale set.
-      node.
-      not already contain the needed graph.
-      that handoff is small and has proven fast enough for retries.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Hosted and Main Native publishers stage
@@ -175,7 +321,7 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario Q proves a generic standalone exact-scope verification restores
     Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
     runner. General trusted ARC verification reuses its private local BuildKit
-    separate exact-head registry contract.
+    state and publishes only a minimal per-PR retry handoff.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
     builders.
@@ -191,6 +337,7 @@ Use this workflow for quality, CI, and deployment changes.
     Main seeds crate-a and crate-b in one Dockerfile leaf.
     A PR that edits only crate-b restores crate-a as CACHED.
     It compiles crate-b and the leaf, then replays the exact graph.
+    Scenario Y mirrors a multi-stage Cargo dependency graph.
     Main publishes the manifest, vendor, fetch, test-dependency, and
     Clippy-dependency lineage to Zot.
     Two concurrent PR sources restore those source-free stages on independent
@@ -295,20 +442,17 @@ Use this workflow for quality, CI, and deployment changes.
     - It initializes the safe builder from that side checkout so the cache fingerprint describes the exact release source without reviving historical setup logic.
     - Release performs immutable tag validation, main-equivalent verify/e2e, stable production deployment, and GitHub Release publication.
 
-    - This includes `Web e2e` and `Extension e2e` failures.
-    - Each rerun creates a fresh delivery generation with generation-specific publication records and no completed publication reuse.
-    - A later failed rerun cancels and supersedes an active delivery before its new generation is enqueued.
-    - The old generation remains `CANCELLING` until its worker durably acknowledges that Codex execution stopped or Kubernetes confirms deletion of the exact recorded worker Pod.
-    - Cancelling exclusive blockers share that barrier, so stale and replacement workers never execute concurrently.
-    - Successful reruns retire active incidents; current-generation reconciliation is idempotent.
-    - A single isolated dispatcher enqueues actionable incidents.
-    - Repair implementation follows the feature path into local dev.
-    - The dev manager controls slow dev PR checks and fast-forward promotion.
-    - Incident completion retains replacement Main verification.
-    - The explicitly dispatched implementation worker does not claim it.
-    - SeaweedFS S3 `sccache` supplies compiler objects.
-    - Main ARC producers publish shared Zot refs after verification.
-    - Hosted jobs restore the same verified Zot refs read-only.
+    #### Manual and scheduled jobs
+    - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
+    - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
+    - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
+    - A finding starts an isolated AI agent.
+    - The agent updates all outdated Rust dependencies.
+    - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
+    - It must run `task docker:ecosystem:fuzz FUZZ_SECONDS=20`.
+    - The harness opens its PR only after those validations succeed.
+    - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
+      collection; no registered-host cleanup workflow is allowed.
 
 11. **GitHub Actions agent execution:**
     - Feature teams author tests and return scoped commits.
@@ -355,8 +499,10 @@ Use this workflow for quality, CI, and deployment changes.
     - The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment.
     - Human-readable coverage tables must not be scraped with shell.
     - `nook-app/nook-platform/nook-core/coverage-floor.json` exhaustively classifies every Cargo package.
+    - PR #1319 staged companion WASM at 18%, authenticator-domain at 87%, and `nook-wasm` at 51%.
     - The current registry raises authenticator-domain to 90%; every other enforced package requires its listed floor.
     - A required successor raises every testable first-party package to at least 90%. Only the explicit non-testable `nook-fuzz` harness and vendored `arrayref` exclusions remain.
+    - Package-specific hosted native, WASM, Dylint, and preflight lanes are the coverage enforcement points; reporting never substitutes for those gates.
 20. **Coverage cache preservation:** Warm the full portable coverage graph with
     one `cargo llvm-cov nextest --no-report` Docker invocation. The graph
     includes `nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,

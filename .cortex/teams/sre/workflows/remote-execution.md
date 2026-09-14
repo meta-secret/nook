@@ -119,7 +119,6 @@ The named ARC tasks avoid a general container-runtime requirement:
   - It proves Task, Bun, and Cargo before starting the named task.
   - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
-  sidecar.
 - `web:build`, `web:e2e`, `extension:e2e`, `check`, `ci:pr`, and `ci:pr:e2e`
   execute directly inside an ordinary exact-image Pod.
 

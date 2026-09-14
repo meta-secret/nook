@@ -25,13 +25,24 @@ The extraction renames the pre-extraction shared data namespace to
 `nook.nokey.sh/*` domain and the k0s encryption-provider configuration is named
 `nook-encryption-provider.yaml`.
 
-Operators must migrate retained registry data and the encryption-provider file
-before deploying this revision on an existing host. Stop k0s and the registry,
-move the prior retained registry directory to `/var/lib/nook/zot`, rename the
-provider file under `/var/lib/k0s/pki`, then deploy. Do not create an empty new
-directory over an existing retained store. Verify ownership (`10001:10001` for
-Zot), namespace resources, PVC binding, and registry authentication before
-restoring CI traffic.
+`task infra:k0s:install` migrates the deployed legacy provider from either its
+live pki path or recovery copy before k0s starts with the generic config. It
+compares every discovered provider byte-for-byte and fails closed if copies
+diverge. A new key is generated only when neither a current nor legacy provider
+exists, so Secrets encrypted by an existing cluster remain decryptable. The
+legacy files are retained as rollback inputs; after verifying the API and
+Secrets, operators may archive them outside the host.
+
+`task infra:registry:deploy` stops the legacy Zot Deployment, moves the retained
+host directory when the generic path is absent (or empty), releases the legacy
+PVC/PV objects, and recreates them in `nook-infra` against the same data. It is
+idempotent after cutover and refuses populated stores at both paths, PVCs in
+both namespaces, or an orphaned legacy PV. On failure before the new Pod is
+ready, recover by stopping Zot, moving `/var/lib/nook/zot` back to the legacy
+path if needed, and reapplying the prior manifest; the retained PV policy means
+the registry blobs are not deleted. Verify ownership (`10001:10001`), PVC
+binding, registry authentication, and representative manifests before restoring
+CI traffic.
 
 ## Operations
 

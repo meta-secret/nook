@@ -204,13 +204,35 @@ tasks:
 
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/registry.dev.nokey.sh
         sudo -n install -d -m 0700 /var/lib/nook/k0s-recovery
-        if ! sudo -n test -s /var/lib/k0s/pki/nook-encryption-provider.yaml &&
-          sudo -n test -s /var/lib/nook/k0s-recovery/encryption-provider.yaml; then
-          sudo -n install -D -m 0600 \
-            /var/lib/nook/k0s-recovery/encryption-provider.yaml \
-            /var/lib/k0s/pki/nook-encryption-provider.yaml
+        encryption_provider=/var/lib/k0s/pki/nook-encryption-provider.yaml
+        legacy_provider_source=""
+        for candidate in \
+          /var/lib/k0s/pki/hive-encryption-provider.yaml \
+          /var/lib/hive/k0s-recovery/encryption-provider.yaml \
+          /var/lib/nook/k0s-recovery/encryption-provider.yaml; do
+          if ! sudo -n test -s "$candidate"; then
+            continue
+          fi
+          if test -z "$legacy_provider_source"; then
+            legacy_provider_source="$candidate"
+          elif ! sudo -n cmp --silent "$legacy_provider_source" "$candidate"; then
+            echo "Refusing divergent legacy k0s encryption-provider files" >&2
+            exit 1
+          fi
+        done
+        if sudo -n test -s "$encryption_provider" &&
+          test -n "$legacy_provider_source" &&
+          ! sudo -n cmp --silent "$encryption_provider" "$legacy_provider_source"; then
+          echo "Refusing divergent current and legacy k0s encryption providers" >&2
+          exit 1
         fi
-        if ! sudo -n test -s /var/lib/k0s/pki/nook-encryption-provider.yaml; then
+        if ! sudo -n test -s "$encryption_provider" &&
+          test -n "$legacy_provider_source"; then
+          sudo -n install -D -m 0600 \
+            "$legacy_provider_source" \
+            "$encryption_provider"
+        fi
+        if ! sudo -n test -s "$encryption_provider"; then
           encryption_key="$(openssl rand -base64 32)"
           encryption_config="$(mktemp)"
           umask 077
@@ -229,7 +251,7 @@ tasks:
         EOF
           sudo -n install -D -m 0600 \
             "$encryption_config" \
-            /var/lib/k0s/pki/nook-encryption-provider.yaml
+            "$encryption_provider"
           rm -f "$encryption_config"
           encryption_config=""
         fi
@@ -530,7 +552,7 @@ tasks:
         REMOTE
 
   k0s:uninstall:
-    desc: Uninstall k0s only when forced; preserve Neo4j and Zot data.
+    desc: Uninstall k0s only when forced; preserve Zot data.
     silent: true
     cmds:
       - |
