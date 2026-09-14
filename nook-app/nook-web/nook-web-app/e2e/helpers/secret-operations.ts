@@ -11,7 +11,6 @@ import {
   assertNoVaultError,
   triggerVaultSyncRefresh,
   type GithubE2eTarget,
-  waitForGithubVaultProjectionState,
   waitForGithubVaultState,
 } from './github-sync'
 import {
@@ -105,9 +104,10 @@ export async function addSecret(
           tx.oncomplete = () => db.close()
         }
       })
+      const storageMode: unknown = vault?.storageMode
       return {
         secrets: vault?.secrets?.length,
-        storageMode: vault?.storageMode,
+        storageMode: typeof storageMode === 'string' ? storageMode : undefined,
         localVaultPresent: vault?.localVaultPresent,
         syncProviders: vault?.syncProviders?.length,
         isSaving: vault?.isSaving,
@@ -199,20 +199,12 @@ export async function deleteSecret(
 ) {
   await waitForSecretOnDevice(page, key, github)
   const beforeCount = github
-    ? github.stub
-      ? (
-          await waitForGithubVaultState(
-            github,
-            (yaml) => yaml.secretIds.length > 0,
-          )
-        ).secretIds.length
-      : (
-          await waitForGithubVaultProjectionState(
-            github.pat,
-            github.repoName,
-            (yaml) => yaml.secretIds.length > 0,
-          )
-        ).secretIds.length
+    ? (
+        await waitForGithubVaultState(
+          github,
+          (yaml) => yaml.secretIds.length > 0,
+        )
+      ).secretIds.length
     : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })

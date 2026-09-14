@@ -281,10 +281,7 @@ async function readCatalog(locale) {
 
 /** @param {unknown} value @returns {value is Catalog} */
 function isCatalog(value) {
-  if (
-    !(value instanceof Object) ||
-    Array.isArray(value)
-  ) {
+  if (!(value instanceof Object) || Array.isArray(value)) {
     return false
   }
   for (const key of Object.keys(value)) {

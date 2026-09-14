@@ -40,7 +40,9 @@
   const keys = $derived(1 + participants.length)
 
   function changeTotal(event: Event) {
-    total = Number((event.currentTarget as HTMLSelectElement).value)
+    const target = event.currentTarget
+    if (!(target instanceof HTMLSelectElement)) return
+    total = Number(target.value)
     threshold = Math.min(threshold, total)
     participants = []
     deviceName = ''
@@ -51,7 +53,9 @@
   }
 
   function changeThreshold(event: Event) {
-    threshold = Number((event.currentTarget as HTMLSelectElement).value)
+    const target = event.currentTarget
+    if (!(target instanceof HTMLSelectElement)) return
+    threshold = Number(target.value)
     finalized = false
   }
 
