@@ -304,16 +304,6 @@ export default defineConfig(({ mode }) => {
       include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
       exclude: ['e2e/**', 'node_modules/**'],
       environment: 'happy-dom',
-      environmentOptions: {
-        happyDOM: {
-          settings: {
-            navigation: {
-              disableChildFrameNavigation: true,
-              disableMainFrameNavigation: true,
-            },
-          },
-        },
-      },
       setupFiles: ['tests/unit/setup-wasm.ts'],
       isolate: true,
       pool: 'forks',
