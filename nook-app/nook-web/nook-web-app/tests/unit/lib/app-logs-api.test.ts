@@ -21,7 +21,12 @@ vi.mock('$lib/runtime/log', () => ({
   },
 }))
 
-import { APP_LOGS_SCHEMA, AppLogsExport } from '$lib/app/logs-api'
+import {
+  APP_LOGS_SCHEMA,
+  AppLogsExport,
+  AppLogsQueryString,
+} from '$lib/app/logs-api'
+import { AppLogsJsonDocument } from '$lib/components/app-logs-json-serialization'
 import { LogLevel } from '$lib/runtime/log'
 
 describe('AppLogsExport', () => {
@@ -70,5 +75,34 @@ describe('AppLogsExport', () => {
       total: 2,
     })
     expect(response.entries).toHaveLength(1)
+  })
+})
+
+describe('AppLogsQueryString', () => {
+  test('uses typed defaults when query parameters are absent', () => {
+    expect(new AppLogsQueryString('').query).toEqual({
+      minLevel: LogLevel.Trace,
+      limit: 500,
+      offset: 0,
+    })
+  })
+
+  test('normalizes present values before validating them', () => {
+    expect(
+      new AppLogsQueryString('?minLevel=%20DEBUG%20&limit=25&offset=4').query,
+    ).toEqual({
+      minLevel: LogLevel.Debug,
+      limit: 25,
+      offset: 4,
+    })
+  })
+})
+
+describe('AppLogsJsonDocument', () => {
+  test('serializes error and loading documents with stable indentation', () => {
+    expect(AppLogsJsonDocument.error('log export failed').text).toBe(
+      '{\n  "error": "log export failed"\n}',
+    )
+    expect(AppLogsJsonDocument.loading().text).toBe('{\n  "loading": true\n}')
   })
 })

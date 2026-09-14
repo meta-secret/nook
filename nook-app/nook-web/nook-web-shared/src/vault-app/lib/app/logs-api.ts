@@ -39,6 +39,33 @@ type PositiveIntegerParseRequest = {
   readonly max: number;
 };
 
+enum QueryParameterValueKind {
+  Absent = "absent",
+  Present = "present",
+}
+
+type QueryParameterValue =
+  | { readonly kind: QueryParameterValueKind.Absent }
+  | {
+      readonly kind: QueryParameterValueKind.Present;
+      readonly value: string;
+    };
+
+type QueryParameterReadRequest = {
+  readonly params: URLSearchParams;
+  readonly name: string;
+};
+
+function readQueryParameter({
+  params,
+  name,
+}: QueryParameterReadRequest): QueryParameterValue {
+  for (const value of params.getAll(name)) {
+    return { kind: QueryParameterValueKind.Present, value };
+  }
+  return { kind: QueryParameterValueKind.Absent };
+}
+
 /** True when the current location resolves to the `/app-logs` JSON export route. */
 
 /** Parse `/app-logs?minLevel=debug&limit=500&offset=0` query parameters. */
@@ -106,8 +133,10 @@ export class AppLogsQueryString {
     name,
     fallback,
   }: LogLevelParseRequest): LogLevel {
-    const raw = params.get(name);
-    const value = raw?.trim().toLowerCase();
+    const readParameterArgs: QueryParameterReadRequest = { params, name };
+    const parameter = readQueryParameter(readParameterArgs);
+    if (parameter.kind === QueryParameterValueKind.Absent) return fallback;
+    const value = parameter.value.trim().toLowerCase();
     switch (value) {
       case LogLevel.Error:
       case LogLevel.Warn:
@@ -125,8 +154,10 @@ export class AppLogsQueryString {
     fallback,
     max,
   }: PositiveIntegerParseRequest) {
-    const raw = params.get(name);
-    const parsed = Number.parseInt(((v) => (v ? v : ""))(raw), 10);
+    const readParameterArgs2: QueryParameterReadRequest = { params, name };
+    const parameter = readQueryParameter(readParameterArgs2);
+    if (parameter.kind === QueryParameterValueKind.Absent) return fallback;
+    const parsed = Number.parseInt(parameter.value, 10);
     if (!Number.isFinite(parsed) || parsed < 0) return fallback;
     return Math.min(parsed, max);
   }
