@@ -60,6 +60,11 @@ interface PushRequest {
   readonly workingDirectory: string;
 }
 
+interface PromotionRequest {
+  readonly sha: CommitSha;
+  readonly workingDirectory: string;
+}
+
 export interface DevGitBootstrapRequest {
   /** Require clean-start local dev to finish exactly at origin/main. */
   readonly requireDevEquality?: boolean;
@@ -539,6 +544,26 @@ export class DevGitRepository {
       });
     }
     return ok();
+  }
+
+  /** Publishes the selected commit object unchanged as the main ref. */
+  promoteExact(request: PromotionRequest): Result<void, DevFailure> {
+    const verified = this.execute({
+      args: ['cat-file', '-e', `${request.sha.value()}^{commit}`],
+      workingDirectory: request.workingDirectory,
+    });
+    if (verified.isErr()) return err(verified.error);
+    if (verified.value.exitCode !== 0) {
+      return err({
+        kind: DevFailureKind.Evidence,
+        message: `The selected promotion object is not an exact commit ${request.sha.value()}: ${new CommandFailureMessage(verified.value).text()}`,
+      });
+    }
+    return this.pushExact({
+      target: ManagedBranch.Main,
+      sha: request.sha,
+      workingDirectory: request.workingDirectory,
+    });
   }
 
   private trackingHead(branch: ManagedBranch): Result<CommitSha, DevFailure> {
