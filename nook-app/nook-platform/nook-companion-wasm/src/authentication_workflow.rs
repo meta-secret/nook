@@ -60,6 +60,13 @@ mod routing_admission_tests {
 
 #[wasm_bindgen]
 #[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn unavailable_website_login_match_availability(
+) -> nook_companion_core::WebsiteLoginMatchAvailability {
+    nook_companion_core::WebsiteLoginMatchAvailability::unavailable()
+}
+
+#[wasm_bindgen]
+#[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_saved_login_capability(
     snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
 ) -> nook_companion_core::AuthenticationSavedLoginCapability {
