@@ -34,12 +34,12 @@ on:
         type: boolean
         default: false
       pinned_local_dev_sha:
-        description: Optional manager-authorized bootstrap evidence: canonical local-dev base SHA
+        description: "Optional manager-authorized bootstrap evidence: canonical local-dev base SHA"
         required: false
         default: ''
         type: string
       origin_main_sha:
-        description: Optional manager-authorized bootstrap evidence: fetched origin/main SHA
+        description: "Optional manager-authorized bootstrap evidence: fetched origin/main SHA"
         required: false
         default: ''
         type: string

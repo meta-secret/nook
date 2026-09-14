@@ -11,6 +11,8 @@ app_taskfile="$(cat "$workflows_dir/../../nook-app/Taskfile.yml")"
 guest_taskfile="$(cat "$workflows_dir/../../.task/agentic-ai.yml")"
 delivery_doc="$(cat "$workflows_dir/../../.cortex/gizmo-prime/architecture/dev-delivery.md")"
 
+ruby -ryaml -e 'YAML.parse_file(ARGV.fetch(0))' "$workflows_dir/agent-implement.yml" >/dev/null
+
 for input in pinned_local_dev_sha origin_main_sha; do
   input_block="$(printf '%s\n' "$dispatch_inputs" | awk -v input="$input" '
     $0 == "      " input ":" { found = 1; next }
@@ -53,9 +55,9 @@ for required in \
   'feature_branch:' \
   'description: Required prepublished canonical Prime feature branch; branch is dispatch authority' \
   'pinned_local_dev_sha:' \
-  'description: Optional manager-authorized bootstrap evidence: canonical local-dev base SHA' \
+  'description: "Optional manager-authorized bootstrap evidence: canonical local-dev base SHA"' \
   'origin_main_sha:' \
-  'description: Optional manager-authorized bootstrap evidence: fetched origin/main SHA' \
+  'description: "Optional manager-authorized bootstrap evidence: fetched origin/main SHA"' \
   'FEATURE_BRANCH: ${{ inputs.feature_branch }}' \
   'refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH' \
   'ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}' \
