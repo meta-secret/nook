@@ -24,6 +24,29 @@ impl LocalDevEvidence<'_> {
         let pinned_local_dev_sha = pinned_local_dev_sha.as_str();
         let observed_feature_head_sha = observed_feature_head_sha.as_str();
         let local_dev_sha = local_dev_sha.as_str();
+        if DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha])
+            .await
+            .is_err()
+        {
+            DeliveryCommand::run_git_status(
+                repository,
+                &[
+                    "fetch",
+                    "--no-tags",
+                    "origin",
+                    "+dev:refs/remotes/origin/dev",
+                ],
+                "make the recorded local-dev commit available for ancestry checks",
+            )
+            .await?;
+        }
+        DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha])
+            .await
+            .map_err(|error| {
+                crate::HiveError::message(format!(
+                    "Hive repair delivery cannot verify local-dev landing because recorded commit {local_dev_sha} is unavailable: {error}"
+                ))
+            })?;
         DeliveryCommand::run_git_status(
             repository,
             &["merge-base", "--is-ancestor", origin_main_sha, pinned_local_dev_sha],

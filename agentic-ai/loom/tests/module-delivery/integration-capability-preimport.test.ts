@@ -20,7 +20,7 @@ test('pre-importing capability assertions cannot preempt coordinator minting', a
     value: forgedBridges,
     writable: true,
   });
-  let fixture: GitFixture | undefined;
+  let fixture: GitFixture | false = false;
   try {
     const preimport = await import(
       '../../src/module-delivery/integration-capabilities.ts'

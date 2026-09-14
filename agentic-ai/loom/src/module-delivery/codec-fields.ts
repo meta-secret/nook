@@ -41,8 +41,8 @@ export class ModulePlanDecodeFailure extends Error {
   constructor(request: ModulePlanDecodeFailureRequest) {
     super(request.message);
     this.name = 'ModulePlanDecodeFailure';
-    this.code = request.code ?? ModuleDeliveryIssueCode.InvalidField;
-    this.path = request.path ?? '$';
+    this.code = request.code || ModuleDeliveryIssueCode.InvalidField;
+    this.path = request.path || '$';
   }
 }
 
@@ -67,7 +67,7 @@ export class ModuleDeliveryPlanTransportLimit extends ModulePlanDecodeFailure {
     readonly path?: string;
   }) {
     super(
-      request.path === undefined
+      !request.path
         ? {
             code: ModuleDeliveryIssueCode.LimitExceeded,
             message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,

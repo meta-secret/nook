@@ -88,8 +88,7 @@ impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
             .any(|attribute| attribute.has_name(sym::automatically_derived));
 
         if RegisteredType::secret(&type_path)
-            && (trait_path == "core::fmt::Display"
-                || (trait_path == "core::fmt::Debug" && derived))
+            && (trait_path == "core::fmt::Display" || (trait_path == "core::fmt::Debug" && derived))
         {
             span_lint_and_help(
                 cx,

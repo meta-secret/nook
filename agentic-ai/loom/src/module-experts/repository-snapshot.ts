@@ -33,6 +33,8 @@ export type RepositorySnapshotRequest = {
   readonly excludedPaths: readonly string[];
   readonly optionalScopePaths: readonly string[];
   readonly sourceCommit: string;
+  /** The current canonical feature frontier to materialize. */
+  readonly featureHeadSha: string;
   readonly scopePaths: readonly string[];
   readonly workingDirectory: string;
 };
@@ -158,7 +160,7 @@ export class RepositorySnapshot {
             '--format=tar',
             '--no-worktree-attributes',
             `--output=${archivePath}`,
-            request.sourceCommit,
+            request.featureHeadSha,
             '--',
             ...request.scopePaths,
             ...optionalPaths.value,
@@ -235,7 +237,7 @@ export class RepositorySnapshot {
         message: 'Module expert repository object directory is unavailable.',
       });
     }
-    let isolatedPath: string | undefined;
+    let isolatedPath = '';
     try {
       isolatedPath = mkdtempSync(join(this.request.codexHome, '.git-'));
       const objectsDirectory = join(isolatedPath, 'objects');
@@ -245,7 +247,7 @@ export class RepositorySnapshot {
       mkdirSync(join(isolatedPath, 'refs', 'tags'), { recursive: true });
       writeFileSync(
         join(isolatedPath, 'HEAD'),
-        `${this.request.sourceCommit}\n`,
+        `${this.request.featureHeadSha}\n`,
         { encoding: 'utf8', flag: 'wx' },
       );
       writeFileSync(
@@ -255,7 +257,7 @@ export class RepositorySnapshot {
       );
       return ok({ path: isolatedPath });
     } catch {
-      if (isolatedPath !== undefined) {
+      if (isolatedPath) {
         try {
           rmSync(isolatedPath, { force: true, recursive: true });
         } catch {
@@ -312,7 +314,7 @@ export class RepositorySnapshot {
         'ls-tree',
         '--name-only',
         '-z',
-        request.sourceCommit,
+        request.featureHeadSha,
         '--',
         ...request.optionalScopePaths,
       ],
@@ -366,7 +368,7 @@ export class SnapshotContextFiles {
       const target = this.safeTarget(root.value, file.path);
       if (target.isErr()) return err(target.error);
       try {
-        let descriptor: number | undefined;
+        let descriptor: number | false = false;
         try {
           descriptor = openSync(
             target.value,
@@ -380,7 +382,7 @@ export class SnapshotContextFiles {
             encoding: 'utf8',
           });
         } finally {
-          if (descriptor !== undefined) closeSync(descriptor);
+          if (descriptor !== false) closeSync(descriptor);
         }
       } catch {
         return err({
@@ -442,7 +444,7 @@ export class SnapshotContextFiles {
           kind: ExpertIsolationFailureKind.ContextFiles,
           message: 'Read-only expert context file is unsafe.',
         });
-      if (metadata !== undefined) {
+      if (metadata) {
         const existingCanonical = realpathSync(target);
         const existingRelative = relative(canonicalRoot, existingCanonical);
         if (
@@ -499,7 +501,7 @@ export class SnapshotContextFiles {
       for (const component of parentRelative.split(sep).filter(Boolean)) {
         const candidate = join(current, component);
         let metadata = lstatSync(candidate, { throwIfNoEntry: false });
-        if (metadata === undefined) {
+        if (!metadata) {
           mkdirSync(candidate);
           metadata = lstatSync(candidate);
         }

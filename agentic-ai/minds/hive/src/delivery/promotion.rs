@@ -54,17 +54,31 @@ impl PromotionEvidence<'_> {
             &["rev-parse", "refs/remotes/origin/main"],
         )
         .await?;
-        if main != sha {
+        if !DeliveryCommand::is_ancestor(
+            self.repository,
+            sha,
+            &main,
+            "verify remote Main contains the promoted repair",
+        )
+        .await?
+        {
             return Err(crate::HiveError::message(format!(
-                "obsolete blocker retirement requires remote Main to equal tested SHA {sha}, observed {main}"
+                "obsolete blocker retirement requires remote Main to contain tested SHA {sha}, observed {main}"
             )));
         }
         let dev =
             DeliveryCommand::git_output(self.repository, &["rev-parse", "refs/remotes/origin/dev"])
                 .await?;
-        if dev != sha {
+        if !DeliveryCommand::is_ancestor(
+            self.repository,
+            sha,
+            &dev,
+            "verify remote dev contains the promoted repair",
+        )
+        .await?
+        {
             return Err(crate::HiveError::message(format!(
-                "obsolete blocker retirement requires remote dev to equal tested SHA {sha}, observed {dev}"
+                "obsolete blocker retirement requires remote dev to contain tested SHA {sha}, observed {dev}"
             )));
         }
         self.validate_pull_request(sha).await?;
@@ -130,13 +144,23 @@ impl PromotionEvidence<'_> {
         .gh_output()
         .await?;
         let runs: Vec<MainRun> = serde_json::from_str(&output)?;
-        if !runs.iter().any(|run| {
-            run.head_sha == sha && run.status == "completed" && run.conclusion == "success"
-        }) {
-            return Err(crate::HiveError::message(format!(
-                "obsolete blocker retirement requires a successful exact-SHA Main run for {sha}"
-            )));
+        for run in runs
+            .iter()
+            .filter(|run| run.status == "completed" && run.conclusion == "success")
+        {
+            if DeliveryCommand::is_ancestor(
+                self.repository,
+                sha,
+                &run.head_sha,
+                "verify successful Main run contains the promoted repair",
+            )
+            .await?
+            {
+                return Ok(());
+            }
         }
-        Ok(())
+        Err(crate::HiveError::message(format!(
+            "obsolete blocker retirement requires a successful Main run containing tested SHA {sha}"
+        )))
     }
 }

@@ -542,15 +542,12 @@ mod tests {
         WorkbenchIncidentText,
     };
 
-    fn bootstrap_evidence() -> BootstrapEvidence {
-        BootstrapEvidence {
-            origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")
-                .expect("fixture SHA is valid"),
-            pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")
-                .expect("fixture SHA is valid"),
-            feature_branch: FeatureBranch::try_from("codex/repair-cache")
-                .expect("fixture branch is valid"),
-        }
+    fn bootstrap_evidence() -> crate::HiveResult<BootstrapEvidence> {
+        Ok(BootstrapEvidence {
+            origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")?,
+            pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")?,
+            feature_branch: FeatureBranch::try_from("codex/repair-cache")?,
+        })
     }
 
     #[derive(Clone, Default)]
@@ -717,7 +714,7 @@ mod tests {
                      pinnedLocalDevSha: 123456789abcdef0123456789abcdef012345678\n\
                      featureBranch: codex/repair-cache",
         };
-        assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence());
+        assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence()?);
         assert!(
             WorkbenchIncidentText { value: "issue" }
                 .bootstrap_evidence()
@@ -795,7 +792,7 @@ mod tests {
             "issue",
             123,
             2,
-            &bootstrap_evidence(),
+            &bootstrap_evidence()?,
         )
         .await?;
 
@@ -857,7 +854,7 @@ mod tests {
                 "issue",
                 123,
                 2,
-                &bootstrap_evidence(),
+                &bootstrap_evidence()?,
             )
             .await
             .is_err()
@@ -890,7 +887,7 @@ mod tests {
             "issue",
             123,
             2,
-            &bootstrap_evidence(),
+            &bootstrap_evidence()?,
         )
         .await?;
         assert_eq!(

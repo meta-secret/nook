@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { CommandFailureMessage } from './dev-command.ts';
 import { GitHubJsonDocument } from './dev-github-json.ts';
+import type { JsonTransportNull } from '../lib/guards.ts';
 import {
   CommandExecutable,
   type CommandOutput,
@@ -18,6 +19,8 @@ import {
   RepositorySlug,
 } from './dev-types.ts';
 
+const repositoryReferenceSchema = z.object({ nameWithOwner: z.string() });
+
 const pullRequestListEntrySchema = z.object({
   number: z.number().int().positive(),
   headRefName: z.string(),
@@ -26,11 +29,19 @@ const pullRequestListEntrySchema = z.object({
   baseRefOid: z.string(),
   url: z.string(),
   isDraft: z.boolean(),
+  headRepository: repositoryReferenceSchema,
+  isCrossRepository: z.boolean(),
 });
 const pullRequestListSchema = z.array(pullRequestListEntrySchema);
 type PullRequestListEntry = z.infer<typeof pullRequestListEntrySchema>;
 
-const repositoryReferenceSchema = z.object({ nameWithOwner: z.string() });
+const githubTransportNullSchema = z.custom<JsonTransportNull>(
+  (value) => typeof value === 'object' && !value,
+);
+const githubNullableStringSchema = z
+  .union([z.string(), githubTransportNullSchema])
+  .transform((value) => (typeof value === 'string' ? value : ''));
+
 const pullRequestViewSchema = z.object({
   number: z.number().int().positive(),
   headRefName: z.string(),
@@ -42,24 +53,40 @@ const pullRequestViewSchema = z.object({
   state: z.string(),
   headRepository: repositoryReferenceSchema,
   isCrossRepository: z.boolean(),
-  reviewDecision: z.string().nullable(),
+  reviewDecision: githubNullableStringSchema,
 });
 type PullRequestView = z.infer<typeof pullRequestViewSchema>;
 
 const pullRequestStatusSchema = z.object({
   state: z.string(),
-  mergedAt: z.string().nullable(),
+  mergedAt: githubNullableStringSchema,
 });
 
 const pageInfoSchema = z.object({
   hasNextPage: z.boolean(),
-  endCursor: z.string().nullable(),
+  endCursor: githubNullableStringSchema,
 });
+
+enum ReviewCommitBindingKind {
+  Present = 'present',
+  Missing = 'missing',
+}
+
+const reviewCommitBindingSchema = z
+  .union([
+    z.object({ oid: z.string() }).transform((value) => ({
+      kind: ReviewCommitBindingKind.Present,
+      oid: value.oid,
+    })),
+    githubTransportNullSchema.transform(() => ({
+      kind: ReviewCommitBindingKind.Missing,
+    })),
+  ]);
 
 const reviewRecordSchema = z.object({
   state: z.string(),
-  body: z.string().nullable(),
-  commit: z.object({ oid: z.string() }).nullable(),
+  body: githubNullableStringSchema,
+  commit: reviewCommitBindingSchema,
 });
 type ReviewRecord = z.infer<typeof reviewRecordSchema>;
 
@@ -392,7 +419,7 @@ export class DevelopmentPullRequestGateway {
       });
       if (threadIdentity.isErr()) return err(threadIdentity.error);
       unresolvedCurrentThread ||= page.data.repository.pullRequest.reviewThreads.nodes.some(
-        (thread) => !thread.isResolved && !thread.isOutdated,
+        (thread) => !thread.isResolved,
       );
     }
 
@@ -529,7 +556,7 @@ export class DevelopmentPullRequestGateway {
   private requireCompletePagination(request: {
     readonly pageInfos: readonly {
       readonly hasNextPage: boolean;
-      readonly endCursor: string | null;
+      readonly endCursor: string;
     }[];
     readonly evidence: string;
   }): Result<void, DevFailure> {
@@ -556,12 +583,6 @@ export class DevelopmentPullRequestGateway {
           });
         }
         continue;
-      }
-      if (pageInfo.endCursor === '') {
-        return err({
-          kind: DevFailureKind.Reviews,
-          message: `GitHub returned unknown terminal pagination for ${request.evidence}`,
-        });
       }
       if (index !== request.pageInfos.length - 1) {
         return err({
@@ -606,24 +627,33 @@ export class DevelopmentPullRequestGateway {
     readonly pullRequest: AdmittedDevelopmentPullRequest;
   }): ReviewRecordDisposition {
     const { review, pullRequest } = request;
-    const substantive = review.body !== null && review.body.trim().length > 0;
+    const substantive =
+      typeof review.body === 'string' && review.body.trim().length > 0;
     const blockingState = review.state === 'CHANGES_REQUESTED';
     const knownNonActionableState =
       review.state === 'APPROVED' ||
       review.state === 'COMMENTED' ||
       review.state === 'DISMISSED' ||
       review.state === 'PENDING';
-    const commit = review.commit ? CommitSha.parse(review.commit.oid) : null;
+    const commit =
+      'oid' in review.commit
+        ? CommitSha.parse(review.commit.oid)
+        : err<CommitSha, DevFailure>({
+            kind: DevFailureKind.Reviews,
+            message: 'GitHub review did not include a commit binding',
+          });
 
     // A malformed, missing, or otherwise unprovable binding cannot establish
     // that a substantive, blocking, or unknown review is stale.
-    if (!commit || commit.isErr()) {
+    if (commit.isErr()) {
       return substantive || blockingState || !knownNonActionableState
         ? ReviewRecordDisposition.Block
         : ReviewRecordDisposition.Ignore;
     }
     if (!commit.value.equals(pullRequest.headSha)) {
-      return ReviewRecordDisposition.Ignore;
+      return substantive || blockingState || !knownNonActionableState
+        ? ReviewRecordDisposition.Block
+        : ReviewRecordDisposition.Ignore;
     }
 
     // Once a review is proven current, unknown states are not safe to ignore.
@@ -713,6 +743,8 @@ export class DevelopmentPullRequestGateway {
   private openPullRequests(
     workingDirectory: string,
   ): Result<readonly PullRequestSelection[], DevFailure> {
+    const repository = this.repository(workingDirectory);
+    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
@@ -725,8 +757,10 @@ export class DevelopmentPullRequestGateway {
         'main',
         '--limit',
         '10',
+        '--repo',
+        repository.value.value(),
         '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,headRepository,isCrossRepository',
       ],
       workingDirectory,
     });
@@ -737,6 +771,11 @@ export class DevelopmentPullRequestGateway {
     if (decoded.isErr()) return err(decoded.error);
     const selections: PullRequestSelection[] = [];
     for (const raw of decoded.value) {
+      if (
+        raw.isCrossRepository ||
+        raw.headRepository.nameWithOwner !== repository.value.value()
+      )
+        continue;
       const number = PullRequestNumber.parse(raw.number);
       if (number.isErr()) return err(number.error);
       selections.push({ number: number.value, raw });
@@ -747,11 +786,15 @@ export class DevelopmentPullRequestGateway {
   private readPullRequest(
     request: PullRequestReadRequest,
   ): Result<AdmittedDevelopmentPullRequest, DevFailure> {
+    const repository = this.repository(request.workingDirectory);
+    if (repository.isErr()) return err(repository.error);
     const output = this.successful({
       args: [
         'pr',
         'view',
         String(request.number.value()),
+        '--repo',
+        repository.value.value(),
         '--json',
         'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,isCrossRepository,reviewDecision',
       ],
@@ -764,25 +807,23 @@ export class DevelopmentPullRequestGateway {
     if (decoded.isErr()) return err(decoded.error);
     return this.admitDevelopmentPullRequest({
       view: decoded.value,
-      workingDirectory: request.workingDirectory,
+      repository: repository.value,
     });
   }
 
   private admitDevelopmentPullRequest(request: {
     readonly view: PullRequestView;
-    readonly workingDirectory: string;
+    readonly repository: RepositorySlug;
   }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
-    const { view } = request;
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
-    // `gh pr view` is scoped to the current repository, so the supported
-    // `isCrossRepository` field proves that the base repository is this repo.
+    const { repository, view } = request;
+    // `--repo` binds the PR number and base repository to this repository;
+    // `isCrossRepository` and `headRepository` then prove the head identity.
     if (
       view.state !== PullRequestState.Open ||
       view.headRefName !== 'dev' ||
       view.baseRefName !== 'main' ||
       view.isCrossRepository ||
-      view.headRepository.nameWithOwner !== repository.value.value()
+      view.headRepository.nameWithOwner !== repository.value()
     ) {
       return err({
         kind: DevFailureKind.GitHub,
@@ -801,7 +842,7 @@ export class DevelopmentPullRequestGateway {
       headSha: headSha.value,
       baseSha: baseSha.value,
       url: view.url,
-      repository: repository.value,
+      repository,
       isDraft: view.isDraft,
       reviewDecision: this.reviewDecision(view.reviewDecision),
     });
@@ -825,7 +866,7 @@ export class DevelopmentPullRequestGateway {
     return RepositorySlug.parse(output.value.stdout.trim());
   }
 
-  private reviewDecision(input: string | null): PullRequestReviewDecision {
+  private reviewDecision(input: string): PullRequestReviewDecision {
     switch (input) {
       case PullRequestReviewDecision.Approved:
         return PullRequestReviewDecision.Approved;
@@ -834,8 +875,6 @@ export class DevelopmentPullRequestGateway {
       case PullRequestReviewDecision.ReviewRequired:
         return PullRequestReviewDecision.ReviewRequired;
       case PullRequestReviewDecision.Empty:
-      case null:
-        return PullRequestReviewDecision.Empty;
       default:
         return PullRequestReviewDecision.Unknown;
     }

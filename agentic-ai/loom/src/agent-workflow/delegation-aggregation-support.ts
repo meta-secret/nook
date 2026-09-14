@@ -74,8 +74,6 @@ export type DelegationRunResultV1 = {
   readonly schemaVersion: typeof DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION;
   readonly runId: string;
   readonly sourceCommit: string;
-  readonly originMainSha: string;
-  readonly pinnedLocalDevSha: string;
   readonly planSha256: string;
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationFinalizedAttempt[];

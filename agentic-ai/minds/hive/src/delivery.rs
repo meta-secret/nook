@@ -98,19 +98,11 @@ impl MainRepairDelivery<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::MainRepairDelivery;
-
     #[test]
     fn feature_delivery_wires_the_canonical_evidence_layers() {
         let source = include_str!("delivery.rs");
         assert!(source.contains("RemoteCompileEvidence"));
         assert!(source.contains("LocalDevEvidence"));
         assert!(source.contains("WorkbenchCompletionCheck"));
-    }
-
-    #[test]
-    fn repair_delivery_keeps_the_worker_call_surface() {
-        let _delivery_method = MainRepairDelivery::verify_main_repair_delivery;
-        let _retirement_method = MainRepairDelivery::verify_main_repair_promotion_and_main;
     }
 }

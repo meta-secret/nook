@@ -452,8 +452,13 @@ jobs:
           fi
           implementation_head="$(git -C "$implementation_root" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
           if [ "$implementation_head" != "$FEATURE_HEAD_SHA" ]; then
-            echo "::error::Isolated implementation repository does not match the run-start feature head."
-            exit 1
+            if ! git -C "$implementation_root" merge-base --is-ancestor "$FEATURE_HEAD_SHA" "$implementation_head"; then
+              echo "::error::Canonical feature branch moved to a non-descendant during bootstrap."
+              exit 1
+            fi
+            echo "::notice::Canonical feature branch advanced during bootstrap; adopting its latest fetched head and rerunning downstream evidence."
+            FEATURE_HEAD_SHA="$implementation_head"
+            feature_head_sha="$implementation_head"
           fi
           if ! git -C "$implementation_root" cat-file -e "$PINNED_LOCAL_DEV_SHA^{commit}"; then
             echo "::error::Pinned local dev commit is missing from the isolated implementation repository."

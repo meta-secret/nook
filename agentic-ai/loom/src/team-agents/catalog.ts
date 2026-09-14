@@ -34,12 +34,14 @@ export class TeamAuthorityCatalog {
   static teamRuntimeProfile(
     agentKey: TeamAgentKey,
   ): TeamRuntimeProfile | false {
-    const directProfile =
-      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === agentKey) ??
-      TEAM_INTERNAL_AGENT_CATALOG.find(
-        (candidate) => candidate.key === agentKey,
-      );
-    if (directProfile) return directProfile;
+    const directProfile = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    const internalProfile = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    const selectedProfile = directProfile || internalProfile;
+    if (selectedProfile) return selectedProfile;
     const teamAuthority = TEAM_AUTHORITY_CATALOG.find(
       (candidate) => candidate.key === agentKey,
     );
@@ -55,12 +57,13 @@ export class TeamAuthorityCatalog {
   static teamRuntimeProfileByName(
     agentName: string,
   ): TeamRuntimeProfile | false {
-    const profile =
-      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === agentName) ??
-      TEAM_INTERNAL_AGENT_CATALOG.find(
-        (candidate) => candidate.key === agentName,
-      );
-    return profile ?? false;
+    const gizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentName,
+    );
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentName,
+    );
+    return gizmo || internalAgent || false;
   }
 
   static teamAgentProfile(
@@ -79,7 +82,7 @@ export class TeamAuthorityCatalog {
     const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
       (candidate) => candidate.key === agentKey,
     );
-    return internalAgent ?? false;
+    return internalAgent || false;
   }
 
   static teamCortexRoot(teamKey: TeamKey): string {

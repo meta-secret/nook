@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { ok, type Result } from 'neverthrow';
+import type { JsonTransportNull } from '../src/lib/guards.ts';
 
 import {
   DevelopmentPullRequestGateway,
@@ -22,22 +23,28 @@ const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const STALE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const BASE = '1111111111111111111111111111111111111111';
 const REPOSITORY = 'nook/example';
+const externalNull = (): JsonTransportNull => {
+  const value = new URLSearchParams().get('missing');
+  if (value !== null) throw new Error('review fixture null sentinel changed');
+  return value;
+};
+const EXTERNAL_NULL = externalNull();
 
 interface ReviewFixture {
   readonly state?: string;
-  readonly body?: string | null;
-  readonly commit?: string | null;
+  readonly body?: string | JsonTransportNull;
+  readonly commit?: string | JsonTransportNull;
 }
 
 interface ReviewPageFixture {
   readonly hasNextPage: boolean;
-  readonly endCursor: string | null;
+  readonly endCursor: string | JsonTransportNull;
   readonly reviews: readonly ReviewFixture[];
 }
 
 interface PageInfoResponse {
   readonly hasNextPage: boolean;
-  readonly endCursor: string | null;
+  readonly endCursor: string | JsonTransportNull;
 }
 
 interface PullRequestIdentityResponse {
@@ -62,8 +69,8 @@ interface ReviewPageResponse {
           readonly pageInfo: PageInfoResponse;
           readonly nodes: readonly {
             readonly state: string;
-            readonly body: string | null;
-            readonly commit: { readonly oid: string } | null;
+            readonly body: string | JsonTransportNull;
+            readonly commit: { readonly oid: string } | JsonTransportNull;
           }[];
         };
       };
@@ -97,7 +104,7 @@ interface ReviewScenario {
   readonly reviewPages: readonly ReviewPageFixture[];
   readonly threadPages?: readonly {
     readonly hasNextPage: boolean;
-    readonly endCursor: string | null;
+    readonly endCursor: string | JsonTransportNull;
     readonly unresolved?: boolean;
     readonly outdated?: boolean;
   }[];
@@ -140,10 +147,17 @@ class ReviewEvidenceRunner implements CommandRunner {
     readonly reviews: readonly ReviewFixture[];
     readonly pagination?: Partial<ReviewPageFixture>;
   }): ReviewPageFixture {
+    const pagination = request.pagination;
     return {
-      hasNextPage: request.pagination?.hasNextPage ?? false,
-      endCursor: request.pagination?.endCursor ?? null,
-      reviews: request.reviews,
+      hasNextPage: pagination?.hasNextPage === true,
+      endCursor:
+        typeof pagination?.endCursor === 'string'
+          ? pagination.endCursor
+          : EXTERNAL_NULL,
+      reviews: request.reviews.map((review) => ({
+        ...review,
+        commit: review.commit ?? EXTERNAL_NULL,
+      })),
     };
   }
 
@@ -174,7 +188,7 @@ class ReviewEvidenceRunner implements CommandRunner {
       this.pullRequestViews += 1;
       const head =
         this.pullRequestViews > 1
-          ? (this.scenario.finalHead ?? HEAD)
+          ? (this.scenario.finalHead || HEAD)
           : HEAD;
       return this.output(JSON.stringify(this.pullRequestView(head)));
     }
@@ -199,14 +213,9 @@ class ReviewEvidenceRunner implements CommandRunner {
                 endCursor: page.endCursor,
               },
               nodes: page.reviews.map((review) => ({
-                state: review.state ?? 'APPROVED',
-                body: review.body === undefined ? '' : review.body,
-                commit:
-                  review.commit === undefined
-                    ? { oid: HEAD }
-                    : review.commit === null
-                      ? null
-                      : { oid: review.commit },
+                state: review.state || 'APPROVED',
+                body: typeof review.body === 'string' ? review.body : '',
+                commit: ReviewEvidenceRunner.reviewCommit(review),
               })),
             },
           },
@@ -216,8 +225,8 @@ class ReviewEvidenceRunner implements CommandRunner {
   }
 
   private threadPages(): readonly ThreadPageResponse[] {
-    const pages = this.scenario.threadPages ?? [
-      { hasNextPage: false, endCursor: null },
+    const pages = this.scenario.threadPages || [
+      { hasNextPage: false, endCursor: EXTERNAL_NULL },
     ];
     return pages.map((page) => ({
       data: {
@@ -233,7 +242,7 @@ class ReviewEvidenceRunner implements CommandRunner {
               nodes: [
                 {
                   isResolved: !page.unresolved,
-                  isOutdated: page.outdated ?? false,
+                  isOutdated: page.outdated === true,
                 },
               ],
             },
@@ -247,7 +256,7 @@ class ReviewEvidenceRunner implements CommandRunner {
     return {
       ...this.pullRequestIdentity(headSha),
       state: 'OPEN',
-      reviewDecision: this.scenario.reviewDecision ?? 'APPROVED',
+      reviewDecision: this.scenario.reviewDecision || 'APPROVED',
     };
   }
 
@@ -264,6 +273,15 @@ class ReviewEvidenceRunner implements CommandRunner {
       baseRepository: { nameWithOwner: REPOSITORY },
       isCrossRepository: false,
     };
+  }
+
+  private static reviewCommit(
+    review: ReviewFixture,
+  ): { readonly oid: string } | JsonTransportNull {
+    if (!Object.hasOwn(review, 'commit')) return { oid: HEAD };
+    return typeof review.commit === 'string'
+      ? { oid: review.commit }
+      : EXTERNAL_NULL;
   }
 
   private output(stdout = ''): CommandOutput {
@@ -302,7 +320,7 @@ test('rejects an incomplete review pagination sequence', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('blocks current-head actionable feedback but ignores stale feedback', () => {
+test('blocks current-head actionable feedback and stale actionable feedback', () => {
   const current = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -328,7 +346,10 @@ test('blocks current-head actionable feedback but ignores stale feedback', () =>
       }),
     ],
   }).reviewResult();
-  expect(stale.result.isOk()).toBe(true);
+  expect(stale.result.isErr()).toBe(true);
+  if (stale.result.isErr()) {
+    expect(stale.result.error.kind).toBe(DevFailureKind.Reviews);
+  }
 });
 
 test('blocks an unknown current-head review state', () => {
@@ -344,9 +365,9 @@ test('blocks an unknown current-head review state', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('fails closed for unprovable unknown review bindings unless stale', () => {
-  for (const body of ['', null]) {
-    for (const commit of [null, 'not-a-sha']) {
+test('fails closed for unprovable unknown review bindings including stale', () => {
+  for (const body of ['', EXTERNAL_NULL]) {
+    for (const commit of [EXTERNAL_NULL, 'not-a-sha']) {
       const { result } = new ReviewEvidenceRunner({
         reviewPages: [
           ReviewEvidenceRunner.reviewPage({
@@ -363,11 +384,14 @@ test('fails closed for unprovable unknown review bindings unless stale', () => {
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
-        reviews: [{ state: 'UNRECOGNIZED', body: null, commit: STALE }],
+        reviews: [{ state: 'UNRECOGNIZED', body: EXTERNAL_NULL, commit: STALE }],
       }),
     ],
   }).reviewResult();
-  expect(stale.result.isOk()).toBe(true);
+  expect(stale.result.isErr()).toBe(true);
+  if (stale.result.isErr()) {
+    expect(stale.result.error.kind).toBe(DevFailureKind.Reviews);
+  }
 });
 
 test('ignores known non-actionable states without substantive feedback', () => {
@@ -394,7 +418,7 @@ test('does not require an aggregate approved review when feedback is clean', () 
   expect(result.isOk()).toBe(true);
 });
 
-test('ignores stale-head reviews but blocks unresolved current threads', () => {
+test('ignores stale non-actionable reviews but blocks unresolved threads', () => {
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -409,7 +433,7 @@ test('ignores stale-head reviews but blocks unresolved current threads', () => {
       ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
     ],
     threadPages: [
-      { hasNextPage: false, endCursor: null, unresolved: true },
+      { hasNextPage: false, endCursor: EXTERNAL_NULL, unresolved: true },
     ],
   }).reviewResult();
   expect(unresolved.result.isErr()).toBe(true);
@@ -424,10 +448,13 @@ test('ignores stale-head reviews but blocks unresolved current threads', () => {
       }),
     ],
     threadPages: [
-      { hasNextPage: false, endCursor: null, unresolved: true, outdated: true },
+      { hasNextPage: false, endCursor: EXTERNAL_NULL, unresolved: true, outdated: true },
     ],
   }).reviewResult();
-  expect(outdated.result.isOk()).toBe(true);
+  expect(outdated.result.isErr()).toBe(true);
+  if (outdated.result.isErr()) {
+    expect(outdated.result.error.kind).toBe(DevFailureKind.Reviews);
+  }
 });
 
 test('reports a pull-request head race after collecting review evidence', () => {
@@ -444,9 +471,9 @@ test('reports a pull-request head race after collecting review evidence', () => 
 
 test('fails closed for unprovable bindings on substantive or blocking reviews', () => {
   for (const review of [
-    { state: 'COMMENTED', body: 'Please address this.', commit: null },
+    { state: 'COMMENTED', body: 'Please address this.', commit: EXTERNAL_NULL },
     { state: 'COMMENTED', body: 'Please address this.', commit: 'not-a-sha' },
-    { state: 'CHANGES_REQUESTED', body: '', commit: null },
+    { state: 'CHANGES_REQUESTED', body: '', commit: EXTERNAL_NULL },
   ]) {
     const { result } = new ReviewEvidenceRunner({
       reviewPages: [ReviewEvidenceRunner.reviewPage({ reviews: [review] })],

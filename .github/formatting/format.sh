@@ -46,7 +46,7 @@ while IFS= read -r -d '' path; do
       loom_files+=("${path#agentic-ai/loom/}")
       ;;
     .cortex/gizmo-prime/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
-      if [[ ! "$path" =~ ^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
+      if [[ ! "$path" =~ ^(\.cortex/(gizmo-prime|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
         echo "format: invalid executable-skill path: $path" >&2
         exit 1
       fi

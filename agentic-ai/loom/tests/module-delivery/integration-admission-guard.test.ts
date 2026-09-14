@@ -176,6 +176,7 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
+      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

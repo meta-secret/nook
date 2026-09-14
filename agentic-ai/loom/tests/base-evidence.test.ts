@@ -156,7 +156,7 @@ describe('pinned dev base Git identity', () => {
 });
 
 describe('canonical feature branch identity', () => {
-  test('accepts the Hive-compatible Prime, child, and machine forms', () => {
+  test('accepts established Prime, canonical child, and machine forms', () => {
     const validBranches: readonly string[] = [
       'codex/repair-cache',
       'codex/abcdefghij',
@@ -180,6 +180,7 @@ describe('canonical feature branch identity', () => {
       'codex/agent--branching',
       'codex/agent-branching/sre/provisioning/fix--hive-branch-compile',
       'codex/hive-main--failure',
+      'codex/agentic-pipeline-deliverx',
       'codex/Repair-cache',
       'codex/agent-branching/sre/provisioning/short',
       'codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile',

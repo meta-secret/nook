@@ -12,8 +12,7 @@ export enum RegisteredCortexPolicyPath {
 }
 
 export enum RegisteredCortexRuntimeDocument {
-  NativeSubagentDelegation =
-    '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+  NativeSubagentDelegation = '.cortex/gizmo-prime/workflows/subagent-delegation.md',
 }
 
 export enum RegisteredCortexRuntimeCommand {

@@ -21,7 +21,7 @@ use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::MainRepairDelivery;
 use crate::model::{
     ActivityLease, AgentId, Artifact, BlockerRequest, BootstrapEvidence, ClaimedTask, Completion,
-    CompletionArtifact, CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger,
+    CompletionArtifact, CompletionRelevance, EnqueueTask, ModelError, TaskActivity, TaskTrigger,
     TerminalResult,
 };
 use crate::store::TaskStore;
@@ -298,55 +298,9 @@ impl<S: TaskStore> Worker<S> {
         external_auth: sync::Arc<BrokerExternalAuth>,
         activity_tx: mpsc::UnboundedSender<TaskActivity>,
     ) -> crate::HiveResult<TaskDisposition> {
-        if task.kind.is_main_repair() && task.bootstrap_evidence.is_none() {
-            return Err(crate::HiveError::message(
-                "main-repair execution requires complete bootstrap evidence",
-            ));
-        }
-        let repair_branch = task
-            .bootstrap_evidence
-            .as_ref()
-            .map(|evidence| evidence.feature_branch.as_str())
-            .unwrap_or("");
-        let origin = if task.kind.is_main_repair() {
-            workspace::WorkspaceOrigin::ResumeBranch(repair_branch)
-        } else {
-            workspace::WorkspaceOrigin::Fresh
-        };
-        let preparation = (TaskWorkspace {
-            workspace: &self.config.workspace,
-            repository_url: &self.config.repository_url,
-            source_commit: &task.source_commit,
-            bootstrap_evidence: task.bootstrap_evidence.as_ref(),
-            resume_branch: origin,
-            dependency_artifacts: &task.dependency_artifacts,
-        })
-        .prepare_workspace()
-        .await?;
-        let repository = self.config.workspace.join("repository");
-        let prepared = match preparation {
-            WorkspacePreparation::Conflicted(conflicted) => {
-                let codex_options = self.codex_options(repository.clone(), activity_tx.clone());
-                let result =
-                    InProcessCodexRunner::with_external_auth(codex_options, external_auth.clone())
-                        .execute_task(
-                            task.id.as_str(),
-                            "Resolve only the dependency integration conflicts in this repository. \
-                         Apply every patch in .hive-pending in lexical order, resolve all Git \
-                         conflicts correctly, remove .hive-pending, and do not implement the \
-                         actual task yet. Return the required completed terminal result.",
-                        )
-                        .await
-                        .hive_context("embedded Codex dependency resolution failed")?;
-                if !matches!(result, TerminalResult::Completed { .. }) {
-                    return Err(crate::HiveError::message(
-                        "Codex could not integrate dependency artifacts",
-                    ));
-                }
-                conflicted.finish_dependency_resolution().await?
-            }
-            WorkspacePreparation::Prepared(prepared) => prepared,
-        };
+        let prepared = self
+            .prepare_task_workspace(task, external_auth.clone(), activity_tx.clone())
+            .await?;
         let repository = prepared.repository().to_owned();
         let prompt = task.task_prompt();
         let codex_options = self.codex_options(repository.clone(), activity_tx);
@@ -379,20 +333,27 @@ impl<S: TaskStore> Worker<S> {
             result: &result,
         }
         .admit()?;
+        let terminal_feature_head_sha = match task.bootstrap_evidence.as_ref() {
+            Some(evidence) => Some(
+                TaskWorkspace::refresh_feature_head(&repository, evidence.feature_branch.as_str())
+                    .await?,
+            ),
+            None => None,
+        };
         plan.verify_owner_deliveries(
             &repository,
             task.bootstrap_evidence.as_ref(),
-            prepared.observed_feature_head_sha(),
+            terminal_feature_head_sha.as_ref(),
         )
         .await?;
         if task.kind.is_main_repair() {
             let bootstrap_evidence = task
                 .bootstrap_evidence
                 .as_ref()
-                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
-            let observed_feature_head_sha = prepared
-                .observed_feature_head_sha()
-                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+                .ok_or(ModelError::MissingBootstrapEvidence)?;
+            let observed_feature_head_sha = terminal_feature_head_sha
+                .as_ref()
+                .ok_or(ModelError::MissingBootstrapEvidence)?;
             (MainRepairDelivery {
                 repository: &repository,
                 branch: bootstrap_evidence.feature_branch.as_str(),
@@ -415,6 +376,61 @@ impl<S: TaskStore> Worker<S> {
             artifact: completion.artifact,
             relevance: completion.relevance,
         })
+    }
+
+    async fn prepare_task_workspace(
+        &self,
+        task: &ClaimedTask,
+        external_auth: sync::Arc<BrokerExternalAuth>,
+        activity_tx: mpsc::UnboundedSender<TaskActivity>,
+    ) -> crate::HiveResult<workspace::PreparedWorkspace> {
+        if task.kind.is_main_repair() && task.bootstrap_evidence.is_none() {
+            return Err(crate::HiveError::message(
+                "main-repair execution requires complete bootstrap evidence",
+            ));
+        }
+        let repair_branch = task
+            .bootstrap_evidence
+            .as_ref()
+            .map_or("", |evidence| evidence.feature_branch.as_str());
+        let origin = if task.kind.is_main_repair() {
+            workspace::WorkspaceOrigin::ResumeBranch(repair_branch)
+        } else {
+            workspace::WorkspaceOrigin::Fresh
+        };
+        let preparation = (TaskWorkspace {
+            workspace: &self.config.workspace,
+            repository_url: &self.config.repository_url,
+            source_commit: &task.source_commit,
+            bootstrap_evidence: task.bootstrap_evidence.as_ref(),
+            resume_branch: origin,
+            dependency_artifacts: &task.dependency_artifacts,
+        })
+        .prepare_workspace()
+        .await?;
+        match preparation {
+            WorkspacePreparation::Conflicted(conflicted) => {
+                let repository = self.config.workspace.join("repository");
+                let codex_options = self.codex_options(repository, activity_tx);
+                let result = InProcessCodexRunner::with_external_auth(codex_options, external_auth)
+                    .execute_task(
+                        task.id.as_str(),
+                        "Resolve only the dependency integration conflicts in this repository. \
+                         Apply every patch in .hive-pending in lexical order, resolve all Git \
+                         conflicts correctly, remove .hive-pending, and do not implement the \
+                         actual task yet. Return the required completed terminal result.",
+                    )
+                    .await
+                    .hive_context("embedded Codex dependency resolution failed")?;
+                if !matches!(result, TerminalResult::Completed { .. }) {
+                    return Err(crate::HiveError::message(
+                        "Codex could not integrate dependency artifacts",
+                    ));
+                }
+                conflicted.finish_dependency_resolution().await
+            }
+            WorkspacePreparation::Prepared(prepared) => Ok(prepared),
+        }
     }
 
     fn codex_options(
@@ -822,7 +838,8 @@ mod tests {
         assert!(prompt.contains("`blocker.present` set to false"));
         assert!(prompt.contains("bounded failed attempt"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
-        assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
+        assert!(prompt.contains("(canonical delivery branch `(not applicable)`)"));
+        assert!(!prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
         let first_owner = task
             .owning_repairs
             .first()
@@ -860,11 +877,10 @@ mod tests {
 
         assert!(prompt.contains("GH_TOKEN"));
         assert!(prompt.contains("replacement Pod"));
-        assert!(prompt.contains("Main verification"));
+        assert!(prompt.contains("Main-verification"));
         assert!(prompt.contains("`originMainSha`"));
         assert!(prompt.contains("`pinnedLocalDevSha`"));
         assert!(prompt.contains("`featureBranch`"));
-        assert!(prompt.contains("(not applicable)"));
         assert!(prompt.contains("observed run head"));
         assert!(prompt.contains("strictly from the exact `pinnedLocalDevSha`"));
         assert!(prompt.contains("`origin/main` is ancestry evidence only"));

@@ -360,11 +360,9 @@ class ImmutableGitCommandPolicy {
   }
 
   private static isRevision(value: string | undefined): boolean {
-    return (
-      value !== undefined &&
-      /^(?:[0-9a-f]{40}|HEAD(?:\^\{commit\})?|refs\/remotes\/origin\/main\^\{commit\})$/u.test(
-        value,
-      )
+    if (value === undefined) return false;
+    return /^(?:[0-9a-f]{40}|HEAD(?:\^\{commit\})?|refs\/remotes\/origin\/main\^\{commit\})$/u.test(
+      value,
     );
   }
 }

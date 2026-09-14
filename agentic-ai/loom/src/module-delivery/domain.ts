@@ -368,6 +368,7 @@ export type ModuleDeliveryPlanV2 = {
   readonly version: 2;
   readonly generation: number;
   readonly sourceCommit: string;
+  readonly maxConcurrency: number;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
@@ -463,6 +464,7 @@ export type LegacyModuleDeliveryNode =
 export type LegacyModuleDeliveryPlan = {
   readonly version: 1;
   readonly sourceCommit: string;
+  readonly maxConcurrency: number;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];

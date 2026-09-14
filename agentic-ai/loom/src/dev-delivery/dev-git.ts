@@ -86,7 +86,7 @@ interface SynchronizeWorktreeRequest {
 
 interface BootstrapWorktreePathRequest {
   readonly branch: ManagedBranch;
-  readonly requestedPath: string | undefined;
+  readonly requestedPath?: string;
   readonly records: readonly WorktreeRecord[];
   readonly repositoryIdentity: string;
 }
@@ -179,7 +179,7 @@ export class DevGitRepository {
   }
 
   /** Resolves an existing checked-out dev worktree without creating one. */
-  developmentWorktreeForLanding(): Result<WorktreeRecord | undefined, DevFailure> {
+  developmentWorktreeForLanding(): Result<WorktreeRecord | false, DevFailure> {
     const records = this.worktrees();
     if (records.isErr()) return err(records.error);
     const candidates = records.value.filter((record) =>
@@ -191,7 +191,7 @@ export class DevGitRepository {
         message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
       });
     }
-    return ok(candidates[0]);
+    return ok(candidates[0] || false);
   }
 
   stateAt(path: string): Result<WorktreeState, DevFailure> {
@@ -359,19 +359,35 @@ export class DevGitRepository {
     if (records.isErr()) return err(records.error);
     const repositoryIdentity = this.repositoryIdentityAt(this.request.root);
     if (repositoryIdentity.isErr()) return err(repositoryIdentity.error);
-    const mainPath = this.bootstrapWorktreePath({
-      branch: ManagedBranch.Main,
-      requestedPath: request.mainPath,
-      records: records.value,
-      repositoryIdentity: repositoryIdentity.value,
-    });
+    const mainPath = this.bootstrapWorktreePath(
+      request.mainPath === undefined
+        ? {
+            branch: ManagedBranch.Main,
+            records: records.value,
+            repositoryIdentity: repositoryIdentity.value,
+          }
+        : {
+            branch: ManagedBranch.Main,
+            requestedPath: request.mainPath,
+            records: records.value,
+            repositoryIdentity: repositoryIdentity.value,
+          },
+    );
     if (mainPath.isErr()) return err(mainPath.error);
-    const devPath = this.bootstrapWorktreePath({
-      branch: ManagedBranch.Dev,
-      requestedPath: request.devPath,
-      records: records.value,
-      repositoryIdentity: repositoryIdentity.value,
-    });
+    const devPath = this.bootstrapWorktreePath(
+      request.devPath === undefined
+        ? {
+            branch: ManagedBranch.Dev,
+            records: records.value,
+            repositoryIdentity: repositoryIdentity.value,
+          }
+        : {
+            branch: ManagedBranch.Dev,
+            requestedPath: request.devPath,
+            records: records.value,
+            repositoryIdentity: repositoryIdentity.value,
+          },
+    );
     if (devPath.isErr()) return err(devPath.error);
 
     const main = this.synchronizeWorktree({
@@ -385,7 +401,7 @@ export class DevGitRepository {
       path: devPath.value,
       target: originMain.value,
       branch: ManagedBranch.Dev,
-      requireEquality: request.requireDevEquality ?? true,
+      requireEquality: request.requireDevEquality !== false,
     });
     if (dev.isErr()) return err(dev.error);
 
@@ -434,16 +450,16 @@ export class DevGitRepository {
     }).mergeInto(request);
   }
 
-  /** Resolves a local branch ref, returning undefined when it does not exist. */
+  /** Resolves a local branch ref, returning false when it does not exist. */
   localBranchHead(
     branch: ManagedBranch,
-  ): Result<CommitSha | undefined, DevFailure> {
+  ): Result<CommitSha | false, DevFailure> {
     const output = this.execute({
       args: ['rev-parse', '--verify', `refs/heads/${branch}^{commit}`],
       workingDirectory: this.request.root,
     });
     if (output.isErr()) return err(output.error);
-    if (output.value.exitCode === 1) return ok(undefined);
+    if (output.value.exitCode === 1) return ok(false);
     if (output.value.exitCode !== 0) {
       return err({
         kind: DevFailureKind.Git,
@@ -552,7 +568,7 @@ export class DevGitRepository {
         record.branch.name.value() === request.branch,
     );
     let path: string;
-    if (request.requestedPath !== undefined) {
+    if (request.requestedPath) {
       const requestedPath = this.canonicalWorktreePath(
         request.requestedPath,
         `Canonical ${request.branch} worktree path`,

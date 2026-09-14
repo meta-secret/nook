@@ -97,9 +97,7 @@ Model text.
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
   expect(markdown).not.toContain('teams/dev-manager-gizmo/');
-  expect(markdown).not.toContain(
-    'teams/delivery-pipeline/internal/',
-  );
+  expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');

@@ -1,6 +1,6 @@
 use neo4rs::Txn;
 
-use crate::model::{BootstrapEvidence, GitSha, TaskKind};
+use crate::model::{BootstrapEvidence, FeatureBranch, GitSha, TaskKind};
 
 use super::{
     Artifact, AttemptId, ClaimedTask, ConfigBuilder, DependencyResult, Graph, HIVE_TLS_PROVIDER,
@@ -327,7 +327,7 @@ impl Neo4jTaskStore {
         Ok(Some(BootstrapEvidence {
             origin_main_sha: GitSha::try_from(origin_main_sha)?,
             pinned_local_dev_sha: GitSha::try_from(pinned_local_dev_sha)?,
-            feature_branch: crate::model::FeatureBranch::try_from(feature_branch)?,
+            feature_branch: FeatureBranch::try_from(feature_branch)?,
         }))
     }
 }

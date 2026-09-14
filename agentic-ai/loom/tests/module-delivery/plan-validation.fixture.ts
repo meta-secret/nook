@@ -135,6 +135,7 @@ export class ModuleDeliveryPlanValidationScenario {
       version: 2,
       generation: plan.generation,
       sourceCommit: plan.sourceCommit,
+      maxConcurrency: 1,
       maxAgentDepth: plan.maxAgentDepth,
       maxAttempts: plan.maxAttempts,
       parentOwnedResources: plan.parentOwnedResources,
@@ -191,6 +192,7 @@ export class ModuleDeliveryPlanValidationScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
+      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,

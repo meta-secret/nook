@@ -38,10 +38,10 @@ export type AgentAttemptEventMetadata = {
   readonly occurredAt: IsoTimestamp;
 };
 
-/** Version 4 persisted the fetched-main and pinned-dev evidence only. */
+/** Version 4 persisted only lifecycle metadata and sourceCommit. */
 export type LegacyAgentAttemptEventMetadata = Omit<
   AgentAttemptEventMetadata,
-  'featureHeadSha'
+  'featureHeadSha' | 'originMainSha' | 'pinnedLocalDevSha'
 >;
 
 export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
@@ -73,10 +73,22 @@ export type AgentAttemptEvent =
   | AgentAttemptTerminalRecordedEvent;
 
 export type LegacyAgentAttemptEvent =
-  | Omit<AgentAttemptStartedEvent, 'featureHeadSha'>
-  | Omit<AgentResultProjectedEvent, 'featureHeadSha'>
-  | Omit<AgentViewProjectedEvent, 'featureHeadSha'>
-  | Omit<AgentAttemptTerminalRecordedEvent, 'featureHeadSha'>;
+  | Omit<
+      AgentAttemptStartedEvent,
+      'featureHeadSha' | 'originMainSha' | 'pinnedLocalDevSha'
+    >
+  | Omit<
+      AgentResultProjectedEvent,
+      'featureHeadSha' | 'originMainSha' | 'pinnedLocalDevSha'
+    >
+  | Omit<
+      AgentViewProjectedEvent,
+      'featureHeadSha' | 'originMainSha' | 'pinnedLocalDevSha'
+    >
+  | Omit<
+      AgentAttemptTerminalRecordedEvent,
+      'featureHeadSha' | 'originMainSha' | 'pinnedLocalDevSha'
+    >;
 
 export type AgentAttemptEventWithoutMetadata =
   | Omit<AgentAttemptStartedEvent, keyof AgentAttemptEventMetadata>

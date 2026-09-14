@@ -2,6 +2,11 @@ name: Dev PR manager
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_dev_sha:
+        description: 'Manager-selected origin/dev commit to publish'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +23,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+      EXPECTED_DEV_SHA: ${{ inputs.expected_dev_sha }}
     steps:
       - name: Checkout trusted manager tooling
         uses: actions/checkout@v7
@@ -43,6 +49,11 @@ jobs:
             refs/heads/dev:refs/remotes/origin/dev
           main_sha="$(git rev-parse refs/remotes/origin/main)"
           dev_sha="$(git rev-parse refs/remotes/origin/dev)"
+          if ! printf '%s' "$EXPECTED_DEV_SHA" | grep -Eq '^[0-9a-f]{40}$' ||
+             [ "$dev_sha" != "$EXPECTED_DEV_SHA" ]; then
+            echo "::error::Fetched origin/dev does not match the manager-selected expected SHA."
+            exit 1
+          fi
           if ! git merge-base --is-ancestor "$main_sha" "$dev_sha"; then
             echo "::error::origin/main is not an ancestor of origin/dev; reconcile dev before creating its PR."
             exit 1
@@ -83,7 +94,7 @@ jobs:
           - Full slow validation and final promotion are separate manager operations.
           EOF
           )"
-          pulls="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head dev --json number,headRefOid,baseRefOid,url)"
+          pulls="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head dev --json number,headRefOid,baseRefOid,url,isCrossRepository,headRepository,baseRepository | jq --arg repo "$GITHUB_REPOSITORY" '[.[] | select(.isCrossRepository == false and .headRepository.nameWithOwner == $repo and .baseRepository.nameWithOwner == $repo)]')"
           count="$(jq 'length' <<<"$pulls")"
           if [ "$count" -gt 1 ]; then
             echo "::error::More than one open dev-to-main PR exists."

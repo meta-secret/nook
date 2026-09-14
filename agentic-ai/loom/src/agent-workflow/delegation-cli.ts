@@ -192,6 +192,7 @@ export class DelegationJournalCli {
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
       featureBranch: plan.featureBranch,
+      featureHeadSha: plan.sourceCommit,
       declaration: root,
     };
     const admissionInput: AdmitDelegationAttemptInput = {
@@ -261,6 +262,7 @@ export class DelegationJournalCli {
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
       featureBranch: request.featureBranch,
+      featureHeadSha: request.featureHeadSha,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -332,6 +334,7 @@ export class DelegationJournalCli {
       originMainSha: input.originMainSha,
       pinnedLocalDevSha: input.pinnedLocalDevSha,
       featureBranch: input.featureBranch,
+      featureHeadSha: input.featureHeadSha,
       identity: input.declaration.identity,
       depth: input.declaration.depth,
       parent: input.declaration.parent,
@@ -558,6 +561,7 @@ type AdmissionRequestForDeclarationInput = {
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
   readonly featureBranch: CanonicalFeatureBranch;
+  readonly featureHeadSha: string;
   readonly declaration: DelegationAttemptDeclaration;
 };
 

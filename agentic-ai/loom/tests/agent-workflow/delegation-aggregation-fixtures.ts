@@ -391,6 +391,7 @@ export class AgentWorkflowDelegationAggregationScenario {
         originMainSha: input.plan.originMainSha,
         pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
         featureBranch: input.plan.featureBranch,
+        featureHeadSha: input.plan.sourceCommit,
         identity: input.declaration.identity,
         depth: input.declaration.depth,
         parent: input.declaration.parent,

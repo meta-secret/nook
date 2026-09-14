@@ -43,7 +43,7 @@ type RemoteIdentityConfig = {
 
 /** Owns the bounded host-process boundary for the dev delivery commands. */
 export class ProcessCommandRunner implements CommandRunner {
-  private readonly repositoryRoot: string | undefined;
+  private readonly repositoryRoot?: string;
 
   private static readonly maxOutputBytes = 16 * 1024 * 1024;
 
@@ -125,7 +125,8 @@ export class ProcessCommandRunner implements CommandRunner {
   ] as const;
 
   constructor(request: { readonly repositoryRoot?: string } = {}) {
-    this.repositoryRoot = request.repositoryRoot;
+    if (request.repositoryRoot !== undefined)
+      this.repositoryRoot = request.repositoryRoot;
   }
 
   run(request: CommandRequest): Result<CommandOutput, DevFailure> {
@@ -140,18 +141,18 @@ export class ProcessCommandRunner implements CommandRunner {
       ? this.bindRepository(request)
       : isolatedOperation
         ? ProcessCommandRunner.inspectRepository(request.workingDirectory)
-        : ok<RepositoryMetadata | undefined, DevFailure>(undefined);
+        : ok<RepositoryMetadata | false, DevFailure>(false);
     if (repository.isErr()) return err(repository.error);
     const argsResult = git
       ? ProcessCommandRunner.gitArguments(request.args, remoteOperation)
       : ok<readonly string[], DevFailure>([...request.args]);
     if (argsResult.isErr()) return err(argsResult.error);
     const args = argsResult.value;
-    let isolatedGitDirectory: IsolatedGitDirectory | undefined;
+    let isolatedGitDirectory: IsolatedGitDirectory | false = false;
     try {
       if (isolatedOperation) {
         const metadata = repository.value;
-        if (metadata === undefined)
+        if (metadata === false)
           return err({
             kind: DevFailureKind.Configuration,
             message: 'Git delivery could not bind its repository metadata',
@@ -164,6 +165,8 @@ export class ProcessCommandRunner implements CommandRunner {
         if (isolated.isErr()) return err(isolated.error);
         isolatedGitDirectory = isolated.value;
       }
+      const isolatedPath =
+        isolatedGitDirectory === false ? '' : isolatedGitDirectory.path;
       const execution = spawnSync(request.executable, args, {
         cwd: request.workingDirectory,
         encoding: 'utf8',
@@ -171,7 +174,7 @@ export class ProcessCommandRunner implements CommandRunner {
           ? ProcessCommandRunner.gitEnvironment(
               remoteOperation,
               request.workingDirectory,
-              isolatedGitDirectory?.path,
+              isolatedPath,
             )
           : {
               ...process.env,
@@ -198,7 +201,7 @@ export class ProcessCommandRunner implements CommandRunner {
           message: `${request.executable} command invocation failed`,
       });
     } finally {
-      isolatedGitDirectory?.cleanup();
+      if (isolatedGitDirectory !== false) isolatedGitDirectory.cleanup();
     }
   }
 
@@ -225,7 +228,7 @@ export class ProcessCommandRunner implements CommandRunner {
           : [],
     );
     const remoteIndex = remoteIndices.at(0);
-    if (remoteIndex === undefined || remoteIndices.length !== 1)
+    if (typeof remoteIndex !== 'number' || remoteIndices.length !== 1)
       return err({
         kind: DevFailureKind.Configuration,
         message: 'Git delivery requires the admitted canonical origin remote',
@@ -245,7 +248,12 @@ export class ProcessCommandRunner implements CommandRunner {
     const credentialOption =
       credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential)
         ? ['--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER']
-        : [];
+        : [
+            '-c',
+            'credential.helper=',
+            '-c',
+            'credential.https://github.com.helper=!gh auth git-credential',
+          ];
     return ok([
       ...ProcessCommandRunner.remoteGitOptions,
       ...credentialOption,
@@ -300,14 +308,14 @@ export class ProcessCommandRunner implements CommandRunner {
     request: CommandRequest,
   ): Result<RepositoryMetadata, DevFailure> {
     const configured =
-      request.repositoryRoot ?? this.repositoryRoot ?? process.env.REPO_ROOT;
-    const root = configured ?? request.workingDirectory;
+      request.repositoryRoot || this.repositoryRoot || process.env.REPO_ROOT;
+    const root = configured || request.workingDirectory;
     const canonicalRoot = ProcessCommandRunner.canonicalPath(
       root,
       'REPO_ROOT',
     );
     if (canonicalRoot.isErr()) return err(canonicalRoot.error);
-    if (configured !== undefined && !isAbsolute(configured)) {
+    if (configured && !isAbsolute(configured)) {
       return err({
         kind: DevFailureKind.Configuration,
         message: 'REPO_ROOT must be an absolute canonical path',
@@ -318,7 +326,7 @@ export class ProcessCommandRunner implements CommandRunner {
       this.repositoryRoot,
       process.env.REPO_ROOT,
     ]) {
-      if (candidate === undefined) continue;
+      if (typeof candidate !== 'string') continue;
       const canonicalCandidate = ProcessCommandRunner.canonicalPath(
         candidate,
         'REPO_ROOT',
@@ -350,7 +358,9 @@ export class ProcessCommandRunner implements CommandRunner {
   private static requiresIsolatedRepository(
     args: readonly string[],
   ): boolean {
-    return new Set([
+    const command = args.at(0);
+    return command
+      ? new Set([
       'checkout',
       'cherry-pick',
       'commit',
@@ -363,7 +373,8 @@ export class ProcessCommandRunner implements CommandRunner {
       'tag',
       'update-index',
       'update-ref',
-    ]).has(args.at(0) ?? '');
+        ]).has(command)
+      : false;
   }
 
   private static inspectRepository(
@@ -382,7 +393,7 @@ export class ProcessCommandRunner implements CommandRunner {
       canonicalWorkingDirectory.value,
     );
     if (working.isErr()) return err(working.error);
-    if (expectedRoot !== undefined) {
+    if (expectedRoot) {
       const expected = ProcessCommandRunner.findRepository(expectedRoot);
       if (expected.isErr()) return err(expected.error);
       if (expected.value.root !== expectedRoot) {
@@ -598,7 +609,7 @@ export class ProcessCommandRunner implements CommandRunner {
       const line = rawLine.trim();
       const sectionMatch = /^\[remote\s+"([^"]+)"\]$/iu.exec(line);
       if (sectionMatch) {
-        section = sectionMatch[1]?.toLowerCase() ?? '';
+        section = sectionMatch[1] ? sectionMatch[1].toLowerCase() : '';
         continue;
       }
       if (line.startsWith('[')) {
@@ -642,7 +653,7 @@ export class ProcessCommandRunner implements CommandRunner {
         const line = rawLine.trim();
         const sectionMatch = /^\[([^\]]+)\]$/u.exec(line);
         if (sectionMatch) {
-          section = sectionMatch[1]?.toLowerCase() ?? '';
+          section = sectionMatch[1] ? sectionMatch[1].toLowerCase() : '';
           continue;
         }
         const value = /^(name|email)\s*=\s*(.*)$/iu.exec(line);
@@ -699,7 +710,7 @@ export class ProcessCommandRunner implements CommandRunner {
       const identity = ProcessCommandRunner.repositoryIdentity(metadata);
       if (identity.isErr()) return err(identity.error);
     }
-    let path: string | undefined;
+    let path = '';
     try {
       path = mkdtempSync(join(tmpdir(), 'nook-dev-git-'));
       writeFileSync(

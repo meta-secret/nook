@@ -32,8 +32,14 @@ export class PinnedDevBaseEnvironment {
     PinnedDevBaseEnvironmentFailure
   > {
     const { environment, repoRoot } = this.request;
-    const originMainSha = environment.ORIGIN_MAIN_SHA?.trim() ?? '';
-    const pinnedLocalDevSha = environment.PINNED_LOCAL_DEV_SHA?.trim() ?? '';
+    const originMainShaValue = environment.ORIGIN_MAIN_SHA;
+    const originMainSha =
+      typeof originMainShaValue === 'string' ? originMainShaValue.trim() : '';
+    const pinnedLocalDevShaValue = environment.PINNED_LOCAL_DEV_SHA;
+    const pinnedLocalDevSha =
+      typeof pinnedLocalDevShaValue === 'string'
+        ? pinnedLocalDevShaValue.trim()
+        : '';
     if (!FULL_COMMIT_SHA.test(originMainSha)) {
       return err({
         message:

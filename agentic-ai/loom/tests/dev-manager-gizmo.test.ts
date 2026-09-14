@@ -7,6 +7,9 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   DevManagerGizmoAction,
   DevManagerGizmoCommand,
+  DevManagerGizmoController,
+  DevManagerGizmoPublicationOperation,
+  DevManagerGizmoRoute,
   DevManagerGizmoState,
 } from '../src/dev-delivery/dev-manager-gizmo.ts';
 import { DevPrManagerCommand } from '../src/dev-delivery/dev-pr-manager.ts';
@@ -55,7 +58,7 @@ class DevManagerGizmoRunner implements CommandRunner {
   private remoteDevSha: string;
   private pullRequest: PullRequestFixture | undefined;
   private readonly originMainSha: string;
-  private fetchedOriginMainSha: string | undefined;
+  private fetchedOriginMainSha?: string;
   private pullRequestListCount = 0;
   private pullRequestViewCount = 0;
 
@@ -67,10 +70,10 @@ class DevManagerGizmoRunner implements CommandRunner {
       readonly options: ScenarioOptions;
     },
   ) {
-    this.remoteDevPresent = request.options.remoteDevPresent ?? true;
+    this.remoteDevPresent = request.options.remoteDevPresent !== false;
     this.remoteDevSha = request.options.remoteDevSha;
     this.pullRequest = request.options.pullRequest;
-    this.originMainSha = request.options.originMainSha ?? SHA_MAIN;
+    this.originMainSha = request.options.originMainSha || SHA_MAIN;
   }
 
   run(request: CommandRequest): Result<CommandOutput, DevFailure> {
@@ -83,9 +86,8 @@ class DevManagerGizmoRunner implements CommandRunner {
 
   private git(request: CommandRequest): Result<CommandOutput, DevFailure> {
     const args = request.args;
+    if (!args[0]) return ok(this.output());
     switch (args[0]) {
-      case undefined:
-        return ok(this.output());
       case 'fetch':
         this.fetchedOriginMainSha = this.originMainSha;
         return ok(this.output());
@@ -96,11 +98,11 @@ class DevManagerGizmoRunner implements CommandRunner {
               ? `worktree ${this.request.mainPath}\nbranch refs/heads/main\n`
               : [
                   `worktree ${this.request.mainPath}`,
-                  `HEAD ${this.request.options.mainSha ?? this.originMainSha}`,
+                  `HEAD ${this.request.options.mainSha || this.originMainSha}`,
                   'branch refs/heads/main',
                   '',
                   `worktree ${this.request.devPath}`,
-                  `HEAD ${this.request.options.reportedWorktreeSha ?? this.request.options.localSha}`,
+                  `HEAD ${this.request.options.reportedWorktreeSha || this.request.options.localSha}`,
                   'branch refs/heads/dev',
                   '',
                 ].join('\n'),
@@ -135,12 +137,12 @@ class DevManagerGizmoRunner implements CommandRunner {
                 ? `${this.request.root}\n`
                 : args[1] === '--verify' &&
                     args[2] === 'refs/remotes/origin/main^{commit}'
-                  ? `${this.fetchedOriginMainSha ?? this.originMainSha}\n`
+                  ? `${this.fetchedOriginMainSha || this.originMainSha}\n`
                   : `${
                       request.workingDirectory === this.request.devPath
-                        ? (this.request.options.observedHeadSha ??
+                          ? (this.request.options.observedHeadSha ||
                           this.request.options.localSha)
-                        : (this.request.options.mainSha ?? this.originMainSha)
+                        : (this.request.options.mainSha || this.originMainSha)
                     }\n`,
           }),
         );
@@ -164,7 +166,7 @@ class DevManagerGizmoRunner implements CommandRunner {
     if (reference === 'refs/heads/main') {
       return ok(
         this.output({
-          stdout: `${this.fetchedOriginMainSha ?? this.originMainSha} refs/heads/main\n`,
+                stdout: `${this.fetchedOriginMainSha || this.originMainSha} refs/heads/main\n`,
         }),
       );
     }
@@ -186,8 +188,8 @@ class DevManagerGizmoRunner implements CommandRunner {
   }
 
   private pushSha(args: readonly string[]): string {
-    const refspec = args[2] ?? '';
-    return refspec.split(':')[0] ?? this.request.options.localSha;
+    const refspec = args[2] || '';
+    return refspec.split(':')[0] || this.request.options.localSha;
   }
 
   private github(request: CommandRequest): Result<CommandOutput, DevFailure> {
@@ -232,7 +234,7 @@ class DevManagerGizmoRunner implements CommandRunner {
       return this.output({ stdout: '[]' });
     }
     const headSha =
-      this.pullRequest?.headSha ?? this.request.options.localSha;
+      this.pullRequest?.headSha || this.request.options.localSha;
     return this.output({
       stdout: JSON.stringify([
         {
@@ -243,6 +245,9 @@ class DevManagerGizmoRunner implements CommandRunner {
           baseRefOid: this.originMainSha,
           url: 'https://github.example/pr/42',
           isDraft: false,
+          headRepository: { nameWithOwner: 'nook/example' },
+          baseRepository: { nameWithOwner: 'nook/example' },
+          isCrossRepository: false,
         },
       ]),
     });
@@ -258,7 +263,7 @@ class DevManagerGizmoRunner implements CommandRunner {
         number: 42,
         headRefName: 'dev',
         baseRefName: 'main',
-        headRefOid: pullRequest?.headSha ?? this.remoteDevSha,
+        headRefOid: pullRequest?.headSha || this.remoteDevSha,
         baseRefOid: this.originMainSha,
         url: 'https://github.example/pr/42',
         isDraft: false,
@@ -279,8 +284,8 @@ class DevManagerGizmoRunner implements CommandRunner {
     } = {},
   ): CommandOutput {
     return {
-      exitCode: request.exitCode ?? 0,
-      stdout: request.stdout ?? '',
+      exitCode: typeof request.exitCode === 'number' ? request.exitCode : 0,
+      stdout: typeof request.stdout === 'string' ? request.stdout : '',
       stderr: '',
     };
   }
@@ -409,9 +414,9 @@ test('returns a typed publication handoff for unpublished local dev without publ
       'route the typed dev:publish handoff through Delivery Pipeline Team Gizmo to PR Lifecycle',
     );
     expect(result.value.publicationHandoff).toEqual({
-      operation: 'dev:publish',
-      controller: 'dev-manager',
-      route: 'delivery-pipeline-gizmo',
+      operation: DevManagerGizmoPublicationOperation.DevPublish,
+      controller: DevManagerGizmoController.DevManager,
+      route: DevManagerGizmoRoute.DeliveryPipelineGizmo,
       executor: 'pr-lifecycle',
       repositoryRoot: harness.root,
       devPath: harness.devPath,

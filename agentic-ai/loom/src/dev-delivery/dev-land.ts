@@ -17,7 +17,7 @@ import {
   WorktreeState,
 } from './dev-types.ts';
 
-export { BranchAdvanced, isBranchAdvancedFailure } from './dev-git-merge.ts';
+export { DevGitMergeBoundary } from './dev-git-merge.ts';
 export type { BranchAdvancedFailure } from './dev-git-merge.ts';
 
 export enum DevLandMode {
@@ -183,7 +183,7 @@ export class DevLandCommand {
     if (selectedDevelopment.isErr()) return err(selectedDevelopment.error);
 
     let development: LandingDevelopment;
-    if (selectedDevelopment.value !== undefined) {
+    if (selectedDevelopment.value !== false) {
       const checkedOut = this.workspace.git.managedWorktreeAt(
         selectedDevelopment.value.path,
         ManagedBranch.Dev,
@@ -213,7 +213,7 @@ export class DevLandCommand {
     } else {
       const localDev = this.workspace.git.localBranchHead(ManagedBranch.Dev);
       if (localDev.isErr()) return err(localDev.error);
-      if (localDev.value !== undefined) {
+      if (localDev.value !== false) {
         development = {
           head: localDev.value,
           path: this.workspace.root,
@@ -222,7 +222,7 @@ export class DevLandCommand {
       } else {
         const localMain = this.workspace.git.localBranchHead(ManagedBranch.Main);
         if (localMain.isErr()) return err(localMain.error);
-        if (localMain.value === undefined) {
+        if (localMain.value === false) {
           return err({
             kind: DevFailureKind.Configuration,
             message:
@@ -256,7 +256,7 @@ export class DevLandCommand {
     }
     const localMain = this.workspace.git.localBranchHead(ManagedBranch.Main);
     if (localMain.isErr()) return err(localMain.error);
-    if (localMain.value === undefined) {
+    if (localMain.value === false) {
       return err({
         kind: DevFailureKind.Configuration,
         message: 'Local refs/heads/main must exist before landing into dev',

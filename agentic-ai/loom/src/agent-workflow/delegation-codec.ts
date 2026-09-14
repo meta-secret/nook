@@ -40,6 +40,7 @@ import {
   CanonicalFeatureBranchContract,
   PinnedDevBaseEvidenceContract,
 } from '../lib/base-evidence.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
 /** Owns the delegation journal schema registry and its capability transitions. */
 export class DelegationJournalSchema {
@@ -73,8 +74,6 @@ export class DelegationJournalSchema {
     'workflow',
     'runId',
     'sourceCommit',
-    'originMainSha',
-    'pinnedLocalDevSha',
     'rootMaterializer',
     'attempts',
   ] as const;
@@ -136,6 +135,7 @@ export class DelegationJournalSchema {
     'originMainSha',
     'pinnedLocalDevSha',
     'featureBranch',
+    'featureHeadSha',
     'identity',
     'depth',
     'parent',
@@ -179,8 +179,6 @@ export class DelegationJournalSchema {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
-      originMainSha: reader.string('originMainSha'),
-      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       rootMaterializer: DelegationJournalSchema.decodeIdentity(
         reader.node('rootMaterializer'),
       ),
@@ -199,6 +197,8 @@ export class DelegationJournalSchema {
       const plan: DelegationPlanV2 = {
         schemaVersion: FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION,
         ...common,
+        originMainSha: reader.string('originMainSha'),
+        pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
         featureHeadSha: reader.string('featureHeadSha'),
       };
       return plan;
@@ -206,6 +206,8 @@ export class DelegationJournalSchema {
     const plan: DelegationPlanV3 = {
       schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
       ...common,
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       featureBranch: CanonicalFeatureBranchContract.parse(
         reader.string('featureBranch'),
       ),
@@ -216,11 +218,9 @@ export class DelegationJournalSchema {
 
   /** Creates a new current plan while leaving the historical value untouched. */
   static migrateDelegationPlan(
-    ...[plan, featureBranch]: [
-      plan: DelegationPlanV1 | DelegationPlanV2,
-      featureBranch: string,
-    ]
+    request: DelegationPlanMigrationRequest,
   ): DelegationPlan {
+    const { plan, featureBranch, originMainSha, pinnedLocalDevSha } = request;
     if (
       plan.schemaVersion !== LEGACY_DELEGATION_PLAN_SCHEMA_VERSION &&
       plan.schemaVersion !== FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION
@@ -228,18 +228,20 @@ export class DelegationJournalSchema {
       throw new Error('Only historical delegation plans can be migrated.');
     const branch = CanonicalFeatureBranchContract.parse(featureBranch);
     PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha: plan.originMainSha,
-      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      originMainSha,
+      pinnedLocalDevSha,
     });
     const withoutFeatureHead =
       plan.schemaVersion === FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION
-        ? (() => {
+      ? (() => {
             const { featureHeadSha: _observedFeatureHeadSha, ...rest } = plan;
             return rest;
-          })()
+        })()
         : plan;
     const migrated: DelegationPlan = {
       ...withoutFeatureHead,
+      originMainSha,
+      pinnedLocalDevSha,
       schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
       featureBranch: branch,
     };
@@ -263,6 +265,7 @@ export class DelegationJournalSchema {
       featureBranch: CanonicalFeatureBranchContract.parse(
         reader.string('featureBranch'),
       ),
+      featureHeadSha: reader.string('featureHeadSha'),
     };
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: evidence.originMainSha,
@@ -446,6 +449,11 @@ export class DelegationJournalSchema {
     };
   }
 }
+
+export type DelegationPlanMigrationRequest = PinnedDevBaseEvidence & {
+  readonly plan: DelegationPlanV1 | DelegationPlanV2;
+  readonly featureBranch: string;
+};
 
 class RecordReader {
   readonly record: UntrustedYamlMap;

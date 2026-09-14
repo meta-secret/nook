@@ -49,7 +49,7 @@ for required in \
   'diff --no-ext-diff --name-only --diff-filter=ACMR -z "$PINNED_LOCAL_DEV_SHA"' \
   'ls-files --others --exclude-per-directory=.gitignore -z' \
   'FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed'; do
-  printf '%s\n' "$script" | grep -Fq "$required" \
+  printf '%s\n' "$script" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: canonical changed-file selection misses $required" >&2; exit 1; }
 done
 printf '%s\n' "$script" | grep -Fq -- '--exclude-standard' \
@@ -98,7 +98,7 @@ for required in \
   '.cortex/gizmo-prime/dynamic-skills/*/scripts/*' \
   '.cortex/shared/dynamic-skills/*/scripts/*' \
   '.cortex/teams/*/dynamic-skills/*/scripts/*' \
-  '^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$' \
+  '^(\.cortex/(gizmo-prime|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$' \
   'skill_root="${BASH_REMATCH[1]}"' \
   'skill_application_files+=("${BASH_REMATCH[3]}")' \
   'skill_application_files+=' \

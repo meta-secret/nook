@@ -73,8 +73,6 @@ export type ModuleDeliveryReadOnlyEvidenceSubmissionV1 = Readonly<{
   generation: number;
   planDigest: string;
   sourceCommit: string;
-  originMainSha: string;
-  pinnedLocalDevSha: string;
   producerTeam: TeamKey;
   functionalOwner: ModuleDeliveryOwnerIdentity;
   acceptanceOwner: ModuleDeliveryOwnerIdentity;
@@ -96,6 +94,8 @@ export type ModuleDeliveryEvidenceMigrationPayload = Readonly<{
 
 export type ModuleDeliveryEvidenceMigrationRequest = Readonly<{
   submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
   migrationEvidence?: readonly ModuleDeliveryEvidenceMigrationPayload[];
 }>;
 
@@ -187,8 +187,6 @@ export class ModuleDeliveryEvidenceSchema {
     'generation',
     'planDigest',
     'sourceCommit',
-    'originMainSha',
-    'pinnedLocalDevSha',
     'producerTeam',
     'functionalOwner',
     'acceptanceOwner',
@@ -213,6 +211,26 @@ export class ModuleDeliveryEvidenceSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'verifiedHeadCommit',
+    'artifactIdentity',
+    'artifactDigest',
+    'sourceProvenanceDigest',
+    'verdict',
+    'claimIdentities',
+    'acceptanceRequirements',
+    'acceptedProviderEvidence',
+  ] as const;
+
+  private static readonly LEGACY_IDENTITY_FIELDS = [
+    'schemaVersion',
+    'generation',
+    'planDigest',
+    'taskId',
+    'attempt',
+    'producerTeam',
+    'functionalOwner',
+    'acceptanceOwner',
+    'sourceCommit',
     'verifiedHeadCommit',
     'artifactIdentity',
     'artifactDigest',
@@ -270,8 +288,8 @@ export class ModuleDeliveryEvidenceSchema {
     const kind = reader.string('kind');
     if (kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence)
       throw new Error('Evidence handoff kind is unsupported.');
-    const originMainSha = reader.commit('originMainSha');
-    const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
+    const originMainSha = legacy ? false : reader.commit('originMainSha');
+    const pinnedLocalDevSha = legacy ? false : reader.commit('pinnedLocalDevSha');
     const taskId = reader.string('taskId');
     const attempt = reader.positiveInteger('attempt');
     const generation = reader.positiveInteger('generation');
@@ -306,8 +324,6 @@ export class ModuleDeliveryEvidenceSchema {
         generation,
         planDigest,
         sourceCommit,
-        originMainSha,
-        pinnedLocalDevSha,
         producerTeam,
         functionalOwner,
         acceptanceOwner,
@@ -322,6 +338,8 @@ export class ModuleDeliveryEvidenceSchema {
       };
       return submission;
     }
+    if (typeof originMainSha !== 'string' || typeof pinnedLocalDevSha !== 'string')
+      throw new Error('Current evidence handoff is missing bootstrap evidence.');
     const submission: ModuleDeliveryReadOnlyEvidenceSubmission = {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -354,12 +372,17 @@ export class ModuleDeliveryEvidenceSchema {
   static migrateReadOnlyEvidenceSubmission(
     request: ModuleDeliveryEvidenceMigrationRequest,
   ): ModuleDeliveryReadOnlyEvidenceSubmission {
-    const { submission, migrationEvidence } = request;
+    const { submission, migrationEvidence, originMainSha, pinnedLocalDevSha } =
+      request;
     if (
       submission.schemaVersion !==
       LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
     )
       throw new Error('Only evidence handoff schema 1 can be migrated.');
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha,
+      pinnedLocalDevSha,
+    });
     const legacyArtifactDigest =
       ModuleDeliveryEvidenceSchema.identityArtifactDigest({
         artifactIdentity: submission.artifactIdentity,
@@ -418,8 +441,8 @@ export class ModuleDeliveryEvidenceSchema {
         functionalOwner: identity.functionalOwner,
         acceptanceOwner: identity.acceptanceOwner,
         sourceCommit: identity.sourceCommit,
-        originMainSha: identity.originMainSha,
-        pinnedLocalDevSha: identity.pinnedLocalDevSha,
+        originMainSha,
+        pinnedLocalDevSha,
         verifiedHeadCommit: identity.verifiedHeadCommit,
         artifactIdentity: identity.artifactIdentity,
         artifactDigest: identity.artifactDigest,
@@ -449,8 +472,8 @@ export class ModuleDeliveryEvidenceSchema {
       generation: submission.generation,
       planDigest: submission.planDigest,
       sourceCommit: submission.sourceCommit,
-      originMainSha: submission.originMainSha,
-      pinnedLocalDevSha: submission.pinnedLocalDevSha,
+      originMainSha,
+      pinnedLocalDevSha,
       producerTeam: submission.producerTeam,
       functionalOwner: submission.functionalOwner,
       acceptanceOwner: submission.acceptanceOwner,
@@ -489,7 +512,7 @@ export class ModuleDeliveryEvidenceSchema {
 
   private static teamKey(value: string): TeamKey {
     const team = Object.values(TeamKey).find((candidate) => candidate === value);
-    if (team === undefined) throw new Error('Evidence handoff team is invalid.');
+    if (!team) throw new Error('Evidence handoff team is invalid.');
     return team;
   }
 
@@ -497,7 +520,7 @@ export class ModuleDeliveryEvidenceSchema {
     const owner = [...Object.values(TeamKey), ...Object.values(ModuleDeliveryOwner)].find(
       (candidate) => candidate === value,
     );
-    if (owner === undefined)
+    if (!owner)
       throw new Error('Evidence handoff owner is invalid.');
     return owner;
   }
@@ -542,7 +565,7 @@ export class ModuleDeliveryEvidenceSchema {
     );
     reader.exactKeys(
       legacy
-        ? ModuleDeliveryEvidenceSchema.IDENTITY_FIELDS
+        ? ModuleDeliveryEvidenceSchema.LEGACY_IDENTITY_FIELDS
         : ModuleDeliveryEvidenceSchema.CURRENT_IDENTITY_FIELDS,
     );
     const generation = reader.positiveInteger('generation');
@@ -559,8 +582,8 @@ export class ModuleDeliveryEvidenceSchema {
       reader.string('acceptanceOwner'),
     );
     const sourceCommit = reader.commit('sourceCommit');
-    const originMainSha = reader.commit('originMainSha');
-    const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
+    const originMainSha = legacy ? false : reader.commit('originMainSha');
+    const pinnedLocalDevSha = legacy ? false : reader.commit('pinnedLocalDevSha');
     const verifiedHeadCommit = reader.commit('verifiedHeadCommit');
     const artifactIdentity = reader.string('artifactIdentity');
     const artifactDigest = reader.sha256('artifactDigest');
@@ -575,10 +598,6 @@ export class ModuleDeliveryEvidenceSchema {
       .map((child) =>
         ModuleDeliveryEvidenceSchema.decodeIdentity(child, legacy),
       );
-    PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha,
-      pinnedLocalDevSha,
-    });
     if (legacy) {
       return {
         schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -590,8 +609,6 @@ export class ModuleDeliveryEvidenceSchema {
         functionalOwner,
         acceptanceOwner,
         sourceCommit,
-        originMainSha,
-        pinnedLocalDevSha,
         verifiedHeadCommit,
         artifactIdentity,
         artifactDigest,
@@ -603,6 +620,8 @@ export class ModuleDeliveryEvidenceSchema {
           ModuleDeliveryEvidenceSchema.legacyIdentities(acceptedProviderEvidence),
       };
     }
+    if (typeof originMainSha !== 'string' || typeof pinnedLocalDevSha !== 'string')
+      throw new Error('Current evidence identity is missing bootstrap evidence.');
     return {
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       generation,
@@ -698,7 +717,7 @@ export class ModuleDeliveryEvidenceSchema {
         continue;
       }
       if (
-        current.node === null ||
+        (typeof current.node === 'object' && !current.node) ||
         typeof current.node === 'boolean' ||
         typeof current.node === 'number'
       )

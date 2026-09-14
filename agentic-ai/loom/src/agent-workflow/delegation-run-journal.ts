@@ -240,6 +240,7 @@ export class DelegationRunJournal {
       originMainSha: loaded.plan.originMainSha,
       pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
       featureBranch: loaded.plan.featureBranch,
+      featureHeadSha: input.request.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const identityKey = DelegationPlanContract.delegationAttemptIdentityKey(
@@ -284,6 +285,7 @@ export class DelegationRunJournal {
       originMainSha: loaded.plan.originMainSha,
       pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
       featureBranch: loaded.plan.featureBranch,
+      featureHeadSha: input.request.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const admitted = DelegationRunJournal.admittedIdentityKeys(events);
@@ -326,7 +328,7 @@ export class DelegationRunJournal {
         sourceCommit: loaded.plan.sourceCommit,
         originMainSha: loaded.plan.originMainSha,
         pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
-        featureHeadSha: loaded.plan.pinnedLocalDevSha,
+        featureHeadSha: input.request.featureHeadSha,
         identity: {
           task: declaration.parent.task,
           agent: declaration.parent.agent,
@@ -441,6 +443,7 @@ export class DelegationRunJournal {
       binding.request.originMainSha !== binding.originMainSha ||
       binding.request.pinnedLocalDevSha !== binding.pinnedLocalDevSha ||
       binding.request.featureBranch !== binding.featureBranch ||
+      !/^[0-9a-f]{40}$/.test(binding.request.featureHeadSha) ||
       binding.request.depth !== binding.declaration.depth ||
       JSON.stringify(binding.request.parent) !==
         JSON.stringify(binding.declaration.parent)
@@ -731,6 +734,7 @@ type AdmissionRequestBinding = {
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
   readonly featureBranch: DelegationPlan['featureBranch'];
+  readonly featureHeadSha: string;
 };
 
 type DelegationRunDirectoryInput = {

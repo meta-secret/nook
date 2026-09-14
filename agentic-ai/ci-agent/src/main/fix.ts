@@ -90,13 +90,15 @@ export class CiFixCommand {
           fixBranch,
         );
         if (audited.isErr()) return err(audited.error);
+        expectedHead = audited.value;
+      } else {
+        const existingHead = await github.readBranchHeadOnOrigin({
+          subject1: repoRef,
+          branch: fixBranch,
+        });
+        if (existingHead.isErr()) return err(existingHead.error);
+        expectedHead = existingHead.value;
       }
-      const existingHead = await github.readBranchHeadOnOrigin({
-        subject1: repoRef,
-        branch: fixBranch,
-      });
-      if (existingHead.isErr()) return err(existingHead.error);
-      expectedHead = existingHead.value;
     } else {
       const loaded = new CiAgentEnvironment(process.env).loadConfig();
       if (loaded.kind === CiAgentConfigLoadKind.MissingApiKey) {
@@ -143,7 +145,7 @@ export class CiFixCommand {
   private async auditExistingDependencyBranch(
     repoRoot: string,
     fixBranch: string,
-  ): Promise<Result<void, CiFailure>> {
+  ): Promise<Result<string, CiFailure>> {
     const token = this.environment.NOOK_GITHUB_PAT?.trim();
     const prior = Object.fromEntries(
       ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"]
@@ -187,7 +189,11 @@ export class CiFixCommand {
       changes: changes.value,
     });
     if (admitted.isErr()) return err(admitted.error);
-    return repository.runValidationWithoutPublicationCredentials();
+    const auditedHead = await repository.gitOutput({ args: ["rev-parse", "HEAD"] });
+    if (auditedHead.isErr()) return err(auditedHead.error);
+    const validation = await repository.runValidationWithoutPublicationCredentials();
+    if (validation.isErr()) return err(validation.error);
+    return ok(auditedHead.value.trim());
   }
   private async edit(
     repoRoot: string,

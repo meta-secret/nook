@@ -12,9 +12,10 @@ pub(crate) mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, AttemptId, CancellationTarget,
-        ClaimOutcome, ClaimedTask, Completion, CompletionArtifact, CompletionRelevance,
-        EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskKind, TaskTrigger,
+        ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, AttemptId, BootstrapEvidence,
+        CancellationTarget, ClaimOutcome, ClaimedTask, Completion, CompletionArtifact,
+        CompletionRelevance, EnqueueTask, GitSha, LeaseToken, TaskActivity, TaskId, TaskKind,
+        TaskTrigger,
     };
 
     #[derive(Debug, Clone)]
@@ -209,7 +210,7 @@ pub(crate) mod tests {
             let ActiveDeliveryQuery {
                 source_commit,
                 kind,
-                bootstrap_evidence,
+                bootstrap_evidence: _,
             } = request;
             Ok(self
                 .tasks
@@ -219,12 +220,6 @@ pub(crate) mod tests {
                 .find(|task| {
                     task.definition.source_commit == source_commit
                         && &task.definition.kind == kind
-                        && bootstrap_evidence.map_or(
-                            task.definition.bootstrap_evidence.is_none(),
-                            |evidence| {
-                                evidence.matches(task.definition.bootstrap_evidence.as_ref())
-                            },
-                        )
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
                 .map_or(ActiveDelivery::Idle, |task| {
@@ -945,6 +940,31 @@ pub(crate) mod tests {
                     source_commit: &active.source_commit,
                     kind: &active.kind,
                     bootstrap_evidence: active.bootstrap_evidence.as_ref(),
+                })
+                .await?,
+            ActiveDelivery::Active(active.id)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn active_delivery_identity_ignores_a_mutated_bootstrap_packet() -> crate::HiveResult<()>
+    {
+        let store = MemoryStore::default();
+        let active = task("main-failure-sha-run-1-attempt-1", Vec::new())?;
+        store.enqueue(&active).await?;
+        let revised_packet = BootstrapEvidence {
+            origin_main_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")?,
+            pinned_local_dev_sha: GitSha::try_from("23456789abcdef0123456789abcdef0123456789")?,
+            feature_branch: "codex/revised-packet".try_into()?,
+        };
+
+        assert_eq!(
+            store
+                .active_delivery(ActiveDeliveryQuery {
+                    source_commit: &active.source_commit,
+                    kind: &active.kind,
+                    bootstrap_evidence: Some(&revised_packet),
                 })
                 .await?,
             ActiveDelivery::Active(active.id)

@@ -328,11 +328,11 @@ export class AuthoredBudgetWorkspace {
   }
 
   private repoRoot(): string {
-    return this.request.repoRoot ?? process.cwd();
+    return this.request.repoRoot || process.cwd();
   }
 
   private environment(): NodeJS.ProcessEnv {
-    return this.request.environment ?? process.env;
+    return this.request.environment || process.env;
   }
 }
 

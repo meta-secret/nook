@@ -16,12 +16,7 @@ impl ClaimedTask {
         } else {
             task.owning_repairs
                 .iter()
-                .map(|owner| {
-                    format!(
-                        "- {} (canonical delivery branch `{}`)",
-                        owner, feature_branch
-                    )
-                })
+                .map(|owner| format!("- {owner} (canonical delivery branch `{feature_branch}`)"))
                 .collect::<Vec<_>>()
                 .join("\n")
         };
@@ -57,6 +52,7 @@ impl ClaimedTask {
 }
 
 impl TaskId {
+    #[cfg(test)]
     pub(crate) fn repair_branch_name(&self) -> String {
         let task_id = self.as_str();
         let slug = task_id

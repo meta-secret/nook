@@ -235,10 +235,7 @@ export class CortexConsistencyContract {
       ['.cortex/teams/security/', CortexContractTeam.Security],
       ['.cortex/teams/sre/', CortexContractTeam.Sre],
       ['.cortex/teams/web-dev/', CortexContractTeam.WebDevelopment],
-      [
-        '.cortex/teams/delivery-pipeline/',
-        CortexContractTeam.DeliveryPipeline,
-      ],
+      ['.cortex/teams/delivery-pipeline/', CortexContractTeam.DeliveryPipeline],
     ];
     for (const [prefix, owner] of owners) {
       if (documentPath.startsWith(prefix)) {

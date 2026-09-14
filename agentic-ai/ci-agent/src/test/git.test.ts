@@ -273,7 +273,7 @@ process.exit(result.status ?? 1);
         "HEAD:refs/heads/fix/dependency-update",
         "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
       ])
-        assert.match(publication, new RegExp(`\\"${argument}\\"`, "u"));
+        assert.ok(publication.includes(JSON.stringify(argument)));
       assert.doesNotMatch(publication, /"--force/u);
       assert.doesNotMatch(publication, /publication-secret/u);
       assert.doesNotMatch(publication, /"origin"/u);

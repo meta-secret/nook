@@ -42,6 +42,24 @@ impl Neo4jTaskStore {
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
             )));
         }
+        Self::migrate_schema_versions(graph, installed_version).await?;
+        Self::install_schema_constraints(graph).await?;
+        graph
+            .run(
+                query(
+                    "MERGE (migration:HiveSchemaMigration {version: $version})
+                     ON CREATE SET migration.applied_at = timestamp()",
+                )
+                .param("version", LATEST_SCHEMA_VERSION),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn migrate_schema_versions(
+        graph: &neo4rs::Graph,
+        installed_version: i64,
+    ) -> crate::HiveResult<()> {
         if installed_version == 1 {
             Self::validate_legacy_schema_one(graph).await?;
         }
@@ -110,46 +128,37 @@ impl Neo4jTaskStore {
                 .await
                 .hive_context("failed to initialize schema-10 bootstrap evidence")?;
         }
-        if installed_version < 11 {
-            Self::validate_schema_eleven_tasks(graph).await?;
-            graph
-                .run(query(
-                    "MATCH (task:Task)
-                     SET task.feature_branch = coalesce(task.feature_branch, '')
-                     REMOVE task.feature_head_sha",
-                ))
-                .await
-                .hive_context("failed to initialize schema-11 canonical feature branches")?;
+        Self::migrate_schema_eleven(graph, installed_version).await
+    }
+
+    async fn migrate_schema_eleven(
+        graph: &neo4rs::Graph,
+        installed_version: i64,
+    ) -> crate::HiveResult<()> {
+        Self::validate_schema_eleven_tasks(graph).await?;
+        let context = if installed_version < 11 {
+            "failed to initialize schema-11 canonical feature branches"
         } else {
-            // A previous v11 attempt may have persisted the marker before this
-            // cleanup was added. Reconcile that graph before allowing any
-            // worker to use the v11 marker, while retaining the same
-            // fail-closed evidence checks as the initial migration.
-            Self::validate_schema_eleven_tasks(graph).await?;
-            graph
-                .run(query(
-                    "MATCH (task:Task)
-                     SET task.feature_branch = coalesce(task.feature_branch, '')
-                     REMOVE task.feature_head_sha",
-                ))
-                .await
-                .hive_context("failed to reconcile schema-11 canonical feature branches")?;
-        }
+            "failed to reconcile schema-11 canonical feature branches"
+        };
+        graph
+            .run(query(
+                "MATCH (task:Task)
+                 SET task.feature_branch = coalesce(task.feature_branch, '')
+                 REMOVE task.feature_head_sha",
+            ))
+            .await
+            .hive_context(context)?;
+        Ok(())
+    }
+
+    async fn install_schema_constraints(graph: &neo4rs::Graph) -> crate::HiveResult<()> {
         for statement in CONSTRAINTS {
             graph
                 .run(query(statement))
                 .await
                 .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
         }
-        graph
-            .run(
-                query(
-                    "MERGE (migration:HiveSchemaMigration {version: $version})
-                     ON CREATE SET migration.applied_at = timestamp()",
-                )
-                .param("version", LATEST_SCHEMA_VERSION),
-            )
-            .await?;
         Ok(())
     }
 

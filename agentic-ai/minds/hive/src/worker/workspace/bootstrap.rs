@@ -102,50 +102,8 @@ impl TaskWorkspace<'_> {
         evidence: &BootstrapEvidence,
         resume_branch: &WorkspaceOrigin<'_>,
     ) -> crate::HiveResult<(PathBuf, bool, Option<GitSha>)> {
-        let repository = workspace.join("repository");
-        if repository.join(".git").is_dir() {
-            return Err(crate::HiveError::message(
-                "refusing to reuse a repository left by an earlier worker process",
-            ));
-        }
-        async_fs::create_dir_all(&repository).await?;
-        let status = TaskWorkspace::git_command()
-            .args(["init", "--quiet"])
-            .arg(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .await
-            .hive_context("failed to initialize the pinned task repository")?;
-        if !status.success() {
-            return Err(crate::HiveError::message(format!(
-                "git init failed with status {status}"
-            )));
-        }
-        TaskWorkspace::run_git_status(
-            &repository,
-            &["remote", "add", "origin", repository_url],
-            "configure the pinned task repository remote",
-        )
-        .await?;
-        TaskWorkspace::run_git_status(
-            &repository,
-            &[
-                "fetch",
-                "--no-tags",
-                "origin",
-                evidence.origin_main_sha.as_str(),
-                evidence.pinned_local_dev_sha.as_str(),
-                &format!(
-                    "refs/heads/{}:refs/remotes/origin/{}",
-                    evidence.feature_branch.as_str(),
-                    evidence.feature_branch.as_str()
-                ),
-            ],
-            "fetch the bootstrap commits and canonical feature branch",
-        )
-        .await?;
+        let repository = Self::initialize_pinned_repository(workspace, repository_url).await?;
+        Self::fetch_pinned_evidence(&repository, evidence).await?;
         TaskWorkspace::run_git_status(
             &repository,
             &[
@@ -177,15 +135,87 @@ impl TaskWorkspace<'_> {
             "verify canonical feature branch descends from pinned local-dev base",
         )
         .await?;
-        let mut did_resume = false;
+        let did_resume = Self::checkout_pinned_repository(
+            &repository,
+            evidence.feature_branch.as_str(),
+            resume_branch,
+            &observed_feature_head_sha,
+        )
+        .await?;
+        Ok((repository, did_resume, Some(observed_feature_head_sha)))
+    }
+
+    async fn initialize_pinned_repository(
+        workspace: &Path,
+        repository_url: &str,
+    ) -> crate::HiveResult<PathBuf> {
+        let repository = workspace.join("repository");
+        if repository.join(".git").is_dir() {
+            return Err(crate::HiveError::message(
+                "refusing to reuse a repository left by an earlier worker process",
+            ));
+        }
+        async_fs::create_dir_all(&repository).await?;
+        let status = TaskWorkspace::git_command()
+            .args(["init", "--quiet"])
+            .arg(&repository)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .await
+            .hive_context("failed to initialize the pinned task repository")?;
+        if !status.success() {
+            return Err(crate::HiveError::message(format!(
+                "git init failed with status {status}"
+            )));
+        }
+        TaskWorkspace::run_git_status(
+            &repository,
+            &["remote", "add", "origin", repository_url],
+            "configure the pinned task repository remote",
+        )
+        .await?;
+        Ok(repository)
+    }
+
+    async fn fetch_pinned_evidence(
+        repository: &Path,
+        evidence: &BootstrapEvidence,
+    ) -> crate::HiveResult<()> {
+        TaskWorkspace::run_git_status(
+            repository,
+            &[
+                "fetch",
+                "--no-tags",
+                "origin",
+                evidence.origin_main_sha.as_str(),
+                evidence.pinned_local_dev_sha.as_str(),
+                &format!(
+                    "refs/heads/{}:refs/remotes/origin/{}",
+                    evidence.feature_branch.as_str(),
+                    evidence.feature_branch.as_str()
+                ),
+            ],
+            "fetch the bootstrap commits and canonical feature branch",
+        )
+        .await
+    }
+
+    async fn checkout_pinned_repository(
+        repository: &Path,
+        feature_branch: &str,
+        resume_branch: &WorkspaceOrigin<'_>,
+        observed_feature_head_sha: &GitSha,
+    ) -> crate::HiveResult<bool> {
         if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            if *branch != evidence.feature_branch.as_str() {
+            if *branch != feature_branch {
                 return Err(crate::HiveError::message(
                     "resume branch does not match the canonical feature branch",
                 ));
             }
             TaskWorkspace::run_git_status(
-                &repository,
+                repository,
                 &[
                     "checkout",
                     "--quiet",
@@ -196,28 +226,25 @@ impl TaskWorkspace<'_> {
                 "resume the canonical Hive repair branch",
             )
             .await?;
-            did_resume = true;
+            return Ok(true);
         }
-        if !did_resume {
-            TaskWorkspace::run_git_status(
-                &repository,
-                &[
-                    "checkout",
-                    "--quiet",
-                    "--detach",
-                    observed_feature_head_sha.as_str(),
-                ],
-                "check out the observed canonical feature branch head",
-            )
-            .await?;
-            let checked_out =
-                TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
-            if checked_out != observed_feature_head_sha.as_str() {
-                return Err(crate::HiveError::message(
-                    "detached workspace HEAD does not equal the observed canonical feature branch head",
-                ));
-            }
+        TaskWorkspace::run_git_status(
+            repository,
+            &[
+                "checkout",
+                "--quiet",
+                "--detach",
+                observed_feature_head_sha.as_str(),
+            ],
+            "check out the observed canonical feature branch head",
+        )
+        .await?;
+        let checked_out = TaskWorkspace::git_output(repository, &["rev-parse", "HEAD"]).await?;
+        if checked_out != observed_feature_head_sha.as_str() {
+            return Err(crate::HiveError::message(
+                "detached workspace HEAD does not equal the observed canonical feature branch head",
+            ));
         }
-        Ok((repository, did_resume, Some(observed_feature_head_sha)))
+        Ok(false)
     }
 }

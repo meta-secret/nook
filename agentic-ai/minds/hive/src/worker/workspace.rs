@@ -63,6 +63,21 @@ impl TaskWorkspace<'_> {
                 .await?
             }
         };
+        Self::apply_dependency_artifacts(
+            repository,
+            did_resume,
+            observed_feature_head_sha,
+            dependency_artifacts,
+        )
+        .await
+    }
+
+    async fn apply_dependency_artifacts(
+        repository: PathBuf,
+        did_resume: bool,
+        observed_feature_head_sha: Option<GitSha>,
+        dependency_artifacts: &[Artifact],
+    ) -> crate::HiveResult<WorkspacePreparation> {
         TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
         let mut applied_dependency = false;
         for (index, artifact) in dependency_artifacts.iter().enumerate() {
@@ -259,10 +274,6 @@ impl PreparedWorkspace {
     pub(super) fn repository(&self) -> &Path {
         &self.repository
     }
-
-    pub(super) fn observed_feature_head_sha(&self) -> Option<&GitSha> {
-        self.observed_feature_head_sha.as_ref()
-    }
 }
 
 impl TaskWorkspace<'_> {
@@ -312,6 +323,29 @@ impl TaskWorkspace<'_> {
 }
 
 impl TaskWorkspace<'_> {
+    pub(super) async fn refresh_feature_head(
+        repository: &Path,
+        feature_branch: &str,
+    ) -> crate::HiveResult<GitSha> {
+        let remote_ref =
+            format!("refs/heads/{feature_branch}:refs/remotes/origin/{feature_branch}");
+        Self::run_git_status(
+            repository,
+            &["fetch", "--no-tags", "origin", &remote_ref],
+            "re-resolve the canonical feature branch before terminal delivery checks",
+        )
+        .await?;
+        let head = Self::git_output(
+            repository,
+            &[
+                "rev-parse",
+                &format!("refs/remotes/origin/{feature_branch}^{{commit}}"),
+            ],
+        )
+        .await?;
+        Ok(GitSha::try_from(head.as_str())?)
+    }
+
     pub(super) async fn git_output(
         repository: &Path,
         arguments: &[&str],
