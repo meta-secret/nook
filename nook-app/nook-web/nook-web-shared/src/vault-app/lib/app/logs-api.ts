@@ -27,13 +27,11 @@ export type AppLogsResponse = {
 };
 
 type LogLevelParseRequest = {
-  readonly params: URLSearchParams;
   readonly name: string;
   readonly fallback: LogLevel;
 };
 
 type PositiveIntegerParseRequest = {
-  readonly params: URLSearchParams;
   readonly name: string;
   readonly fallback: number;
   readonly max: number;
@@ -50,21 +48,6 @@ type QueryParameterValue =
       readonly kind: QueryParameterValueKind.Present;
       readonly value: string;
     };
-
-type QueryParameterReadRequest = {
-  readonly params: URLSearchParams;
-  readonly name: string;
-};
-
-function readQueryParameter({
-  params,
-  name,
-}: QueryParameterReadRequest): QueryParameterValue {
-  for (const value of params.getAll(name)) {
-    return { kind: QueryParameterValueKind.Present, value };
-  }
-  return { kind: QueryParameterValueKind.Absent };
-}
 
 /** True when the current location resolves to the `/app-logs` JSON export route. */
 
@@ -87,54 +70,36 @@ export class AppLogsLocation {
   }
 }
 export class AppLogsQueryString {
-  constructor(private readonly request: string) {}
-  get query(): AppLogsQuery {
-    const search = this.request;
-    const params = new URLSearchParams(
-      search.startsWith("?") ? search.slice(1) : search,
+  private readonly params: URLSearchParams;
+
+  constructor(request: string) {
+    this.params = new URLSearchParams(
+      request.startsWith("?") ? request.slice(1) : request,
     );
+  }
+  get query(): AppLogsQuery {
+    const minLevelRequest: LogLevelParseRequest = {
+      name: "minLevel",
+      fallback: LogLevel.Trace,
+    };
+    const limitRequest: PositiveIntegerParseRequest = {
+      name: "limit",
+      fallback: 500,
+      max: 5000,
+    };
+    const offsetRequest: PositiveIntegerParseRequest = {
+      name: "offset",
+      fallback: 0,
+      max: Number.MAX_SAFE_INTEGER,
+    };
     return {
-      minLevel: (() => {
-        const parseLevelArgs: Parameters<
-          typeof AppLogsQueryString.parseLevel
-        >[0] = {
-          params,
-          name: "minLevel",
-          fallback: LogLevel.Trace,
-        };
-        return AppLogsQueryString.parseLevel(parseLevelArgs);
-      })(),
-      limit: (() => {
-        const parsePositiveIntArgs: Parameters<
-          typeof AppLogsQueryString.parsePositiveInt
-        >[0] = {
-          params,
-          name: "limit",
-          fallback: 500,
-          max: 5000,
-        };
-        return AppLogsQueryString.parsePositiveInt(parsePositiveIntArgs);
-      })(),
-      offset: (() => {
-        const parsePositiveIntArgs2: Parameters<
-          typeof AppLogsQueryString.parsePositiveInt
-        >[0] = {
-          params,
-          name: "offset",
-          fallback: 0,
-          max: Number.MAX_SAFE_INTEGER,
-        };
-        return AppLogsQueryString.parsePositiveInt(parsePositiveIntArgs2);
-      })(),
+      minLevel: this.parseLevel(minLevelRequest),
+      limit: this.parsePositiveInt(limitRequest),
+      offset: this.parsePositiveInt(offsetRequest),
     };
   }
-  static parseLevel({
-    params,
-    name,
-    fallback,
-  }: LogLevelParseRequest): LogLevel {
-    const readParameterArgs: QueryParameterReadRequest = { params, name };
-    const parameter = readQueryParameter(readParameterArgs);
+  private parseLevel({ name, fallback }: LogLevelParseRequest): LogLevel {
+    const parameter = this.read(name);
     if (parameter.kind === QueryParameterValueKind.Absent) return fallback;
     const value = parameter.value.trim().toLowerCase();
     switch (value) {
@@ -148,18 +113,23 @@ export class AppLogsQueryString {
         return fallback;
     }
   }
-  static parsePositiveInt({
-    params,
+  private parsePositiveInt({
     name,
     fallback,
     max,
-  }: PositiveIntegerParseRequest) {
-    const readParameterArgs2: QueryParameterReadRequest = { params, name };
-    const parameter = readQueryParameter(readParameterArgs2);
+  }: PositiveIntegerParseRequest): number {
+    const parameter = this.read(name);
     if (parameter.kind === QueryParameterValueKind.Absent) return fallback;
     const parsed = Number.parseInt(parameter.value, 10);
     if (!Number.isFinite(parsed) || parsed < 0) return fallback;
     return Math.min(parsed, max);
+  }
+
+  private read(name: string): QueryParameterValue {
+    for (const value of this.params.getAll(name)) {
+      return { kind: QueryParameterValueKind.Present, value };
+    }
+    return { kind: QueryParameterValueKind.Absent };
   }
 }
 export class AppLogsLocationRequest {
