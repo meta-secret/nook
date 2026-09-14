@@ -31,6 +31,19 @@ void test("records the immutable compile dependency seed boundary", () => {
         write_enabled: false,
         export_enabled: false,
       },
+      imports: {
+        probes_complete: false,
+        availability: [
+          {
+            name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
+            available: true,
+          },
+          {
+            name: "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
+            available: false,
+          },
+        ],
+      },
     },
   );
 });

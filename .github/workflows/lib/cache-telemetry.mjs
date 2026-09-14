@@ -15,6 +15,10 @@ export class CacheScopeTelemetry {
   }
 
   record() {
+    const cacheAvailability = Object.entries(this.environment)
+      .filter(([name]) => /^GHA_CACHE_(?:EXACT|MAIN)_.+_AVAILABLE$/.test(name))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, value]) => ({ name, available: value === "1" }));
     return {
       scope: this.environment.GHA_RUST_COMPILE_DEPS_SCOPE || "",
       compile_dependencies: {
@@ -42,6 +46,11 @@ export class CacheScopeTelemetry {
           this.environment.GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED === "1" ||
           (this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
             this.environment.NOOK_COMPILE_CACHE_MODE === "publish"),
+      },
+      imports: {
+        probes_complete:
+          this.environment.GHA_CACHE_EXACT_PROBES_COMPLETE === "1",
+        availability: cacheAvailability,
       },
     };
   }

@@ -72,6 +72,12 @@ jobs:
       - name: Run dependency policy
         run: task docker:ecosystem:dependency-policy
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-policy
+
   deterministic-tests:
     name: Deterministic tests, fuzz, and Kani
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
@@ -110,6 +116,12 @@ jobs:
           NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
         run: task docker:ecosystem:smoke
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-smoke
+
   dylint:
     name: Dylint repository lints
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
@@ -144,3 +156,9 @@ jobs:
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
       - name: Bake rust-dylint
         run: task docker:ecosystem:dylint
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-dylint
