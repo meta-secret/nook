@@ -11,11 +11,13 @@ import { workflowSchema } from "./arc-manifest-model";
 export class ArcWorkflowPlacementContract {
   constructor(private readonly root: string) {}
   async assert(): Promise<Result<void, OperationalContractFailure>> {
-    const hostedUntrustedBoundary = new Set([
-      "ci.yml#scope",
-      "hive.yml#verify-fork",
-      "hive.yml#console-untrusted",
-      "web-research.yml#validate-untrusted",
+    const hostedRunnerBoundaries = new Map<string, "trusted" | "untrusted">([
+      ["ci.yml#scope", "untrusted"],
+      ["hive.yml#verify-fork", "untrusted"],
+      ["hive.yml#console-untrusted", "untrusted"],
+      ["web-research.yml#validate-untrusted", "untrusted"],
+      ["dev-pr-manager.yml#manage", "trusted"],
+      ["repository-delivery-policy.yml#verify", "trusted"],
     ]);
     const workflowsDir = resolve(this.root, ".github/workflows");
     let entries: string[];
@@ -54,7 +56,8 @@ export class ArcWorkflowPlacementContract {
         }
         const identity = `${workflowFile}#${jobName}`;
         if (placement === "ubuntu-latest") {
-          if (!hostedUntrustedBoundary.has(identity)) {
+          const boundary = hostedRunnerBoundaries.get(identity);
+          if (!boundary) {
             return err({
               kind: OperationalContractFailureKind.Requirement,
               message: `${identity} routes trusted work to GitHub cloud`,
@@ -66,6 +69,7 @@ export class ArcWorkflowPlacementContract {
           ]);
           const { if: condition = "" } = job;
           if (
+            boundary === "untrusted" &&
             identity !== "ci.yml#scope" &&
             (!condition.includes("head.repo.full_name") ||
               !condition.includes("dependabot[bot]"))
@@ -98,7 +102,7 @@ export class ArcWorkflowPlacementContract {
       }
     }
 
-    for (const exception of hostedUntrustedBoundary) {
+    for (const exception of hostedRunnerBoundaries.keys()) {
       if (!observedHostedExceptions.has(exception)) {
         return err({
           kind: OperationalContractFailureKind.Requirement,
