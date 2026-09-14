@@ -59,6 +59,50 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
 }
 
 #[test]
+fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> anyhow::Result<()> {
+    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    );
+    let dockerfile = std::fs::read_to_string(
+        repository_root.join("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    )?;
+    let web_stage = dockerfile
+        .find("FROM web-base AS compile-web")
+        .expect("compile Dockerfile must retain the web stage");
+    let web_stage = &dockerfile[web_stage..];
+
+    assert!(
+        web_stage.contains(concat!(
+            "cp -a /tmp/nook-wasm-handoff/nook-wasm/. \\\n",
+            "      nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/"
+        )),
+        "compile-web must place nook_wasm.js directly in the vault-app nook-wasm import destination"
+    );
+    assert!(
+        web_stage.contains(concat!(
+            "cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \\\n",
+            "      nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/"
+        )),
+        "compile-web must retain the flattened companion WASM handoff"
+    );
+    assert!(
+        web_stage.contains(concat!(
+            "test -f ",
+            "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js"
+        )),
+        "compile-web must require nook_wasm.js at the web import destination"
+    );
+    assert!(
+        !web_stage.contains(
+            "-exec cp -a {} nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/"
+        ),
+        "compile-web must not nest the nook-wasm handoff directory inside its import destination"
+    );
+    Ok(())
+}
+
+#[test]
 fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -> anyhow::Result<()>
 {
     let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(

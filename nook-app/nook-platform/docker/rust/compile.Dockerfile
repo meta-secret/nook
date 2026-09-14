@@ -219,10 +219,11 @@ COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
-    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
-      -exec cp -a {} nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
+    && cp -a /tmp/nook-wasm-handoff/nook-wasm/. \
+      nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \
     && cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
+    && test -f nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js \
     && rm -rf /tmp/nook-wasm-handoff
 
 RUN cd nook-app/nook-web/nook-web-app \
