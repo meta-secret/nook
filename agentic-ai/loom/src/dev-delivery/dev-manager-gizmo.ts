@@ -489,8 +489,8 @@ export class DevManagerGizmoCommand {
 
   private releaseLocks(locks: DevManagerGizmoLocks): Result<void, DevFailure> {
     const local = locks.local.release();
-    if (local.isErr()) return err(local.error);
     const publication = locks.publication.release();
+    if (local.isErr()) return err(local.error);
     if (publication.isErr()) return err(publication.error);
     return ok();
   }

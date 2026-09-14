@@ -2,7 +2,6 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { DevCli, type DevCliMessage } from './dev-cli.ts';
 import {
-  LOCAL_BUILD_EVIDENCE_AUTHORIZATION,
   LocalBuildEvidenceGenerator,
   LocalBuildEvidenceStore,
   LOCAL_BUILD_TASKS,
@@ -56,7 +55,7 @@ export class LocalBuildEvidenceCli {
       outputPath: outputPath.value,
     });
     return result.map(() => ({
-      message: `Generated one-off local build evidence at ${outputPath.value}; authorize dev:land with LOCAL_BUILD_EVIDENCE_AUTHORIZATION=${LOCAL_BUILD_EVIDENCE_AUTHORIZATION}`,
+      message: `Generated local build evidence at ${outputPath.value}; this artifact does not authorize landing, so Gizmo Prime must explicitly bind its source SHA, task, and digest in a one-off dev:land packet`,
     }));
   }
 

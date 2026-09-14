@@ -8,12 +8,15 @@ import {
   CommitSha,
   DevLandBuildProofMode,
   DevFailureKind,
+  LocalBuildEvidenceController,
+  LocalBuildEvidenceSelectionAuthorization,
+  LocalBuildTask,
   type DevLandBuildProof,
   type DevFailure,
   type DevLandRequest,
   type LocalBuildEvidenceRequest,
 } from './dev-types.ts';
-import { LOCAL_BUILD_EVIDENCE_AUTHORIZATION } from './local-build-evidence.ts';
+import { LOCAL_BUILD_TASKS } from './local-build-evidence.ts';
 
 export interface DevCliMessage {
   readonly message: string;
@@ -112,22 +115,55 @@ export class DevCli {
       (typeof path !== 'string' || path === '') &&
       (typeof authorization !== 'string' || authorization === '');
     if (noSelection) return ok({ mode: DevLandBuildProofMode.Remote });
-    if (authorization !== LOCAL_BUILD_EVIDENCE_AUTHORIZATION) {
+    if (
+      authorization !==
+      LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff
+    ) {
       return err({
         kind: DevFailureKind.Configuration,
         message:
-          'LOCAL_BUILD_EVIDENCE_AUTHORIZATION must be one-off-local when local proof is selected',
+          'LOCAL_BUILD_EVIDENCE_AUTHORIZATION must record explicit one-off Gizmo Prime authority when local proof is selected',
       });
     }
     const evidencePath = DevCli.requiredAbsolutePath(
       'LOCAL_BUILD_EVIDENCE_PATH',
     );
     if (evidencePath.isErr()) return err(evidencePath.error);
+    const sourceSha = DevCli.requiredCommitSha(
+      'LOCAL_BUILD_EVIDENCE_SOURCE_SHA',
+    );
+    if (sourceSha.isErr()) return err(sourceSha.error);
+    const task = LOCAL_BUILD_TASKS.find(
+      (candidate) => candidate === process.env.LOCAL_BUILD_EVIDENCE_TASK,
+    );
+    if (!task) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `LOCAL_BUILD_EVIDENCE_TASK must be one of: ${LOCAL_BUILD_TASKS.join(', ')}`,
+      });
+    }
+    const artifactDigest = process.env.LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST;
+    if (
+      typeof artifactDigest !== 'string' ||
+      !/^sha256:[0-9a-f]{64}$/u.test(artifactDigest)
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          'LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST must be an exact sha256 digest',
+      });
+    }
     return ok({
       mode: DevLandBuildProofMode.Local,
       evidence: {
         path: evidencePath.value,
-        authorization: LOCAL_BUILD_EVIDENCE_AUTHORIZATION,
+        authorization:
+          LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff,
+        controller: LocalBuildEvidenceController.GizmoPrime,
+        sourceSha: sourceSha.value,
+        task:
+          task === 'build' ? LocalBuildTask.Build : LocalBuildTask.RustBuild,
+        artifactDigest,
       },
     });
   }

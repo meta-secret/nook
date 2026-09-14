@@ -197,13 +197,30 @@ export interface BuildProofRequest {
 }
 
 export interface LocalBuildEvidenceRequest {
-  /** Explicitly authorized one-off local proof artifact. */
+  /** Exact auditable one-off selection issued by Gizmo Prime. */
   readonly path: string;
-  readonly authorization: LocalBuildEvidenceAuthorization.OneOffLocal;
+  readonly authorization: LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff;
+  readonly controller: LocalBuildEvidenceController.GizmoPrime;
+  readonly sourceSha: CommitSha;
+  readonly task: LocalBuildTask;
+  readonly artifactDigest: string;
 }
 
 export enum LocalBuildEvidenceAuthorization {
   OneOffLocal = 'one-off-local',
+}
+
+export enum LocalBuildEvidenceSelectionAuthorization {
+  GizmoPrimeOneOff = 'gizmo-prime-one-off-local-build',
+}
+
+export enum LocalBuildEvidenceController {
+  GizmoPrime = 'gizmo-prime',
+}
+
+export enum LocalBuildTask {
+  Build = 'build',
+  RustBuild = 'rust:build',
 }
 
 export enum DevLandBuildProofMode {

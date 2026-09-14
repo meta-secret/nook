@@ -90,7 +90,14 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     canonical feature branch as public input.
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's packet; PR Lifecycle
     Agent performs the bounded invocation.
-  - Verify positive remote build evidence for the current canonical branch head.
+  - Verify positive remote build evidence for the current canonical branch head
+    by default. A local proof may replace that remote proof only for one
+    explicitly authorized landing operation when Gizmo Prime records the exact
+    source SHA, allowlisted Task target, proof artifact digest, and
+    `gizmo-prime-one-off-local-build` authority in the packet. The short-lived
+    artifact must independently prove a successful exit and freshness. Merely
+    setting a local-proof path or using the generator's `one-off-local` marker
+    grants no landing authority.
   - At the merge boundary, fetch and prune origin, resolve current
     `origin/main`, local `main`, and local `dev`, and discover a unique existing
     checked-out `dev` worktree from canonical Git metadata when present. A
@@ -148,7 +155,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo to route bounded local
     integration to PR Lifecycle Agent for local dev.
   - The task verifies positive GitHub compilation evidence for the current
-    canonical branch head.
+    canonical branch head unless the current Gizmo Prime packet carries the
+    fully bound one-off local-build authorization defined by `dev:land` above.
+    That exception is per-operation, auditable, and never inferred or reused.
   - Serialize all mutations of the shared local dev checkout and index.
   - Task tooling owns the integration exclusion across concurrent Gizmos.
   - Record the observed feature commit and resulting local dev SHA.
@@ -257,7 +266,8 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
      feature path, publish a fresh snapshot, and repeat full validation.
 3. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle Agent's
    guarded fast-forward promotion to push the tested SHA to main.
-   - Move remote main directly to the unchanged, fully validated dev commit.
+   - Move remote main directly to the unchanged, fully validated dev commit
+     object with the same SHA; do not manufacture a new commit from its tree.
    - This is an actual fast-forward ref move preserving the tested commit SHA.
    - It preserves the complete graph, including existing feature merge commits.
    - It does not promise a linear commit graph.

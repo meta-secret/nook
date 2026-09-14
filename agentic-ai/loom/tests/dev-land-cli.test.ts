@@ -6,7 +6,9 @@ import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   BranchName,
   CommandExecutable,
-  LocalBuildEvidenceAuthorization,
+  LocalBuildEvidenceController,
+  LocalBuildEvidenceSelectionAuthorization,
+  LocalBuildTask,
   type CommandOutput,
   type CommandRequest,
   type CommandRunner,
@@ -171,6 +173,9 @@ test('requires explicit one-off authorization before selecting local build evide
     'FEATURE_BRANCH',
     'LOCAL_BUILD_EVIDENCE_PATH',
     'LOCAL_BUILD_EVIDENCE_AUTHORIZATION',
+    'LOCAL_BUILD_EVIDENCE_SOURCE_SHA',
+    'LOCAL_BUILD_EVIDENCE_TASK',
+    'LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST',
   ] as const;
   const previous = Object.fromEntries(
     names.map((name) => [name, process.env[name]]),
@@ -184,17 +189,42 @@ test('requires explicit one-off authorization before selecting local build evide
     const unauthorized = DevCli.requiredDevLandPacket();
     expect(unauthorized.isErr()).toBe(true);
     if (unauthorized.isErr())
-      expect(unauthorized.error.message).toContain('one-off-local');
+      expect(unauthorized.error.message).toContain('Gizmo Prime');
 
-    process.env.LOCAL_BUILD_EVIDENCE_AUTHORIZATION =
-      LocalBuildEvidenceAuthorization.OneOffLocal;
+    process.env.LOCAL_BUILD_EVIDENCE_AUTHORIZATION = 'one-off-local';
+    const generatorMarkerIsNotPrimeAuthority = DevCli.requiredDevLandPacket();
+    expect(generatorMarkerIsNotPrimeAuthority.isErr()).toBe(true);
+    if (generatorMarkerIsNotPrimeAuthority.isErr())
+      expect(generatorMarkerIsNotPrimeAuthority.error.message).toContain(
+        'Gizmo Prime',
+      );
+
+    Object.assign(process.env, {
+      LOCAL_BUILD_EVIDENCE_AUTHORIZATION:
+        LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff,
+      LOCAL_BUILD_EVIDENCE_SOURCE_SHA:
+        '1111111111111111111111111111111111111111',
+      LOCAL_BUILD_EVIDENCE_TASK: 'build',
+      LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST: `sha256:${'a'.repeat(64)}`,
+    });
     const authorized = DevCli.requiredDevLandPacket();
     expect(authorized.isOk()).toBe(true);
     if (authorized.isOk()) {
-      expect(authorized.value.localBuildEvidence).toEqual({
-        path: '/tmp/nook-dev-land/.nook/local-build-evidence/proof.json',
-        authorization: LocalBuildEvidenceAuthorization.OneOffLocal,
-      });
+      const evidence = authorized.value.localBuildEvidence;
+      expect(evidence?.path).toBe(
+        '/tmp/nook-dev-land/.nook/local-build-evidence/proof.json',
+      );
+      expect(evidence?.authorization).toBe(
+        LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff,
+      );
+      expect(evidence?.controller).toBe(
+        LocalBuildEvidenceController.GizmoPrime,
+      );
+      expect(evidence?.sourceSha.value()).toBe(
+        '1111111111111111111111111111111111111111',
+      );
+      expect(evidence?.task).toBe(LocalBuildTask.Build);
+      expect(evidence?.artifactDigest).toBe(`sha256:${'a'.repeat(64)}`);
     }
   } finally {
     for (const name of names) {

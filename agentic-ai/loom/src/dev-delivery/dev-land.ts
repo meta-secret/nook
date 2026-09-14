@@ -8,12 +8,14 @@ import {
 import {
   Ancestry,
   BranchName,
+  CommitSha,
   DevLandBuildProofMode,
   DevFailureKind,
-  LocalBuildEvidenceAuthorization,
+  LocalBuildEvidenceController,
+  LocalBuildEvidenceSelectionAuthorization,
+  LocalBuildTask,
   ManagedBranch,
   RemoteBranchPresence,
-  type CommitSha,
   type DevFailure,
   type DevLandBuildProof,
   type DevLandRequest,
@@ -173,11 +175,15 @@ export class DevLandCommand {
     if (localBuildEvidence.mode === DevLandBuildProofMode.Local) {
       if (
         localBuildEvidence.evidence.authorization !==
-        LocalBuildEvidenceAuthorization.OneOffLocal
+          LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff ||
+        localBuildEvidence.evidence.controller !==
+          LocalBuildEvidenceController.GizmoPrime ||
+        !localBuildEvidence.evidence.sourceSha.equals(featureHead)
       ) {
         return err({
           kind: DevFailureKind.Configuration,
-          message: 'Local build evidence requires one-off-local authorization',
+          message:
+            'Local build evidence requires exact one-off Gizmo Prime authorization for the observed source SHA',
         });
       }
       const proof = this.workspace.localBuildEvidence.verify({
@@ -186,6 +192,17 @@ export class DevLandCommand {
         commit: featureHead,
       });
       if (proof.isErr()) return err(proof.error);
+      if (
+        proof.value.task.name !== localBuildEvidence.evidence.task ||
+        proof.value.artifact.digest !==
+          localBuildEvidence.evidence.artifactDigest
+      ) {
+        return err({
+          kind: DevFailureKind.Evidence,
+          message:
+            'Local build evidence does not match the Gizmo Prime-authorized task and artifact digest',
+        });
+      }
       return ok();
     }
     const proof = this.workspace.github.buildProof({
@@ -440,12 +457,18 @@ export class DevLandCommand {
         typeof localBuildEvidence !== 'object' ||
         typeof localBuildEvidence.path !== 'string' ||
         localBuildEvidence.authorization !==
-          LocalBuildEvidenceAuthorization.OneOffLocal
+          LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff ||
+        localBuildEvidence.controller !==
+          LocalBuildEvidenceController.GizmoPrime ||
+        !(localBuildEvidence.sourceSha instanceof CommitSha) ||
+        (localBuildEvidence.task !== LocalBuildTask.Build &&
+          localBuildEvidence.task !== LocalBuildTask.RustBuild) ||
+        !/^sha256:[0-9a-f]{64}$/u.test(localBuildEvidence.artifactDigest)
       ) {
         return err({
           kind: DevFailureKind.Configuration,
           message:
-            'The landing packet local build evidence is missing one-off-local authorization or path',
+            'The landing packet local build evidence is missing exact one-off Gizmo Prime authorization, source, task, digest, or path',
         });
       }
     }
