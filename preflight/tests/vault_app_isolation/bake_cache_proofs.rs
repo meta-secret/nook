@@ -524,10 +524,16 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     assert!(
         setup.contains("scope_suffix=\"-git-$scope_sha\"")
             && setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\"")
+            && !setup.contains("isolated_cache_write=false")
             && setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled")
             && setup.contains("fallback_enabled=1")
             && setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"),
-        "PR/Remote isolated writes must use -git-<40-char head SHA> with cold-scope Main fallback enabled"
+        "PR/Remote isolated scopes must remain -git-<40-char head SHA> on both hosted and ARC runners"
+    );
+    assert!(
+        setup.contains("ARC skips general exact-SHA registry export")
+            && setup.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then"),
+        "ARC must retain the exact source scope while disabling only registry export"
     );
     assert!(
         setup.contains("docker buildx imagetools inspect")
