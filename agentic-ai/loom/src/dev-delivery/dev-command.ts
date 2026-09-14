@@ -248,7 +248,12 @@ export class ProcessCommandRunner implements CommandRunner {
     const credentialOption =
       credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential)
         ? ['--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER']
-        : [];
+        : [
+            '-c',
+            'credential.helper=',
+            '-c',
+            'credential.https://github.com.helper=!gh auth git-credential',
+          ];
     return ok([
       ...ProcessCommandRunner.remoteGitOptions,
       ...credentialOption,

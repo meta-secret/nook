@@ -186,7 +186,10 @@ exit 0
     expect(output).toContain('http.sslVerify=true');
     expect(output).toContain('protocol.file.allow=never');
     expect(output).toContain('protocol.https.allow=always');
-    expect(output).not.toContain('credential.helper=');
+    expect(output).toContain('credential.helper=');
+    expect(output).toContain(
+      'credential.https://github.com.helper=!gh auth git-credential',
+    );
     expect(output).not.toContain('http.cookieFile=');
     expect(output).not.toContain('http.sslCAInfo=');
     expect(output).not.toContain('http.sslCAPath=');
@@ -195,6 +198,7 @@ exit 0
     expect(output).not.toContain('evil.example');
     expect(output).not.toContain('evil-ca');
     expect(output).not.toContain('evil-cookie');
+    expect(output).not.toContain('evil-helper');
   } finally {
     if (typeof previousPath !== 'string') delete process.env.PATH;
     else process.env.PATH = previousPath;
