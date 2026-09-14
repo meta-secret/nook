@@ -504,11 +504,11 @@ export class SkillProviderBoundaryScenario {
   static isAmbientIdentifier(request: AmbientIdentifierInspection): boolean {
     let cache = AMBIENT_IDENTIFIER_RESULTS.get(request.checker);
     if (!cache) {
-      cache = new WeakMap<ts.Identifier, boolean>();
+      cache = new WeakMap<ts.Identifier, AmbientIdentifierCacheEntry>();
       AMBIENT_IDENTIFIER_RESULTS.set(request.checker, cache);
     }
     const cached = cache.get(request.node);
-    if (cached !== undefined) return cached;
+    if (cached) return cached.value;
     const locationSymbol = request.checker.getSymbolAtLocation(request.node);
     const resolvedSymbol = request.checker.resolveName(
       request.node.text,
@@ -531,7 +531,10 @@ export class SkillProviderBoundaryScenario {
       !SkillProviderBoundaryScenario.hasVisibleGlobalThisDeclaration(
         request.node,
       );
-    cache.set(request.node, result);
+    cache.set(request.node, {
+      kind: AmbientIdentifierCacheEntryKind.Cached,
+      value: result,
+    });
     return result;
   }
 
@@ -852,8 +855,17 @@ export type AmbientIdentifierInspection = {
 
 const AMBIENT_IDENTIFIER_RESULTS = new WeakMap<
   ts.TypeChecker,
-  WeakMap<ts.Identifier, boolean>
+  WeakMap<ts.Identifier, AmbientIdentifierCacheEntry>
 >();
+
+enum AmbientIdentifierCacheEntryKind {
+  Cached = 'cached',
+}
+
+type AmbientIdentifierCacheEntry = {
+  readonly kind: AmbientIdentifierCacheEntryKind.Cached;
+  readonly value: boolean;
+};
 
 export type DeclarationScopeInspection = {
   readonly declaration: ts.Node;

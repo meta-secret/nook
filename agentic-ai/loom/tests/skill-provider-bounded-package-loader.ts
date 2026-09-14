@@ -499,7 +499,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const createRequireImports = new Map<string, ts.ImportDeclaration>();
     const pathToFileUrlImports = new Set<string>();
     const variableDeclarations = new Map<string, ts.VariableDeclaration>();
-    const functionDeclarations: ts.FunctionDeclaration[] = [];
+    const functionDeclarations: BoundedLoaderDeclaration[] = [];
     const visit = (node: ts.Node): void => {
       if (
         ts.isImportDeclaration(node) &&
@@ -535,7 +535,9 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
         variableDeclarations.set(node.name.text, node);
       }
-      if (ts.isFunctionDeclaration(node)) functionDeclarations.push(node);
+      if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+        functionDeclarations.push(node);
+      }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
@@ -546,6 +548,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       const parameterDeclaration = functionDeclaration.parameters[0];
       if (
         !functionName ||
+        !ts.isIdentifier(functionName) ||
         (functionDeclaration.parameters.length !== 1 &&
           functionDeclaration.parameters.length !== 2) ||
         !parameterDeclaration ||
@@ -614,6 +617,12 @@ export class SkillProviderBoundedPackageLoaderScenario {
           dynamicImport,
           functionDeclaration,
           functionName,
+          methodOwner:
+            ts.isMethodDeclaration(functionDeclaration) &&
+            (ts.isClassDeclaration(functionDeclaration.parent) ||
+              ts.isClassExpression(functionDeclaration.parent))
+              ? functionDeclaration.parent
+              : false,
           parameter,
           validationParameter:
             validationParameterDeclaration &&
@@ -682,6 +691,115 @@ export class SkillProviderBoundedPackageLoaderScenario {
     );
   }
 
+  static candidateCallExpression(
+    inspection: CandidateCallInspection,
+  ): ts.CallExpression | false {
+    const node = inspection.node;
+    const candidate = inspection.candidate;
+    if (ts.isCallExpression(node.parent) && node.parent.expression === node) {
+      return node.parent;
+    }
+    if (candidate.methodOwner === false) return false;
+    const access = node.parent;
+    const call = access.parent;
+    if (
+      !ts.isPropertyAccessExpression(access) ||
+      access.name !== node ||
+      !ts.isCallExpression(call) ||
+      call.expression !== access ||
+      access.expression.kind !== ts.SyntaxKind.ThisKeyword ||
+      SkillProviderBoundedPackageLoaderScenario.nearestClassLike(call) !==
+        candidate.methodOwner ||
+      !SkillProviderBoundedPackageLoaderScenario.isClassMethodThisCall({
+        call,
+        owner: candidate.methodOwner,
+      })
+    ) {
+      return false;
+    }
+    return call;
+  }
+
+  static nearestClassLike(node: ts.Node): ts.ClassLikeDeclaration | false {
+    let candidate = node.parent;
+    while (!ts.isSourceFile(candidate)) {
+      if (ts.isClassDeclaration(candidate) || ts.isClassExpression(candidate)) {
+        return candidate;
+      }
+      candidate = candidate.parent;
+    }
+    return false;
+  }
+
+  static isClassMethodThisCall(
+    inspection: ClassMethodThisCallInspection,
+  ): boolean {
+    const { call, owner } = inspection;
+    let candidate = call.parent;
+    while (candidate !== owner && !ts.isSourceFile(candidate)) {
+      if (ts.isFunctionLike(candidate) && !ts.isArrowFunction(candidate)) {
+        return ts.isMethodDeclaration(candidate) && candidate.parent === owner;
+      }
+      candidate = candidate.parent;
+    }
+    return false;
+  }
+
+  static isClosedValidationFunction(expression: ts.Expression): boolean {
+    if (
+      (!ts.isArrowFunction(expression) &&
+        !ts.isFunctionExpression(expression)) ||
+      expression.parameters.length !== 1 ||
+      !expression.body ||
+      !ts.isBlock(expression.body) ||
+      !expression.type ||
+      !ts.isTypePredicateNode(expression.type)
+    ) {
+      return false;
+    }
+    let safe = true;
+    const visit = (node: ts.Node): void => {
+      if (!safe) return;
+      if (
+        ts.isCallExpression(node) ||
+        ts.isNewExpression(node) ||
+        ts.isAwaitExpression(node) ||
+        ts.isYieldExpression(node) ||
+        ts.isThrowStatement(node) ||
+        node.kind === ts.SyntaxKind.DeleteExpression ||
+        (ts.isPostfixUnaryExpression(node) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken)) ||
+        (ts.isPrefixUnaryExpression(node) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken))
+      ) {
+        safe = false;
+        return;
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      ) {
+        safe = false;
+        return;
+      }
+      if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isFunctionExpression(node) ||
+          ts.isArrowFunction(node)) &&
+        node !== expression
+      ) {
+        safe = false;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(expression.body);
+    return safe;
+  }
+
   static isClosedBoundedLoader(validation: CandidateValidation): boolean {
     const candidate = validation.candidate;
     const requireInitializer = candidate.requireDeclaration.initializer;
@@ -714,7 +832,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const validationParameter = candidate.validationParameter;
     const declaredFunctionNames = new Set<string>();
     const collectFunctionNames = (node: ts.Node): void => {
-      if (ts.isFunctionDeclaration(node) && node.name) {
+      if (
+        (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) &&
+        node.name &&
+        ts.isIdentifier(node.name)
+      ) {
         declaredFunctionNames.add(node.name.text);
       }
       ts.forEachChild(node, collectFunctionNames);
@@ -727,8 +849,12 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (!safe) return;
       if (ts.isIdentifier(node) && node.text === candidate.functionName.text) {
         if (node === candidate.functionName) return;
-        const parent = node.parent;
-        if (!ts.isCallExpression(parent) || parent.expression !== node) {
+        const parent =
+          SkillProviderBoundedPackageLoaderScenario.candidateCallExpression({
+            candidate,
+            node,
+          });
+        if (parent === false) {
           safe = false;
           return;
         }
@@ -746,8 +872,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
             ? parent.arguments.length === 1
             : parent.arguments.length === 2 &&
               !!validationArgument &&
-              ts.isIdentifier(validationArgument) &&
-              declaredFunctionNames.has(validationArgument.text);
+              ((ts.isIdentifier(validationArgument) &&
+                declaredFunctionNames.has(validationArgument.text)) ||
+                SkillProviderBoundedPackageLoaderScenario.isClosedValidationFunction(
+                  validationArgument,
+                ));
         if (
           !hasValidValidationArgument ||
           !argument ||
@@ -901,8 +1030,9 @@ type BoundedLoaderCandidate = {
   readonly createRequireBinding: ts.Identifier;
   readonly createRequireImport: ts.ImportDeclaration;
   readonly dynamicImport: ts.CallExpression;
-  readonly functionDeclaration: ts.FunctionDeclaration;
+  readonly functionDeclaration: BoundedLoaderDeclaration;
   readonly functionName: ts.Identifier;
+  readonly methodOwner: ts.ClassLikeDeclaration | false;
   readonly parameter: ts.Identifier;
   readonly validationParameter: ts.Identifier | false;
   readonly pathToFileUrlBinding: ts.Identifier;
@@ -917,6 +1047,18 @@ type CandidateValidation = {
   readonly inspection: BoundedPackageLoaderInspection;
   readonly sourceFile: ts.SourceFile;
 };
+
+type CandidateCallInspection = {
+  readonly candidate: BoundedLoaderCandidate;
+  readonly node: ts.Identifier;
+};
+
+type ClassMethodThisCallInspection = {
+  readonly call: ts.CallExpression;
+  readonly owner: ts.ClassLikeDeclaration;
+};
+
+type BoundedLoaderDeclaration = ts.FunctionDeclaration | ts.MethodDeclaration;
 
 type RepositoryPackageDocument = {
   dependencies?: Readonly<Record<string, string>>;
