@@ -122,7 +122,7 @@ jobs:
 
   rust:
     name: Native Rust verification
-    needs: [preflight]
+    needs: [preflight-cache-publish]
     if: inputs.product_changed
     outputs:
       cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
@@ -205,7 +205,7 @@ jobs:
 
   wasm:
     name: WASM verification and artifact
-    needs: [rust, preflight]
+    needs: [rust, native-cache-publish]
     outputs:
       cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -330,10 +330,14 @@ jobs:
           NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   web:
     name: Verify web build
     timeout-minutes: 10
-    needs: [wasm]
+    needs: [wasm, wasm-cache-publish]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -404,10 +408,6 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Publish verified web BuildKit cache
         if: success()
         run: task ci:main:publish-web-cache
@@ -415,6 +415,10 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e

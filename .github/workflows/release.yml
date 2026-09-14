@@ -107,6 +107,10 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
           NOOK_EXTENSION_SITE_URL: https://nokey.sh/
 
+      - name: Preserve release cache telemetry
+        if: always()
+        uses: ./.nook/release-workflow/.github/actions/nook-cache-telemetry
+
   deploy:
     name: Verify and deploy production
     needs: prepare

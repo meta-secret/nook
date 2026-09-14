@@ -37,6 +37,16 @@ registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
+compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
+compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
+if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
+  echo "build:compile requires an exact-commit BuildKit source scope" >&2
+  exit 2
+fi
+if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v2-[0-9a-f]{40}$ ]]; then
+  echo "build:compile requires the fingerprinted Rust dependency scope" >&2
+  exit 2
+fi
 case "${REQUEST_INCLUDES_HIVE:-false}" in
   true|1) compile_hive=1 ;;
   false|0|"")
