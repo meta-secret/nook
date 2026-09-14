@@ -652,10 +652,11 @@ export class DevelopmentPullRequestGateway {
         ? ReviewRecordDisposition.Block
         : ReviewRecordDisposition.Ignore;
     }
+    // GitHub retains review records after a pull-request head advances. A
+    // valid binding to another commit therefore proves that this record is
+    // historical, so its body or state must not block the admitted head.
     if (!commit.value.equals(pullRequest.headSha)) {
-      return substantive || blockingState || !knownNonActionableState
-        ? ReviewRecordDisposition.Block
-        : ReviewRecordDisposition.Ignore;
+      return ReviewRecordDisposition.Ignore;
     }
 
     // Once a review is proven current, unknown states are not safe to ignore.

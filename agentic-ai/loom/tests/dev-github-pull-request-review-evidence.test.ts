@@ -322,7 +322,7 @@ test('rejects an incomplete review pagination sequence', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('blocks current-head actionable feedback and stale actionable feedback', () => {
+test('blocks current-head actionable feedback but ignores stale actionable feedback', () => {
   const current = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -348,10 +348,19 @@ test('blocks current-head actionable feedback and stale actionable feedback', ()
       }),
     ],
   }).reviewResult();
-  expect(stale.result.isErr()).toBe(true);
-  if (stale.result.isErr()) {
-    expect(stale.result.error.kind).toBe(DevFailureKind.Reviews);
-  }
+  expect(stale.result.isOk()).toBe(true);
+
+  const staleChangesRequested = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [
+          { state: 'APPROVED', body: '' },
+          { state: 'CHANGES_REQUESTED', body: '', commit: STALE },
+        ],
+      }),
+    ],
+  }).reviewResult();
+  expect(staleChangesRequested.result.isOk()).toBe(true);
 });
 
 test('blocks an unknown current-head review state', () => {
@@ -367,7 +376,7 @@ test('blocks an unknown current-head review state', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('fails closed for unprovable unknown review bindings including stale', () => {
+test('fails closed for unprovable unknown review bindings but ignores provably stale ones', () => {
   for (const body of ['', EXTERNAL_NULL]) {
     for (const commit of [EXTERNAL_NULL, 'not-a-sha']) {
       const { result } = new ReviewEvidenceRunner({
@@ -393,10 +402,7 @@ test('fails closed for unprovable unknown review bindings including stale', () =
       }),
     ],
   }).reviewResult();
-  expect(stale.result.isErr()).toBe(true);
-  if (stale.result.isErr()) {
-    expect(stale.result.error.kind).toBe(DevFailureKind.Reviews);
-  }
+  expect(stale.result.isOk()).toBe(true);
 });
 
 test('ignores known non-actionable states without substantive feedback', () => {

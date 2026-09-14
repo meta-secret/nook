@@ -64,14 +64,32 @@ export class SkillProviderBoundaryScenario {
             ) ||
             LOADER_CAPABLE_MODULE_SPECIFIERS.has(reference.specifier) ||
             DYNAMIC_EVALUATOR_MODULE_SPECIFIERS.has(reference.specifier))) ||
-        SkillProviderBoundaryScenario.isUnboundedRequireValue(nodeInspection) ||
-        SkillProviderBoundaryScenario.isAmbientRequireMember(nodeInspection) ||
-        SkillProviderBoundaryScenario.isUnboundedAmbientLoaderRootValue(
-          nodeInspection,
-        ) ||
-        SkillProviderDynamicEvaluatorScenario.isAmbientDynamicEvaluator(
-          evaluatorInspection,
-        )
+        (ts.isIdentifier(node) &&
+          (SkillProviderBoundaryScenario.isUnboundedRequireValue(
+            nodeInspection,
+          ) ||
+            SkillProviderBoundaryScenario.isUnboundedAmbientLoaderRootValue(
+              nodeInspection,
+            ))) ||
+        ((ts.isPropertyAccessExpression(node) ||
+          ts.isElementAccessExpression(node)) &&
+          (SkillProviderBoundaryScenario.isAmbientRequireMember(
+            nodeInspection,
+          ) ||
+            SkillProviderBoundaryScenario.isUnboundedAmbientLoaderRootValue(
+              nodeInspection,
+            ))) ||
+        (ts.isMetaProperty(node) &&
+          SkillProviderBoundaryScenario.isUnboundedAmbientLoaderRootValue(
+            nodeInspection,
+          )) ||
+        ((ts.isIdentifier(node) ||
+          ts.isBindingElement(node) ||
+          ts.isPropertyAccessExpression(node) ||
+          ts.isElementAccessExpression(node)) &&
+          SkillProviderDynamicEvaluatorScenario.isAmbientDynamicEvaluator(
+            evaluatorInspection,
+          ))
       ) {
         boundaryViolation = true;
         return;
@@ -484,6 +502,13 @@ export class SkillProviderBoundaryScenario {
   }
 
   static isAmbientIdentifier(request: AmbientIdentifierInspection): boolean {
+    let cache = AMBIENT_IDENTIFIER_RESULTS.get(request.checker);
+    if (!cache) {
+      cache = new WeakMap<ts.Identifier, boolean>();
+      AMBIENT_IDENTIFIER_RESULTS.set(request.checker, cache);
+    }
+    const cached = cache.get(request.node);
+    if (cached !== undefined) return cached;
     const locationSymbol = request.checker.getSymbolAtLocation(request.node);
     const resolvedSymbol = request.checker.resolveName(
       request.node.text,
@@ -501,12 +526,13 @@ export class SkillProviderBoundaryScenario {
           SkillProviderBoundaryScenario.isRuntimeValueDeclaration(declaration),
       ),
     );
-    return (
+    const result =
       !hasResolvedLocal &&
       !SkillProviderBoundaryScenario.hasVisibleGlobalThisDeclaration(
         request.node,
-      )
-    );
+      );
+    cache.set(request.node, result);
+    return result;
   }
 
   static hasVisibleGlobalThisDeclaration(node: ts.Identifier): boolean {
@@ -823,6 +849,11 @@ export type AmbientIdentifierInspection = {
   readonly checker: ts.TypeChecker;
   readonly node: ts.Identifier;
 };
+
+const AMBIENT_IDENTIFIER_RESULTS = new WeakMap<
+  ts.TypeChecker,
+  WeakMap<ts.Identifier, boolean>
+>();
 
 export type DeclarationScopeInspection = {
   readonly declaration: ts.Node;
