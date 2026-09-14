@@ -255,7 +255,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        14,
+        16,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);

@@ -728,7 +728,10 @@ fn theorem_build_compile_always_compiles_hive_without_validation_work() -> anyho
     let dependencies = dockerfile
         .split("FROM compile-minds-base AS compile-minds-dependencies")
         .nth(1)
-        .and_then(|body| body.split("FROM compile-minds-dependencies AS compile-minds-source").next())
+        .and_then(|body| {
+            body.split("FROM compile-minds-dependencies AS compile-minds-source")
+                .next()
+        })
         .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive dependency stage"))?;
     let source = dockerfile
         .split("FROM compile-minds-dependencies AS compile-minds-source")
@@ -752,8 +755,18 @@ fn theorem_build_compile_always_compiles_hive_without_validation_work() -> anyho
     assert!(source.contains("hive-export-observer-contract"));
     assert!(console.contains("bun install --frozen-lockfile"));
     assert!(console.contains("node_modules/.bin/vite build"));
-    for forbidden in ["cargo test", "cargo clippy", "coverage", "e2e", "preflight", "--mount=type=cache"] {
-        assert!(!active_instructions.contains(forbidden), "build-only graph contains {forbidden}");
+    for forbidden in [
+        "cargo test",
+        "cargo clippy",
+        "coverage",
+        "e2e",
+        "preflight",
+        "--mount=type=cache",
+    ] {
+        assert!(
+            !active_instructions.contains(forbidden),
+            "build-only graph contains {forbidden}"
+        );
     }
     Ok(())
 }
