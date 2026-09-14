@@ -911,6 +911,18 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn unavailable_login_match_bridge_returns_the_generated_typed_variant()
+    -> Result<(), wasm_bindgen::JsError> {
+        let availability = super::unavailable_website_login_match_availability();
+        let js_output = serde_wasm_bindgen::to_value(&availability).map_err(js_error)?;
+        let result: LoginAvailabilityResult =
+            serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
+
+        assert_eq!(result.kind, "unavailable");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn backup_code_classifier_round_trips_both_typed_wasm_variants()
     -> Result<(), serde_wasm_bindgen::Error> {
         for (text, expected) in [
