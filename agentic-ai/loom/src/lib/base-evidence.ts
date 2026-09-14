@@ -73,6 +73,7 @@ export class CanonicalFeatureBranchContract {
     const valid =
       (segments.length === 1 &&
         (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
+          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
@@ -84,6 +85,13 @@ export class CanonicalFeatureBranchContract {
         CanonicalFeatureBranchContract.isKebabSegment(segments[3], 20, 50) &&
         segments[3] !== 'cleanup');
     return valid;
+  }
+
+  /** Preserves the authorized delivery branch created before the current length bound. */
+  private static isEstablishedPrimeBranch(
+    segments: readonly string[],
+  ): boolean {
+    return segments.length === 1 && segments[0] === 'agentic-pipeline-delivery';
   }
 
   private static isKebabSegment(
