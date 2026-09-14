@@ -65,7 +65,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}-${{ inputs.dispatch_nonce || 'default' }}
+  # All generation seeds serialize globally so probe-before-write is a true
+  # immutable create. Ordinary task dispatches retain caller correlation.
+  group: ${{ (inputs.tasks || inputs.task) == 'build:compile-cache-seed' && 'remote-build-compile-generation-seed' || format('remote-{0}-{1}-{2}', github.ref, inputs.tasks || inputs.task, inputs.dispatch_nonce || 'default') }}
   cancel-in-progress: false
 
 env:
@@ -251,7 +253,7 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "false"
-      - name: Seed missing compatible compile caches
+      - name: Seed missing immutable compile baselines
         shell: bash
         run: timeout --kill-after=1m 22m bash .github/scripts/compile-deps-cache-seed.sh
       - name: Preserve compile cache seed telemetry

@@ -922,10 +922,8 @@ tasks:
     expect(production).toContain(
       'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != ""',
     );
-    expect(production).toContain(
-      "GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX",
-    );
-    expect(production).toContain("compile_ancestor_source_cache_ref");
+    expect(production).toContain("GHA_RUST_COMPILE_GENERATION_SCOPE");
+    expect(production).toContain("compile_generation_cache_ref");
     expect(production).toContain("timeout=2m");
     expect(compileFingerprint).toContain("nook-rust-compile-deps-input-v3");
     expect(compileFingerprint).toContain(
@@ -940,8 +938,13 @@ tasks:
       "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
     );
     expect(compileSeed).toContain("GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1");
-    expect(compileSeed).toContain("GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1");
-    expect(compileSeed).toContain("GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE");
+    expect(compileSeed).toContain(
+      "GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED=1",
+    );
+    expect(compileSeed).toContain("GHA_CACHE_COMPILE_GENERATION_AVAILABLE");
+    expect(compileSeed).not.toContain(
+      "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1",
+    );
     expect(remoteWorkflow).toContain("compile-cache-seed:");
     expect(remoteWorkflow).toContain("timeout-minutes: 25");
     expect(production).toContain("nook-build-compile-v3");
@@ -963,6 +966,7 @@ tasks:
     );
     expect(simulator).toContain('COMPILE_SOURCE_CACHE_AVAILABLE != ""');
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
+    expect(simulator).toContain("COMPILE_GENERATION_SCOPE");
     expect(simulator).toContain("separate seed boundary");
     expect(proof).toContain(
       "Separate seed replay: existing immutable fingerprint skips solve and export",
@@ -971,19 +975,23 @@ tasks:
       "compile deps replay: available=1 solves=0 writes=0",
     );
     expect(proof).toContain(
-      "New exact source: mode=min retains the ancestor compiler lineage",
+      "Unseeded commit B: generation baseline retains unrelated compiler branches",
     );
     expect(proof).toContain(
       "Legacy incompatible source: v2 manifest is ignored",
     );
     expect(proof).toContain(
-      "Compatible source seed replay: exact manifest skips solve and export",
+      "Generation seed replay: immutable manifest skips solve and export",
     );
     expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",
     );
     expect(proof).toContain("bake-sim-compile-hive-source");
     expect(proof).toContain("compile source B: cached=7 uncached=2 writes=1");
+    expect(proof).toContain("compile source C: cached=8 uncached=1 writes=1");
+    expect(proof).toContain(
+      "compile generation rotation: old_available=1 current_available=0 selected=0",
+    );
     expect(proof).toContain("compile warm: cached=9 uncached=0 writes=0");
     expect(proof).toContain(
       'bake_compile_source "$proof_log" "$compile_source_b" "1" ""',

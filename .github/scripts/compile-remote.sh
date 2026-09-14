@@ -40,7 +40,9 @@ extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
 compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
 compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
-ancestor_scope_suffix="${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX:-}"
+compile_generation_scope="${GHA_RUST_COMPILE_GENERATION_SCOPE:-}"
+compile_generation_available="${GHA_CACHE_COMPILE_GENERATION_AVAILABLE:-}"
+compile_exact_available="${GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
@@ -49,19 +51,9 @@ if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v3-[0-9a-f]{40}$ ]]; th
   echo "build:compile requires the fingerprinted Rust dependency scope" >&2
   exit 2
 fi
-if [ -n "$ancestor_scope_suffix" ]; then
-  if [[ ! "$ancestor_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
-    echo "build:compile ancestor source scope is malformed" >&2
-    exit 2
-  fi
-  ancestor_scope_sha="${ancestor_scope_suffix#-git-}"
-  if [ "$ancestor_scope_sha" = "$(git rev-parse HEAD)" ] \
-    || ! git merge-base --is-ancestor "$ancestor_scope_sha" HEAD \
-    || ! git rev-list --first-parent HEAD \
-      | awk -v expected="$ancestor_scope_sha" '$0 == expected { found = 1 } END { exit found ? 0 : 1 }'; then
-    echo "build:compile ancestor source scope is outside HEAD's first-parent history" >&2
-    exit 2
-  fi
+if [[ ! "$compile_generation_scope" =~ ^nook-build-compile-generation-v1-[0-9a-f]{40}$ ]]; then
+  echo "build:compile requires the recipe-aware immutable generation scope" >&2
+  exit 2
 fi
 bake_args=(
   --allow="fs.read=${repo_root}"
@@ -108,6 +100,10 @@ fi
 
 if [ -z "$compile_deps_available" ]; then
   echo "build:compile requires a seeded immutable dependency cache; dispatch build:compile-cache-seed first" >&2
+  exit 2
+fi
+if [ -z "$compile_exact_available" ] && [ -z "$compile_generation_available" ]; then
+  echo "build:compile requires an exact cache or seeded immutable generation baseline" >&2
   exit 2
 fi
 

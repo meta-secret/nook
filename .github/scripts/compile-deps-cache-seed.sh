@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Hosted-only maintenance publisher for missing compile dependency and
-# compatible exact-source graphs. Product build:compile remains a three-minute
-# consumer/current-source publisher; cold bootstrap belongs here.
+# Hosted-only maintenance publisher for the immutable dependency and compiler
+# generation baselines. Product build:compile remains the only exact-head
+# source publisher; ordinary new heads never require maintenance seeding.
 set -euo pipefail
 
 if [ "${GITHUB_ACTIONS:-}" != "true" ] \
@@ -23,14 +23,14 @@ if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v3-[0-9a-f]{40}$ ]]; th
   exit 2
 fi
 compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
-compile_source_available="${GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE:-}"
-compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
-if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
-  echo "compile cache seeding requires the exact source scope" >&2
+compile_generation_scope="${GHA_RUST_COMPILE_GENERATION_SCOPE:-}"
+compile_generation_available="${GHA_CACHE_COMPILE_GENERATION_AVAILABLE:-}"
+if [[ ! "$compile_generation_scope" =~ ^nook-build-compile-generation-v1-[0-9a-f]{40}$ ]]; then
+  echo "compile cache seeding requires the recipe-aware immutable generation scope" >&2
   exit 2
 fi
-if [ -n "$compile_deps_available" ] && [ -n "$compile_source_available" ]; then
-  echo "Compatible compile dependency and exact-source caches already exist; skipping solve and export"
+if [ -n "$compile_deps_available" ] && [ -n "$compile_generation_available" ]; then
+  echo "Compile dependency and generation baselines already exist; skipping solve and export"
   exit 0
 fi
 
@@ -89,16 +89,17 @@ else
   echo "Compile dependency cache already exists; skipping dependency solve and export: $compile_deps_scope"
 fi
 
-if [ -z "$compile_source_available" ]; then
-  # The dependency ref either pre-existed or was published immediately above.
-  # Import it while exporting only the current compatible exact-source v3 ref.
+if [ -z "$compile_generation_available" ]; then
+  # Probe-before-write makes this fingerprinted ref immutable. The complete
+  # mode=max graph becomes the shared starting point for all subsequent heads.
   GHA_CACHE_WRITE_ENABLED= \
   GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED= \
-  GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1 \
+  GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED= \
+  GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED=1 \
   GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=1 \
     bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-      "build:compile-cache-seed source" \
-      "$docker_bin" buildx bake "${bake_args[@]}" build-compile
+      "build:compile-cache-seed generation" \
+      "$docker_bin" buildx bake "${bake_args[@]}" build-compile-generation
 else
-  echo "Compatible exact-source cache already exists; skipping source solve and export: nook-build-compile-v3${compile_scope_suffix}"
+  echo "Compile generation baseline already exists; skipping solve and export: $compile_generation_scope"
 fi

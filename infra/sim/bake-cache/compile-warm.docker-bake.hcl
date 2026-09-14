@@ -14,7 +14,11 @@ variable "COMPILE_SOURCE_CACHE_AVAILABLE" {
   default = ""
 }
 
-variable "COMPILE_ANCESTOR_SOURCE_SCOPE" {
+variable "COMPILE_GENERATION_SCOPE" {
+  default = "generation-v1-fingerprint-a"
+}
+
+variable "COMPILE_GENERATION_CACHE_AVAILABLE" {
   default = ""
 }
 
@@ -26,6 +30,10 @@ variable "COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+variable "COMPILE_GENERATION_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
 variable "COMPILE_SOURCE_CACHE_GENERATION" {
   default = "v3"
 }
@@ -34,12 +42,12 @@ compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/noo
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_GENERATION}-${COMPILE_SOURCE_SCOPE}:buildcache"
-compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v3-${COMPILE_ANCESTOR_SOURCE_SCOPE}:buildcache"
+compile_generation_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_GENERATION_SCOPE}:buildcache"
 
 compile_cache_from = COMPILE_SOURCE_CACHE_AVAILABLE != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",
-] : COMPILE_ANCESTOR_SOURCE_SCOPE != "" ? [
-  "type=registry,ref=${compile_ancestor_source_cache_ref}",
+] : COMPILE_GENERATION_CACHE_AVAILABLE != "" ? [
+  "type=registry,ref=${compile_generation_cache_ref}",
   "type=registry,ref=${compile_deps_cache_ref}",
 ] : [
   "type=registry,ref=${compile_deps_cache_ref}",
@@ -51,6 +59,10 @@ compile_deps_cache_to = COMPILE_DEPS_CACHE_WRITE_ENABLED != "" ? [
 
 compile_source_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${compile_source_cache_ref},mode=min,compression=zstd,force-compression=true,timeout=2m",
+] : []
+
+compile_generation_cache_to = COMPILE_GENERATION_CACHE_WRITE_ENABLED != "" && COMPILE_GENERATION_CACHE_AVAILABLE == "" ? [
+  "type=registry,ref=${compile_generation_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=5m",
 ] : []
 
 target "compile-dependencies" {
@@ -71,4 +83,9 @@ target "compile-warm" {
   cache-from = compile_cache_from
   cache-to = compile_source_cache_to
   output = ["type=cacheonly"]
+}
+
+target "compile-generation" {
+  inherits = ["compile-warm"]
+  cache-to = compile_generation_cache_to
 }

@@ -16,7 +16,11 @@ variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
   default = ""
 }
 
-variable "GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX" {
+variable "GHA_RUST_COMPILE_GENERATION_SCOPE" {
+  default = ""
+}
+
+variable "GHA_CACHE_COMPILE_GENERATION_AVAILABLE" {
   default = ""
 }
 
@@ -25,6 +29,10 @@ variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
 }
 
 variable "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
+variable "GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
@@ -37,15 +45,15 @@ compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${G
 // lineage. Legacy v2 manifests are intentionally incompatible and untrusted
 // as warm-build evidence.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
-compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX}:buildcache"
+compile_generation_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_GENERATION_SCOPE}:buildcache"
 
 compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",
-] : GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX != "" ? [
-  // Import the nearest immutable first-parent source graph and the current
-  // lockfile fingerprint together. BuildKit reuses unchanged source/compiler
-  // vertices while the fingerprint ref remains authoritative for dependencies.
-  "type=registry,ref=${compile_ancestor_source_cache_ref}",
+] : GHA_CACHE_COMPILE_GENERATION_AVAILABLE != "" && GHA_RUST_COMPILE_GENERATION_SCOPE != "" ? [
+  // The immutable recipe generation is a complete mode=max compiler graph.
+  // BuildKit keys every vertex by the current inputs, so only unchanged source
+  // branches are reusable by a new head; changed sources still rebuild.
+  "type=registry,ref=${compile_generation_cache_ref}",
 ] : []
 
 compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
@@ -69,6 +77,10 @@ compile_deps_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_RUST_COMPIL
 
 compile_deps_cache_to = GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
   "type=registry,ref=${compile_deps_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=8m",
+] : []
+
+compile_generation_cache_to = GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED != "" && GHA_RUST_COMPILE_GENERATION_SCOPE != "" && GHA_CACHE_COMPILE_GENERATION_AVAILABLE == "" ? [
+  "type=registry,ref=${compile_generation_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=12m",
 ] : []
 
 target "build-compile" {
@@ -100,6 +112,15 @@ target "build-compile" {
   cache-from = compile_effective_cache_from
   cache-to   = compile_cache_to
   output     = ["type=cacheonly"]
+}
+
+// Maintenance publishes one immutable full compiler graph per recipe
+// generation. It never writes an exact-head ref; ordinary builds alone own
+// current-SHA mode=min publication after a green solve.
+target "build-compile-generation" {
+  inherits = ["build-compile"]
+  cache-from = compile_effective_cache_from
+  cache-to = compile_generation_cache_to
 }
 
 // Provisioning invokes this target only after computing the exact dependency

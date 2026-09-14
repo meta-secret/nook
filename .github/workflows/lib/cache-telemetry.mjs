@@ -47,6 +47,16 @@ export class CacheScopeTelemetry {
           (this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
             this.environment.NOOK_COMPILE_CACHE_MODE === "publish"),
       },
+      compile_generation: {
+        scope: this.environment.GHA_RUST_COMPILE_GENERATION_SCOPE || "",
+        available: Boolean(
+          this.environment.GHA_CACHE_COMPILE_GENERATION_AVAILABLE,
+        ),
+        write_enabled:
+          this.environment.GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED === "1",
+        export_enabled:
+          this.environment.GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED === "1",
+      },
       imports: {
         probes_complete:
           this.environment.GHA_CACHE_EXACT_PROBES_COMPLETE === "1",
@@ -119,7 +129,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}}} cache_scope
+ * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_generation: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records

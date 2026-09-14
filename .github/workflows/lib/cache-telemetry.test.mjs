@@ -15,6 +15,10 @@ void test("records the immutable compile dependency seed boundary", () => {
       GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED: "1",
       GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
       GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED: "",
+      GHA_RUST_COMPILE_GENERATION_SCOPE:
+        `nook-build-compile-generation-v1-${"a".repeat(40)}`,
+      GHA_CACHE_COMPILE_GENERATION_AVAILABLE: "",
+      GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED: "1",
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
     }).record(),
     {
@@ -30,6 +34,12 @@ void test("records the immutable compile dependency seed boundary", () => {
         available: true,
         write_enabled: false,
         export_enabled: false,
+      },
+      compile_generation: {
+        scope: `nook-build-compile-generation-v1-${"a".repeat(40)}`,
+        available: false,
+        write_enabled: true,
+        export_enabled: true,
       },
       imports: {
         probes_complete: false,

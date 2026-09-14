@@ -12,6 +12,9 @@ compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.do
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 3 || 360 }}"
 
+grep -Fq -- "'remote-build-compile-generation-seed'" "$remote" \
+  || { echo 'remote compile contract: generation seed writes must be globally serialized' >&2; exit 1; }
+
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout" \
   || { echo 'remote compile contract: build:compile must use three minutes and other batch tasks must retain 360 minutes' >&2; exit 1; }
 
@@ -35,17 +38,17 @@ printf '%s\n' "$batch_job" | grep -Fq -- "(inputs.tasks || inputs.task) != 'buil
   || { echo 'remote compile contract: dependency seed selector must be excluded from the generic batch' >&2; exit 1; }
 
 for required in \
-  'git rev-list --first-parent --skip=1' \
-  'GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX' \
-  'nook-build-compile-v3$ancestor_scope_suffix'; do
+  'GHA_RUST_COMPILE_GENERATION_SCOPE' \
+  'GHA_CACHE_COMPILE_GENERATION_AVAILABLE' \
+  'nook-build-compile-generation-v1-$compile_deps_fingerprint'; do
   grep -Fq -- "$required" "$setup" \
-    || { echo "remote compile contract: missing immutable first-parent cache fallback: $required" >&2; exit 1; }
+    || { echo "remote compile contract: missing immutable generation cache baseline: $required" >&2; exit 1; }
 done
 
-grep -Fq -- 'git merge-base --is-ancestor "$ancestor_scope_sha" HEAD' "$compile_script" \
-  || { echo 'remote compile contract: ancestor cache input must be revalidated at the build boundary' >&2; exit 1; }
-grep -Fq -- 'compile_ancestor_source_cache_ref' "$compile_bake" \
-  || { echo 'remote compile contract: Bake must import the selected immutable ancestor source graph' >&2; exit 1; }
+grep -Fq -- '^nook-build-compile-generation-v1-[0-9a-f]{40}$' "$compile_script" \
+  || { echo 'remote compile contract: generation baseline identity must be revalidated at the build boundary' >&2; exit 1; }
+grep -Fq -- 'compile_generation_cache_ref' "$compile_bake" \
+  || { echo 'remote compile contract: Bake must import the immutable generation baseline' >&2; exit 1; }
 
 for required in \
   'nook-rust-compile-deps-input-v3' \
@@ -85,10 +88,14 @@ grep -Fq -- 'GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must skip an existing immutable fingerprint' >&2; exit 1; }
 grep -Fq -- 'GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must narrowly authorize only the dependency export' >&2; exit 1; }
-grep -Fq -- 'GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1' "$seed_script" \
-  || { echo 'remote compile contract: seed boundary must narrowly authorize the compatible source export' >&2; exit 1; }
-grep -Fq -- 'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE' "$seed_script" \
-  || { echo 'remote compile contract: seed boundary must independently skip an existing compatible source graph' >&2; exit 1; }
+grep -Fq -- 'GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED=1' "$seed_script" \
+  || { echo 'remote compile contract: seed boundary must narrowly authorize the immutable generation export' >&2; exit 1; }
+grep -Fq -- 'GHA_CACHE_COMPILE_GENERATION_AVAILABLE' "$seed_script" \
+  || { echo 'remote compile contract: seed boundary must independently skip an existing generation baseline' >&2; exit 1; }
+if grep -Fq -- 'GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1' "$seed_script"; then
+  echo 'remote compile contract: maintenance must not seed a per-head exact source cache' >&2
+  exit 1
+fi
 if grep -Fq -- 'build-compile-dependencies' "$compile_script"; then
   echo 'remote compile contract: ordinary build:compile must consume dependency caches, not seed them' >&2
   exit 1
@@ -98,6 +105,8 @@ grep -Fq -- 'GHA_CACHE_WRITE_ENABLED=' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must keep generic cache exports disabled' >&2; exit 1; }
 grep -Fq -- 'timeout=8m' "$compile_bake" \
   || { echo 'remote compile contract: dependency cache export must remain bounded inside the seed job' >&2; exit 1; }
+grep -Fq -- 'mode=max,compression=zstd,force-compression=true,timeout=12m' "$compile_bake" \
+  || { echo 'remote compile contract: generation baseline must retain the complete graph with a bounded export' >&2; exit 1; }
 
 grep -Fq -- '[ "$cache_selection" = "compile-seed" ]' "$setup" \
   || { echo 'remote compile contract: seed must probe the immutable remote-buildcache namespace' >&2; exit 1; }

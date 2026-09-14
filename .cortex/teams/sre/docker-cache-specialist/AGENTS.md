@@ -23,6 +23,11 @@ behavior for packets issued by SRE Team Gizmo.
 - Preserve separate cache identities:
   - exact-commit scopes own source reuse;
   - dependency-fingerprint scopes own dependency reuse.
+  - immutable recipe-generation scopes own one maintenance-seeded, mode-max
+    compiler baseline for ordinary unseeded heads. BuildKit input digests, not
+    mutable branch names, decide which source vertices remain reusable.
+- Serialize generation seeding, probe before writing, and never overwrite an
+  existing generation manifest. Recipe changes rotate the generation scope.
 - Preserve read-only cache state across GitHub Actions step boundaries.
 - Prove that read-only consumers perform zero cache writes and zero exports.
 - Use `mode=min` for exact source-cache exports.
