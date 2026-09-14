@@ -76,11 +76,12 @@ functional ownership, readiness, promotion, or final delivery.
 - Do not create stacked branches or pull requests. When a feature genuinely
   requires multiple slices, use one strictly sequential sequence from the
   latest committed canonical local `dev` commit resolved after mandatory fetch
-  and synchronization. A previously pinned or otherwise older local-dev SHA
-  is invalid. Each slice may record its observed `featureHeadSha` for run
-  association; the canonical branch name remains the authority and later work
-  follows its latest committed head. The fetched `origin/main` SHA is ancestry
-  evidence, not the feature base.
+  and synchronization. That pinned local-dev SHA is the feature base. A
+  previously pinned or otherwise older local-dev SHA is invalid. Each slice
+  may record its observed `featureHeadSha` for run association. The canonical
+  branch name remains the authority. Later work follows its latest committed
+  head. The fetched `origin/main` SHA is ancestry evidence, not the feature
+  base.
 
 ## PR title and description
 

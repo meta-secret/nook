@@ -323,7 +323,7 @@ export class SkillProviderConfigRuntimeScenario {
       if (
         sourcePath === '.github/workflows/agent-implement.yml' &&
         new Bun.CryptoHasher('sha256').update(source).digest('hex') ===
-          '92ea3dbf87b0d320ae5197a833913cd753219e1ed68d207c8b2cce16dba17fa0'
+          '5ca8980f23219c429175ae19cf61f5221422d53185d7975b6d7fd50bfe304353'
       )
         return 'true';
       throw new Error('Unaudited AGENT_EOF shell exemption.');

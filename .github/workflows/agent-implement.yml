@@ -193,7 +193,11 @@ jobs:
             echo "::error::GITHUB_WORKSPACE did not resolve to the validated runner child."
             exit 1
           fi
-          find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          shopt -s dotglob nullglob
+          inherited_workspace_entries=("$GITHUB_WORKSPACE"/*)
+          if [ "${#inherited_workspace_entries[@]}" -gt 0 ]; then
+            rm -rf -- "${inherited_workspace_entries[@]}"
+          fi
           if find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
             echo "::error::Failed to clear inherited workspace contents."
             exit 1
@@ -333,6 +337,12 @@ jobs:
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
+          if [ -n "$ISSUE_URL" ]; then
+            owned_scope="$ISSUE_PATH"
+          else
+            owned_scope="manual prompt run $RUN_ID"
+          fi
+          task="$(printf '%s\n\n## Ownership\nContinuing agent: `%s`\nOwned scope: `%s`' "$task" "$continuing_owner" "$owned_scope")"
           feature="${FEATURE_BRANCH#codex/}"
           branch="$FEATURE_BRANCH"
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -506,6 +516,19 @@ jobs:
             })
             if (!['admin', 'maintain', 'write'].includes(data.permission)) {
               core.setFailed(`${username} must be an assignable Nook collaborator with write access`)
+              return
+            }
+            if (context.issue.number) {
+              await github.rest.issues.addAssignees({
+                ...context.repo,
+                issue_number: context.issue.number,
+                assignees: [username],
+              })
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body: `@${username} owns continuation of this feature task after the agent run.`,
+              })
             }
 
       - name: Expose Actions Node.js runtime
@@ -629,6 +652,7 @@ jobs:
               `gizmo_id: ${currentGizmoId}`,
               `originMainSha: ${process.env.ORIGIN_MAIN_SHA}`,
               `pinnedLocalDevSha: ${process.env.PINNED_LOCAL_DEV_SHA}`,
+              `featureBranch: ${process.env.FEATURE_BRANCH}`,
               `featureHeadSha: ${process.env.FEATURE_HEAD_SHA}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
@@ -708,7 +732,7 @@ jobs:
           FORMAT_CHANGED_FILES="$changed_files" \
             task --taskfile "$GITHUB_WORKSPACE/Taskfile.yml" ci:format:implementation
 
-      - name: Validate implementation work summary
+      - name: Validate delivered capability metadata
         id: summary
         if: steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9

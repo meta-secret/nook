@@ -168,6 +168,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/pairing-import.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/passkey-session-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/session-lifecycle.ts',
+  'nook-app/nook-web/nook-web-extension/src/background/service-worker/website-login-options-wire-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/vault-runtime.ts',
   'nook-app/nook-web/nook-web-extension/src/content/autofill.ts',
   'nook-app/nook-web/nook-web-extension/src/content/autofill/authenticator-actions.ts',
