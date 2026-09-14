@@ -200,8 +200,10 @@ runs:
             ;;
         esac
         remote_compile_cache_write=""
+        remote_compile_scope=""
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+          remote_compile_scope=1
           # Feature source output is exact-head scoped. Dependencies use their
           # content fingerprint below, and Hive retains its own lineage.
           if [ "$publish_compile_cache" = "true" ]; then
@@ -219,7 +221,7 @@ runs:
         else
           echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
         fi
-        if [ "$isolated_cache_write" = "true" ]; then
+        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
@@ -289,7 +291,11 @@ runs:
               hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
               ;;
           esac
-          echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
+          if [ "$isolated_cache_write" = "true" ]; then
+            echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
+          else
+            echo "Remote compile read-only verification uses exact source scope $scope_suffix"
+          fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"

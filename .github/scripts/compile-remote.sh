@@ -39,6 +39,7 @@ wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
 compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
+compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
@@ -109,11 +110,20 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
-bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-  "build:compile dependencies" \
-  "$docker_bin" buildx bake "${bake_args[@]}" \
-  --set "build-compile-dependencies.args.NOOK_COMPILE_HIVE=${compile_hive}" \
-  build-compile-dependencies
+if [ -z "$compile_deps_available" ]; then
+  compile_deps_cache_write=""
+  if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = "publish" ]; then
+    compile_deps_cache_write=1
+  fi
+  GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED="$compile_deps_cache_write" \
+    bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
+      "build:compile dependencies" \
+      "$docker_bin" buildx bake "${bake_args[@]}" \
+      --set "build-compile-dependencies.args.NOOK_COMPILE_HIVE=${compile_hive}" \
+      build-compile-dependencies
+else
+  echo "Dependency cache already exists; skipping duplicate dependency solve/export"
+fi
 
 bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \

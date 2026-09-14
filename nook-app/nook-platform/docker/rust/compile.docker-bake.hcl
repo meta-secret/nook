@@ -20,6 +20,10 @@ variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
   default = ""
 }
 
+variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
 // The source-free dependency graph is fingerprinted independently. A feature
 // source graph is exact-commit-only and embeds Hive when the request includes
 // it. There is deliberately no trusted Main source fallback.
@@ -32,15 +36,17 @@ compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPIL
   "type=registry,ref=${compile_deps_cache_ref}",
 ] : []
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
-  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
+compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
+  // The fingerprint ref owns the maximal dependency closure. Keep the exact
+  // source handoff minimal so publication does not serialize that graph twice.
+  "type=registry,ref=${compile_source_cache_ref},mode=min,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
 compile_deps_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
   "type=registry,ref=${compile_deps_cache_ref}",
 ] : []
 
-compile_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+compile_deps_cache_to = GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
   "type=registry,ref=${compile_deps_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 

@@ -186,7 +186,7 @@ void test("extracts structured registry cache bytes, timings, and incomplete fai
           vertex: "sha256:complete-transfer",
           id: "push",
           name: "pushing cache manifest",
-          current: 4096,
+          current: 0,
           total: 4096,
         },
         {

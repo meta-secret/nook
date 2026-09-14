@@ -194,7 +194,12 @@ export class BuildkitCacheExportTelemetry {
               `${id} ${name}`,
             ));
         if (!belongsToCacheExport) continue;
-        const current = this.nonNegativeInteger(candidate.current);
+        // Completed BuildKit status records may retain only `total`, or reset
+        // `current` to zero after the transfer. Either is measured evidence.
+        const current = Math.max(
+          this.nonNegativeInteger(candidate.current),
+          this.nonNegativeInteger(candidate.total),
+        );
         const key = `${vertexKey}:${id}`;
         bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
       }
