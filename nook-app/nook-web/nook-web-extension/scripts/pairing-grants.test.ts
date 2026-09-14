@@ -69,11 +69,11 @@ describe('extension pairing grant transport', () => {
         .parse()
         .isOk(),
     ).toBe(true)
+    const missingCreatedAt = Object.fromEntries(
+      Object.entries(complete).filter(([key]) => key !== 'createdAt'),
+    )
     expect(
-      new ExtensionPairingStorageProviderPayloadAdmission({
-        ...complete,
-        createdAt: undefined,
-      })
+      new ExtensionPairingStorageProviderPayloadAdmission(missingCreatedAt)
         .parse()
         .isErr(),
     ).toBe(true)
