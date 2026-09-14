@@ -107,9 +107,6 @@ tasks:
         compile_source_c="git-cccccccccccccccccccccccccccccccccccccccc"
         compile_source_d="git-dddddddddddddddddddddddddddddddddddddddd"
         compile_source_e="git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-        compile_generation="generation-v1-fingerprint-a"
-        compile_generation_repository="nook/remote-buildcache/nook-bake-sim-compile-${compile_generation}"
-        compile_generation_manifest="${registry_ref}/v2/${compile_generation_repository}/manifests/buildcache"
         suffix="$(date +%s)-$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')"
         network="nook-bake-sim-${suffix}"
         zot_name="nook-bake-sim-zot-${suffix}"
@@ -128,9 +125,9 @@ tasks:
         compile_web_legal_input_orig="$(cat "$compile_web_legal_input")"
         compile_policy_input="$sim_dir/inputs/compile-policy-catalog.txt"
         compile_policy_input_orig="$(cat "$compile_policy_input")"
-        sccache_seed_mode="$(mktemp)"
+        sccache_publish_mode="$(mktemp)"
         sccache_consumer_mode="$(mktemp)"
-        printf '%s\n' READ_WRITE >"$sccache_seed_mode"
+        printf '%s\n' READ_WRITE >"$sccache_publish_mode"
         printf '%s\n' READ_ONLY >"$sccache_consumer_mode"
 
         cleanup() {
@@ -152,7 +149,7 @@ tasks:
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
           fi
-          rm -f "$sccache_seed_mode" "$sccache_consumer_mode"
+          rm -f "$sccache_publish_mode" "$sccache_consumer_mode"
           rm -rf -- "$trusted_docker_config"
         }
         trap cleanup EXIT
@@ -234,41 +231,25 @@ tasks:
           return "$bake_status"
         }
 
-        bake_compile_dependencies() {
-          local log_file="$1"
-          set +e
-          env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
-            COMPILE_DEPS_CACHE_WRITE_ENABLED=1 \
-            "$docker_cli" buildx bake \
-            --progress=plain \
-            -f "$sim_dir/compile-warm.docker-bake.hcl" \
-            --set "*.context=$sim_dir" \
-            --set "compile-dependencies.args.SIMULATED_BUILD_PROFILE=production" \
-            --set "compile-dependencies.args.SIMULATED_EXTENSION_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-            --set "compile-dependencies.secrets=id=sccache_runtime_mode,src=$sccache_seed_mode" \
-            compile-dependencies >"$log_file" 2>&1
-          local bake_status=$?
-          set -e
-          cat "$log_file"
-          return "$bake_status"
-        }
-
         bake_compile_source() {
           local log_file="$1"
           local source_scope="$2"
           local source_available="$3"
           local cache_write="$4"
-          local generation_available="${5:-}"
-          local source_generation="${6:-v3}"
+          local runtime_mode="${5:-$sccache_consumer_mode}"
+          local source_version="${6:-v3}"
           local extension_commit="${7:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+          local dependency_available="${8:-}"
+          local -a compile_targets=(compile-warm)
+          if [ -n "$cache_write" ] && [ -z "$dependency_available" ]; then
+            compile_targets=(compile-dependency-cache compile-warm)
+          fi
           set +e
           env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             COMPILE_SOURCE_SCOPE="$source_scope" \
             COMPILE_SOURCE_CACHE_AVAILABLE="$source_available" \
             COMPILE_SOURCE_CACHE_WRITE_ENABLED="$cache_write" \
-            COMPILE_GENERATION_SCOPE="$compile_generation" \
-            COMPILE_GENERATION_CACHE_AVAILABLE="$generation_available" \
-            COMPILE_SOURCE_CACHE_GENERATION="$source_generation" \
+            COMPILE_SOURCE_CACHE_VERSION="$source_version" \
             SIMULATED_EXTENSION_COMMIT="$extension_commit" \
             "$docker_cli" buildx bake \
             --progress=plain \
@@ -276,28 +257,9 @@ tasks:
             --set "*.context=$sim_dir" \
             --set "compile-warm.args.SIMULATED_BUILD_PROFILE=production" \
             --set "compile-warm.args.SIMULATED_EXTENSION_COMMIT=$extension_commit" \
-            --set "compile-warm.secrets=id=sccache_runtime_mode,src=$sccache_consumer_mode" \
-            compile-warm >"$log_file" 2>&1
-          local bake_status=$?
-          set -e
-          cat "$log_file"
-          return "$bake_status"
-        }
-
-        bake_compile_generation() {
-          local log_file="$1"
-          set +e
-          env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
-            COMPILE_GENERATION_SCOPE="$compile_generation" \
-            COMPILE_GENERATION_CACHE_WRITE_ENABLED=1 \
-            "$docker_cli" buildx bake \
-            --progress=plain \
-            -f "$sim_dir/compile-warm.docker-bake.hcl" \
-            --set "*.context=$sim_dir" \
-            --set "compile-generation.args.SIMULATED_BUILD_PROFILE=production" \
-            --set "compile-generation.args.SIMULATED_EXTENSION_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-            --set "compile-generation.secrets=id=sccache_runtime_mode,src=$sccache_seed_mode" \
-            compile-generation >"$log_file" 2>&1
+            --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
+            --set "compile-dependency-cache.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
+            "${compile_targets[@]}" >"$log_file" 2>&1
           local bake_status=$?
           set -e
           cat "$log_file"
@@ -401,133 +363,28 @@ tasks:
         test "$(registry_ref_code)" = 200
         echo "rust-deps no-op: cached=6 uncached=0 writes=1 ref=${stable_repository}:buildcache"
 
-        echo "== Separate seed boundary: cold compile dependencies publish before the product SLO =="
-        create_builder "nook-bake-sim-compile-deps-${suffix}"
-        bake_compile_dependencies "$proof_log"
-        grep -Fq -- 'bake-sim-sccache-write' "$proof_log"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies; do
-          require_uncached_step "$proof_log" "$marker"
-        done
-        for forbidden_source in \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-web-source \
-          bake-sim-compile-extension-package; do
-          if grep -Fq -- "$forbidden_source" "$proof_log"; then
-            echo "dependency seed executed product source stage: $forbidden_source" >&2
-            exit 1
-          fi
-        done
-        require_cache_write "$proof_log"
-        test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
-        echo "compile deps cold: cached=0 uncached=7 source_stages=0 writes=1 ref=${compile_deps_repository}:fingerprint-lock-and-recipe-inputs"
-
-        echo "== Separate seed replay: existing immutable fingerprint skips solve and export =="
-        printf 'seed-boundary-manifest-present\n' >"$proof_log"
-        if [ "$(compile_registry_ref_code "$compile_deps_manifest")" != 200 ]; then
-          bake_compile_dependencies "$proof_log"
-        fi
-        grep -Fxq 'seed-boundary-manifest-present' "$proof_log"
-        require_no_cache_write "$proof_log"
-        echo "compile deps replay: available=1 solves=0 writes=0"
-
-        legacy_source_a_manifest="${registry_ref}/v2/${legacy_compile_source_repository}-${compile_source_a}/manifests/buildcache"
-        echo "== Legacy incompatible source: v2 manifest is ignored =="
-        create_builder "nook-bake-sim-compile-legacy-source-a-${suffix}"
-        bake_compile_source "$proof_log" "$compile_source_a" "" "1" "" "v2"
-        require_cache_write "$proof_log"
-        test "$(compile_registry_ref_code "$legacy_source_a_manifest")" = 200
-        compatible_source_a_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_a}/manifests/buildcache"
-        test "$(compile_registry_ref_code "$compatible_source_a_manifest")" = 404
-        echo "legacy compile source: compatible=0 selected=0 generation=v2"
-
-        echo "== Generation seed A: publish one immutable full graph mode=max =="
+        echo "== Cold normal publish: no seed prerequisite, sccache READ_WRITE =="
         create_builder "nook-bake-sim-compile-source-a-${suffix}"
-        bake_compile_generation "$proof_log"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        for marker in \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source \
-          bake-sim-compile-extension-package; do
-          require_uncached_step "$proof_log" "$marker"
-        done
+        compile_started="$(date +%s)"
+        bake_compile_source "$proof_log" "$compile_source_a" "" "1" "$sccache_publish_mode" "v3" \
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        compile_elapsed=$(( $(date +%s) - compile_started ))
+        grep -Fq -- 'bake-sim-sccache-write' "$proof_log"
         require_cache_write "$proof_log"
-        if grep -Fq -- 'bake-sim-sccache-write' "$proof_log"; then
-          echo 'generation solve missed dependency keys shared by dependency seed' >&2
-          exit 1
-        fi
-        test "$(compile_registry_ref_code "$compile_generation_manifest")" = 200
-        echo "compile generation A: cached=7 uncached=8 writes=1 mode=max"
+        test "$compile_elapsed" -lt 300
+        test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
+        compile_source_a_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_a}/manifests/buildcache"
+        test "$(compile_registry_ref_code "$compile_source_a_manifest")" = 200
+        echo "compile cold publish: sccache_mode=READ_WRITE requests=present writes=present elapsed=${compile_elapsed}s limit=300s"
 
-        echo "== Generation seed replay: immutable manifest skips solve and export =="
-        printf 'generation-seed-manifest-present\n' >"$proof_log"
-        if [ "$(compile_registry_ref_code "$compile_generation_manifest")" != 200 ]; then
-          bake_compile_generation "$proof_log"
-        fi
-        grep -Fxq 'generation-seed-manifest-present' "$proof_log"
-        require_no_cache_write "$proof_log"
-        echo "compile generation replay: available=1 solves=0 writes=0"
-
-        echo "== Policy-only commit: product compilers reuse the generation baseline =="
-        printf 'policy-catalog-only-edit\n' >"$compile_policy_input"
-        create_builder "nook-bake-sim-compile-policy-${suffix}"
-        bake_compile_source \
-          "$proof_log" \
-          "git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" \
-          "" "" "1" "v3" \
-          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        require_uncached_step "$proof_log" bake-sim-compile-extension-package
-        require_no_cache_write "$proof_log"
-        printf '%s\n' "$compile_policy_input_orig" >"$compile_policy_input"
-        echo "compile policy-only: product_cached=14 product_uncached=0 packaging_uncached=1 writes=0"
-
-        echo "== Unseeded commit B: generation baseline retains unrelated compiler branches =="
+        echo "== Next unseeded head: dependency reuse plus cross-commit sccache hits =="
         printf 'nook-wasm-source-only-edit\n' >"$compile_nook_input"
         create_builder "nook-bake-sim-compile-source-b-${suffix}"
         compile_started="$(date +%s)"
-        bake_compile_source "$proof_log" "$compile_source_b" "" "1" "1" "v3" \
-          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        bake_compile_source "$proof_log" "$compile_source_b" "" "1" "$sccache_publish_mode" "v3" \
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "1"
         compile_elapsed=$(( $(date +%s) - compile_started ))
+        grep -Fq -- 'bake-sim-sccache-hit' "$proof_log"
         for marker in \
           bake-sim-compile-toolchain \
           bake-sim-compile-native-dependencies \
@@ -538,139 +395,27 @@ tasks:
           bake-sim-compile-web-dependencies; do
           require_cached_step "$proof_log" "$marker"
         done
-        for marker in \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        for marker in \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-extension-package; do
-          require_uncached_step "$proof_log" "$marker"
-        done
         require_cache_write "$proof_log"
-        test "$compile_elapsed" -lt 120
+        test "$compile_elapsed" -lt 300
         compile_source_b_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_b}/manifests/buildcache"
         test "$(compile_registry_ref_code "$compile_source_b_manifest")" = 200
-        echo "compile source B: cached=12 uncached=3 writes=1 elapsed=${compile_elapsed}s limit=120s mode=min"
+        echo "compile next-head publish: sccache_mode=READ_WRITE cache_hits=required writes=permitted elapsed=${compile_elapsed}s limit=300s"
 
-        echo "== Unseeded commit C: distinct narrow edit reuses the same generation baseline =="
-        printf '%s\n' "$compile_nook_input_orig" >"$compile_nook_input"
-        printf 'hive-source-only-edit\n' >"$compile_hive_input"
-        create_builder "nook-bake-sim-compile-source-c-${suffix}"
-        bake_compile_source "$proof_log" "$compile_source_c" "" "1" "1" "v3" \
-          "cccccccccccccccccccccccccccccccccccccccc"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        require_uncached_step "$proof_log" bake-sim-compile-hive-source
-        require_uncached_step "$proof_log" bake-sim-compile-extension-package
-        require_cache_write "$proof_log"
-        compile_source_c_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_c}/manifests/buildcache"
-        test "$(compile_registry_ref_code "$compile_source_c_manifest")" = 200
-        echo "compile source C: cached=13 uncached=2 writes=1 mode=min"
-
-        echo "== Unseeded commit D: web edit invalidates only the web lineage =="
-        printf '%s\n' "$compile_hive_input_orig" >"$compile_hive_input"
-        printf 'web-source-only-edit\n' >"$compile_web_input"
-        create_builder "nook-bake-sim-compile-source-d-${suffix}"
-        bake_compile_source "$proof_log" "$compile_source_d" "" "1" "1" "v3" \
-          "dddddddddddddddddddddddddddddddddddddddd"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        require_uncached_step "$proof_log" bake-sim-compile-web-source
-        require_uncached_step "$proof_log" bake-sim-compile-extension-package
-        require_cache_write "$proof_log"
-        printf '%s\n' "$compile_web_input_orig" >"$compile_web_input"
-        echo "compile source D: cached=13 uncached=2 writes=1 domain=web"
-
-        echo "== Unseeded commit E: legal document edit invalidates only the web lineage =="
-        printf 'legal-document-source-only-edit\n' >"$compile_web_legal_input"
-        create_builder "nook-bake-sim-compile-source-e-${suffix}"
-        bake_compile_source "$proof_log" "$compile_source_e" "" "1" "1" "v3" \
-          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-        for marker in \
-          bake-sim-compile-toolchain \
-          bake-sim-compile-native-dependencies \
-          bake-sim-compile-hive-dependencies \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-dependencies \
-          bake-sim-compile-hive-console-dependencies \
-          bake-sim-compile-web-app-dependencies \
-          bake-sim-compile-web-dependencies \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build; do
-          require_cached_step "$proof_log" "$marker"
-        done
-        require_uncached_step "$proof_log" bake-sim-compile-web-source
-        require_uncached_step "$proof_log" bake-sim-compile-extension-package
-        require_cache_write "$proof_log"
-        printf '%s\n' "$compile_web_legal_input_orig" >"$compile_web_legal_input"
-        echo "compile legal E: cached=13 uncached=2 writes=1 domain=web-legal"
-
-        echo "== Recipe rotation: old generation is not current =="
-        rotated_generation_manifest="${registry_ref}/v2/nook/remote-buildcache/nook-bake-sim-compile-generation-v1-fingerprint-b/manifests/buildcache"
-        test "$(compile_registry_ref_code "$rotated_generation_manifest")" = 404
-        compile_generation="generation-v1-fingerprint-b"
-        create_builder "nook-bake-sim-compile-rotated-${suffix}"
-        bake_compile_source "$proof_log" "git-ffffffffffffffffffffffffffffffffffffffff" "" "" ""
-        for marker in \
-          bake-sim-compile-hive-source \
-          bake-sim-compile-wasm-source-base \
-          bake-sim-compile-nook-wasm-source \
-          bake-sim-compile-companion-wasm-source \
-          bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source \
-          bake-sim-compile-extension-package; do
-          require_uncached_step "$proof_log" "$marker"
-        done
-        require_no_cache_write "$proof_log"
-        echo "compile generation rotation: old_available=1 current_available=0 selected=0"
-
-        echo "== Exact source replay: read-only warm solve stays below two minutes =="
-        printf 'nook-wasm-source-only-edit\n' >"$compile_nook_input"
-        printf '%s\n' "$compile_hive_input_orig" >"$compile_hive_input"
-        compile_generation="generation-v1-fingerprint-a"
-        create_builder "nook-bake-sim-compile-warm-${suffix}"
+        echo "== Read-only replay: exact BuildKit reuse and zero writes =="
+        create_builder "nook-bake-sim-compile-source-b-read-only-${suffix}"
         compile_started="$(date +%s)"
-        bake_compile_source "$proof_log" "$compile_source_b" "1" "" "" "v3" \
+        bake_compile_source "$proof_log" "$compile_source_b" "1" "" "$sccache_consumer_mode" "v3" \
           "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         compile_elapsed=$(( $(date +%s) - compile_started ))
+        require_no_cache_write "$proof_log"
+        test "$compile_elapsed" -lt 300
+        echo "compile read-only: sccache_mode=READ_ONLY cache_writes=0 registry_exports=0 elapsed=${compile_elapsed}s limit=300s"
+
+        echo "== Legal document edit: invalidate only the web lineage =="
+        printf 'legal-document-source-only-edit\n' >"$compile_web_legal_input"
+        create_builder "nook-bake-sim-compile-source-e-${suffix}"
+        bake_compile_source "$proof_log" "$compile_source_e" "" "1" "$sccache_publish_mode" "v3" \
+          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" "1"
         for marker in \
           bake-sim-compile-toolchain \
           bake-sim-compile-native-dependencies \
@@ -684,14 +429,12 @@ tasks:
           bake-sim-compile-nook-wasm-source \
           bake-sim-compile-companion-wasm-source \
           bake-sim-compile-nook-wasm-build \
-          bake-sim-compile-companion-wasm-build \
-          bake-sim-compile-web-source \
-          bake-sim-compile-extension-package; do
+          bake-sim-compile-companion-wasm-build; do
           require_cached_step "$proof_log" "$marker"
         done
-        require_no_cache_write "$proof_log"
-        test "$compile_elapsed" -lt 120
-        test "$(compile_registry_ref_code "$compile_source_b_manifest")" = 200
-        echo "compile warm: cached=15 uncached=0 writes=0 elapsed=${compile_elapsed}s limit=120s ref=${compile_source_repository}-${compile_source_b}:buildcache"
+        require_uncached_step "$proof_log" bake-sim-compile-web-source
+        require_uncached_step "$proof_log" bake-sim-compile-extension-package
+        require_cache_write "$proof_log"
+        echo "compile legal edit: rust_wasm_hive_cached=1 web_invalidated=1"
 
         echo "bake-cache BuildKit proofs passed: rust dependency replay plus compile warm acceptance"

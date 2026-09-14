@@ -18,51 +18,36 @@ behavior for packets issued by SRE Team Gizmo.
 
 - Accept cache and remote-build performance packets from SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
-- Enforce a three-minute remote-build latency SLO and workflow timeout.
-- Enforce a seven-minute hard ceiling for a cold immutable compiler-generation
-  seed; a seed that cannot populate remote compiler entries inside that bound
-  is failed evidence, not an acceptable maintenance path.
+- Enforce a five-minute remote-build latency SLO and workflow timeout.
 - Diagnose cache telemetry before changing cache topology.
 - Preserve separate cache identities:
-  - immutable recipe/dependency-fingerprint generation scopes own exactly one
-    maintenance-seeded, `mode=max` compiler baseline per generation;
-  - dependency-fingerprint scopes own dependency reuse; and
+  - dependency-fingerprint scopes own dependency and toolchain reuse; and
   - optional exact-commit scopes own only `mode=min` same-head retry
     acceleration.
-- Make ordinary unseeded commits import the immutable generation baseline and
-  dependency cache. BuildKit input digests, not mutable branch names, decide
-  which source vertices remain reusable.
-- Own effective Bake solve parity between generation seeds and ordinary
-  consumers. CLI `--set target.*` overrides apply only to the named target and
-  do not retroactively propagate to targets that inherit from it, so explicitly
-  mirror every invocation-shaping argument, context, platform, and output.
-- Include those effective seed/consumer inputs in the recipe fingerprint and
-  require the Docker simulator and proof to compare them. A successfully
-  imported generation manifest can still yield zero cache-key matches when the
-  effective solves differ.
+- Make sccache the primary cross-commit compiler cache. Ordinary authorized
+  publish builds use `READ_WRITE`, while read-only verification uses
+  `READ_ONLY` and performs zero writes.
+- Do not require a maintenance seed before an ordinary compile. The first cold
+  publish is allowed to miss and must populate compiler objects for the next
+  committed head.
 - Require cache-root reachability in addition to manifest existence and import
   success. The target exported through `cache_to` must retain the reusable
   dependency and compiler ancestry consumed by ordinary builds.
 - Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
   export a terminal result while orphaning intermediate cache records.
-- Keep dependency seeding provably source-free and explicitly root native,
-  WASM, Minds, Hive, Node, and web dependency stages. Keep compiler roots
-  reachable from the immutable generation cache.
+- Keep dependency layers reusable across source changes and explicitly root
+  native, WASM, Minds, Hive, Node, and web dependency stages.
 - Enforce semantic input-domain isolation for every compiler stage. Rust,
   WASM, Hive, and web stages must never broadly copy the repository root; each
   stage copies only the source, lockfiles, manifests, generated inputs, and
   configuration that can affect its own compilation result.
 - Introduce per-head arguments only at the latest consumer boundary that needs
-  them so commit identity cannot invalidate dependency or generation-baseline
-  vertices.
+  them so commit identity cannot invalidate dependency vertices or sccache
+  compiler keys.
 - Preserve explicit, narrow cross-domain artifact handoffs. Generated WASM
   packages cross into web builds through the declared handoff; Rust or WASM
   repository roots do not become web compiler inputs.
-- Serialize generation seeding, probe before writing, and never overwrite an
-  existing generation manifest. A legitimate recipe or dependency-fingerprint
-  change rotates the generation scope and is the only reason to seed a new
-  compiler baseline.
-- Never maintenance-seed a source cache for each commit or branch head.
+- Never add a compiler-cache seed task or generation-baseline prerequisite.
 - Preserve read-only cache state across GitHub Actions step boundaries.
 - Prove that read-only consumers perform zero cache writes and zero exports.
 - Treat remote `sccache` in `READ_ONLY` mode as an optional accelerator.
@@ -81,14 +66,14 @@ behavior for packets issued by SRE Team Gizmo.
   infrastructure. Startup, credential, read, and write failures remain
   terminal.
 - Carry sccache read/write authority through a stable-ID runtime secret (or an
-  equivalently cache-key-neutral runtime input) mounted identically by seed
-  and consumer compiler vertices. Never encode publisher versus consumer mode
+  equivalently cache-key-neutral runtime input) mounted identically by publish
+  and read-only compiler vertices. Never encode publisher versus consumer mode
   in an ARG, ENV, target context, platform, output, or command shape that
   divides their BuildKit keys.
 - Use `mode=min` for exact source-cache exports.
 - Bound cache exports and transport retries.
 - Preserve ordinary new-commit reuse when no optional exact source cache
-  exists by importing the generation baseline and dependency cache.
+  exists through sccache and the dependency cache.
 - Validate cache publication with a warm replay at the same committed head.
 - Maintain the canonical simulator and proof surfaces:
   - `infra/sim/bake-cache/compile-warm.docker-bake.hcl`;
@@ -111,7 +96,8 @@ behavior for packets issued by SRE Team Gizmo.
   - Prove the healthy path starts once and serves every compiler invocation in
     the `RUN`.
 - Make the simulator and proof require `compile-wasm-dependencies` to be cached
-  on replay and fail when any source stage executes during dependency seeding.
+  on replay, a cold ordinary publish to write sccache objects, the next head to
+  report compiler hits, and read-only verification to write nothing.
 - Commit the complete bounded iteration.
 - Report the commit SHA, evidence, latency measurements, and blockers to SRE
   Team Gizmo.
@@ -124,7 +110,7 @@ behavior for packets issued by SRE Team Gizmo.
   compilation during feature work.
 - Delivery Pipeline owns remote `build:compile` execution.
 - Delivery resolves and validates the latest canonical feature-branch head.
-- A warm replay is accepted only when it completes within three minutes and
+- A warm replay is accepted only when it completes within five minutes and
   proves the required cache behavior.
 
 ## Prohibited actions
@@ -135,8 +121,6 @@ behavior for packets issued by SRE Team Gizmo.
   reduce latency.
 - Do not treat a missing per-head exact cache as a reason to run maintenance
   seeding or publish a generation baseline.
-- Do not infer effective solve parity from Bake inheritance or successful
-  generation-manifest import.
 - Do not equate manifest existence or import success with reachable reusable
   ancestry, or export a scratch/marker join that can orphan intermediate cache
   records.

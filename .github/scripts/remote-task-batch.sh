@@ -4,7 +4,7 @@ set -euo pipefail
 task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
-    build:compile) echo 30 ;;
+    build:compile) echo 5 ;;
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;

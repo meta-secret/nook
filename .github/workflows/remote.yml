@@ -65,9 +65,7 @@ permissions:
   contents: read
 
 concurrency:
-  # All generation seeds serialize globally so probe-before-write is a true
-  # immutable create. Ordinary task dispatches retain caller correlation.
-  group: ${{ (inputs.tasks || inputs.task) == 'build:compile-cache-seed' && 'remote-build-compile-generation-seed' || format('remote-{0}-{1}-{2}', github.ref, inputs.tasks || inputs.task, inputs.dispatch_nonce || 'default') }}
+  group: ${{ format('remote-{0}-{1}-{2}', github.ref, inputs.tasks || inputs.task, inputs.dispatch_nonce || 'default') }}
   cancel-in-progress: false
 
 env:
@@ -80,11 +78,9 @@ jobs:
   batch:
     if: >-
       (inputs.publish_compile_cache == false &&
-      (inputs.tasks || inputs.task) != 'build:compile' &&
-      (inputs.tasks || inputs.task) != 'build:compile-cache-seed') ||
+      (inputs.tasks || inputs.task) != 'build:compile') ||
       (inputs.tasks != '' && inputs.task != '') ||
       ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
-      (inputs.tasks || inputs.task) != 'build:compile-cache-seed' &&
       (inputs.tasks || inputs.task) != 'web:verify' &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
@@ -96,14 +92,14 @@ jobs:
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
-    timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 3 || 360 }}
+    timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
       REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
       REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
-      SCCACHE_S3_RW_MODE: READ_ONLY
+      SCCACHE_S3_RW_MODE: ${{ (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache && 'READ_WRITE' || 'READ_ONLY' }}
       HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
       HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
       HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
@@ -210,58 +206,6 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
-  compile-cache-seed:
-    if: >-
-      inputs.tasks == '' &&
-      inputs.task == 'build:compile-cache-seed' &&
-      inputs.publish_compile_cache != false
-    name: Remote / build:compile-cache-seed
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 8
-    env:
-      REQUESTED_REMOTE_TASKS: build:compile-cache-seed
-      REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
-      SCCACHE_S3_RW_MODE: READ_WRITE
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Validate exact cache seed source
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] \
-            || [ "$(git rev-parse HEAD)" != "$REQUESTED_SOURCE_SHA" ]; then
-            echo "Compile cache seeding requires the exact requested source SHA." >&2
-            exit 2
-          fi
-          case "${GITHUB_REF_NAME:-}" in
-            main|dev) echo "Compile cache seeding requires a feature branch." >&2; exit 2 ;;
-          esac
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-selection: compile-seed
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "false"
-      - name: Seed missing immutable compile baselines
-        shell: bash
-        run: timeout --kill-after=30s 7m bash .github/scripts/compile-deps-cache-seed.sh
-      - name: Preserve compile cache seed telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-        with:
-          artifact-suffix: compile-cache-seed
-
   web-verify:
     if: >-
       inputs.publish_compile_cache != false &&

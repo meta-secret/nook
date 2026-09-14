@@ -1,7 +1,6 @@
-// Production-shaped BuildKit cache proof. A separate seed boundary publishes
-// the source-free, compiler-rooted content-fingerprinted ref before the
-// product build consumes it; authored source remains isolated in generation
-// and exact-commit refs.
+// Production-shaped BuildKit cache proof. Ordinary publish builds populate
+// both the dependency graph and an optional exact-head accelerator. Cross-head
+// compiler reuse is owned by sccache rather than a maintenance seed.
 
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"
@@ -15,27 +14,11 @@ variable "COMPILE_SOURCE_CACHE_AVAILABLE" {
   default = ""
 }
 
-variable "COMPILE_GENERATION_SCOPE" {
-  default = "generation-v1-fingerprint-a"
-}
-
-variable "COMPILE_GENERATION_CACHE_AVAILABLE" {
-  default = ""
-}
-
-variable "COMPILE_DEPS_CACHE_WRITE_ENABLED" {
-  default = ""
-}
-
 variable "COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-variable "COMPILE_GENERATION_CACHE_WRITE_ENABLED" {
-  default = ""
-}
-
-variable "COMPILE_SOURCE_CACHE_GENERATION" {
+variable "COMPILE_SOURCE_CACHE_VERSION" {
   default = "v3"
 }
 
@@ -50,19 +33,14 @@ variable "SIMULATED_EXTENSION_COMMIT" {
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
-compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_GENERATION}-${COMPILE_SOURCE_SCOPE}:buildcache"
-compile_generation_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_GENERATION_SCOPE}:buildcache"
-
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_VERSION}-${COMPILE_SOURCE_SCOPE}:buildcache"
 compile_cache_from = COMPILE_SOURCE_CACHE_AVAILABLE != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",
-] : COMPILE_GENERATION_CACHE_AVAILABLE != "" ? [
-  "type=registry,ref=${compile_generation_cache_ref}",
-  "type=registry,ref=${compile_deps_cache_ref}",
 ] : [
   "type=registry,ref=${compile_deps_cache_ref}",
 ]
 
-compile_deps_cache_to = COMPILE_DEPS_CACHE_WRITE_ENABLED != "" ? [
+compile_deps_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${compile_deps_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=5m",
 ] : []
 
@@ -70,29 +48,9 @@ compile_source_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${compile_source_cache_ref},mode=min,compression=zstd,force-compression=true,timeout=2m",
 ] : []
 
-compile_generation_cache_to = COMPILE_GENERATION_CACHE_WRITE_ENABLED != "" && COMPILE_GENERATION_CACHE_AVAILABLE == "" ? [
-  "type=registry,ref=${compile_generation_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=5m",
-] : []
-
 compile_solve_args = {
   SIMULATED_BUILD_PROFILE    = SIMULATED_BUILD_PROFILE
   SIMULATED_EXTENSION_COMMIT = SIMULATED_EXTENSION_COMMIT
-}
-
-target "compile-dependencies" {
-  context = "."
-  dockerfile = "compile-warm.Dockerfile"
-  target = "compile-dependencies"
-  platforms = ["linux/amd64"]
-  contexts = {
-    toolchain-base = "target:compile-toolchain-context"
-  }
-  args = compile_solve_args
-  cache-from = [
-    "type=registry,ref=${compile_deps_cache_ref},ignore-error=true",
-  ]
-  cache-to = compile_deps_cache_to
-  output = ["type=cacheonly"]
 }
 
 target "compile-warm" {
@@ -109,12 +67,19 @@ target "compile-warm" {
   output = ["type=cacheonly"]
 }
 
-target "compile-generation" {
-  inherits = ["compile-warm"]
+target "compile-dependency-cache" {
+  context = "."
+  dockerfile = "compile-warm.Dockerfile"
+  target = "compile-dependency-cache"
+  platforms = ["linux/amd64"]
+  contexts = {
+    toolchain-base = "target:compile-toolchain-context"
+  }
   args = compile_solve_args
-  cache-to = compile_generation_cache_to
+  cache-from = []
+  cache-to = compile_deps_cache_to
+  output = ["type=cacheonly"]
 }
-
 
 target "compile-toolchain-context" {
   context = "."

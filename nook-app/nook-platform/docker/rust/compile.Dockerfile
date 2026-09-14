@@ -9,6 +9,12 @@ FROM rust-base AS compile-platform-manifests
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 
+# Compiler objects are the cross-commit cache boundary. Keep debug/source-path
+# metadata independent of the checkout identity and disable incremental object
+# layouts, which sccache cannot reuse reliably across clean BuildKit vertices.
+ENV CARGO_INCREMENTAL=0
+ENV RUSTFLAGS="--remap-path-prefix=/meta-secret/nook=/workspace"
+
 COPY nook-app/nook-platform/.cargo .cargo
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
@@ -229,9 +235,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Continue the source-free Rust dependency ancestry through Minds. This is
-# deliberately before compile-minds-source: the maintenance dependency solve
-# can never reach authored Hive source.
+# Continue the source-free Rust dependency ancestry through Minds before
+# authored Hive source enters the graph.
 FROM compile-wasm-dependencies AS compile-minds-base
 
 RUN apt-get update \
@@ -256,7 +261,6 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=false \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-hive-dependencies
 
-# The maintenance dependency graph needs one manifest with every compiler root.
 # Copy only the Bun and Node runtimes from web-base into the source-free Rust
 # lineage; do not merge either product tree. Package manifests enter in the
 # sequential dependency stages below.
@@ -469,10 +473,10 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
 
-# Root the dependency export in the complete source-free compiler ancestry.
-# Native, WASM, Minds, Hive-console, and both web dependency installs are
-# parents of this target; there are no sibling marker/content joins.
-FROM compile-web-dependencies AS compile-dependencies
+# Source-free export root used only as a sibling of the ordinary product
+# target in the first publish Bake session. No authored product source stage
+# can reach this target.
+FROM compile-web-dependencies AS compile-dependency-cache
 
 RUN install -D /opt/nook/compile-native-dependencies /compile/native \
     && install -D /opt/nook/compile-wasm-dependencies /compile/wasm \

@@ -90,7 +90,10 @@ RUN cat /tmp/nook-wasm-source.txt >/opt/compile-nook-wasm-source \
   && echo bake-sim-compile-nook-wasm-source
 
 FROM compile-nook-wasm-source AS compile-nook-wasm-build
-RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
+  && echo bake-sim-sccache-hit \
+  && cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
   && sleep 1 \
   && echo bake-sim-compile-nook-wasm-build
 
@@ -115,7 +118,7 @@ RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
   && sleep 1 \
   && echo bake-sim-compile-extension-package
 
-FROM compile-web-dependencies AS compile-dependencies
+FROM compile-web-dependencies AS compile-dependency-cache
 RUN install -D /opt/compile-native-dependencies /compile/native \
   && install -D /opt/compile-wasm-dependencies /compile/wasm \
   && install -D /opt/compile-hive-dependencies /compile/hive \

@@ -34,7 +34,20 @@ done
 
 docker_bin="${DOCKER:-docker}"
 runtime_mode_file="${RUNNER_TEMP:-/tmp}/nook-sccache-runtime-mode-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
-printf '%s\n' READ_ONLY >"$runtime_mode_file"
+runtime_mode="${SCCACHE_S3_RW_MODE:-READ_ONLY}"
+case "$runtime_mode" in
+  READ_ONLY|READ_WRITE) ;;
+  *) echo "build:compile received unsupported sccache mode: $runtime_mode" >&2; exit 2 ;;
+esac
+if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = publish ] && [ "$runtime_mode" != READ_WRITE ]; then
+  echo "build:compile publication requires READ_WRITE compiler-cache authority" >&2
+  exit 2
+fi
+if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = read-only ] && [ "$runtime_mode" != READ_ONLY ]; then
+  echo "build:compile verification requires READ_ONLY compiler-cache authority" >&2
+  exit 2
+fi
+printf '%s\n' "$runtime_mode" >"$runtime_mode_file"
 chmod 600 "$runtime_mode_file"
 trap 'rm -f -- "$runtime_mode_file"' EXIT
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
@@ -44,8 +57,6 @@ extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
 compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
 compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
-compile_generation_scope="${GHA_RUST_COMPILE_GENERATION_SCOPE:-}"
-compile_generation_available="${GHA_CACHE_COMPILE_GENERATION_AVAILABLE:-}"
 compile_exact_available="${GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
@@ -53,10 +64,6 @@ if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
 fi
 if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v3-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires the fingerprinted Rust dependency scope" >&2
-  exit 2
-fi
-if [[ ! "$compile_generation_scope" =~ ^nook-build-compile-generation-v1-[0-9a-f]{40}$ ]]; then
-  echo "build:compile requires the recipe-aware immutable generation scope" >&2
   exit 2
 fi
 bake_args=(
@@ -87,6 +94,27 @@ bake_args=(
   --set "build-compile.args.NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"
 )
 
+# Bake target overrides do not propagate through shared HCL values. Mirror the
+# solve shape on the source-free sibling so both targets share dependency keys
+# when the first ordinary publish requests them together.
+for compile_argument in \
+  "SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}" \
+  "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}" \
+  "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}" \
+  "WASM_BUILD_MODE=${wasm_build_mode}" \
+  "VITE_BASE=${VITE_BASE:-/}" \
+  "VITE_SITE_URL=${VITE_SITE_URL:-}" \
+  "VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL:-}" \
+  "VITE_SIMPLE_APP_URL=${VITE_SIMPLE_APP_URL:-}" \
+  "VITE_SENTINEL_APP_URL=${VITE_SENTINEL_APP_URL:-}" \
+  "NOOK_SIMPLE_VAULT_URL=${NOOK_SIMPLE_VAULT_URL:-https://simple.nokey.sh/}" \
+  "NOOK_EXTENSION_CHANNEL=${NOOK_EXTENSION_CHANNEL:-production}" \
+  "NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}" \
+  "NOOK_EXTENSION_COMMIT=${extension_commit}" \
+  "NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"; do
+  bake_args+=(--set "build-compile-dependency-cache.args.${compile_argument}")
+done
+
 access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
 secret_key_file="${SCCACHE_S3_SECRET_KEY_FILE:-}"
 if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
@@ -104,16 +132,19 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
-if [ -z "$compile_deps_available" ]; then
-  echo "build:compile requires a seeded immutable dependency cache; dispatch build:compile-cache-seed first" >&2
-  exit 2
-fi
-if [ -z "$compile_exact_available" ] && [ -z "$compile_generation_available" ]; then
-  echo "build:compile requires an exact cache or seeded immutable generation baseline" >&2
-  exit 2
+compile_targets=(build-compile)
+if [ "$runtime_mode" = READ_WRITE ] && [ -z "$compile_deps_available" ]; then
+  compile_targets=(build-compile-dependency-cache build-compile)
+  echo "Dependency cache is absent; publishing its source-free graph in the ordinary compile session"
 fi
 
-echo "Dependency cache is available; build:compile remains a cache consumer"
+if [ -n "$compile_exact_available" ]; then
+  echo "Exact BuildKit cache is available; sccache remains the cross-commit compiler cache"
+elif [ -n "$compile_deps_available" ]; then
+  echo "Dependency BuildKit cache is available; sccache will serve cross-commit compiler objects"
+else
+  echo "No remote BuildKit cache is available; performing a cold solve with sccache"
+fi
 bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \
-  "$docker_bin" buildx bake "${bake_args[@]}" build-compile
+  "$docker_bin" buildx bake "${bake_args[@]}" "${compile_targets[@]}"

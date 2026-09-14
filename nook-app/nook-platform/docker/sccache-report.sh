@@ -29,6 +29,11 @@ if stats_json="$(/usr/local/bin/nook-sccache --show-stats --stats-format=json 2>
       printf 'NOOK_SCCACHE_PUBLICATION_FAILURE %s\n' "$report" >&2
       exit 1
     fi
+    if [ "$runtime_mode" = READ_ONLY ] \
+      && jq -e '.cache_writes > 0' >/dev/null 2>&1 <<<"$report"; then
+      printf 'NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE %s\n' "$report" >&2
+      exit 1
+    fi
     exit 0
   fi
 fi

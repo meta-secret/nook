@@ -950,161 +950,72 @@ tasks:
     const productionDockerfile = this.read(
       "nook-app/nook-platform/docker/rust/compile.Dockerfile",
     );
-    const compileFingerprint = this.read(
-      ".github/scripts/compile-deps-cache-fingerprint.sh",
-    );
-    const compileSeed = this.read(".github/scripts/compile-deps-cache-seed.sh");
+    const compileScript = this.read(".github/scripts/compile-remote.sh");
     const remoteWorkflow = this.read(".github/workflows/remote.yml");
+    const dockerSetup = this.read(
+      ".github/actions/nook-docker-setup/action.yml",
+    );
     const cacheTelemetry = this.read(
       ".github/workflows/lib/cache-telemetry.mjs",
     );
-    const simulatorDockerfile = this.read(
-      "infra/sim/bake-cache/compile-warm.Dockerfile",
-    );
     const proof = this.read("infra/tasks/bake-cache.yml");
+
+    expect(remoteWorkflow).toContain(
+      "== 'build:compile' && 5 || 360",
+    );
+    expect(remoteWorkflow).toContain(
+      "(inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache && 'READ_WRITE' || 'READ_ONLY'",
+    );
+    expect(remoteWorkflow).not.toContain("build:compile-cache-seed");
+    expect(compileScript).toContain(
+      "publication requires READ_WRITE compiler-cache authority",
+    );
+    expect(compileScript).toContain(
+      "verification requires READ_ONLY compiler-cache authority",
+    );
+    expect(compileScript).toContain(
+      "No remote BuildKit cache is available; performing a cold solve with sccache",
+    );
+    expect(dockerSetup).toContain(
+      "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true",
+    );
+    expect(dockerSetup).not.toContain("compile_generation_scope");
 
     for (const source of [production, simulator]) {
       expect(source).toContain("compile_deps_cache_ref");
       expect(source).toContain("compile_source_cache_ref");
       expect(source).toContain("mode=max,compression=zstd");
       expect(source).toContain("mode=min,compression=zstd");
+      expect(source).not.toContain("compile_generation");
     }
-    expect(production).toContain(
-      'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != ""',
-    );
-    expect(production).toContain("GHA_RUST_COMPILE_GENERATION_SCOPE");
-    expect(production).toContain("compile_generation_cache_ref");
-    expect(production).toContain("timeout=2m");
-    expect(compileFingerprint).toContain("nook-rust-compile-deps-input-v3");
-    expect(compileFingerprint).toContain(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
-    );
-    expect(compileFingerprint).toContain(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
-    );
-    expect(compileSeed).toContain("build-compile-dependencies");
-    expect(compileSeed).toContain("build-compile");
-    expect(compileSeed).toContain("build-compile-generation.args.WASM_BUILD_MODE");
-    expect(compileSeed).toContain(
-      "build-compile-dependencies.args.WASM_BUILD_MODE",
-    );
-    expect(compileSeed).toContain("build-compile-generation.args.VITE_BASE");
-    expect(compileSeed).toContain(
-      "build-compile-generation.args.NOOK_EXTENSION_COMMIT",
-    );
-    expect(compileFingerprint).toContain(
-      ".github/scripts/compile-deps-cache-seed.sh",
-    );
-    expect(compileFingerprint).toContain(".github/scripts/compile-remote.sh");
-    expect(compileSeed).toContain(
-      "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
-    );
-    expect(compileSeed).toContain("GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1");
-    expect(compileSeed).toContain(
-      "GHA_COMPILE_GENERATION_CACHE_WRITE_ENABLED=1",
-    );
-    expect(compileSeed).toContain("GHA_CACHE_COMPILE_GENERATION_AVAILABLE");
-    expect(compileSeed).not.toContain(
-      "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1",
-    );
-    expect(remoteWorkflow).toContain("compile-cache-seed:");
-    expect(remoteWorkflow).toContain("timeout-minutes: 8");
-    expect(remoteWorkflow).toContain(
-      "timeout --kill-after=30s 7m bash .github/scripts/compile-deps-cache-seed.sh",
-    );
-    expect(compileSeed).toContain("printf '%s\\n' READ_WRITE");
-    expect(compileSeed).toContain("id=sccache_runtime_mode");
+    expect(production).toContain('target "build-compile-dependency-cache"');
+    expect(production).toContain('target     = "compile-dependency-cache"');
+    expect(production).toContain("cache-to   = compile_deps_cache_to");
+    expect(production).toContain('NOOK_COMPILE_CACHE_MODE == "publish"');
+    expect(cacheTelemetry).toContain("compile_dependencies");
+    expect(cacheTelemetry).toContain("compile_source");
+    expect(cacheTelemetry).not.toContain("compile_generation");
+    expect(
+      this.read("nook-app/nook-platform/docker/sccache-report.sh"),
+    ).toContain("NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE");
+
+    expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
     expect(productionDockerfile.match(/id=sccache_runtime_mode/g)).toHaveLength(
       18,
     );
-    expect(proof).toContain("generation solve missed dependency keys");
-    expect(remoteWorkflow).toContain(
-      "== 'build:compile' && 'compile'",
-    );
-    const dockerSetup = this.read(
-      ".github/actions/nook-docker-setup/action.yml",
-    );
-    expect(dockerSetup).toContain(
-      "Compile cache probes complete: count=3 timeout_seconds=6 parallel=true",
-    );
-    expect(dockerSetup).toContain(
-      '&& timeout 6s docker buildx imagetools inspect',
-    );
-    expect(production).toContain("nook-build-compile-v3");
-    expect(production).not.toContain("nook-build-compile-v2");
-    expect(cacheTelemetry).toContain("compile_dependencies");
-    expect(cacheTelemetry).toContain("compile_source");
-    expect(cacheTelemetry).toContain("export_enabled");
-    expect(cacheTelemetry).toContain(
-      "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
-    );
-    expect(productionDockerfile).toContain(
-      "FROM compile-wasm-source AS compile",
-    );
-    expect(productionDockerfile).toContain(
-      "FROM compile-native-dependencies AS compile-wasm-dependencies",
-    );
-    expect(productionDockerfile).toContain(
-      "FROM compile-wasm-dependencies AS compile-minds-base",
-    );
-    expect(productionDockerfile).toContain(
-      "FROM compile-minds-dependencies AS compile-node-dependency-toolchain",
-    );
-    for (const directDependencyEdge of [
-      "FROM compile-node-dependency-toolchain AS compile-hive-console-dependencies",
-      "FROM compile-hive-console-dependencies AS compile-web-app-dependencies",
-      "FROM compile-web-app-dependencies AS compile-web-dependencies",
-      "FROM compile-web-dependencies AS compile-dependencies",
-    ]) {
-      expect(productionDockerfile).toContain(directDependencyEdge);
-    }
-    const dependencyTarget = productionDockerfile.slice(
-      productionDockerfile.indexOf(
-        "FROM compile-web-dependencies AS compile-dependencies",
-      ),
-      productionDockerfile.indexOf("FROM compile-wasm-source AS compile"),
-    );
-    for (const sourceStage of [
-      "compile-native-source",
-      "compile-wasm-source",
-      "compile-minds-source",
-      "compile-hive-console ",
-      "compile-web ",
-    ]) {
-      expect(dependencyTarget).not.toContain(sourceStage);
-    }
-    expect(productionDockerfile).toContain(
-      "COPY nook-app/nook-web nook-app/nook-web",
-    );
-    for (const legalDocument of [
+    for (const semanticInput of [
       "docs/privacy-policy.md",
       "docs/terms-of-service.md",
+      "nook-app/nook-platform/nook-app-common/locales/en.json",
+      "nook-app/nook-platform/nook-app-common/locales/ru.json",
     ]) {
       expect(productionDockerfile).toContain(
-        `COPY ${legalDocument} ${legalDocument}`,
+        `COPY ${semanticInput} ${semanticInput}`,
       );
-      expect(compileFingerprint).not.toContain(legalDocument);
     }
-    for (const extensionLocale of ["en", "ru"]) {
-      const localePath = `nook-app/nook-platform/nook-app-common/locales/${extensionLocale}.json`;
-      expect(productionDockerfile).toContain(
-        `COPY ${localePath} ${localePath}`,
-      );
-      expect(compileFingerprint).not.toContain(localePath);
-    }
-    expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
-    const extensionCommitArgument = productionDockerfile.indexOf(
-      "ARG NOOK_EXTENSION_COMMIT=",
-    );
-    const extensionPackage = productionDockerfile.indexOf(
-      'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"',
-    );
-    const webSourceBoundary = productionDockerfile.indexOf(
-      "FROM web-base AS compile-web",
-    );
     const webTypeCheck = productionDockerfile.indexOf(
       "node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json",
-      webSourceBoundary,
+      productionDockerfile.indexOf("FROM web-base AS compile-web"),
     );
     const legalInput = productionDockerfile.indexOf(
       "COPY docs/privacy-policy.md docs/privacy-policy.md",
@@ -1112,97 +1023,54 @@ tasks:
     const lastWebBuild = productionDockerfile.indexOf(
       "nook-web-research && node_modules/.bin/vite build",
     );
-    const extensionLocaleInput = productionDockerfile.indexOf(
+    const localeInput = productionDockerfile.indexOf(
       "COPY nook-app/nook-platform/nook-app-common/locales/en.json",
     );
+    const commitArgument = productionDockerfile.indexOf(
+      "ARG NOOK_EXTENSION_COMMIT=",
+    );
+    const extensionPackage = productionDockerfile.indexOf(
+      'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"',
+    );
     expect(legalInput).toBeLessThan(webTypeCheck);
-    expect(extensionLocaleInput).toBeGreaterThan(lastWebBuild);
-    expect(extensionLocaleInput).toBeLessThan(extensionCommitArgument);
-    expect(extensionCommitArgument).toBeGreaterThan(webTypeCheck);
-    expect(extensionPackage).toBeGreaterThan(extensionCommitArgument);
-    expect(simulatorDockerfile).toContain(
-      "FROM compile-companion-wasm-build AS compile-nook-wasm-source",
+    expect(localeInput).toBeGreaterThan(lastWebBuild);
+    expect(localeInput).toBeLessThan(commitArgument);
+    expect(commitArgument).toBeGreaterThan(webTypeCheck);
+    expect(extensionPackage).toBeGreaterThan(commitArgument);
+    const dependencyTarget = productionDockerfile.slice(
+      productionDockerfile.indexOf(
+        "FROM compile-web-dependencies AS compile-dependency-cache",
+      ),
+      productionDockerfile.indexOf("FROM compile-wasm-source AS compile"),
     );
-    expect(simulatorDockerfile).toContain(
-      "FROM compile-nook-wasm-build AS compile",
-    );
-    for (const dependencyRoot of [
-      "compile-native-dependencies",
-      "compile-wasm-dependencies",
-      "compile-hive-dependencies",
-      "compile-hive-console-dependencies",
-      "compile-web-app-dependencies",
-      "compile-web-dependencies",
+    for (const sourceStage of [
+      "compile-native-source",
+      "compile-minds-source",
+      "compile-hive-console ",
+      "compile-web ",
     ]) {
-      expect(simulatorDockerfile).toContain(dependencyRoot);
-      expect(proof).toContain(`bake-sim-${dependencyRoot}`);
+      expect(dependencyTarget).not.toContain(sourceStage);
     }
-    expect(simulatorDockerfile).toContain(
-      "FROM compile-web-dependencies AS compile-dependencies",
-    );
-    for (const simulatorDependencyEdge of [
-      "FROM compile-toolchain AS compile-native-dependencies",
-      "FROM compile-native-dependencies AS compile-wasm-dependencies",
-      "FROM compile-wasm-dependencies AS compile-hive-dependencies",
-      "FROM compile-hive-dependencies AS compile-hive-console-dependencies",
-      "FROM compile-hive-console-dependencies AS compile-web-app-dependencies",
-      "FROM compile-web-app-dependencies AS compile-web-dependencies",
-    ]) {
-      expect(simulatorDockerfile).toContain(simulatorDependencyEdge);
-    }
-    expect(simulatorDockerfile).toContain("inputs/compile-web-legal.txt");
-    expect(simulatorDockerfile).toContain(
-      "inputs/compile-extension-locales.txt",
-    );
-    expect(simulator).toContain('COMPILE_SOURCE_CACHE_AVAILABLE != ""');
-    expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
-    expect(simulator).toContain("COMPILE_GENERATION_SCOPE");
-    expect(simulator).toContain('target "compile-generation"');
-    expect(simulator).toContain("SIMULATED_BUILD_PROFILE");
-    expect(proof).toContain("SIMULATED_BUILD_PROFILE=production");
-    expect(simulator).toContain("separate seed boundary");
+
     expect(proof).toContain(
-      "Separate seed replay: existing immutable fingerprint skips solve and export",
+      "Cold normal publish: no seed prerequisite, sccache READ_WRITE",
     );
     expect(proof).toContain(
-      "compile deps replay: available=1 solves=0 writes=0",
+      "compile_targets=(compile-dependency-cache compile-warm)",
     );
     expect(proof).toContain(
-      "Unseeded commit B: generation baseline retains unrelated compiler branches",
+      "Next unseeded head: dependency reuse plus cross-commit sccache hits",
     );
     expect(proof).toContain(
-      "Legacy incompatible source: v2 manifest is ignored",
+      "Read-only replay: exact BuildKit reuse and zero writes",
+    );
+    expect(proof).toContain("cache_writes=0 registry_exports=0");
+    expect(proof).toContain("elapsed=${compile_elapsed}s limit=300s");
+    expect(proof).toContain(
+      "Legal document edit: invalidate only the web lineage",
     );
     expect(proof).toContain(
-      "Generation seed replay: immutable manifest skips solve and export",
-    );
-    expect(proof).toContain(
-      "Policy-only commit: product compilers reuse the generation baseline",
-    );
-    expect(proof).toContain(
-      "compile policy-only: product_cached=14 product_uncached=0 packaging_uncached=1 writes=0",
-    );
-    expect(proof).toContain(
-      "Exact source replay: read-only warm solve stays below two minutes",
-    );
-    expect(proof).toContain("bake-sim-compile-hive-source");
-    expect(proof).toContain("compile source B: cached=12 uncached=3 writes=1");
-    expect(proof).toContain("compile source C: cached=13 uncached=2 writes=1");
-    expect(proof).toContain(
-      "Unseeded commit D: web edit invalidates only the web lineage",
-    );
-    expect(proof).toContain(
-      "compile source D: cached=13 uncached=2 writes=1 domain=web",
-    );
-    expect(proof).toContain(
-      "compile legal E: cached=13 uncached=2 writes=1 domain=web-legal",
-    );
-    expect(proof).toContain(
-      "compile generation rotation: old_available=1 current_available=0 selected=0",
-    );
-    expect(proof).toContain("compile warm: cached=15 uncached=0 writes=0");
-    expect(proof).toContain(
-      'bake_compile_source "$proof_log" "$compile_source_b" "1" ""',
+      "compile legal edit: rust_wasm_hive_cached=1 web_invalidated=1",
     );
     expect(proof).toContain('require_no_cache_write "$proof_log"');
   }
