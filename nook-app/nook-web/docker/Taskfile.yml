@@ -196,6 +196,19 @@ tasks:
         --set "*.output=type=cacheonly"
         web-app-deps-publish web-research-deps-publish web-deps-publish
 
+  docker:ci:cache:publish:web-research:
+    desc: Solve and export only the research Bun dependency graph for the selected exact scope.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ci:cache:publish:web-research"
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        web-research-deps-publish
+
   docker:ci:cache:publish:web-e2e:
     desc: Export the already-verified browser web graph from this job's builder.
     env:

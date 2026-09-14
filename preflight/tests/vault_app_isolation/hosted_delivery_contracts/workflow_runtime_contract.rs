@@ -110,14 +110,15 @@ impl WorkflowRuntimeContract<'_> {
                 && research.contains("without deployment credentials"),
             "untrusted research PRs must retain secret-free hosted validation"
         );
-        let research_publish = research
-            .split("      - name: Publish verified research web dependency cache\n")
-            .nth(1)
-            .unwrap_or("");
         let research_image = research
             .split("  image:\n")
             .nth(1)
             .and_then(|section| section.split("\n  deploy:\n").next())
+            .unwrap_or("");
+        let research_dependencies = research
+            .split("  dependencies:\n")
+            .nth(1)
+            .and_then(|section| section.split("\n  image:\n").next())
             .unwrap_or("");
         assert!(
             research.contains("registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
@@ -125,21 +126,18 @@ impl WorkflowRuntimeContract<'_> {
                 && research.contains("cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}")
                 && research.contains("main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}")
                 && research.contains("task web:e2e:kubernetes-image")
-                && research_publish.contains("task ci:main:publish-web-cache")
-                && research_publish.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-                && research_publish.contains("success() &&")
-                && research_publish.contains("github.event_name == 'push' && github.ref == 'refs/heads/main'")
-                && research_publish
-                    .contains("github.event.pull_request.head.repo.full_name == github.repository")
-                && research_publish
-                    .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-                && research_publish.contains("NOOK_ARC_RUNNER")
-                && research_publish.contains("ARC keeps the verified research web graph local")
                 && research_image.contains(
                     "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
                 )
                 && research_image.contains("fetch-depth: 0")
+                && research_image.contains("cache-selection: web-research-image")
                 && research.contains("same-repository PRs retain the remote identity")
+                && research_dependencies.contains("name: Prepare research dependency cache")
+                && research_dependencies.contains("cache-selection: web-research-deps")
+                && research_dependencies.contains("task docker:ci:cache:publish:web-research")
+                && research_dependencies.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+                && research_image.contains("needs: dependencies")
+                && !research.contains("task ci:main:publish-web-cache")
                 && !research.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
                 && !research.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
             "trusted Main and hosted PR research jobs must publish only authorized web cache scopes"

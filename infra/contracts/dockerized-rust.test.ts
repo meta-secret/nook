@@ -268,6 +268,8 @@ class DockerizedRustContract {
       for (const profile of [
         "preflight",
         "web-e2e",
+        "web-research-deps",
+        "web-research-image",
         "connection-only",
         "native",
         "hive",
@@ -316,11 +318,20 @@ class DockerizedRustContract {
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        expect(values).toContain("GHA_CACHE_SCOPE_SUFFIX=\n");
+        const expectedScope =
+          profile === "web-research-deps" || profile === "web-research-image"
+            ? `GHA_CACHE_SCOPE_SUFFIX=-git-${"a".repeat(40)}\n`
+            : "GHA_CACHE_SCOPE_SUFFIX=\n";
+        expect(values).toContain(expectedScope);
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
         expect(values).not.toContain("HIVE_CACHE_TO=");
         const calls = readFileSync(probes, "utf8");
-        expect(calls).not.toContain("-git-");
+        if (
+          profile === "web-research-deps" ||
+          profile === "web-research-image"
+        )
+          expect(calls).toContain("-git-");
+        else expect(calls).not.toContain("-git-");
         if (profile === "connection-only" || profile === "hive")
           expect(calls).toBe("");
         if (profile === "ecosystem-smoke") {
@@ -336,11 +347,14 @@ class DockerizedRustContract {
           expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-preflight-v1");
         }
-        if (profile === "web-e2e") {
+        if (profile === "web-e2e" || profile === "web-research-image") {
           expect(calls.trim().split("\n")).toHaveLength(4);
           expect(calls).toContain("nook-web-e2e-v1");
           expect(calls).toContain("nook-web-deps-v1");
           expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
+        } else if (profile === "web-research-deps") {
+          expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-web-research-deps-v1");
         }
       }

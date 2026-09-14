@@ -9,7 +9,9 @@ inputs:
       ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
-      wasm-proof computes its dependency fingerprint without probing; hive probes
+      wasm-proof computes its dependency fingerprint without probing;
+      web-research-deps probes only the research Bun dependency lineage;
+      web-research-image probes the exact research browser graph; hive probes
       only the Hive lineage; connection-only performs no registry cache probes.
     required: false
     default: general
@@ -172,7 +174,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -191,6 +193,7 @@ runs:
           fi
         fi
         isolated_cache_write="${{ inputs.isolated-cache-write }}"
+        isolated_scope_requested="$isolated_cache_write"
         publish_compile_cache="${{ inputs.publish-compile-cache }}"
         case "$publish_compile_cache" in
           true|false) ;;
@@ -221,7 +224,11 @@ runs:
         else
           echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
         fi
-        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
+        if [ "$isolated_cache_write" = "true" ] \
+          || { [ "$isolated_scope_requested" = "true" ] \
+            && { [ "$cache_selection" = "web-research-deps" ] \
+              || [ "$cache_selection" = "web-research-image" ]; }; } \
+          || [ -n "$remote_compile_scope" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
@@ -437,7 +444,8 @@ runs:
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
           publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
         fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \
+          || [ "$cache_selection" = "web-research-image" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
           # Keep the aggregate dependency graph and its independent lockfile
           # children distinct from the source-bearing browser image. Each
@@ -451,8 +459,14 @@ runs:
             publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
           fi
         fi
+        if [ "$cache_selection" = "web-research-deps" ]; then
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          if [ -n "$scope_suffix" ]; then
+            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
+          fi
+        fi
         case "$cache_selection" in
-          general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
+          general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac
