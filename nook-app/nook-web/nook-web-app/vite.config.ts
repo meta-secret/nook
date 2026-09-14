@@ -307,6 +307,7 @@ export default defineConfig(({ mode }) => {
       environmentOptions: {
         happyDOM: {
           settings: {
+            disableIframePageLoading: true,
             navigation: {
               disableChildFrameNavigation: true,
               disableMainFrameNavigation: true,

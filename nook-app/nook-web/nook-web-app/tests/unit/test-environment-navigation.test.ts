@@ -54,10 +54,11 @@ class DomNavigationSimulation {
 }
 
 describe('happy-dom unit-test navigation boundary', () => {
-  test('does not issue a localhost request when simulated markup inserts a frame', () => {
+  test('does not issue a localhost request when simulated markup inserts a frame', async () => {
     const simulation = new DomNavigationSimulation(window)
 
     simulation.insertFrame()
+    await window.happyDOM.waitUntilComplete()
 
     expect(simulation.requestProbe.requestCount).toBe(0)
   })
