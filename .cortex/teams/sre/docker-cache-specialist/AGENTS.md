@@ -37,6 +37,14 @@ behavior for packets issued by SRE Team Gizmo.
   require the Docker simulator and proof to compare them. A successfully
   imported generation manifest can still yield zero cache-key matches when the
   effective solves differ.
+- Require cache-root reachability in addition to manifest existence and import
+  success. The target exported through `cache_to` must retain the reusable
+  dependency and compiler ancestry consumed by ordinary builds.
+- Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
+  export a terminal result while orphaning intermediate cache records.
+- Keep dependency seeding provably source-free and explicitly root native,
+  WASM, Minds, Hive, Node, and web dependency stages. Keep compiler roots
+  reachable from the immutable generation cache.
 - Enforce semantic input-domain isolation for every compiler stage. Rust,
   WASM, Hive, and web stages must never broadly copy the repository root; each
   stage copies only the source, lockfiles, manifests, generated inputs, and
@@ -94,6 +102,8 @@ behavior for packets issued by SRE Team Gizmo.
     terminal.
   - Prove the healthy path starts once and serves every compiler invocation in
     the `RUN`.
+- Make the simulator and proof require `compile-wasm-dependencies` to be cached
+  on replay and fail when any source stage executes during dependency seeding.
 - Commit the complete bounded iteration.
 - Report the commit SHA, evidence, latency measurements, and blockers to SRE
   Team Gizmo.
@@ -119,6 +129,11 @@ behavior for packets issued by SRE Team Gizmo.
   seeding or publish a generation baseline.
 - Do not infer effective solve parity from Bake inheritance or successful
   generation-manifest import.
+- Do not equate manifest existence or import success with reachable reusable
+  ancestry, or export a scratch/marker join that can orphan intermediate cache
+  records.
+- Do not omit native, WASM, Minds, Hive, Node, or web dependency roots from the
+  dependency seed, and do not execute source stages while seeding dependencies.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic
   consumer.

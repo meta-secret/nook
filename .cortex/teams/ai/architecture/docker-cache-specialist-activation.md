@@ -28,6 +28,9 @@ continues to own GitHub execution mechanics.
   - `effective-solve-input-mismatch` means the generation seed and ordinary
     consumer resolved different effective Bake inputs even though the
     generation manifest imported successfully.
+  - `unreachable-cache-root` means a cache manifest exists or imports, but its
+    exported `cache_to` root does not retain reusable dependency or compiler
+    ancestry required by the consumer.
   - `unrelated-input-cache-invalidation` means a compiler stage invalidated
     because its build context, broad repository copy, or prematurely applied
     per-head input included a change outside that stage's semantic input
@@ -78,6 +81,21 @@ continues to own GitHub execution mechanics.
   and consumer solves. A successfully imported generation manifest proves
   availability, not cache-key compatibility: differing effective inputs can
   still produce zero matching cache keys.
+- Treat cache-root reachability as separate from manifest availability and
+  effective-solve parity. The target exported through `cache_to` must retain
+  the dependency and compiler vertices that ordinary consumers need; an
+  imported manifest is insufficient evidence when those records are not
+  reachable from its exported root.
+- Prohibit scratch, marker-only, and synthetic join targets whose result can be
+  exported while orphaning the intermediate dependency or compiler records
+  they claim to seed.
+- Require a dependency seed to be provably source-free and to enumerate rooted
+  native, WASM, Minds, Hive, Node, and web dependency stages explicitly. The
+  generation cache must retain the compiler roots used by ordinary commits.
+- Require the Docker cache simulator and proof to show that
+  `compile-wasm-dependencies` is cached on replay and that no source stage runs
+  during dependency seeding. A source-stage execution in the dependency seed
+  or an uncached required rooted stage fails the proof.
 - Isolate compiler-stage inputs by semantic domain. Rust, WASM, Hive, and web
   stages must each copy only the source, lockfiles, manifests, generated
   inputs, and configuration that can affect that domain; a compiler stage must
@@ -142,6 +160,11 @@ continues to own GitHub execution mechanics.
   import miss, or missing exact-SHA cache.
 - Do not infer seed/consumer parity from Bake target inheritance or from a
   successful manifest import.
+- Do not treat manifest existence, import success, a marker artifact, or a
+  scratch/join target as proof that reusable cache records are reachable.
+- Do not seed dependencies through a target that can omit native, WASM, Minds,
+  Hive, Node, or web dependency roots, and do not let a dependency seed execute
+  any source stage.
 - Do not use a repository-root `COPY` as a compiler-stage input or let an
   unrelated Rust, WASM, Hive, or web change invalidate another compiler
   domain.

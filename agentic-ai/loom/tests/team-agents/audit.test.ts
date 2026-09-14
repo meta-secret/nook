@@ -235,6 +235,7 @@ describe('canonical Cortex team authority', () => {
           'generation-baseline-missing',
           'generation-baseline-invalid',
           'effective-solve-input-mismatch',
+          'unreachable-cache-root',
           'unrelated-input-cache-invalidation',
           'sccache-read-only-startup-fallback',
           'sccache-read-only-transport-fallback',
@@ -266,6 +267,12 @@ describe('canonical Cortex team authority', () => {
           'introduce-per-head-args-at-latest-semantic-consumer-and-preserve-explicit-narrow-wasm-handoffs',
         domainIsolationProofPolicy:
           'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
+        cacheRootReachabilityPolicy:
+          'cache-to-root-retains-reusable-dependency-and-compiler-ancestry-never-scratch-marker-or-orphaning-join',
+        dependencySeedRootPolicy:
+          'source-free-seed-explicitly-roots-native-wasm-minds-hive-node-and-web-dependency-stages',
+        cacheRootProofPolicy:
+          'simulator-and-proof-require-compile-wasm-dependencies-cached-and-zero-source-stages-during-dependency-seed',
         sccacheReadOnlyPolicy:
           'optional-accelerator-two-second-single-start-shared-run-circuit-structured-fallback-direct-compiler-zero-writes',
         sccacheReadWritePolicy:
@@ -323,6 +330,18 @@ describe('canonical Cortex team authority', () => {
           ...dockerCacheSpecialist,
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
+            reasonCodes:
+              dockerCacheSpecialist.activationContract.reasonCodes.filter(
+                (reasonCode) => reasonCode !== 'unreachable-cache-root',
+              ),
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
             bakeInheritancePolicy: 'inherit-cli-overrides',
           },
         },
@@ -360,6 +379,33 @@ describe('canonical Cortex team authority', () => {
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
             domainIsolationProofPolicy: 'skip-unrelated-domain-proof',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            cacheRootReachabilityPolicy: 'manifest-import-is-sufficient',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            dependencySeedRootPolicy: 'marker-only-join',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            cacheRootProofPolicy: 'skip-root-replay-proof',
           },
         },
       ],
