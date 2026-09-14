@@ -33,6 +33,7 @@ void test("records ordinary compile publication boundaries", () => {
       },
       imports: {
         probes_complete: false,
+        failure_class: "none",
         availability: [
           {
             name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
@@ -46,6 +47,20 @@ void test("records ordinary compile publication boundaries", () => {
       },
     },
   );
+});
+
+void test("records transient optional probe failures without marking probes incomplete", () => {
+  const scope = new CacheScopeTelemetry({
+    GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
+    GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "transient_unavailable",
+    GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE: "",
+    GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "",
+  }).record();
+
+  assert.equal(scope.imports.probes_complete, true);
+  assert.equal(scope.imports.failure_class, "transient_unavailable");
+  assert.equal(scope.compile_dependencies.available, false);
+  assert.equal(scope.compile_source.available, false);
 });
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {

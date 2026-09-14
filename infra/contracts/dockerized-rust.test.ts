@@ -979,6 +979,14 @@ tasks:
     expect(dockerSetup).toContain(
       "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true",
     );
+    expect(dockerSetup).toContain("classify-registry-cache-probe.sh");
+    expect(dockerSetup).toContain("NOOK_CACHE_PROBE_WARNING");
+    expect(dockerSetup).toContain(
+      '"failure_class":"transient_unavailable"',
+    );
+    expect(dockerSetup).toContain(
+      "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS",
+    );
     expect(dockerSetup).not.toContain("compile_generation_scope");
 
     for (const source of [production, simulator]) {
@@ -994,6 +1002,17 @@ tasks:
     expect(production).toContain('NOOK_COMPILE_CACHE_MODE == "publish"');
     expect(cacheTelemetry).toContain("compile_dependencies");
     expect(cacheTelemetry).toContain("compile_source");
+    expect(cacheTelemetry).toContain("failure_class");
+    const probeClassification = this.read(
+      "infra/contracts/compile-cache-probe-classification.test.sh",
+    );
+    expect(probeClassification).toContain("transient_unavailable 124");
+    expect(probeClassification).toContain(
+      "transient_unavailable 2 'context canceled'",
+    );
+    expect(probeClassification).toContain(
+      "fatal 1 'unauthorized: authentication required'",
+    );
     expect(cacheTelemetry).not.toContain("compile_generation");
     expect(cacheTelemetry).toContain("baked_runtime_mode");
     expect(cacheTelemetry).toContain("runtime_mode_source");

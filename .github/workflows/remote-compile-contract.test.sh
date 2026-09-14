@@ -10,6 +10,7 @@ sccache_report="$workflows_dir/../../nook-app/nook-platform/docker/sccache-repor
 sccache_wrapper="$workflows_dir/../../nook-app/nook-platform/docker/sccache-wrapper.sh"
 sccache_fallback_contract="$workflows_dir/../../infra/contracts/sccache-wrapper-fallback.test.sh"
 sccache_publication_contract="$workflows_dir/../../infra/contracts/sccache-publication.test.sh"
+probe_classification_contract="$workflows_dir/../../infra/contracts/compile-cache-probe-classification.test.sh"
 proof="$workflows_dir/../../infra/tasks/bake-cache.yml"
 remote_taskfile="$workflows_dir/../../.task/remote-execution.yml"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
@@ -41,8 +42,11 @@ for compile_target in build-compile build-compile-dependency-cache; do
     grep -Fq -- "--set=${compile_target}.${secret_binding}" "$compile_script"
   done
 done
-for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true'; do
+for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
+done
+for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
+  grep -Fq -- "$required" "$probe_classification_contract"
 done
 for required in 'mode=min,compression=zstd,force-compression=true,timeout=2m' 'mode=max,compression=zstd,force-compression=true,timeout=2m' 'target "build-compile-dependency-cache"' 'target     = "compile-dependency-cache"' 'cache-to   = compile_deps_cache_to' 'NOOK_COMPILE_CACHE_MODE == "publish"'; do
   grep -Fq -- "$required" "$compile_bake"
@@ -85,7 +89,7 @@ for required in 'Publication guard: zero errors plus zero writes remains termina
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"
-for required in 'baked_runtime_mode' 'runtime_mode_source' 'inconsistent sccache ${field}' 'sccache authority: baked='; do
+for required in 'baked_runtime_mode' 'runtime_mode_source' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
   grep -Fq -- "$required" "$cache_telemetry"
 done
 echo 'remote build:compile cache contract passed'

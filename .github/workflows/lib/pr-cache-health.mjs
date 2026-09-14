@@ -15,7 +15,7 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @typedef {object} CacheTelemetryRecord
  * @property {{job: string}} github
  * @property {{persistent: boolean}} cache_backend
- * @property {{imports?: {probes_complete: boolean, availability: Array<{available: boolean}>}}} cache_scope
+ * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
  * @property {{cache_errors: number, cache_writes: number, cache_hits: number, cache_misses: number}} sccache
  * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
  * @property {{complete: boolean}} collection

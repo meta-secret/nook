@@ -324,22 +324,42 @@ runs:
         cache_ref_status() {
           local ref="$1"
           local probe_output
+          local probe_status=0
+          local failure_class
           probe_output="$(mktemp)"
-          if { [ "$cache_selection" = "compile" ] \
-            && timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; } \
-            || { [ "$cache_selection" != "compile" ] \
-              && docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; }; then
+          if [ "$cache_selection" = "compile" ]; then
+            timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
+          else
+            docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
+          fi
+          failure_class="$(bash "${{ github.action_path }}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
+          case "$failure_class" in
+          available)
             rm -f "$probe_output"
             return 0
-          fi
-          if grep -Eqi 'not found|manifest unknown|name unknown' "$probe_output"; then
+            ;;
+          absent)
             rm -f "$probe_output"
             return 1
-          fi
-          echo "Registry cache probe was inconclusive: $ref" >&2
-          cat "$probe_output" >&2
-          rm -f "$probe_output"
-          return 2
+            ;;
+          transient_unavailable)
+            echo "Registry cache probe was transiently unavailable: $ref" >&2
+            cat "$probe_output" >&2
+            rm -f "$probe_output"
+            return 2
+            ;;
+          fatal)
+            echo "Registry cache probe failed with a fatal authentication, permission, reference, or unclassified error: $ref" >&2
+            cat "$probe_output" >&2
+            rm -f "$probe_output"
+            return 3
+            ;;
+          *)
+            echo "Registry cache probe classifier returned an invalid class: $failure_class" >&2
+            rm -f "$probe_output"
+            return 3
+            ;;
+          esac
         }
         publish_exact_availability() {
           local env_name="$1"
@@ -419,6 +439,7 @@ runs:
             exit 1
           fi
           compile_probe_dir="$(mktemp -d)"
+          compile_probe_failure_class=none
           for compile_probe in \
             "deps|$compile_deps_scope" \
             "exact|nook-build-compile-v3$scope_suffix"; do
@@ -436,12 +457,23 @@ runs:
             case "$compile_probe_name|$compile_probe_status" in
               deps\|0) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=1" >> "$GITHUB_ENV" ;;
               deps\|1) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=" >> "$GITHUB_ENV" ;;
+              deps\|2)
+                echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=" >> "$GITHUB_ENV"
+                compile_probe_failure_class=transient_unavailable
+                echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"dependencies","failure_class":"transient_unavailable","action":"continue_cold"}'
+                ;;
               exact\|0) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV" ;;
               exact\|1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
+              exact\|2)
+                echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
+                compile_probe_failure_class=transient_unavailable
+                echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
+                ;;
               *) rm -rf "$compile_probe_dir"; exit "$compile_probe_status" ;;
             esac
           done
           rm -rf "$compile_probe_dir"
+          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
           echo "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true"
         fi
 

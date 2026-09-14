@@ -54,6 +54,8 @@ export class CacheScopeTelemetry {
       imports: {
         probes_complete:
           this.environment.GHA_CACHE_EXACT_PROBES_COMPLETE === "1",
+        failure_class:
+          this.environment.GHA_CACHE_EXACT_PROBE_FAILURE_CLASS || "none",
         availability: cacheAvailability,
       },
     };
@@ -129,7 +131,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}}} cache_scope
+ * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
