@@ -189,6 +189,9 @@ export type TeamInternalAgentActivationContract = {
   readonly timeoutDiagnosisPolicy: string;
   readonly bakeInheritancePolicy: string;
   readonly effectiveSolveParityPolicy: string;
+  readonly inputDomainIsolationPolicy: string;
+  readonly perHeadBoundaryPolicy: string;
+  readonly domainIsolationProofPolicy: string;
   readonly repairLoop: readonly string[];
 };
 
@@ -561,6 +564,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
           'generation-baseline-missing',
           'generation-baseline-invalid',
           'effective-solve-input-mismatch',
+          'unrelated-input-cache-invalidation',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -580,6 +584,12 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
           'cli-set-overrides-do-not-retroactively-propagate-to-inheriting-targets',
         effectiveSolveParityPolicy:
           'mirror-seed-and-consumer-args-contexts-platforms-and-outputs-in-recipe-fingerprint-and-docker-proof',
+        inputDomainIsolationPolicy:
+          'rust-wasm-hive-and-web-compiler-stages-copy-only-semantic-domain-inputs-never-repository-root',
+        perHeadBoundaryPolicy:
+          'introduce-per-head-args-at-latest-semantic-consumer-and-preserve-explicit-narrow-wasm-handoffs',
+        domainIsolationProofPolicy:
+          'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
         repairLoop: [
           'diagnose-telemetry-before-editing',
           'prove-with-docker-simulator-and-proof',

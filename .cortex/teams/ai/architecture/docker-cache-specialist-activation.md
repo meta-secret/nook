@@ -28,6 +28,10 @@ continues to own GitHub execution mechanics.
   - `effective-solve-input-mismatch` means the generation seed and ordinary
     consumer resolved different effective Bake inputs even though the
     generation manifest imported successfully.
+  - `unrelated-input-cache-invalidation` means a compiler stage invalidated
+    because its build context, broad repository copy, or prematurely applied
+    per-head input included a change outside that stage's semantic input
+    domain.
   - `recipe-or-dependency-generation-changed` means a legitimate recipe or
     dependency-fingerprint change rotated the required baseline generation.
   - `unexpected-read-only-write-or-export` means a read-only consumer wrote
@@ -61,6 +65,21 @@ continues to own GitHub execution mechanics.
   and consumer solves. A successfully imported generation manifest proves
   availability, not cache-key compatibility: differing effective inputs can
   still produce zero matching cache keys.
+- Isolate compiler-stage inputs by semantic domain. Rust, WASM, Hive, and web
+  stages must each copy only the source, lockfiles, manifests, generated
+  inputs, and configuration that can affect that domain; a compiler stage must
+  never broadly copy the repository root.
+- Introduce per-head arguments at the latest consumer boundary that actually
+  needs them. Do not attach commit identity or another source-varying value to
+  dependency or generation-baseline vertices.
+- Keep cross-domain artifact handoffs explicit and narrow. In particular,
+  transfer generated WASM packages through the declared handoff rather than
+  making a web stage consume the Rust or WASM repository domain.
+- Require simulator and proof coverage for policy-only cache changes and for
+  each Rust, WASM, Hive, or web input-domain change. Each case must mutate an
+  unrelated compiler domain and prove the subject domain remains cached, in
+  addition to proving that a relevant-domain change invalidates the expected
+  vertices.
 - Require read-only consumers to perform zero writes and zero exports.
 - Require the canonical Docker cache simulator and proof for every repair.
 - Route workflow dispatch, status inspection, reruns, and other GitHub
@@ -81,6 +100,11 @@ continues to own GitHub execution mechanics.
   import miss, or missing exact-SHA cache.
 - Do not infer seed/consumer parity from Bake target inheritance or from a
   successful manifest import.
+- Do not use a repository-root `COPY` as a compiler-stage input or let an
+  unrelated Rust, WASM, Hive, or web change invalidate another compiler
+  domain.
+- Do not place per-head arguments above their latest semantic consumer
+  boundary or replace an explicit artifact handoff with a broad source copy.
 - Do not let the specialist execute GitHub, pull-request, publication,
   landing, or promotion mechanics.
 - Do not run local tests, Docker, preflight, or product compilation during the

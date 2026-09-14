@@ -37,6 +37,16 @@ behavior for packets issued by SRE Team Gizmo.
   require the Docker simulator and proof to compare them. A successfully
   imported generation manifest can still yield zero cache-key matches when the
   effective solves differ.
+- Enforce semantic input-domain isolation for every compiler stage. Rust,
+  WASM, Hive, and web stages must never broadly copy the repository root; each
+  stage copies only the source, lockfiles, manifests, generated inputs, and
+  configuration that can affect its own compilation result.
+- Introduce per-head arguments only at the latest consumer boundary that needs
+  them so commit identity cannot invalidate dependency or generation-baseline
+  vertices.
+- Preserve explicit, narrow cross-domain artifact handoffs. Generated WASM
+  packages cross into web builds through the declared handoff; Rust or WASM
+  repository roots do not become web compiler inputs.
 - Serialize generation seeding, probe before writing, and never overwrite an
   existing generation manifest. A legitimate recipe or dependency-fingerprint
   change rotates the generation scope and is the only reason to seed a new
@@ -56,6 +66,10 @@ behavior for packets issued by SRE Team Gizmo.
   - `.github/workflows/remote.yml`; and
   - `.github/workflows/remote-compile-contract.test.sh`.
 - Author focused policy and regression tests for every cache defect.
+- Extend the Docker simulator and proof for policy-only cache changes and each
+  Rust, WASM, Hive, or web input-domain change. Mutating an unrelated domain
+  must leave the subject compiler domain cached, while a relevant-domain
+  mutation invalidates only the expected vertices.
 - Commit the complete bounded iteration.
 - Report the commit SHA, evidence, latency measurements, and blockers to SRE
   Team Gizmo.
@@ -81,6 +95,9 @@ behavior for packets issued by SRE Team Gizmo.
   seeding or publish a generation baseline.
 - Do not infer effective solve parity from Bake inheritance or successful
   generation-manifest import.
+- Do not use repository-root `COPY` in a compiler stage, leak one compiler
+  domain into another, or apply a per-head argument before its latest semantic
+  consumer.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
