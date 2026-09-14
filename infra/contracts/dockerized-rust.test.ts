@@ -265,6 +265,7 @@ class DockerizedRustContract {
           .replaceAll("${{ inputs.isolated-cache-write }}", "true")
           .replaceAll("${{ inputs.main-cache-only }}", "true")
           .replaceAll("${{ inputs.cache-write }}", "false")
+          .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
           .replaceAll(
             "${{ github.action_path }}",
@@ -284,16 +285,25 @@ class DockerizedRustContract {
             GITHUB_ENV: environment,
             GITHUB_WORKSPACE: this.root,
             NOOK_ARC_RUNNER: "1",
+            NOOK_REMOTE_TASK_SELECTION: "",
             NOOK_SELECTED_BUILDER: "test-builder",
           },
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        expect(values).toContain("GHA_CACHE_SCOPE_SUFFIX=\n");
+        const exactScopeSuffix = `-git-${"a".repeat(40)}`;
+        expect(values).toContain(
+          `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
+        );
+        expect(values).toContain("GHA_CACHE_FALLBACK_ENABLED=1\n");
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
         const calls = readFileSync(probes, "utf8");
-        expect(calls).not.toContain("-git-");
-        if (profile === "connection-only") expect(calls).toBe("");
+        if (profile === "connection-only") {
+          expect(calls).toBe("");
+        } else {
+          expect(calls).toContain(`nook/remote-buildcache/`);
+          expect(calls).toContain(exactScopeSuffix);
+        }
         if (profile === "ecosystem-smoke") {
           expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
@@ -950,7 +960,7 @@ test(
   contract.workflowTooling.bind(contract),
 );
 test(
-  "ARC probes only consumed Main caches and never exports unused exact refs",
+  "ARC probes consumed exact-SHA caches without exporting registry refs",
   contract.arcCacheSelection.bind(contract),
 );
 test(
