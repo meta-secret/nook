@@ -9,14 +9,15 @@ permissions:
 jobs:
   verify:
     name: Verify merge and branch protection settings
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout policy verifier
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Require policy inspection credential
         env:

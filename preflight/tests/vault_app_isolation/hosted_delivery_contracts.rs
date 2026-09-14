@@ -19,6 +19,46 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     Ok(())
 }
 
+#[test]
+fn repository_delivery_policy_executes_only_the_trusted_default_branch_verifier() {
+    let root = RepositoryFixture::repository_root();
+    let workflow = root.read(".github/workflows/repository-delivery-policy.yml");
+    let checkout = section(
+        &workflow,
+        "      - name: Checkout policy verifier\n",
+        "      - name: Require policy inspection credential\n",
+    );
+
+    assert!(
+        workflow.contains(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+        ),
+        "manual policy verification must reject dispatches outside the trusted default branch"
+    );
+    assert!(
+        checkout.contains("ref: ${{ github.event.repository.default_branch }}")
+            && checkout.contains("persist-credentials: false"),
+        "manual policy verification must check out verifier code from the trusted default branch"
+    );
+    assert!(
+        !checkout.contains("NOOK_GITHUB_PAT") && !checkout.contains("token:"),
+        "the admin-capable policy credential must not be exposed to checkout"
+    );
+    assert_eq!(
+        workflow
+            .matches("GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}")
+            .count(),
+        2,
+        "the policy credential must be scoped only to the credential check and trusted verifier"
+    );
+    assert!(
+        !workflow.contains("ref: ${{ github.ref }}")
+            && !workflow.contains("ref: ${{ inputs.")
+            && workflow.contains("run: bash .github/scripts/verify-github-delivery-policy.sh"),
+        "a dispatched ref must not select executable verifier code, while trusted manual verification remains available"
+    );
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one setup contract verifies the complete hosted Docker boundary"
