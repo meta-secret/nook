@@ -38,16 +38,21 @@ require_text "$remote" 'isolated-cache-write: "true"'
 require_text "$docker_setup" '"$NOOK_REMOTE_TASK_SELECTION" != "hive:verify"'
 require_text "$compile_remote" 'nook-rust-compile-deps-v2-'
 require_text "$compile_remote" 'GHA_CACHE_SCOPE_SUFFIX'
+require_text "$compile_remote" 'build-compile-dependencies'
+require_text "$compile_remote" '"build:compile dependencies"'
 require_text "$docker_setup" 'GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE'
 require_text "$docker_setup" 'GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE'
 require_text "$docker_setup" 'GHA_CACHE_EXACT_WEB_E2E_AVAILABLE'
 
-# A successful Main producer must publish before the next consumer begins, so
-# the just-verified graph seeds the dependent lane and publication cannot be
-# hidden behind a later green product job.
-require_text "$main" 'needs: [preflight-cache-publish]'
-require_text "$main" 'needs: [rust, native-cache-publish]'
-require_text "$main" 'needs: [wasm, wasm-cache-publish]'
+# Cache publication remains independently visible without delaying the
+# verification/product chain. Node-local BuildKit provides in-run seeding;
+# registry exports seed later runs asynchronously.
+require_text "$main" 'needs: [preflight]'
+require_text "$main" 'needs: [rust, preflight]'
+require_text "$main" 'needs: [wasm]'
+reject_text "$main" 'needs: [preflight-cache-publish]'
+reject_text "$main" 'needs: [rust, native-cache-publish]'
+reject_text "$main" 'needs: [wasm, wasm-cache-publish]'
 
 # Every trusted cache-bearing workflow preserves telemetry, including the
 # failure path where the build step itself did not complete.

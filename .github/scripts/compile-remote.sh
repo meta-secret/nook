@@ -109,5 +109,11 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
 fi
 
 bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-  "build:compile" \
+  "build:compile dependencies" \
+  "$docker_bin" buildx bake "${bake_args[@]}" \
+  --set "build-compile-dependencies.args.NOOK_COMPILE_HIVE=${compile_hive}" \
+  build-compile-dependencies
+
+bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
+  "build:compile source" \
   "$docker_bin" buildx bake "${bake_args[@]}" build-compile
