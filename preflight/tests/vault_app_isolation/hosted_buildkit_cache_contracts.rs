@@ -884,8 +884,6 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
             && nook_source.contains(
                 "cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm"
             )
-            && nook_source.contains("nook-wasm/.wasm-source-sha256")
-            && !nook_source.contains("nook-companion-wasm/.wasm-source-sha256")
             && !nook_source.contains("-p nook-companion-wasm"),
         "nook-wasm source compilation must not share a Cargo invocation with the companion"
     );
@@ -900,10 +898,30 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
             && companion_source.contains(
                 "cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm"
             )
-            && companion_source.contains("nook-companion-wasm/.wasm-source-sha256")
-            && !companion_source.contains("nook-wasm/.wasm-source-sha256")
             && !companion_source.contains("-p nook-wasm"),
         "companion WASM source compilation must not share a Cargo invocation with nook-wasm"
+    );
+
+    let nook_build = dockerfile
+        .split_once("FROM builder-nook-wasm-source AS builder-nook-wasm-build")
+        .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
+        .expect("nook-wasm build stage must be delimited by the next Docker stage");
+    assert!(
+        nook_build.contains("nook-wasm/.wasm-source-sha256")
+            && !nook_build.contains("nook-companion-wasm/.wasm-source-sha256")
+            && !nook_build.contains("-p nook-companion-wasm"),
+        "nook-wasm build stamps must remain package-specific"
+    );
+
+    let companion_build = dockerfile
+        .split_once("FROM builder-companion-wasm-source AS builder-companion-wasm-build")
+        .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
+        .expect("companion WASM build stage must be delimited by the next Docker stage");
+    assert!(
+        companion_build.contains("nook-companion-wasm/.wasm-source-sha256")
+            && !companion_build.contains("nook-wasm/.wasm-source-sha256")
+            && !companion_build.contains("-p nook-wasm"),
+        "companion WASM build stamps must remain package-specific"
     );
 }
 
