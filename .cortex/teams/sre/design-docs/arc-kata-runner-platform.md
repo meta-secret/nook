@@ -16,8 +16,6 @@ This document owns:
 - cache distribution; and
 - ARC credential ownership.
 
-The broader Hive agent platform remains in
-[Hive Isolated Agent Platform](hive-isolated-agent-platform.md).
 
 ## Runner boundary
 
@@ -43,7 +41,6 @@ They do not receive:
 The Docker CLI is a BuildKit client. It must not be treated as a general
 container-runtime API.
 
-Hive ARC runners add only the pinned Neo4j and Rust test-runtime sidecars. Those
 helpers remain inside the disposable runner Pod.
 
 ## Compute and placement
@@ -56,8 +53,6 @@ Two scale sets serve trusted work:
 - **`nook-k0s`**
   - Serves general trusted jobs.
   - Advertises `maxRunners: 35`.
-- **`nook-k0s-hive`**
-  - Serves Hive Rust verification.
   - Advertises `maxRunners: 10`.
 
 The four qualified nodes use tier preferences:
@@ -176,7 +171,6 @@ Jobs must keep publication identities separate:
 
 - Main publishes shared refs under `nook/buildcache/**`.
 - Pull requests use exact-commit refs under `nook/remote-buildcache/**`.
-- Hive keeps its independent cache lineage.
 
 Distribution follows these rules:
 
@@ -198,7 +192,6 @@ Distribution follows these rules:
 
 The resource envelopes are:
 
-- General runner, container-scale-set coordinator, Hive runner, and
   container-job containers declare no resource requests or limits.
 - Concurrent Pods share all CPU available on their node.
 - Scale-set ceilings bound aggregate runner count.
@@ -206,7 +199,6 @@ The resource envelopes are:
 - Empty-directory size limits continue to bound disposable storage.
 - The persistent BuildKit shard performs compilation, layer extraction,
   import, and export. It must not inherit fractional control-plane CPU limits.
-- Hive's Rust test-runtime sidecar retains its 4 GiB memory limit. Hive init
   containers and sidecars remain free of CPU requests and limits.
 - Zot may use up to 8 CPU and 12 GiB because it serves all nodes.
 

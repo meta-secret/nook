@@ -114,7 +114,7 @@ tasks:
       - bash "{{.REPO_ROOT}}/.github/scripts/web-research-verify-live.sh"
 
   infra:surface:check:
-    desc: Validate the root Taskfile still exposes Hive infrastructure commands.
+    desc: Validate the root Taskfile still exposes infrastructure commands.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/infra-surface-check.sh"
 

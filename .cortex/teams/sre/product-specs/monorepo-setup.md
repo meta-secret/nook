@@ -49,9 +49,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Delivery BuildKit uses persistent node-local shards and portable Zot refs.**
   - Trusted same-repository PR Rust jobs and Main build producers use disposable
     ordinary ARC Pods.
-  - Hive Rust verification uses a dedicated scale-to-zero ARC set with ten-job
     concurrency.
-  - Hive's pinned Neo4j and Rust test-runtime sidecars stop with the runner.
   - The Docker CLI connects only to the rootless BuildKit shard on its node.
   - ARC runners receive no Docker daemon, Podman API, DinD process, host runtime
     socket, host path, or Kata runtime.
@@ -110,7 +108,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     BuildKit service. Zot proves child manifest digests and sizes plus every
     blob's declared size and SHA-256 before deployment proceeds.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
-  - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
   - Every ARC job receives a fresh ordinary Pod.
   - The job reuses the persistent BuildKit shard on its selected node.
   - Fork and Dependabot PRs use GitHub-hosted `ubuntu-latest`.
@@ -128,7 +125,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `remote.yml` executes named Task targets per manual dispatch.
   - `preflight`, `rust:ci`, `loom:verify`, and `arc:runtime` may run on a fresh
     general ARC Pod.
-  - `hive:verify` may run on a fresh dedicated Hive ARC Pod.
   - Other non-browser selections run on general ARC.
   - Browser selections build their immutable image on general ARC and execute
     it in an ordinary `nook-k0s-container` job Pod.
@@ -146,7 +142,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Remote exports only those Remote refs.
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
   - New commit dependency results persist in Zot.
-  - Trusted Main/local/Hive writers populate SeaweedFS.
   - `pr.yml` mounts SeaweedFS sccache for same-repository jobs.
   - `pr.yml` exports only git-commit `nook/remote-buildcache/**` refs.
   - Main restore stays available.
@@ -172,6 +167,5 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     implemented but temporarily disabled.
   - Development deploy waits on web verify, web e2e, and the portable WASM
     cache publication proof.
-  - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
   - That includes browser E2E failures.
   - Real-provider sync-live checks run only through explicit manual validation.

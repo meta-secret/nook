@@ -44,87 +44,6 @@ impl RepositoryFixture {
 }
 
 #[test]
-fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::Result<()> {
-    let dockerfile = RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Dockerfile");
-    for required in [
-        "FROM fetched-dependencies AS test-dependencies",
-        "FROM fetched-dependencies AS clippy-dependencies",
-        "FROM clippy-dependencies AS check-source",
-        "FROM test-dependencies AS test-source",
-        "COPY --from=test-dependencies /opt/nook/hive-test-dependencies",
-        "COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies",
-        "cargo test --locked --workspace --no-run",
-        "cargo clippy --locked --workspace --all-targets -- -D warnings",
-        "ENV CARGO_PROFILE_DEV_DEBUG=0",
-        "ENV CARGO_PROFILE_TEST_DEBUG=0",
-    ] {
-        assert!(
-            dockerfile.contains(required),
-            "Hive parallel verification cache topology is missing: {required}"
-        );
-    }
-    assert!(
-        !dockerfile.contains("AS verification-dependencies"),
-        "Hive test and Clippy dependency graphs must not share a serial stage"
-    );
-    Ok(())
-}
-
-#[test]
-fn hive_named_sccache_helper_context_never_uploads_nook_app() -> anyhow::Result<()> {
-    let hive_tasks =
-        RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Taskfile.yml");
-    let hive_dockerfile =
-        RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Dockerfile");
-    let prepare = RepositoryFixture::repository_root()
-        .read("agentic-ai/minds/hive/prepare-sccache-context.sh");
-    let infra_hive = RepositoryFixture::repository_root().read("infra/tasks/hive.yml");
-    for required in [
-        "prepare-sccache-context.sh",
-        "prepare_nook_sccache_helpers_context",
-        "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT",
-    ] {
-        assert!(
-            hive_tasks.contains(required),
-            "Hive tasks must stage a tiny sccache helper context: {required}"
-        );
-    }
-    assert!(
-        !hive_tasks.contains("NOOK_APP_CONTEXT")
-            && !hive_tasks.contains("--build-context \"nook-app=")
-            && !hive_tasks.contains("--build-context nook-app="),
-        "Hive must not use a named BuildKit context rooted at nook-app"
-    );
-    for required in [
-        "COPY --from=nook-sccache-helpers sccache-wrapper.sh",
-        "COPY --from=nook-sccache-helpers sccache-report.sh",
-    ] {
-        assert!(
-            hive_dockerfile.contains(required),
-            "Hive Dockerfile must copy sccache helpers from the staged context: {required}"
-        );
-    }
-    for required in [
-        "nook-app/nook-platform/docker/sccache-wrapper.sh",
-        "nook-app/nook-platform/docker/sccache-report.sh",
-        "Refusing oversized sccache helper context",
-        "Refusing sccache helper context that looks like nook-app",
-    ] {
-        assert!(
-            prepare.contains(required),
-            "sccache helper staging script is missing: {required}"
-        );
-    }
-    assert!(
-        infra_hive.contains(
-            "--build-context \"nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker\""
-        ),
-        "remote Hive image builds must use the narrowed nook-sccache-helpers context"
-    );
-    Ok(())
-}
-
-#[test]
 fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyhow::Result<()> {
     let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
     let platform_tasks =
@@ -429,22 +348,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             "only enumerated trusted remote compiler jobs may receive {credential}"
         );
     }
-    assert!(remote.contains(
-        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
-    ));
-    let remote_batch =
-        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
-    assert!(remote_batch.contains("env HIVE_CACHE_TO= task hive:verify"));
-
-    let hive = RepositoryFixture::repository_root().read(".github/workflows/hive.yml");
-    assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
-    assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
-    assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
-    assert!(hive.contains("runs-on: nook-k0s-hive"));
-    assert!(hive.contains(
-        "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-    ));
-    assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
+    assert!(remote.contains("isolated-cache-write: \"true\""));
     Ok(())
 }
 

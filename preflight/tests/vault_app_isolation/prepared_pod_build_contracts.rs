@@ -136,7 +136,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     );
     for workflow in [
         ".github/workflows/e2e-pr.yml",
-        ".github/workflows/hive.yml",
         ".github/workflows/main.yml",
         ".github/workflows/pr.yml",
         ".github/workflows/release.yml",
@@ -149,14 +148,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "{workflow} must explicitly pass system Chromium through the ARC container hook"
         );
     }
-    let hive_workflow = root.read(".github/workflows/hive.yml");
-    let hive_global = section(&hive_workflow, "env:\n", "\njobs:\n");
-    let hive_console = section(&hive_workflow, "  console:\n", "\n  console-untrusted:\n");
-    assert!(
-        !hive_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
-            && hive_console.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
-        "Hive must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
-    );
     let research_workflow = root.read(".github/workflows/web-research.yml");
     let research_global = section(&research_workflow, "env:\n", "\njobs:\n");
     let research_deploy = section(

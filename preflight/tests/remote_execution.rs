@@ -310,7 +310,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let system_path = env::var("PATH")?;
     let output = Command::new("bash")
         .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
-        .args(["--run", "preflight,rust:ci,arbitrary:task,hive:verify"])
+        .args(["--run", "preflight,rust:ci,arbitrary:task"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
         .env("GITHUB_STEP_SUMMARY", &summary)
@@ -335,7 +335,6 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     assert!(summary.contains("| `preflight` | passed |"));
     assert!(summary.contains("| `rust:ci` | failed (exit 1) |"));
     assert!(summary.contains("| `arbitrary:task` | passed |"));
-    assert!(summary.contains("| `hive:verify` | passed |"));
 
     fs::remove_dir_all(fixture)?;
     Ok(())
@@ -444,13 +443,7 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
         0,
         "trusted remote execution must not consume GitHub-hosted capacity"
     );
-    assert!(
-        workflow.contains("inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')")
-            && workflow.contains("vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive'")
-            && workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'")
-            && workflow.contains("runs-on: nook-k0s-container"),
-        "remote tasks must select the general, Hive, or container ARC scale set"
-    );
+    assert!(workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'"));
     assert!(
         !workflow.contains("Start hosted Hive Neo4j service")
             && !workflow.contains("docker run --detach"),
@@ -534,23 +527,7 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
-    assert!(workflow.contains(
-        "REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}"
-    ));
-    assert!(workflow.contains(
-        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
-    ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
-    assert!(batch_script.contains(
-        "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
-    ), "Hive must not publish a per-branch cache even when another task makes a mixed ARC batch writable");
-    assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
-    assert_eq!(
-        workflow
-            .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
-            .count(),
-        1,
-        "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
-    );
+    assert!(workflow.contains("isolated-cache-write: \"true\""));
     Ok(())
 }
 

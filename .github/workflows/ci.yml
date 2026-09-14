@@ -63,7 +63,6 @@ jobs:
       full-e2e-requested: ${{ steps.paths.outputs.full-e2e-requested }}
       product: ${{ steps.paths.outputs.product }}
       minds: ${{ steps.paths.outputs.minds }}
-      hive: ${{ steps.paths.outputs.hive }}
       research: ${{ steps.paths.outputs.research }}
       dev-pr: ${{ steps.paths.outputs.dev-pr }}
     steps:
@@ -110,7 +109,6 @@ jobs:
           echo "dev-pr=$dev_pr" >> "$GITHUB_OUTPUT"
           product=false
           minds=false
-          hive=false
           research=false
           while IFS= read -r -d '' path; do
             case "$path" in
@@ -118,16 +116,13 @@ jobs:
               *) product=true ;;
             esac
             case "$path" in agentic-ai/minds/*) minds=true ;; esac
-            case "$path" in .github/workflows/hive.yml | .github/actions/nook-cache-connect/* | .github/actions/nook-docker-setup/* | .github/scripts/rust-deps-cache-fingerprint.sh | .github/formatting/* | infra/contracts/* | infra/contracts/k0s-firewall-rollback-test.ts | agentic-ai/minds/hive/controller/reaper.ts | agentic-ai/minds/hive/controller/reaper.test.ts | .github/scripts/wait-hive-neo4j.sh | .task/agentic-ai.yml | .task/ci-workflows.yml | .github/scripts/infra-surface-check.sh | Taskfile.yml | agentic-ai/minds/* | nook-app/nook-platform/nook-core/coverage-floor.json | infra/compose.yaml | infra/k0s/* | infra/providers/* | infra/tasks/* | infra/Taskfile.yml) hive=true ;; esac
             case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac
           done < "$changed_paths"
           if [ "$DEV_PR" = "true" ]; then
             product=true
-            hive=true
           fi
           echo "product=$product" >> "$GITHUB_OUTPUT"
           echo "minds=$minds" >> "$GITHUB_OUTPUT"
-          echo "hive=$hive" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
 
   policy:
@@ -172,15 +167,6 @@ jobs:
     with:
       product_changed: ${{ needs.scope.outputs.product == 'true' }}
 
-  hive:
-    name: Hive
-    needs: scope
-    if: needs.scope.outputs.hive == 'true'
-    uses: ./.github/workflows/hive.yml
-    secrets: inherit
-    with:
-      source_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-
   research:
     name: Web research
     needs: scope
@@ -212,13 +198,13 @@ jobs:
 
   # Stable manager-facing check. The called PR workflow owns the full named
   # suite; this job is the one exact-head conclusion used for promotion.
-  # Required caller gates: Repository policy, PR validation, and Hive.
+  # Required caller gates: Repository policy and PR validation.
   dev-promotion-readiness:
     name: Dev promotion readiness
     concurrency:
       group: dev-promotion-readiness
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    needs: [scope, policy, pr, hive, research]
+    needs: [scope, policy, pr, research]
     if: >-
       always() &&
       needs.scope.outputs.dev-pr == 'true'
@@ -232,7 +218,6 @@ jobs:
           DEV_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           POLICY_RESULT: ${{ needs.policy.result }}
           PR_RESULT: ${{ needs.pr.result }}
-          HIVE_RESULT: ${{ needs.hive.result }}
           RESEARCH_REQUIRED: ${{ needs.scope.outputs.research }}
           RESEARCH_RESULT: ${{ needs.research.result }}
         run: |
@@ -243,8 +228,7 @@ jobs:
           fi
           for gate in \
             "Repository policy=$POLICY_RESULT" \
-            "PR validation=$PR_RESULT" \
-            "Hive=$HIVE_RESULT"
+            "PR validation=$PR_RESULT"
           do
             name="${gate%%=*}"
             result="${gate#*=}"
@@ -265,7 +249,6 @@ jobs:
             echo "- PR head SHA: \`${DEV_HEAD_SHA}\`"
             echo "- Repository policy: ${POLICY_RESULT}"
             echo "- PR validation: ${PR_RESULT}"
-            echo "- Hive: ${HIVE_RESULT}"
             if [ "$RESEARCH_REQUIRED" = "true" ]; then
               echo "- Web research: ${RESEARCH_RESULT}"
             fi

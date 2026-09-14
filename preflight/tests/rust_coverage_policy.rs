@@ -28,7 +28,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 70.0,
-            "hive" => 60.0,
             _ => 90.0,
         };
         assert!(*floor >= expected);
@@ -58,11 +57,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
-    let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
     let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
-    let hive_ci = read(&root.join(".github/workflows/hive.yml"))?;
-    let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
-    let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
     let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
@@ -71,7 +66,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let enforced = policy.enforced_packages.clone();
     for package in &enforced {
         assert!(
-            [&product, &nightly, &platform_tasks, &hive, &preflight]
+            [&product, &nightly, &platform_tasks, &preflight]
                 .iter()
                 .flat_map(|source| source.lines())
                 .filter(|line| line.contains("llvm-cov") || line.contains("for package in"))
@@ -176,31 +171,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
             .count(),
         1
     );
-    let hive_route = central_ci
-        .split_once("\n  hive:\n")
-        .and_then(|(_, remainder)| remainder.split_once("\n  research:\n"))
-        .map(|(route, _)| route)
-        .context("central CI must retain an independently routed Hive job")?;
-    assert!(
-        hive_route.contains("if: needs.scope.outputs.hive == 'true'")
-            && hive_route.contains("uses: ./.github/workflows/hive.yml")
-    );
-    assert!(hive_ci.contains("workflow_call:"));
-    assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
-    assert!(hive.contains("cargo llvm-cov report -p hive"));
-    assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
-    assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
-    assert!(hive.contains(
-        "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
-    ));
-    assert!(hive.contains("sha256sum -c -"));
-    assert!(hive.contains("cargo llvm-cov show-env --export-prefix"));
-    assert!(hive.contains("CARGO_TARGET_DIR=target/llvm-cov-target cargo test"));
-    assert!(hive.contains("COPY --from=hive-coverage-profiles"));
-    assert!(hive.contains("mkdir -p target/llvm-cov-target"));
-    assert!(hive_tasks.contains("hive-coverage-profiles=$profiles"));
-    assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
-    assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));

@@ -184,7 +184,6 @@ legacy registered `nook` runner is not used.
   layers can exceed 15 GiB and concurrent uploads overload the registry HDD.
 - They restore Main's registry lineage and reuse compiler objects through
   SeaweedFS sccache.
-- Hive retains a small minimal exact-SHA handoff for fast retries.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -273,7 +272,6 @@ legacy registered `nook` runner is not used.
   - Only the WASM package and coverage outputs cross from Rust to web.
   - They cross through the commit-scoped, invocation-isolated host directory.
   - The common runtime image contains no Rust toolchain or `target/`.
-- **Local export:** The normal **`docker` driver** writes the web result directly to the containerd image store to avoid extra archive/import cycles.
 - **ARC export:** Trusted delivery validation uses the selected node-local
   rootless BuildKit shard and exports portable state to `registry.dev.nokey.sh`.
 
@@ -317,9 +315,7 @@ legacy registered `nook` runner is not used.
 - Concurrent jobs share BuildKit's content-addressed store on that node.
 - Main and pull requests retain separate registry publication refs.
 - Zot remains the cross-node bootstrap and recovery source.
-- Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
-  so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
   its independent Zot cache publication because its workflow may overlap Main.
 - Registry transfer time and local snapshot materialization time are separate
   performance dimensions.
@@ -338,7 +334,6 @@ legacy registered `nook` runner is not used.
 ### Rust Compiler Cache (`sccache`)
 
 - Wrapped by pinned `sccache` backed by SeaweedFS S3 at `https://sccache.dev.nokey.sh`.
-- Local builds, Hive, and Main write compiler objects.
 - Explicit Remote tasks use read-only credentials.
 - Fork and untrusted jobs receive no S3 credentials and fall back to clean compilation.
 
@@ -348,7 +343,6 @@ legacy registered `nook` runner is not used.
 - Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
 - Trusted ARC PR jobs read Main and exact-SHA refs.
 - General trusted ARC PR jobs do not write registry cache refs.
-- Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
   `nook/remote-buildcache/**`.
 - Their runner Pods reuse the persistent BuildKit shard on the selected node.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.

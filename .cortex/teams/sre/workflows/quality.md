@@ -5,7 +5,6 @@
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks. Paused Hive remains outside the manual manager
 lifecycle and must not be reactivated by this delivery change.
 
 ## Overview
@@ -80,7 +79,6 @@ Use this workflow for quality, CI, and deployment changes.
      `nook-event-log`, `nook-companion-core`, and `nook-core`. WASM lint covers
      `nook-companion-wasm` and `nook-wasm` for `wasm32-unknown-unknown`.
      The standalone `preflight` Clippy pass is also enforced with `-D warnings`.
-   - Rust coverage uses independent hosted native, WASM, Dylint, Hive, and preflight gates.
    - `svelte-check`
    - `eslint` — the web-family lint command uses a dedicated project that
      includes every linted TypeScript and Svelte source, enables
@@ -264,15 +262,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free
       dependencies without cold `cargo install`.
-    - Trusted Hive PR verification runs on the dedicated `nook-k0s-hive` ARC
       scale set.
-    - Each Hive runner reuses the persistent BuildKit shard on its selected
       node.
-    - Hive PRs may import trusted Main registry refs when the local shard does
       not already contain the needed graph.
-    - Hive PRs export one minimal isolated exact-SHA registry handoff because
       that handoff is small and has proven fast enough for retries.
-    - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Hosted and Main Native publishers stage
@@ -308,7 +301,6 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_exact_scope_excludes_main_then_cold_scope_falls_back`
     - `theorem_context_parents_never_write_publishers_mode_max`
     - `theorem_github_actions_zot_parameter_matrix`
-    - `theorem_hive_arc_pr_reuses_local_state_without_exact_export`
     - `theorem_local_formatter_and_pr_share_input_cache`
     - `theorem_source_leaf_solves_do_not_duplicate_linked_dependency_targets`
     - `theorem_wasm_fingerprint_closed_allowlist`
@@ -332,7 +324,6 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario Q proves a generic standalone exact-scope verification restores
     Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
     runner. General trusted ARC verification reuses its private local BuildKit
-    state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
     separate exact-head registry contract.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
@@ -349,7 +340,6 @@ Use this workflow for quality, CI, and deployment changes.
     Main seeds crate-a and crate-b in one Dockerfile leaf.
     A PR that edits only crate-b restores crate-a as CACHED.
     It compiles crate-b and the leaf, then replays the exact graph.
-    Scenario Y mirrors Hive's Cargo dependency graph.
     Main publishes the manifest, vendor, fetch, test-dependency, and
     Clippy-dependency lineage to Zot.
     Two concurrent PR sources restore those source-free stages on independent
@@ -396,7 +386,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
       into the persistent BuildKit shard on the selected node.
     - Exact-SHA handoffs remain isolated by commit identity.
-    - Hive alone keeps a small minimal exact-SHA retry handoff.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
@@ -463,14 +452,10 @@ Use this workflow for quality, CI, and deployment changes.
     - The agent updates all outdated Rust dependencies.
     - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
     - It must run `task docker:ecosystem:fuzz FUZZ_SECONDS=20`.
-    - It must run `task hive:verify`.
-    - `task hive:verify` must compile, lint, and test Hive.
     - The harness opens its PR only after those validations succeed.
     - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
       collection; no registered-host cleanup workflow is allowed.
 
-    #### Main failure incidents (Hive)
-    - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.
     - This includes `Web e2e` and `Extension e2e` failures.
     - Each rerun creates a fresh delivery generation with generation-specific publication records and no completed publication reuse.
     - A later failed rerun cancels and supersedes an active delivery before its new generation is enqueued.
@@ -482,7 +467,6 @@ Use this workflow for quality, CI, and deployment changes.
     - The dev manager controls slow dev PR checks and fast-forward promotion.
     - Incident completion retains replacement Main verification.
     - The explicitly dispatched implementation worker does not claim it.
-    - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
     - Main ARC producers publish shared Zot refs after verification.
     - Hosted jobs restore the same verified Zot refs read-only.
@@ -532,10 +516,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment.
     - Human-readable coverage tables must not be scraped with shell.
     - `nook-app/nook-platform/nook-core/coverage-floor.json` exhaustively classifies every Cargo package.
-    - PR #1319 staged companion WASM at 18%, authenticator-domain at 87%, Hive at 60%, and `nook-wasm` at 51%.
     - The current registry raises authenticator-domain to 90%; every other enforced package requires its listed floor.
     - A required successor raises every testable first-party package to at least 90%. Only the explicit non-testable `nook-fuzz` harness and vendored `arrayref` exclusions remain.
-    - Package-specific hosted native, WASM, Dylint, Hive, and preflight lanes are the coverage enforcement points; reporting never substitutes for those gates.
 20. **Coverage cache preservation:** Warm the full portable coverage graph with
     one `cargo llvm-cov nextest --no-report` Docker invocation. The graph
     includes `nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,

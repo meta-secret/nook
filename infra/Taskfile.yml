@@ -70,10 +70,6 @@ includes:
     taskfile: tasks/kata.yml
     dir: ..
     flatten: true
-  neo4j:
-    taskfile: tasks/neo4j.yml
-    dir: ..
-    flatten: true
   registry:
     taskfile: tasks/registry.yml
     dir: ..
@@ -92,14 +88,6 @@ includes:
     flatten: true
   sccache:
     taskfile: tasks/sccache.yml
-    dir: ..
-    flatten: true
-  hive:
-    taskfile: tasks/hive.yml
-    dir: ..
-    flatten: true
-  hive-queue:
-    taskfile: tasks/hive-queue.yml
     dir: ..
     flatten: true
   operations:

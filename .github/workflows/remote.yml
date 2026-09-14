@@ -84,18 +84,13 @@ jobs:
       (inputs.tasks || inputs.task) != 'ci:pr:e2e')
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
-    runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
       REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
-      REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
-      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
-      HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
-      HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
-      HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
     steps:
       - name: Report Kubernetes worker node
         shell: bash
@@ -154,7 +149,7 @@ jobs:
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+          isolated-cache-write: "true"
       - name: Confirm prepared build-only environment
         if: (inputs.tasks || inputs.task) == 'build:compile'
         run: |
@@ -164,9 +159,6 @@ jobs:
           : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST"
-      - name: Wait for private Neo4j sidecar
-        if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
-        run: .github/scripts/wait-hive-neo4j.sh
       - name: Run task batch
         shell: bash
         env:

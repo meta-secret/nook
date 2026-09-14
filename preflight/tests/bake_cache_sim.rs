@@ -47,7 +47,6 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/parent.Dockerfile"),
         format!("{sim}/parent-nested.Dockerfile"),
         format!("{sim}/combined-nightly.Dockerfile"),
-        format!("{sim}/hive.Dockerfile"),
         format!("{sim}/platform-nested.Dockerfile"),
         format!("{sim}/leaf.Dockerfile"),
         format!("{sim}/leaf-platform.Dockerfile"),
@@ -184,7 +183,6 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks
                 .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
             && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
-            && tasks.contains("Scenario Y: concurrent Hive ARC jobs replay isolated Zot graphs",)
             && tasks.contains("Scenario Z: persistent ARC-shaped shard survives daemon restart")
             && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
@@ -195,19 +193,6 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && RepositoryFixture::repository_root()
                 .read(&format!("{sim}/combined-nightly.Dockerfile"))
                 .contains("AS crate-b")
-            && RepositoryFixture::repository_root()
-                .read(&format!("{sim}/hive.Dockerfile"))
-                .contains("AS fetched-dependencies")
-            && RepositoryFixture::repository_root()
-                .read(&format!("{sim}/hive.Dockerfile"))
-                .contains("AS test-dependencies")
-            && RepositoryFixture::repository_root()
-                .read(&format!("{sim}/hive.Dockerfile"))
-                .contains("AS clippy-dependencies")
-            && tasks.contains("bake-sim-hive-cargo-fetch")
-            && tasks.contains("nook-bake-sim-y-pr-a-retry")
-            && tasks.contains("nook-bake-sim-y-pr-b-retry")
-            && bake.contains("nook-bake-sim-hive-v2")
             && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")

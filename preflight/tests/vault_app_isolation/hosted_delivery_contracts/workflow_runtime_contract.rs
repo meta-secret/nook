@@ -77,7 +77,6 @@ impl WorkflowRuntimeContract<'_> {
         let root = self.root;
         for workflow in [
             ".github/workflows/repository-policy.yml",
-            ".github/workflows/hive.yml",
             ".github/workflows/web-research.yml",
         ] {
             let source = root.read(workflow);
@@ -88,11 +87,9 @@ impl WorkflowRuntimeContract<'_> {
                 "{workflow} must not request PR-isolated cache writes for push or input-free manual events"
             );
         }
-        let hive = root.read(".github/workflows/hive.yml");
         let research = root.read(".github/workflows/web-research.yml");
         let repository_policy = root.read(".github/workflows/repository-policy.yml");
         for (workflow, source) in [
-            ("Hive", &hive),
             ("web research", &research),
             ("repository policy", &repository_policy),
         ] {
@@ -109,17 +106,6 @@ impl WorkflowRuntimeContract<'_> {
                 && research.contains("task web:research:verify")
                 && research.contains("without deployment credentials"),
             "untrusted research PRs must retain secret-free hosted validation"
-        );
-        assert!(
-            hive.contains("console-untrusted:")
-                && hive.contains("name: Validate untrusted Hive Control Center source")
-                && hive.contains("runs-on: ubuntu-latest")
-                && hive
-                    .contains("github.event.pull_request.head.repo.full_name != github.repository")
-                && hive.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
-                && hive.contains("run: task hive:console:verify")
-                && hive.contains("without private credentials"),
-            "untrusted Hive console PRs must retain complete secret-free hosted validation"
         );
     }
 }

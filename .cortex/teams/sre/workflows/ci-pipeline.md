@@ -5,7 +5,6 @@
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks. Paused Hive remains outside the manual manager
 lifecycle and must not be reactivated by this delivery change.
 
 ## Overview
@@ -25,7 +24,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 - A secret-free classifier reads changed paths without executing source.
 - Repository policy runs on PR changes and Main pushes.
-- Hive and research retain their existing changed-path selections.
 - A validation label activates product checks for subsequent PR commits.
 - The router reads current labels to avoid stale event ordering.
 - Removing the validation label disables product checks on later pushes.
@@ -75,11 +73,7 @@ and manual ecosystem execution in one Actions run named `CI`.
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
 - **[`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml)**
   - Trigger: Failed Main-push `CI` attempt
-  - Purpose: Create Hive Workbench incident
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
-- **[`hive.yml`](../../../../.github/workflows/hive.yml)**
-  - Trigger: Reusable call from `ci.yml` for Hive paths
-  - Purpose: Hive format/Clippy/tests
   - GitHub PAT: No
 - **[`release.yml`](../../../../.github/workflows/release.yml)**
   - Trigger: Semver tag `v*.*.*` or manual version + ref
@@ -206,16 +200,12 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Uses run metadata and failed job names only.
 - Includes browser E2E failures.
 
-**`hive.yml`**
 
-- Installs, checks, and browser-tests the Hive Control Center.
 - Fork and Dependabot console changes receive the same install, check, build,
   and browser journey on a secret-free GitHub-hosted runner.
 - Runs pinned Docker format/Clippy and behavior tests against Neo4j.
 - Checks k0s manifests and the Taskfile command surface.
-- Main alone publishes the shared Hive dependency cache.
 - Console images warm observer-export dependencies from manifests and the lockfile.
-- The exporter then rebuilds from the exact Hive source before generating the console contract.
 
 **`release.yml`**
 
@@ -268,8 +258,6 @@ flowchart LR
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
   main_yml -->|any actionable failure| main_failure[Queue Workbench incident]
-  main_failure --> hive_dispatcher[Isolated Hive dispatcher]
-  hive_dispatcher --> hive_worker[One end-to-end repair task]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -419,8 +407,6 @@ provider, those handlers read and write real event files under a temp directory.
 Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
 producers use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
-`hive:verify` uses the dedicated
-`nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
 Trusted browser runtime jobs use `nook-k0s-container`. ARC's Kubernetes
 lifecycle hooks create a regular job Pod from the exact image built by the
 general scale set. Fork and Dependabot pull requests retain GitHub-hosted
@@ -457,15 +443,11 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   explicitly isolated git-commit publisher.
 - Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
   their exact scope is absent, and cannot replace shared Main manifests.
-- Hive ARC PR jobs use the local shard and may import Main when needed. Main
-  remains the only workflow writer of the shared Hive registry seed.
 - The legacy registered `nook` runner is not used.
 
 **Focused remote jobs:**
 
 - `preflight`, `rust:ci`, and `arc:runtime` may use disposable ordinary Pods in
-  the configured general ARC scale set. Trusted `hive:verify` may use the
-  dedicated Hive ARC scale set. Each job reaches the persistent BuildKit shard
   on its selected node.
 - `arc:runtime` proves a remote BuildKit result can be exported without a
   Docker daemon, Podman, DinD, or host socket.
@@ -479,7 +461,6 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   `ci:pr`, and `ci:pr:e2e`.
 - Each runtime-backed selector must be dispatched alone. Mixed batches are
   rejected before repository commands execute.
-- Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
 - Common Rust test and web/extension check image targets remain available to
   local workflows.
@@ -600,10 +581,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-  - Runner: trusted jobs use general, Hive, or container ARC scale sets. Fork
     and Dependabot code alone uses GitHub-hosted isolation.
   - Purpose: Elastic delivery with persistent node-local BuildKit and private Zot recovery.
-- **`repository-policy.yml`, `hive.yml`**
   - Runner: ARC for trusted sources; GitHub-hosted only for untrusted sources.
   - Purpose: Independent architecture and package verification
 - **`agent-implement.yml`, `ci-agent-smoke.yml`**
@@ -658,7 +637,6 @@ remotely against that isolated update:
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
 task docker:ecosystem:fuzz FUZZ_SECONDS=20
-task hive:verify
 ```
 
 The trusted host fails closed unless:
@@ -696,7 +674,6 @@ those exact-head gates.
 - extension e2e.
 
 - The additional targets validate the separate fuzz workspace.
-  - They also compile, lint, and test Hive in the Minds workspace.
 - Credentialed real-provider `sync-live` e2e remains a separate manual
   validation.
   - It creates disposable external-provider state.
@@ -838,7 +815,6 @@ task web:test:e2e:github            # → sync-live
 `nook-app/nook-platform/nook-core/coverage-floor.json` is the exhaustive package
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
-PR #1319 staged companion WASM at 18, authenticator-domain at 87, Hive at 60,
 and `nook-wasm` at 51 percent. The current registry raises
 authenticator-domain to 90 percent.
 
@@ -856,7 +832,6 @@ authenticator-domain to 90 percent.
 - The WASM lane gates companion separately, executes Chromium without cache
   credentials, and combines native and browser profiles for one `nook-wasm` report.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
-- Hive verification runs instrumented Hive binaries in the existing
   Neo4j-enabled runtime, then imports their profiles for reporting.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;
@@ -1019,7 +994,6 @@ authenticator-domain to 90 percent.
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
 - Compiler vertices receive the bucket-scoped build identity only through stable optional BuildKit secret IDs.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
-- Same-repository PR Rust producers and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
 - SeaweedFS remains an optimization and never a correctness input.
@@ -1027,10 +1001,8 @@ authenticator-domain to 90 percent.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
 - Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
 
-**Hive workflow cache:**
 
 - Manual e2e, research, and AI-agent jobs use isolated ARC Pods and may restore the same scoped BuildKit layers.
-- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
 - The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
 - Each parallel Cargo branch is capped at two jobs to bound compiler-process
@@ -1040,8 +1012,6 @@ authenticator-domain to 90 percent.
 - Pull requests restore Main's scope read-only and may publish only a
   quarantined exact-head cache. Only Main exports both shared graphs, in a
   final step after check and behavior tests pass.
-- Hive check and test tasks use the same job-scoped Buildx builder, so the behavior image reuses the dependency graph produced earlier in the run without allowing parallel PRs or failed validation to replace the trusted cache.
-- Unlike the product delivery graph, trusted same-repository Hive runs also mount `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` into compiler steps and use SeaweedFS S3 `sccache` with the isolated `nook-hive` key prefix.
 - GitHub withholds those secrets from forked pull requests, and the shared wrapper then falls back to direct compilation.
 - The credentials are BuildKit secrets or read-only runtime mounts, never image content.
 
@@ -1090,10 +1060,8 @@ authenticator-domain to 90 percent.
 - Same-repository Remote tasks use that registry identity for git-commit
   exporters under `nook/remote-buildcache/**`.
 - General ARC pull requests remain registry-read-only and reuse Main plus
-  SeaweedFS sccache. Hive keeps its small minimal exact-SHA handoff.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
-- Hive images also publish and pull through Zot.
 - There is no host `:5000` listener and no `kubectl port-forward` for the registry.
 
 **Main deploy verification:**

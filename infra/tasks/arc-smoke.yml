@@ -2,7 +2,6 @@ version: '3'
 
 vars:
   ARC_RUNNER_LABEL: nook-k0s
-  ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
@@ -99,11 +98,3 @@ tasks:
         vars:
           ARC_SMOKE_TASK: arc:runtime
           ARC_SMOKE_RUNNER_LABEL: nook-k0s
-
-  arc:smoke:hive:
-    desc: Validate the Hive ARC route.
-    cmds:
-      - task: arc:smoke
-        vars:
-          ARC_SMOKE_TASK: hive:verify
-          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive

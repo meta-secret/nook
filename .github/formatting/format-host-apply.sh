@@ -18,12 +18,6 @@ base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
   git ls-files --others --exclude-standard -z
 } >"$changed_files"
 
-if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
-  FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed
-  git status --short --untracked-files=no
-  exit 0
-fi
-
 formatter_dir="$repo_root/.github/formatting"
 formatter_hash="$(
   (cd "$formatter_dir" && \

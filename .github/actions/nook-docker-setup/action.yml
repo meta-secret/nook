@@ -9,8 +9,8 @@ inputs:
       ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
-      wasm-proof computes its dependency fingerprint without probing; hive probes
-      only the Hive lineage; connection-only performs no registry cache probes.
+      wasm-proof computes its dependency fingerprint without probing;
+      connection-only performs no registry cache probes.
     required: false
     default: general
   cache-write:
@@ -162,7 +162,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -224,7 +224,6 @@ runs:
 
         scope_suffix=""
         fallback_enabled=""
-        hive_remote_ref=""
         if [ "$isolated_cache_write" = "true" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
@@ -242,11 +241,6 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          case "$cache_selection" in
-            general|hive)
-              hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
-              ;;
-          esac
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
@@ -388,33 +382,6 @@ runs:
           ;;
         esac
 
-        if [ -n "$hive_remote_ref" ]; then
-          hive_ref="${hive_remote_ref#type=registry,ref=}"
-          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
-          hive_export_mode=max
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # The selected node retains the full graph in its persistent
-            # BuildKit shard. Export only the minimal exact-SHA
-            # handoff; exporting the full graph added minutes after a green
-            # Hive build while sccache already preserves compiler artifacts.
-            hive_export_mode=min
-          fi
-          hive_probe_status=0
-          cache_ref_status "$hive_ref" || hive_probe_status=$?
-          case "$hive_probe_status" in
-            0)
-              hive_seed=""
-              echo "Exact Hive cache available; Main seed suppressed"
-              ;;
-            1)
-              echo "Exact Hive cache absent; trusted Main seed enabled"
-              ;;
-            *) exit "$hive_probe_status" ;;
-          esac
-          echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m" >> "$GITHUB_ENV"
-        fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then

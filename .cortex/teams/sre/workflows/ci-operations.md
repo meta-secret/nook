@@ -5,7 +5,6 @@
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks. Paused Hive remains outside the manual manager
 lifecycle and must not be reactivated by this delivery change.
 
 ## Overview
@@ -181,17 +180,14 @@ separate Task-backed harness.
 **Main failure handoff:**
 
 - An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml).
-- Trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs.
 - The token-free k0s dispatcher reconciles it into Neo4j.
 - A repair task owns diagnosis and feature implementation through local dev landing.
 - The dev manager owns slow dev PR checks, review acceptance, and fast-forward
   promotion. Incident completion retains replacement Main verification.
-- The explicitly dispatched implementation worker does not claim Hive
   incidents.
 - Browser E2E failures enter the same durable repair queue as native, WASM,
   build, deployment, mixed, and unknown failures.
 
-**Hive delivery generations:**
 
 - Each rerun is recorded on the Workbench issue keyed by source SHA.
 - Its publication branch, plan, and worklog are generation-specific.
@@ -204,7 +200,6 @@ separate Task-backed harness.
 - A successful rerun retires an existing incident and terminates any active delivery.
 - Run IDs and attempts are ordered across the incident so older workflow runs are ignored.
 - Reconciliation of the already-current generation is idempotent and never cancels it.
-- Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job still queues Hive.
 
 **Rust dependency updates:**
 
@@ -391,7 +386,6 @@ publication steps. Registry credentials are not used. Prompt:
    - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
    - Main runs the same local-provider and extension **e2e**.
    - Every actionable unsuccessful Main run is reconciled through one
-     `automation: hive` Workbench incident.
      - Browser E2E failures are included.
      - The repair follows the feature path into local dev.
      - The dev manager controls slow checks and fast-forward promotion.

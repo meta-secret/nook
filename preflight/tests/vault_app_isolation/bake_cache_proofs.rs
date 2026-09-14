@@ -47,7 +47,6 @@ fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
     for relative in [
         ".github/workflows/pr.yml",
         ".github/workflows/rust-ecosystem-checks.yml",
-        ".github/workflows/hive.yml",
         ".github/workflows/repository-policy.yml",
     ] {
         let workflow = root.read(relative);
@@ -645,57 +644,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
             "{name} must fail the job when cook-layer export fails"
         );
     }
-    Ok(())
-}
-
-#[test]
-fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
-    let workflow = root.read(".github/workflows/hive.yml");
-    let tasks = root.read("agentic-ai/minds/hive/Taskfile.yml");
-
-    assert!(
-        setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
-            && setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed")
-            && setup.contains("hive_export_mode=min")
-            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m")
-            && setup.contains("Exact Hive cache available; Main seed suppressed")
-            && !setup.contains("if [ \"$event_name\" != \"pull_request\" ]; then"),
-        "isolated PR setup must use exact Hive alone when present, otherwise Main, and publish only the exact SHA"
-    );
-    assert!(
-        workflow.contains("uses: ./.github/actions/nook-docker-setup")
-            && workflow.contains("runs-on: nook-k0s-hive")
-            && workflow.contains(
-                "main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-            )
-            && workflow.contains(
-                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-            )
-            && tasks.contains("${NOOK_ARC_HIVE:-}"),
-        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and publish only its isolated exact cache"
-    );
-    let verify = taskfile_task_body(&tasks, "verify")?;
-    assert!(
-        verify.contains("--cache-from \"$HIVE_CACHE_FROM\"")
-            && verify.contains("--cache-from \"$HIVE_CACHE_SEED_FROM\"")
-            && verify.contains("--cache-to \"$HIVE_CACHE_TO\""),
-        "Hive verification must retain optional exact/Main importer and exporter capabilities for hosted fallback and Main publication"
-    );
-    assert!(
-        workflow.contains(
-            "if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'"
-        ) && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
-            && workflow.matches("Publish verified Hive cache").count() == 1
-            && !workflow.contains("verify-hosted:")
-            && workflow.contains("verify-fork:")
-            && workflow.contains("console-untrusted:")
-            && workflow.contains("Set up untrusted cache-free BuildKit")
-            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 3
-            && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
-        "trusted Main must publish from ARC, while untrusted PR and console validation remain secret-free on the hosted boundary"
-    );
     Ok(())
 }
 
