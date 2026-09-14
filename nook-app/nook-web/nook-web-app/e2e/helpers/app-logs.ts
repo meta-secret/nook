@@ -63,12 +63,20 @@ type AppLogsResponse = {
   entries: NookLogEntry[]
 }
 
+type AppLogsJsonValue =
+  | AppLogsResponse
+  | AppLogsResponse['meta']
+  | NookLogEntry
+  | NookLogEntry[]
+  | string
+  | number
+
 export /** Read persisted app log entries when the runtime hook is available. */
 async function readNookLogEntries(
   page: Page,
   limit: number,
 ): Promise<NookLogEntry[]> {
-  return page.evaluate(
+  return page.evaluate<NookLogEntry[], { lim: number; minLevel: LogLevel }>(
     async ({ lim, minLevel }) => {
       const log = window.__nookLog
       if (!log) throw new Error('__nookLog is not available on the page')
@@ -480,7 +488,11 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, (_key, value) => value, 2)
+    const body = JSON.stringify(
+      payload,
+      (_key: string, value: AppLogsJsonValue): AppLogsJsonValue => value,
+      2,
+    )
     const attachmentName =
       options && options.attachmentName
         ? options.attachmentName

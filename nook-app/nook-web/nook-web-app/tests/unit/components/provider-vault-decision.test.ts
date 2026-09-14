@@ -54,6 +54,8 @@ function panelVault(
   manager.provider_vault_decision_request = async () => load()
   const vault = VaultStateTestFixture.create()
   vault.openManager(manager)
+  vault.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
   const immediateStorage = async <T, E = Error>(
     operation: () => Result<T, E> | Promise<Result<T, E>>,
   ): Promise<Result<T, E>> => operation()
@@ -191,6 +193,8 @@ test('selected local target survives loading the selected identity providers', a
 
 test('clears verification after remote conflict import returns before manager admission', async () => {
   const state = VaultStateTestFixture.create()
+  state.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
   state.stageStoreIdSyncConflictForTesting({
     providerLabel: 'Backup',
     localStoreId: 'store-local',
