@@ -150,14 +150,11 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "k0s-worker-restore",
         "k0s-worker-mesh",
         "kata",
-        "neo4j",
         "registry",
         "arc",
         "arc-operations",
         "arc-smoke",
         "sccache",
-        "hive",
-        "hive-queue",
         "operations",
         "bake-cache",
         "kubernetes-cache",
@@ -430,7 +427,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         .and_then(|tail| tail.split("\n  registry:check:\n").next())
         .context("infra must define the Zot deployment task")?;
     for required in [
-        "sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot",
+        "sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/nook/zot",
         "kubectl rollout status deployment/nook-zot",
         "deployment/nook-zot",
         "nook-zot-registry-loopback.service",
@@ -459,7 +456,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "Zot deployment must not recreate loopback port-forward or NodePort/Ingress paths"
     );
     assert!(
-        !deploy.contains("hive-data hive-system arc-runners"),
+        !deploy.contains("nook-infra arc-runners"),
         "ARC must not receive the Main-writer Zot credential"
     );
 
@@ -517,7 +514,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
     let uninstall = RepositoryFixture::repository_root().read("infra/tasks/k0s.yml");
     assert!(
         uninstall.contains("disable --now nook-zot-registry-loopback.service")
-            && uninstall.contains("test -d /var/lib/hive/zot")
+            && uninstall.contains("test -d /var/lib/nook/zot")
             && uninstall.contains("certs.d/registry.dev.nokey.sh"),
         "k0s uninstall must remove any legacy forwarding unit, retain Zot data, and use the public registry host config"
     );

@@ -201,7 +201,6 @@ tasks:
             LEAF_EXACT_AVAILABLE="${BAKE_SIM_LEAF_EXACT_AVAILABLE:-}" \
             NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
             CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
-            HIVE_EXACT_AVAILABLE="${BAKE_SIM_HIVE_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_cli" buildx bake \
             --progress=plain \
@@ -677,7 +676,7 @@ tasks:
         # exact-head scope. A fresh retry at that SHA must restore the source
         # leaf as well as the Main-seeded parent.
         printf '%s\n' "$parent_input_orig" >"$parent_input"
-        printf 'hive-pr-source-edit\n' >"$leaf_input"
+        printf 'pr-source-edit\n' >"$leaf_input"
         exact_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1

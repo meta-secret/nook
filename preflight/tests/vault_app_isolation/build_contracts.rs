@@ -901,7 +901,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
         "cargo outdated --workspace --root-deps-only --exit-code 1",
         "check_manifest nook-app/nook-platform",
         "check_manifest nook-app/nook-platform/fuzz",
-        "check_manifest agentic-ai/minds",
         "check_manifest preflight",
     ] {
         assert!(
@@ -914,12 +913,10 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
     for required in [
         "`nook-app/nook-platform/`",
         "`nook-app/nook-platform/fuzz/`",
-        "`agentic-ai/minds/`",
         "`preflight/`",
         "all outdated direct Rust dependencies",
         "WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000",
         "task docker:ecosystem:fuzz FUZZ_SECONDS=20",
-        "task hive:verify",
         "every local-provider Playwright e2e spec, and the\n   extension e2e",
     ] {
         assert!(

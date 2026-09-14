@@ -364,7 +364,6 @@ tasks:
       - task: rust:dependency-policy
       - task: preflight:dependency-policy
       - task: fuzz:dependency-policy
-      - task: minds:dependency-policy
 
   docker:ecosystem:smoke:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.

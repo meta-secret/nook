@@ -48,7 +48,7 @@ fn kubernetes_cache_proof_reuses_production_workloads() {
         "$patch: delete",
         "name: nook-buildkit-rise-s-2",
         "path: /spec/replicas\n        value: 3",
-        "nook-zot.hive-data.svc.cluster.local:5000",
+        "nook-zot.nook-infra.svc.cluster.local:5000",
     ] {
         assert!(
             overlay.contains(required),

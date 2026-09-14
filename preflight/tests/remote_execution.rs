@@ -445,9 +445,9 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     );
     assert!(workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'"));
     assert!(
-        !workflow.contains("Start hosted Hive Neo4j service")
+        !workflow.contains("Start hosted Nook Neo4j service")
             && !workflow.contains("docker run --detach"),
-        "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"
+        "ARC remote tasks must use the Nook scale set sidecar instead of a nested daemon"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")

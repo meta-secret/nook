@@ -62,7 +62,6 @@ jobs:
       validation-requested: ${{ steps.paths.outputs.validation-requested }}
       full-e2e-requested: ${{ steps.paths.outputs.full-e2e-requested }}
       product: ${{ steps.paths.outputs.product }}
-      minds: ${{ steps.paths.outputs.minds }}
       research: ${{ steps.paths.outputs.research }}
       dev-pr: ${{ steps.paths.outputs.dev-pr }}
     steps:
@@ -108,21 +107,18 @@ jobs:
           echo "full-e2e-requested=$full_e2e_requested" >> "$GITHUB_OUTPUT"
           echo "dev-pr=$dev_pr" >> "$GITHUB_OUTPUT"
           product=false
-          minds=false
           research=false
           while IFS= read -r -d '' path; do
             case "$path" in
               .cortex/* | .cursor/* | .vale.ini | .vale/* | .github/workflows/repository-policy.yml | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*) ;;
               *) product=true ;;
             esac
-            case "$path" in agentic-ai/minds/*) minds=true ;; esac
             case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac
           done < "$changed_paths"
           if [ "$DEV_PR" = "true" ]; then
             product=true
           fi
           echo "product=$product" >> "$GITHUB_OUTPUT"
-          echo "minds=$minds" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
 
   policy:
@@ -157,7 +153,7 @@ jobs:
   main:
     name: Main validation
     needs: scope
-    if: github.event_name == 'push' && (needs.scope.outputs.product == 'true' || needs.scope.outputs.minds == 'true')
+    if: github.event_name == 'push' && needs.scope.outputs.product == 'true'
     permissions:
       contents: read
       pull-requests: read
@@ -183,10 +179,7 @@ jobs:
     needs: scope
     if: >-
       always() && !cancelled() &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && needs.scope.outputs.product == 'false' &&
-      needs.scope.outputs.minds == 'true' &&
-      needs.scope.outputs.validation-requested == 'true'))
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       pull-requests: read

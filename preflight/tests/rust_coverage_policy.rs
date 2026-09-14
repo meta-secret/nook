@@ -59,7 +59,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
-    let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
     let policy =
         CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
@@ -201,7 +200,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
-    assert!(minds_manifest.contains("exclude = [\"vendor/arrayref\"]"));
     assert!(fuzz_manifest.contains("cargo-fuzz = true") && fuzz_manifest.contains("test = false"));
     Ok(())
 }

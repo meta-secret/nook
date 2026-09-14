@@ -170,26 +170,6 @@ class DockerizedRustContract {
     expect(product).toContain(
       "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
     );
-    const hive = this.read("agentic-ai/minds/hive/Dockerfile");
-    const dependencies = hive
-      .split("FROM fetched-dependencies AS observer-contract-dependencies")[1]
-      ?.split(
-        "FROM observer-contract-dependencies AS observer-contract-exporter",
-      )[0];
-    expect(dependencies).toContain(
-      "COPY --from=chef-planner /build/recipe.json recipe.json",
-    );
-    expect(dependencies).toContain("cargo chef cook --locked");
-    expect(dependencies).toContain(
-      "--features observer-contract-export --bin hive-export-observer-contract",
-    );
-    expect(dependencies).not.toContain("COPY hive/src");
-    expect(hive).toContain(
-      "FROM observer-contract-dependencies AS observer-contract-exporter\nCOPY hive/src hive/src",
-    );
-    expect(hive).toContain(
-      "--bin hive-export-observer-contract -- --output /observer-contract",
-    );
   }
 
   workflowTooling(): void {
@@ -230,9 +210,6 @@ class DockerizedRustContract {
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
     );
-    expect(this.read("agentic-ai/minds/hive/Dockerfile")).toContain(
-      "prettier-skill.json",
-    );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
     expect(audit).toContain('no-cache-filter = ["audit"]');
     expect(audit).not.toContain("no-cache = true");
@@ -269,7 +246,6 @@ class DockerizedRustContract {
         "web-e2e",
         "connection-only",
         "native",
-        "hive",
         "ecosystem-dylint",
         "ecosystem-fuzz",
         "ecosystem-policy-tools",
@@ -315,11 +291,9 @@ class DockerizedRustContract {
         const values = readFileSync(environment, "utf8");
         expect(values).toContain("GHA_CACHE_SCOPE_SUFFIX=\n");
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
-        expect(values).not.toContain("HIVE_CACHE_TO=");
         const calls = readFileSync(probes, "utf8");
         expect(calls).not.toContain("-git-");
-        if (profile === "connection-only" || profile === "hive")
-          expect(calls).toBe("");
+        if (profile === "connection-only") expect(calls).toBe("");
         if (profile === "ecosystem-smoke") {
           expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
@@ -666,11 +640,7 @@ class DockerizedRustContract {
     const groupedTask = webTasks.tasks["_web:test:e2e:run-groups"];
     const webOnlyTask = ciTasks.tasks["_ci:main:web:e2e-only"];
     const fullTask = ciTasks.tasks["_ci:main"];
-    if (
-      !groupedTask?.cmds ||
-      !webOnlyTask?.cmds ||
-      !fullTask?.cmds
-    ) {
+    if (!groupedTask?.cmds || !webOnlyTask?.cmds || !fullTask?.cmds) {
       throw new Error("E2E completion task definitions are missing");
     }
     const grouped = z.string().parse(groupedTask.cmds[0]);
@@ -973,7 +943,7 @@ test(
   contract.ecosystemResults.bind(contract),
 );
 test(
-  "PR dedup retains standalone coverage and source-correct Hive exports",
+  "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
 );
 test(

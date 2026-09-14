@@ -90,7 +90,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"combined-leaf\"")
             && bake.contains("target \"combined-consumer\"")
             && bake.contains("target \"preflight-source\"")
-            && bake.contains("target \"hive\"")
+            && bake.contains("target \"nook\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
@@ -216,8 +216,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         quality.contains("task infra:bake-cache:prove")
             && quality.contains("bake_cache_proofs.rs")
             && quality.contains("parallel PR git-scope isolation")
-            && quality.contains("Scenario X proves sequential crate COPY+RUN layers")
-            && quality.contains("Scenario Y mirrors Hive's Cargo dependency graph"),
+            && quality.contains("Scenario X proves sequential crate COPY+RUN layers"),
         "cortex quality must document the runtime sim beside static theorems"
     );
 }

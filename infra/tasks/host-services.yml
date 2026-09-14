@@ -211,7 +211,6 @@ tasks:
       - task: services:ensure-edge-firewall
       - task: registry:deploy
       - task: kata:install
-      - task: kata:verify
       - task: arc:deploy
 
   k0s:sync:
@@ -232,17 +231,10 @@ tasks:
             ;;
         esac
         ssh -n -o BatchMode=yes "$ssh_target" \
-          "install -d -m 0750 '$remote_dir'; \
-           if test -d '$remote_dir/agentic-ai/minds'; then \
-             find '$remote_dir/agentic-ai/minds' \
-               -type d -name target -prune -exec rm -rf -- {} +; \
-           fi"
+          "install -d -m 0750 '$remote_dir'"
         COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" \
-          --exclude='agentic-ai/minds/target' \
-          --exclude='agentic-ai/minds/*/target' \
           -cf - \
           infra/k0s \
-          agentic-ai/minds \
           nook-app/nook-platform/docker/sccache-wrapper.sh \
           nook-app/nook-platform/docker/sccache-report.sh |
           ssh -o BatchMode=yes "$ssh_target" \

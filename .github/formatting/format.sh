@@ -20,7 +20,7 @@ while IFS= read -r -d '' path; do
     continue
   fi
   case "$path" in
-    nook-app/nook-platform/*.rs | nook-app/nook-platform/**/*.rs | preflight/*.rs | preflight/**/*.rs | agentic-ai/minds/*.rs | agentic-ai/minds/**/*.rs)
+    nook-app/nook-platform/*.rs | nook-app/nook-platform/**/*.rs | preflight/*.rs | preflight/**/*.rs)
       rust_files+=("$path")
       ;;
     nook-app/nook-web/nook-web-shared/src/vault-app/*.ts)

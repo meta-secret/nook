@@ -60,9 +60,9 @@ tasks:
         grep -Eq "^${username}"':[$]2[ay][$]' "$htpasswd_file"
         grep -Eq "^${remote_username}"':[$]2[ay][$]' "$htpasswd_file"
 
-        kubectl create namespace hive-data --dry-run=client -o yaml |
+        kubectl create namespace nook-infra --dry-run=client -o yaml |
           kubectl apply -f -
-        kubectl -n hive-data create secret generic nook-zot-htpasswd \
+        kubectl -n nook-infra create secret generic nook-zot-htpasswd \
           --from-file=htpasswd="$htpasswd_file" \
           --dry-run=client -o yaml |
           kubectl apply -f -
@@ -410,7 +410,7 @@ tasks:
         sudo -n systemctl daemon-reload || true
         sudo -n rm -rf /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
 
-        sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot
+        sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/nook/zot
         sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/{{.NOOK_REGISTRY_HOST}}
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
@@ -419,10 +419,10 @@ tasks:
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl delete networkpolicy nook-zot-default-deny \
-          --namespace hive-data \
+          --namespace nook-infra \
           --ignore-not-found=true
         kubectl apply -f "$rendered_manifest"
-        for namespace in hive-data hive-system; do
+        for namespace in nook-infra; do
           kubectl -n "$namespace" create secret docker-registry nook-registry \
             --docker-server="{{.NOOK_REGISTRY_HOST}}" \
             --docker-username="$(cat "$remote_dir/secrets/registry-username")" \
@@ -433,17 +433,17 @@ tasks:
         kubectl delete secret nook-registry \
           --namespace arc-runners \
           --ignore-not-found=true
-        kubectl rollout restart deployment/nook-zot --namespace hive-data
+        kubectl rollout restart deployment/nook-zot --namespace nook-infra
         kubectl rollout status deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --timeout=10m
-        kubectl get svc nook-zot --namespace hive-data
+        kubectl get svc nook-zot --namespace nook-infra
         test "$(
-          kubectl get svc nook-zot --namespace hive-data \
+          kubectl get svc nook-zot --namespace nook-infra \
             -o jsonpath='{.spec.clusterIP}'
         )" = "{{.NOOK_REGISTRY_CLUSTER_IP}}"
         test "$(
-          kubectl get pvc nook-zot-data --namespace hive-data \
+          kubectl get pvc nook-zot-data --namespace nook-infra \
             -o jsonpath='{.status.phase}'
         )" = Bound
 
@@ -504,16 +504,16 @@ tasks:
         fi
 
         sudo -n k0s kubectl rollout status deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --timeout=2m
         test "$(
           sudo -n k0s kubectl get pvc nook-zot-data \
-            --namespace hive-data \
+            --namespace nook-infra \
             -o jsonpath='{.status.phase}'
         )" = Bound
         test "$(
           sudo -n k0s kubectl get svc nook-zot \
-            --namespace hive-data \
+            --namespace nook-infra \
             -o jsonpath='{.spec.clusterIP}'
         )" = "{{.NOOK_REGISTRY_CLUSTER_IP}}"
 
@@ -531,9 +531,9 @@ tasks:
         anonymous_private_read="$(curl -sS -o /dev/null -w '%{http_code}' \
           "https://$host/v2/nook/buildcache/nook-authz-probe/manifests/missing")"
         test "$anonymous_private_read" = 401
-        anonymous_hive_read="$(curl -sS -o /dev/null -w '%{http_code}' \
-          "https://$host/v2/nook-hive/manifests/missing")"
-        test "$anonymous_hive_read" = 401
+        anonymous_nook_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/v2/nook-infra/manifests/missing")"
+        test "$anonymous_nook_read" = 401
         anonymous_mirror_write="$(curl -sS -o /dev/null -w '%{http_code}' \
           -X POST \
           "https://$host/v2/library/nook-authz-probe/blobs/uploads/")"
@@ -595,11 +595,11 @@ tasks:
           'sport = :443' || true
         docker compose -f "$remote_dir/compose.yaml" ps || true
         sudo -n k0s kubectl get deployment,pod,svc,pv,pvc \
-          --namespace hive-data \
+          --namespace nook-infra \
           -l app.kubernetes.io/name=nook-zot \
           -o wide || true
         sudo -n k0s kubectl logs deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --tail=100 || true
         curl -sS -D- -o /dev/null "https://{{.NOOK_REGISTRY_HOST}}/v2/" || true
         REMOTE

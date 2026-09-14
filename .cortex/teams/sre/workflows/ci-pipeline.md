@@ -38,64 +38,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 ## Workflow map
 
-- **[`remote.yml`](../../../../.github/workflows/remote.yml)**
-  - Trigger: Manual named-task dispatch
-  - Purpose: Focused command batch; no merge authorization
-  - GitHub PAT: No
-- **[`pr.yml`](../../../../.github/workflows/pr.yml)**
-  - Trigger: Reusable call from `ci.yml` after a validation label
-  - Purpose: Exact-head PR gate, including Rust ecosystem jobs
-  - GitHub PAT: No
-- **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
-  - Trigger: Reusable call from `ci.yml`
-  - Purpose: Source architecture plus conditional Loom verification
-  - GitHub PAT: No
-- **[`web-research.yml`](../../../../.github/workflows/web-research.yml)**
-  - Trigger: Reusable call from `ci.yml` for research paths
-  - Purpose: Research check, build, Cloudflare deploy, and PR preview
-  - GitHub PAT: No
-- **[`pr-validation-handoff.yml`](../../../../.github/workflows/pr-validation-handoff.yml)**
-  - Trigger: Successful same-repository CI run with PR product verification
-  - Purpose: Promote trusted PR artifacts
-  - GitHub PAT: No
-- **[`linear-ui-demo.yml`](../../../../.github/workflows/linear-ui-demo.yml)**
-  - Trigger: Successful CI run / PR close
-  - Purpose: Retain disabled publication and close previously created Linear
-    issues
-  - GitHub PAT: No
-- **[`main.yml`](../../../../.github/workflows/main.yml)**
-  - Trigger: Reusable call from `ci.yml` on Main pushes
-  - Purpose: Product + ecosystem verify, e2e, dev deploy
-  - GitHub PAT: No
-- **[`main-build-stats.yml`](../../../../.github/workflows/main-build-stats.yml)**
-  - Trigger: Completed Main-push `CI` attempt
-  - Purpose: Commit Main build stats to Workbench
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
-- **[`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml)**
-  - Trigger: Failed Main-push `CI` attempt
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
-  - GitHub PAT: No
-- **[`release.yml`](../../../../.github/workflows/release.yml)**
-  - Trigger: Semver tag `v*.*.*` or manual version + ref
-  - Purpose: Production verify, deploy, release
-  - GitHub PAT: No
-- **[`rust-dependency-updates.yml`](../../../../.github/workflows/rust-dependency-updates.yml)**
-  - Trigger: Weekly Monday 09:00 UTC + manual
-  - Purpose: Audit and AI-update Rust deps
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
-- **[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml)**
-  - Trigger: Explicit issue-path or prompt dispatch
-  - Purpose: Claim Workbench issue or run prompt → implement → PR
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
-- **[`ci-agent-smoke.yml`](../../../../.github/workflows/ci-agent-smoke.yml)**
-  - Trigger: Manual
-  - Purpose: ci-agent unit tests and open-handle exit smoke
-  - GitHub PAT: No
-- **[`e2e-pr.yml`](../../../../.github/workflows/e2e-pr.yml)**
-  - Trigger: Manual
-  - Purpose: Debug e2e on a PR branch
-  - GitHub PAT: Only for `sync-live`
-
 ### Workflow details
 
 **`remote.yml`**
@@ -172,34 +114,14 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
-- Web verification has a ten-minute job limit.
-- Calls the shared Rust ecosystem jobs in parallel with product verification.
-- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
-- Classifies changed paths and skips the product job chain for minds-only pushes.
-- Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
-- Each lane serially exports its already-solved local BuildKit graph after validation.
-- Local-provider web e2e and extension e2e consume verified WASM on separate
-  runners.
-- Each browser E2E solve is read-only.
-- Headless UI-demo execution and new artifact publication are temporarily
-  disabled.
-- The retained Main UI-demo implementation remains available for later
-  re-enable.
-- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
-  the portable WASM cache publication proof.
-
 **`main-build-stats.yml`**
 
 - Collects run/job/step timing and conclusions.
 - Commits one `stats/main-build/**` record directly to Nook Workbench.
 
-**`main-failure-handoff.yml`**
-
 - Creates or refreshes one ready automated Workbench incident per failed Main revision.
 - Uses run metadata and failed job names only.
 - Includes browser E2E failures.
-
 
 - Fork and Dependabot console changes receive the same install, check, build,
   and browser journey on a secret-free GitHub-hosted runner.
@@ -214,11 +136,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Publishes GitHub Release.
 
 **`rust-dependency-updates.yml`**
-
-- Audits every direct dependency in each Rust root.
-- The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
-- When an update exists, an AI agent updates all outdated Rust dependencies.
-- Runs the full deterministic suite and opens a PR for explicit review.
 
 **`agent-implement.yml`**
 
@@ -285,43 +202,6 @@ Cancellation is scoped to work that a newer run actually supersedes:
 - Main is serialized: an active run completes to protect its cache writers, while the single pending slot coalesces bursts to the newest merged revision.
 
 ### Concurrency scopes
-
-- **PR (`pr.yml`)**
-  - Scope: PR number (`pr-<number>`)
-  - Cancel active run: Yes
-  - Reason: Only the newest commit on the same PR needs validation.
-- **Main (`main.yml`)**
-  - Scope: `main`
-  - Cancel active run: No (one pending)
-  - Reason: Finish active cache publication and coalesce bursts to the newest pending revision.
-- **Main failure handoff (`main-failure-handoff.yml`)**
-  - Scope: Failed Main head SHA
-  - Cancel active run: No (one pending)
-  - Reason: Serialize retries that update the same Workbench incident.
-- **Main build stats (`main-build-stats.yml`)**
-  - Scope: Main run ID + attempt
-  - Cancel active run: No
-  - Reason: Every completed attempt is immutable evidence; separate runs never supersede it.
-- **Manual PR e2e (`e2e-pr.yml`)**
-  - Scope: PR number + suite
-  - Cancel active run: Yes
-  - Reason: A repeated run of the same suite supersedes its older debug build.
-- **Web research (`web-research.yml`)**
-  - Scope: PR number or ref
-  - Cancel active run: Yes
-  - Reason: Keep only the newest build for the same preview or branch.
-- **CI agent smoke (`ci-agent-smoke.yml`)**
-  - Scope: Global smoke group
-  - Cancel active run: Yes
-  - Reason: Only the newest smoke result matters.
-- **Agent implement (`agent-implement.yml`)**
-  - Scope: Issue number (manual runs are unique)
-  - Cancel active run: No
-  - Reason: An active run may already have pushed a branch or opened a PR.
-- **Production release (`release.yml`)**
-  - Scope: Global production release group
-  - Cancel active run: No
-  - Reason: Serialize stateful publication without interrupting a deployment.
 
 ## Production release strategy
 
@@ -616,11 +496,6 @@ Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults l
 runs weekly and can be started manually. It installs the pinned
 `cargo-outdated` orchestration tool and runs it with `--workspace
 --root-deps-only` in every Rust root. Those roots are:
-
-- `nook-app/nook-platform/`;
-- `nook-app/nook-platform/fuzz/`;
-- `agentic-ai/minds/`;
-- `preflight/`.
 
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
@@ -1000,7 +875,6 @@ authenticator-domain to 90 percent.
 - Each workflow run and retry loads its sealed web and e2e results under run-scoped Docker image tags; concurrent jobs must never replace one another's runtime image between build and deploy.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
 - Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
-
 
 - Manual e2e, research, and AI-agent jobs use isolated ARC Pods and may restore the same scoped BuildKit layers.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.

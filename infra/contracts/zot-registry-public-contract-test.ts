@@ -596,7 +596,7 @@ class PublicRegistryContract {
       '"preserveDigest": true',
       '"anonymousPolicy": ["read"]',
       '"actions": ["read"]',
-      '"nook-hive": {',
+      '"nook-infra": {',
       '"users": ["__NOOK_REGISTRY_USERNAME__"]',
       "kind: Service",
       'requests:\n              cpu: "2"\n              memory: 4Gi',

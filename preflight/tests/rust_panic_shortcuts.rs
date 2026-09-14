@@ -86,7 +86,6 @@ fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
     let root = RepositoryFixture::repository_root();
     for relative in [
         "nook-app/nook-platform/Cargo.toml",
-        "agentic-ai/minds/Cargo.toml",
         "preflight/Cargo.toml",
         "nook-app/nook-platform/fuzz/Cargo.toml",
     ] {
@@ -106,7 +105,6 @@ fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
     let root = RepositoryFixture::repository_root();
     for relative in [
         "nook-app/nook-platform/clippy.toml",
-        "agentic-ai/minds/clippy.toml",
         "preflight/clippy.toml",
         "nook-app/nook-platform/fuzz/clippy.toml",
     ] {

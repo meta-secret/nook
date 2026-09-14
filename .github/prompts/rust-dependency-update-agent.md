@@ -33,7 +33,6 @@ ${RUST_DEPS_OUTDATED_REPORT}
 2. Inventory every direct dependency in these Rust roots:
    - `nook-app/nook-platform/`;
    - `nook-app/nook-platform/fuzz/`;
-   - `agentic-ai/minds/`; and
    - `preflight/`.
 3. Classify each root and compatibility change by functional owner through the
    root router.

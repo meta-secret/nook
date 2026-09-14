@@ -179,16 +179,6 @@ separate Task-backed harness.
 
 **Main failure handoff:**
 
-- An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml).
-- The token-free k0s dispatcher reconciles it into Neo4j.
-- A repair task owns diagnosis and feature implementation through local dev landing.
-- The dev manager owns slow dev PR checks, review acceptance, and fast-forward
-  promotion. Incident completion retains replacement Main verification.
-  incidents.
-- Browser E2E failures enter the same durable repair queue as native, WASM,
-  build, deployment, mixed, and unknown failures.
-
-
 - Each rerun is recorded on the Workbench issue keyed by source SHA.
 - Its publication branch, plan, and worklog are generation-specific.
 - A later failed rerun supersedes and cancels an active delivery before its new generation is enqueued.
