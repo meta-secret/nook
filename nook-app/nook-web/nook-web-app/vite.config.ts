@@ -309,6 +309,7 @@ export default defineConfig(({ mode }) => {
           settings: {
             navigation: {
               disableChildFrameNavigation: true,
+              disableMainFrameNavigation: true,
             },
           },
         },
