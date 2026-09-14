@@ -288,6 +288,7 @@ class DockerizedRustContract {
             "a".repeat(40),
           )
           .replaceAll("${{ inputs.isolated-cache-write }}", "true")
+          .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.main-cache-only }}", "true")
           .replaceAll("${{ inputs.cache-write }}", "false")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
@@ -309,6 +310,7 @@ class DockerizedRustContract {
             GITHUB_ENV: environment,
             GITHUB_WORKSPACE: this.root,
             NOOK_ARC_RUNNER: "1",
+            NOOK_REMOTE_TASK_SELECTION: "",
             NOOK_SELECTED_BUILDER: "test-builder",
           },
         });
@@ -335,8 +337,10 @@ class DockerizedRustContract {
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
     } finally {
