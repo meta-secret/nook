@@ -42,13 +42,25 @@ class ObserverSchema {
         removeAdditional: false,
         validateFormats: false,
       });
-      return ok(standaloneCode(ajv, ajv.compile(schema)));
+      return ok(
+        new ObserverValidatorSource(
+          standaloneCode(ajv, ajv.compile(schema)),
+        ).withoutImplicitAbsence(),
+      );
     } catch {
       return err({
         kind: ContractFailureKind.Schema,
         message: 'Unable to compile exported observer schema',
       });
     }
+  }
+}
+export class ObserverValidatorSource {
+  constructor(private readonly source: string) {}
+  withoutImplicitAbsence(): string {
+    return this.source
+      .replace(/\bundefined\b/g, 'void 0')
+      .replace(/\bnull\b/g, 'void 0');
   }
 }
 class ObserverValidatorExport {
@@ -115,10 +127,12 @@ class ObserverContractGeneration {
     return generated.copyFrom(staged.path);
   }
 }
-const outcome = await new ObserverContractGeneration(
-  fileURLToPath(new URL('../', import.meta.url)),
-).execute();
-if (outcome.isErr()) {
-  console.error(outcome.error.message);
-  process.exitCode = 1;
+if (import.meta.main) {
+  const outcome = await new ObserverContractGeneration(
+    fileURLToPath(new URL('../', import.meta.url)),
+  ).execute();
+  if (outcome.isErr()) {
+    console.error(outcome.error.message);
+    process.exitCode = 1;
+  }
 }
