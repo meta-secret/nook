@@ -42,25 +42,36 @@ const FIXED_ARCHIVE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z')
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 const safeJson: { parse: (value: string) => unknown } = JSON
 
-function isExtensionManifest(value: unknown): value is ExtensionManifest {
-  if (!value || typeof value !== 'object') return false
-  if (
-    !('manifest_version' in value) ||
-    value.manifest_version !== 3 ||
-    !('version' in value) ||
-    typeof value.version !== 'string' ||
-    !('externally_connectable' in value) ||
-    !value.externally_connectable ||
-    typeof value.externally_connectable !== 'object' ||
-    !('matches' in value.externally_connectable) ||
-    !Array.isArray(value.externally_connectable.matches)
-  ) {
-    return false
+class ExtensionManifestAdmission {
+  parse(value: unknown): ExtensionManifest {
+    if (!this.isManifest(value)) {
+      throw new Error('Deployment extension manifest has an invalid shape.')
+    }
+    return value
   }
-  return value.externally_connectable.matches.every(
-    (match) => typeof match === 'string',
-  )
+
+  private isManifest(value: unknown): value is ExtensionManifest {
+    if (!value || typeof value !== 'object') return false
+    if (
+      !('manifest_version' in value) ||
+      value.manifest_version !== 3 ||
+      !('version' in value) ||
+      typeof value.version !== 'string' ||
+      !('externally_connectable' in value) ||
+      !value.externally_connectable ||
+      typeof value.externally_connectable !== 'object' ||
+      !('matches' in value.externally_connectable) ||
+      !Array.isArray(value.externally_connectable.matches)
+    ) {
+      return false
+    }
+    return value.externally_connectable.matches.every(
+      (match) => typeof match === 'string',
+    )
+  }
 }
+
+const extensionManifestAdmission = new ExtensionManifestAdmission()
 
 export function extensionArchiveName(
   channel: ExtensionChannel,
@@ -163,13 +174,11 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
     process.env.NOOK_EXTENSION_SITE_URL?.trim() || 'https://nokey.sh/',
     'NOOK_EXTENSION_SITE_URL',
   )
-  const manifestValue = safeJson.parse(
-    await readFile(join(extensionDist, 'manifest.json'), 'utf8'),
+  const manifest = extensionManifestAdmission.parse(
+    safeJson.parse(
+      await readFile(join(extensionDist, 'manifest.json'), 'utf8'),
+    ),
   )
-  if (!isExtensionManifest(manifestValue)) {
-    throw new Error('Deployment extension manifest has an invalid shape.')
-  }
-  const manifest = manifestValue
   if (!manifest.key) {
     throw new Error('Deployment extension manifest is missing its stable key.')
   }
