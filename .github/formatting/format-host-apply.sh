@@ -58,20 +58,6 @@ trap 'rm -f "$changed_files"' EXIT
       ls-files --others --exclude-per-directory=.gitignore -z
 } >"$changed_files"
 
-if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
-  PINNED_LOCAL_DEV_SHA="$PINNED_LOCAL_DEV_SHA" FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed
-  GIT_CONFIG_NOSYSTEM=1 \
-    GIT_CONFIG_GLOBAL=/dev/null \
-    GIT_NO_REPLACE_OBJECTS=1 \
-    git \
-      -c core.fsmonitor=false \
-      -c core.hooksPath=/dev/null \
-      -c core.excludesFile=/dev/null \
-      -c diff.external= \
-      status --short --untracked-files=no
-  exit 0
-fi
-
 formatter_dir="$repo_root/.github/formatting"
 formatter_hash="$(
   (cd "$formatter_dir" && \

@@ -21,8 +21,8 @@ variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
 }
 
 // The source-free dependency graph is fingerprinted independently. A feature
-// source graph is exact-commit-only and includes the required Hive compile
-// graph. There is deliberately no trusted Main source fallback.
+// source graph is exact-commit-only. There is deliberately no trusted Main
+// source fallback.
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_DEPS_SCOPE}:buildcache"
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
 

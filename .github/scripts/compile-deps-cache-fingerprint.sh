@@ -36,9 +36,6 @@ paths="$({
     nook-app/nook-web/nook-web-app/docker-bake.hcl \
     agentic-ai/minds/Cargo.toml \
     agentic-ai/minds/Cargo.lock \
-    agentic-ai/minds/hive/Cargo.toml \
-    agentic-ai/minds/hive-console/package.json \
-    agentic-ai/minds/hive-console/bun.lock \
     nook-app/nook-web/nook-web-app/package.json \
     nook-app/nook-web/nook-web-app/bun.lock \
     nook-app/nook-web/nook-web-research/package.json \

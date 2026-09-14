@@ -30,9 +30,6 @@ fixture_paths=(
   nook-app/nook-web/nook-web-app/docker-bake.hcl
   agentic-ai/minds/Cargo.toml
   agentic-ai/minds/Cargo.lock
-  agentic-ai/minds/hive/Cargo.toml
-  agentic-ai/minds/hive-console/package.json
-  agentic-ai/minds/hive-console/bun.lock
   nook-app/nook-web/nook-web-app/package.json
   nook-app/nook-web/nook-web-app/bun.lock
   nook-app/nook-web/nook-web-research/package.json
@@ -44,8 +41,8 @@ for path in "${fixture_paths[@]}"; do
   cp "$repo_root/$path" "$fixture/$path"
 done
 
-# The Hive dependency image copies vendored crates directly. Keep one tracked
-# vendor file in the fixture so the glob is exercised without copying the tree.
+# Keep one tracked vendor file in the fixture so the dependency glob is
+# exercised without copying the tree.
 mkdir -p "$fixture/agentic-ai/minds/vendor"
 printf 'vendor fixture\n' >"$fixture/agentic-ai/minds/vendor/fixture.crate"
 
@@ -69,10 +66,7 @@ graph_inputs=(
   nook-app/nook-platform/docker/rust/compile.docker-bake.hcl
   nook-app/nook-platform/docker/rust/docker-bake.hcl
   agentic-ai/minds/Cargo.lock
-  agentic-ai/minds/hive/Cargo.toml
   agentic-ai/minds/vendor/fixture.crate
-  agentic-ai/minds/hive-console/package.json
-  agentic-ai/minds/hive-console/bun.lock
   nook-app/nook-web/docker/toolchain.Dockerfile
   nook-app/nook-web/docker/toolchain.docker-bake.hcl
   nook-app/nook-web/docker/web.Dockerfile

@@ -57,7 +57,7 @@ fn web_static_container_entrypoint_is_top_level_reachable() {
     let container_entrypoint = tasks
         .split("\n  web:static:container:\n")
         .nth(1)
-        .and_then(|tail| tail.split("\n  hive:console:static:\n").next())
+        .and_then(|tail| tail.split("\n  static:check:\n").next())
         .unwrap_or_else(|| panic!("static checks must define a dedicated container entrypoint"));
 
     assert!(

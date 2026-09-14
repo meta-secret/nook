@@ -324,10 +324,7 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
     for input in [
         "nook-app/nook-platform/Cargo.lock",
         "agentic-ai/minds/Cargo.lock",
-        "agentic-ai/minds/hive/Cargo.toml",
         "agentic-ai/minds/vendor/**",
-        "agentic-ai/minds/hive-console/package.json",
-        "agentic-ai/minds/hive-console/bun.lock",
         "nook-app/nook-web/nook-web-app/package.json",
         "nook-app/nook-web/nook-web-app/bun.lock",
         "nook-app/nook-web/nook-web-research/package.json",
