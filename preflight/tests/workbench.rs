@@ -796,13 +796,13 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
         agent_tasks
             .matches("- task loom:cortex-session-clean")
             .count()
-            == 2
+            == 1
             && readiness_guard
                 .contains("PR readiness requires removing temporary Cortex session memory")
             && !RepositoryFixture::repository_root()
                 .join(".github/scripts/assert-cortex-session-clean.sh")
                 .exists(),
-        "host and Hive readiness must reject leftover temporary session memory"
+        "PR readiness must reject leftover temporary session memory"
     );
     Ok(())
 }
