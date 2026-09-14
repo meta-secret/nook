@@ -15,16 +15,28 @@ import type {
   PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
-import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import type { ExtensionConnectScope as SharedExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 
-export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export { ExtensionIdentityRequestSource };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "$lib/extension/extension-pairing-delivery";
+
+export type ExtensionConnectScope = SharedExtensionConnectScope;
+
+/** Owns Sentinel's fail-closed facade for unreachable extension scope access. */
+class SentinelExtensionConnectScopeCatalog {
+  get SyncProviderCredentials(): ExtensionConnectScope {
+    throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
+  }
+}
+
+export const ExtensionConnectScope =
+  new SentinelExtensionConnectScopeCatalog();
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -91,10 +103,6 @@ export async function requestPairedExtensionUnlock(
 ): Promise<boolean> {
   void _vaultStoreId;
   return false;
-}
-
-export function scopeLabel(): never {
-  throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
 }
 
 export async function adoptExtensionIdentity(
