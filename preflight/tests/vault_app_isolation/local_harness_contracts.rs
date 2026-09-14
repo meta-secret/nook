@@ -27,7 +27,13 @@ fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inp
     assert!(
         web.contains("GITHUB_ACTIONS")
             && web.contains("CI_ARTIFACT_DIR")
-            && web.contains("ci:pr:web:local"),
+            && web.contains("ci:pr:web:local")
+            && web.contains("with-remote-buildkit.sh")
+            && web.contains("with-healthy-buildkit.sh")
+            && web.contains("_ci:pr:web:host")
+            && !web.contains("task --dir \"{{.REPO_ROOT}}\" _buildx:healthy")
+            && web.contains("VITE_SITE_URL: '{{.VITE_SITE_URL}}'")
+            && web.contains("NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'"),
         "the public web route must select local assembly only when hosted CI has no handoff"
     );
     assert!(
