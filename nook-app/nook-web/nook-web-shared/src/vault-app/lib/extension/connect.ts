@@ -24,6 +24,10 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
+type ChromeRuntimeLastError = {
+  readonly message?: string;
+};
+
 type ChromeRuntimeHost = {
   // eslint-disable-next-line max-params -- Chrome owns this positional API.
   sendMessage?: (
@@ -31,7 +35,7 @@ type ChromeRuntimeHost = {
     message: unknown,
     callback: (response?: unknown) => void,
   ) => void;
-  lastError?: typeof globalThis.chrome.runtime.lastError;
+  lastError?: ChromeRuntimeLastError;
 };
 
 type ExtensionBrowserHost = typeof globalThis & {
