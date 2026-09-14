@@ -75,6 +75,37 @@ test('rejects missing and invalid dev:land branch identity', () => {
   }
 });
 
+test('accepts only the Prime-authorized long canonical feature branch', () => {
+  const previous = process.env.FEATURE_BRANCH;
+  try {
+    process.env.FEATURE_BRANCH = 'codex/agentic-pipeline-delivery';
+    const authorized = DevCli.requiredDevLandPacket();
+    expect(authorized.isOk()).toBe(true);
+    if (authorized.isOk()) {
+      expect(authorized.value.featureBranch.value()).toBe(
+        'codex/agentic-pipeline-delivery',
+      );
+    }
+
+    for (const branch of [
+      'codex/agentic-pipeline-deliveries',
+      'codex/agentic-pipeline-delivery-extra',
+      'codex/agentic-pipeline-delivery/tmp',
+      'codex/agentic-pipeline-delivery/delivery-pipeline/pr-lifecycle/repair-feature-branch-validator',
+    ]) {
+      process.env.FEATURE_BRANCH = branch;
+      const rejected = DevCli.requiredDevLandPacket();
+      expect(rejected.isErr()).toBe(true);
+      if (rejected.isErr()) {
+        expect(rejected.error.message).toContain('malformed');
+      }
+    }
+  } finally {
+    if (typeof previous === 'string') process.env.FEATURE_BRANCH = previous;
+    else delete process.env.FEATURE_BRANCH;
+  }
+});
+
 class BranchOnlyRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
 

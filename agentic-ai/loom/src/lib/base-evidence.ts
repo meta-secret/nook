@@ -77,6 +77,7 @@ export class CanonicalFeatureBranchContract {
           10,
           20,
         ) ||
+          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(
@@ -96,6 +97,13 @@ export class CanonicalFeatureBranchContract {
         ) &&
         segments[3] !== 'cleanup');
     return valid;
+  }
+
+  /** Preserves the Prime-authorized delivery branch created before the current length bound. */
+  private static isEstablishedPrimeBranch(
+    segments: readonly string[],
+  ): boolean {
+    return segments.length === 1 && segments[0] === 'agentic-pipeline-delivery';
   }
 
   private static isKebabSegment(
