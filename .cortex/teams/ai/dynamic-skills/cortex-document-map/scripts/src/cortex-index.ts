@@ -297,12 +297,14 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
-- [Gizmo Prime](gizmo-prime/AGENTS.md) is the first actor for each new user-originated
-  repository task. Follow-ups retain their current Gizmo owner.
+- Gizmo Prime is the first actor for each new user-originated repository task.
+  Follow-ups retain their current Gizmo owner.
 - Assigned workers use the owning team context in their bounded packet.
 - Gizmo routes manually requested dev operations to the dev manager.
 
 ## Canonical tree
+
+### Roles and worktrees
 
 Gizmo Prime lives at \`gizmo-prime/\`. Its six and only six top-level teams are
 \`teams/ai/\`, \`teams/dev-core/\`, \`teams/security/\`, \`teams/sre/\`,
@@ -316,6 +318,8 @@ worktree. Prime reuses or creates a compatible Team Gizmo before dispatch. That
 Team Gizmo reuses or dispatches bounded internal leaf Team Agents, each in an
 issued child worktree, and integrates specialist commits into its feature
 branch.
+
+### Fresh-base bootstrap
 
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 \`git fetch --prune origin\`; a fetch failure fails closed. Delivery/Dev Manager
@@ -337,6 +341,8 @@ resolves the latest committed branch head before each remote dispatch, review,
 or landing operation. If the branch advances, follow the latest head and rerun
 affected evidence. Team Gizmos and leaves keep temporary branches private.
 
+### Harness admission
+
 Active harness admission is dynamic. Gizmo immediately attempts every
 dependency-ready Team Gizmo with a disjoint scope concurrently and uses the
 actual admission result. A temporary admission refusal queues work for retry when capacity
@@ -344,6 +350,8 @@ releases. A host or session allocation is current availability, not an
 architecture or product limit. A dispatch wave is not pre-checked or budgeted
 against a numeric limit. Cortex and Loom never encode, infer, or repeat a fixed
 numeric agent or subagent concurrency cap.
+
+### Specialist routing
 
 Current specialist routing includes SRE (\`teams/sre/provisioning/\` and
 \`teams/sre/cloud-native/\`), Development Core
@@ -354,21 +362,12 @@ Current specialist routing includes SRE (\`teams/sre/provisioning/\` and
 
 ## Owning contexts
 
-- [Multiagent delivery architecture](gizmo-prime/architecture/multiagent-delivery-diagrams.md):
-  mandatory primary explanation for the complete feature, check, local-dev,
-  dev-validation, and promotion workflow.
 - [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational
-  delivery mechanics. Its Team Gizmo is
-  [here](teams/delivery-pipeline/gizmo/knowledge-graph.md); the
-  [Dev Manager](teams/delivery-pipeline/dev-manager/knowledge-graph.md) alone
-  invokes \`dev:pr-manager\`, and the
-  [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
-  performs only authorized mechanics.
-- [Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical
-  feature compilation, local integration, and dev-to-main contract.
+  delivery mechanics. Its owner graph routes Team Gizmo, Dev Manager, and PR
+  Lifecycle authorities.
 - [Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
-  New feature and child branches follow the [branch naming contract](gizmo-prime/dynamic-skills/branch-naming.md).
+  Its owner graph routes delivery architecture and branch naming.
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault

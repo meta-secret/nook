@@ -16,9 +16,13 @@ harness provides Team Agent communication.
 4. Follow direct links one hop only when the task requires them.
 5. Do not load the Gizmo graph or another team's graph.
 
+### Universal boundary
+
 The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
 universal requirements. This entry point adds only AI ownership and context
 selection.
+
+### Harness admission
 
 AI dispatch follows active-harness admission. Immediately attempt every
 dependency-ready specialist with a disjoint scope and use the actual admission
@@ -27,6 +31,8 @@ session allocation is current availability, not an architecture or product
 limit. Do not pre-check or budget a wave against a numeric limit. Cortex and
 Loom never encode, infer, or repeat a fixed numeric agent or subagent
 concurrency cap.
+
+### Bootstrap evidence
 
 AI Team Gizmo and its leaves consume the canonical feature branch name and the
 bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
@@ -41,6 +47,8 @@ follows the latest head and reruns affected evidence. SHAs observed during the
 run are evidence, not cross-stage authority. The AI team fails closed on
 missing or unprovable bootstrap/branch evidence and never resolves or guesses
 a base independently.
+
+### Foreign expertise
 
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team

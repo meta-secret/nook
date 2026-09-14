@@ -646,6 +646,8 @@ authorize a local Playwright run. Spec files that need ordering use
 
 ## Rust dependency updates
 
+### Audit schedule and scope
+
 [`rust-dependency-updates.yml`](../../../../.github/workflows/rust-dependency-updates.yml)
 runs weekly and can be started manually. It installs the pinned
 `cargo-outdated` orchestration tool and runs it with `--workspace
@@ -659,11 +661,15 @@ runs weekly and can be started manually. It installs the pinned
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
+### Automated repair
+
 On an outdated result, `task ci-agent:fix` runs on general ARC with
 `CI_AGENT_FIX_PROFILE=rust-dependency-update`. This narrow trusted Actions
 publisher is not an ordinary Team Agent: its isolated editor updates every
 outdated direct dependency and necessary compatibility code without Git,
 validation, credentials, or publication authority.
+
+### Trusted publication
 
 The trusted publisher may publish only the canonical feature branch for remote
 `build:compile` execution. Each stage re-fetches and resolves the latest
@@ -673,6 +679,8 @@ feature-stage graph is build-only: tests, coverage, e2e, and preflight must not
 execute transitively, including through Docker stages. No local tests, checks,
 preflight, or Docker work may precede publication. Full slow validation runs
 later only in the Dev Manager-controlled dev-to-main GitHub PR cycle.
+
+### Host integrity
 
 The trusted host fails closed unless:
 
@@ -690,7 +698,9 @@ The trusted host fails closed unless:
   phase and leaves the remaining job time for publication-integrity checks; and
 - exact branch identity is unambiguous and the publisher returns its verified
   remote head SHA to Gizmo after commit and push. No PR is created by this
-  workflow; the later dev manager flow owns the single dev-to-main PR.
+workflow; the later dev manager flow owns the single dev-to-main PR.
+
+### Delivery handoff
 
 That handoff resumes the ordinary delivery boundary. The publisher returns the
 verified canonical feature-branch head as stage evidence and owns neither

@@ -8,15 +8,13 @@ packet.
 - [Web Development Team Gizmo contract](AGENTS.md)
 - [Web Development team contract](../AGENTS.md)
 - [Web Development team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime contract](../../../gizmo-prime/AGENTS.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- Gizmo Prime is the parent mission authority.
 
 ## Specialist contexts
 
-- [TypeScript specialist knowledge graph](../typescript-specialist/knowledge-graph.md)
-- [Svelte specialist knowledge graph](../svelte-specialist/knowledge-graph.md)
+- [TypeScript specialist contract](../typescript-specialist/AGENTS.md)
+- [Svelte specialist contract](../svelte-specialist/AGENTS.md)
 
 ## Delivery authority
 
-- [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
-- [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
+Prime supplies the applicable delivery authority in the packet.

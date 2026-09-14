@@ -2,6 +2,8 @@
 
 ## Status and authority
 
+### Supersession
+
 This is the approved delivery contract for concurrent feature development.
 It supersedes feature-stage full validation, direct feature publication to dev,
 and squash delivery to main. Runtime owners implement the command contracts
@@ -11,9 +13,13 @@ this Cortex document alone does not establish command availability.
 Missing capability blocks the affected stage. Do not substitute tests or full
 slow validation for feature compilation.
 
+### Slow-stage boundary
+
 The existing `.github/workflows/pr.yml` supplies the slow checks. In this
 architecture, only the dev manager's dev-to-main cycle uses that workflow.
 Routing, captured-SHA checkouts, and concurrency still require runtime alignment.
+
+### Primary model
 
 The [multiagent delivery visual model](multiagent-delivery-diagrams.md) is the
 mandatory first read and primary end-to-end explanation. Its diagrams define

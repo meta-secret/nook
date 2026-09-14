@@ -6,29 +6,35 @@ rules belong to Gizmo Prime's linked authorities.
 
 ## Canonical Cortex tree
 
-The canonical routing tree is rooted at `.cortex/gizmo-prime`. It has exactly
-six top-level teams: `ai`, `dev-core`, `security`, `sre`, `web-dev`, and
-`delivery-pipeline`. Each team has exactly one `gizmo` at
-`teams/<team>/gizmo/`; every Team Gizmo reports to Gizmo Prime and uses
-`gpt-5.6-sol` with `low` reasoning. It requests Fast mode with
-`service_tier: fast`, which resolves as `priority`.
+The canonical routing tree is rooted at `.cortex/gizmo-prime`.
 
-Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning.
-It requests Fast mode with `service_tier: fast`, which resolves as `priority`.
-Each leaf receives a separate issued child worktree.
+- **Teams**
+  - The six top-level teams are `ai`, `dev-core`, `security`, `sre`,
+    `web-dev`, and `delivery-pipeline`.
+  - Each team has exactly one `gizmo` at `teams/<team>/gizmo/`.
+  - Every Team Gizmo reports to Gizmo Prime.
+- **Team Gizmos**
+  - Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.
+  - It requests Fast mode with `service_tier: fast`.
+  - Fast mode resolves as `priority`.
+  - Each Team Gizmo owns one team worktree for its packet.
+  - Gizmo Prime reuses or creates a compatible Team Gizmo for the packet.
+  - The Team Gizmo dispatches bounded internal leaf Team Agents.
+  - It integrates their commits into its feature branch.
+  - It reports the resulting branch state to Prime.
+- **Leaf Team Agents**
+  - Each leaf uses `gpt-5.6-luna` with `xhigh` reasoning.
+  - It requests Fast mode with `service_tier: fast`.
+  - Each leaf receives a separate issued child worktree.
+- **Specialist paths**
+  - SRE uses `teams/sre/provisioning/` and `teams/sre/cloud-native/`.
+  - Development Core uses `teams/dev-core/rust-core-developer/` and
+    `teams/dev-core/rust-auth2-developer/`.
+  - Delivery Pipeline uses `teams/delivery-pipeline/gizmo/`,
+    `teams/delivery-pipeline/dev-manager/`, and
+    `teams/delivery-pipeline/pr-lifecycle/`.
 
-Each Team Gizmo owns one team worktree for its packet. Gizmo Prime reuses or
-creates a compatible Team Gizmo for the packet. That Team Gizmo reuses or
-dispatches bounded internal leaf Team Agents, each in an issued child
-worktree. Team Gizmo integrates those specialist commits into its feature
-branch and reports the resulting branch state to Prime. Any commit SHA is
-observational evidence, not workflow authority.
-
-The current specialist paths are SRE
-(`teams/sre/provisioning/`, `teams/sre/cloud-native/`), Development Core
-(`teams/dev-core/rust-core-developer/`, `teams/dev-core/rust-auth2-developer/`),
-and Delivery Pipeline (`teams/delivery-pipeline/gizmo/`,
-`teams/delivery-pipeline/dev-manager/`, `teams/delivery-pipeline/pr-lifecycle/`).
+Any commit SHA is observational evidence, not workflow authority.
 
 ## Mandatory Gizmo Gate — fail closed
 
@@ -655,6 +661,8 @@ temporary notes optional and requires cleanup before readiness.
 
 ## Delivery and validation
 
+### Mission workflow
+
 The delivery workflow is mandatory. Follow
 [mission delivery](gizmo-prime/workflows/mission-delivery.md) through feature landing
 and the manager handoff. A worker commit is not feature completion.
@@ -669,6 +677,8 @@ explicit user instruction such as `stop at PR` selects an intermediate
 handoff. Silence about
 merge is not an intermediate selection.
 
+### Delivery completion
+
 Feature delivery completes after reviewed, remotely compiled changes merge
 into local dev through local integration. The manually run dev manager owns the
 slow delivery stage through snapshot publication, full dev PR validation, and
@@ -676,6 +686,8 @@ guarded fast-forward promotion. Delivery Pipeline Team Gizmo routes authorized
 mechanics to the PR Lifecycle Agent for the owning controller. Promotion
 fast-forwards main to the tested dev SHA. A worker commit alone does not
 complete feature delivery. Every change passes through dev.
+
+### Failed validation waves
 
 When a dev PR validation wave fails, the terminal evidence must include every
 failed or cancelled required GitHub Actions job before repair begins. Gizmo
