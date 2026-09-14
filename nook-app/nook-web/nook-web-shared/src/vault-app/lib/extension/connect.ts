@@ -24,10 +24,6 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ChromeRuntimeLastError = {
-  readonly message?: string;
-};
-
 type ChromeRuntimeHost = {
   // eslint-disable-next-line max-params -- Chrome owns this positional API.
   sendMessage?: (
@@ -35,10 +31,12 @@ type ChromeRuntimeHost = {
     message: unknown,
     callback: (response?: unknown) => void,
   ) => void;
-  lastError?: ChromeRuntimeLastError | undefined;
 };
 
-type ExtensionBrowserHost = typeof globalThis & {
+type ExtensionBrowserHost = {
+  readonly crypto: typeof globalThis.crypto;
+  readonly document: typeof globalThis.document;
+  readonly window: typeof globalThis.window;
   chrome?: { runtime?: ChromeRuntimeHost };
 };
 import { ApplicationPath } from "$lib/runtime/routes";
@@ -283,6 +281,18 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
+  private static runtimeHasLastError(runtime: ChromeRuntimeHost): boolean {
+    if (!("lastError" in runtime)) return false;
+    const lastError = runtime.lastError;
+    return (
+      !!lastError &&
+      typeof lastError === "object" &&
+      "message" in lastError &&
+      typeof lastError.message === "string" &&
+      !!lastError.message
+    );
+  }
+
   isExtensionConnectPath(pathname: string): boolean {
     const normalized =
       new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
@@ -377,14 +387,14 @@ class ExtensionConnectionBrowser {
   }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
     return new Promise((resolve) => {
       const runtime = this.browser.chrome?.runtime;
-      const sendMessage = runtime?.sendMessage?.bind(runtime);
-      if (!sendMessage) {
+      if (!runtime?.sendMessage) {
         const resolveArgs: Parameters<typeof resolve>[0] = {
           kind: ExtensionMessageDeliveryKind.Unavailable,
         };
         resolve(resolveArgs);
         return;
       }
+      const sendMessage = runtime.sendMessage.bind(runtime);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
@@ -392,7 +402,7 @@ class ExtensionConnectionBrowser {
         resolve,
       });
       function receiveExtensionResponse(response?: unknown): void {
-        if (runtime?.lastError?.message) {
+        if (ExtensionConnectionBrowser.runtimeHasLastError(runtime)) {
           pending.unavailable();
           return;
         }
@@ -701,7 +711,7 @@ class ExtensionConnectionBrowser {
           request.extensionRuntimeId,
           message,
           (response) => {
-            if (runtime.lastError?.message) {
+            if (ExtensionConnectionBrowser.runtimeHasLastError(runtime)) {
               resolve(
                 err(
                   new VaultStorageFailure(
