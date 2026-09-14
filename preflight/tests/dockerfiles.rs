@@ -73,6 +73,19 @@ fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> an
     let web_stage = &dockerfile[web_stage..];
 
     assert!(
+        dockerfile.contains("prod) wasm_opt_flag=\"\"; stamp_mode=\"optimized\" ;;")
+            && dockerfile.contains("dev) wasm_opt_flag=\"--no-opt\"; stamp_mode=\"no-opt\" ;;"),
+        "compile-wasm-source must map each WASM build mode to its isolation verifier stamp"
+    );
+    assert!(
+        dockerfile.contains(concat!(
+            "printf '%s\\n' \"$stamp_mode\" > ",
+            "/opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode"
+        )),
+        "compile-wasm-source must include the selected build mode in its handoff"
+    );
+
+    assert!(
         web_stage.contains(concat!(
             "cp -a /tmp/nook-wasm-handoff/nook-wasm/. \\\n",
             "      nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/"
