@@ -17,12 +17,20 @@ await companionWasmReady
 
 function pairingGrant(id: string): StoredExtensionPairingGrant {
   return {
+    vaultType: 'simple',
     vaultStoreId: id,
     vaultName: `Vault ${id}`,
     deviceId: `device-${id}`,
     devicePublicKey: `public-${id}`,
     deviceSigningPublicKey: `signing-${id}`,
-  } as StoredExtensionPairingGrant
+    deviceLabel: `device-${id}`,
+    approvedAt: '2026-08-10T00:00:00Z',
+    scopes: [],
+    syncProviderCount: 0,
+    eventCount: 0,
+    eventLogHeads: [],
+    lastLocalSyncAt: '',
+  }
 }
 
 describe('website passkey options', () => {

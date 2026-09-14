@@ -2,17 +2,37 @@ import { expect, mock, test } from 'bun:test'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import type { EnrollmentFlowHost } from '../src/content/enrollment-flow'
+import {
+  RuntimeMessageDeliveryKind,
+  type AuthenticatorEnrollmentConfirmResponse,
+  type AuthenticatorEnrollmentStageResponse,
+} from '../src/content/autofill/runtime-message-adapter'
+import type { BrowserMessageKey } from '../src/lib/browser-message-keys'
 
-Object.assign(globalThis, {
-  document: { querySelectorAll: () => [] },
-  location: { origin: 'https://example.test' },
-})
+function installTestDocument(): void {
+  Object.assign(globalThis, {
+    document: {
+      createElement: () => ({
+        disabled: false,
+        hidden: false,
+        isConnected: true,
+        remove: mock(() => {}),
+        replaceChildren: mock(() => {}),
+        append: mock(() => {}),
+        textContent: '',
+      }),
+      querySelectorAll: () => [],
+    },
+    location: { origin: 'https://example.test' },
+  })
+}
+installTestDocument()
 
 await companionWasmReady
 const { authenticatorEnrollmentInteraction } =
   await import('../src/content/enrollment-flow')
 const delivered = <Response>(response: Response) => ({
-  kind: 'delivered' as const,
+  kind: RuntimeMessageDeliveryKind.Delivered,
   response,
 })
 
@@ -24,29 +44,56 @@ function enrollmentHost(confirmKind: number) {
   const outcome = mock(async () => {
     throw new Error('website outcome polling must not run')
   })
-  const host = {
-    description: { textContent: '' },
+  const host: EnrollmentFlowHost = {
+    panel: document.createElement('div'),
+    title: document.createElement('h2'),
+    description: document.createElement('p'),
+    step: document.createElement('p'),
+    continueButton: document.createElement('button'),
+    openVaultButton: document.createElement('button'),
     setBusy: mock(() => {}),
-    translatedMessage: (key: string) => key,
+    isBusy: () => false,
+    translatedMessage: (key: BrowserMessageKey) => key,
     sendAuthenticatorEnrollmentStageRuntimeMessage: mock(async () => {
       order.push('stage')
-      return delivered({ kind: 0, stageId: 'stage-1' })
+      const response: AuthenticatorEnrollmentStageResponse = {
+        kind: 0,
+        stageId: 'stage-1',
+      }
+      return delivered(response)
     }),
     sendAuthenticatorEnrollmentConfirmRuntimeMessage: mock(async () => {
       order.push('confirm')
-      return confirmKind === 0
-        ? delivered({ kind: 0 })
-        : delivered({ kind: 1, reason: 'authenticator-enroll-failed' })
+      const response: AuthenticatorEnrollmentConfirmResponse =
+        confirmKind === 0
+          ? { kind: 0, secretId: 'secret-1' }
+          : { kind: 1, reason: 'authenticator-enroll-failed' }
+      return delivered(response)
     }),
     sendAuthenticatorCodeRuntimeMessage: code,
     sendAuthenticationOutcomeRuntimeMessage: outcome,
-  } as unknown as EnrollmentFlowHost
+    sendDecodedRuntimeMessage: async () => {
+      throw new Error('decoded runtime message must not run')
+    },
+    sendAuthenticatorBackupAttachRuntimeMessage: async () => {
+      throw new Error('backup attach must not run')
+    },
+    sendAuthenticatorOptionsRuntimeMessage: async () => {
+      throw new Error('authenticator options must not run')
+    },
+    sendAuthenticatorPreviewRuntimeMessage: async () => {
+      throw new Error('authenticator preview must not run')
+    },
+    sendRuntimeMessageWithoutResponse: () => {},
+    translatedMessageWithSubstitution: ({ key, substitution }) =>
+      `${key}:${substitution}`,
+  }
   return { code, host, order, outcome }
 }
 
 test('explicit authenticator confirmation saves immediately after staging', async () => {
   const { code, host, order, outcome } = enrollmentHost(0)
-  const section = { replaceChildren: mock(() => {}) } as unknown as HTMLElement
+  const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
 
@@ -102,7 +149,7 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
 
 test('immediate authenticator save reports confirmation failure truthfully', async () => {
   const { code, host, order, outcome } = enrollmentHost(1)
-  const section = { replaceChildren: mock(() => {}) } as unknown as HTMLElement
+  const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
 

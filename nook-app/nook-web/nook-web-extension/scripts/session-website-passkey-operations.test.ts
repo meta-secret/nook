@@ -32,12 +32,43 @@ type MockManagerState = {
   assertionFreed: boolean
 }
 
-function mockManager(state: MockManagerState): NookVaultManager {
-  return {
-    register_website_passkey: async (
-      ...args: Parameters<NookVaultManager['register_website_passkey']>
-    ) => {
-      const [, shouldContinue] = args
+type MockPasskeyManager = Pick<
+  NookVaultManager,
+  | 'open_extension_passkey_vault_js'
+  | 'load_auth_providers_snapshot'
+  | 'flush_event_outbox_for_provider'
+> & {
+  register_website_passkey: (
+    request: Parameters<NookVaultManager['register_website_passkey']>[0],
+    ceremonyActive: () => boolean,
+  ) => Promise<{
+    credentialId: string
+    clientDataJSON: string
+    attestationObject: string
+    transports: string[]
+    free: () => void
+  }>
+  assert_website_passkey: (
+    request: Parameters<NookVaultManager['assert_website_passkey']>[0],
+    ceremonyActive: () => boolean,
+  ) => Promise<{
+    credentialId: string
+    clientDataJSON: string
+    authenticatorData: string
+    signature: string
+    userHandle: string
+    free: () => void
+  }>
+}
+
+function mockManager(state: MockManagerState): MockPasskeyManager {
+  const manager: MockPasskeyManager = {
+    open_extension_passkey_vault_js: async () => {},
+    load_auth_providers_snapshot: async () => {
+      throw new Error('unused test manager operation')
+    },
+    flush_event_outbox_for_provider: async () => {},
+    register_website_passkey: async (_request, shouldContinue) => {
       state.registrationContinuationObserved = shouldContinue()
       return {
         credentialId: 'registration-credential',
@@ -49,10 +80,7 @@ function mockManager(state: MockManagerState): NookVaultManager {
         },
       }
     },
-    assert_website_passkey: async (
-      ...args: Parameters<NookVaultManager['assert_website_passkey']>
-    ) => {
-      const [, shouldContinue] = args
+    assert_website_passkey: async (_request, shouldContinue) => {
       state.assertionContinuationObserved = shouldContinue()
       return {
         credentialId: 'assertion-credential',
@@ -65,7 +93,8 @@ function mockManager(state: MockManagerState): NookVaultManager {
         },
       }
     },
-  } as NookVaultManager
+  }
+  return manager
 }
 
 function cancelRequest(requestId: string): CancelPasskeyRequest {

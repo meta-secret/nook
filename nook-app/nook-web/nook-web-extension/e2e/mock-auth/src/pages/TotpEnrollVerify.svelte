@@ -3,9 +3,13 @@
   import { softNavigate } from '../lib/navigation'
   import { verifyTotpCode } from '../lib/totp'
 
-  const enrollAccount = MOCK_AUTH_ACCOUNTS.find(
+  const enrollAccountCandidate = MOCK_AUTH_ACCOUNTS.find(
     (account) => account.totpSecret,
-  )!
+  )
+  if (!enrollAccountCandidate) {
+    throw new Error('TOTP enrollment fixture account is missing')
+  }
+  const enrollAccount = enrollAccountCandidate
 
   let error = $state('')
   let busy = $state(false)

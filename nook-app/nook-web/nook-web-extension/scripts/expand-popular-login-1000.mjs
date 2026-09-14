@@ -40,6 +40,78 @@ const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 /** @typedef {{ fields: Array<Record<string, string>>, submit: Record<string, string> }} StoredTemplateStep */
 /** @typedef {{ id: string, quirks: string[], steps: StoredTemplateStep[] }} StoredTemplate */
 
+/** @type {{ parse: (value: string) => unknown }} */
+const safeJson = JSON
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** @param {unknown} value @returns {value is Record<string, string>} */
+function isStringRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).every((entry) => typeof entry === 'string')
+}
+
+/** @param {unknown} value @returns {value is StoredTemplateStep} */
+function isStoredTemplateStep(value) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('fields' in value) ||
+    !('submit' in value)
+  )
+    return false
+  return (
+    Array.isArray(value.fields) &&
+    value.fields.every(isStringRecord) &&
+    isStringRecord(value.submit)
+  )
+}
+
+/** @param {unknown} value @returns {value is StoredTemplate} */
+function isStoredTemplate(value) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('id' in value) ||
+    typeof value.id !== 'string'
+  )
+    return false
+  if (
+    !('quirks' in value) ||
+    !Array.isArray(value.quirks) ||
+    !value.quirks.every((entry) => typeof entry === 'string')
+  )
+    return false
+  return (
+    'steps' in value &&
+    Array.isArray(value.steps) &&
+    value.steps.every(isStoredTemplateStep)
+  )
+}
+
+/** @param {unknown} value @returns {value is CatalogSite} */
+function isCatalogSite(value) {
+  if (!value || typeof value !== 'object') return false
+  return (
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'family' in value &&
+    typeof value.family === 'string' &&
+    'loginUrl' in value &&
+    typeof value.loginUrl === 'string' &&
+    'hosts' in value &&
+    Array.isArray(value.hosts) &&
+    value.hosts.every((host) => typeof host === 'string') &&
+    'rank' in value &&
+    typeof value.rank === 'number'
+  )
+}
+
 /** Keep hand-tuned Tier-1 / family shells from existing templates when present. */
 function loadExistingTemplates() {
   /** @type {Map<string, StoredTemplate>} */
@@ -48,7 +120,12 @@ function loadExistingTemplates() {
     n.endsWith('.json'),
   )) {
     const id = name.replace(/\.json$/u, '')
-    const data = JSON.parse(readFileSync(path.join(templatesDir, name), 'utf8'))
+    const data = safeJson.parse(
+      readFileSync(path.join(templatesDir, name), 'utf8'),
+    )
+    if (!isStoredTemplate(data)) {
+      throw new Error(`Invalid stored template ${id}`)
+    }
     map.set(id, {
       id,
       quirks: ((v) => (v ? v : []))(data.quirks),
@@ -62,10 +139,29 @@ function loadExistingTemplates() {
 const EXTRA = [...EXTRA_PRIMARY, ...EXTRA_SECONDARY]
 
 function main() {
-  /** @type {CatalogSite[]} */
-  const seeded = JSON.parse(readFileSync(catalogPath, 'utf8'))
+  const seededValue = safeJson.parse(readFileSync(catalogPath, 'utf8'))
+  if (!Array.isArray(seededValue) || !seededValue.every(isCatalogSite)) {
+    throw new Error('Invalid popular login catalog')
+  }
+  const seeded = seededValue
+  const existingShellsValue = safeJson.parse(
+    readFileSync(siteShellsPath, 'utf8'),
+  )
+  if (!isObjectRecord(existingShellsValue)) {
+    throw new Error('Invalid site shell catalog')
+  }
   /** @type {Record<string, { template?: string, source?: string }>} */
-  const existingShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
+  const existingShells = {}
+  for (const [id, value] of Object.entries(existingShellsValue)) {
+    if (!value || typeof value !== 'object') continue
+    /** @type {{ template?: string, source?: string }} */
+    const shell = {}
+    if ('template' in value && typeof value.template === 'string')
+      shell.template = value.template
+    if ('source' in value && typeof value.source === 'string')
+      shell.source = value.source
+    existingShells[id] = shell
+  }
   const existingTemplates = loadExistingTemplates()
 
   /** @type {Map<string, ExpandedSite>} */

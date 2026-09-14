@@ -249,6 +249,7 @@ const CAPTURE_IDS = new Set([
   'instagram',
 ])
 
+/** @type {Record<string, string>} */
 const SPECIAL_TEMPLATE_IDS = {
   facebook: 'facebook',
   github: 'github',

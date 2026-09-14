@@ -9,9 +9,13 @@
   } from '../lib/login-form'
   import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
 
-  const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
+  const fixtureAccountCandidate = MOCK_AUTH_ACCOUNTS.find(
     (account) => !account.totpSecret,
-  )!
+  )
+  if (!fixtureAccountCandidate) {
+    throw new Error('plain-login fixture account is missing')
+  }
+  const fixtureAccount = fixtureAccountCandidate
 
   let error = $state('')
 

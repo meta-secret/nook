@@ -29,11 +29,50 @@ const fixturesRoot = path.join(
 const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 
-/** @type {LoginSite[]} */
-const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
-const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
-
 /** @typedef {{ id: string, loginUrl: string }} LoginSite */
+/** @typedef {{ template: string, source: string, loginUrl: string }} SiteShell */
+
+/** @type {{ parse: (value: string) => unknown }} */
+const safeJson = JSON
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** @param {unknown} value @returns {value is LoginSite} */
+function isLoginSite(value) {
+  return (
+    isObjectRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.loginUrl === 'string'
+  )
+}
+
+/** @param {unknown} value @returns {value is SiteShell} */
+function isSiteShell(value) {
+  return (
+    isObjectRecord(value) &&
+    typeof value.template === 'string' &&
+    typeof value.source === 'string' &&
+    typeof value.loginUrl === 'string'
+  )
+}
+
+const catalogValue = safeJson.parse(readFileSync(catalogPath, 'utf8'))
+if (!Array.isArray(catalogValue) || !catalogValue.every(isLoginSite)) {
+  throw new Error('Invalid popular login catalog')
+}
+const catalog = catalogValue
+const siteShellsValue = safeJson.parse(readFileSync(siteShellsPath, 'utf8'))
+if (!isObjectRecord(siteShellsValue)) {
+  throw new Error('Invalid site shell catalog')
+}
+/** @type {Record<string, SiteShell>} */
+const siteShells = {}
+for (const [id, value] of Object.entries(siteShellsValue)) {
+  if (isSiteShell(value)) siteShells[id] = value
+}
 
 /** @param {string} id @returns {LoginSite | false} */
 function siteById(id) {

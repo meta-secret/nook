@@ -1,6 +1,8 @@
 export const AUTHENTICATION_ROUTE_HISTORY_SOURCE =
   "nook-authentication-route-v1";
 
+export type AuthenticationSourceMessage = { source?: string };
+
 type NavigationCurrentEntryChangeListener = () => void;
 
 type SameDocumentNavigationObserver = {
@@ -27,7 +29,9 @@ class AuthenticationRouteBrowser {
     this.browser.window.postMessage(message, targetOrigin);
   }
 
-  isAuthenticationRouteHistoryMessage(event: MessageEvent): boolean {
+  isAuthenticationRouteHistoryMessage(
+    event: MessageEvent<AuthenticationSourceMessage>,
+  ): boolean {
     if (
       this.browser.location.origin === "null" ||
       event.origin === "null" ||
@@ -37,10 +41,9 @@ class AuthenticationRouteBrowser {
       return false;
     }
     const data = event.data;
+    if (!data || typeof data !== "object") return false;
     return (
-      typeof data === "object" &&
-      Boolean(data) &&
-      data.source === AUTHENTICATION_ROUTE_HISTORY_SOURCE
+      "source" in data && data.source === AUTHENTICATION_ROUTE_HISTORY_SOURCE
     );
   }
 

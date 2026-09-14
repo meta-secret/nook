@@ -8,7 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
   type AuthProvidersSnapshot,
-  type NookExternalEventLogRecords,
+  NookExternalEventLogRecords,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
@@ -87,10 +87,9 @@ function importRequest(
 function importDependencies(
   provider: StorageProvider,
 ): ImportExtensionVaultDependencies {
-  const records = {} as NookExternalEventLogRecords
   return {
     decodeProviders: () => [provider],
-    createRecords: () => records,
+    createRecords: () => NookExternalEventLogRecords.from_array([]),
   }
 }
 

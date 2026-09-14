@@ -261,11 +261,7 @@ describe('extension pairing grant transport', () => {
                 },
               ),
             )
-          : Promise.resolve(
-              scenario === 'malformed'
-                ? { [key]: {} as StoredExtensionPairingGrant }
-                : {},
-            ),
+          : Promise.resolve(scenario === 'malformed' ? { [key]: {} } : {}),
       )
       const unusedOperation = mock(() =>
         Promise.reject(new Error('must not run')),

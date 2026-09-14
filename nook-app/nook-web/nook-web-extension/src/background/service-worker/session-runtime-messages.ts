@@ -13,13 +13,24 @@ type AuthenticationSurfacesRefreshMessage = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
-type ChromeMessageListener = Parameters<
-  typeof chrome.runtime.onMessage.addListener
->[0]
-type ChromeRuntimeMessage = Parameters<ChromeMessageListener>[0]
+export type ExtensionSessionRuntimeMessageInput = {
+  [key: string]:
+    | string
+    | number
+    | boolean
+    | ExtensionSessionRuntimeMessageInput
+    | ExtensionSessionRuntimeMessageInput[]
+}
+
+export type ExtensionSessionRuntimeMessageValue =
+  | ExtensionSessionRuntimeMessageInput
+  | ExtensionSessionRuntimeMessageInput[]
+  | string
+  | number
+  | boolean
 
 export function isExtensionSessionEnsureMessage(
-  message: ChromeRuntimeMessage,
+  message: ExtensionSessionRuntimeMessageValue,
 ): message is ExtensionSessionRuntimeMessage {
   return (
     !!message &&
@@ -30,7 +41,7 @@ export function isExtensionSessionEnsureMessage(
 }
 
 export function isExtensionAuthenticationSurfacesRefreshMessage(
-  message: ChromeRuntimeMessage,
+  message: ExtensionSessionRuntimeMessageValue,
 ): message is AuthenticationSurfacesRefreshMessage {
   return (
     !!message &&
@@ -41,7 +52,7 @@ export function isExtensionAuthenticationSurfacesRefreshMessage(
 }
 
 export function isExtensionSessionExpiryMessage(
-  message: ChromeRuntimeMessage,
+  message: ExtensionSessionRuntimeMessageValue,
 ): message is ExtensionSessionRuntimeMessage {
   return (
     !!message &&
@@ -52,7 +63,7 @@ export function isExtensionSessionExpiryMessage(
 }
 
 export function isExtensionSessionLockMessage(
-  message: ChromeRuntimeMessage,
+  message: ExtensionSessionRuntimeMessageValue,
 ): message is ExtensionSessionRuntimeMessage {
   return (
     !!message &&

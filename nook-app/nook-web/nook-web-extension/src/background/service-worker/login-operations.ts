@@ -41,6 +41,7 @@ import {
   type LoginOperationSuccess,
 } from './login-session-response-adapter'
 import { websiteLoginRevealSessionRequest } from './session-request-projections'
+import { decode_website_login_save_pending_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 enum LoginPickerOpenStatus {
   Ready = 'ready',
@@ -520,34 +521,17 @@ export async function websiteLoginSavePending({
   if (delivery0_9.isErr()) {
     return delivery0_9.error.response
   }
-  const response = delivery0_9.value
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    !('ok' in response) ||
-    response.ok !== true
-  ) {
-    return { ok: false, reason: 'login-save-pending-failed' }
+  const response = decode_website_login_save_pending_response(delivery0_9.value)
+  if (response.ok !== true || !('state' in response)) {
+    return response
   }
-  if (
-    !('state' in response) ||
-    response.state !== 'available' ||
-    !('offer' in response) ||
-    typeof response.offer !== 'object'
-  ) {
-    return { ok: true, state: 'unavailable' }
-  }
-  const staged = response.offer as {
-    offerId?: string
-    decision?: number
-    vaultStoreId?: string
-  }
+  if (response.state !== 'available') return response
+  const staged = response.offer
   const grant = grants.find(
     (candidate) => candidate.vaultStoreId === staged.vaultStoreId,
   )
   if (
     !grant ||
-    typeof staged.offerId !== 'string' ||
     (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
       staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
@@ -630,7 +614,11 @@ export async function websiteLoginSaveCommit({
     return { kind: 'rejected', reason: delivery0_11.error.kind }
   }
   const pending = delivery0_11.value
-  let grant = grants[0]!
+  const firstGrant = grants[0]
+  if (!firstGrant) {
+    return { kind: 'rejected', reason: 'login-save-unavailable' }
+  }
+  let grant = firstGrant
   if (
     pending &&
     typeof pending === 'object' &&

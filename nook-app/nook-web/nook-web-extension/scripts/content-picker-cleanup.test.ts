@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
 import type { LoginCredentials } from '../../nook-web-shared/src/extension/password-form-field-actions'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type {
@@ -68,6 +69,23 @@ function pickerApproval(): AuthenticationWorkflowApproval {
 }
 
 const addListener = mock(() => {})
+const fakeElement = () => ({
+  disabled: false,
+  hidden: false,
+  isConnected: true,
+  remove: mock(() => {}),
+  replaceChildren: mock(() => {}),
+  append: mock(() => {}),
+  textContent: '',
+})
+function installTestDocument(): void {
+  Object.assign(globalThis, {
+    document: {
+      createElement: () => fakeElement(),
+    },
+  })
+}
+installTestDocument()
 type RuntimeResponseCallback = (response: unknown) => void
 
 enum RuntimeResponseStateKind {
@@ -170,17 +188,33 @@ test('delivers cleanup cancellation through the content-script router', async ()
     await import('../src/content/autofill/state')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
-  const description = { textContent: '' } as HTMLParagraphElement
-  const continueButton = {
-    disabled: true,
-    hidden: false,
-    isConnected: true,
-  } as HTMLButtonElement
+  const description = document.createElement('p')
+  const continueButton = document.createElement('button')
+  continueButton.disabled = true
+  continueButton.hidden = false
+  const workflow: PasswordFormObservation = {
+    root: document,
+    formScope: { kind: PasswordFormScopeKind.Unowned },
+    summary: {
+      passwordFieldCount: 1,
+      currentPasswordFieldCount: 1,
+      newPasswordFieldCount: 0,
+      genericPasswordFieldCount: 0,
+      usernameFieldCount: 1,
+      oneTimeCodeFieldCount: 0,
+      manualCheckpointPresent: false,
+      passkeyControlPresent: false,
+      formCount: 1,
+      observedAt: 1,
+    },
+  }
+  const step = document.createElement('p')
+  const title = document.createElement('h2')
   pickerState.openLogin({
     requestId: 'login-request',
-    workflow: {} as PasswordFormObservation,
-    step: {} as HTMLParagraphElement,
-    title: {} as HTMLHeadingElement,
+    workflow,
+    step,
+    title,
     description,
     continueButton,
     timeoutId: 7,
@@ -221,15 +255,19 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({
-    remove,
-    isConnected: true,
-  } as unknown as HTMLElement)
+  const host = document.createElement('div')
+  host.remove = remove
+  widgetState.attachHost(host)
   widgetState.dismissed = true
   widgetState.busy = true
   const staleOfferId = 'stale-save-offer'
   saveOfferState.watchPage({
-    offer: { offerId: staleOfferId } as WebsiteLoginSaveOfferView,
+    offer: {
+      offerId: staleOfferId,
+      decision: 0,
+      vaultStoreId: 'vault-store',
+      vaultName: 'Vault',
+    } satisfies WebsiteLoginSaveOfferView,
     startedAt: 1,
     authPath: '/login',
     sawMutation: false,
@@ -274,12 +312,16 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({
-    isConnected: true,
-    remove,
-  } as unknown as HTMLElement)
+  const host = document.createElement('div')
+  host.remove = remove
+  widgetState.attachHost(host)
   saveOfferState.watchPage({
-    offer: { offerId: 'rejected-save-offer' } as WebsiteLoginSaveOfferView,
+    offer: {
+      offerId: 'rejected-save-offer',
+      decision: 0,
+      vaultStoreId: 'vault-store',
+      vaultName: 'Vault',
+    } satisfies WebsiteLoginSaveOfferView,
     startedAt: 1,
     authPath: '/login',
     sawMutation: false,

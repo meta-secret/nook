@@ -191,6 +191,46 @@ type WebsiteLoginMatchAvailabilityArgs = {
   dependencies?: WebsiteLoginOptionsDependencies
 }
 
+function isWebsiteLoginOptionsWireValue(
+  value: unknown,
+): value is WebsiteLoginOptionsWireValue {
+  if (!isWebsiteLoginWireObject(value)) return false
+  if (typeof value.ok !== 'boolean') return false
+  if (!value.ok) return typeof value.reason === 'string'
+  if (typeof value.status !== 'string') return false
+  if (value.status !== 'ready')
+    return value.status === 'locked' || value.status === 'unavailable'
+  if (
+    typeof value.authorizationGeneration !== 'string' ||
+    !Array.isArray(value.accounts)
+  )
+    return false
+  return value.accounts.every(isWebsiteLoginAccountWire)
+}
+
+type WebsiteLoginWireObject = {
+  [key: string]:
+    string | boolean | WebsiteLoginWireObject | WebsiteLoginWireObject[]
+}
+
+function isWebsiteLoginWireObject(
+  value: unknown,
+): value is WebsiteLoginWireObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isWebsiteLoginAccountWire(value: unknown): boolean {
+  if (!isWebsiteLoginWireObject(value)) return false
+  return (
+    typeof value.vaultStoreId === 'string' &&
+    typeof value.vaultName === 'string' &&
+    typeof value.secretId === 'string' &&
+    typeof value.username === 'string' &&
+    typeof value.websiteUrl === 'string' &&
+    typeof value.websiteHost === 'string'
+  )
+}
+
 type StoreLoginPickerArgs = {
   request: PendingLoginPicker
   authorizationGeneration: string
@@ -865,9 +905,10 @@ class AccountPickerSessions {
     }
     if (dependencies) responseRequest.dependencies = dependencies
     const response = await this.websiteLoginOptionsResponse(responseRequest)
-    return decode_website_login_match_availability(
-      response as WebsiteLoginOptionsWireValue,
-    )
+    if (!isWebsiteLoginOptionsWireValue(response)) {
+      return { kind: 'unavailable' }
+    }
+    return decode_website_login_match_availability(response)
   }
 
   private loginPickerStorageKey(requestId: string): string {

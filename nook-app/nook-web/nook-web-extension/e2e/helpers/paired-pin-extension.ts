@@ -37,6 +37,17 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
 const setupStorageKey = 'nook:extension-setup'
 const EXTENSION_TIMEOUT_MS = 45_000
 
+type SessionStatusResponse = {
+  ok?: boolean
+  error?: string
+}
+
+type SessionLockResponse = {
+  ok?: boolean
+  error?: string
+  reason?: string
+}
+
 export type PairedPinExtension = {
   context: BrowserContext
   extensionId: string
@@ -72,7 +83,7 @@ export async function exerciseConcurrentSessionStatus({
               type: 'nook:extension-session-status',
               payload: { queue: { kind: 'message-default' } },
             },
-            (response) => {
+            (response?: SessionStatusResponse) => {
               const error = globalThis.chrome.runtime.lastError?.message
               if (error) {
                 reject(new Error(error))
@@ -258,7 +269,8 @@ export async function lockExtensionSession(
       await new Promise<{ ok?: boolean }>((resolve) => {
         globalThis.chrome.runtime.sendMessage(
           { type: 'nook:ensure-extension-session-runtime' },
-          (response) => resolve(((v) => (v ? v : {}))(response)),
+          (response?: SessionStatusResponse) =>
+            resolve(response ? response : {}),
         )
       })
       const activeSessionRequests = Array.from(
@@ -284,10 +296,8 @@ export async function lockExtensionSession(
       }>((resolve) => {
         globalThis.chrome.runtime.sendMessage(
           { type: 'nook:extension-session-lock' },
-          (response) =>
-            resolve(
-              ((...[v = { ok: false, error: 'no-response' }]) => v)(response),
-            ),
+          (response?: SessionLockResponse) =>
+            resolve(response ? response : { ok: false, error: 'no-response' }),
         )
       })
       await Promise.all(activeSessionRequests)

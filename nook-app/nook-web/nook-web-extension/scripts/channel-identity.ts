@@ -10,6 +10,12 @@ export type PullRequestExtensionChannel = `pr-${number}`
 export type ExtensionChannel =
   ExtensionReleaseChannel | PullRequestExtensionChannel
 
+function isPullRequestExtensionChannel(
+  value: string,
+): value is PullRequestExtensionChannel {
+  return /^pr-[1-9][0-9]*$/.test(value)
+}
+
 export type ExtensionChannelIdentity = {
   channel: ExtensionChannel
   extensionId: string
@@ -33,9 +39,7 @@ export function parseExtensionChannel(value: string): ExtensionChannel {
   ) {
     return channel
   }
-  if (/^pr-[1-9][0-9]*$/.test(channel)) {
-    return channel as PullRequestExtensionChannel
-  }
+  if (isPullRequestExtensionChannel(channel)) return channel
   throw new Error(
     'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
   )

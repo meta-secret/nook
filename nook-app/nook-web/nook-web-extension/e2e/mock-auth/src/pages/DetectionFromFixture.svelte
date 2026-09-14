@@ -9,6 +9,7 @@
     getTemplateFixture,
     SiteFixtureLookupKind,
     SiteFixtureSubmitType,
+    type SiteFixtureLookup,
     type SiteFixtureField,
   } from '../lib/site-fixtures'
 
@@ -24,7 +25,7 @@
   let error = $state('')
 
   const renderState: DetectionFixtureRenderState = $derived.by(() => {
-    const selectedFixture = templateId
+    const selectedFixture: SiteFixtureLookup = templateId
       ? getTemplateFixture(templateId)
       : siteId
         ? getSiteFixture(siteId)
@@ -106,6 +107,13 @@
     }
   }
 
+  function requiredRenderStep(state: DetectionFixtureRenderState) {
+    if (state.kind !== DetectionFixtureRenderKind.Ready) {
+      throw new Error('render step is unavailable')
+    }
+    return state.step
+  }
+
   function onsubmit(event: SubmitEvent): void {
     event.preventDefault()
     const form = event.currentTarget
@@ -157,7 +165,7 @@
     <p class="error" role="alert">No fixture for {label}</p>
   </main>
 {:else if wrapAriaHidden}
-  {@const step = renderState.step}
+  {@const step = requiredRenderStep(renderState)}
   <div aria-hidden="true">
     <main>
       <h1>{label}</h1>
@@ -193,7 +201,7 @@
     </main>
   </div>
 {:else}
-  {@const step = renderState.step}
+  {@const step = requiredRenderStep(renderState)}
   <main>
     <h1>{label}</h1>
     <p data-testid="mock-auth-scenario">{label}-login</p>

@@ -50,7 +50,7 @@ export enum SiteFixturePilotExpectation {
   FailClosedAlternateAuthentication = 'fail-closed-alternate-authentication',
 }
 
-enum SiteFixtureSource {
+export enum SiteFixtureSource {
   Capture = 'capture',
   Research = 'research',
 }
@@ -64,12 +64,14 @@ export type PopularLoginSite = {
   rank: number
 }
 
-type ShellTemplate = {
+export type ShellTemplate = {
   id: string
   quirks: string[]
   steps: SiteFixtureStep[]
   pilotExpectation: SiteFixturePilotExpectation
 }
+
+type ShellTemplateRaw = Omit<ShellTemplate, 'id' | 'pilotExpectation'>
 
 export enum SiteFixtureLookupKind {
   Missing = 'missing',
@@ -97,16 +99,53 @@ type SiteShellRef = {
   steps?: SiteFixtureStep[]
 }
 
-const siteShells = siteShellsJson as Record<string, SiteShellRef>
-const pilotExpectations = pilotExpectationsJson as Record<
-  string,
-  SiteFixturePilotExpectation
->
+function isSiteShellRef(value: unknown): value is SiteShellRef {
+  if (!value || typeof value !== 'object') return false
+  return (
+    'template' in value &&
+    typeof value.template === 'string' &&
+    'source' in value &&
+    (value.source === SiteFixtureSource.Capture ||
+      value.source === SiteFixtureSource.Research) &&
+    'loginUrl' in value &&
+    typeof value.loginUrl === 'string'
+  )
+}
+
+function parsePilotExpectation(
+  value: unknown,
+): SiteFixturePilotExpectation | false {
+  switch (value) {
+    case SiteFixturePilotExpectation.ContinueWithNook:
+      return SiteFixturePilotExpectation.ContinueWithNook
+    case SiteFixturePilotExpectation.FailClosedAlternateAuthentication:
+      return SiteFixturePilotExpectation.FailClosedAlternateAuthentication
+    default:
+      return false
+  }
+}
+
+const siteShells = new Map<string, SiteShellRef>()
+for (const [id, value] of Object.entries(siteShellsJson)) {
+  if (isSiteShellRef(value)) siteShells.set(id, value)
+}
+
+const pilotExpectations = new Map<string, SiteFixturePilotExpectation>()
+for (const [id, value] of Object.entries(pilotExpectationsJson)) {
+  const expectation = parsePilotExpectation(value)
+  if (expectation) pilotExpectations.set(id, expectation)
+}
 
 const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
   eager: true,
   import: 'default',
-}) as Record<string, ShellTemplate>
+})
+
+function isShellTemplateRaw(value: unknown): value is ShellTemplateRaw {
+  if (!value || typeof value !== 'object') return false
+  if (!('quirks' in value) || !Array.isArray(value.quirks)) return false
+  return 'steps' in value && Array.isArray(value.steps)
+}
 
 const templatesById = new Map<string, ShellTemplate>()
 for (const [pathKey, template] of Object.entries(templateModules)) {
@@ -114,8 +153,8 @@ for (const [pathKey, template] of Object.entries(templateModules)) {
     .split('/')
     .pop()
     ?.replace(/\.json$/u, '')
-  if (!id || !template || typeof template !== 'object') continue
-  const pilotExpectation = pilotExpectations[id]
+  if (!id || !isShellTemplateRaw(template)) continue
+  const pilotExpectation = pilotExpectations.get(id)
   if (!pilotExpectation) {
     throw new Error(`missing Pilot expectation for shell template ${id}`)
   }
@@ -123,7 +162,7 @@ for (const [pathKey, template] of Object.entries(templateModules)) {
 }
 
 function resolveSiteFixture(id: string): SiteFixtureLookup {
-  const ref = siteShells[id]
+  const ref = siteShells.get(id)
   if (!ref) return { kind: SiteFixtureLookupKind.Missing }
   const template = templatesById.get(ref.template)
   const [steps = template?.steps] = [ref.steps]
@@ -146,7 +185,7 @@ function resolveSiteFixture(id: string): SiteFixtureLookup {
 }
 
 const fixturesById = new Map<string, SiteFixture>()
-for (const id of Object.keys(siteShells)) {
+for (const id of siteShells.keys()) {
   const fixture = resolveSiteFixture(id)
   if (fixture.kind === SiteFixtureLookupKind.Found) {
     fixturesById.set(id, fixture.fixture)
@@ -194,24 +233,37 @@ export function getTemplateFixture(templateId: string): SiteFixtureLookup {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSiteFixtureStep(value: unknown): value is SiteFixtureStep {
+  if (!isRecord(value) || !Array.isArray(value.fields)) return false
+  if (!isRecord(value.submit) || typeof value.submit.label !== 'string') {
+    return false
+  }
+  return value.fields.every((field) => isRecord(field))
+}
+
 export function isSiteFixture(value: unknown): value is SiteFixture {
-  if (!value || typeof value !== 'object') return false
-  const fixture = value as SiteFixture
-  return (
-    typeof fixture.id === 'string' &&
-    (fixture.source === 'capture' || fixture.source === 'research') &&
-    typeof fixture.loginUrl === 'string' &&
-    Array.isArray(fixture.quirks) &&
-    Array.isArray(fixture.steps) &&
-    fixture.steps.length > 0 &&
-    fixture.steps.every(
-      (step) =>
-        Array.isArray(step.fields) &&
-        step.fields.length > 0 &&
-        step.submit &&
-        typeof step.submit.label === 'string',
-    )
-  )
+  if (!isRecord(value)) return false
+  if (typeof value.id !== 'string' || typeof value.loginUrl !== 'string') {
+    return false
+  }
+  if (
+    value.source !== SiteFixtureSource.Capture &&
+    value.source !== SiteFixtureSource.Research
+  ) {
+    return false
+  }
+  if (
+    !Array.isArray(value.quirks) ||
+    !Array.isArray(value.steps) ||
+    typeof value.template !== 'string'
+  ) {
+    return false
+  }
+  return value.steps.length > 0 && value.steps.every(isSiteFixtureStep)
 }
 
 /** Build static HTML for unit tests (first step, or final step for password shells). */

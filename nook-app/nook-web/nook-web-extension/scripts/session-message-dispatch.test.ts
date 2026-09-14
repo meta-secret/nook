@@ -16,14 +16,21 @@ import {
   type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-function messagePayload(message: unknown): Record<string, unknown> {
+type MessageWireObject = {
+  [key: string]:
+    string | number | boolean | MessageWireObject | MessageWireObject[]
+}
+
+function isMessageWireObject(value: unknown): value is MessageWireObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function messagePayload(message: unknown): MessageWireObject {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
     return {}
   }
   const payload = message.payload
-  return payload && typeof payload === 'object'
-    ? (payload as Record<string, unknown>)
-    : {}
+  return isMessageWireObject(payload) ? payload : {}
 }
 async function decodeProviders(providers: StorageProvider[]) {
   return structuredClone(providers)
@@ -71,13 +78,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const blocked = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
     const events: string[] = []
-    globalThis.chrome = {
-      runtime: {
-        id: 'nook-extension',
-        getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
-        onMessage: { addListener: registered.resolve },
+    Object.assign(globalThis, {
+      chrome: {
+        runtime: {
+          id: 'nook-extension',
+          getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
+          onMessage: { addListener: registered.resolve },
+        },
       },
-    } as typeof chrome
+    })
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })

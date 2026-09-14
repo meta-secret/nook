@@ -8,6 +8,35 @@ type ProviderCredentialTransport =
   StorageProvider | ExtensionStorageProviderPayload
 type ProviderCredentialTransports = ProviderCredentialTransport[]
 
+function isStorageProvider(
+  value: ProviderCredentialTransport,
+): value is StorageProvider {
+  if (!value || typeof value !== 'object') return false
+  if (
+    !('id' in value) ||
+    typeof value.id !== 'string' ||
+    !('type' in value) ||
+    typeof value.type !== 'string' ||
+    !('label' in value) ||
+    typeof value.label !== 'string'
+  )
+    return false
+  return [
+    'githubPat',
+    'githubRepo',
+    'oauthFile',
+    'localFolder',
+    'storeId',
+    'createdAt',
+  ].every((key) => key in value)
+}
+
+function isStorageProviderList(
+  value: ProviderCredentialTransports,
+): value is StorageProvider[] {
+  return value.every(isStorageProvider)
+}
+
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
   InvalidTransport = 'invalid-provider-transport',
@@ -118,12 +147,10 @@ export class ProviderCredentialBuffer {
     } catch {
       return err(ProviderCredentialFailure.InvalidTransport)
     }
+    if (!isStorageProviderList(staged))
+      return err(ProviderCredentialFailure.InvalidTransport)
     try {
-      const admitted: StorageProvider[] = await Reflect.apply(
-        args.decode,
-        globalThis,
-        [staged],
-      )
+      const admitted = await args.decode(staged)
       return ok(admitted)
     } catch {
       return err(ProviderCredentialFailure.AdmissionRejected)

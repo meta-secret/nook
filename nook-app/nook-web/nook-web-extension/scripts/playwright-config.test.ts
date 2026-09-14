@@ -10,13 +10,16 @@ const extensionRoot = path.resolve(
   '..',
 )
 const mockAuthSource = path.join(extensionRoot, 'e2e/mock-auth/src')
-const mockAuthVitestFiles = readdirSync(mockAuthSource, {
+const mockAuthVitestFiles: string[] = []
+for (const file of readdirSync(mockAuthSource, {
   encoding: 'utf8',
   recursive: true,
-})
-  .filter((file) => file.endsWith('.test.ts'))
-  .map((file) => path.posix.join('mock-auth/src', file))
-  .sort()
+})) {
+  if (typeof file === 'string' && file.endsWith('.test.ts')) {
+    mockAuthVitestFiles.push(path.posix.join('mock-auth/src', file))
+  }
+}
+mockAuthVitestFiles.sort()
 
 describe('extension Playwright discovery', () => {
   test('runs every CI case once within a finite suite budget', () => {
@@ -36,14 +39,14 @@ describe('extension Playwright discovery', () => {
         path.join(extensionRoot, 'e2e/mock-auth-pilot-coverage.spec.ts'),
       ),
     ).toBe(true)
-    expect(mockAuthVitestFiles).toEqual(
-      expect.arrayContaining([
-        'mock-auth/src/lib/apple-auth-flow.test.ts',
-        'mock-auth/src/lib/google-auth-flow.test.ts',
-        'mock-auth/src/lib/openai-auth-flow.test.ts',
-        'mock-auth/src/lib/x-auth-flow.test.ts',
-      ]),
-    )
+    for (const expectedFile of [
+      'mock-auth/src/lib/apple-auth-flow.test.ts',
+      'mock-auth/src/lib/google-auth-flow.test.ts',
+      'mock-auth/src/lib/openai-auth-flow.test.ts',
+      'mock-auth/src/lib/x-auth-flow.test.ts',
+    ]) {
+      expect(mockAuthVitestFiles).toContain(expectedFile)
+    }
     expect(
       mockAuthVitestFiles.every((file) =>
         /^mock-auth\/src\/.*\.test\.ts$/u.test(file),

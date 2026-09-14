@@ -249,6 +249,18 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.Lock]: [],
 }
 
+const safeReflect: {
+  get(
+    target: ExtensionSessionNonImportRequest['payload'],
+    propertyKey: PropertyKey,
+  ): unknown
+  set(
+    target: ExtensionSessionNonImportRequest['payload'],
+    propertyKey: PropertyKey,
+    value: unknown,
+  ): boolean
+} = Reflect
+
 function clearSensitiveFieldValue(value: unknown): void {
   if (Array.isArray(value)) value.fill(0)
 }
@@ -264,7 +276,7 @@ type SetExtensionSessionSensitiveValueArgs = {
 function setExtensionSessionSensitiveValue(
   args: SetExtensionSessionSensitiveValueArgs,
 ): void {
-  Reflect.set(args.payload, args.field, args.value)
+  safeReflect.set(args.payload, args.field, args.value)
 }
 
 enum ExtensionSessionSensitiveValueCopyKind {
@@ -307,9 +319,9 @@ export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
   for (const field of sensitiveSessionFields[request.type]) {
-    const value = Reflect.get(request.payload, field)
+    const value = safeReflect.get(request.payload, field)
     clearSensitiveFieldValue(value)
-    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
+    safeReflect.set(request.payload, field, typeof value === 'string' ? '' : [])
   }
 }
 
@@ -322,7 +334,7 @@ export function stageExtensionSessionSensitiveRequest(
   }
   const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
-    const value = Reflect.get(request.payload, field)
+    const value = safeReflect.get(request.payload, field)
     const copiedValue = copyExtensionSessionSensitiveValue(value)
     if (copiedValue.kind === ExtensionSessionSensitiveValueCopyKind.Invalid) {
       clearExtensionSessionSensitiveRequest(request)
@@ -385,9 +397,9 @@ function hasExtensionSessionQueue(payload: unknown): boolean {
   return 'queue' in payload && isExtensionSessionQueueEnvelope(payload.queue)
 }
 
-function stageExtensionSessionIngressRequest(
+function isParsedExtensionSessionTransportRequest(
   value: unknown,
-): ExtensionSessionIngressStage {
+): value is ParsedExtensionSessionTransportRequest {
   if (
     !value ||
     typeof value !== 'object' ||
@@ -398,10 +410,18 @@ function stageExtensionSessionIngressRequest(
     !value.payload ||
     typeof value.payload !== 'object'
   ) {
+    return false
+  }
+  return true
+}
+
+function stageExtensionSessionIngressRequest(
+  value: unknown,
+): ExtensionSessionIngressStage {
+  if (!isParsedExtensionSessionTransportRequest(value)) {
     return { kind: ExtensionSessionIngressStageKind.Invalid }
   }
-
-  const request = value as ParsedExtensionSessionTransportRequest
+  const request = value
   if (!hasExtensionSessionQueue(request.payload)) {
     clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionIngressStageKind.Invalid }
@@ -512,8 +532,10 @@ export async function parseExtensionSessionRequest(
     } else {
       validationRequest = request
     }
+    const validationRequestArgs: GeneratedExtensionSessionRequest =
+      validationRequest
     if (
-      validate_extension_session_request(validationRequest) !==
+      validate_extension_session_request(validationRequestArgs) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       clearExtensionSessionIngressRequest(request)

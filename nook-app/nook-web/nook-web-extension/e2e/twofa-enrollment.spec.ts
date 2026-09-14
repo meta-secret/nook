@@ -14,6 +14,34 @@ type ExtensionPairingSessionGrant = {
   deviceSigningPublicKey: string
 }
 
+type AuthenticatorResponse = {
+  ok: boolean
+  accounts?: Array<{ issuer?: string; account?: string }>
+}
+
+function isAuthenticatorAccount(
+  value: unknown,
+): value is { issuer?: string; account?: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (!('issuer' in value) || typeof value.issuer === 'string') &&
+    (!('account' in value) || typeof value.account === 'string')
+  )
+}
+
+function isAuthenticatorResponse(
+  value: unknown,
+): value is AuthenticatorResponse {
+  if (!value || typeof value !== 'object') return false
+  if (!('ok' in value) || typeof value.ok !== 'boolean') return false
+  if (!('accounts' in value)) return true
+  return (
+    Array.isArray(value.accounts) &&
+    value.accounts.every(isAuthenticatorAccount)
+  )
+}
+
 enum ExtensionPairingSessionGrantParseKind {
   Invalid = 'invalid',
   Valid = 'valid',
@@ -92,7 +120,7 @@ async function listExtensionAuthenticators(
     })
     const accounts: Array<{ issuer: string; account: string }> = []
     for (const grant of pairedGrants) {
-      const response = (await new Promise<unknown>((resolve) => {
+      const responseValue = await new Promise<unknown>((resolve) => {
         globalThis.chrome.runtime.sendMessage(
           {
             type: 'nook:extension-session-list-authenticators',
@@ -104,12 +132,10 @@ async function listExtensionAuthenticators(
           },
           resolve,
         )
-      })) as {
-        ok?: boolean
-        accounts?: Array<{ issuer?: string; account?: string }>
-      }
-      if (!response?.ok || !Array.isArray(response.accounts)) continue
-      for (const account of response.accounts) {
+      })
+      if (!isAuthenticatorResponse(responseValue) || !responseValue.ok) continue
+      if (!Array.isArray(responseValue.accounts)) continue
+      for (const account of responseValue.accounts) {
         if (
           typeof account.issuer === 'string' &&
           typeof account.account === 'string'

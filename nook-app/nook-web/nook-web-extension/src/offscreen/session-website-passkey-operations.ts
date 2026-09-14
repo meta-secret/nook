@@ -37,9 +37,44 @@ export type AssertPasskeyRequest = Extract<
 type WebsitePasskeyRequest =
   CancelPasskeyRequest | RegisterPasskeyRequest | AssertPasskeyRequest
 
+type WebsitePasskeyRegistration = {
+  credentialId: string
+  clientDataJSON: string
+  attestationObject: string
+  transports: string[]
+  free: () => void
+}
+
+type WebsitePasskeyAssertion = {
+  credentialId: string
+  clientDataJSON: string
+  authenticatorData: string
+  signature: string
+  userHandle: string
+  free: () => void
+}
+
+type WebsitePasskeyManager = Pick<
+  NookVaultManager,
+  | 'open_extension_passkey_vault_js'
+  | 'load_auth_providers_snapshot'
+  | 'flush_event_outbox_for_provider'
+> & {
+  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
+  register_website_passkey: (
+    request: Parameters<NookVaultManager['register_website_passkey']>[0],
+    ceremonyActive: () => boolean,
+  ) => Promise<WebsitePasskeyRegistration>
+  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
+  assert_website_passkey: (
+    request: Parameters<NookVaultManager['assert_website_passkey']>[0],
+    ceremonyActive: () => boolean,
+  ) => Promise<WebsitePasskeyAssertion>
+}
+
 export type WebsitePasskeyOperationArgs = {
   message: WebsitePasskeyRequest
-  getManager: () => Promise<NookVaultManager>
+  getManager: () => Promise<WebsitePasskeyManager>
   openVault: typeof openPasskeyVault
   flushEvent: typeof flushPasskeyEventToProviders
 }

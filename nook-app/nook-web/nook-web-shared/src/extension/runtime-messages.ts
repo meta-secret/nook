@@ -214,6 +214,26 @@ export class ExtensionStorageProviderPayloadAdmission {
   }
 }
 
+function isCompleteStorageProviderPayload(
+  value: unknown,
+): value is ExtensionPairingStorageProviderPayload {
+  if (!value || typeof value !== "object") return false;
+  if (
+    !("label" in value) ||
+    typeof value.label !== "string" ||
+    !("createdAt" in value) ||
+    typeof value.createdAt !== "string"
+  )
+    return false;
+  return [
+    "githubPat",
+    "githubRepo",
+    "oauthFile",
+    "localFolder",
+    "storeId",
+  ].every((key) => key in value);
+}
+
 /**
  * Pairing approvals carry sealed provider rows for the extension import.
  * Validate the wire shape here, then leave field-level admission (including
@@ -249,12 +269,14 @@ export class ExtensionPairingStorageProviderPayloadAdmission {
       if (!(key in provider))
         return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
+    if (!isCompleteStorageProviderPayload(provider))
+      return err(ExtensionStorageProviderIdentityFailure.Invalid);
     try {
       structuredClone(provider);
     } catch {
       return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
-    return ok(provider as ExtensionPairingStorageProviderPayload);
+    return ok(provider);
   }
 }
 
