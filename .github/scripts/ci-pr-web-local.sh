@@ -36,40 +36,42 @@ if [ "$temporary_artifacts" -eq 1 ]; then
 fi
 
 source_sha="$(git rev-parse HEAD)"
-common_env=(
-  CI=1
-  GITHUB_ACTIONS=
-  NOOK_ARC_RUNNER=
-  NOOK_REGISTRY_CACHE=0
-  NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0
-  NOOK_BUILDKIT_REMOTE=0
-  SCCACHE_OPTIONAL=1
-  SCCACHE_S3_MODE=external
-  GHA_CACHE_ENABLED=
-  GHA_CACHE_WRITE_ENABLED=
-  GIT_COMMIT_ID="$source_sha"
-  NOOK_EXTENSION_COMMIT="$source_sha"
-  CI_ARTIFACT_DIR="$artifact_root"
-)
+export CI=1
+export GITHUB_ACTIONS=
+export NOOK_ARC_RUNNER=
+export NOOK_REGISTRY_CACHE=0
+export NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0
+export NOOK_BUILDKIT_REMOTE=0
+export SCCACHE_OPTIONAL=1
+export SCCACHE_S3_MODE=external
+export GHA_CACHE_ENABLED=
+export GHA_CACHE_WRITE_ENABLED=
+export GIT_COMMIT_ID="$source_sha"
+export NOOK_EXTENSION_COMMIT="$source_sha"
+export CI_ARTIFACT_DIR="$artifact_root"
 
 for stage in wasm web; do
   case "$stage" in
     wasm)
-      label="WASM handoff assembly"
-      stage_command=(env "${common_env[@]}" task --dir "$repo_root" ci:pr:wasm)
+      stage_command_label="WASM handoff assembly"
       ;;
     web)
-      label="web artifact consumer"
-      stage_command=(env "${common_env[@]}" \
-        bash "$repo_root/.github/scripts/with-healthy-buildkit.sh" \
-        task --dir "$repo_root" docker:ci:web:build)
+      stage_command_label="web artifact consumer"
       ;;
   esac
 
   started=$SECONDS
-  echo "task ci:pr:web:local: starting $label (limit=${timeout_seconds}s)" >&2
+  echo "task ci:pr:web:local: starting $stage_command_label (limit=${timeout_seconds}s)" >&2
   set -m
-  "${stage_command[@]}" &
+  case "$stage" in
+    wasm)
+      task ci:pr:wasm &
+      ;;
+    web)
+      bash "$repo_root/.github/scripts/with-healthy-buildkit.sh" \
+        task docker:ci:web:build &
+      ;;
+  esac
   command_pid=$!
   set +m
   while kill -0 "$command_pid" 2>/dev/null; do
@@ -86,10 +88,10 @@ for stage in wasm web; do
   stage_status=0
   wait "$command_pid" || stage_status=$?
   if [ "$stage_status" -ne 0 ]; then
-    echo "task ci:pr:web:local: $label failed after $((SECONDS - started))s" >&2
+    echo "task ci:pr:web:local: $stage_command_label failed after $((SECONDS - started))s" >&2
     exit "$stage_status"
   fi
-  echo "task ci:pr:web:local: $label completed in $((SECONDS - started))s" >&2
+  echo "task ci:pr:web:local: $stage_command_label completed in $((SECONDS - started))s" >&2
 
   if [ "$stage" = wasm ]; then
     wasm_root="$artifact_root/nook-wasm"
