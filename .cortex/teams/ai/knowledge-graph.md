@@ -15,6 +15,7 @@ Use these documents for AI runtime design and read-only expert routing.
 - [Dev manager context](../delivery-pipeline/dev-manager/AGENTS.md)
 - [Structural refactoring expert registry](architecture/refactoring-experts.md)
 - [Core agent-first beliefs](design-docs/core-beliefs.md)
+- [Docker cache specialist activation](architecture/docker-cache-specialist-activation.md)
 - [Design document catalog](design-docs/index.md)
 
 ## Cortex authoring and maintenance

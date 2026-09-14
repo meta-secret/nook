@@ -173,6 +173,16 @@ export type TeamInternalAgentProfile = {
   readonly parent: TeamGizmoKey;
   readonly reportingBoundary: string;
   readonly capabilityBoundary: string;
+  readonly activationContract?: TeamInternalAgentActivationContract;
+};
+
+export type TeamInternalAgentActivationContract = {
+  readonly workflowScope: string;
+  readonly decisionSource: 'canonical-json';
+  readonly markdownRole: 'human-context-only';
+  readonly reasonCodes: readonly string[];
+  readonly greenPath: 'no-specialist-dispatch';
+  readonly repairLoop: readonly string[];
 };
 
 export type TeamRuntimeProfile = TeamGizmoProfile | TeamInternalAgentProfile;
@@ -517,18 +527,42 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       team: TeamKey.Sre,
       identity: 'Docker cache specialist',
       description:
-        'Owns Docker and BuildKit cache correctness, cache proofs, telemetry, and remote-build latency under SRE ownership.',
+        'Owns Docker and BuildKit cache correctness, cache proofs, telemetry, and latency for every Docker or BuildKit job in pr.yml under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/sre/docker-cache-specialist/AGENTS.md',
         '.cortex/teams/sre/docker-cache-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/architecture/docker-cache-specialist-activation.md',
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
-        'Reports bounded Docker cache correctness, warm-build latency evidence, and blockers to SRE Team Gizmo.',
+        'Reports bounded Docker cache diagnoses, repair evidence, latency measurements, and blockers to SRE Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+      activationContract: {
+        workflowScope:
+          'Every Docker or BuildKit-bearing job in .github/workflows/pr.yml.',
+        decisionSource: 'canonical-json',
+        markdownRole: 'human-context-only',
+        reasonCodes: [
+          'job-timeout',
+          'job-cancelled',
+          'cache-health-gate-failed',
+          'telemetry-missing-or-incomplete',
+          'required-import-miss',
+          'unexpected-read-only-write-or-export',
+          'severe-cache-hit-regression',
+          'diagnostic-flag',
+        ],
+        greenPath: 'no-specialist-dispatch',
+        repairLoop: [
+          'diagnose-telemetry-before-editing',
+          'prove-with-docker-simulator-and-proof',
+          'route-github-mechanics-through-delivery',
+          'repeat-until-current-head-is-green',
+        ],
+      },
     },
     {
       key: TeamInternalAgentKey.TypeScriptSpecialist,

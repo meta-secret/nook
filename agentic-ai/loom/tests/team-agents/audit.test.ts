@@ -221,14 +221,37 @@ describe('canonical Cortex team authority', () => {
       contextPaths: [
         '.cortex/teams/sre/docker-cache-specialist/AGENTS.md',
         '.cortex/teams/sre/docker-cache-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/architecture/docker-cache-specialist-activation.md',
       ],
+      activationContract: {
+        workflowScope:
+          'Every Docker or BuildKit-bearing job in .github/workflows/pr.yml.',
+        decisionSource: 'canonical-json',
+        markdownRole: 'human-context-only',
+        reasonCodes: expect.arrayContaining([
+          'job-timeout',
+          'cache-health-gate-failed',
+          'required-import-miss',
+          'unexpected-read-only-write-or-export',
+          'severe-cache-hit-regression',
+        ]),
+        greenPath: 'no-specialist-dispatch',
+      },
     });
   });
 
   test('rejects Team Gizmo and internal-agent contract, hierarchy, count, and path drift', () => {
     const teamGizmo = TEAM_GIZMO_CATALOG[0];
     const internalAgent = TEAM_INTERNAL_AGENT_CATALOG[0];
-    if (!teamGizmo || !internalAgent)
+    const dockerCacheSpecialist = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) =>
+        candidate.key === TeamInternalAgentKey.DockerCacheSpecialist,
+    );
+    if (
+      !teamGizmo ||
+      !internalAgent ||
+      !dockerCacheSpecialist?.activationContract
+    )
       throw new Error('Delivery Pipeline profiles are incomplete.');
 
     const driftedGizmos: readonly TeamGizmoProfile[][] = [
@@ -250,6 +273,15 @@ describe('canonical Cortex team authority', () => {
       [],
       [{ ...internalAgent, team: TeamKey.Ai }],
       [{ ...internalAgent, capabilityBoundary: '' }],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            reasonCodes: [],
+          },
+        },
+      ],
       [internalAgent, internalAgent],
     ];
     for (const agents of driftedAgents) {
