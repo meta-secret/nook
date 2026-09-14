@@ -175,7 +175,7 @@ class PublishRunner implements CommandRunner {
         isDraft: false,
         state: 'OPEN',
         headRepository: { nameWithOwner: 'nook/example' },
-        baseRepository: { nameWithOwner: 'nook/example' },
+        isCrossRepository: false,
         reviewDecision: 'REVIEW_REQUIRED',
       }),
     });

@@ -264,9 +264,7 @@ class DevManagerGizmoRunner implements CommandRunner {
         headRepository: {
           nameWithOwner: foreign ? 'other/example' : 'nook/example',
         },
-        baseRepository: {
-          nameWithOwner: foreign ? 'other/example' : 'nook/example',
-        },
+        isCrossRepository: foreign,
         reviewDecision: 'REVIEW_REQUIRED',
       }),
     });

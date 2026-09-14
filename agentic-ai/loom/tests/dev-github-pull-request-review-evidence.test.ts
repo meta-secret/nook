@@ -50,6 +50,7 @@ interface PullRequestIdentityResponse {
   readonly isDraft: boolean;
   readonly headRepository: { readonly nameWithOwner: string };
   readonly baseRepository: { readonly nameWithOwner: string };
+  readonly isCrossRepository: boolean;
 }
 
 interface ReviewPageResponse {
@@ -261,6 +262,7 @@ class ReviewEvidenceRunner implements CommandRunner {
       isDraft: false,
       headRepository: { nameWithOwner: REPOSITORY },
       baseRepository: { nameWithOwner: REPOSITORY },
+      isCrossRepository: false,
     };
   }
 

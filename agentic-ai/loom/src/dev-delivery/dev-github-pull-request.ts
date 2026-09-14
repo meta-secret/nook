@@ -41,7 +41,7 @@ const pullRequestViewSchema = z.object({
   isDraft: z.boolean(),
   state: z.string(),
   headRepository: repositoryReferenceSchema,
-  baseRepository: repositoryReferenceSchema,
+  isCrossRepository: z.boolean(),
   reviewDecision: z.string().nullable(),
 });
 type PullRequestView = z.infer<typeof pullRequestViewSchema>;
@@ -751,7 +751,7 @@ export class DevelopmentPullRequestGateway {
         'view',
         String(request.number.value()),
         '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,baseRepository,reviewDecision',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,isCrossRepository,reviewDecision',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -773,12 +773,14 @@ export class DevelopmentPullRequestGateway {
     const { view } = request;
     const repository = this.repository(request.workingDirectory);
     if (repository.isErr()) return err(repository.error);
+    // `gh pr view` is scoped to the current repository, so the supported
+    // `isCrossRepository` field proves that the base repository is this repo.
     if (
       view.state !== PullRequestState.Open ||
       view.headRefName !== 'dev' ||
       view.baseRefName !== 'main' ||
-      view.headRepository.nameWithOwner !== repository.value.value() ||
-      view.baseRepository.nameWithOwner !== repository.value.value()
+      view.isCrossRepository ||
+      view.headRepository.nameWithOwner !== repository.value.value()
     ) {
       return err({
         kind: DevFailureKind.GitHub,
