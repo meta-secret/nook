@@ -15,6 +15,7 @@ import type {
   PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
 import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runtime-messages";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
@@ -35,8 +36,7 @@ class SentinelExtensionConnectScopeCatalog {
   }
 }
 
-export const ExtensionConnectScope =
-  new SentinelExtensionConnectScopeCatalog();
+export const ExtensionConnectScope = new SentinelExtensionConnectScopeCatalog();
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ProtocolExtensionConnectScope>;
@@ -114,6 +114,11 @@ export async function adoptExtensionIdentity(
   );
 }
 
+type ExtensionPairingApprovalDelivery = {
+  readonly request: ExtensionConnectRequest;
+  readonly message: ExtensionPairingApprovedMessage;
+};
+
 export const extensionConnectionBrowser = {
   isExtensionConnectPath,
   extensionConnectRequestFromLocation,
@@ -122,9 +127,8 @@ export const extensionConnectionBrowser = {
   discoverPairedExtensionIdentity,
   requestPairedExtensionUnlock,
   adoptExtensionIdentity,
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
   async deliverExtensionPairingApproval(
-    _request: unknown,
+    _request: ExtensionPairingApprovalDelivery,
   ): Promise<ExtensionPairingDelivery> {
     void _request;
     throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
