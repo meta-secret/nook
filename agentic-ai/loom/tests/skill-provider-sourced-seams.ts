@@ -159,7 +159,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '964c2e9266957c1018efa21a5c23f0734245d01011505308f4e7222c6c7fb95e',
+    '8d1efad4ca6c65086dc46c925f67af431cdce6093b3d9ac40a35b3253232abf7',
   ],
   [
     'agentic-ai/loom/src/lib/run.ts',
@@ -183,7 +183,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'a2d550d69c76d829deb9a3345c3f6785f3e44e771de07329b2106ceb082537d2',
+    '2b93470a397275447a8cdf13dc9dfec1fe9ebe2caf78900561e0723a0b4c2b40',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',

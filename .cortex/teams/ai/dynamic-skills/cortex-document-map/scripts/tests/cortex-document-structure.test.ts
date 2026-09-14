@@ -75,7 +75,11 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
   }
 
   static distributedDocuments(
-    args: DistributedDocumentsArgs,
+    args: DistributedDocumentsArgs = {
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    },
   ): CortexDocumentSource[] {
     const rootDocumentArgs: MakeDocumentArgs = {
       path: '.cortex/knowledge-graph.md',
@@ -166,14 +170,12 @@ ${args.rootExtra}`,
   }
 
   static nestedDistributedDocuments(): CortexDocumentSource[] {
-    const pipelineGraphPath =
-      '.cortex/teams/delivery-pipeline/knowledge-graph.md';
     const documents = this.distributedDocuments({
       rootExtra: '',
       devTarget: 'policy.md',
       gizmoTarget: 'policy.md',
     }).map((document) =>
-      document.relativePath === pipelineGraphPath
+      document.relativePath === PIPELINE_GRAPH_PATH
         ? {
             ...document,
             content: `${document.content}
@@ -218,6 +220,8 @@ ${args.rootExtra}`,
 }
 
 const REPO_ROOT = '/repo';
+const PIPELINE_GRAPH_PATH =
+  '.cortex/teams/delivery-pipeline/knowledge-graph.md';
 
 type MakeDocumentArgs = {
   readonly path: string;
@@ -295,27 +299,16 @@ type DistributedDocumentsArgs = {
 };
 
 test('accepts document-level team and shared graphs', () => {
-  const distributedArgs: DistributedDocumentsArgs = {
-    rootExtra: '',
-    devTarget: 'policy.md',
-    gizmoTarget: 'policy.md',
-  };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit(
-      CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
-        distributedArgs,
-      ),
+      CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(),
     ),
   ).toEqual([]);
 });
 
 test('indexes Dev Manager documents only through their owning graph', () => {
   const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
-      rootExtra: '',
-      devTarget: 'policy.md',
-      gizmoTarget: 'policy.md',
-    });
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const managerGraphPath =
     '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
   const policyPath = '.cortex/teams/delivery-pipeline/dev-manager/policy.md';
@@ -365,11 +358,7 @@ test('indexes Dev Manager documents only through their owning graph', () => {
 
 test('indexes Team Gizmo documents only through their owning graph', () => {
   const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
-      rootExtra: '',
-      devTarget: 'policy.md',
-      gizmoTarget: 'policy.md',
-    });
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const graphPath = '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
   const policyPath = '.cortex/teams/delivery-pipeline/gizmo/policy.md';
   documents.push(
@@ -404,13 +393,7 @@ test('indexes Team Gizmo documents only through their owning graph', () => {
 
 test('indexes Delivery Pipeline documents only through their owning graph', () => {
   const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
-      rootExtra: '',
-      devTarget: 'policy.md',
-      gizmoTarget: 'policy.md',
-    });
-  const pipelineGraphPath =
-    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const policyPath = '.cortex/teams/delivery-pipeline/policy.md';
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
@@ -422,12 +405,12 @@ test('indexes Delivery Pipeline documents only through their owning graph', () =
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
   expect(findings).toContainEqual({
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: pipelineGraphPath,
+    file: PIPELINE_GRAPH_PATH,
     line: 1,
-    message: `Document is not indexed in its owning knowledge graph ${pipelineGraphPath}: ${policyPath}`,
+    message: `Document is not indexed in its owning knowledge graph ${PIPELINE_GRAPH_PATH}: ${policyPath}`,
   });
   const indexedDocuments = documents.map((document) =>
-    document.relativePath === pipelineGraphPath
+    document.relativePath === PIPELINE_GRAPH_PATH
       ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
       : document,
   );
@@ -459,8 +442,6 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
   ).toEqual([]);
 
-  const pipelineGraphPath =
-    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
   const lifecycleGraphPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
   const lifecyclePolicyPath =
@@ -472,7 +453,7 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
         content: '# Delivery Pipeline PR Lifecycle Knowledge Graph\n',
       };
     }
-    if (document.relativePath === pipelineGraphPath) {
+    if (document.relativePath === PIPELINE_GRAPH_PATH) {
       return {
         ...document,
         content: `${document.content}- [Policy](${lifecyclePolicyPath.replace(
@@ -493,15 +474,39 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
   });
 });
 
+test('rejects sibling same-team child authority from a child graph', () => {
+  const managerGraphPath =
+    '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
+  const siblingGraphPath =
+    '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
+      (document) =>
+        document.relativePath === managerGraphPath
+          ? {
+              ...document,
+              content: `${document.content}- [Sibling authority](../gizmo/knowledge-graph.md)\n`,
+            }
+          : document,
+    );
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
+      code: CortexStructureFindingCode.InvalidIndexEntry,
+      file: managerGraphPath,
+      message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${siblingGraphPath}`,
+    }),
+  ).toBe(true);
+});
+
 test('rejects duplicate direct-child document indexing but allows external authorities', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const pipelineGraphPath =
-    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
   const workflowPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
   const indexedByParent = documents.map((document) =>
-    document.relativePath === pipelineGraphPath
+    document.relativePath === PIPELINE_GRAPH_PATH
       ? {
           ...document,
           content: `${document.content}- [PR Lifecycle policy](pr-lifecycle/workflows/policy.md)\n`,
@@ -513,7 +518,7 @@ test('rejects duplicate direct-child document indexing but allows external autho
     CortexDocumentMapCortexDocumentStructureScenario.audit(indexedByParent),
   ).toContainEqual({
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: pipelineGraphPath,
+    file: PIPELINE_GRAPH_PATH,
     line: 1,
     message: `Knowledge graphs must index each non-graph document once: ${workflowPath}`,
   });

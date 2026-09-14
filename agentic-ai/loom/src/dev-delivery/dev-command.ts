@@ -332,11 +332,13 @@ export class ProcessCommandRunner implements CommandRunner {
         message: 'REPO_ROOT must be an absolute canonical path',
       });
     }
-    for (const candidate of [
-      request.repositoryRoot,
-      this.repositoryRoot,
-      process.env.REPO_ROOT,
-    ]) {
+    const explicitRoots = [request.repositoryRoot, this.repositoryRoot];
+    const rootCandidates = explicitRoots.some(
+      (candidate) => typeof candidate === 'string',
+    )
+      ? explicitRoots
+      : [process.env.REPO_ROOT];
+    for (const candidate of rootCandidates) {
       if (typeof candidate !== 'string') continue;
       const canonicalCandidate = ProcessCommandRunner.canonicalPath(
         candidate,

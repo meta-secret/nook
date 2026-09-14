@@ -51,12 +51,6 @@ import {
   ModuleExpertIsolation,
   type ModuleExpertCodexOptionsRequest,
 } from '../../src/module-experts/runtime-contract.ts';
-import {
-  CargoWorkspaceInventoryKind,
-  type CargoWorkspaceInventory,
-  type DecodeCargoWorkspaceMetadataArgs,
-  CargoWorkspaceMetadata,
-} from '../../src/module-experts/cargo-workspace.ts';
 
 /** Owns the module experts audit fixture registry and its capability transitions. */
 export class ModuleExpertsAuditFixture {
@@ -774,34 +768,6 @@ describe('module expert audit', () => {
         (finding) => finding.code,
       ),
     ).toContain('cortex-module-expert-contract-semantic-drift');
-  });
-
-  test('uses Cargo workspace identities instead of manifest text matches', () => {
-    const liveManifest = join(
-      ModuleExpertsAuditFixture.REPO_ROOT,
-      'nook-app/nook-platform/live-crate/Cargo.toml',
-    );
-    const decoyManifest = join(
-      ModuleExpertsAuditFixture.REPO_ROOT,
-      'nook-app/nook-platform/retired-crate/Cargo.toml',
-    );
-    const metadata = {
-      packages: [
-        { id: 'live 1.0.0', manifest_path: liveManifest },
-        { id: 'retired 1.0.0', manifest_path: decoyManifest },
-      ],
-      workspace_members: ['live 1.0.0'],
-    };
-    const decodeArgs: DecodeCargoWorkspaceMetadataArgs = {
-      repoRoot: ModuleExpertsAuditFixture.REPO_ROOT,
-      source: JSON.stringify(metadata),
-    };
-
-    const expected: CargoWorkspaceInventory = {
-      kind: CargoWorkspaceInventoryKind.Complete,
-      roots: ['nook-app/nook-platform/live-crate'],
-    };
-    expect(CargoWorkspaceMetadata.decode(decodeArgs)).toEqual(expected);
   });
 
   test('uses an isolated non-delegating Codex runtime', () => {

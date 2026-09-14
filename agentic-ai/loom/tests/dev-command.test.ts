@@ -64,6 +64,7 @@ test('isolates Git delivery and pins its remote without exposing the token', () 
   const previousToken = process.env.NOOK_GITHUB_PAT;
   const previousCapture = process.env.NOOK_DEV_COMMAND_CAPTURE;
   const previousConfig = process.env.GIT_CONFIG_PARAMETERS;
+  const previousRepositoryRoot = process.env.REPO_ROOT;
   try {
     mkdirSync(bin);
     GitFixture.initialize(root);
@@ -92,6 +93,8 @@ exit 0
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
     process.env.NOOK_GITHUB_PAT = 'delivery-secret';
     process.env.GIT_CONFIG_PARAMETERS = 'hostile-config';
+    process.env.REPO_ROOT =
+      '/hosted/checkout/that-must-not-override-the-runner';
 
     const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
       executable: CommandExecutable.Git,
@@ -138,6 +141,9 @@ exit 0
     if (typeof previousConfig !== 'string')
       delete process.env.GIT_CONFIG_PARAMETERS;
     else process.env.GIT_CONFIG_PARAMETERS = previousConfig;
+    if (typeof previousRepositoryRoot !== 'string')
+      delete process.env.REPO_ROOT;
+    else process.env.REPO_ROOT = previousRepositoryRoot;
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -152,6 +158,7 @@ test('ignores unsafe local and worktree config during remote Git execution', () 
   const previousPath = process.env.PATH;
   const previousCapture = process.env.NOOK_DEV_COMMAND_CAPTURE;
   const previousToken = process.env.NOOK_GITHUB_PAT;
+  const previousRepositoryRoot = process.env.REPO_ROOT;
   try {
     mkdirSync(bin);
     GitFixture.initialize(root);
@@ -214,6 +221,8 @@ exit 0
     chmodSync(fakeGit, 0o755);
     process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
+    process.env.REPO_ROOT =
+      '/hosted/checkout/that-must-not-override-the-runner';
 
     for (const token of [false, ''] as const) {
       if (token === false) delete process.env.NOOK_GITHUB_PAT;
@@ -254,6 +263,9 @@ exit 0
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
     if (typeof previousToken !== 'string') delete process.env.NOOK_GITHUB_PAT;
     else process.env.NOOK_GITHUB_PAT = previousToken;
+    if (typeof previousRepositoryRoot !== 'string')
+      delete process.env.REPO_ROOT;
+    else process.env.REPO_ROOT = previousRepositoryRoot;
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -425,6 +437,7 @@ test('fetch preserves explicit refspecs and adds only the managed default refspe
   const fakeGit = join(bin, 'git');
   const previousPath = process.env.PATH;
   const previousCapture = process.env.NOOK_DEV_COMMAND_CAPTURE;
+  const previousRepositoryRoot = process.env.REPO_ROOT;
   try {
     mkdirSync(bin);
     GitFixture.initialize(root);
@@ -438,6 +451,8 @@ exit 0
     chmodSync(fakeGit, 0o755);
     process.env.PATH = `${bin}:${previousPath || '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
+    process.env.REPO_ROOT =
+      '/hosted/checkout/that-must-not-override-the-runner';
     const runner = new ProcessCommandRunner({ repositoryRoot: root });
     expect(
       runner
@@ -474,6 +489,9 @@ exit 0
     if (typeof previousCapture !== 'string')
       delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
+    if (typeof previousRepositoryRoot !== 'string')
+      delete process.env.REPO_ROOT;
+    else process.env.REPO_ROOT = previousRepositoryRoot;
     rmSync(root, { recursive: true, force: true });
   }
 });

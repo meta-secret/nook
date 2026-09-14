@@ -703,6 +703,14 @@ export class AgentSourceSnapshot {
         }),
       );
     }
+    if (check.featureHeadSha !== check.sourceCommit) {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.SourceCommit,
+          message: `Codex agent source ${check.sourceCommit} does not match the canonical feature frontier ${check.featureHeadSha} ${check.phase}.`,
+        }),
+      );
+    }
     const statusCommand: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Git,
       args: ['status', '--porcelain', '--untracked-files=normal'],

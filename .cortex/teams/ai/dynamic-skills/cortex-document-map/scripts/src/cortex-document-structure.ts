@@ -168,13 +168,7 @@ export class CortexChildGraphReference {
     ) {
       return true;
     }
-    const graphTeam = this.graphPath.childGraphTeam();
-    const indexedTeam = this.indexedPath.childGraphTeam();
-    return (
-      graphTeam !== false &&
-      indexedTeam === graphTeam &&
-      indexedPath !== this.graphPath.value()
-    );
+    return false;
   }
 
   isReadOnly(): boolean {

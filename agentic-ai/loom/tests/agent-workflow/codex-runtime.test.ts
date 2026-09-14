@@ -462,6 +462,18 @@ describe('Codex agent source stability', () => {
       ).assertStable();
       assert(runtimeFailure1.isOk());
 
+      const advancedFeatureCheck: AgentSourceStabilityCheck = {
+        ...stableCheck,
+        featureHeadSha: '2222222222222222222222222222222222222222',
+      };
+      const advancedFeature = new AgentSourceSnapshot(
+        advancedFeatureCheck,
+      ).assertStable();
+      assert(advancedFeature.isErr());
+      expect(advancedFeature.error.message).toContain(
+        'does not match the canonical feature frontier',
+      );
+
       const wrongCommitCheck: AgentSourceStabilityCheck = {
         ...stableCheck,
         sourceCommit: '0000000000000000000000000000000000000000',
