@@ -464,8 +464,6 @@ export async function authorizeDeviceProtection(
   )
   const authenticatedShell = page.getByTestId('authenticated-shell')
   const button = page.getByTestId('device-protection-unlock-btn')
-  const isVaultAuthenticated = async () =>
-    page.evaluate(() => Boolean(window.__nookVault?.isAuthenticated))
 
   const isAuthenticatedWorkspace = async () => {
     // Read both surfaces in one browser turn. Separate locator calls can
@@ -601,33 +599,30 @@ export async function authorizeDeviceProtection(
     })
     await unlockVaultButton.click()
   }
+  // Clicking the login unlock action starts the device ceremony and then
+  // loads the vault. Wait on the access-gate transition itself so the helper
+  // does not race a reactive field snapshot while Svelte is remounting the
+  // authenticated shell. Keep the device action as a fallback for flows that
+  // expose the explicit authorization card after the login action.
   await expect
     .poll(
       async () => {
-        return deviceProtectionAuthorizationGateState({
-          overlayVisible: false,
-          unlockVisible: false,
-          pickerVisible: false,
-          lockedAccessVisible: false,
-          authorizeReady: await authorizeButtonReady(),
-          vaultAuthenticated: await isVaultAuthenticated(),
-          workspaceUnlocked: await isAuthenticatedWorkspace(),
-        })
+        if (!(await loginGate.isVisible())) return 'unlocked'
+        if (await authorizeButtonReady()) return 'authorize'
+        return 'waiting'
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
-  if (!(await isAuthenticatedWorkspace())) {
-    if (!(await isVaultAuthenticated())) {
-      await button.click()
-    }
-    await expect(loginGate).toBeHidden({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(authenticatedShell).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+  if ((await loginGate.isVisible()) && (await authorizeButtonReady())) {
+    await button.click()
   }
+  await expect(loginGate).toBeHidden({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(authenticatedShell).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 
   if (restoreDevicesAccess) {
     await page.evaluate(() => {
