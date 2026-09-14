@@ -880,19 +880,6 @@ authenticator-domain to 90 percent.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
 - Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
 
-- Manual e2e, research, and AI-agent jobs use isolated ARC Pods and may restore the same scoped BuildKit layers.
-- Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
-- The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
-- Each parallel Cargo branch is capped at two jobs to bound compiler-process
-  fan-out against the shared BuildKit shard. BuildKit requests 4 CPU and 8 GiB
-  of memory. It has no CPU or memory limits and may share all resources
-  available on its node for compiler and linker peaks.
-- Pull requests restore Main's scope read-only and may publish only a
-  quarantined exact-head cache. Only Main exports both shared graphs, in a
-  final step after check and behavior tests pass.
-- GitHub withholds those secrets from forked pull requests, and the shared wrapper then falls back to direct compilation.
-- The credentials are BuildKit secrets or read-only runtime mounts, never image content.
-
 **Deploy and release:**
 
 - Main deploys `dist/site`, Simple, and Sentinel independently to `dev.nokey.sh`,

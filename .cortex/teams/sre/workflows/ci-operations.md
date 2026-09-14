@@ -177,20 +177,6 @@ the trusted direct-host CI-agent entrypoint for ready Workbench issues or manual
 prompts (see below). Dependency-update and generic-fix workflows retain their
 separate Task-backed harness.
 
-**Main failure handoff:**
-
-- Each rerun is recorded on the Workbench issue keyed by source SHA.
-- Its publication branch, plan, and worklog are generation-specific.
-- A later failed rerun supersedes and cancels an active delivery before its new generation is enqueued.
-- The failed reconciliation retries only after a poll interval longer than the worker heartbeat.
-- Elapsed time is not the termination barrier.
-- The old generation remains `CANCELLING` until its worker durably acknowledges that Codex execution stopped or Kubernetes confirms deletion of the exact recorded worker Pod.
-- Cancelling exclusive blocker Pods participate in the same barrier.
-- Only then can the replacement become claimable.
-- A successful rerun retires an existing incident and terminates any active delivery.
-- Run IDs and attempts are ordered across the incident so older workflow runs are ignored.
-- Reconciliation of the already-current generation is idempotent and never cancels it.
-
 **Rust dependency updates:**
 
 - The weekly Rust dependency workflow uses the same harness through **`task ci-agent:fix`** for its bounded update job.
