@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       expected_dev_sha:
-        description: 'Manager-selected origin/dev commit to publish'
+        description: "Manager-selected origin/dev commit to publish"
         required: true
         type: string
       controller:
-        description: 'Required Dev Manager controller identity for this packet'
+        description: "Required Dev Manager controller identity for this packet"
         required: true
         type: string
 
