@@ -76,7 +76,7 @@ for stage in wasm web; do
   set +m
   while kill -0 "$command_pid" 2>/dev/null; do
     if [ "$SECONDS" -ge $((started + timeout_seconds)) ]; then
-      echo "task ci:pr:web:local: $label exceeded ${timeout_seconds}s; terminating" >&2
+      echo "task ci:pr:web:local: $stage_command_label exceeded ${timeout_seconds}s; terminating" >&2
       kill -TERM -- "-$command_pid" 2>/dev/null || kill -TERM "$command_pid" 2>/dev/null || true
       sleep 2
       kill -KILL -- "-$command_pid" 2>/dev/null || kill -KILL "$command_pid" 2>/dev/null || true

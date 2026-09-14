@@ -70,4 +70,9 @@ fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inp
             "local web verification is missing bounded offline contract: {required}"
         );
     }
+    assert!(
+        script.contains("$stage_command_label exceeded ${timeout_seconds}s; terminating")
+            && !script.contains("$label exceeded ${timeout_seconds}s; terminating"),
+        "timeout cleanup must use the initialized stage label before terminating the exact stage process group"
+    );
 }
