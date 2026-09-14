@@ -421,7 +421,7 @@ export class DevelopmentPullRequestGateway {
       if (threadIdentity.isErr()) return err(threadIdentity.error);
       unresolvedCurrentThread ||=
         page.data.repository.pullRequest.reviewThreads.nodes.some(
-          (thread) => !thread.isResolved && !thread.isOutdated,
+          (thread) => !thread.isResolved,
         );
     }
 
@@ -652,11 +652,13 @@ export class DevelopmentPullRequestGateway {
         ? ReviewRecordDisposition.Block
         : ReviewRecordDisposition.Ignore;
     }
-    // GitHub retains review records after a pull-request head advances. A
-    // valid binding to another commit therefore proves that this record is
-    // historical, so its body or state must not block the admitted head.
+    // A historical binding establishes only when GitHub created the review;
+    // it does not disposition substantive feedback. Older-head findings stay
+    // blocking until GitHub records an explicit non-actionable state.
     if (!commit.value.equals(pullRequest.headSha)) {
-      return ReviewRecordDisposition.Ignore;
+      return substantive || blockingState || !knownNonActionableState
+        ? ReviewRecordDisposition.Block
+        : ReviewRecordDisposition.Ignore;
     }
 
     // Once a review is proven current, unknown states are not safe to ignore.
