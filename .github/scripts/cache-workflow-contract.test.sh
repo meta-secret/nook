@@ -44,6 +44,8 @@ require_text "$compile_remote" 'build-compile-dependencies'
 require_text "$compile_remote" '"build:compile dependencies"'
 require_text "$docker_setup" 'remote_compile_scope=1'
 require_text "$docker_setup" '[ -n "$remote_compile_scope" ]'
+require_text "$docker_setup" 'echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"'
+require_text "$docker_setup" 'echo "$env_name=$available" >> "$GITHUB_ENV"'
 require_text "$compile_remote" 'GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE'
 require_text "$compile_remote" 'compile_deps_cache_write=1'
 require_text "$compile_remote" 'GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED="$compile_deps_cache_write"'
@@ -51,6 +53,34 @@ require_text "$compile_remote" 'Dependency cache already exists; skipping duplic
 require_text "$repo_root/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl" 'variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED"'
 require_text "$repo_root/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl" 'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == ""'
 require_text "$repo_root/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl" 'mode=min,compression=zstd'
+
+# Model the composite-action -> subsequent task-step boundary. GitHub imports
+# GITHUB_ENV only after the action step exits, so false-mode cache identity and
+# probe results must be durable there while publication authority stays empty.
+readonly_step_env="$(mktemp)"
+trap 'rm -f "$readonly_step_env"' EXIT
+scope_suffix="-git-1111111111111111111111111111111111111111"
+compile_deps_available=1
+compile_source_available=1
+cache_write_enabled=""
+{
+  echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"
+  echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=$compile_deps_available"
+  echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=$compile_source_available"
+  echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"
+} >"$readonly_step_env"
+(
+  unset GHA_CACHE_SCOPE_SUFFIX GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE
+  unset GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE GHA_CACHE_WRITE_ENABLED
+  set -a
+  # shellcheck disable=SC1090 -- models GitHub's next-step environment import.
+  . "$readonly_step_env"
+  set +a
+  [ "$GHA_CACHE_SCOPE_SUFFIX" = "$scope_suffix" ]
+  [ "$GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE" = "1" ]
+  [ "$GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" = "1" ]
+  [ -z "${GHA_CACHE_WRITE_ENABLED:-}" ]
+)
 require_text "$docker_setup" 'GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE'
 require_text "$docker_setup" 'GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE'
 require_text "$docker_setup" 'GHA_CACHE_EXACT_WEB_E2E_AVAILABLE'

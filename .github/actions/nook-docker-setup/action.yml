@@ -269,7 +269,10 @@ runs:
         scope_suffix=""
         fallback_enabled=""
         hive_remote_ref=""
-        if [ "$isolated_cache_write" = "true" ]; then
+        # Exact source identity is required for both publication and read-only
+        # verification. ARC may disable write authorization above, but that must
+        # not erase the scope/probes exported to the later task step.
+        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
