@@ -250,6 +250,7 @@ tasks:
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
             --set "*.context=$sim_dir" \
+            --set "compile-warm.args.SIMULATED_BUILD_PROFILE=production" \
             compile-warm >"$log_file" 2>&1
           local bake_status=$?
           set -e
@@ -267,6 +268,7 @@ tasks:
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
             --set "*.context=$sim_dir" \
+            --set "compile-generation.args.SIMULATED_BUILD_PROFILE=production" \
             compile-generation >"$log_file" 2>&1
           local bake_status=$?
           set -e

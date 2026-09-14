@@ -52,10 +52,35 @@ grep -Fq -- 'compile_generation_cache_ref' "$compile_bake" \
 
 for required in \
   'nook-rust-compile-deps-input-v3' \
+  '.github/scripts/compile-deps-cache-seed.sh' \
+  '.github/scripts/compile-remote.sh' \
   'nook-app/nook-platform/docker/rust/compile.Dockerfile' \
   'nook-app/nook-platform/docker/rust/compile.docker-bake.hcl'; do
   grep -Fq -- "$required" "$compile_fingerprint" \
     || { echo "remote compile contract: compile dependency fingerprint omits recipe input: $required" >&2; exit 1; }
+done
+
+# Bake inheritance is resolved before command-line target overrides. The
+# maintenance target therefore needs the same explicit build arguments as the
+# ordinary consumer; setting only build-compile.args.* creates different LLB
+# vertex keys even though build-compile-generation inherits the HCL target.
+for argument in \
+  SCCACHE_S3_MODE \
+  SCCACHE_ENDPOINT \
+  SCCACHE_BUCKET \
+  WASM_BUILD_MODE \
+  VITE_BASE \
+  VITE_SITE_URL \
+  VITE_PUBLIC_APP_URL \
+  VITE_SIMPLE_APP_URL \
+  VITE_SENTINEL_APP_URL \
+  NOOK_SIMPLE_VAULT_URL \
+  NOOK_EXTENSION_CHANNEL \
+  NOOK_EXTENSION_VERSION \
+  NOOK_EXTENSION_COMMIT \
+  NOOK_EXTENSION_SITE_URL; do
+  grep -Fq -- "build-compile-generation.args.${argument}=" "$seed_script" \
+    || { echo "remote compile contract: generation seed omits consumer argument: $argument" >&2; exit 1; }
 done
 
 grep -Fq -- 'nook-rust-compile-deps-v3-' "$setup" \

@@ -22,6 +22,8 @@ fi
 paths="$({
   printf '%s\n' \
     .github/scripts/compile-deps-cache-fingerprint.sh \
+    .github/scripts/compile-deps-cache-seed.sh \
+    .github/scripts/compile-remote.sh \
     nook-app/docker-bake.hcl \
     nook-app/nook-platform/docker/rust/compile.Dockerfile \
     nook-app/nook-platform/docker/rust/compile.docker-bake.hcl \

@@ -2,11 +2,16 @@
 # Compile-shaped graph used by the warm-cache acceptance proof. Dependency
 # inputs stay before package source inputs. The expensive WASM compiler leaves
 # form the exported target's ancestry so mode=min retains their cache records.
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS compile-toolchain
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS compile-toolchain-image
 COPY inputs/compile-base.txt /tmp/toolchain.txt
 RUN cat /tmp/toolchain.txt >/opt/compile-toolchain \
   && sleep 1 \
   && echo bake-sim-compile-toolchain
+
+FROM toolchain-base AS compile-toolchain
+
+ARG SIMULATED_BUILD_PROFILE=production
+RUN test "$SIMULATED_BUILD_PROFILE" = production
 
 FROM compile-toolchain AS compile-hive-dependencies
 COPY inputs/compile-hive-lock.txt /tmp/hive-lock.txt

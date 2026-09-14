@@ -38,6 +38,10 @@ variable "COMPILE_SOURCE_CACHE_GENERATION" {
   default = "v3"
 }
 
+variable "SIMULATED_BUILD_PROFILE" {
+  default = "production"
+}
+
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
@@ -69,6 +73,10 @@ target "compile-dependencies" {
   context = "."
   dockerfile = "compile-warm.Dockerfile"
   target = "compile-dependencies"
+  platforms = ["linux/amd64"]
+  contexts = {
+    toolchain-base = "target:compile-toolchain-context"
+  }
   cache-from = [
     "type=registry,ref=${compile_deps_cache_ref},ignore-error=true",
   ]
@@ -80,6 +88,13 @@ target "compile-warm" {
   context = "."
   dockerfile = "compile-warm.Dockerfile"
   target = "compile"
+  platforms = ["linux/amd64"]
+  contexts = {
+    toolchain-base = "target:compile-toolchain-context"
+  }
+  args = {
+    SIMULATED_BUILD_PROFILE = SIMULATED_BUILD_PROFILE
+  }
   cache-from = compile_cache_from
   cache-to = compile_source_cache_to
   output = ["type=cacheonly"]
@@ -88,4 +103,13 @@ target "compile-warm" {
 target "compile-generation" {
   inherits = ["compile-warm"]
   cache-to = compile_generation_cache_to
+}
+
+
+target "compile-toolchain-context" {
+  context = "."
+  dockerfile = "compile-warm.Dockerfile"
+  target = "compile-toolchain-image"
+  platforms = ["linux/amd64"]
+  output = ["type=cacheonly"]
 }

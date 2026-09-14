@@ -934,6 +934,15 @@ tasks:
     );
     expect(compileSeed).toContain("build-compile-dependencies");
     expect(compileSeed).toContain("build-compile");
+    expect(compileSeed).toContain("build-compile-generation.args.WASM_BUILD_MODE");
+    expect(compileSeed).toContain("build-compile-generation.args.VITE_BASE");
+    expect(compileSeed).toContain(
+      "build-compile-generation.args.NOOK_EXTENSION_COMMIT",
+    );
+    expect(compileFingerprint).toContain(
+      ".github/scripts/compile-deps-cache-seed.sh",
+    );
+    expect(compileFingerprint).toContain(".github/scripts/compile-remote.sh");
     expect(compileSeed).toContain(
       "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
     );
@@ -967,6 +976,9 @@ tasks:
     expect(simulator).toContain('COMPILE_SOURCE_CACHE_AVAILABLE != ""');
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
     expect(simulator).toContain("COMPILE_GENERATION_SCOPE");
+    expect(simulator).toContain('target "compile-generation"');
+    expect(simulator).toContain("SIMULATED_BUILD_PROFILE");
+    expect(proof).toContain("SIMULATED_BUILD_PROFILE=production");
     expect(simulator).toContain("separate seed boundary");
     expect(proof).toContain(
       "Separate seed replay: existing immutable fingerprint skips solve and export",

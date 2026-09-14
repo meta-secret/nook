@@ -64,6 +64,23 @@ bake_args=(
   --set "build-compile.args.NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}"
   --set "build-compile.args.NOOK_EXTENSION_COMMIT=${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
   --set "build-compile.args.NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"
+  # Bake applies CLI overrides after target inheritance. Mirror every
+  # invocation-shaping consumer argument on the maintenance target so the
+  # exported generation contains the keys build:compile will request.
+  --set "build-compile-generation.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
+  --set "build-compile-generation.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+  --set "build-compile-generation.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
+  --set "build-compile-generation.args.WASM_BUILD_MODE=${WASM_BUILD_MODE:-dev}"
+  --set "build-compile-generation.args.VITE_BASE=${VITE_BASE:-/}"
+  --set "build-compile-generation.args.VITE_SITE_URL=${VITE_SITE_URL:-}"
+  --set "build-compile-generation.args.VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL:-}"
+  --set "build-compile-generation.args.VITE_SIMPLE_APP_URL=${VITE_SIMPLE_APP_URL:-}"
+  --set "build-compile-generation.args.VITE_SENTINEL_APP_URL=${VITE_SENTINEL_APP_URL:-}"
+  --set "build-compile-generation.args.NOOK_SIMPLE_VAULT_URL=${NOOK_SIMPLE_VAULT_URL:-https://simple.nokey.sh/}"
+  --set "build-compile-generation.args.NOOK_EXTENSION_CHANNEL=${NOOK_EXTENSION_CHANNEL:-production}"
+  --set "build-compile-generation.args.NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}"
+  --set "build-compile-generation.args.NOOK_EXTENSION_COMMIT=${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
+  --set "build-compile-generation.args.NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"
 )
 
 access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
