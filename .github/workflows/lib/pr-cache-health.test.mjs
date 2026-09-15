@@ -491,6 +491,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   }
   assert.match(
     productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false \\\n[ ]{4}echo "nook-wasm declared coverage tests:/,
+    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
   );
+  assert.match(productDockerfile, /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/);
 });
