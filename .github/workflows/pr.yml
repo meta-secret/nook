@@ -578,7 +578,6 @@ jobs:
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
-
       - name: Upload preview dist handoff
         uses: actions/upload-artifact@v7
         with:
@@ -590,7 +589,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           overwrite: true
-
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
@@ -781,14 +779,12 @@ jobs:
             failed=1
           fi
           test "$failed" -eq 0
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-
       - name: Setup Node for host Pages deploy
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: actions/setup-node@v7

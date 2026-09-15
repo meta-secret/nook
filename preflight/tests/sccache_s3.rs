@@ -256,6 +256,23 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ];
     let repository_policy =
         RepositoryFixture::repository_root().read(".github/workflows/repository-policy.yml");
+    let trusted_host = repository_policy
+        .split_once("      - name: Connect trusted host compiler cache")
+        .and_then(|(_, tail)| tail.split_once("      - run: task tooling:static"))
+        .map(|(trusted, _)| trusted)
+        .expect("repository policy host tooling must configure its compiler cache");
+    for required in [
+        "uses: ./.github/actions/nook-cache-connect",
+        "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+        "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+        "test \"${NOOK_SCCACHE_BACKEND:-}\" = remote",
+        "test \"${SCCACHE_S3_RW_MODE:-}\" = READ_WRITE",
+    ] {
+        assert!(
+            trusted_host.contains(required),
+            "trusted host compiler cache must enforce {required}"
+        );
+    }
     let trusted_policy = repository_policy
         .split_once("      - name: Connect private ARC BuildKit")
         .and_then(|(_, tail)| tail.split_once("      - name: Setup secret-free hosted BuildKit"))
