@@ -307,27 +307,35 @@ class DockerizedRustContract {
         } else {
           expect(calls).toContain(`nook/remote-buildcache/`);
           expect(calls).toContain(exactScopeSuffix);
+          expect(values).toContain("GHA_CACHE_EXACT_PROBES_COMPLETE=1\n");
         }
         if (profile === "ecosystem-smoke") {
-          expect(calls.trim().split("\n")).toHaveLength(4);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
           expect(calls).toContain("nook-rust-ecosystem-fuzz-");
           expect(calls).toContain("nook-rust-ecosystem-kani-");
         } else if (profile.startsWith("ecosystem-")) {
-          expect(calls.trim().split("\n")).toHaveLength(2);
           expect(calls).toContain(`nook-rust-${profile}-`);
         }
         if (profile === "preflight") {
-          expect(calls.trim().split("\n")).toHaveLength(2);
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls).not.toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-v1");
           expect(calls).toContain("nook-web-deps-v1");
           expect(calls).toContain("nook-web-app-deps-v1");
           expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
+      expect(selection.run).toContain("declare -A restore_suffix_by_env=()");
+      expect(selection.run).toContain(
+        '"GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4"',
+      );
+      expect(selection.run).toContain(
+        '"GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1"',
+      );
+      expect(selection.run).toContain("concurrent=true");
+      expect(selection.run).not.toContain("restore_anchor_set_available");
 
       const secretFreeScript = selection.run
         .replaceAll("${{ inputs.cache-selection }}", "native")

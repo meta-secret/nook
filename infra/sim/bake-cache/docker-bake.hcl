@@ -36,7 +36,17 @@ variable "GHA_CACHE_RESTORE_SCOPE_SUFFIX" {
   default = ""
 }
 
+variable "GHA_CACHE_RESTORE_PARENT_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_LEAF_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
 restore_cache_scope_suffix = GHA_CACHE_RESTORE_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_SCOPE_SUFFIX : GHA_CACHE_SCOPE_SUFFIX
+restore_parent_scope_suffix = GHA_CACHE_RESTORE_PARENT_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_PARENT_SCOPE_SUFFIX : restore_cache_scope_suffix
+restore_leaf_scope_suffix = GHA_CACHE_RESTORE_LEAF_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_LEAF_SCOPE_SUFFIX : restore_cache_scope_suffix
 
 variable "PARENT_OWN_CACHE_ENABLED" {
   default = "1"
@@ -89,11 +99,11 @@ base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // FALLBACK: exact git scope first, then content fingerprint, then trusted Main.
 parent_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_parent_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:fingerprint-${RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_parent_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:fingerprint-${RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
 ]
 
@@ -111,10 +121,10 @@ parent_input_candidate_cache_from = INPUT_CACHE_CANDIDATE != "" ? [
 
 // Nested parent (Bake-context base) uses its own Zot scope.
 parent_nested_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${restore_parent_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-nested-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${restore_parent_scope_suffix}:buildcache,ignore-error=true",
 ]
 
 parent_nested_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
@@ -122,12 +132,12 @@ parent_nested_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : NESTED_LEAF_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_leaf_scope_suffix}:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-nested-leaf-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
 ]
 
 nested_leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
@@ -135,12 +145,12 @@ nested_leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 consumer_cache_from = GHA_CACHE_ENABLED == "" ? [] : CONSUMER_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_leaf_scope_suffix}:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-consumer-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
 ]
 
 consumer_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
@@ -150,16 +160,16 @@ consumer_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // Broken PR FALLBACK: git-scope only (documents cold install without Main).
 parent_pr_cold_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${restore_parent_scope_suffix}:buildcache,ignore-error=true",
 ]
 
 leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : LEAF_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_leaf_scope_suffix}:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-leaf-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${restore_leaf_scope_suffix}:buildcache,ignore-error=true",
 ]
 
 leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [

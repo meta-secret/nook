@@ -21,6 +21,12 @@ export class CacheScopeTelemetry {
       .filter(([name]) => /^GHA_CACHE_(?:EXACT|MAIN)_.+_AVAILABLE$/.test(name))
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, value]) => ({ name, available: value === "1" }));
+    const restoreSuffixes = Object.entries(this.environment)
+      .filter(([name, value]) =>
+        /^GHA_CACHE_RESTORE_.+_SCOPE_SUFFIX$/.test(name) && Boolean(value),
+      )
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, suffix]) => ({ name, suffix }));
     return {
       scope: !cacheEnabled
         ? "local-only"
@@ -63,6 +69,7 @@ export class CacheScopeTelemetry {
         failure_class:
           this.environment.GHA_CACHE_EXACT_PROBE_FAILURE_CLASS || "none",
         availability: cacheAvailability,
+        restore_suffixes: restoreSuffixes,
       },
     };
   }

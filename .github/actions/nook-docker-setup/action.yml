@@ -4,14 +4,15 @@ description: Task, Buildx, and authenticated registry BuildKit cache setup.
 inputs:
   cache-selection:
     description: >-
-      Closed cache probe set: general probes every shared Bake lineage; native,
+      Closed cache probe set: general selects every shared Bake lineage independently; native,
       wasm, preflight, and web-e2e probe only the named consumer graph;
       ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
       compile probes its exact head and immutable first-parent candidates in
-      one bounded batch;
+      one bounded batch; all non-compile immutable lineage candidates are
+      probed concurrently within the same bounded discovery window;
       web-research-deps probes only the research Bun dependency lineage;
       web-research-image probes the exact research browser graph;
       connection-only performs no registry cache probes.
@@ -383,7 +384,11 @@ runs:
             echo "$env_name=" >> "$GITHUB_ENV"
             return 0
           fi
-          cache_ref_status "$ref" || probe_status=$?
+          if [ -n "${cache_probe_status_by_ref[$ref]+set}" ]; then
+            probe_status="${cache_probe_status_by_ref[$ref]}"
+          else
+            cache_ref_status "$ref" || probe_status=$?
+          fi
           case "$probe_status" in
             0)
               available=1
@@ -430,125 +435,163 @@ runs:
         }
 
         restore_scope_suffix="$scope_suffix"
-        restore_anchors=()
         restore_ancestor_sha=""
+        GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_WEB_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX="$scope_suffix"
+        GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX="$scope_suffix"
+        declare -A restore_suffix_by_env=()
+        declare -A restore_sha_by_env=()
+        declare -A transient_restore_probe_by_env=()
+        declare -A cache_probe_status_by_ref=()
         if [ -n "$scope_suffix" ] \
           && [ "$cache_selection" != "compile" ] \
           && [ "$cache_selection" != "connection-only" ] \
           && [ "$cache_selection" != "wasm-proof" ]; then
+          restore_lineages=()
           case "$cache_selection" in
-            # An ancestor is eligible only through a scope that this producer
-            # publishes on every non-handoff execution.  Shorter/shared roots
-            # can exist while the source graph needed by this job is absent.
-            # The general remote profile can consume every lineage below. It
-            # therefore restores one suffix only after proving that exact
-            # immutable suffix contains the complete set; a partially
-            # published arbitrary-task head can never redirect unrelated
-            # consumers to missing refs.
-            general) restore_anchors=(
-              nook-rust-base-v2 nook-rust-deps-v4
-              nook-rust-native-source-v4 nook-rust-wasm-deps-v6
-              nook-rust-wasm-source-v3 nook-rust-ecosystem-dylint-v4
-              nook-rust-ecosystem-fuzz-v4 nook-rust-ecosystem-policy-tools-v5
-              nook-rust-ecosystem-deterministic-v2 nook-rust-ecosystem-kani-v2
-              nook-preflight-v1 nook-web-e2e-v1 nook-web-deps-v1
-              nook-web-app-deps-v1 nook-web-research-deps-v1
+            # Each producer guarantees only its own immutable lineage. Select
+            # the nearest available suffix independently so an arbitrary task
+            # head cannot make unrelated caches unreachable.
+            general) restore_lineages=(
+              "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX|nook-rust-base-v2"
+              "GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX|nook-rust-deps-v4"
+              "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4"
+              "GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX|nook-rust-wasm-deps-v6"
+              "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3"
+              "GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX|nook-rust-ecosystem-dylint-v4"
+              "GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX|nook-rust-ecosystem-fuzz-v4"
+              "GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX|nook-rust-ecosystem-policy-tools-v5"
+              "GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX|nook-rust-ecosystem-deterministic-v2"
+              "GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX|nook-rust-ecosystem-kani-v2"
+              "GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX|nook-preflight-v1"
+              "GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1"
+              "GHA_CACHE_RESTORE_WEB_SCOPE_SUFFIX|nook-web-v1"
+              "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX|nook-web-deps-v1"
+              "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX|nook-web-app-deps-v1"
+              "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1"
             ) ;;
-            native) restore_anchors=(nook-rust-native-source-v4) ;;
-            wasm) restore_anchors=(nook-rust-wasm-source-v3 nook-rust-base-v2) ;;
-            preflight) restore_anchor=nook-preflight-v1 ;;
-            # The regular web publisher always exports these three dependency
-            # lineages.  web-e2e is conditional and therefore cannot anchor a
-            # normal verification restore.
-            web-e2e|web-research-image) restore_anchors=(nook-web-deps-v1 nook-web-app-deps-v1 nook-web-research-deps-v1) ;;
-            web-research-deps) restore_anchors=(nook-web-research-deps-v1) ;;
-            ecosystem-dylint) restore_anchor=nook-rust-ecosystem-dylint-v4 ;;
-            ecosystem-fuzz) restore_anchor=nook-rust-ecosystem-fuzz-v4 ;;
-            ecosystem-policy-tools) restore_anchor=nook-rust-ecosystem-policy-tools-v5 ;;
-            ecosystem-deterministic) restore_anchor=nook-rust-ecosystem-deterministic-v2 ;;
-            ecosystem-kani|ecosystem-smoke) restore_anchor=nook-rust-ecosystem-kani-v2 ;;
-            *) restore_anchor="" ;;
+            native) restore_lineages=(
+              "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX|nook-rust-base-v2"
+              "GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX|nook-rust-deps-v4"
+              "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4"
+            ) ;;
+            wasm) restore_lineages=(
+              "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX|nook-rust-base-v2"
+              "GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX|nook-rust-wasm-deps-v6"
+              "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3"
+            ) ;;
+            preflight) restore_lineages=("GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX|nook-preflight-v1") ;;
+            web-e2e|web-research-image) restore_lineages=(
+              "GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1"
+              "GHA_CACHE_RESTORE_WEB_SCOPE_SUFFIX|nook-web-v1"
+              "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX|nook-web-deps-v1"
+              "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX|nook-web-app-deps-v1"
+              "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1"
+            ) ;;
+            web-research-deps) restore_lineages=("GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1") ;;
+            ecosystem-dylint) restore_lineages=("GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX|nook-rust-ecosystem-dylint-v4") ;;
+            ecosystem-fuzz) restore_lineages=("GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX|nook-rust-ecosystem-fuzz-v4") ;;
+            ecosystem-policy-tools) restore_lineages=("GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX|nook-rust-ecosystem-policy-tools-v5") ;;
+            ecosystem-deterministic) restore_lineages=("GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX|nook-rust-ecosystem-deterministic-v2") ;;
+            ecosystem-kani) restore_lineages=("GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX|nook-rust-ecosystem-kani-v2") ;;
+            ecosystem-smoke) restore_lineages=(
+              "GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX|nook-rust-ecosystem-fuzz-v4"
+              "GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX|nook-rust-ecosystem-deterministic-v2"
+              "GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX|nook-rust-ecosystem-kani-v2"
+            ) ;;
           esac
-          if [ "${#restore_anchors[@]}" -eq 0 ] && [ -n "${restore_anchor:-}" ]; then
-            restore_anchors=("$restore_anchor")
-          fi
-          restore_anchor_set_available() {
-            local candidate_suffix="$1"
-            local anchor
-            local status=0
-            for anchor in "${restore_anchors[@]}"; do
-              cache_ref_status "$registry_host/$exact_repository/$anchor$candidate_suffix:buildcache" || status=$?
-              [ "$status" -eq 0 ] || return "$status"
-            done
-          }
-          restore_status=0
-          restore_anchor_set_available "$scope_suffix" || restore_status=$?
-          if [ "$restore_status" -eq 1 ]; then
-            ancestor_probe_limit=8
-            ancestor_probe_dir="$(mktemp -d)"
-            mapfile -t restore_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
-            for ancestor_sha in "${restore_ancestors[@]}"; do
+
+          ancestor_probe_limit=8
+          restore_probe_dir="$(mktemp -d)"
+          mapfile -t restore_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
+          restore_candidate_suffixes=("$scope_suffix")
+          restore_candidate_shas=("$(git rev-parse HEAD)")
+          for ancestor_sha in "${restore_ancestors[@]}"; do
+            restore_candidate_suffixes+=("-git-$ancestor_sha")
+            restore_candidate_shas+=("$ancestor_sha")
+          done
+          probe_index=0
+          for lineage_spec in "${restore_lineages[@]}"; do
+            IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
+            for candidate_index in "${!restore_candidate_suffixes[@]}"; do
+              candidate_suffix="${restore_candidate_suffixes[$candidate_index]}"
+              cache_ref="$registry_host/$exact_repository/$restore_anchor$candidate_suffix:buildcache"
+              probe_file="$restore_probe_dir/$probe_index"
               (
-                ancestor_status=0
-                restore_anchor_set_available "-git-$ancestor_sha" || ancestor_status=$?
-                printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
+                candidate_status=0
+                cache_ref_status "$cache_ref" || candidate_status=$?
+                printf '%s\n' "$candidate_status" > "$probe_file"
               ) &
+              printf '%s|%s|%s|%s|%s\n' "$probe_index" "$restore_env" "$restore_anchor" "$candidate_index" "$cache_ref" >> "$restore_probe_dir/index"
+              probe_index=$((probe_index + 1))
             done
-            wait || true
-            for ancestor_sha in "${restore_ancestors[@]}"; do
-              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
-              if [ "$ancestor_status" -eq 3 ]; then
-                rm -rf "$ancestor_probe_dir"
-                exit 3
-              fi
-            done
-            for ancestor_sha in "${restore_ancestors[@]}"; do
-              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
-              case "$ancestor_status" in
-                0)
-                  restore_scope_suffix="-git-$ancestor_sha"
-                  restore_ancestor_sha="$ancestor_sha"
-                  echo "Nearest complete immutable cache candidate available: ${restore_anchors[*]} at $ancestor_sha"
-                  break
-                  ;;
-                1) ;;
-                2) disable_registry_cache ;;
-                *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
-              esac
-            done
-            rm -rf "$ancestor_probe_dir"
-          elif [ "$restore_status" -eq 2 ]; then
+          done
+          wait || true
+
+          while IFS='|' read -r index restore_env restore_anchor candidate_index cache_ref; do
+            candidate_status="$(cat "$restore_probe_dir/$index")"
+            cache_probe_status_by_ref["$cache_ref"]="$candidate_status"
+            case "$candidate_status" in
+              0)
+                if [ -z "${restore_suffix_by_env[$restore_env]+set}" ]; then
+                  restore_suffix_by_env["$restore_env"]="${restore_candidate_suffixes[$candidate_index]}"
+                  restore_sha_by_env["$restore_env"]="${restore_candidate_shas[$candidate_index]}"
+                  echo "Nearest immutable $restore_anchor cache: ${restore_candidate_shas[$candidate_index]}"
+                fi
+                ;;
+              1) ;;
+              2) transient_restore_probe_by_env["$restore_env"]=1 ;;
+              *) rm -rf "$restore_probe_dir"; exit "$candidate_status" ;;
+            esac
+          done < "$restore_probe_dir/index"
+          rm -rf "$restore_probe_dir"
+
+          unresolved_transient_probe=""
+          for restore_env in "${!transient_restore_probe_by_env[@]}"; do
+            if [ -z "${restore_suffix_by_env[$restore_env]+set}" ]; then
+              unresolved_transient_probe=1
+            fi
+          done
+          if [ -n "$unresolved_transient_probe" ]; then
             disable_registry_cache
-            echo "Immutable cache discovery unavailable; disabling registry cache for this job"
-          elif [ "$restore_status" -ne 0 ]; then
-            exit "$restore_status"
+            echo "Immutable lineage discovery was transiently unavailable; disabling registry cache for this job"
+          else
+            for lineage_spec in "${restore_lineages[@]}"; do
+              IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
+              selected_suffix="${restore_suffix_by_env[$restore_env]:-$scope_suffix}"
+              printf -v "$restore_env" '%s' "$selected_suffix"
+              echo "$restore_env=$selected_suffix" >> "$GITHUB_ENV"
+            done
           fi
-          echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+          echo "Immutable lineage probes complete: lineages=${#restore_lineages[@]} candidates=${#restore_candidate_suffixes[@]} probe_timeout_seconds=6 concurrent=true"
+
+          source_restore_env=""
           case "$cache_selection" in
-            native)
-              echo "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              ;;
-            wasm)
-              echo "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              echo "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              ;;
-            web-e2e|web-research-image)
-              echo "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              echo "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              echo "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              ;;
-            web-research-deps)
-              echo "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
-              ;;
+            native) source_restore_env=GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX ;;
+            wasm) source_restore_env=GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX ;;
           esac
-          case "$cache_selection:$restore_ancestor_sha" in
-            native:?*|wasm:?*)
+          if [ -n "$source_restore_env" ] && [ -n "${restore_sha_by_env[$source_restore_env]:-}" ]; then
+              restore_ancestor_sha="${restore_sha_by_env[$source_restore_env]}"
+              if [ "$restore_ancestor_sha" != "$(git rev-parse HEAD)" ]; then
               current_compiler_input="$(git rev-parse HEAD:nook-app/nook-platform)"
               restore_compiler_input="$(git rev-parse "$restore_ancestor_sha:nook-app/nook-platform")"
               echo "NOOK_COMPILER_INPUT_FINGERPRINT=$current_compiler_input" >> "$GITHUB_ENV"
               echo "NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT=$restore_compiler_input" >> "$GITHUB_ENV"
-              ;;
-          esac
+              fi
+          fi
         fi
 
         case "$cache_selection" in
@@ -645,10 +688,10 @@ runs:
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
           # Main source also owns fresh dependency-only restores after publication.
-          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX"
           if [ -n "$scope_suffix" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$restore_scope_suffix"
-            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$restore_scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX"
           fi
           publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
         fi
@@ -657,45 +700,45 @@ runs:
           # WASM consumes the base, fingerprinted dependency, and complete WASM source scopes.
           wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
           if [ -n "$scope_suffix" ]; then
-            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$restore_scope_suffix"
+            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX"
           fi
           if [ "$cache_selection" != "general" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$restore_scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX"
           fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
           fi
         fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \
           || [ "$cache_selection" = "web-research-image" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX"
           # Keep the aggregate dependency graph and its independent lockfile
           # children distinct from the source-bearing browser image. Each
           # importer selects exact-or-Main rather than merging cache versions.
-          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$restore_scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$restore_scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
@@ -703,7 +746,7 @@ runs:
           fi
         fi
         if [ "$cache_selection" = "web-research-deps" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
           fi

@@ -16,6 +16,7 @@ void test("records ordinary compile publication boundaries", () => {
       GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
       GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
+      GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX: `-git-${"d".repeat(40)}`,
       NOOK_COMPILER_INPUT_FINGERPRINT: "compiler-input-current",
       NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT: "compiler-input-parent",
     }).record(),
@@ -45,6 +46,12 @@ void test("records ordinary compile publication boundaries", () => {
           {
             name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
             available: true,
+          },
+        ],
+        restore_suffixes: [
+          {
+            name: "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX",
+            suffix: `-git-${"d".repeat(40)}`,
           },
         ],
       },

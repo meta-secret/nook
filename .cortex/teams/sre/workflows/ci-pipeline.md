@@ -81,15 +81,16 @@ and manual ecosystem execution in one Actions run named `CI`.
   Only the per-consumer `timed_out` result activates the Docker Cache
   Specialist. Aggregate matrix status and missing artifacts remain diagnostic
   and are never used to infer a shard timeout.
-- Immutable ancestor discovery uses the complete set of scopes each producer
-  always publishes: native source for native, WASM source plus rust-base for
-  WASM, and all three web dependency lineages for regular web verification.
-  Conditional image refs and shorter shared roots cannot select an incomplete
-  ancestor. Partial publication therefore falls back to Main/cold state.
-- The general Remote profile proves one immutable suffix contains every Rust,
-  WASM, ecosystem, preflight, and web lineage it may consume before assigning
-  that suffix globally. Arbitrary-task partial publications cannot make
-  unrelated consumers probe a mismatched ancestor.
+- Immutable ancestor discovery is per lineage. Native base, dependencies, and
+  source; WASM base, dependencies, and source; each ecosystem/preflight family;
+  and each web aggregate, child dependency, application, and browser-image
+  graph select their own nearest available immutable first-parent suffix.
+  Missing or partially published heads therefore do not discard usable sibling
+  lineages or redirect a consumer to a ref that producer never guaranteed.
+- The general Remote profile performs the same independent selection for every
+  lineage it may consume. It probes the bounded candidate matrix concurrently,
+  keeping discovery inside one probe-duration wall window rather than paying a
+  sequential lineage-by-ancestor product.
 - Any transient registry probe disables all registry imports and exports for
   the job. Secret-free jobs likewise remain local-only even when a later task
   invokes a publisher; Bake exporters require both cache enablement and write
