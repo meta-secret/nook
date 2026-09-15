@@ -188,6 +188,8 @@ jobs:
       - name: Publish PR-scoped native BuildKit cache
         if: steps.trusted-native.outputs.found != 'true'
         run: task ci:main:publish-native-cache
+        env:
+          GHA_CACHE_EXPORT_MODE: min
 
       - name: Rust format, clippy, tests, and coverage
         if: steps.trusted-native.outputs.found != 'true'
@@ -333,6 +335,7 @@ jobs:
         run: task ci:main:publish-wasm-cache
         env:
           WASM_BUILD_MODE: dev
+          GHA_CACHE_EXPORT_MODE: min
 
       - name: WASM clippy and build
         if: steps.trusted-wasm.outputs.found != 'true'

@@ -8,8 +8,8 @@
 // toolchain lineage inside each mode=max leaf scope and removes the linked
 // nightly context whose nested identity rebuilt cargo-dylint. Source COPY steps
 // stay after the shared tool stage. rust-base remains the only linked context.
-// Dedicated *-publish targets write mode=max refs under write_cache_repository
-// plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
+// Dedicated *-publish targets write refs under write_cache_repository plus
+// GHA_CACHE_SCOPE_SUFFIX (Main: mode=max; isolated PR roots: mode=min).
 // Every registry writer forces zstd. Scope generations rotate as one family
 // when compression changes so retired mixed-compression indexes are not read.
 // Empty cache-from= and cache-to= overrides are prohibited.
@@ -47,7 +47,7 @@ rust_ecosystem_smoke_cache_from = GHA_CACHE_ENABLED != "" ? [
 ] : []
 
 rust_ecosystem_smoke_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-smoke-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-smoke-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
 // Unique quarantine tag written by one local formatter invocation. Pull
@@ -386,7 +386,8 @@ target "rust-dylint-build" {
 
 // Publish the reusable checker/toolchain before repository lint execution.
 target "rust-dylint-build-publish" {
-  inherits = ["rust-dylint-build"]
+  inherits = ["rust-dylint"]
+  target   = "rust-ecosystem-nightly"
   cache-to = rust_ecosystem_dylint_cache_to
 }
 
@@ -429,7 +430,7 @@ target "rust-ecosystem-deterministic-cache-probe" {
 }
 
 target "rust-ecosystem-deterministic-smoke-member" {
-  inherits = ["rust-ecosystem-deterministic-cache-probe"]
+  inherits = ["rust-base"]
   cache-to = []
 }
 
@@ -455,7 +456,7 @@ target "rust-fuzz-smoke-member" {
   cache-to = []
 }
 
-// One rooted mode=max export owns only the reusable toolchain/build phases.
+// One rooted export owns only the reusable toolchain/build phases.
 // Terminal tests and proofs consume this graph but cannot block publication.
 target "rust-ecosystem-smoke-publish" {
   context    = "."

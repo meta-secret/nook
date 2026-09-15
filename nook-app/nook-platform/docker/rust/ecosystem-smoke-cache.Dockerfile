@@ -3,6 +3,6 @@
 # Root the reusable deterministic source graph, nightly tools, and Kani
 # toolchain beneath one export before any terminal validation executes.
 FROM scratch AS rust-ecosystem-smoke-cache
-COPY --from=deterministic /meta-secret/nook/nook-app/nook-platform/Cargo.toml /proof/deterministic-Cargo.toml
+COPY --from=deterministic /usr/local/cargo/bin/cargo /proof/cargo
 COPY --from=fuzz /usr/local/cargo/bin/cargo-fuzz /proof/cargo-fuzz
 COPY --from=kani /usr/local/cargo/bin/cargo-kani /proof/cargo-kani

@@ -51,4 +51,25 @@ install_block="$(sed -n '/RUN --mount=type=secret,id=sccache_s3_access_key/,/car
 grep -Fq 'id=sccache_s3_secret_key' <<<"$install_block"
 grep -Fq 'cargo install cargo-dylint dylint-link' <<<"$install_block"
 
+# Inspect the resolved Bake plans, not just HCL text. Each PR publication command
+# must expose exactly one physical exporter, and PRs deliberately use mode=min.
+bake_files=(
+  -f "$repo_root/nook-app/docker-bake.hcl"
+  -f "$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl"
+  -f "$repo_root/nook-app/nook-platform/nook-core/docker-bake.hcl"
+  -f "$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl"
+)
+for target in rust-native-source-publish builder-wasm-build-publish rust-dylint-build-publish rust-ecosystem-smoke-publish; do
+  plan="$(env \
+    GHA_CACHE_ENABLED=1 \
+    GHA_CACHE_WRITE_ENABLED=1 \
+    GHA_CACHE_EXPORT_MODE=min \
+    GHA_CACHE_SCOPE_SUFFIX=-git-contract \
+    NOOK_REGISTRY_CACHE_HOST=registry.invalid \
+    NOOK_REGISTRY_CACHE_REPOSITORY=nook/remote-buildcache \
+    docker buildx bake "${bake_files[@]}" --print "$target" 2>/dev/null)"
+  test "$(jq '[.target[] | select(((.["cache-to"] // []) | length) > 0)] | length' <<<"$plan")" -eq 1
+  test "$(jq -r '[.target[] | .["cache-to"][]? | .mode] | unique | join(",")' <<<"$plan")" = min
+done
+
 echo 'PR Docker producer single-export contract passed'

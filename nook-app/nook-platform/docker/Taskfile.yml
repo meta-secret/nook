@@ -263,7 +263,7 @@ tasks:
         rust-base-publish
 
   docker:ci:cache:publish:native:
-    desc: Export the one complete verified native source graph from this job's builder.
+    desc: Export the native source overlay; sccache owns compiled verification objects.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -276,7 +276,7 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        builder-debug
+        rust-native-source-publish
 
   docker:ci:cache:publish:preflight:
     desc: Export the independently verified preflight graph from its Main job's builder.

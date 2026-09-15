@@ -129,6 +129,7 @@ jobs:
         env:
           FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
           NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
+          GHA_CACHE_EXPORT_MODE: ${{ github.event_name == 'pull_request' && 'min' || 'max' }}
         run: task docker:ecosystem:smoke
 
       - name: Preserve cache telemetry
@@ -177,6 +178,8 @@ jobs:
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
       - name: Bake rust-dylint
         run: task docker:ecosystem:dylint
+        env:
+          GHA_CACHE_EXPORT_MODE: ${{ github.event_name == 'pull_request' && 'min' || 'max' }}
 
       - name: Preserve cache telemetry
         if: always()

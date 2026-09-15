@@ -40,6 +40,14 @@ target "rust-platform" {
   output = ["type=cacheonly"]
 }
 
+// PR publication stops at the source overlay. sccache owns compiler objects;
+// exporting builder-debug would serialize clippy and coverage history twice.
+target "rust-native-source-publish" {
+  inherits   = ["rust-platform"]
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+}
+
 target "builder-wasm-deps" {
   inherits   = ["_sccache"]
   context    = "."
