@@ -498,21 +498,11 @@ The active harness owns dynamic admission capacity and actual spawn results.
 
 ## Remote task execution
 
-The selectors below describe existing task behavior. The current feature
-stage uses only remote build-only execution; the dev manager requests slow checks
+Remote Task dispatch follows the [Agent Derailment Circuit
+Breaker](CIRCUIT-BREAKER.md). This section owns stage and actor routing only.
+It is not a selector catalog or a preflight contract. The current feature stage
+uses only remote build-only execution. The dev manager requests slow checks
 through the dev PR. Follow [dev delivery](gizmo-prime/architecture/dev-delivery.md).
-These old task descriptions do not authorize feature tests or an automatic
-dev-push validation pipeline.
-
-The remote task selectors map local validation work to hosted execution:
-
-- `preflight` runs repository preflight.
-- `rust:ci` runs Rust product validation.
-- `loom:verify` runs the full Loom suite.
-- `web:build` runs the web product build.
-- `web:e2e` and `extension:e2e` run browser suites.
-- `check`, `ci:pr`, and `ci:pr:e2e` run combined repository and PR validation.
-- `arc:runtime` runs the ARC runtime smoke check.
 
 Run hosted validation from a clean, committed non-main branch:
 
@@ -534,10 +524,9 @@ remote-task entry point. A temporary leaf or Team Gizmo branch is never a
 valid source for publication or dispatch.
 
 `task remote` rejects a dirty checkout, `main`, an unpushed branch, or a local
-`HEAD` that differs from the remote branch. The remote runner invokes the
-requested Task name; an unknown or otherwise broken Task fails on the remote
-runner. Runtime-backed selectors and `arc:runtime` should be dispatched alone
-so their Task implementations receive the correct runner image.
+`HEAD` that differs from the remote branch. Runtime-backed selectors and
+`arc:runtime` should be dispatched alone so their Task implementations receive
+the correct runner image.
 When a task requires a current base:
 
   - The feature base is the exact latest committed canonical local `dev`

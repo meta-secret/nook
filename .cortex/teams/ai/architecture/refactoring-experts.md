@@ -319,8 +319,7 @@ Examples include:
 - existence of Task entrypoints declared by canonical Cortex workflow
   contracts.
 
-User-requested remote Task selectors are dispatch input. Their existence is not
-a deterministic pre-dispatch candidate. Follow the root
+Remote Task handling follows the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 Semantic decisions remain in Cortex.

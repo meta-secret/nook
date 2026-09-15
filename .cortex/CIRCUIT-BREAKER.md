@@ -30,10 +30,12 @@ protecting a real product trust boundary.
   Do not reinterpret that evidence as identity, authority, or a secret.
 - Keep internal validation proportional to the workflow action being verified.
 - Forward a user-requested remote Task selector as ordinary dispatch input.
+  - Forward and execute the remote Task directly.
   - Forward the user-requested remote Task selector without checking whether it
     exists in a local catalog.
   - An unknown or missing selector is valid dispatch input and fails naturally
     on the GitHub Actions runner.
+  - The actual terminal outcome from GitHub Actions is the execution evidence.
   - Keep typed read, write, and output scope validation at the owning workflow
     boundary.
 - Stop when a proposed implementation enters a prohibited category.
@@ -94,6 +96,11 @@ evidence, or validation results.
 - **Remote Task selectors**
   - Do not add selector discovery, existence validation, aliases, fallback
     resolution, or pre-dispatch build machinery.
+  - Do not create or maintain preflight mocks, simulations, or contract tests
+    for remote Task dispatch.
+  - This prohibition includes shell invocation arguments, environment wiring,
+    task existence, shell behavior, retry or failure paths, and expected
+    dispatch results.
   - Do not execute an acceptance selector inside Loom.
   - Do not turn a selector into an authorization or identity mechanism.
 - **Preservation**

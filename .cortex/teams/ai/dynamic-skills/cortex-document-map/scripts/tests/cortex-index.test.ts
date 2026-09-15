@@ -358,6 +358,18 @@ test('forwards remote Task selectors without catalog prevalidation', () => {
   expect(circuitBreaker).toContain(
     'Do not add selector discovery, existence validation, aliases, fallback resolution, or pre-dispatch build machinery.',
   );
+  expect(circuitBreaker).toContain(
+    'Forward and execute the remote Task directly.',
+  );
+  expect(circuitBreaker).toContain(
+    'The actual terminal outcome from GitHub Actions is the execution evidence.',
+  );
+  expect(circuitBreaker).toContain(
+    'Do not create or maintain preflight mocks, simulations, or contract tests for remote Task dispatch.',
+  );
+  expect(circuitBreaker).toContain(
+    'This prohibition includes shell invocation arguments, environment wiring, task existence, shell behavior, retry or failure paths, and expected dispatch results.',
+  );
 });
 
 test('keeps root and AI universal policy routes canonical', () => {
