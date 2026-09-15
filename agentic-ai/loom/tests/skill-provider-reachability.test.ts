@@ -569,6 +569,21 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   ).toEqual([]);
 });
 
+test('rejects drift in the dockerized Rust runtime contract digest', async () => {
+  const path = 'infra/contracts/dockerized-rust.test.ts';
+  const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
+  const request = { path, source };
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(request),
+  ).not.toThrow();
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+      ...request,
+      source: `${source}\n`,
+    }),
+  ).toThrow(`Audited runtime source has drifted: ${path}`);
+});
+
 test('rejects every alternate application consumer edge', () => {
   const canonical = new Map<string, string>([
     [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],

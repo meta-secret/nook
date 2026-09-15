@@ -170,7 +170,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'e669b5165ad962a8f2ee157c70d5736d63266b187f984149dbd489144d619b19',
+    'f77e8e12ba4ed5efcdd502e04c8c457723306248c6d04351ad96dad487bc0337',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
