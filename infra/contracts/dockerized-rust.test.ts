@@ -279,6 +279,51 @@ class DockerizedRustContract {
     );
   }
 
+  wasmNodeCompilerSecretsAndDylintTelemetryRuntime(): void {
+    const product = this.read(
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    const nodeDeps = product
+      .split("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")[1]
+      ?.split("# Source overlay for bulk native leaves")[0];
+    if (!nodeDeps) throw new Error("WASM Node dependency stage is missing");
+    const accessMount =
+      "--mount=type=secret,id=sccache_s3_access_key,required=false";
+    const secretMount =
+      "--mount=type=secret,id=sccache_s3_secret_key,required=false";
+    const compilerRuns = nodeDeps.split(
+      "RUN --mount=type=secret,id=sccache_s3_access_key,required=false",
+    );
+    const hostCoverage = compilerRuns[1]?.split("\nRUN --mount")[0];
+    const browserCoverage = compilerRuns[2]?.split("\n# Source overlay")[0];
+    expect(hostCoverage).toContain(accessMount);
+    expect(hostCoverage).toContain(secretMount);
+    expect(hostCoverage?.match(/--mount=type=secret/g)).toHaveLength(2);
+    expect(browserCoverage).toContain(accessMount);
+    expect(browserCoverage).toContain(secretMount);
+    expect(browserCoverage?.match(/--mount=type=secret/g)).toHaveLength(2);
+    const bunInstall = nodeDeps.split("RUN curl -fsSL https://bun.sh/install")[1]
+      ?.split("\n\n# Export cargo-llvm-cov")[0];
+    expect(bunInstall).not.toContain("--mount=type=secret");
+
+    const ecosystem = this.read(
+      ".github/workflows/rust-ecosystem-checks.yml",
+    );
+    const dylintJob = ecosystem
+      .split("\n  dylint:\n")[1];
+    if (!dylintJob) throw new Error("Dylint job is missing");
+    const nodeProvision = dylintJob.indexOf("actions/setup-node@v7");
+    const dockerSetup = dylintJob.indexOf(
+      "uses: ./.github/actions/nook-docker-setup",
+    );
+    expect(nodeProvision).toBeGreaterThanOrEqual(0);
+    expect(nodeProvision).toBeLessThan(dockerSetup);
+    expect(dylintJob).toContain('node-version: "24.19.0"');
+    expect(this.read(".github/actions/nook-cache-telemetry/action.yml")).not.toContain(
+      "skipping cache telemetry",
+    );
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -964,6 +1009,10 @@ test(
 test(
   "Dylint compiler vertices consume the current wrapper content",
   contract.dylintWrapperContentInvalidatesBuildGraph.bind(contract),
+);
+test(
+  "WASM Node compilers retain secrets and Dylint telemetry has Node",
+  contract.wasmNodeCompilerSecretsAndDylintTelemetryRuntime.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
