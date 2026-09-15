@@ -105,7 +105,12 @@ selection, slow validation, and promotion. Each retains its own verdict.
   the high-level result to Gizmo Prime.
 - Keep all waits inside the active task.
 - Subscribe for one iteration with an inactivity-driven completion check.
-- Complete the iteration when all current-head checks finish, including failures.
+- Complete the iteration when all current-head checks finish, including failures,
+  or when the bounded initial observation yields terminal `validation not
+  scheduled` for an empty exact-head check/run set.
+- For `validation not scheduled`, immediately diagnose workflow trigger/event
+  eligibility and return that diagnosis with the terminal handoff to the
+  controller. Do not leave the child waiting for a later check wave.
 - Stop if the PR closes, the controller directs, or termination is requested.
 - Drain the subscription, return one result, and end the child task.
 
