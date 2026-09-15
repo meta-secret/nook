@@ -1,9 +1,16 @@
 # Cortex Context Router
 
+## Highest-priority rule
+
+- [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md): mandatory first read
+  for every agent and every task.
+
 Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Entry contract
 
+- [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) prohibits security and
+  adversarial-evidence machinery for trusted agent-internal operations.
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
 

@@ -1,5 +1,15 @@
 # AI Team Agent Contract
 
+## Highest-priority circuit breaker
+
+Read and follow the root
+[Agent Derailment Circuit Breaker](../../CIRCUIT-BREAKER.md) before this
+contract. It is the highest-priority rule for every AI-team task.
+
+Do not design, implement, test, or approve security machinery for trusted
+agent-internal communication, evidence, handoffs, or Git actions. Stop that
+work immediately and report it as Agent Derailment syndrome.
+
 ## Mission
 
 The AI team owns Nook's agent knowledge system and deterministic agent

@@ -1,17 +1,28 @@
 # Nook Agent Routing Contract
 
+## Highest-priority circuit breaker
+
+Read the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) before every
+other Cortex document. Follow it for the entire task.
+
+It prohibits security and adversarial-evidence machinery for trusted internal
+agent communication, handoffs, Git actions, and validation. Treat a violation
+as a P1 finding and stop the prohibited work immediately.
+
 This file is the repository entry point. It selects one owning context and
 states only boundaries that apply everywhere. Detailed delivery and delegation
 rules belong to Gizmo's linked authorities.
 
 ## Mandatory context selection
 
-1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as feature Gizmo control, dev-manager control, PR Steward operations, AI,
+1. Confirm that the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) has
+   been read.
+2. Read the [root context router](knowledge-graph.md).
+3. Classify the work as feature Gizmo control, dev-manager control, PR Steward operations, AI,
    development core, security, SRE, web development, or shared ownership.
-3. Load exactly one owning `AGENTS.md` and knowledge graph.
-4. Open only the documents and headings needed for the assigned work.
-5. Stop loading Cortex when the task can be executed safely.
+4. Load exactly one owning `AGENTS.md` and knowledge graph.
+5. Open only the documents and headings needed for the assigned work.
+6. Stop loading Cortex when the task can be executed safely.
 
 Do not preload all graphs, a whole team corpus, or foreign-team material for
 background context. A selected team authority may link a task-relevant
