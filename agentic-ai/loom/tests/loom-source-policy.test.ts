@@ -37,7 +37,7 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
     '"precheck": "bun run source-policy && bun run cortex-audit"',
   );
   expect(packageJson).toContain(
-    '"source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from \\\"$LOOM_OWNERSHIP_FROM\\\""',
+    '"source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from \\"$LOOM_OWNERSHIP_FROM\\""',
   );
   const taskfile = await readFile(
     join(repositoryRoot, '.task', 'static-checks.yml'),
@@ -51,6 +51,15 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain('fetch-depth: 0');
   expect(workflow).toContain(
     'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
+  );
+  const rustSetup =
+    '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
+    '        with:\n' +
+    '          toolchain: stable\n' +
+    '          cache: false';
+  expect(workflow).toContain(rustSetup);
+  expect(workflow.indexOf(rustSetup)).toBeLessThan(
+    workflow.indexOf('      - run: task tooling:static'),
   );
   const preflightTaskfile = await readFile(
     join(repositoryRoot, 'preflight', 'Taskfile.yml'),
