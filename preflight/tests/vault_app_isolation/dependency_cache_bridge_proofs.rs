@@ -315,7 +315,7 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_compile_cache_uses_one_exact_export() -> anyhow::Result<()> {
+fn theorem_compile_cache_uses_one_exact_export() {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
@@ -341,7 +341,6 @@ fn theorem_compile_cache_uses_one_exact_export() -> anyhow::Result<()> {
             && !compile_dockerfile.contains("AS compile-dependency-cache"),
         "source-free native and WASM stages must remain in one rooted compile graph"
     );
-    Ok(())
 }
 
 #[test]
