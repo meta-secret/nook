@@ -21,6 +21,7 @@ vars:
   # rust/wasm commands (and the browser variant only by manual browser-wasm tests).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
+  PR_NATIVE_BUILD_OUTPUT: '{{default "type=docker" .PR_NATIVE_BUILD_OUTPUT}}'
   DOCKER_RUST_FAST_IMAGE: '{{default "nook-rust-fast:local" .DOCKER_RUST_FAST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
