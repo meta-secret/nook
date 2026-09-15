@@ -135,6 +135,36 @@ test('extracts Zig without delegating XZ decoding to runner tar', async () => {
   expect(extraction).not.toContain('tar --xz');
 });
 
+test('translates cc-rs GNU targets for Zig without dropping compiler arguments', async () => {
+  const repositoryRoot = join(import.meta.dir, '..', '..', '..');
+  const workflow = await readFile(
+    join(repositoryRoot, '.github', 'workflows', 'repository-policy.yml'),
+    'utf8',
+  );
+  const compilerStart = workflow.indexOf(
+    '      - name: Configure rootless native compiler',
+  );
+  const compilerEnd = workflow.indexOf(
+    '      - uses: actions-rust-lang/setup-rust-toolchain@v2',
+    compilerStart,
+  );
+  const compiler = workflow.slice(compilerStart, compilerEnd);
+  expect(
+    compiler.split('\n              --target=x86_64-unknown-linux-gnu)').length,
+  ).toBe(3);
+  expect(
+    compiler.split('\n              -target=x86_64-unknown-linux-gnu)').length,
+  ).toBe(3);
+  expect(compiler.split('--target|-target)').length).toBe(3);
+  expect(compiler.split('args+=("--target=x86_64-linux-gnu")').length).toBe(3);
+  expect(compiler.split('args+=("-target=x86_64-linux-gnu")').length).toBe(3);
+  expect(compiler.split('args+=("x86_64-linux-gnu")').length).toBe(3);
+  expect(compiler).toContain('args+=("$1")');
+  expect(compiler).toContain('args+=("$2")');
+  expect(compiler).not.toContain('sed ');
+  expect(compiler).not.toContain('shift 2');
+});
+
 test('rejects reusable unowned functions in a reviewed source file', async () => {
   const root = await mkdtemp(join(tmpdir(), 'loom-source-policy-'));
   try {
