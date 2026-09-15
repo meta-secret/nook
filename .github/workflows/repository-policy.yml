@@ -34,9 +34,35 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: "3.52.0"
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
-        with:
-          version: 0.15.2
+      - name: Install rootless Zig toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          zig_version="0.15.2"
+          zig_archive="${RUNNER_TEMP}/zig-x86_64-linux-${zig_version}.tar.xz"
+          zig_tar="${RUNNER_TEMP}/zig-x86_64-linux-${zig_version}.tar"
+          zig_dir="${RUNNER_TEMP}/zig-x86_64-linux-${zig_version}"
+          xz_decoder="${RUNNER_TEMP}/nook-native-toolchain/unxz"
+          mkdir -p "${RUNNER_TEMP}/nook-native-toolchain"
+
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$zig_archive" \
+            "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz"
+          printf '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239  %s\n' "$zig_archive" |
+            sha256sum -c -
+
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$xz_decoder" \
+            "https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox_UNXZ"
+          printf 'c70d2b5e2828f4c90c36a3b9185b5d4405b0751e9fc7c43231c78711e047a306  %s\n' "$xz_decoder" |
+            sha256sum -c -
+          chmod 0755 "$xz_decoder"
+
+          "$xz_decoder" -c "$zig_archive" > "$zig_tar"
+          mkdir -p "$zig_dir"
+          tar -xf "$zig_tar" -C "$RUNNER_TEMP"
+          test -x "$zig_dir/zig"
+          echo "$zig_dir" >> "$GITHUB_PATH"
       - name: Configure rootless native compiler
         shell: bash
         run: |

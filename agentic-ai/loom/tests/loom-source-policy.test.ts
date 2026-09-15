@@ -52,10 +52,7 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain(
     'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
   );
-  const zigSetup =
-    '      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29\n' +
-    '        with:\n' +
-    '          version: 0.15.2';
+  const zigSetup = '      - name: Install rootless Zig toolchain';
   expect(workflow).toContain(zigSetup);
   expect(workflow).not.toContain('sudo -n apt-get');
   expect(workflow).toContain('exec zig cc "${args[@]}"');
@@ -99,6 +96,43 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
     'runtime failures return `neverthrow` `Result` values with concrete',
   );
   expect(readme).not.toContain('runtime failures throw `LoomFailure`');
+});
+
+test('extracts Zig without delegating XZ decoding to runner tar', async () => {
+  const repositoryRoot = join(import.meta.dir, '..', '..', '..');
+  const workflow = await readFile(
+    join(repositoryRoot, '.github', 'workflows', 'repository-policy.yml'),
+    'utf8',
+  );
+  const extractionStart = workflow.indexOf(
+    '      - name: Install rootless Zig toolchain',
+  );
+  const extractionEnd = workflow.indexOf(
+    '      - name: Configure rootless native compiler',
+    extractionStart,
+  );
+  const extraction = workflow.slice(extractionStart, extractionEnd);
+
+  expect(extraction).not.toContain('mlugg/setup-zig');
+  expect(extraction).toContain(
+    'https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz',
+  );
+  expect(extraction).toContain(
+    'https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox_UNXZ',
+  );
+  expect(extraction).toContain(
+    "printf '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239  %s\\n'",
+  );
+  expect(extraction).toContain(
+    "printf 'c70d2b5e2828f4c90c36a3b9185b5d4405b0751e9fc7c43231c78711e047a306  %s\\n'",
+  );
+  expect(extraction).toContain('"$zig_archive" |');
+  expect(extraction).toContain('"$xz_decoder" |');
+  expect(extraction).toContain('sha256sum -c -');
+  expect(extraction).toContain('"$xz_decoder" -c "$zig_archive"');
+  expect(extraction).toContain('tar -xf "$zig_tar"');
+  expect(extraction).not.toContain('tar -xJ');
+  expect(extraction).not.toContain('tar --xz');
 });
 
 test('rejects reusable unowned functions in a reviewed source file', async () => {
