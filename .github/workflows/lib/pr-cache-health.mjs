@@ -30,10 +30,28 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  */
 
 export class PrCacheHealth {
+  /** @param {Record<string, unknown>} record @param {string} field @returns {string | number} */
+  static displayedCounter(record, field) {
+    const value = record[field];
+    return typeof value === "string" || typeof value === "number"
+      ? value
+      : "n/a";
+  }
+
+  /** @param {Record<string, unknown>} record @returns {number} */
+  static cacheLookups(record) {
+    const hits = "cache_hits" in record ? Number(record.cache_hits) : 0;
+    const misses = "cache_misses" in record ? Number(record.cache_misses) : 0;
+    return hits + misses;
+  }
+
   /**
    * @param {{minimumBuildkitHitRate?: number, minimumCompletedSteps?: number}} [policy]
    */
-  constructor({ minimumBuildkitHitRate = 20, minimumCompletedSteps = 20 } = {}) {
+  constructor({
+    minimumBuildkitHitRate = 20,
+    minimumCompletedSteps = 20,
+  } = {}) {
     this.minimumBuildkitHitRate = minimumBuildkitHitRate;
     this.minimumCompletedSteps = minimumCompletedSteps;
   }
@@ -78,9 +96,7 @@ export class PrCacheHealth {
         reasons.push(`${job.id}:cache_import_probes_incomplete`);
       }
       if (record.sccache.cache_errors > 0)
-        reasons.push(
-          `${job.id}:sccache_errors:${record.sccache.cache_errors}`,
-        );
+        reasons.push(`${job.id}:sccache_errors:${record.sccache.cache_errors}`);
       if (record.sccache.cache_write_errors > 0)
         reasons.push(
           `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
@@ -110,7 +126,11 @@ export class PrCacheHealth {
           warnings.push(`${job.id}:publication_pending_verification`);
         }
       }
-      if (job.buildExpected && steps > 0 && steps < this.minimumCompletedSteps) {
+      if (
+        job.buildExpected &&
+        steps > 0 &&
+        steps < this.minimumCompletedSteps
+      ) {
         warnings.push(
           `${job.id}:cache_sample_too_small:${steps}<${this.minimumCompletedSteps}`,
         );
@@ -179,14 +199,16 @@ export class PrCacheHealth {
       "| --- | --- | --- | ---: | ---: | ---: |",
     ];
     for (const job of model.jobs) {
-      const buildkit = /** @type {Partial<NonNullable<typeof job.counters.buildkit>>} */ (
-        job.counters.buildkit || {}
-      );
-      const sccache = /** @type {Partial<NonNullable<typeof job.counters.sccache>>} */ (
-        job.counters.sccache || {}
-      );
+      const buildkit =
+        /** @type {Partial<NonNullable<typeof job.counters.buildkit>>} */ (
+          job.counters.buildkit || {}
+        );
+      const sccache =
+        /** @type {Partial<NonNullable<typeof job.counters.sccache>>} */ (
+          job.counters.sccache || {}
+        );
       lines.push(
-        `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} |`,
+        `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${PrCacheHealth.displayedCounter(buildkit, "cached_steps")} cached / ${PrCacheHealth.displayedCounter(buildkit, "completed_steps")} completed | ${PrCacheHealth.displayedCounter(sccache, "cache_hits")} hits / ${PrCacheHealth.cacheLookups(sccache)} lookups | ${PrCacheHealth.displayedCounter(job.exports, "attempts")} |`,
       );
     }
     if (model.gate.reasons.length)
@@ -221,18 +243,53 @@ export class PrCacheHealth {
       })) {
         const entryPath = path.join(currentDirectory, entry.name);
         if (entry.isDirectory()) directories.push(entryPath);
-        else if (entry.isFile() && entry.name.endsWith(".json"))
-          telemetry.push(JSON.parse(fs.readFileSync(entryPath, "utf8")));
+        else if (entry.isFile() && entry.name.endsWith(".json")) {
+          const parsed = CacheTelemetry.parseJson(
+            fs.readFileSync(entryPath, "utf8"),
+          );
+          CacheTelemetry.validateTelemetryRecord(parsed);
+          telemetry.push(/** @type {CacheTelemetryRecord} */ (parsed));
+        }
       }
     }
     return telemetry;
+  }
+
+  /** @param {string} text @returns {PrCacheJob[]} */
+  static parseJobs(text) {
+    const parsed = CacheTelemetry.parseJson(text);
+    if (!Array.isArray(parsed))
+      throw new Error("cache-health jobs must be a valid job array");
+    /** @type {PrCacheJob[]} */
+    const jobs = [];
+    /** @type {unknown[]} */
+    const candidates = parsed;
+    for (const candidate of candidates) {
+      if (
+        !CacheTelemetry.isJsonRecord(candidate) ||
+        typeof candidate.id !== "string" ||
+        typeof candidate.result !== "string" ||
+        typeof candidate.buildExpected !== "boolean" ||
+        typeof candidate.readOnly !== "boolean"
+      )
+        throw new Error("cache-health jobs must be a valid job array");
+      jobs.push({
+        id: candidate.id,
+        result: candidate.result,
+        buildExpected: candidate.buildExpected,
+        readOnly: candidate.readOnly,
+      });
+    }
+    return jobs;
   }
 
   static main() {
     const directory = process.env.NOOK_PR_CACHE_TELEMETRY_DIR || "";
     const output = process.env.NOOK_PR_CACHE_HEALTH_JSON || "";
     const summary = process.env.NOOK_PR_CACHE_HEALTH_MARKDOWN || "";
-    const jobs = JSON.parse(process.env.NOOK_PR_CACHE_JOBS || "[]");
+    const jobs = PrCacheHealth.parseJobs(
+      process.env.NOOK_PR_CACHE_JOBS || "[]",
+    );
     if (!directory || !output || !summary)
       throw new Error("cache-health paths are required");
     const model = new PrCacheHealth().evaluate({
@@ -240,7 +297,7 @@ export class PrCacheHealth {
       telemetry: PrCacheHealth.readTelemetry(directory),
     });
     fs.mkdirSync(path.dirname(output), { recursive: true });
-    fs.writeFileSync(output, `${JSON.stringify(model, null, 2)}\n`);
+    CacheTelemetry.writeJson(output, model);
     fs.writeFileSync(summary, PrCacheHealth.renderMarkdown(model));
     if (process.env.GITHUB_STEP_SUMMARY)
       fs.appendFileSync(

@@ -362,7 +362,9 @@ void test("extracts zero-based sccache snapshots from a cancelled raw build log"
     'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"compile_failures":0}\ncancelled\n';
   const reports = CacheTelemetry.extractSccacheReportsFromText(raw);
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].cache_hits, 8);
+  const [report] = reports;
+  assert.ok(report);
+  assert.equal(report.cache_hits, 8);
 });
 
 void test("marks client-side zero-write publication counters pending verification", () => {
@@ -454,9 +456,15 @@ void test("rejects an unknown sccache fallback state", () => {
     runId: "1",
     runAttempt: "1",
   });
-  record.sccache.fallback.state = "unknown";
+  const malformed = {
+    ...record,
+    sccache: {
+      ...record.sccache,
+      fallback: { state: "unknown", reason: "fixture" },
+    },
+  };
   assert.throws(
-    () => CacheTelemetry.validateTelemetryRecord(record),
+    () => CacheTelemetry.validateTelemetryRecord(malformed),
     /telemetry sccache.fallback is invalid/,
   );
 });
