@@ -46,6 +46,31 @@ export enum DeviceProtectionAuthorizationGateState {
   Waiting = 'waiting',
 }
 
+export type DeviceProtectionPostUnlockObservation = {
+  readonly loginGateVisible: boolean
+  readonly overlayVisible: boolean
+  readonly authorizeReady: boolean
+}
+
+export class DeviceProtectionPostUnlockGate {
+  constructor(
+    private readonly observation: DeviceProtectionPostUnlockObservation,
+  ) {}
+
+  state(): DeviceProtectionAuthorizationGateState {
+    if (!this.observation.loginGateVisible) {
+      return DeviceProtectionAuthorizationGateState.Unlocked
+    }
+    if (this.observation.overlayVisible) {
+      return DeviceProtectionAuthorizationGateState.Overlay
+    }
+    if (this.observation.authorizeReady) {
+      return DeviceProtectionAuthorizationGateState.Authorize
+    }
+    return DeviceProtectionAuthorizationGateState.Waiting
+  }
+}
+
 export function deviceProtectionAuthorizationGateState({
   overlayVisible,
   unlockVisible,
@@ -607,14 +632,22 @@ export async function authorizeDeviceProtection(
   await expect
     .poll(
       async () => {
-        if (!(await loginGate.isVisible())) return 'unlocked'
-        if (await authorizeButtonReady()) return 'authorize'
-        return 'waiting'
+        return new DeviceProtectionPostUnlockGate({
+          loginGateVisible: await loginGate.isVisible(),
+          overlayVisible: await overlay.isVisible(),
+          authorizeReady: await authorizeButtonReady(),
+        }).state()
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    .not.toBe('waiting')
-  if ((await loginGate.isVisible()) && (await authorizeButtonReady())) {
+    .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
+  if (await loginGate.isVisible()) {
+    await expect(button).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(button).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await button.click()
   }
   await expect(loginGate).toBeHidden({

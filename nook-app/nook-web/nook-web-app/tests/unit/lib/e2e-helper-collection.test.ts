@@ -11,6 +11,7 @@ import { LogLevel } from '$lib/runtime/log-level'
 import {
   deviceProtectionAuthorizationGateState,
   DeviceProtectionAuthorizationGateState,
+  DeviceProtectionPostUnlockGate,
 } from '../../../e2e/helpers/settings-auth'
 
 const appRoot = process.cwd()
@@ -95,6 +96,40 @@ describe('Playwright collection imports', () => {
         vaultAuthenticated: true,
       }),
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  })
+
+  test('recognizes the passkey overlay while login unlock hands off device authorization', () => {
+    const gate = new DeviceProtectionPostUnlockGate({
+      loginGateVisible: true,
+      overlayVisible: true,
+      authorizeReady: false,
+    })
+
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Overlay)
+  })
+
+  test('recognizes the terminal post-unlock states around device authorization', () => {
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: false,
+        overlayVisible: false,
+        authorizeReady: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: true,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })
 
   test('shares the canonical trace transport without loading WASM', () => {
