@@ -424,6 +424,18 @@ void test("reports the selected persistent or no-secret fallback backend", () =>
   });
 });
 
+void test("a healthy terminal snapshot supersedes an earlier vertex fallback", () => {
+  const text = [
+    'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
+    'NOOK_SCCACHE_STATS {"stage":"compile-wasm","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":602,"requests_executed":602,"cache_hits":592,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"compile_failures":0}',
+  ].join("\n");
+
+  assert.deepEqual(CacheTelemetry.extractSccacheFallbackFromText(text), {
+    state: "active",
+    reason: "none",
+  });
+});
+
 void test("rejects malformed nested telemetry records at the ingress", () => {
   assert.throws(
     () =>

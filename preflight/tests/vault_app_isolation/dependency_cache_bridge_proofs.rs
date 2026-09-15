@@ -315,7 +315,7 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_compile_cache_uses_one_bounded_exact_export() -> anyhow::Result<()> {
+fn theorem_compile_cache_uses_one_exact_export() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
@@ -330,7 +330,7 @@ fn theorem_compile_cache_uses_one_bounded_exact_export() -> anyhow::Result<()> {
         bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true")
             && !bake.contains("compile_deps_cache_to")
             && !bake.contains("target \"build-compile-dependency-cache\""),
-        "the ordinary compile must have one bounded full-graph best-effort export"
+        "the ordinary compile must have one full-graph best-effort export with a per-operation timeout"
     );
     let compile_dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
     assert!(

@@ -46,7 +46,8 @@ variable "SIMULATED_SCCACHE_NEXT_HEAD_HITS" {
   default = "1"
 }
 
-// v4 models the single bounded exact-head export used in production.
+// v4 models the single exact-head export used in production. Its timeout is a
+// per-registry-operation limit; the five-minute job is the total latency bound.
 // manifests do not prove that the final compiler lineage was retained.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v4-${COMPILE_SOURCE_SCOPE}:buildcache"
 compile_restore_source_scope = COMPILE_RESTORE_SOURCE_SCOPE != "" ? COMPILE_RESTORE_SOURCE_SCOPE : COMPILE_SOURCE_SCOPE

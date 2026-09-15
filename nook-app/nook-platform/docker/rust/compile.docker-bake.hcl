@@ -51,8 +51,8 @@ compile_solve_args = {
 compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // Export the rooted immutable exact-head graph once. sccache owns cross-head
   // compiler objects, so serializing a second sibling dependency graph is
-  // redundant. A slow registry handoff is best-effort and cannot consume the
-  // five-minute compilation budget.
+  // redundant. The exporter timeout applies to each registry operation; the
+  // five-minute GitHub job timeout remains the end-to-end acceptance bound.
   "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s,ignore-error=true",
 ] : []
 

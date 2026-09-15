@@ -80,7 +80,9 @@ behavior for packets issued by SRE Team Gizmo.
   divides their BuildKit keys.
 - Use one rooted `mode=max` exact source-cache export so all source-free and
   compiler vertices remain reachable; never pair it with a sibling export.
-- Bound cache exports and transport retries.
+- Configure finite per-operation exporter and transport timeouts, but never
+  describe an exporter `timeout` as a total export-duration bound. Acceptance
+  is one export and completion of the whole GitHub job within five minutes.
 - Preserve ordinary new-commit reuse when no optional exact source cache
   exists through sccache and stable source-free vertices in the rooted graph.
 - Validate cache publication with a changed-head replay.

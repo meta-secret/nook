@@ -655,6 +655,31 @@ export class CacheTelemetry {
   static extractSccacheFallbackFromText(text) {
     let reason = "none";
     for (const line of text.split(/\r?\n/)) {
+      const reportAt = line.indexOf(SCCACHE_MARKER);
+      if (reportAt !== -1) {
+        try {
+          const report = CacheTelemetry.normalizeSccacheReport(
+            CacheTelemetry.parseJsonRecord(
+              line.slice(reportAt + SCCACHE_MARKER.length).trim(),
+            ),
+          );
+          // A completed healthy READ_WRITE snapshot is the terminal effective
+          // state for that compiler stage. BuildKit's interleaved log retains
+          // fallback markers from earlier vertices, so an any-event reduction
+          // incorrectly labels a later healthy build as direct compilation.
+          if (
+            report.runtime_mode === "READ_WRITE" &&
+            report.cache_errors === 0 &&
+            report.cache_write_errors === 0 &&
+            report.compile_failures === 0 &&
+            (report.cache_hits > 0 || report.cache_misses > 0)
+          ) {
+            reason = "none";
+          }
+        } catch {
+          // Partial reports are expected when cancellation interrupts a line.
+        }
+      }
       const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
       if (markerAt === -1) continue;
       try {
@@ -675,7 +700,7 @@ export class CacheTelemetry {
 
   /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
   static extractSccacheFallback(events) {
-    let reason = "none";
+    let text = "";
     for (const event of events) {
       const candidates = Array.isArray(event.logs) ? event.logs : [];
       for (const candidate of candidates) {
@@ -684,26 +709,10 @@ export class CacheTelemetry {
           typeof candidate.data !== "string"
         )
           continue;
-        const decoded = Buffer.from(candidate.data, "base64").toString("utf8");
-        for (const line of decoded.split(/\r?\n/)) {
-          const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
-          if (markerAt === -1) continue;
-          try {
-            const fallback = CacheTelemetry.parseJsonRecord(
-              line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
-            );
-            if (typeof fallback.reason === "string" && fallback.reason) {
-              reason = fallback.reason;
-            }
-          } catch {
-            reason = "malformed_fallback_event";
-          }
-        }
+        text += `${Buffer.from(candidate.data, "base64").toString("utf8")}\n`;
       }
     }
-    return reason === "none"
-      ? { state: "active", reason }
-      : { state: "fallback", reason };
+    return CacheTelemetry.extractSccacheFallbackFromText(text);
   }
 
   /** @returns {BuildHistoryRecord[]} */
