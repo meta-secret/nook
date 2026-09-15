@@ -145,8 +145,10 @@ jobs:
   dylint:
     name: Dylint repository lints
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    # Five-minute warm SLO plus two minutes for bounded setup and telemetry.
-    timeout-minutes: 7
+    # Five-minute warm SLO plus five minutes for bounded setup, a contended
+    # WASM compile, and telemetry. The full-E2E PR path runs this job alongside
+    # the WASM producer on the same ARC capacity pool.
+    timeout-minutes: 10
     outputs:
       cache-result: ${{ steps.cache-result.outputs.result }}
     steps:

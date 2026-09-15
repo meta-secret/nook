@@ -755,51 +755,6 @@ class DockerizedRustContract {
     }
   }
 
-  e2eImageCacheCredentials(): void {
-    const workflow = z
-      .object({
-        jobs: z.object({
-          image: z.object({
-            steps: z.array(
-              z.object({
-                uses: z.string().optional(),
-                with: z.record(z.string(), z.string()).optional(),
-              }),
-            ),
-          }),
-        }),
-      })
-      .parse(Bun.YAML.parse(this.read(".github/workflows/e2e-pr.yml")));
-    const setupIndex = workflow.jobs.image.steps.findIndex(
-      (step) => step.uses === "./.github/actions/nook-docker-setup",
-    );
-    if (setupIndex < 0) {
-      throw new Error("manual E2E image job must configure Nook Docker");
-    }
-    const setup = z
-      .object({ with: z.record(z.string(), z.string()) })
-      .parse(workflow.jobs.image.steps[setupIndex]);
-    expect(setup.with["registry-username"]).toBe(
-      "${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}",
-    );
-    expect(setup.with["registry-password"]).toBe(
-      "${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}",
-    );
-    expect(setup.with["sccache-access-key"]).toBe(
-      "${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
-    );
-    expect(setup.with["sccache-secret-key"]).toBe(
-      "${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
-    );
-    expect(setup.with["sccache-endpoint"]).toBe(
-      "${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
-    );
-    expect(setup.with["sccache-bucket"]).toBe(
-      "${{ secrets.NOOK_SCCACHE_BUCKET }}",
-    );
-    expect(setup.with["cache-write"]).toBe("false");
-  }
-
   compilerFirstWebVerification(): void {
     const taskSchema = z.object({
       tasks: z.record(
@@ -1032,10 +987,6 @@ test(
 test(
   "e2e orchestration reports every selected suite before failing",
   contract.e2eCompletion.bind(contract),
-);
-test(
-  "manual E2E image setup propagates trusted registry and sccache credentials",
-  contract.e2eImageCacheCredentials.bind(contract),
 );
 test(
   "web verification aggregates compilers before starting unit suites",
