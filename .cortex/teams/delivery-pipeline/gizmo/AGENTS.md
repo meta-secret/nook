@@ -116,10 +116,17 @@ do not create an internal security protocol.
   predict any remote invocation detail or outcome. The Delivery team
   [Circuit Breaker boundary](../AGENTS.md#prohibited-actions) requires direct
   execution and the actual terminal GitHub result.
-- Do not ask a child to reproduce Docker or BuildKit cache keys, dependency
-  invalidation, cache selection, or layer-reuse decisions. Preserve SRE's
-  required cache verdict exactly; Delivery does not reimplement or
-  independently interpret SRE's policy or evaluation.
+- Do not ask a child to emulate Docker or BuildKit cache keys, dependency
+  invalidation, cache selection, or layer reuse in Rust, application code, or
+  another custom implementation that does not invoke Docker or BuildKit. Real
+  Docker/BuildKit simulations and execution proofs remain permitted and
+  required when applicable: use the actual Dockerfiles and Bake HCL for cold,
+  warm, import, and export builds,
+  cache mounts and exports, and resulting artifact and metadata inspection.
+  Those execution proofs do not model a remote Task invocation. Preserve
+  SRE's required cache verdict exactly, including cache-health and publication
+  contracts and zero-hit failure; Delivery does not independently interpret
+  SRE's policy or evaluation.
 
 ## Parent and child reporting
 

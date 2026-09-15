@@ -51,10 +51,16 @@ external GitHub, Git, credential, artifact, publication, and promotion state.
   predict remote selectors, shell arguments, environment wiring, Task
   existence, shell behavior, retries, failure paths, or expected dispatch
   results. Do not count declared, stale, or unexecuted Task results as evidence.
-- Do not custom-reproduce Docker or BuildKit cache keys, dependency
-  invalidation, cache selection, or layer-reuse decisions. The remote compile
-  performs direct BuildKit cache import, build, and export and reports its
-  actual terminal outcome; preserve the SRE-owned verdict as reported.
+- Do not emulate Docker or BuildKit cache keys, dependency invalidation, cache
+  selection, or layer reuse in Rust, application code, or another custom
+  implementation that does not invoke Docker or BuildKit. Real Docker/BuildKit
+  simulations and execution proofs remain permitted and required when
+  applicable: use the actual Dockerfiles and Bake HCL for cold, warm, import,
+  and export builds, cache
+  mounts and exports, and inspect resulting artifacts and metadata. Those
+  execution proofs are distinct from prohibited remote Task invocation mocks
+  and simulations. Preserve the SRE-owned verdict exactly, including
+  cache-health and publication contracts and zero-hit failure.
 
 ## Procedure
 

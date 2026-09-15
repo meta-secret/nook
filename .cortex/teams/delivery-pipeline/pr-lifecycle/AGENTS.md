@@ -141,10 +141,17 @@ selection, slow validation, and promotion. Each retains its own verdict.
   dispatch results. These are runner-owned execution semantics under the
   [Circuit Breaker](../../../CIRCUIT-BREAKER.md), not an internal validation
   surface.
-- PR Lifecycle Agent must not custom-reproduce Docker or BuildKit cache keys,
-  dependency invalidation, cache selection, or layer-reuse decisions. The
-  remote compile performs direct BuildKit cache import, build, and export and
-  supplies the actual terminal result and SRE-owned cache verdict.
+- PR Lifecycle Agent must not emulate Docker or BuildKit cache keys,
+  dependency invalidation, cache selection, or layer reuse in Rust,
+  application code, or another custom implementation that does not invoke
+  Docker or BuildKit. Real Docker/BuildKit simulations and execution proofs
+  remain permitted and required when applicable: use the actual Dockerfiles
+  and Bake HCL for cold, warm, import, and export builds, cache mounts and
+  exports, and inspect
+  resulting artifacts and metadata. Those proofs are distinct from prohibited
+  remote Task invocation mocks and simulations. Preserve the SRE-owned cache
+  verdict exactly, including cache-health and publication contracts and
+  zero-hit failure.
 
 ## Completion boundary
 

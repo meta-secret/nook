@@ -147,11 +147,16 @@ existing validation and exact-snapshot safeguards.
   retries, failure path, or dispatch result. Follow the
   [Circuit Breaker](../../CIRCUIT-BREAKER.md) and report the actual terminal
   GitHub outcome.
-- Do not custom-reproduce Docker or BuildKit cache keys, dependency
-  invalidation, cache selection, or layer-reuse decisions. The remote compile
-  performs the direct BuildKit cache import, build, and export and reports its
-  actual terminal outcome. Preserve SRE's resulting required cache verdict
-  without independently interpreting it.
+- Do not reproduce Docker or BuildKit cache behavior in Rust, application
+  code, or another custom implementation that does not invoke Docker or
+  BuildKit. Real Docker/BuildKit simulations and execution proofs remain
+  permitted and required when applicable: exercise the actual Dockerfiles and
+  Bake HCL through cold, warm,
+  import, and export builds, cache mounts and exports, then inspect the
+  resulting artifacts and metadata. These execution proofs are distinct from
+  prohibited mocks or simulations of a remote Task invocation. Preserve SRE's
+  resulting required cache verdict, including cache-health and publication
+  contracts and zero-hit failure, without independently interpreting it.
 - Do not accept an unexecuted Task declaration, stale claimed result, or
   successful agent handoff as Task execution evidence. Do not reject a remote
   selector before dispatch merely because its Task target is unknown or absent.
