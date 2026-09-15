@@ -213,9 +213,7 @@ jobs:
       inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    # Cold WASM builds may compile companion-core before handoff/publication
-    # completes; downstream consumers depend on this producer job.
-    timeout-minutes: 30
+    timeout-minutes: 10
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
       cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
