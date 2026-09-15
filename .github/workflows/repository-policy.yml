@@ -40,6 +40,29 @@ jobs:
         with:
           toolchain: stable
           cache: false
+      - name: Connect trusted host compiler cache
+        if: >-
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        uses: ./.github/actions/nook-cache-connect
+        with:
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+      - name: Require writable trusted host compiler cache
+        if: >-
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        run: >-
+          test "${NOOK_SCCACHE_BACKEND:-}" = remote &&
+          test "${SCCACHE_S3_RW_MODE:-}" = READ_WRITE &&
+          test -s "${SCCACHE_S3_ACCESS_KEY_FILE:-}" &&
+          test -s "${SCCACHE_S3_SECRET_KEY_FILE:-}"
       - run: task tooling:static
 
   verify:
