@@ -76,8 +76,33 @@ type StageSaveOfferRequest = {
 }
 
 type CrossWorldSubmitEvent = Event & {
-  readonly submitter: EventTarget | false
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Browser-world input is narrowed immediately by AuthenticationSubmitEvent.
+  readonly submitter: unknown
 }
+
+enum AuthenticationSubmitterKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type AuthenticationSubmitter =
+  | { kind: AuthenticationSubmitterKind.Absent }
+  | {
+      kind: AuthenticationSubmitterKind.Present
+      control: HTMLButtonElement | HTMLInputElement
+    }
+
+enum AuthenticationSubmitEventAdmissionKind {
+  Rejected = 'rejected',
+  Admitted = 'admitted',
+}
+
+type AuthenticationSubmitEventAdmission =
+  | { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+  | {
+      kind: AuthenticationSubmitEventAdmissionKind.Admitted
+      submitter: AuthenticationSubmitter
+    }
 
 /** Admits submit semantics without relying on page/isolated-world prototypes. */
 class AuthenticationSubmitEvent {
@@ -85,8 +110,29 @@ class AuthenticationSubmitEvent {
     return 'submitter' in event
   }
 
-  static admit(event: Event): CrossWorldSubmitEvent | false {
-    return event.type === 'submit' && this.hasSubmitter(event) ? event : false
+  static admit(event: Event): AuthenticationSubmitEventAdmission {
+    if (event.type !== 'submit' || !this.hasSubmitter(event)) {
+      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+    }
+    if (!event.submitter) {
+      return {
+        kind: AuthenticationSubmitEventAdmissionKind.Admitted,
+        submitter: { kind: AuthenticationSubmitterKind.Absent },
+      }
+    }
+    if (!(
+      event.submitter instanceof HTMLButtonElement ||
+      event.submitter instanceof HTMLInputElement
+    )) {
+      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+    }
+    return {
+      kind: AuthenticationSubmitEventAdmissionKind.Admitted,
+      submitter: {
+        kind: AuthenticationSubmitterKind.Present,
+        control: event.submitter,
+      },
+    }
   }
 }
 
@@ -331,7 +377,7 @@ class LoginSaveInteraction {
     const submitEvent = AuthenticationSubmitEvent.admit(event)
     const target = event.target
     if (
-      !submitEvent ||
+      submitEvent.kind === AuthenticationSubmitEventAdmissionKind.Rejected ||
       !(target instanceof HTMLFormElement) ||
       widgetState.busy
     ) {
@@ -346,15 +392,12 @@ class LoginSaveInteraction {
     )
     if (!workflow || workflow.summary.passwordFieldCount === 0) return
     const { submitter } = submitEvent
-    if (submitter) {
+    if (submitter.kind === AuthenticationSubmitterKind.Present) {
+      const { control } = submitter
       if (
-        !(
-          submitter instanceof HTMLButtonElement ||
-          submitter instanceof HTMLInputElement
-        ) ||
-        submitter.form !== target ||
+        control.form !== target ||
         (passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow) &&
-          !workflow.root.contains(submitter))
+          !workflow.root.contains(control))
       ) {
         return
       }
