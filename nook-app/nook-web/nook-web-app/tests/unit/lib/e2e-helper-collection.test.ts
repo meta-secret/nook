@@ -98,14 +98,14 @@ describe('Playwright collection imports', () => {
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
-  test('recognizes the passkey overlay while login unlock hands off device authorization', () => {
+  test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
       overlayVisible: true,
       authorizeReady: false,
     })
 
-    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Overlay)
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })
 
   test('recognizes the terminal post-unlock states around device authorization', () => {

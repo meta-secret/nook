@@ -62,7 +62,7 @@ export class DeviceProtectionPostUnlockGate {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
     if (this.observation.overlayVisible) {
-      return DeviceProtectionAuthorizationGateState.Overlay
+      return DeviceProtectionAuthorizationGateState.Waiting
     }
     if (this.observation.authorizeReady) {
       return DeviceProtectionAuthorizationGateState.Authorize
@@ -641,13 +641,7 @@ export async function authorizeDeviceProtection(
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
-  if (await loginGate.isVisible()) {
-    await expect(button).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(button).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+  if (await authorizeButtonReady()) {
     await button.click()
   }
   await expect(loginGate).toBeHidden({
