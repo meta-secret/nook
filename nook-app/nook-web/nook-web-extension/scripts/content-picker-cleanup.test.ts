@@ -347,11 +347,95 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   expect(sendResponse).toHaveBeenCalledWith({ ok: false })
 })
 
+test('keeps a submitted login offer when the success page advances the scan', async () => {
+  const { SavePageWatchKind, saveOfferState, scanState } =
+    await import('../src/content/autofill/state')
+  const { loginSaveInteraction } =
+    await import('../src/content/autofill/login-save')
+  const credentials: LoginCredentials = {
+    username: 'person@example.test',
+    password: 'submitted-password',
+  }
+  const originalMutationObserver = globalThis.MutationObserver
+  const originalSetInterval = window.setInterval
+  const originalClearInterval = window.clearInterval
+  const originalDocumentElement = document.documentElement
+  const originalEvaluatePendingSaveEvidence =
+    loginSaveInteraction.evaluatePendingSaveEvidence
+  loginSaveInteraction.evaluatePendingSaveEvidence = async () => {}
+  class SubmittedLoginMutationObserver {
+    observe(): void {}
+    disconnect(): void {}
+  }
+  Object.assign(globalThis, {
+    MutationObserver: SubmittedLoginMutationObserver,
+  })
+  Object.defineProperty(document, 'documentElement', {
+    configurable: true,
+    value: {},
+  })
+  Object.assign(window, {
+    setInterval: () => 7,
+    clearInterval: () => {},
+  })
+  deferRuntimeResponse()
+  sendMessage.mockClear()
+  const initialSequence = scanState.sequence
+  const staging = loginSaveInteraction.stageSaveForCredentials(credentials)
+  scanState.sequence = initialSequence + 1
+
+  resolveDeferredRuntimeResponse({
+    response: {
+      kind: 'offer-available',
+      offer: {
+        offerId: 'successful-submit-offer',
+        decision: 0,
+        vaultStoreId: 'vault-1',
+        vaultName: 'Personal',
+      },
+    },
+    subsequentResponse: { kind: 'unavailable' },
+  })
+  await staging
+
+  expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Watching)
+  expect(credentials).toEqual({ username: '', password: '' })
+  expect(sendMessage).toHaveBeenCalledTimes(1)
+
+  loginSaveInteraction.stopPendingSaveWatch()
+  Object.assign(globalThis, { MutationObserver: originalMutationObserver })
+  Object.defineProperty(document, 'documentElement', {
+    configurable: true,
+    value: originalDocumentElement,
+  })
+  loginSaveInteraction.evaluatePendingSaveEvidence =
+    originalEvaluatePendingSaveEvidence
+  Object.assign(window, {
+    setInterval: originalSetInterval,
+    clearInterval: originalClearInterval,
+  })
+})
+
 test('refresh dismisses an in-flight save offer before rescanning', async () => {
   const { SavePageWatchKind, scanState, saveOfferState } =
     await import('../src/content/autofill/state')
   const { loginSaveInteraction } =
     await import('../src/content/autofill/login-save')
+  const originalEvaluatePendingSaveEvidence =
+    loginSaveInteraction.evaluatePendingSaveEvidence
+  loginSaveInteraction.evaluatePendingSaveEvidence = async () => {}
+  const originalMutationObserver = globalThis.MutationObserver
+  const originalSetInterval = window.setInterval
+  const originalClearInterval = window.clearInterval
+  class RefreshMutationObserver {
+    observe(): void {}
+    disconnect(): void {}
+  }
+  Object.assign(globalThis, { MutationObserver: RefreshMutationObserver })
+  Object.assign(window, {
+    setInterval: () => 7,
+    clearInterval: () => {},
+  })
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const credentials: LoginCredentials = {
@@ -404,4 +488,11 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     expect.any(Function),
   )
   expect(schedule).toHaveBeenCalledTimes(1)
+  loginSaveInteraction.evaluatePendingSaveEvidence =
+    originalEvaluatePendingSaveEvidence
+  Object.assign(globalThis, { MutationObserver: originalMutationObserver })
+  Object.assign(window, {
+    setInterval: originalSetInterval,
+    clearInterval: originalClearInterval,
+  })
 })

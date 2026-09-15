@@ -41,37 +41,6 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
 
-type LoginAccountResponse = {
-  secretId: string
-  username: string
-  websiteUrl: string
-  websiteHost: string
-}
-
-class ExtensionSmokeScenario {
-  isLoginAccountResponseList(value: unknown): value is LoginAccountResponse[] {
-    return Array.isArray(value) && value.every(this.isLoginAccountResponse)
-  }
-
-  private isLoginAccountResponse(
-    value: unknown,
-  ): value is LoginAccountResponse {
-    if (!value || typeof value !== 'object') return false
-    return (
-      'secretId' in value &&
-      typeof value.secretId === 'string' &&
-      'username' in value &&
-      typeof value.username === 'string' &&
-      'websiteUrl' in value &&
-      typeof value.websiteUrl === 'string' &&
-      'websiteHost' in value &&
-      typeof value.websiteHost === 'string'
-    )
-  }
-}
-
-const extensionSmokeScenario = new ExtensionSmokeScenario()
-
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
 }, testInfo) => {
@@ -608,16 +577,44 @@ test('keeps the extension vault independent and switches after valid re-pairing'
                 !('ok' in value) ||
                 typeof value.ok !== 'boolean' ||
                 !('accounts' in value) ||
-                !extensionSmokeScenario.isLoginAccountResponseList(
-                  value.accounts,
-                )
+                !Array.isArray(value.accounts)
               ) {
                 reject(new Error('unexpected login lookup response'))
                 return
               }
+              const admittedAccounts: Array<{
+                secretId: string
+                username: string
+                websiteUrl: string
+                websiteHost: string
+              }> = []
+              const accounts: readonly unknown[] = value.accounts
+              for (const account of accounts) {
+                if (
+                  !account ||
+                  typeof account !== 'object' ||
+                  !('secretId' in account) ||
+                  typeof account.secretId !== 'string' ||
+                  !('username' in account) ||
+                  typeof account.username !== 'string' ||
+                  !('websiteUrl' in account) ||
+                  typeof account.websiteUrl !== 'string' ||
+                  !('websiteHost' in account) ||
+                  typeof account.websiteHost !== 'string'
+                ) {
+                  reject(new Error('unexpected login lookup response'))
+                  return
+                }
+                admittedAccounts.push({
+                  secretId: account.secretId,
+                  username: account.username,
+                  websiteUrl: account.websiteUrl,
+                  websiteHost: account.websiteHost,
+                })
+              }
               resolve({
                 ok: value.ok,
-                accounts: value.accounts,
+                accounts: admittedAccounts,
               })
             },
           )

@@ -73,7 +73,6 @@ type AuthenticationOutcomeObservationContext = {
 
 type StageSaveOfferRequest = {
   credentials: LoginCredentials
-  trustedSurfaceGeneration: number
 }
 
 export enum PendingSaveOfferLoadKind {
@@ -273,10 +272,8 @@ class LoginSaveInteraction {
   }
 
   stageSaveForCredentials(credentials: LoginCredentials): Promise<void> {
-    const trustedSurfaceGeneration = scanState.sequence
     const stageRequest: StageSaveOfferRequest = {
       credentials,
-      trustedSurfaceGeneration,
     }
     const operation = this.stageSaveOfferForCredentials(stageRequest)
     const trackedOperation = operation.finally(() => {
@@ -288,7 +285,6 @@ class LoginSaveInteraction {
 
   private async stageSaveOfferForCredentials({
     credentials,
-    trustedSurfaceGeneration,
   }: StageSaveOfferRequest): Promise<void> {
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
@@ -312,10 +308,6 @@ class LoginSaveInteraction {
     const { response } = delivery
     if (response.kind !== 'offer-available') return
     const { offer } = response
-    if (trustedSurfaceGeneration !== scanState.sequence) {
-      await this.dismissSaveOffer(offer)
-      return
-    }
     if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
     this.beginPendingSaveWatch(offer)
   }

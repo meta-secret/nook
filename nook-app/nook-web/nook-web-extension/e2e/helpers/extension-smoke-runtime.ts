@@ -155,7 +155,12 @@ export async function registerWebsitePasskeyThroughExtension(
         timeout: 15_000,
       },
     })
-    if (!(credential instanceof PublicKeyCredential)) {
+    if (
+      !credential ||
+      credential.type !== 'public-key' ||
+      typeof credential.id !== 'string' ||
+      !('response' in credential)
+    ) {
       throw new Error('Website passkey creation did not return a public key')
     }
     return credential.id
@@ -199,11 +204,23 @@ export async function assertWebsitePasskeyThroughExtension({
         timeout: 15_000,
       },
     })
-    if (!(credential instanceof PublicKeyCredential)) {
+    if (
+      !credential ||
+      credential.type !== 'public-key' ||
+      typeof credential.id !== 'string' ||
+      !('response' in credential)
+    ) {
       throw new Error('Website passkey assertion did not return a public key')
     }
     const response = credential.response
-    if (!(response instanceof AuthenticatorAssertionResponse)) {
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('authenticatorData' in response) ||
+      !(response.authenticatorData instanceof ArrayBuffer) ||
+      !('signature' in response) ||
+      !(response.signature instanceof ArrayBuffer)
+    ) {
       throw new Error('Website passkey assertion has no assertion response')
     }
     return {

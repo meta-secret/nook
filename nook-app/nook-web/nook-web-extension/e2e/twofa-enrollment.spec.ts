@@ -14,11 +14,6 @@ type ExtensionPairingSessionGrant = {
   deviceSigningPublicKey: string
 }
 
-type AuthenticatorResponse = {
-  ok: boolean
-  accounts?: Array<{ issuer?: string; account?: string }>
-}
-
 enum ExtensionPairingSessionGrantParseKind {
   Invalid = 'invalid',
   Valid = 'valid',
@@ -65,12 +60,24 @@ class TwoFactorEnrollmentScenario {
             resolve,
           )
         })
-        if (!this.isAuthenticatorResponse(responseValue) || !responseValue.ok)
+        if (
+          !responseValue ||
+          typeof responseValue !== 'object' ||
+          !('ok' in responseValue) ||
+          responseValue.ok !== true ||
+          !('accounts' in responseValue) ||
+          !Array.isArray(responseValue.accounts)
+        ) {
           continue
-        if (!Array.isArray(responseValue.accounts)) continue
-        for (const account of responseValue.accounts) {
+        }
+        const responseAccounts: readonly unknown[] = responseValue.accounts
+        for (const account of responseAccounts) {
           if (
+            account &&
+            typeof account === 'object' &&
+            'issuer' in account &&
             typeof account.issuer === 'string' &&
+            'account' in account &&
             typeof account.account === 'string'
           ) {
             accounts.push({ issuer: account.issuer, account: account.account })
@@ -242,29 +249,6 @@ class TwoFactorEnrollmentScenario {
         'Expected the enrolled authenticator in the paired vault.',
       )
     }, evaluateArgs)
-  }
-
-  private isAuthenticatorAccount(
-    value: unknown,
-  ): value is { issuer?: string; account?: string } {
-    return (
-      !!value &&
-      typeof value === 'object' &&
-      (!('issuer' in value) || typeof value.issuer === 'string') &&
-      (!('account' in value) || typeof value.account === 'string')
-    )
-  }
-
-  private isAuthenticatorResponse(
-    value: unknown,
-  ): value is AuthenticatorResponse {
-    if (!value || typeof value !== 'object') return false
-    if (!('ok' in value) || typeof value.ok !== 'boolean') return false
-    if (!('accounts' in value)) return true
-    return (
-      Array.isArray(value.accounts) &&
-      value.accounts.every((account) => this.isAuthenticatorAccount(account))
-    )
   }
 
   private extensionPairingSessionGrant(
