@@ -888,7 +888,8 @@ export class CacheTelemetry {
     }
     if (
       !CacheTelemetry.isJsonRecord(sccache.fallback) ||
-      !["active", "fallback"].includes(sccache.fallback.state) ||
+      (sccache.fallback.state !== "active" &&
+        sccache.fallback.state !== "fallback") ||
       typeof sccache.fallback.reason !== "string"
     ) {
       throw new Error("telemetry sccache.fallback is invalid");

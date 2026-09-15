@@ -429,3 +429,17 @@ void test("rejects malformed nested telemetry records at the ingress", () => {
     /telemetry github context is required/,
   );
 });
+
+void test("rejects an unknown sccache fallback state", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  record.sccache.fallback.state = "unknown";
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(record),
+    /telemetry sccache.fallback is invalid/,
+  );
+});
