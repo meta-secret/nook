@@ -278,6 +278,10 @@ void test("PR workflow covers every BuildKit-producing job without another build
     ".github/workflows/rust-ecosystem-checks.yml",
     "utf8",
   );
+  const telemetryAction = fs.readFileSync(
+    ".github/actions/nook-cache-telemetry/action.yml",
+    "utf8",
+  );
   assert.match(
     workflow,
     /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
@@ -297,4 +301,33 @@ void test("PR workflow covers every BuildKit-producing job without another build
       ?.length,
     3,
   );
+  for (const result of [
+    "dependency-policy-result",
+    "deterministic-tests-result",
+    "dylint-result",
+  ]) {
+    assert.match(
+      workflow,
+      new RegExp(
+        `needs\\.rust-ecosystem\\.outputs\\.${result} \\|\\| 'cancelled'`,
+      ),
+    );
+  }
+  assert.doesNotMatch(
+    workflow,
+    /\{"id":"(?:dependency-policy|deterministic-tests|dylint)","result":"\$\{\{ needs\.rust-ecosystem\.result \}\}/,
+  );
+  assert.match(
+    ecosystem,
+    /dependency-policy-result:[\s\S]*jobs\.dependency-policy\.outputs\.cache-result/,
+  );
+  assert.match(
+    ecosystem,
+    /deterministic-tests-result:[\s\S]*jobs\.deterministic-tests\.outputs\.cache-result/,
+  );
+  assert.match(
+    ecosystem,
+    /dylint-result:[\s\S]*jobs\.dylint\.outputs\.cache-result/,
+  );
+  assert.match(telemetryAction, /NOOK_CACHE_TELEMETRY_JOB_STATUS:/);
 });

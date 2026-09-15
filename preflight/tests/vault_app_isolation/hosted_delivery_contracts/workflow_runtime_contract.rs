@@ -123,8 +123,8 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(_, job)| job)
             .unwrap_or_else(|| panic!("rust ecosystem workflow must define a Dylint job"));
         assert!(
-            dylint_job.contains("timeout-minutes: 5"),
-            "Rust ecosystem Dylint job must retain its bounded 5-minute execution envelope"
+            dylint_job.contains("timeout-minutes: 7"),
+            "Rust ecosystem Dylint job must retain its bounded 7-minute execution envelope"
         );
     }
 

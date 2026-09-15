@@ -130,6 +130,46 @@ void test("selects cancelled Buildx records so completed stage telemetry survive
   ]);
 });
 
+void test("does not count concurrent unfinished records for a successful job", () => {
+  const records = [
+    {
+      ref: "completed",
+      name: "completed",
+      status: "completed",
+      completed_at: "2026-09-06T04:00:00Z",
+      started_at: "2026-09-06T03:00:00Z",
+      completed_steps: 2,
+      total_steps: 2,
+      cached_steps: 1,
+    },
+    {
+      ref: "concurrent",
+      name: "concurrent",
+      status: "running",
+      started_at: "2026-09-06T05:00:00Z",
+      completed_steps: 1,
+      total_steps: 2,
+      cached_steps: 0,
+    },
+  ];
+
+  assert.deepEqual(
+    CacheTelemetry.selectBuildRecords(records, 32, {
+      includeUnfinished: false,
+    }),
+    {
+      records: [records[0]],
+      warnings: [],
+    },
+  );
+  assert.deepEqual(
+    CacheTelemetry.selectBuildRecords(records, 32, {
+      includeUnfinished: true,
+    }).records,
+    [records[1], records[0]],
+  );
+});
+
 void test("maps history logs concurrently while preserving record order", async () => {
   let active = 0;
   let maximumActive = 0;

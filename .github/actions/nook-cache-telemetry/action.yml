@@ -15,6 +15,7 @@ runs:
       shell: bash
       env:
         NOOK_CACHE_TELEMETRY_SUFFIX: ${{ inputs.artifact-suffix }}
+        NOOK_CACHE_TELEMETRY_JOB_STATUS: ${{ job.status }}
       run: |
         set -euo pipefail
         node_bin="$(command -v node || true)"

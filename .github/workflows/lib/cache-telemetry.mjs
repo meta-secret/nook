@@ -209,10 +209,18 @@ export class CacheTelemetry {
   /**
    * @param {readonly BuildHistoryRecord[]} records
    * @param {number} [limit]
+   * @param {{includeUnfinished?: boolean}} [options]
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
    */
-  static selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
-    const selected = [...records].sort((left, right) => {
+  static selectBuildRecords(
+    records,
+    limit = HISTORY_RECORD_LIMIT,
+    { includeUnfinished = true } = {},
+  ) {
+    const candidates = includeUnfinished
+      ? [...records]
+      : records.filter((record) => record.completed_at);
+    const selected = candidates.sort((left, right) => {
       const activity = CacheTelemetry.compareStrings(
         String(right.completed_at || right.started_at || ""),
         String(left.completed_at || left.started_at || ""),
@@ -229,7 +237,7 @@ export class CacheTelemetry {
     const unfinishedCount = records.filter(
       (record) => !record.completed_at,
     ).length;
-    if (unfinishedCount > 0) {
+    if (includeUnfinished && unfinishedCount > 0) {
       warnings.push(`buildx_records_unfinished_included:${unfinishedCount}`);
     }
     if (selected.length > limit) {
@@ -697,7 +705,14 @@ export class CacheTelemetry {
       const candidates = CacheTelemetry.listBuildHistory().filter(
         (record) => record.ref && !baseline.has(record.ref),
       );
-      const selection = CacheTelemetry.selectBuildRecords(candidates);
+      const selection = CacheTelemetry.selectBuildRecords(
+        candidates,
+        undefined,
+        {
+          includeUnfinished:
+            environment.NOOK_CACHE_TELEMETRY_JOB_STATUS !== "success",
+        },
+      );
       records = selection.records;
       warnings.push(...selection.warnings);
     } catch (error) {
