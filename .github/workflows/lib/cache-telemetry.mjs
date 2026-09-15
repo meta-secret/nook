@@ -707,7 +707,7 @@ export class CacheTelemetry {
       );
       const selection = CacheTelemetry.selectBuildRecords(
         candidates,
-        undefined,
+        HISTORY_RECORD_LIMIT,
         {
           includeUnfinished:
             environment.NOOK_CACHE_TELEMETRY_JOB_STATUS !== "success",
