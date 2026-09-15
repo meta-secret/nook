@@ -245,7 +245,6 @@ export class CacheTelemetry {
     }
     return { records: selected.slice(0, limit), warnings };
   }
-
   /**
    * @template Input, Output
    * @param {readonly Input[]} items
