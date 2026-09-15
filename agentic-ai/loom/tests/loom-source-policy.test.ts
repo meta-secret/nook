@@ -15,6 +15,17 @@ test('accepts the complete Loom source and test inventory', () => {
   expect(report.violations).toEqual([]);
 });
 
+test('accepts structural result schema factories with their semantic owner', () => {
+  const root = join(import.meta.dir, '..');
+  const report = LoomSourcePolicy.audit({
+    root,
+    ownershipPaths: [
+      join(root, 'src', 'agent-workflow', 'structural-result-values.ts'),
+    ],
+  });
+  expect(report.violations).toEqual([]);
+});
+
 test('wires canonical state and Cortex gates into Loom check', async () => {
   const packageJson = await readFile(
     join(import.meta.dir, '..', 'package.json'),
