@@ -38,6 +38,13 @@ protecting a real product trust boundary.
   - The actual terminal outcome from GitHub Actions is the execution evidence.
   - Keep typed read, write, and output scope validation at the owning workflow
     boundary.
+- Use Docker and BuildKit directly for Docker layer-cache behavior.
+  - Docker and BuildKit are the sole authority for Docker layer-cache validity.
+  - Import available BuildKit cache, run the actual Docker build to validate
+    and reuse layers, then export the updated cache.
+  - Preserve real Dockerfiles, contexts, build arguments, cache import and
+    export, actual build results, and structured statistics artifacts.
+  - Preserve the complete sccache health policy, including its zero-hit gate.
 - Stop when a proposed implementation enters a prohibited category.
   - Do not write the proposed mechanism or tests.
   - Report that the circuit breaker tripped.
@@ -103,6 +110,12 @@ evidence, or validation results.
     dispatch results.
   - Do not execute an acceptance selector inside Loom.
   - Do not turn a selector into an authorization or identity mechanism.
+- **Docker layer-cache authority**
+  - Treat agent-authored reproductions of Docker or BuildKit cache
+    functionality as P1 violations.
+  - Do not implement cache-key calculation, dependency invalidation, cache
+    selection, layer-reuse decisions, or equivalent cache-engine behavior in
+    custom scripts, simulators, models, or contract tests.
 - **Preservation**
   - Never preserve a prohibited system merely because another document or
     existing implementation describes it.

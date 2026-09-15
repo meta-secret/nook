@@ -342,7 +342,7 @@ test('keeps trusted-agent prohibitions single-sourced in the circuit breaker', (
   }
 });
 
-test('forwards remote Task selectors without catalog prevalidation', () => {
+test('keeps direct remote Task and BuildKit execution authoritative', () => {
   const circuitBreaker = CortexContextRouterScenario.normalizeMarkdown(
     readFileSync(
       path.join(REPOSITORY_ROOT, '.cortex/CIRCUIT-BREAKER.md'),
@@ -369,6 +369,24 @@ test('forwards remote Task selectors without catalog prevalidation', () => {
   );
   expect(circuitBreaker).toContain(
     'This prohibition includes shell invocation arguments, environment wiring, task existence, shell behavior, retry or failure paths, and expected dispatch results.',
+  );
+  expect(circuitBreaker).toContain(
+    'Treat agent-authored reproductions of Docker or BuildKit cache functionality as P1 violations.',
+  );
+  expect(circuitBreaker).toContain(
+    'Do not implement cache-key calculation, dependency invalidation, cache selection, layer-reuse decisions, or equivalent cache-engine behavior in custom scripts, simulators, models, or contract tests.',
+  );
+  expect(circuitBreaker).toContain(
+    'Docker and BuildKit are the sole authority for Docker layer-cache validity.',
+  );
+  expect(circuitBreaker).toContain(
+    'Import available BuildKit cache, run the actual Docker build to validate and reuse layers, then export the updated cache.',
+  );
+  expect(circuitBreaker).toContain(
+    'Preserve real Dockerfiles, contexts, build arguments, cache import and export, actual build results, and structured statistics artifacts.',
+  );
+  expect(circuitBreaker).toContain(
+    'Preserve the complete sccache health policy, including its zero-hit gate.',
   );
 });
 
