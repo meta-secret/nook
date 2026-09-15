@@ -124,7 +124,9 @@ ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
     LOOM_OWNERSHIP_FROM=$LOOM_OWNERSHIP_FROM
 
 FROM policy-source AS loom-verify
-RUN task loom:verify
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task loom:verify
 
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \
