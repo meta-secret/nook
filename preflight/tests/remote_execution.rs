@@ -78,7 +78,8 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 
     assert!(root_tasks.contains("taskfile: .task/remote-execution.yml"));
     for required in [
-        "TASK_NAMES=<a,b> or TASK_NAME=<a>",
+        "Run named tasks in one configured remote job",
+        "REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'",
         "git status --porcelain",
         "git ls-remote --refs origin",
         "if [ \"$remote_sha\" != \"$local_sha\" ]",
@@ -163,7 +164,7 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     assert_eq!(String::from_utf8(arbitrary.stdout)?, "30\n");
     let build_compile = remote_batch_command(&["--timeout", "build:compile"])?;
     assert!(build_compile.status.success());
-    assert_eq!(String::from_utf8(build_compile.stdout)?, "30\n");
+    assert_eq!(String::from_utf8(build_compile.stdout)?, "5\n");
 
     let batch_script =
         RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
@@ -189,8 +190,7 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
         );
     }
     assert!(
-        batch_script
-            .contains("build:compile) run_with_timeout \"$timeout_minutes\" task build:compile")
+        batch_script.contains("build:compile) timeout --kill-after=10s 240s task build:compile")
     );
     for direct_task in [
         "web:build) task _web:build",
@@ -390,7 +390,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
     assert!(remote_tasks.contains(
-        "if [ \"$requested_tasks\" != \"build:compile\" ]; then\n          .github/scripts/require-current-base.sh origin main\n        fi"
+        "if [[ \"$requested_tasks\" != build:compile* ]]; then\n          .github/scripts/require-current-base.sh origin main\n        fi"
     ));
     assert!(remote_tasks.contains("baseRefName"));
 
@@ -489,9 +489,11 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
-    assert!(docker_setup.contains(
-        ": \"${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}\""
-    ));
+    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
+    assert!(
+        docker_setup
+            .contains("echo \"isolated-cache-write requires a dispatched task selection\" >&2")
+    );
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert!(workflow.contains("isolated-cache-write: \"true\""));

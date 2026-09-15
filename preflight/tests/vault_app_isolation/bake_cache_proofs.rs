@@ -505,6 +505,7 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
 fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let probe_classifier = root.read(".github/scripts/classify-registry-cache-probe.sh");
     let app_bake = root.read("nook-app/docker-bake.hcl");
     let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_image = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
@@ -524,21 +525,24 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     assert!(
         setup.contains("scope_suffix=\"-git-$scope_sha\"")
             && setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\"")
-            && !setup.contains("isolated_cache_write=false")
+            && setup.contains("isolated_cache_write=false")
+            && setup.contains("&& [ -z \"$remote_compile_cache_write\" ]; then")
             && setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled")
             && setup.contains("fallback_enabled=1")
             && setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"),
-        "PR/Remote isolated scopes must remain -git-<40-char head SHA> on both hosted and ARC runners"
+        "hosted isolated writes and remote compile scopes must remain -git-<40-char head SHA> while ordinary ARC jobs retain node-local cache state"
     );
     assert!(
         setup.contains("ARC skips general exact-SHA registry export")
-            && setup.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then"),
-        "ARC must retain the exact source scope while disabling only registry export"
+            && setup.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ] \\")
+            && setup.contains("&& [ -z \"$remote_compile_cache_write\" ]; then"),
+        "ARC must skip general registry export without disabling the authorized remote compile publication"
     );
     assert!(
         setup.contains("docker buildx imagetools inspect")
-            && setup.contains("Registry cache probe was inconclusive")
-            && setup.contains("manifest unknown|name unknown")
+            && setup.contains("Registry cache probe was transiently unavailable")
+            && setup.contains("Registry cache probe failed with a fatal")
+            && probe_classifier.contains("not found|manifest unknown|name unknown")
             && setup.contains("cache-from entries are merged, not ordered")
             && setup.contains("Exact cache absent; Main/fingerprint fallback enabled")
             && setup.contains("publish_main_availability")
@@ -546,8 +550,8 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     assert!(
-        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
-            && setup.contains("general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
+        setup.contains("general|native|wasm|wasm-proof|compile|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
+            && setup.contains("general|native|wasm|compile|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
             && setup.contains("[ \"$cache_selection\" = \"native\" ]")
             && setup.contains("[ \"$cache_selection\" = \"wasm\" ]")
             && setup.contains("[ \"$cache_selection\" = \"preflight\" ]")
