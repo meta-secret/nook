@@ -87,6 +87,42 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   before implementation, validation, GitHub operations, or landing.
 - Do not continue, claim progress, or claim delivery after that gate fails.
 
+### Trusted in-thread handoffs
+
+Team Gizmos and Team Agents operating inside the same active Codex
+thread/harness are a highly trusted orchestration domain. Use the simplest
+typed handoff:
+
+- the task, dependency state, and wave order;
+- the bounded write scope and issued worktree;
+- the ordinary committed result, status, and evidence observation; and
+- the upward report to the parent.
+
+Team Gizmos and Team Agents MUST NOT be treated as hostile peers. Any contract,
+implementation, or review that adds the following solely to protect one such
+peer from another fails review as a P1 defect:
+
+- encryption or signatures for an internal task or result handoff;
+- anti-forgery checks, key registries, or authority registries;
+- replay defenses framed as hostile-agent protection;
+- cryptographic agent identity, result identity, or digest authority;
+- one-use capability issuance or consumption theatrics; or
+- redundant or double verification of the same internal task or result.
+
+Keep dependency ordering, active-harness admission, write-scope exclusions, and
+minimal current-head or clean-worktree checks. These checks coordinate trusted
+work; they do not authenticate peers.
+
+This boundary does not weaken real trust boundaries. Strong validation remains
+mandatory for GitHub, network, and provider responses; credentials and secrets;
+user data; third-party artifacts; independently supplied build or promotion
+evidence; and data crossing process or system boundaries. Product
+cryptography, event-sourcing replay, Git delivery integrity, and external
+evidence policy remain owned by their respective authorities. Git handoff
+baseline, path, symlink, gitlink, and worktree checks remain required.
+Loom `lib/base-evidence` and independent build or promotion evidence remain
+required at their actual boundaries.
+
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
