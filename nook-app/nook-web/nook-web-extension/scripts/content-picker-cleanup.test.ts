@@ -69,23 +69,28 @@ function pickerApproval(): AuthenticationWorkflowApproval {
 }
 
 const addListener = mock(() => {})
-const fakeElement = () => ({
-  disabled: false,
-  hidden: false,
-  isConnected: true,
-  remove: mock(() => {}),
-  replaceChildren: mock(() => {}),
-  append: mock(() => {}),
-  textContent: '',
-})
-function installTestDocument(): void {
-  Object.assign(globalThis, {
-    document: {
-      createElement: () => fakeElement(),
-    },
-  })
+class ContentPickerDocumentFixture {
+  install(): void {
+    Object.assign(globalThis, {
+      document: {
+        createElement: () => this.fakeElement(),
+      },
+    })
+  }
+
+  private fakeElement() {
+    return {
+      disabled: false,
+      hidden: false,
+      isConnected: true,
+      remove: mock(() => {}),
+      replaceChildren: mock(() => {}),
+      append: mock(() => {}),
+      textContent: '',
+    }
+  }
 }
-installTestDocument()
+new ContentPickerDocumentFixture().install()
 type RuntimeResponseCallback = (response: unknown) => void
 
 enum RuntimeResponseStateKind {

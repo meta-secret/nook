@@ -21,20 +21,25 @@ type MessageWireObject = {
     string | number | boolean | MessageWireObject | MessageWireObject[]
 }
 
-function isMessageWireObject(value: unknown): value is MessageWireObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function messagePayload(message: unknown): MessageWireObject {
-  if (!message || typeof message !== 'object' || !('payload' in message)) {
-    return {}
+class SessionMessageWireFixture {
+  messagePayload(message: unknown): MessageWireObject {
+    if (!message || typeof message !== 'object' || !('payload' in message)) {
+      return {}
+    }
+    const payload = message.payload
+    return this.isMessageWireObject(payload) ? payload : {}
   }
-  const payload = message.payload
-  return isMessageWireObject(payload) ? payload : {}
+
+  readonly decodeProviders = async (
+    providers: StorageProvider[],
+  ): Promise<StorageProvider[]> => structuredClone(providers)
+
+  private isMessageWireObject(value: unknown): value is MessageWireObject {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  }
 }
-async function decodeProviders(providers: StorageProvider[]) {
-  return structuredClone(providers)
-}
+const sessionMessageWireFixture = new SessionMessageWireFixture()
+const decodeProviders = sessionMessageWireFixture.decodeProviders
 function githubProvider(token: string): StorageProvider {
   return {
     id: 'provider',
@@ -356,7 +361,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       decodeProviders,
       handleMessage: async (message) =>
         ok({
-          pin: messagePayload(message).pin,
+          pin: sessionMessageWireFixture.messagePayload(message).pin,
         }),
     })
     const response = dispatcher.enqueue({
@@ -386,8 +391,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
-      expect(messagePayload(parsed.request).username).toBe('alice')
-      expect(messagePayload(parsed.request).password).toBe('password')
+      expect(
+        sessionMessageWireFixture.messagePayload(parsed.request).username,
+      ).toBe('alice')
+      expect(
+        sessionMessageWireFixture.messagePayload(parsed.request).password,
+      ).toBe('password')
     }
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
@@ -431,9 +440,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       const parsed = await parsing
       expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
       if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
-        expect(messagePayload(parsed.request).requestJson).toBe(
-          '{"challenge":"browser-owned-secret"}',
-        )
+        expect(
+          sessionMessageWireFixture.messagePayload(parsed.request).requestJson,
+        ).toBe('{"challenge":"browser-owned-secret"}')
       }
     }
   })
@@ -608,7 +617,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
         ),
       decodeProviders,
       handleMessage: async (message) => {
-        const handledProviders = messagePayload(message).providers
+        const handledProviders =
+          sessionMessageWireFixture.messagePayload(message).providers
         if (Array.isArray(handledProviders)) {
           const provider = handledProviders[0]
           if (

@@ -61,40 +61,43 @@ type MockPasskeyManager = Pick<
   }>
 }
 
-function mockManager(state: MockManagerState): MockPasskeyManager {
-  const manager: MockPasskeyManager = {
-    open_extension_passkey_vault_js: async () => {},
-    load_auth_providers_snapshot: async () => {
-      throw new Error('unused test manager operation')
-    },
-    flush_event_outbox_for_provider: async () => {},
-    register_website_passkey: async (_request, shouldContinue) => {
-      state.registrationContinuationObserved = shouldContinue()
-      return {
-        credentialId: 'registration-credential',
-        clientDataJSON: 'registration-client-data',
-        attestationObject: 'registration-attestation',
-        transports: ['internal'],
-        free: () => {
-          state.registrationFreed = true
-        },
-      }
-    },
-    assert_website_passkey: async (_request, shouldContinue) => {
-      state.assertionContinuationObserved = shouldContinue()
-      return {
-        credentialId: 'assertion-credential',
-        clientDataJSON: 'assertion-client-data',
-        authenticatorData: 'assertion-authenticator-data',
-        signature: 'assertion-signature',
-        userHandle: 'assertion-user-handle',
-        free: () => {
-          state.assertionFreed = true
-        },
-      }
-    },
+class WebsitePasskeyOperationsScenario {
+  constructor(private readonly state: MockManagerState) {}
+
+  manager(): MockPasskeyManager {
+    return {
+      open_extension_passkey_vault_js: async () => {},
+      load_auth_providers_snapshot: async () => {
+        throw new Error('unused test manager operation')
+      },
+      flush_event_outbox_for_provider: async () => {},
+      register_website_passkey: async (_request, shouldContinue) => {
+        this.state.registrationContinuationObserved = shouldContinue()
+        return {
+          credentialId: 'registration-credential',
+          clientDataJSON: 'registration-client-data',
+          attestationObject: 'registration-attestation',
+          transports: ['internal'],
+          free: () => {
+            this.state.registrationFreed = true
+          },
+        }
+      },
+      assert_website_passkey: async (_request, shouldContinue) => {
+        this.state.assertionContinuationObserved = shouldContinue()
+        return {
+          credentialId: 'assertion-credential',
+          clientDataJSON: 'assertion-client-data',
+          authenticatorData: 'assertion-authenticator-data',
+          signature: 'assertion-signature',
+          userHandle: 'assertion-user-handle',
+          free: () => {
+            this.state.assertionFreed = true
+          },
+        }
+      },
+    }
   }
-  return manager
 }
 
 function cancelRequest(requestId: string): CancelPasskeyRequest {
@@ -161,7 +164,7 @@ describe('website passkey session operations', () => {
       registrationFreed: false,
       assertionFreed: false,
     }
-    const manager = mockManager(state)
+    const manager = new WebsitePasskeyOperationsScenario(state).manager()
     const cancellationArgs: WebsitePasskeyOperationArgs = {
       message: cancelRequest('request-cancel'),
       getManager: async () => manager,
@@ -200,7 +203,7 @@ describe('website passkey session operations', () => {
       registrationFreed: false,
       assertionFreed: false,
     }
-    const manager = mockManager(state)
+    const manager = new WebsitePasskeyOperationsScenario(state).manager()
     let openCount = 0
     let flushCount = 0
     const openVault: WebsitePasskeyOperationArgs['openVault'] = async () => {

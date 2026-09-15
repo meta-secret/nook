@@ -9,24 +9,26 @@ import {
 } from '../src/content/autofill/runtime-message-adapter'
 import type { BrowserMessageKey } from '../src/lib/browser-message-keys'
 
-function installTestDocument(): void {
-  Object.assign(globalThis, {
-    document: {
-      createElement: () => ({
-        disabled: false,
-        hidden: false,
-        isConnected: true,
-        remove: mock(() => {}),
-        replaceChildren: mock(() => {}),
-        append: mock(() => {}),
-        textContent: '',
-      }),
-      querySelectorAll: () => [],
-    },
-    location: { origin: 'https://example.test' },
-  })
+class AuthenticatorEnrollmentDocumentFixture {
+  install(): void {
+    Object.assign(globalThis, {
+      document: {
+        createElement: () => ({
+          disabled: false,
+          hidden: false,
+          isConnected: true,
+          remove: mock(() => {}),
+          replaceChildren: mock(() => {}),
+          append: mock(() => {}),
+          textContent: '',
+        }),
+        querySelectorAll: () => [],
+      },
+      location: { origin: 'https://example.test' },
+    })
+  }
 }
-installTestDocument()
+new AuthenticatorEnrollmentDocumentFixture().install()
 
 await companionWasmReady
 const { authenticatorEnrollmentInteraction } =

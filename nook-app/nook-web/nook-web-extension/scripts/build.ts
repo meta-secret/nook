@@ -344,22 +344,44 @@ type NookLocaleCatalog = {
   }
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return Object.values(value).every((entry) => typeof entry === 'string')
+type ExtensionLocaleCatalogAdmissionArgs = {
+  value: unknown
+  locale: string
 }
 
-function isNookLocaleCatalog(value: unknown): value is NookLocaleCatalog {
-  if (!value || typeof value !== 'object' || !('extension' in value)) {
-    return false
+class ExtensionLocaleCatalogAdmission {
+  admit({
+    value,
+    locale,
+  }: ExtensionLocaleCatalogAdmissionArgs): NookLocaleCatalog {
+    if (!this.isNookLocaleCatalog(value)) {
+      throw new Error(`Locale catalog ${locale} has an invalid shape.`)
+    }
+    return value
   }
-  const extension = value.extension
-  if (!extension || typeof extension !== 'object') return false
-  if (!('widget' in extension) || !('passkey' in extension)) return false
-  return isStringRecord(extension.widget) && isStringRecord(extension.passkey)
+
+  private isNookLocaleCatalog(value: unknown): value is NookLocaleCatalog {
+    if (!value || typeof value !== 'object' || !('extension' in value)) {
+      return false
+    }
+    const extension = value.extension
+    if (!extension || typeof extension !== 'object') return false
+    if (!('widget' in extension) || !('passkey' in extension)) return false
+    return (
+      this.isStringRecord(extension.widget) &&
+      this.isStringRecord(extension.passkey)
+    )
+  }
+
+  private isStringRecord(value: unknown): value is Record<string, string> {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false
+    return Object.values(value).every((entry) => typeof entry === 'string')
+  }
 }
 
 const identityJsonParse: (value: string) => unknown = JSON.parse
+const extensionLocaleCatalogAdmission = new ExtensionLocaleCatalogAdmission()
 
 async function buildChromeLocales() {
   await Promise.all(
@@ -367,10 +389,11 @@ async function buildChromeLocales() {
       const catalogValue = identityJsonParse(
         await readFile(join(appCommonLocalesRoot, `${locale}.json`), 'utf8'),
       )
-      if (!isNookLocaleCatalog(catalogValue)) {
-        throw new Error(`Locale catalog ${locale} has an invalid shape.`)
+      const admissionArgs: ExtensionLocaleCatalogAdmissionArgs = {
+        value: catalogValue,
+        locale,
       }
-      const catalog = catalogValue
+      const catalog = extensionLocaleCatalogAdmission.admit(admissionArgs)
       const messages = {
         widgetOpenVault: { message: catalog.extension.widget.open_vault },
         widgetDismiss: { message: catalog.extension.widget.dismiss },
