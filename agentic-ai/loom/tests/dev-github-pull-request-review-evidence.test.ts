@@ -23,13 +23,6 @@ const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const STALE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const BASE = '1111111111111111111111111111111111111111';
 const REPOSITORY = 'nook/example';
-const externalNull = (): JsonTransportNull => {
-  const value = new URLSearchParams().get('missing');
-  if (typeof value !== 'object' || value)
-    throw new Error('review fixture null sentinel changed');
-  return value;
-};
-const EXTERNAL_NULL = externalNull();
 
 interface ReviewFixture {
   readonly state?: string;
@@ -120,6 +113,13 @@ class ReviewEvidenceRunner implements CommandRunner {
 
   constructor(private readonly scenario: ReviewScenario) {}
 
+  static transportNull(): JsonTransportNull {
+    const value = new URLSearchParams().get('missing');
+    if (typeof value !== 'object' || value)
+      throw new Error('review fixture null sentinel changed');
+    return value;
+  }
+
   static admitted(): AdmittedDevelopmentPullRequest {
     const number = PullRequestNumber.parse(42);
     const headSha = CommitSha.parse(HEAD);
@@ -154,11 +154,13 @@ class ReviewEvidenceRunner implements CommandRunner {
       endCursor:
         typeof pagination?.endCursor === 'string'
           ? pagination.endCursor
-          : EXTERNAL_NULL,
+          : ReviewEvidenceRunner.transportNull(),
       reviews: request.reviews.map((review) => ({
         ...review,
         commit:
-          typeof review.commit === 'string' ? review.commit : EXTERNAL_NULL,
+          typeof review.commit === 'string'
+            ? review.commit
+            : ReviewEvidenceRunner.transportNull(),
       })),
     };
   }
@@ -226,7 +228,10 @@ class ReviewEvidenceRunner implements CommandRunner {
 
   private threadPages(): readonly ThreadPageResponse[] {
     const pages = this.scenario.threadPages || [
-      { hasNextPage: false, endCursor: EXTERNAL_NULL },
+      {
+        hasNextPage: false,
+        endCursor: ReviewEvidenceRunner.transportNull(),
+      },
     ];
     return pages.map((page) => ({
       data: {
@@ -281,13 +286,15 @@ class ReviewEvidenceRunner implements CommandRunner {
     if (!Object.hasOwn(review, 'commit')) return { oid: HEAD };
     return typeof review.commit === 'string'
       ? { oid: review.commit }
-      : EXTERNAL_NULL;
+      : ReviewEvidenceRunner.transportNull();
   }
 
   private output(stdout = ''): CommandOutput {
     return { exitCode: 0, stdout, stderr: '' };
   }
 }
+
+const EXTERNAL_NULL = ReviewEvidenceRunner.transportNull();
 
 test('accepts complete multi-page current-head review and thread evidence', () => {
   const { result, runner } = new ReviewEvidenceRunner({

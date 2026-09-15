@@ -9,8 +9,11 @@ import path from 'node:path';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../../../../../..');
 
-const normalizeMarkdown = (markdown: string): string =>
-  markdown.replace(/\s+/gu, ' ').trim();
+class CortexContextRouterScenario {
+  static normalizeMarkdown(markdown: string): string {
+    return markdown.replace(/\s+/gu, ' ').trim();
+  }
+}
 
 const FRESH_BASE_AUTHORITIES = [
   '.cortex/AGENTS.md',
@@ -109,7 +112,7 @@ Model text.
   expect(markdown).toContain(
     '`git fetch --prune origin`; a fetch failure fails closed.',
   );
-  const normalized = normalizeMarkdown(markdown);
+  const normalized = CortexContextRouterScenario.normalizeMarkdown(markdown);
   expect(normalized).toContain(
     'Only after both synchronizations, Prime resolves the latest committed `refs/heads/dev^{commit}`.',
   );
@@ -138,7 +141,7 @@ test('requires every fresh-base authority to use the post-sync local dev head', 
   ] as const;
 
   for (const relativePath of FRESH_BASE_AUTHORITIES) {
-    const markdown = normalizeMarkdown(
+    const markdown = CortexContextRouterScenario.normalizeMarkdown(
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
     for (const phrase of required) {
@@ -153,7 +156,7 @@ test('requires every fresh-base authority to use the post-sync local dev head', 
   }
 
   for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
-    const markdown = normalizeMarkdown(
+    const markdown = CortexContextRouterScenario.normalizeMarkdown(
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
     expect(markdown).toContain('git fetch --prune origin');
@@ -200,7 +203,7 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   expect(markdown).toContain('return to the selected owning context');
-  expect(normalizeMarkdown(markdown)).toContain(
+  expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
     'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
   );
   expect(markdown).toContain('Every new feature mission');
