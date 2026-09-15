@@ -20,6 +20,9 @@ if [ "${1:-}" = --start-server ]; then
   fi
   exit "${FAKE_START_STATUS:-0}"
 fi
+if [ "${1:-}" = --zero-stats ]; then
+  exit 0
+fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
   success)
     test "${SCCACHE_CLIENT_SIDE:-}" = 1

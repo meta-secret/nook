@@ -147,6 +147,7 @@ elif [ -n "$compile_deps_available" ]; then
 else
   echo "No remote BuildKit cache is available; performing a cold solve with sccache"
 fi
-bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
+NOOK_BUILDKIT_RAW_LOG="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log" \
+  bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \
   "$docker_bin" buildx bake "${bake_args[@]}" "${compile_targets[@]}"

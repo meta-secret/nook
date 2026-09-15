@@ -261,6 +261,7 @@ class DockerizedRustContract {
     expect(wrapper).toContain('${AWS_MAX_ATTEMPTS:=1}');
     expect(wrapper).toContain('${NOOK_SCCACHE_START_TIMEOUT:-2s}');
     expect(wrapper).toContain("unset SCCACHE_ERROR_LOG");
+    expect(wrapper).toContain('"$sccache_binary" --zero-stats');
     expect(wrapper).toContain(
       'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}',
     );

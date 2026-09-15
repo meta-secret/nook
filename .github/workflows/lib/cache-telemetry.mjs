@@ -123,7 +123,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {number} cache_write_errors
  * @property {number} cache_writes
  * @property {number} compile_failures
- * @property {'sum_of_per_stage_terminal_snapshots'} measurement
+ * @property {'sum_of_zero_based_run_snapshots'} measurement
  * @property {{state: 'active' | 'fallback', reason: string}} fallback
  * @property {readonly SccacheReport[]} snapshots
  * @property {number} [hit_rate_percent]
@@ -485,9 +485,12 @@ export class CacheTelemetry {
 
   /** @param {readonly SccacheReport[]} reports @returns {SccacheSummary} */
   static summarizeSccache(reports) {
+    const terminalReports = [
+      ...new Map(reports.map((report) => [report.stage, report])).values(),
+    ];
     /** @type {SccacheSummary} */
     const summary = {
-      report_count: reports.length,
+      report_count: terminalReports.length,
       baked_runtime_mode: "UNAVAILABLE",
       runtime_mode: "UNAVAILABLE",
       runtime_mode_source: "unavailable",
@@ -502,11 +505,11 @@ export class CacheTelemetry {
       cache_write_errors: 0,
       cache_writes: 0,
       compile_failures: 0,
-      measurement: "sum_of_per_stage_terminal_snapshots",
+      measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
       snapshots: [],
     };
-    const first = reports[0];
+    const first = terminalReports[0];
     if (first) {
       summary.baked_runtime_mode = first.baked_runtime_mode;
       summary.runtime_mode = first.runtime_mode;
@@ -514,7 +517,7 @@ export class CacheTelemetry {
       summary.client_side = first.client_side;
       summary.counter_reliability = first.counter_reliability;
     }
-    for (const report of reports) {
+    for (const report of terminalReports) {
       for (const field of /** @type {const} */ ([
         "baked_runtime_mode",
         "runtime_mode",
@@ -537,12 +540,12 @@ export class CacheTelemetry {
       summary.cache_writes += report.cache_writes;
       summary.compile_failures += report.compile_failures;
     }
-    if (reports.length > 0) {
+    if (terminalReports.length > 0) {
       summary.publication_status = summary.client_side && summary.cache_errors === 0 && summary.cache_write_errors === 0 && summary.cache_writes === 0
         ? "pending_verification"
         : "counters_observed";
     }
-    summary.snapshots = reports;
+    summary.snapshots = terminalReports;
     return {
       ...summary,
       ...CacheTelemetry.percentageField(
@@ -631,6 +634,51 @@ export class CacheTelemetry {
       inspectLine(line, { vertex: key, timestamp: "unterminated" });
     }
     return reports;
+  }
+
+  /** @param {string} text @returns {SccacheReport[]} */
+  static extractSccacheReportsFromText(text) {
+    /** @type {Map<string, SccacheReport>} */
+    const latestByStage = new Map();
+    for (const line of text.split(/\r?\n/)) {
+      const markerAt = line.indexOf(SCCACHE_MARKER);
+      if (markerAt === -1) continue;
+      try {
+        const report = CacheTelemetry.normalizeSccacheReport(
+          CacheTelemetry.parseJsonRecord(
+            line.slice(markerAt + SCCACHE_MARKER.length).trim(),
+          ),
+        );
+        latestByStage.set(report.stage, report);
+      } catch {
+        // A cancelled write can leave one partial terminal line. Completed
+        // stage records remain usable and the collection warning identifies
+        // the cancelled overall solve.
+      }
+    }
+    return [...latestByStage.values()];
+  }
+
+  /** @param {string} text @returns {{state: 'active' | 'fallback', reason: string}} */
+  static extractSccacheFallbackFromText(text) {
+    let reason = "none";
+    for (const line of text.split(/\r?\n/)) {
+      const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
+      if (markerAt === -1) continue;
+      try {
+        const fallback = CacheTelemetry.parseJsonRecord(
+          line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
+        );
+        if (typeof fallback.reason === "string" && fallback.reason) {
+          reason = fallback.reason;
+        }
+      } catch {
+        reason = "malformed_fallback_event";
+      }
+    }
+    return reason === "none"
+      ? { state: "active", reason }
+      : { state: "fallback", reason };
   }
 
   /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
@@ -884,7 +932,7 @@ export class CacheTelemetry {
       }
     }
     CacheTelemetry.validateOptionalRate(sccache, "hit_rate_percent", "sccache");
-    if (sccache.measurement !== "sum_of_per_stage_terminal_snapshots") {
+    if (sccache.measurement !== "sum_of_zero_based_run_snapshots") {
       throw new Error("telemetry sccache.measurement is invalid");
     }
     if (
@@ -1031,6 +1079,25 @@ export class CacheTelemetry {
     const reports = [];
     /** @type {JsonRecord[]} */
     const historyEvents = [];
+    let rawBuildLog = "";
+    const rawBuildLogPath =
+      environment.NOOK_BUILDKIT_RAW_LOG ||
+      (environment.RUNNER_TEMP
+        ? path.join(environment.RUNNER_TEMP, "nook-build-compile.raw.log")
+        : "");
+    if (rawBuildLogPath && fs.existsSync(rawBuildLogPath)) {
+      try {
+        rawBuildLog = fs.readFileSync(rawBuildLogPath, "utf8");
+        reports.push(
+          ...CacheTelemetry.extractSccacheReportsFromText(rawBuildLog),
+        );
+      } catch (error) {
+        warnings.push(
+          `buildx_raw_log_unavailable: ${CacheTelemetry.errorMessage(error)}`,
+        );
+      }
+    }
+    const reportsFromRawLog = reports.length > 0;
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -1070,9 +1137,11 @@ export class CacheTelemetry {
               nook_history_ref: result.record.ref,
             })),
           );
-          reports.push(
-            ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
-          );
+          if (!reportsFromRawLog) {
+            reports.push(
+              ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
+            );
+          }
           break;
       }
     }
@@ -1089,7 +1158,9 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    sccache.fallback = CacheTelemetry.extractSccacheFallback(historyEvents);
+    sccache.fallback = rawBuildLog
+      ? CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog)
+      : CacheTelemetry.extractSccacheFallback(historyEvents);
 
     return {
       schema_version: 1,

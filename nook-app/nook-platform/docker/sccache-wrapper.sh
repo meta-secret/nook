@@ -95,7 +95,15 @@ if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
     startup_status=$?
     set -e
     if [ "$startup_status" -eq 0 ]; then
-      : >"$ready_marker"
+      # A descendant Docker stage may expose cumulative daemon counters. Zero
+      # them before publishing readiness so every report is a disjoint per-RUN
+      # terminal snapshot and aggregate telemetry cannot double-count parents.
+      if "$sccache_binary" --zero-stats >/dev/null 2>&1; then
+        : >"$ready_marker"
+      else
+        startup_status=1
+        : >"$fallback_marker"
+      fi
     else
       : >"$fallback_marker"
     fi

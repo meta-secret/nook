@@ -357,11 +357,19 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     cache_write_errors: 0,
     cache_writes: 4,
     compile_failures: 0,
-    measurement: "sum_of_per_stage_terminal_snapshots",
+    measurement: "sum_of_zero_based_run_snapshots",
     fallback: { state: "active", reason: "none" },
     snapshots: reports,
     hit_rate_percent: 73.33,
   });
+});
+
+void test("extracts zero-based sccache snapshots from a cancelled raw build log", () => {
+  const raw =
+    'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"compile_failures":0}\ncancelled\n';
+  const reports = CacheTelemetry.extractSccacheReportsFromText(raw);
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].cache_hits, 8);
 });
 
 void test("marks client-side zero-write publication counters pending verification", () => {

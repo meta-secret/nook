@@ -32,7 +32,7 @@ for forbidden in build:compile-cache-seed compile-generation COMPILE_GENERATION 
 done
 test ! -e "$workflows_dir/../scripts/compile-deps-cache-seed.sh"
 grep -Fq -- 'workflow_args+=(--raw-field "tasks=$requested_tasks")' "$remote_taskfile"
-for required in 'trusted build:compile requires the shared READ_WRITE compiler cache mode' 'id=sccache_runtime_mode' 'No remote BuildKit cache is available; performing a cold solve with sccache'; do
+for required in 'trusted build:compile requires the shared READ_WRITE compiler cache mode' 'id=sccache_runtime_mode' 'NOOK_BUILDKIT_RAW_LOG=' 'No remote BuildKit cache is available; performing a cold solve with sccache'; do
   grep -Fq -- "$required" "$compile_script"
 done
 grep -Fq -- 'SCCACHE_OPTIONAL=1' "$workflows_dir/../actions/nook-cache-connect/main.js"
@@ -82,7 +82,7 @@ if grep -Fq -- 'id=sccache_runtime_mode,required=false' "$compile_dockerfile"; t
   echo 'compile vertex permits missing runtime authority secret' >&2
   exit 1
 fi
-for required in 'unset SCCACHE_ERROR_LOG' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
+for required in 'unset SCCACHE_ERROR_LOG' '"$sccache_binary" --zero-stats' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
   grep -Fq -- "$required" "$sccache_wrapper"
 done
 for required in 'compile_requests":339' 'cache_misses":{"counts":{"Rust":275' '"cache_errors":0' '"cache_write_errors":0' '"cache_write_errors":1' '"cache_writes":0' '"cache_writes":275' '"baked_runtime_mode":"READ_WRITE"' '"runtime_mode":"READ_WRITE"' '"runtime_mode_source":"runtime_secret"' '"counter_reliability":"backend_incomplete"' 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION' 'NOOK_SCCACHE_HEALTH_WARNING'; do
@@ -103,7 +103,7 @@ if grep -Fq -- 'unexpected_read_only_sccache_writes' "$pr_cache_health"; then
   echo 'BuildKit no-export state incorrectly disables trusted sccache writes' >&2
   exit 1
 fi
-for required in 'baked_runtime_mode' 'runtime_mode_source' 'counter_reliability' 'publication_status' 'cache_write_errors' 'compile_failures' 'sum_of_per_stage_terminal_snapshots' 'NOOK_SCCACHE_FALLBACK' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'sccache counters:' 'sccache publication:' 'sccache requests:' 'sccache cache results:' 'fallback=' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
+for required in 'baked_runtime_mode' 'runtime_mode_source' 'counter_reliability' 'publication_status' 'cache_write_errors' 'compile_failures' 'sum_of_zero_based_run_snapshots' 'NOOK_SCCACHE_FALLBACK' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'sccache counters:' 'sccache publication:' 'sccache requests:' 'sccache cache results:' 'fallback=' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
   grep -Fq -- "$required" "$cache_telemetry"
 done
 echo 'remote build:compile cache contract passed'
