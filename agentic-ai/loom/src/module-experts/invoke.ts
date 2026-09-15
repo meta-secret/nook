@@ -1,47 +1,30 @@
-import { AgentAttemptTransport } from '../agent-workflow/attempt-codec.ts';
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   AgentAttemptJournal,
   type ActiveModuleExpertJournal,
 } from '../agent-workflow/agent-journal.ts';
-import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
+import type { ModuleExpertAttemptJournalConfiguration } from '../agent-workflow/agent-journal.ts';
 import {
-  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
-  MaterializedViewPresence,
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../agent-workflow/domain.ts';
-import type {
-  AgentAttemptEvent,
-  AgentAttemptTerminalRecordedEvent,
-} from '../agent-workflow/agent-events.ts';
 import type {
   AgentAttemptParent,
   AgentAttemptProcessingReference,
   TaskTerminal,
 } from '../agent-workflow/domain.ts';
-import type { ModuleExpertAttemptJournalConfiguration } from '../agent-workflow/agent-journal.ts';
-import {
-  MODULE_EXPERT_WORKFLOW_VERSION,
-  ModuleExpertRuntimeAuthority,
-} from './trusted-runtime.ts';
-import type { TrustedModuleExpertExecution } from './trusted-runtime.ts';
-import { AgentAttemptReplay } from '../agent-workflow/agent-replay.ts';
 import { WorkflowRuntimeActivityKind } from '../agent-workflow/events.ts';
 import type { RuntimeActivityObservation } from '../agent-workflow/events.ts';
 import type { AgentExecutionCompletion } from '../agent-workflow/runtime.ts';
 import { WorkflowResultSchema } from '../agent-workflow/structured-result-codec.ts';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
-import { ModuleExpertParentAuthorization } from './parent-authorization.ts';
-import type {
-  ModuleExpertChildRequest,
-  VerifyModuleExpertParentAuthorizationArgs,
-} from './parent-authorization.ts';
+import {
+  MODULE_EXPERT_WORKFLOW_VERSION,
+  ModuleExpertRuntime,
+} from './trusted-runtime.ts';
 import { ModuleExpertRequestDecoder } from './request-codec.ts';
 import type {
   ModuleExpertInvocationRequest,
@@ -51,7 +34,7 @@ import type {
 export { ModuleExpertRequestDecoder } from './request-codec.ts';
 export type { ModuleExpertInvocationRequest } from './request-codec.ts';
 
-/** Owns the module expert invocation registry and its capability transitions. */
+/** Runs one trusted, bounded module-expert task and returns its journaled result. */
 export class ModuleExpertInvocation {
   private constructor() {}
   private static readonly MAX_ACTIVITY_COUNT = 256;
@@ -70,6 +53,9 @@ export class ModuleExpertInvocation {
     if (!profile) {
       throw new Error('Requested module expert is not registered.');
     }
+    if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
+      ModuleExpertInvocation.invalidRequest();
+    }
     const runDirectory = join(
       repoRoot,
       'workflow',
@@ -77,33 +63,6 @@ export class ModuleExpertInvocation {
       DelegatedAgentWorkflowName.AgentWork,
       request.runId,
     );
-    if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
-      ModuleExpertInvocation.invalidRequest();
-    }
-    // The runtime session performs the final catalog audit before consuming
-    // this capability; reject malformed lineage at its own boundary first.
-    const childRequest: ModuleExpertChildRequest = {
-      runId: request.runId,
-      sourceCommit: request.sourceCommit,
-      originMainSha: request.originMainSha,
-      pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.featureHeadSha,
-      task: request.task,
-      expert: request.expert,
-      attempt: request.attempt,
-      depth: request.depth,
-      parent: request.parent,
-    };
-    const authorizationArgs: VerifyModuleExpertParentAuthorizationArgs = {
-      runDirectory,
-      workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
-      request: childRequest,
-      expertNames: MODULE_EXPERT_CATALOG.map((expert) => expert.name),
-    };
-    const parentAuthorization =
-      await ModuleExpertParentAuthorization.verifyModuleExpertParentAuthorization(
-        authorizationArgs,
-      );
     const journalConfiguration: ModuleExpertAttemptJournalConfiguration = {
       runDirectory,
       runId: request.runId,
@@ -118,33 +77,22 @@ export class ModuleExpertInvocation {
       attempt: request.attempt,
       depth: request.depth,
       parent: request.parent,
-      invocationContextSha256: ModuleExpertInvocation.sha256(
-        JSON.stringify(request.selectedContextPaths),
-      ),
       now: () => new Date().toISOString(),
     };
-    const sessionArgs = {
-      repoRoot,
-      request,
-      parentAuthorization,
-    };
-    const runtimeSession =
-      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(
-        sessionArgs,
-      );
-    const journalArgs = {
+    const runtimeSession = ModuleExpertRuntime.createModuleExpertRuntimeSession(
+      {
+        repoRoot,
+        request,
+      },
+    );
+    const preparedJournal = AgentAttemptJournal.createModuleExpert<string>({
       configuration: journalConfiguration,
-      authority: runtimeSession.journalAuthority,
-      identity: runtimeSession.identity,
-    };
-    const preparedJournal =
-      AgentAttemptJournal.createModuleExpert<string>(journalArgs);
+    });
     const journal = await preparedJournal.initialize();
-    const selectedContextObservation: RuntimeActivityObservation = {
+    await journal.observe({
       activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
       detail: 'Module expert context selected.',
-    };
-    await journal.observe(selectedContextObservation);
+    });
     let activityCount = 1;
     const observe = async (
       observation: RuntimeActivityObservation,
@@ -155,55 +103,46 @@ export class ModuleExpertInvocation {
       await journal.observe(observation);
       activityCount += 1;
     };
-    let trustedExecution: TrustedModuleExpertExecution;
+    let completion: AgentExecutionCompletion;
     try {
-      const executionArgs = {
+      const runtimeResult = await ModuleExpertRuntime.executeModuleExpertAgent({
         session: runtimeSession.session,
         signal: args.signal,
         observe,
-      };
-      const runtimeResult =
-        await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(
-          executionArgs,
-        );
+      });
       if (runtimeResult.isErr()) {
-        const failureContext: FinalizeFailedAttemptContext = {
+        return ModuleExpertInvocation.finalizeFailedAttempt({
           journal,
           activityCount,
           runDirectory,
           profile,
           request,
-        };
-        return ModuleExpertInvocation.finalizeFailedAttempt(failureContext);
+        });
       }
-      trustedExecution = runtimeResult.value;
+      completion = runtimeResult.value;
     } catch {
-      const failureContext: FinalizeFailedAttemptContext = {
+      return ModuleExpertInvocation.finalizeFailedAttempt({
         journal,
         activityCount,
         runDirectory,
         profile,
         request,
-      };
-      return ModuleExpertInvocation.finalizeFailedAttempt(failureContext);
+      });
     }
-    const completionContext: ValidateAgentCompletionContext = {
-      completion: trustedExecution.completion,
-      expectedResultKind: WorkflowResultKind.ModuleExpertEvidence,
-    };
     let validatedCompletion: ValidatedAgentCompletion;
     try {
-      validatedCompletion =
-        ModuleExpertInvocation.validateAgentCompletion(completionContext);
+      validatedCompletion = ModuleExpertInvocation.validateAgentCompletion({
+        completion,
+        expectedResultKind: WorkflowResultKind.ModuleExpertEvidence,
+      });
     } catch {
-      const failureContext: FinalizeFailedAttemptContext = {
+      return ModuleExpertInvocation.finalizeFailedAttempt({
         journal,
         activityCount,
         runDirectory,
         profile,
         request,
-      };
-      return ModuleExpertInvocation.finalizeFailedAttempt(failureContext);
+      });
     }
     const terminal: TaskTerminal<string> = {
       kind: TaskTerminalKind.Completed,
@@ -212,37 +151,25 @@ export class ModuleExpertInvocation {
       threadId: validatedCompletion.threadId,
       output: validatedCompletion.output,
     };
-    const beforeFinalization = journal.eventHighWaterMark;
     let processing: AgentAttemptProcessingReference;
     try {
-      const finalizeArgs = { terminal, execution: trustedExecution };
-      processing = await journal.finalizeModuleExpert(finalizeArgs);
+      processing = await journal.finalizeModuleExpert({ terminal });
     } catch {
-      if (journal.eventHighWaterMark === beforeFinalization) {
-        const failureContext: FinalizeFailedAttemptContext = {
-          journal,
-          activityCount,
-          runDirectory,
-          profile,
-          request,
-        };
-        return ModuleExpertInvocation.finalizeFailedAttempt(failureContext);
-      }
-      ModuleExpertInvocation.processingVerificationFailed();
+      return ModuleExpertInvocation.finalizeFailedAttempt({
+        journal,
+        activityCount,
+        runDirectory,
+        profile,
+        request,
+      });
     }
-    const resultContext: ModuleExpertResultContext = {
+    return ModuleExpertInvocation.invocationResult({
       runDirectory,
       profile,
       request,
       terminal,
       processing,
-    };
-    const result = ModuleExpertInvocation.invocationResult(resultContext);
-    const verificationArgs: VerifyModuleExpertInvocationResultArgs = { result };
-    await ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-      verificationArgs,
-    );
-    return result;
+    });
   }
 
   private static invocationResult(
@@ -270,11 +197,10 @@ export class ModuleExpertInvocation {
     context: FinalizeFailedAttemptContext,
   ): Promise<ModuleExpertInvocationResult> {
     if (context.activityCount < ModuleExpertInvocation.MAX_ACTIVITY_COUNT) {
-      const failureObservation = {
+      await context.journal.observe({
         activity: WorkflowRuntimeActivityKind.RuntimeError,
         detail: 'Module expert runtime failed.',
-      };
-      await context.journal.observe(failureObservation);
+      });
     }
     const terminal: TaskTerminal<string> = {
       kind: TaskTerminalKind.Failed,
@@ -283,19 +209,13 @@ export class ModuleExpertInvocation {
       summary: 'Module expert runtime failed.',
     };
     const processing = await context.journal.finalize(terminal);
-    const resultContext: ModuleExpertResultContext = {
+    return ModuleExpertInvocation.invocationResult({
       runDirectory: context.runDirectory,
       profile: context.profile,
       request: context.request,
       terminal,
       processing,
-    };
-    const result = ModuleExpertInvocation.invocationResult(resultContext);
-    const verificationArgs: VerifyModuleExpertInvocationResultArgs = { result };
-    await ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-      verificationArgs,
-    );
-    return result;
+    });
   }
 
   private static validateAgentCompletion(
@@ -317,171 +237,6 @@ export class ModuleExpertInvocation {
     return { threadId: context.completion.threadId, output };
   }
 
-  static async verifyModuleExpertInvocationResult(
-    args: VerifyModuleExpertInvocationResultArgs,
-  ): Promise<void> {
-    const result = args.result;
-    if (result.processing.view.presence !== MaterializedViewPresence.Recorded) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    const expectedAttemptDirectory = join(
-      'agents',
-      result.task,
-      `attempt-${result.attempt}`,
-    );
-    if (
-      result.processing.events.path !==
-        join(expectedAttemptDirectory, 'events.jsonl') ||
-      result.processing.result.path !==
-        join(expectedAttemptDirectory, 'result.json') ||
-      result.processing.view.projection.path !==
-        join(expectedAttemptDirectory, 'view.md')
-    ) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    const eventsProjection: ReadVerifiedProjectionArgs = {
-      runDirectory: result.runDirectory,
-      path: result.processing.events.path,
-      sha256: result.processing.events.sha256,
-    };
-    const resultProjection: ReadVerifiedProjectionArgs = {
-      runDirectory: result.runDirectory,
-      path: result.processing.result.path,
-      sha256: result.processing.result.sha256,
-    };
-    const viewProjection: ReadVerifiedProjectionArgs = {
-      runDirectory: result.runDirectory,
-      path: result.processing.view.projection.path,
-      sha256: result.processing.view.projection.sha256,
-    };
-    const eventsSerialized =
-      await ModuleExpertInvocation.readVerifiedProjection(eventsProjection);
-    const resultSerialized =
-      await ModuleExpertInvocation.readVerifiedProjection(resultProjection);
-    const viewSerialized =
-      await ModuleExpertInvocation.readVerifiedProjection(viewProjection);
-    let projectedTerminal: TaskTerminal<string>;
-    let events: readonly AgentAttemptEvent[];
-    try {
-      projectedTerminal =
-        AgentAttemptTransport.decodeTerminal(resultSerialized);
-      events = AgentAttemptTransport.decodeEvents(eventsSerialized);
-    } catch {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    if (
-      JSON.stringify(projectedTerminal) !==
-        JSON.stringify(
-          AgentAttemptTransport.decodeTerminalValue(result.terminal),
-        ) ||
-      viewSerialized.trim() === ''
-    ) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    if (projectedTerminal.kind === TaskTerminalKind.Completed) {
-      let projectedOutput: ReturnType<
-        typeof WorkflowResultSchema.decodeWorkflowTaskOutput
-      >;
-      try {
-        projectedOutput = WorkflowResultSchema.decodeWorkflowTaskOutputNode(
-          projectedTerminal.output,
-        );
-      } catch {
-        ModuleExpertInvocation.processingVerificationFailed();
-      }
-      if (
-        projectedOutput.resultKind !==
-          WorkflowResultKind.ModuleExpertEvidence ||
-        JSON.stringify(projectedOutput) !==
-          JSON.stringify(projectedTerminal.output) ||
-        viewSerialized !==
-          `${projectedTerminal.output.materializedViewMarkdown.trim()}\n`
-      ) {
-        ModuleExpertInvocation.processingVerificationFailed();
-      }
-    }
-    let replayed: ReturnType<typeof AgentAttemptReplay.replay>;
-    try {
-      const replayRequest = { events };
-      replayed = AgentAttemptReplay.replay(replayRequest);
-    } catch {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    const firstEvent = events[0];
-    const terminalEvents = events.filter(
-      (event) => event.kind === AgentAttemptEventKind.AttemptTerminalRecorded,
-    ) as readonly AgentAttemptTerminalRecordedEvent[];
-    const terminalEvent = terminalEvents[0];
-    if (
-      !firstEvent ||
-      terminalEvents.length !== 1 ||
-      !terminalEvent ||
-      firstEvent.kind !== AgentAttemptEventKind.AttemptStarted ||
-      firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
-      firstEvent.runId !== result.runId ||
-      firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
-      firstEvent.workflowVersion !== MODULE_EXPERT_WORKFLOW_VERSION ||
-      firstEvent.sourceCommit !== result.sourceCommit ||
-      firstEvent.originMainSha !== result.originMainSha ||
-      firstEvent.pinnedLocalDevSha !== result.pinnedLocalDevSha ||
-      firstEvent.featureHeadSha !== result.featureHeadSha ||
-      firstEvent.task !== result.task ||
-      firstEvent.agent !== result.expert ||
-      firstEvent.attempt !== result.attempt ||
-      firstEvent.depth !== result.depth ||
-      JSON.stringify(firstEvent.parent) !== JSON.stringify(result.parent) ||
-      firstEvent.invocationContextSha256 !==
-        ModuleExpertInvocation.sha256(
-          JSON.stringify(result.selectedContextPaths),
-        ) ||
-      projectedTerminal.task !== result.task ||
-      projectedTerminal.attempt !== result.attempt ||
-      projectedTerminal.kind !== result.terminal.kind ||
-      JSON.stringify(terminalEvent.result) !==
-        JSON.stringify(result.processing.result) ||
-      JSON.stringify(terminalEvent.view) !==
-        JSON.stringify(result.processing.view) ||
-      replayed.eventCount !== events.length ||
-      replayed.terminalKind !== result.terminal.kind ||
-      JSON.stringify(replayed.view) !== JSON.stringify(result.processing.view)
-    ) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-  }
-
-  private static async readVerifiedProjection(
-    args: ReadVerifiedProjectionArgs,
-  ): Promise<string> {
-    const runRoot = resolve(args.runDirectory);
-    const absolutePath = resolve(runRoot, args.path);
-    const relativePath = relative(runRoot, absolutePath);
-    const segments = args.path.split(/[\\/]/u);
-    if (
-      isAbsolute(args.path) ||
-      segments.some(
-        (segment) => segment === '' || segment === '.' || segment === '..',
-      ) ||
-      relativePath === '..' ||
-      relativePath.startsWith(`..${sep}`)
-    ) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    let serialized: string;
-    try {
-      serialized = await readFile(absolutePath, 'utf8');
-    } catch {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    if (ModuleExpertInvocation.sha256(serialized) !== args.sha256) {
-      ModuleExpertInvocation.processingVerificationFailed();
-    }
-    return serialized;
-  }
-
-  private static processingVerificationFailed(): never {
-    throw new Error('Module expert processing verification failed.');
-  }
-
   private static containsForbiddenControl(value: string): boolean {
     return Array.from(value).some((character) => {
       const code = character.charCodeAt(0);
@@ -494,13 +249,9 @@ export class ModuleExpertInvocation {
   private static invalidRequest(): never {
     throw new Error('Module expert invocation request is invalid.');
   }
-
-  private static sha256(value: string): string {
-    return createHash('sha256').update(value).digest('hex');
-  }
 }
 
-export type ModuleExpertInvocationResult = {
+export type ModuleExpertInvocationResult = Readonly<{
   readonly runDirectory: string;
   readonly runId: string;
   readonly expert: string;
@@ -515,48 +266,38 @@ export type ModuleExpertInvocationResult = {
   readonly parent: AgentAttemptParent;
   readonly terminal: TaskTerminal<string>;
   readonly processing: AgentAttemptProcessingReference;
-};
+}>;
 
-export type InvokeModuleExpertArgs = {
+export type InvokeModuleExpertArgs = Readonly<{
   readonly repoRoot: string;
   readonly request: ModuleExpertInvocationRequest;
   readonly signal: AbortSignal;
-};
+}>;
 
-export type VerifyModuleExpertInvocationResultArgs = {
-  readonly result: ModuleExpertInvocationResult;
-};
-
-type ModuleExpertResultContext = {
+type ModuleExpertResultContext = Readonly<{
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
   readonly request: ValidatedModuleExpertInvocationRequest;
   readonly terminal: TaskTerminal<string>;
   readonly processing: AgentAttemptProcessingReference;
-};
+}>;
 
-type ValidateAgentCompletionContext = {
+type ValidateAgentCompletionContext = Readonly<{
   readonly completion: AgentExecutionCompletion;
   readonly expectedResultKind: WorkflowResultKind;
-};
+}>;
 
-type ValidatedAgentCompletion = {
+type ValidatedAgentCompletion = Readonly<{
   readonly threadId: string;
   readonly output: ReturnType<
     typeof WorkflowResultSchema.decodeWorkflowTaskOutput
   >;
-};
+}>;
 
-type ReadVerifiedProjectionArgs = {
-  readonly runDirectory: string;
-  readonly path: string;
-  readonly sha256: string;
-};
-
-type FinalizeFailedAttemptContext = {
+type FinalizeFailedAttemptContext = Readonly<{
   readonly journal: ActiveModuleExpertJournal<string>;
   readonly activityCount: number;
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
   readonly request: ValidatedModuleExpertInvocationRequest;
-};
+}>;

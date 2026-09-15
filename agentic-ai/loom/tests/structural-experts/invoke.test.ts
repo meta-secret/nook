@@ -309,7 +309,7 @@ class OutOfScopeEvidenceRuntime implements AgentTaskRuntime<string, string> {
   }
 }
 
-test('records completed structural evidence only through structural provenance', async () => {
+test('records completed structural evidence through the typed handoff', async () => {
   const request =
     StructuralExpertsInvokeScenario.invocationRequest('structural-success');
   const runDirectory = StructuralExpertsInvokeScenario.processingRunDirectory(
@@ -336,7 +336,7 @@ test('records completed structural evidence only through structural provenance',
   }
 });
 
-test('invalid completion becomes a replayable sanitized failed terminal', async () => {
+test('invalid completion becomes a sanitized failed terminal', async () => {
   const request = StructuralExpertsInvokeScenario.invocationRequest(
     'structural-invalid-completion',
   );
@@ -371,7 +371,7 @@ test('invalid completion becomes a replayable sanitized failed terminal', async 
   }
 });
 
-test('out-of-snapshot evidence becomes a replayable sanitized failed terminal', async () => {
+test('out-of-snapshot evidence becomes a sanitized failed terminal', async () => {
   const base = StructuralExpertsInvokeScenario.invocationRequest(
     'structural-out-of-scope-evidence',
   );

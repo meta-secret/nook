@@ -884,8 +884,7 @@ describe('module expert audit', () => {
 
   test('rejects generic and module-expert runtime routing drift', () => {
     const safeModuleCliSource = 'invokeModuleExpert(invokeArgs);';
-    const safeTrustedRuntimeSource =
-      'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs);';
+    const safeTrustedRuntimeSource = 'executeIsolated(executionArgs);';
     const moduleRoutingMutations: readonly AuditModuleExpertRuntimeRoutingArgs[] =
       [
         {
@@ -900,17 +899,15 @@ describe('module expert audit', () => {
         {
           moduleExpertCliSource: safeModuleCliSource,
           trustedRuntimeSource:
-            'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs); new CodexSdkAgentRuntime<string, string>();',
+            'executeIsolated(executionArgs); new CodexSdkAgentRuntime<string, string>();',
         },
         {
           moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource:
-            'consumeIsolatedModuleExpertExecution(consumeArgs);',
+          trustedRuntimeSource: 'consumeIsolated(consumeArgs);',
         },
         {
           moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource:
-            'executeIsolatedModuleExpertAgent(executionArgs);',
+          trustedRuntimeSource: 'executeOther(executionArgs);',
         },
       ];
     for (const mutation of moduleRoutingMutations) {

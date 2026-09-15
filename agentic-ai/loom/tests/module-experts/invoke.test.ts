@@ -24,7 +24,6 @@ import {
 import { AgentAttemptReplay } from '../../src/agent-workflow/agent-replay.ts';
 
 import type {
-  CompletedTaskTerminal,
   FailedTaskTerminal,
   TaskTerminal,
 } from '../../src/agent-workflow/domain.ts';
@@ -59,11 +58,8 @@ import { ModuleExpertInvocation } from '../../src/module-experts/invoke.ts';
 
 import type {
   InvokeModuleExpertArgs,
-  ModuleExpertInvocationResult,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
-
-import { MODULE_EXPERT_WORKFLOW_VERSION } from '../../src/module-experts/trusted-runtime.ts';
 
 import { ModuleExpertsInvokeParentFixtureScenario } from './invoke-parent-fixture.ts';
 
@@ -485,7 +481,7 @@ describe('module expert invocation runtime', () => {
     }
   });
 
-  test('finalizes replayable failure when the runtime resolves invalid completion', async () => {
+  test('finalizes a sanitized failure when the runtime resolves invalid completion', async () => {
     const runtime = new InvalidCompletionAgentRuntime();
     const request = ModuleExpertsInvokeScenario.directRequest(
       ModuleExpertsInvokeScenario.uniqueRunId('module-expert-invalid-result'),
@@ -538,7 +534,7 @@ describe('module expert invocation runtime', () => {
     }
   });
 
-  test('finalizes replayable failure when expert evidence omits typed continuation', async () => {
+  test('finalizes a sanitized failure when expert evidence omits typed continuation', async () => {
     const runtime = new MissingContinuationAgentRuntime();
     const request = ModuleExpertsInvokeScenario.directRequest(
       ModuleExpertsInvokeScenario.uniqueRunId('module-expert-incomplete'),
@@ -583,184 +579,6 @@ describe('module expert invocation runtime', () => {
       expect(JSON.stringify(events)).not.toContain('Complete-looking report');
     } finally {
       runtimeMock.dispose();
-      await rm(runDirectory, REMOVE_RECURSIVELY);
-    }
-  });
-
-  test('rejects corrupted projections and a forged generic adapter', async () => {
-    const runtime = new RecordingAgentRuntime();
-    const request = ModuleExpertsInvokeScenario.directRequest(
-      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-corruption'),
-    );
-    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
-      request.runId,
-    );
-    const controller = new AbortController();
-    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
-      runId: request.runId,
-      runtime,
-    };
-    const runtimeMock =
-      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
-        runtimeMockArgs,
-      );
-    const invokeArgs: InvokeModuleExpertArgs = {
-      repoRoot: REPO_ROOT,
-      request,
-      signal: controller.signal,
-    };
-    try {
-      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
-        request,
-      );
-      const result =
-        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
-      if (
-        result.processing.view.presence !== MaterializedViewPresence.Recorded
-      ) {
-        throw new Error('Expected recorded module expert view.');
-      }
-      const projectionPaths = [
-        result.processing.events.path,
-        result.processing.result.path,
-        result.processing.view.projection.path,
-      ];
-
-      for (const projectionPath of projectionPaths) {
-        const absolutePath = join(result.runDirectory, projectionPath);
-        const original = await readFile(absolutePath, 'utf8');
-        await writeFile(absolutePath, `${original}corrupted`, 'utf8');
-        const verificationArgs = { result };
-        await expect(
-          ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-            verificationArgs,
-          ),
-        ).rejects.toThrow('processing verification failed');
-        await writeFile(absolutePath, original, 'utf8');
-      }
-
-      const reboundContextResult: ModuleExpertInvocationResult = {
-        ...result,
-        selectedContextPaths: [
-          '.cortex/teams/web-dev/product-specs/browser-extension.md',
-        ],
-      };
-      const reboundContextVerification = { result: reboundContextResult };
-      await expect(
-        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-          reboundContextVerification,
-        ),
-      ).rejects.toThrow('processing verification failed');
-
-      const eventsPath = join(
-        result.runDirectory,
-        result.processing.events.path,
-      );
-      const originalEvents = await readFile(eventsPath, 'utf8');
-      const forgedEvents = (
-        await ModuleExpertsInvokeScenario.readEvents(eventsPath)
-      ).map((event) => ({
-        ...event,
-        adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
-      }));
-      const forgedEventsSerialized = `${forgedEvents
-        .map((event) => JSON.stringify(event))
-        .join('\n')}\n`;
-      await writeFile(eventsPath, forgedEventsSerialized, 'utf8');
-      const forgedResult: ModuleExpertInvocationResult = {
-        ...result,
-        processing: {
-          ...result.processing,
-          events: {
-            ...result.processing.events,
-            sha256: ModuleExpertsInvokeScenario.sha256(forgedEventsSerialized),
-          },
-        },
-      };
-      const forgedVerificationArgs = { result: forgedResult };
-      await expect(
-        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-          forgedVerificationArgs,
-        ),
-      ).rejects.toThrow('processing verification failed');
-      await writeFile(eventsPath, originalEvents, 'utf8');
-    } finally {
-      runtimeMock.dispose();
-      await rm(runDirectory, REMOVE_RECURSIVELY);
-    }
-  });
-
-  test('rejects generic Cortex evidence wrapped as module expert evidence', async () => {
-    const request = ModuleExpertsInvokeScenario.directRequest(
-      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-forged-generic'),
-    );
-    const runDirectory = await mkdtemp(
-      join(tmpdir(), 'loom-module-expert-forged-generic-'),
-    );
-    const journalConfiguration: AgentAttemptJournalConfiguration = {
-      adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
-      runDirectory,
-      runId: request.runId,
-      workflow: DelegatedAgentWorkflowName.AgentWork,
-      workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
-      sourceCommit: request.sourceCommit,
-      originMainSha: request.originMainSha,
-      pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.pinnedLocalDevSha,
-      task: request.task,
-      agent: request.expert,
-      attempt: request.attempt,
-      depth: request.depth,
-      parent: request.parent,
-      now: () => '2026-08-22T00:00:00.000Z',
-    };
-    const preparedJournal = new AgentAttemptJournal<string>(
-      journalConfiguration,
-    );
-    const terminal: CompletedTaskTerminal<string> = {
-      kind: TaskTerminalKind.Completed,
-      task: request.task,
-      attempt: request.attempt,
-      threadId: 'generic-cortex-thread',
-      output: {
-        resultKind: WorkflowResultKind.CortexEvidence,
-        summary: 'Generic evidence with matching invocation identity.',
-        materializedViewMarkdown:
-          '# Generic evidence\n\nThis is not module expert evidence.',
-        findings: [],
-        notesForParent: [],
-        artifacts: [],
-      },
-    };
-
-    try {
-      const journal = await preparedJournal.initialize();
-      const processing = await journal.finalize(terminal);
-      const [defaulted1 = []] = [request.selectedContextPaths];
-      const forgedResult: ModuleExpertInvocationResult = {
-        runDirectory,
-        runId: request.runId,
-        expert: request.expert,
-        selectedContextPaths: defaulted1,
-        sourceCommit: request.sourceCommit,
-        originMainSha: request.originMainSha,
-        pinnedLocalDevSha: request.pinnedLocalDevSha,
-        featureHeadSha: request.pinnedLocalDevSha,
-        task: request.task,
-        attempt: request.attempt,
-        depth: request.depth,
-        parent: request.parent,
-        terminal,
-        processing,
-      };
-      const verificationArgs = { result: forgedResult };
-
-      await expect(
-        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
-          verificationArgs,
-        ),
-      ).rejects.toThrow('processing verification failed');
-    } finally {
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
