@@ -47,6 +47,13 @@ target "builder-wasm-build-cache-probe" {
   output   = ["type=cacheonly"]
 }
 
+// The normal producer publishes this reusable compiler phase before clippy,
+// tests, wasm-bindgen packaging, and artifact export.
+target "builder-wasm-build-publish" {
+  inherits = ["builder-wasm-build-cache-probe"]
+  cache-to = rust_wasm_source_cache_to
+}
+
 target "_nook-rust-fast-common" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
@@ -73,7 +80,7 @@ target "wasm-export" {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
   cache-from = rust_wasm_source_cache_from
-  cache-to   = rust_wasm_source_cache_to
+  cache-to   = []
 }
 
 target "focused-web-artifacts" {

@@ -183,6 +183,12 @@ jobs:
         if: steps.trusted-native.outputs.found == 'true'
         run: task preflight
 
+      # Publish the reusable compiler graph before terminal validation. A test
+      # timeout must not prevent the next run from restoring this exact head.
+      - name: Publish PR-scoped native BuildKit cache
+        if: steps.trusted-native.outputs.found != 'true'
+        run: task ci:main:publish-native-cache
+
       - name: Rust format, clippy, tests, and coverage
         if: steps.trusted-native.outputs.found != 'true'
         run: >-
@@ -191,10 +197,6 @@ jobs:
           CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
-
-      - name: Publish PR-scoped native BuildKit cache
-        if: steps.trusted-native.outputs.found != 'true'
-        run: task ci:main:publish-native-cache
 
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
@@ -324,6 +326,14 @@ jobs:
             echo "run-node-tests=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Export only the reusable WASM compile phase before clippy/tests and
+      # artifact assembly, so terminal failures cannot starve the lineage.
+      - name: Publish PR-scoped WASM BuildKit cache
+        if: steps.trusted-wasm.outputs.found != 'true'
+        run: task ci:main:publish-wasm-cache
+        env:
+          WASM_BUILD_MODE: dev
+
       - name: WASM clippy and build
         if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -331,12 +341,6 @@ jobs:
           CI: true
           WASM_BUILD_MODE: dev
           GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: Publish PR-scoped WASM BuildKit cache
-        if: steps.trusted-wasm.outputs.found != 'true'
-        run: task ci:main:publish-wasm-cache
-        env:
-          WASM_BUILD_MODE: dev
 
       - name: Stamp WASM handoff attempt
         run: echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
@@ -418,6 +422,7 @@ jobs:
       ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}
       ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}
       auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}
+      cache-result: ${{ steps.cache-result.outputs.result }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -580,6 +585,11 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
+      - name: Record cache-health job result
+        id: cache-result
+        if: always()
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
+
   cache-health:
     name: Docker cache health
     if: always() && inputs.validation_requested
@@ -618,13 +628,13 @@ jobs:
           NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
           NOOK_PR_CACHE_JOBS: >-
             [
-              {"id":"dependency-policy","result":"success","buildExpected":true,"readOnly":false},
-              {"id":"deterministic-tests","result":"success","buildExpected":true,"readOnly":false},
-              {"id":"dylint","result":"success","buildExpected":true,"readOnly":false},
+              {"id":"dependency-policy","result":"${{ needs.rust-ecosystem.outputs.dependency-policy-result || 'cancelled' }}","buildExpected":true,"readOnly":false},
+              {"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.outputs.deterministic-tests-result || 'cancelled' }}","buildExpected":true,"readOnly":false},
+              {"id":"dylint","result":"${{ needs.rust-ecosystem.outputs.dylint-result || 'cancelled' }}","buildExpected":true,"readOnly":false},
               {"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},
-              {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false},
+              {"id":"verify","result":"${{ needs.verify.outputs.cache-result || needs.verify.result }}","buildExpected":true,"readOnly":false},
               {"id":"ui-demo","result":"${{ needs.ui-demo.result }}","buildExpected":false,"readOnly":true,"consumer":true},
               {"id":"extension-e2e","result":"${{ needs.extension-e2e.result }}","buildExpected":false,"readOnly":true,"consumer":true},
               {"id":"full-e2e-shard-1","consumerIdentity":"full-e2e-shard-1","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true,"consumer":true},

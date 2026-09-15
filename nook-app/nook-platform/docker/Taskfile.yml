@@ -301,7 +301,7 @@ tasks:
         preflight-test
 
   docker:ci:cache:publish:wasm:
-    desc: Export verified ARC-local WASM source state; hosted CI owns the portable dependency ref.
+    desc: Export the reusable WASM compile phase before terminal validation.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -314,7 +314,7 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        wasm-export
+        builder-wasm-build-publish
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
@@ -374,6 +374,13 @@ tasks:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.
     cmds:
       - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-smoke-publish.output=type=cacheonly" \
+            rust-ecosystem-smoke-publish
+        fi
+      - |
         GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:deterministic & deterministic_pid=$!
         GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:fuzz & fuzz_pid=$!
         GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:kani & kani_pid=$!
@@ -397,13 +404,6 @@ tasks:
           failed=1
         fi
         test "$failed" -eq 0
-      - |
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "rust-ecosystem-smoke-publish.output=type=cacheonly" \
-            rust-ecosystem-smoke-publish
-        fi
 
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
@@ -481,6 +481,14 @@ tasks:
     cmds:
       - task: docker:rust-base
       - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            rust-dylint-build-publish
+        else
+          GHA_CACHE_WRITE_ENABLED= {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            rust-dylint-build
+        fi
+      - |
         failed=0
         floor="$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" || exit 1
         for stage in self-test native wasm; do
@@ -489,7 +497,3 @@ tasks:
             "rust-dylint-$stage" || failed=1
         done
         if [ "$failed" -ne 0 ]; then exit "$failed"; fi
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
-            --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" rust-dylint
-        fi

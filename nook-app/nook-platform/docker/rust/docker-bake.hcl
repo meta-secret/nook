@@ -374,7 +374,7 @@ target "rust-dylint" {
     rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_dylint_cache_from
-  cache-to   = rust_ecosystem_dylint_cache_to
+  cache-to   = []
   output     = ["type=cacheonly"]
 }
 
@@ -382,6 +382,12 @@ target "rust-dylint-build" {
   inherits = ["rust-dylint"]
   target = "rust-dylint-build"
   cache-to = []
+}
+
+// Publish the reusable checker/toolchain before repository lint execution.
+target "rust-dylint-build-publish" {
+  inherits = ["rust-dylint-build"]
+  cache-to = rust_ecosystem_dylint_cache_to
 }
 
 target "rust-dylint-self-test" {
@@ -423,7 +429,7 @@ target "rust-ecosystem-deterministic-cache-probe" {
 }
 
 target "rust-ecosystem-deterministic-smoke-member" {
-  inherits = ["rust-ecosystem-deterministic"]
+  inherits = ["rust-ecosystem-deterministic-cache-probe"]
   cache-to = []
 }
 
@@ -439,17 +445,18 @@ target "rust-kani" {
 
 target "rust-kani-smoke-member" {
   inherits = ["rust-kani"]
+  target   = "rust-kani-toolchain"
   cache-to = []
 }
 
 target "rust-fuzz-smoke-member" {
   inherits = ["rust-fuzz-smoke"]
+  target   = "rust-ecosystem-nightly"
   cache-to = []
 }
 
-// One rooted mode=max export owns the deterministic/fuzz/Kani producer. The
-// named contexts make all three independently-built validation graphs part of
-// one immutable cache publication.
+// One rooted mode=max export owns only the reusable toolchain/build phases.
+// Terminal tests and proofs consume this graph but cannot block publication.
 target "rust-ecosystem-smoke-publish" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/ecosystem-smoke-cache.Dockerfile"
