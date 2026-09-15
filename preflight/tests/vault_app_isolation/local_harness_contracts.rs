@@ -1,11 +1,11 @@
 use super::*;
 
 #[test]
-fn local_native_verification_exports_preflight_into_the_repository_artifact_root() {
+fn local_native_verification_exports_preflight_into_the_repository_artifact_root()
+-> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/ci/Taskfile.yml");
-    let rust_host = taskfile_task_body(&tasks, "_ci:pr:rust:host")
-        .expect("native Rust CI must retain a host orchestration task");
+    let rust_host = taskfile_task_body(&tasks, "_ci:pr:rust:host")?;
 
     assert!(
         rust_host.contains(
@@ -13,15 +13,16 @@ fn local_native_verification_exports_preflight_into_the_repository_artifact_root
         ) && rust_host.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
         "local native verification must default the shared coverage and preflight export root to a writable repository-local directory"
     );
+    Ok(())
 }
 
 #[test]
-fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inputs() {
+fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inputs()
+-> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/ci/Taskfile.yml");
-    let web = taskfile_task_body(&tasks, "ci:pr:web").expect("ci:pr:web must remain a public task");
-    let local = taskfile_task_body(&tasks, "ci:pr:web:local")
-        .expect("ci:pr:web must expose a local verification route");
+    let web = taskfile_task_body(&tasks, "ci:pr:web")?;
+    let local = taskfile_task_body(&tasks, "ci:pr:web:local")?;
     let script = root.read(".github/scripts/ci-pr-web-local.sh");
 
     assert!(
@@ -75,4 +76,5 @@ fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inp
             && !script.contains("$label exceeded ${timeout_seconds}s; terminating"),
         "timeout cleanup must use the initialized stage label before terminating the exact stage process group"
     );
+    Ok(())
 }

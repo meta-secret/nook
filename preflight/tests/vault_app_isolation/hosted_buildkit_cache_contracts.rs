@@ -740,10 +740,12 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
         "the two WASM packages must have sibling source and package-build stages"
     );
 
-    let nook_source = dockerfile
+    let Some(nook_source) = dockerfile
         .split_once("FROM builder-wasm-source-base AS builder-nook-wasm-source")
         .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
-        .expect("nook-wasm source stage must be delimited by the next Docker stage");
+    else {
+        panic!("nook-wasm source stage must be delimited by the next Docker stage");
+    };
     assert!(
         nook_source.contains("COPY nook-app/nook-platform/nook-wasm nook-wasm")
             && nook_source.contains(
@@ -753,10 +755,12 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
         "nook-wasm source compilation must not share a Cargo invocation with the companion"
     );
 
-    let companion_source = dockerfile
+    let Some(companion_source) = dockerfile
         .split_once("FROM builder-wasm-source-base AS builder-companion-wasm-source")
         .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
-        .expect("companion WASM source stage must be delimited by the next Docker stage");
+    else {
+        panic!("companion WASM source stage must be delimited by the next Docker stage");
+    };
     assert!(
         companion_source
             .contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm")
@@ -767,10 +771,12 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
         "companion WASM source compilation must not share a Cargo invocation with nook-wasm"
     );
 
-    let nook_build = dockerfile
+    let Some(nook_build) = dockerfile
         .split_once("FROM builder-nook-wasm-source AS builder-nook-wasm-build")
         .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
-        .expect("nook-wasm build stage must be delimited by the next Docker stage");
+    else {
+        panic!("nook-wasm build stage must be delimited by the next Docker stage");
+    };
     assert!(
         nook_build.contains("nook-wasm/.wasm-source-sha256")
             && !nook_build.contains("nook-companion-wasm/.wasm-source-sha256")
@@ -778,10 +784,12 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
         "nook-wasm build stamps must remain package-specific"
     );
 
-    let companion_build = dockerfile
+    let Some(companion_build) = dockerfile
         .split_once("FROM builder-companion-wasm-source AS builder-companion-wasm-build")
         .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
-        .expect("companion WASM build stage must be delimited by the next Docker stage");
+    else {
+        panic!("companion WASM build stage must be delimited by the next Docker stage");
+    };
     assert!(
         companion_build.contains("nook-companion-wasm/.wasm-source-sha256")
             && !companion_build.contains("nook-wasm/.wasm-source-sha256")

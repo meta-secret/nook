@@ -315,7 +315,7 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> anyhow::Result<()> {
+fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let script = root.read(".github/scripts/compile-deps-cache-fingerprint.sh");
@@ -358,13 +358,14 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
         "compile dependency fingerprint must exclude ordinary product source"
     );
     let compile_dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
-    let dependency_aggregate = compile_dockerfile
+    let Some((dependency_aggregate, _)) = compile_dockerfile
         .split_once("FROM web-deps AS compile-dependencies")
         .and_then(|(_, tail)| {
             tail.split_once("FROM compile-native-dependencies AS compile-native-source")
         })
-        .map(|(stage, _)| stage)
-        .unwrap_or_else(|| panic!("compile dependency aggregate stage is missing"));
+    else {
+        panic!("compile dependency aggregate stage is missing");
+    };
     assert!(
         dependency_aggregate.contains(
             "COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native",
@@ -373,7 +374,6 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
         ) && !dependency_aggregate.contains("COPY nook-app/"),
         "compile dependency aggregate must retain every dependency sibling without product source"
     );
-    Ok(())
 }
 
 #[test]
