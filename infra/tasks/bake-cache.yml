@@ -351,6 +351,11 @@ tasks:
         grep -Fq 'general) restore_lineages=(' "$repo_root/.github/actions/nook-docker-setup/action.yml"
         grep -Fq 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' "$repo_root/.github/actions/nook-docker-setup/action.yml"
         grep -Fq 'GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        grep -Fq 'rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE' "$rust_bake"
+        grep -Fq '${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache",' "$rust_bake"
+        test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",' "$rust_bake")" -eq 0
+        test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true' "$rust_bake")" -eq 0
+        grep -Fq '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE}' "$rust_bake"
         grep -Fq 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' "$repo_root/.github/actions/nook-docker-setup/action.yml"
         grep -Fq 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' "$repo_root/.github/actions/nook-docker-setup/action.yml"
         grep -Fq 'concurrent=true' "$repo_root/.github/actions/nook-docker-setup/action.yml"

@@ -196,16 +196,17 @@ rust_native_deps_input_cache_to = GHA_CACHE_ENABLED != "" && NOOK_RUST_DEPS_INPU
 // native rust-deps: those short-chain and orphan cook RUNs. Longer source-v3
 // indexes embed the cook layers (mode=max), so they are a soft fallback when
 // the fingerprinted deps scope is still empty after a cook-input rotation.
+rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE
 rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE
 
 rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache",
 ] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX}:buildcache,ignore-error=true",

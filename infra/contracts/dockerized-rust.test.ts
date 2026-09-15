@@ -401,6 +401,24 @@ class DockerizedRustContract {
       "nook-app/nook-platform/docker/rust/docker-bake.hcl",
     );
     expect(bake).toContain(
+      'rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE',
+    );
+    expect(bake).toContain(
+      'rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE',
+    );
+    expect(bake).toContain(
+      'type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache',
+    );
+    expect(bake).toContain(
+      'type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE}',
+    );
+    expect(bake).not.toContain(
+      '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",',
+    );
+    expect(bake).not.toContain(
+      '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true',
+    );
+    expect(bake).toContain(
       'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""',
     );
     expect(bake.match(/\$\{pr_cache_export_error_policy\}/g)?.length).toBe(10);
