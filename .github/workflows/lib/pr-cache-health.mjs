@@ -112,6 +112,7 @@ export class PrCacheHealth {
         reasons.push(`${job.id}:buildkit_telemetry_missing`);
       if (!job.buildExpected) warnings.push(`${job.id}:build_not_expected`);
       const steps = record.buildkit.completed_steps;
+      const buildkitHitRate = record.buildkit.cache_hit_rate_percent;
       const imports = record.cache_scope.imports || {
         probes_complete: false,
         availability: [],
@@ -148,12 +149,16 @@ export class PrCacheHealth {
       if (
         job.buildExpected &&
         steps >= this.minimumCompletedSteps &&
-        hasAvailableImport &&
-        record.buildkit.cache_hit_rate_percent < this.minimumBuildkitHitRate
-      )
-        reasons.push(
-          `${job.id}:buildkit_cache_regression:${record.buildkit.cache_hit_rate_percent}<${this.minimumBuildkitHitRate}`,
-        );
+        hasAvailableImport
+      ) {
+        if (typeof buildkitHitRate !== "number") {
+          reasons.push(`${job.id}:buildkit_cache_rate_missing`);
+        } else if (buildkitHitRate < this.minimumBuildkitHitRate) {
+          reasons.push(
+            `${job.id}:buildkit_cache_regression:${buildkitHitRate}<${this.minimumBuildkitHitRate}`,
+          );
+        }
+      }
       return {
         ...job,
         telemetry_complete: record.collection.complete,
@@ -163,7 +168,9 @@ export class PrCacheHealth {
             records: record.buildkit.build_record_count,
             completed_steps: steps,
             cached_steps: record.buildkit.cached_steps,
-            cache_hit_rate_percent: record.buildkit.cache_hit_rate_percent,
+            ...(typeof buildkitHitRate === "number"
+              ? { cache_hit_rate_percent: buildkitHitRate }
+              : {}),
           },
         },
         scopes: record.cache_scope,
