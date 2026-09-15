@@ -288,6 +288,95 @@ void test("requires remote write evidence only when compiler misses occur", () =
   assert.equal(cachedModel.gate.verdict, "pass");
 });
 
+void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fallback telemetry", () => {
+  const unavailable = telemetry("wasm-node-test", {
+    cache_backend: {
+      kind: "direct_compile",
+      persistent: false,
+      reason: "credentials_unavailable",
+    },
+    sccache: {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "fallback", reason: "credentials_unavailable" },
+      snapshots: [],
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "wasm-node-test",
+        result: "success",
+        buildExpected: true,
+        readOnly: false,
+      },
+    ],
+    telemetry: [unavailable],
+  });
+
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(
+    model.gate.reasons.includes("wasm-node-test:sccache_unavailable"),
+  );
+  assert.ok(
+    model.gate.reasons.includes(
+      "wasm-node-test:sccache_fallback:credentials_unavailable",
+    ),
+  );
+});
+
+void test("does not require sccache for the web-only verification job", () => {
+  const webOnly = telemetry("verify", {
+    cache_backend: {
+      kind: "direct_compile",
+      persistent: false,
+      reason: "credentials_unavailable",
+    },
+    sccache: {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [{ id: "verify", result: "success", buildExpected: true, readOnly: false }],
+    telemetry: [webOnly],
+  });
+
+  assert.equal(model.gate.verdict, "pass");
+});
+
 void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "nook-cache-health-"),
@@ -320,6 +409,10 @@ void test("PR workflow covers every BuildKit-producing job without another build
   );
   const telemetryAction = fs.readFileSync(
     ".github/actions/nook-cache-telemetry/action.yml",
+    "utf8",
+  );
+  const productDockerfile = fs.readFileSync(
+    "nook-app/nook-platform/docker/rust/product.Dockerfile",
     "utf8",
   );
   assert.match(
@@ -378,5 +471,26 @@ void test("PR workflow covers every BuildKit-producing job without another build
   assert.match(
     telemetryAction,
     /cache telemetry baseline unavailable[\s\S]*unavailable[\s\S]*--output "\$output"/i,
+  );
+  assert.match(
+    workflow,
+    /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\}/,
+  );
+  const wasmNodeJob = workflow.slice(
+    workflow.indexOf("  wasm-node-test:"),
+    workflow.indexOf("  verify:", workflow.indexOf("  wasm-node-test:")),
+  );
+  for (const input of [
+    "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+    "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+    "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
+    "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
+    'require-sccache: "true"',
+  ]) {
+    assert.match(wasmNodeJob, new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(
+    productDockerfile,
+    /FROM builder-wasm-handoff AS builder-wasm\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n    echo "nook-wasm declared coverage tests:/,
   );
 });

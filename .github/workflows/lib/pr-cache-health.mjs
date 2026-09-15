@@ -70,6 +70,11 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
+      // Web verification produces BuildKit telemetry but no Rust compiler
+      // requests. Keep its intentionally unavailable sccache summary a
+      // warning-free non-applicable state while compiler-bearing jobs fail
+      // closed when their cache authority disappears.
+      const compilerExpected = job.buildExpected && job.id !== "verify";
       if (job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
@@ -88,6 +93,12 @@ export class PrCacheHealth {
       CacheTelemetry.validateTelemetryRecord(record);
       if (!record.collection.complete)
         reasons.push(`${job.id}:telemetry_incomplete`);
+      if (compilerExpected && record.sccache.runtime_mode === "UNAVAILABLE")
+        reasons.push(`${job.id}:sccache_unavailable`);
+      if (compilerExpected && record.sccache.fallback.state === "fallback")
+        reasons.push(
+          `${job.id}:sccache_fallback:${record.sccache.fallback.reason}`,
+        );
       if (record.sccache.cache_errors > 0)
         reasons.push(`${job.id}:sccache_errors:${record.sccache.cache_errors}`);
       if (record.sccache.cache_write_errors > 0)
