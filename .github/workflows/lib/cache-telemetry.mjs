@@ -25,7 +25,9 @@ export class CacheScopeTelemetry {
       scope: !cacheEnabled
         ? "local-only"
         : scopeSuffix
-          ? `exact${scopeSuffix}`
+          ? scopeSuffix.startsWith("-pr-")
+            ? `pull-request${scopeSuffix}`
+            : `exact${scopeSuffix}`
           : "main",
       compile_dependencies: {
         scope: "",

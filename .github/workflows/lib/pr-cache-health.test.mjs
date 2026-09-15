@@ -90,7 +90,7 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
 void test("tracks image consumers without requiring BuildKit telemetry", () => {
   const skipped = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "ui-demo", result: "skipped", buildExpected: false, readOnly: true },
+      { id: "ui-demo", result: "skipped", buildExpected: false, readOnly: true, consumer: true },
     ],
     telemetry: [],
   });
@@ -99,12 +99,21 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
 
   const failed = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "extension-e2e", result: "failure", buildExpected: false, readOnly: true },
+      { id: "extension-e2e", result: "failure", buildExpected: false, readOnly: true, consumer: true },
     ],
     telemetry: [],
   });
-  assert.equal(failed.gate.verdict, "fail");
-  assert.ok(failed.gate.reasons.includes("extension-e2e:upstream_failure_or_timeout"));
+  assert.equal(failed.gate.verdict, "pass");
+  assert.ok(failed.warnings.includes("extension-e2e:consumer_failure_requires_log_classification"));
+
+  const cancelled = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "full-e2e-shard", result: "cancelled", buildExpected: false, readOnly: true, consumer: true },
+    ],
+    telemetry: [],
+  });
+  assert.equal(cancelled.gate.verdict, "fail");
+  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_timeout_or_cancelled"));
 });
 
 void test("records a legitimate cold build without applying the warm threshold", () => {

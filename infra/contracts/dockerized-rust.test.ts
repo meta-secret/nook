@@ -291,7 +291,7 @@ class DockerizedRustContract {
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        const exactScopeSuffix = `-git-${"a".repeat(40)}`;
+        const exactScopeSuffix = "-pr-1";
         expect(values).toContain(
           `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
         );
@@ -318,8 +318,11 @@ class DockerizedRustContract {
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls.trim().split("\n")).toHaveLength(4);
           expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-deps-v1");
+          expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
     } finally {
@@ -970,7 +973,7 @@ test(
   contract.workflowTooling.bind(contract),
 );
 test(
-  "ARC probes consumed exact-SHA caches without exporting registry refs",
+  "ARC updates and restores the stable isolated PR cache lane",
   contract.arcCacheSelection.bind(contract),
 );
 test(

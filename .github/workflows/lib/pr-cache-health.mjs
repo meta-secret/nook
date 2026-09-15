@@ -10,6 +10,7 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {string} result
  * @property {boolean} buildExpected
  * @property {boolean} readOnly
+ * @property {boolean} [consumer]
  */
 /**
  * @typedef {object} CacheTelemetryRecord
@@ -52,9 +53,13 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
-      if (
-        job.result !== "success" &&
-        !(job.result === "skipped" && !job.buildExpected)
+      if (job.consumer && job.result === "cancelled")
+        reasons.push(`${job.id}:consumer_timeout_or_cancelled`);
+      else if (job.consumer && job.result === "failure")
+        warnings.push(`${job.id}:consumer_failure_requires_log_classification`);
+      else if (
+        !job.consumer &&
+        job.result !== "success"
       )
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {

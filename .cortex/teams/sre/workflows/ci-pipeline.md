@@ -77,9 +77,11 @@ and manual ecosystem execution in one Actions run named `CI`.
   extension, and full-browser consumers. Skipped optional consumers are
   neutral; a selected consumer failure or timeout activates the Docker Cache
   Specialist even when its producer completed successfully.
-- ARC PR jobs retain the requested exact-commit restore scope even though they
-  do not export the registry graph. Restore selection and export authority are
-  independent; Main remains the fallback when the exact graph is absent.
+- Each ordinary PR uses one isolated `-pr-<number>` cache lane. All seven
+  producers, including ARC jobs, may update their own target ref after a
+  successful solve, so a fresh shard and the next PR head restore the prior
+  graph. Main remains read-only fallback and remote `build:compile` retains its
+  immutable `-git-<sha>` proof identity.
 
 **`repository-policy.yml`**
 

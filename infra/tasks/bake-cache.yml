@@ -677,14 +677,14 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario U ok"
 
-        echo "== Scenario Q: inline PR verification publishes a generic exact leaf =="
+        echo "== Scenario Q: successive PR heads share an isolated cache lane =="
         # A standalone PR workflow first restores its unchanged dependency/tool
-        # stages from trusted Main. The verified build writes only its isolated
-        # exact-head scope. A fresh retry at that SHA must restore the source
-        # leaf as well as the Main-seeded parent.
+        # stages from trusted Main. The verified build updates only its isolated
+        # PR-number scope. A fresh successor head must restore unchanged source
+        # vertices from that lane while changed vertices execute.
         printf '%s\n' "$parent_input_orig" >"$parent_input"
         printf 'pr-source-edit\n' >"$leaf_input"
-        exact_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        exact_pr_suffix="-pr-42"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1

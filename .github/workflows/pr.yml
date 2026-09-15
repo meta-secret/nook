@@ -636,9 +636,9 @@ jobs:
               {"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},
               {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false},
-              {"id":"ui-demo","result":"${{ needs.ui-demo.result }}","buildExpected":false,"readOnly":true},
-              {"id":"extension-e2e","result":"${{ needs.extension-e2e.result }}","buildExpected":false,"readOnly":true},
-              {"id":"full-e2e-shard","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true}
+              {"id":"ui-demo","result":"${{ needs.ui-demo.result }}","buildExpected":false,"readOnly":true,"consumer":true},
+              {"id":"extension-e2e","result":"${{ needs.extension-e2e.result }}","buildExpected":false,"readOnly":true,"consumer":true},
+              {"id":"full-e2e-shard","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true,"consumer":true}
             ]
         run: node .github/workflows/lib/pr-cache-health.mjs
 

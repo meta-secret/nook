@@ -57,8 +57,11 @@ variable "GHA_CACHE_EXPORT_MODE" {
   default = "max"
 }
 
-// Main keeps this empty. Isolated PR/Remote/local writes use -git-<40-char-sha> so each
-// commit owns a distinct remote-buildcache index and cannot replace trusted Main refs.
+// Main keeps this empty. Ordinary PR jobs use a stable -pr-<number> lane so
+// successive heads and fresh ARC shards reuse the previous verified graph.
+// Remote build:compile and local publications retain immutable -git-<sha>
+// identities. Every nonempty suffix writes only remote-buildcache and cannot
+// replace trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }

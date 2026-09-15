@@ -57,6 +57,13 @@ void test("distinguishes exact, Main, and local-only BuildKit scope selection", 
     new CacheScopeTelemetry({ GHA_CACHE_ENABLED: "1" }).record().scope,
     "main",
   );
+  assert.equal(
+    new CacheScopeTelemetry({
+      GHA_CACHE_ENABLED: "1",
+      GHA_CACHE_SCOPE_SUFFIX: "-pr-42",
+    }).record().scope,
+    "pull-request-pr-42",
+  );
   assert.equal(new CacheScopeTelemetry({}).record().scope, "local-only");
 });
 
