@@ -205,8 +205,7 @@ export class CacheTelemetry {
     return left < right ? -1 : left > right ? 1 : 0;
   }
 
-  /**
-   * @param {readonly BuildHistoryRecord[]} records
+  /** @param {readonly BuildHistoryRecord[]} records
    * @param {number} [limit]
    * @param {{includeUnfinished?: boolean}} [options]
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
@@ -809,8 +808,7 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    const rawFallback =
-      CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
+    const rawFallback = CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
     const historyFallback =
       CacheTelemetry.extractSccacheFallback(historyEvents);
     sccache.fallback =
