@@ -11,9 +11,12 @@ This is the `loom-structural-experts` profile and produces
 Use this role only when multiple structural terminal-observation streams need a
 shared diagnostic join.
 
-Team Gizmos and Team Agents use the ordinary trusted handoff described by the
-[AI team contract](../AGENTS.md#trusted-in-thread-handoffs). This role does not
-add a peer-authentication or peer-integrity protocol.
+### Trusted handoff boundary
+
+The [AI team contract](../AGENTS.md#trusted-in-thread-handoffs) describes the
+ordinary trusted handoff. Team Gizmos use that handoff. Team Agents use that
+handoff. This role does not add a peer-authentication protocol. It does not add
+a peer-integrity protocol.
 
 ## Problem pattern
 

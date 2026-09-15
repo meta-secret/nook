@@ -29,6 +29,8 @@ and boundary checks; it does not add worker lifecycle or recovery machinery.
 
 ## Agent action references
 
+### Document identifiers
+
 `.cortex/identifiers.json` assigns stable compact identifiers to Cortex
 categories and selected documents or headings. Category IDs use `CX-<NAME>`;
 document and item IDs add a five-character random suffix. Published IDs are
@@ -36,6 +38,8 @@ never removed or reassigned when a title or locator changes. Each entry carries
 an immutable document-authority locator. The Cortex audit compares those
 assignments with the registry at the pull request's exact published base
 commit. The audit fails closed when an established base cannot be resolved.
+
+### Lifecycle activity
 
 Every persisted agent-attempt event receives an action ID derived from its
 one-based event sequence, such as `a0002`. Runtime activities are live,
@@ -45,14 +49,21 @@ They may attach bounded registered Cortex references whose relation is one of
 to stderr without writing them to `events.jsonl`; optional display failure
 cannot block the lifecycle journal.
 
+### Persisted evidence
+
 Persisted records expose replayable lifecycle and terminal handoff evidence,
 not private reasoning. Live activity counts are diagnostic signals and are not
 an effort, quality, or billing measure.
 
-Lifecycle replay is an event-sourcing and projection concern. It is not a
-security check against a trusted Team Gizmo or Team Agent. The document-
-authority locator is a Cortex-document reference. It is not a credential,
-signature, digest, or authority token for internal agent handoffs.
+### Replay boundary
+
+Lifecycle replay is an event-sourcing concern. It is also a projection concern.
+It is not a security check against a trusted Team Gizmo or Team Agent. The
+document-authority locator is a Cortex-document reference. It is not a
+credential. It is not a signature. It is not a digest. It is not an authority
+token for internal agent handoffs.
+
+### In-thread handoff
 
 Team Gizmos and Team Agents use the ordinary trusted handoff described by the
 [AI team contract](../AGENTS.md#trusted-in-thread-handoffs). The handoff carries

@@ -60,7 +60,7 @@ const AI_TYPESCRIPT_POLICY_ROUTES = [
     path: '.cortex/teams/ai/gizmo/AGENTS.md',
     links: [
       '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
       '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
     ],
   },
@@ -68,7 +68,7 @@ const AI_TYPESCRIPT_POLICY_ROUTES = [
     path: '.cortex/teams/ai/cortex-specialist/AGENTS.md',
     links: [
       '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
       '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
     ],
   },
@@ -76,7 +76,7 @@ const AI_TYPESCRIPT_POLICY_ROUTES = [
     path: '.cortex/teams/ai/loom-specialist/AGENTS.md',
     links: [
       '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
       '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
     ],
   },
@@ -247,7 +247,9 @@ test('renders the complete canonical Cortex context router', () => {
 
 test('routes every AI TypeScript leaf through the minimal policy authorities', () => {
   for (const route of AI_TYPESCRIPT_POLICY_ROUTES) {
-    const document = readFileSync(path.join(REPOSITORY_ROOT, route.path), 'utf8');
+    const document = CortexContextRouterScenario.normalizeMarkdown(
+      readFileSync(path.join(REPOSITORY_ROOT, route.path), 'utf8'),
+    );
     for (const link of route.links) {
       expect(document).toContain(link);
     }
@@ -266,9 +268,8 @@ test('routes every AI TypeScript leaf through the minimal policy authorities', (
 });
 
 test('keeps root and AI universal policy routes canonical', () => {
-  const rootContract = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'),
-    'utf8',
+  const rootContract = CortexContextRouterScenario.normalizeMarkdown(
+    readFileSync(path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'), 'utf8'),
   );
   for (const required of [
     '[function ownership](shared/dynamic-skills/function-ownership.md)',
@@ -283,9 +284,11 @@ test('keeps root and AI universal policy routes canonical', () => {
     expect(rootContract).toContain(required);
   }
 
-  const aiContract = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
-    'utf8',
+  const aiContract = CortexContextRouterScenario.normalizeMarkdown(
+    readFileSync(
+      path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+      'utf8',
+    ),
   );
   for (const required of [
     '[Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)',
