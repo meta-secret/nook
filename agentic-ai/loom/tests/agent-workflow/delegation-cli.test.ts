@@ -437,7 +437,7 @@ describe('delegated agent journal CLI', () => {
         VerifiedAttemptArtifacts.readVerifiedBarrierAttempt(
           verificationRequest,
         ),
-      ).rejects.toThrow('parent authorization failed');
+      ).rejects.toThrow('Agent attempt artifact is invalid');
 
       const unsafeRequest = {
         ...request,

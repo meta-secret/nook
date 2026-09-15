@@ -245,7 +245,7 @@ describe('ordinary delegation run aggregation', () => {
       );
       await expect(
         DelegationRunFinalization.finalizeDelegationRun(incompleteInput),
-      ).rejects.toThrow('parent authorization failed');
+      ).rejects.toThrow('Agent attempt artifact is invalid');
 
       const fixtureInput: FixtureInput = {
         workingDirectory,

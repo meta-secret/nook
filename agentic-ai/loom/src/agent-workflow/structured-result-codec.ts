@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  AgentAttemptParentKind,
   WorkflowArtifactKind,
   WorkflowFindingSeverity,
   WorkflowResultKind,
@@ -113,55 +112,6 @@ const BASE = {
     )
     .meta({ maxItems: 100 }),
 };
-const identityMessage = 'module expert authorization identity is invalid';
-const id = string
-  .max(128, identityMessage)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u, identityMessage);
-const positive = z
-  .int(error('workflow structured result expected an integer'))
-  .positive(identityMessage);
-const AUTHORIZATION = z
-  .strictObject(
-    {
-      task: id,
-      expert: id,
-      attempt: positive,
-      depth: z.union([z.literal(2), z.literal(3)], error(identityMessage)),
-      parent: z.strictObject(
-        {
-          kind: z.literal(
-            AgentAttemptParentKind.AgentAttempt,
-            error(identityMessage),
-          ),
-          task: id,
-          agent: id,
-          attempt: positive,
-        },
-        exact,
-      ),
-    },
-    exact,
-  )
-  .refine(
-    (value) =>
-      value.task !== value.parent.task ||
-      value.attempt !== value.parent.attempt,
-    identityMessage,
-  );
-const AUTHORIZATIONS = z
-  .array(
-    AUTHORIZATION,
-    error('module development plan requires bounded expert authorizations'),
-  )
-  .min(1, 'module development plan requires bounded expert authorizations')
-  .max(100, 'module development plan requires bounded expert authorizations')
-  .refine(
-    (values) =>
-      new Set(values.map((value) => `${value.task}\u0000${value.attempt}`))
-        .size === values.length,
-    'module expert authorization journal storage keys must be unique',
-  )
-  .meta({ uniqueItems: true });
 const continuationMessage =
   'module expert continuation fields require bounded non-empty entries';
 const continuationEntries = strings
@@ -209,7 +159,6 @@ const RESULT_SCHEMAS = {
     {
       ...BASE,
       resultKind: z.literal(WorkflowResultKind.ModuleDevelopmentPlan),
-      moduleExpertAuthorizations: AUTHORIZATIONS,
     },
     exact,
   ),

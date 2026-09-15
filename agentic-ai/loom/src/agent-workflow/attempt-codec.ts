@@ -32,7 +32,7 @@ import {
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-/** Decodes persisted attempt artifacts before lifecycle or authorization logic. */
+/** Decodes persisted attempt artifacts before lifecycle processing. */
 export class AgentAttemptTransport {
   private constructor() {}
 
@@ -68,7 +68,7 @@ export class AgentAttemptTransport {
     );
   }
 
-  /** Decodes V4 and V5 events while preserving the V4 shape verbatim. */
+  /** Decodes V4 and current events while preserving the V4 shape verbatim. */
   static decodeCompatibleEvent(
     serialized: string,
   ): AgentAttemptEvent | LegacyAgentAttemptEvent {
@@ -160,18 +160,11 @@ export class AgentAttemptTransport {
     });
     switch (kind) {
       case AgentAttemptEventKind.AttemptStarted: {
-        const optional = Object.hasOwn(node, 'invocationContextSha256')
-          ? {
-              invocationContextSha256: AgentAttemptTransport.string(
-                AgentAttemptTransport.field(node, 'invocationContextSha256'),
-              ),
-            }
-          : {};
         AgentAttemptTransport.exactKeys({
           node,
-          fields: [...fields, 'kind', ...Object.keys(optional)],
+          fields: [...fields, 'kind'],
         });
-        return { ...metadata, kind, ...optional } as
+        return { ...metadata, kind } as
           AgentAttemptEvent | LegacyAgentAttemptEvent;
       }
       case AgentAttemptEventKind.ResultProjected:
@@ -222,7 +215,7 @@ export class AgentAttemptTransport {
     }
   }
 
-  /** Copies a V4 event into the V5 wire shape with explicitly supplied evidence. */
+  /** Copies a V4 event into the current wire shape with explicitly supplied evidence. */
   static migrateEvent(
     request: AgentAttemptEventMigrationRequest,
   ): AgentAttemptEvent {

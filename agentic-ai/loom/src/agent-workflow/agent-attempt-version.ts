@@ -36,13 +36,23 @@ export class AgentAttemptSchema {
         'Agent attempt journal version 4.0.0 predates feature-head provenance. Migrate the persisted attempt with an explicit feature head before retrying.',
       );
     }
+    if (version === CAPABILITY_BOUND_AGENT_ATTEMPT_WORKFLOW_VERSION) {
+      throw new AgentAttemptSchemaCompatibilityError(
+        'Agent attempt journal version 5.0.0 contains removed internal handoff authority fields. Recreate the persisted attempt with the trusted handoff schema before retrying.',
+      );
+    }
     throw new AgentAttemptSchemaCompatibilityError(
       'Agent attempt journal version is unsupported. Remove or explicitly migrate the persisted attempt before retrying.',
     );
   }
 }
 
-export const CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion = '5.0.0';
+/** Version 5 carried internal authority and invocation-context fields. */
+export const CAPABILITY_BOUND_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion =
+  '5.0.0';
+
+/** Version 6 carries only typed lifecycle events and terminal handoffs. */
+export const CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion = '6.0.0';
 
 /** Version 4 persisted origin/main and pinned-dev provenance, but no feature head. */
 export const BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion =

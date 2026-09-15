@@ -41,16 +41,6 @@ export class AgentAttemptReplay {
     if (!first || first.kind !== AgentAttemptEventKind.AttemptStarted) {
       throw new Error('Agent attempt journal must start with attempt-started.');
     }
-    const moduleExpertAttempt =
-      first.adapter === AgentAttemptAdapterKind.ModuleExpertInvocation;
-    if (
-      moduleExpertAttempt
-        ? !first.invocationContextSha256 ||
-          !/^[0-9a-f]{64}$/u.test(first.invocationContextSha256)
-        : first.invocationContextSha256
-    ) {
-      throw new Error('Agent attempt invocation context binding is invalid.');
-    }
     AgentAttemptSchema.assertCurrent(first.workflowVersion);
     let projectedResult: ProjectionReference | false = false;
     let sawView = false;
@@ -257,13 +247,8 @@ export class AgentAttemptReplay {
   }
 
   private eventHasExactKeys(event: AgentAttemptEvent): boolean {
-    const startFields =
-      event.kind === AgentAttemptEventKind.AttemptStarted &&
-      event.invocationContextSha256
-        ? ['invocationContextSha256']
-        : [];
     const fieldsByKind: Record<AgentAttemptEventKind, readonly string[]> = {
-      [AgentAttemptEventKind.AttemptStarted]: startFields,
+      [AgentAttemptEventKind.AttemptStarted]: [],
       [AgentAttemptEventKind.ResultProjected]: ['result'],
       [AgentAttemptEventKind.ViewProjected]: ['view'],
       [AgentAttemptEventKind.AttemptTerminalRecorded]: [

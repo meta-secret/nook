@@ -108,6 +108,7 @@ test('rejects malformed nested journal metadata before replay', () => {
     { ...started, parent: { kind: AgentAttemptParentKind.AgentAttempt } },
     { ...started, depth: '0' },
     { ...started, adapter: 'future' },
+    { ...started, invocationContextSha256: 'a'.repeat(64) },
     { ...started, unexpected: true },
   ]) {
     expect(() =>

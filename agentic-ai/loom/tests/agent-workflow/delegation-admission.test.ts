@@ -357,7 +357,7 @@ describe('ordinary delegation admission', () => {
     };
     await expect(
       DelegationRunJournal.admitDelegationAttempt(specialistInput),
-    ).rejects.toThrow('parent authorization failed');
+    ).rejects.toThrow('Agent attempt artifact is invalid');
     const expertDeclaration = plan.attempts[1];
     if (!expertDeclaration) throw new Error('Expert declaration is missing.');
     const journalConfiguration: AgentAttemptJournalConfiguration = {

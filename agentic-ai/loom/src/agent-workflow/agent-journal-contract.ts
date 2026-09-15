@@ -9,18 +9,7 @@ import type {
   WorkflowRunId,
   WorkflowVersion,
 } from './domain.ts';
-import type {
-  ModuleExpertJournalAuthority,
-  ModuleExpertRuntimeIdentity,
-  TrustedModuleExpertExecution,
-} from '../module-experts/trusted-runtime.ts';
-import type {
-  StructuralJournalAuthority,
-  StructuralRuntimeIdentity,
-  TrustedStructuralExecution,
-} from '../structural-experts/trusted-runtime.ts';
-export type AgentAttemptJournalAdapter =
-  AgentAttemptAdapterKind.GenericDelegationRecorder;
+export type AgentAttemptJournalAdapter = AgentAttemptAdapterKind;
 
 export type AgentAttemptJournalConfiguration = {
   readonly adapter: AgentAttemptJournalAdapter;
@@ -37,7 +26,6 @@ export type AgentAttemptJournalConfiguration = {
   readonly attempt: WorkflowAttemptNumber;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
-  readonly invocationContextSha256?: string;
   readonly now: () => IsoTimestamp;
   readonly knownCortexIdentifiers?: ReadonlySet<string>;
   readonly compactOutput?: (line: string) => void | Promise<void>;
@@ -45,25 +33,15 @@ export type AgentAttemptJournalConfiguration = {
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
   AgentAttemptJournalConfiguration,
-  'adapter' | 'invocationContextSha256'
-> & {
-  readonly invocationContextSha256: string;
-};
+  'adapter'
+>;
 
 export type CreateModuleExpertAttemptJournalArgs = {
   readonly configuration: ModuleExpertAttemptJournalConfiguration;
-  readonly authority: ModuleExpertJournalAuthority;
-  readonly identity: ModuleExpertRuntimeIdentity;
-};
-
-export type ConfigurationIdentityMatchArgs = {
-  readonly configuration: ModuleExpertAttemptJournalConfiguration;
-  readonly identity: ModuleExpertRuntimeIdentity;
 };
 
 export type FinalizeModuleExpertAttemptArgs<TTask extends string> = {
   readonly terminal: TaskTerminal<TTask>;
-  readonly execution: TrustedModuleExpertExecution;
 };
 
 export type StructuralExpertAttemptJournalConfiguration = Omit<
@@ -73,11 +51,8 @@ export type StructuralExpertAttemptJournalConfiguration = Omit<
 
 export type CreateStructuralExpertAttemptJournalArgs = {
   readonly configuration: StructuralExpertAttemptJournalConfiguration;
-  readonly authority: StructuralJournalAuthority;
-  readonly identity: StructuralRuntimeIdentity;
 };
 
 export type FinalizeStructuralExpertAttemptArgs<TTask extends string> = {
   readonly terminal: TaskTerminal<TTask>;
-  readonly execution: TrustedStructuralExecution;
 };
