@@ -482,6 +482,34 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
   });
 });
 
+void test("a healthy unrelated stage cannot hide an unresolved circuit-open fallback", () => {
+  const log = [
+    '#31 NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
+    '#47 NOOK_SCCACHE_STATS {"stage":"wasm-build","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":12,"cache_hits":12,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"compile_failures":0}',
+  ].join("\n");
+  assert.deepEqual(CacheTelemetry.extractSccacheFallbackFromText(log), {
+    state: "fallback",
+    reason: "cache_circuit_open",
+  });
+});
+
+void test("raw job progress is authoritative for physical cache exporters", () => {
+  const log = [
+    "#18 exporting cache to registry",
+    "#18 preparing build cache for export 2.0s done",
+    "#18 DONE 70.5s",
+    "#18 exporting cache to registry",
+    "#18 sending cache export",
+  ].join("\n");
+  assert.deepEqual(CacheTelemetry.cacheExportFromRawText(log), {
+    attempts: 2,
+    completed: 1,
+    bytes: 0,
+    duration_ms: 70500,
+    incomplete_failures: 1,
+  });
+});
+
 void test("rejects malformed nested telemetry records at the ingress", () => {
   assert.throws(
     () =>

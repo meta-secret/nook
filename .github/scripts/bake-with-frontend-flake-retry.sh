@@ -106,7 +106,9 @@ log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 raw_log="${NOOK_BUILDKIT_RAW_LOG:-}"
 if [ -n "$raw_log" ]; then
   mkdir -p "$(dirname "$raw_log")"
-  : >"$raw_log"
+  # Docker setup truncates this once per job. Every Bake solve appends so raw
+  # progress remains job-authoritative across publication and validation.
+  if [ ! -e "$raw_log" ]; then : >"$raw_log"; fi
 fi
 cleanup() {
   rm -f "$log_file"

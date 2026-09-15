@@ -17,10 +17,10 @@ assert_job_timeout() {
 }
 
 for job in rust wasm wasm-node-test verify; do
-  assert_job_timeout "$repo_root/.github/workflows/pr.yml" "$job" 5
+  assert_job_timeout "$repo_root/.github/workflows/pr.yml" "$job" 7
 done
 for job in dependency-policy deterministic-tests dylint; do
-  assert_job_timeout "$repo_root/.github/workflows/rust-ecosystem-checks.yml" "$job" 5
+  assert_job_timeout "$repo_root/.github/workflows/rust-ecosystem-checks.yml" "$job" 7
 done
 
 echo 'PR Docker producer timeout contract passed'

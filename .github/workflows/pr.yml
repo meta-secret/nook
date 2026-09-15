@@ -80,7 +80,8 @@ jobs:
       inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
     outputs:
       cache-build-expected: ${{ steps.trusted-native.outputs.found != 'true' }}
     steps:
@@ -219,7 +220,8 @@ jobs:
       inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
       cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
@@ -368,7 +370,8 @@ jobs:
       inputs.validation_requested
     needs: wasm
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
     steps:
       - name: Checkout
         if: needs.wasm.outputs.run-node-tests == 'true'
@@ -416,7 +419,8 @@ jobs:
 
   verify:
     name: Web verification
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
     if: >-
       inputs.validation_requested
     needs: [validation-request, wasm]

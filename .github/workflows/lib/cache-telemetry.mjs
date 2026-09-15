@@ -671,8 +671,10 @@ export class CacheTelemetry {
 
   /** @param {string} text @returns {{state: 'active' | 'fallback', reason: string}} */
   static extractSccacheFallbackFromText(text) {
-    let reason = "none";
+    /** @type {Map<string, string>} */
+    const fallbackByVertex = new Map();
     for (const line of text.split(/\r?\n/)) {
+      const vertex = line.match(/^(#[0-9]+)\b/)?.[1] || "unscoped";
       const reportAt = line.indexOf(SCCACHE_MARKER);
       if (reportAt !== -1) {
         try {
@@ -692,7 +694,7 @@ export class CacheTelemetry {
             report.compile_failures === 0 &&
             (report.cache_hits > 0 || report.cache_misses > 0)
           ) {
-            reason = "none";
+            fallbackByVertex.delete(vertex);
           }
         } catch {
           // Partial reports are expected when cancellation interrupts a line.
@@ -705,15 +707,48 @@ export class CacheTelemetry {
           line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
         );
         if (typeof fallback.reason === "string" && fallback.reason) {
-          reason = fallback.reason;
+          fallbackByVertex.set(vertex, fallback.reason);
         }
       } catch {
-        reason = "malformed_fallback_event";
+        fallbackByVertex.set(vertex, "malformed_fallback_event");
       }
     }
-    return reason === "none"
+    const reason = [...fallbackByVertex.values()][0] || "none";
+    return fallbackByVertex.size === 0
       ? { state: "active", reason }
       : { state: "fallback", reason };
+  }
+
+  /** @param {string} text @returns {{attempts:number, completed:number, bytes:number, duration_ms:number, incomplete_failures:number}} */
+  static cacheExportFromRawText(text) {
+    /** @type {Map<string, {completed:boolean, duration_ms:number}>} */
+    const active = new Map();
+    /** @type {Array<{completed:boolean, duration_ms:number}>} */
+    const exports = [];
+    for (const line of text.split(/\r?\n/)) {
+      const start = line.match(/^(#[0-9]+) exporting cache to registry\s*$/i);
+      if (start && !active.has(start[1])) {
+        const record = { completed: false, duration_ms: 0 };
+        active.set(start[1], record);
+        exports.push(record);
+        continue;
+      }
+      const done = line.match(/^(#[0-9]+) DONE ([0-9.]+)s\s*$/);
+      if (!done) continue;
+      const record = active.get(done[1]);
+      if (!record) continue;
+      record.completed = true;
+      record.duration_ms = Math.round(Number(done[2]) * 1000);
+      active.delete(done[1]);
+    }
+    const completed = exports.filter((record) => record.completed).length;
+    return {
+      attempts: exports.length,
+      completed,
+      bytes: 0,
+      duration_ms: exports.reduce((sum, record) => sum + record.duration_ms, 0),
+      incomplete_failures: exports.length - completed,
+    };
   }
 
   /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
@@ -1178,6 +1213,9 @@ export class CacheTelemetry {
     }
 
     const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    if (/^#[0-9]+ exporting cache to registry\s*$/im.test(rawBuildLog)) {
+      buildkit.cache_export = CacheTelemetry.cacheExportFromRawText(rawBuildLog);
+    }
     if (buildkit.cache_export.incomplete_failures > 0) {
       warnings.push(
         `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
