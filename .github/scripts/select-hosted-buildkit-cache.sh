@@ -157,13 +157,14 @@ disable_registry_cache() {
 }
 cache_ref_status() {
   local ref="$1"
+  local request_timeout_seconds="${2:-4}"
   local probe_output
   local probe_status=0
   local failure_class
   probe_output="$(mktemp)"
   # Cache discovery is optional acceleration and must never consume an
   # unbounded share of a validation job.
-  timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
+  timeout "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
   failure_class="$(bash "${NOOK_CACHE_ACTION_PATH:?NOOK_CACHE_ACTION_PATH is required}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
   case "$failure_class" in
   available)
@@ -217,7 +218,7 @@ publish_exact_availability() {
       echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
       ;;
     2)
-      disable_registry_cache
+      cache_probe_failure_class=transient_unavailable
       echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
       ;;
     *) return "$probe_status" ;;
@@ -245,7 +246,7 @@ publish_main_availability() {
       echo "Main cache absent; source-free dependency fallback enabled: $scope"
       ;;
     2)
-      disable_registry_cache
+      cache_probe_failure_class=transient_unavailable
       echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
       ;;
     *) return "$probe_status" ;;
@@ -343,59 +344,73 @@ if [ -n "$scope_suffix" ] \
     restore_candidate_shas+=("$ancestor_sha")
   done
   probe_index=0
+  probe_request_timeout_seconds=4
+  probe_lineage_timeout_seconds=20
   for lineage_spec in "${restore_lineages[@]}"; do
     IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
-    for candidate_index in "${!restore_candidate_suffixes[@]}"; do
-      candidate_suffix="${restore_candidate_suffixes[$candidate_index]}"
-      cache_ref="$registry_host/$exact_repository/$restore_anchor$candidate_suffix:buildcache"
-      probe_file="$restore_probe_dir/$probe_index"
-      (
+    probe_file="$restore_probe_dir/$probe_index"
+    (
+      lineage_deadline=$((SECONDS + probe_lineage_timeout_seconds))
+      : > "$probe_file"
+      for candidate_index in "${!restore_candidate_suffixes[@]}"; do
+        remaining_seconds=$((lineage_deadline - SECONDS))
+        if (( remaining_seconds <= 0 )); then
+          printf '%s|%s|%s\n' '-1' '2' 'lineage_deadline' >> "$probe_file"
+          break
+        fi
+        request_timeout_seconds="$probe_request_timeout_seconds"
+        if (( remaining_seconds < request_timeout_seconds )); then
+          request_timeout_seconds="$remaining_seconds"
+        fi
+        candidate_suffix="${restore_candidate_suffixes[$candidate_index]}"
+        cache_ref="$registry_host/$exact_repository/$restore_anchor$candidate_suffix:buildcache"
         candidate_status=0
-        cache_ref_status "$cache_ref" || candidate_status=$?
-        printf '%s\n' "$candidate_status" > "$probe_file"
-      ) &
-      printf '%s|%s|%s|%s|%s\n' "$probe_index" "$restore_env" "$restore_anchor" "$candidate_index" "$cache_ref" >> "$restore_probe_dir/index"
-      probe_index=$((probe_index + 1))
-    done
+        cache_ref_status "$cache_ref" "$request_timeout_seconds" || candidate_status=$?
+        printf '%s|%s|%s\n' "$candidate_index" "$candidate_status" "$cache_ref" >> "$probe_file"
+        case "$candidate_status" in
+          0|3) break ;;
+        esac
+      done
+    ) &
+    printf '%s|%s|%s\n' "$probe_index" "$restore_env" "$restore_anchor" >> "$restore_probe_dir/index"
+    probe_index=$((probe_index + 1))
   done
   wait || true
 
-  while IFS='|' read -r index restore_env restore_anchor candidate_index cache_ref; do
-    candidate_status="$(cat "$restore_probe_dir/$index")"
-    cache_probe_status_by_ref["$cache_ref"]="$candidate_status"
-    case "$candidate_status" in
-      0)
-        if [ -z "${restore_suffix_by_env[$restore_env]+set}" ]; then
+  while IFS='|' read -r index restore_env restore_anchor; do
+    while IFS='|' read -r candidate_index candidate_status cache_ref; do
+      if [ "$candidate_index" != "-1" ]; then
+        cache_probe_status_by_ref["$cache_ref"]="$candidate_status"
+      fi
+      case "$candidate_status" in
+        0)
           restore_suffix_by_env["$restore_env"]="${restore_candidate_suffixes[$candidate_index]}"
           restore_sha_by_env["$restore_env"]="${restore_candidate_shas[$candidate_index]}"
           echo "Nearest immutable $restore_anchor cache: ${restore_candidate_shas[$candidate_index]}"
-        fi
-        ;;
-      1) ;;
-      2) transient_restore_probe_by_env["$restore_env"]=1 ;;
-      *) rm -rf "$restore_probe_dir"; exit "$candidate_status" ;;
-    esac
+          ;;
+        1) ;;
+        2) transient_restore_probe_by_env["$restore_env"]=1 ;;
+        *) rm -rf "$restore_probe_dir"; exit "$candidate_status" ;;
+      esac
+    done < "$restore_probe_dir/$index"
   done < "$restore_probe_dir/index"
   rm -rf "$restore_probe_dir"
 
-  unresolved_transient_probe=""
-  for restore_env in "${!transient_restore_probe_by_env[@]}"; do
-    if [ -z "${restore_suffix_by_env[$restore_env]+set}" ]; then
-      unresolved_transient_probe=1
-    fi
-  done
-  if [ -n "$unresolved_transient_probe" ]; then
-    disable_registry_cache
-    echo "Immutable lineage discovery was transiently unavailable; disabling registry cache for this job"
-  else
-    for lineage_spec in "${restore_lineages[@]}"; do
-      IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
+  for lineage_spec in "${restore_lineages[@]}"; do
+    IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
+    if [ -n "${restore_suffix_by_env[$restore_env]+set}" ]; then
       selected_suffix="${restore_suffix_by_env[$restore_env]:-$scope_suffix}"
-      printf -v "$restore_env" '%s' "$selected_suffix"
-      echo "$restore_env=$selected_suffix" >> "$GITHUB_ENV"
-    done
-  fi
-  echo "Immutable lineage probes complete: lineages=${#restore_lineages[@]} candidates=${#restore_candidate_suffixes[@]} probe_timeout_seconds=6 concurrent=true"
+    elif [ -n "${transient_restore_probe_by_env[$restore_env]+set}" ]; then
+      selected_suffix=""
+      cache_probe_failure_class=transient_unavailable
+      echo "::warning title=Optional lineage probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$restore_anchor\",\"failure_class\":\"transient_unavailable\",\"action\":\"lineage_main_fallback\"}"
+    else
+      selected_suffix="$scope_suffix"
+    fi
+    printf -v "$restore_env" '%s' "$selected_suffix"
+    echo "$restore_env=$selected_suffix" >> "$GITHUB_ENV"
+  done
+  echo "Immutable lineage probes complete: lineages=${#restore_lineages[@]} candidates=${#restore_candidate_suffixes[@]} request_timeout_seconds=$probe_request_timeout_seconds lineage_timeout_seconds=$probe_lineage_timeout_seconds concurrent_lineages=true"
 
   source_restore_env=""
   case "$cache_selection" in

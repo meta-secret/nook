@@ -18,15 +18,15 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {{job: string}} github
  * @property {{persistent: boolean}} cache_backend
  * @property {{compiler_input?: {fingerprint: string, restore_fingerprint: string}, imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
- * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
- * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
+ * @property {{requests_executed: number, cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
+ * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
  * @property {{complete: boolean}} collection
  */
 /**
  * @typedef {object} PrCacheHealthModel
  * @property {1} schema_version
  * @property {{minimum_buildkit_hit_rate_percent: number, minimum_completed_steps: number}} policy
- * @property {Array<PrCacheJob & {consumer_result?: "success" | "functional_failure" | "timed_out", telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
+ * @property {Array<PrCacheJob & {consumer_result?: "success" | "functional_failure" | "timed_out", telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: {cache_export_ms?: number}, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
  * @property {string[]} warnings
  * @property {{verdict: "pass" | "fail", specialist_activation_required: boolean, reasons: string[]}} gate
  */
@@ -119,6 +119,10 @@ export class PrCacheHealth {
         reasons.push(`${job.id}:buildkit_telemetry_missing`);
       if (!job.buildExpected) warnings.push(`${job.id}:build_not_expected`);
       const steps = record.buildkit.completed_steps;
+      const buildkitHitRate =
+        typeof record.buildkit.cache_hit_rate_percent === "number"
+          ? record.buildkit.cache_hit_rate_percent
+          : 0;
       const imports = record.cache_scope.imports || {
         probes_complete: false,
         availability: [],
@@ -155,10 +159,10 @@ export class PrCacheHealth {
         job.buildExpected &&
         steps >= this.minimumCompletedSteps &&
         hasAvailableImport &&
-        record.buildkit.cache_hit_rate_percent < this.minimumBuildkitHitRate
+        buildkitHitRate < this.minimumBuildkitHitRate
       )
         reasons.push(
-          `${job.id}:buildkit_cache_regression:${record.buildkit.cache_hit_rate_percent}<${this.minimumBuildkitHitRate}`,
+          `${job.id}:buildkit_cache_regression:${buildkitHitRate}<${this.minimumBuildkitHitRate}`,
         );
       return {
         ...job,
@@ -170,7 +174,7 @@ export class PrCacheHealth {
             records: record.buildkit.build_record_count,
             completed_steps: steps,
             cached_steps: record.buildkit.cached_steps,
-            cache_hit_rate_percent: record.buildkit.cache_hit_rate_percent,
+            cache_hit_rate_percent: buildkitHitRate,
           },
         },
         scopes: record.cache_scope,
@@ -262,7 +266,11 @@ export class PrCacheHealth {
         const entryPath = path.join(currentDirectory, entry.name);
         if (entry.isDirectory()) directories.push(entryPath);
         else if (entry.isFile() && entry.name.endsWith(".json"))
-          telemetry.push(JSON.parse(fs.readFileSync(entryPath, "utf8")));
+          telemetry.push(
+            CacheTelemetry.validateTelemetryRecord(
+              JSON.parse(fs.readFileSync(entryPath, "utf8")),
+            ),
+          );
       }
     }
     return telemetry;
@@ -270,12 +278,13 @@ export class PrCacheHealth {
 
   /** @param {string} directory @returns {Map<string, "success" | "functional_failure" | "timed_out">} */
   static readConsumerResults(directory) {
+    /** @type {Map<string, "success" | "functional_failure" | "timed_out">} */
     const results = new Map();
     if (!fs.existsSync(directory)) return results;
     const pending = [directory];
     while (pending.length > 0) {
       const current = pending.pop();
-      if (!current) continue;
+      if (typeof current !== "string") continue;
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
         const entryPath = path.join(current, entry.name);
         if (entry.isDirectory()) pending.push(entryPath);
@@ -287,10 +296,13 @@ export class PrCacheHealth {
             .readFileSync(entryPath, "utf8")
             .trim()
             .split(/\s+/, 2);
+          if (!identity) continue;
           if (
-            identity &&
-            ["success", "functional_failure", "timed_out"].includes(result)
-          ) results.set(identity, result);
+            result === "success" ||
+            result === "functional_failure" ||
+            result === "timed_out"
+          )
+            results.set(identity, result);
         }
       }
     }
@@ -302,7 +314,7 @@ export class PrCacheHealth {
     const output = process.env.NOOK_PR_CACHE_HEALTH_JSON || "";
     const summary = process.env.NOOK_PR_CACHE_HEALTH_MARKDOWN || "";
     const consumerDirectory = process.env.NOOK_PR_CACHE_CONSUMER_DIR || "";
-    const jobs = JSON.parse(process.env.NOOK_PR_CACHE_JOBS || "[]");
+    const jobs = PrCacheHealth.parseJobs(process.env.NOOK_PR_CACHE_JOBS || "[]");
     if (!directory || !output || !summary)
       throw new Error("cache-health paths are required");
     const model = new PrCacheHealth().evaluate({
@@ -324,6 +336,38 @@ export class PrCacheHealth {
       );
       process.exitCode = 1;
     }
+  }
+
+  /** @param {string} serialized @returns {PrCacheJob[]} */
+  static parseJobs(serialized) {
+    /** @type {unknown} */
+    const parsed = JSON.parse(serialized);
+    if (!Array.isArray(parsed))
+      throw new Error("cache-health jobs must be an array");
+    return parsed.map((job) => {
+      /** @type {unknown} */
+      const candidate = job;
+      if (
+        !CacheTelemetry.isJsonRecord(candidate) ||
+        typeof candidate.id !== "string" ||
+        typeof candidate.result !== "string" ||
+        typeof candidate.buildExpected !== "boolean" ||
+        typeof candidate.readOnly !== "boolean"
+      )
+        throw new Error("cache-health job is invalid");
+      return {
+        id: candidate.id,
+        result: candidate.result,
+        buildExpected: candidate.buildExpected,
+        readOnly: candidate.readOnly,
+        ...(typeof candidate.consumer === "boolean"
+          ? { consumer: candidate.consumer }
+          : {}),
+        ...(typeof candidate.consumerIdentity === "string"
+          ? { consumerIdentity: candidate.consumerIdentity }
+          : {}),
+      };
+    });
   }
 }
 

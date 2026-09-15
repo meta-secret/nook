@@ -832,7 +832,7 @@ export class CacheTelemetry {
   /**
    * @param {unknown} record
    * @param {TelemetryIdentityExpectation} [expected]
-   * @returns {JsonRecord}
+   * @returns {CacheTelemetryRecord}
    */
   static validateTelemetryRecord(record, expected = {}) {
     if (!CacheTelemetry.isJsonRecord(record))
@@ -1034,7 +1034,7 @@ export class CacheTelemetry {
     ) {
       throw new Error("telemetry collection.failures must be an array");
     }
-    return record;
+    return /** @type {CacheTelemetryRecord} */ (record);
   }
 
   /**

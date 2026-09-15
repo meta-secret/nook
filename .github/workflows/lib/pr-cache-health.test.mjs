@@ -150,7 +150,10 @@ void test("uses explicit per-consumer results without inferring matrix timeouts"
     consumerResults: new Map([["full-e2e-shard-1", "success"]]),
   });
   assert.equal(successDespiteAggregateFailure.gate.verdict, "pass");
-  assert.equal(successDespiteAggregateFailure.jobs[0].consumer_result, "success");
+  assert.deepEqual(
+    successDespiteAggregateFailure.jobs.map((job) => job.consumer_result),
+    ["success"],
+  );
   assert.ok(successDespiteAggregateFailure.warnings.includes("full-e2e-shard-1:consumer_success_aggregate_failure"));
   assert.match(PrCacheHealth.renderMarkdown(successDespiteAggregateFailure), /consumer: success/);
 });
@@ -275,6 +278,19 @@ void test("reads browser consumer results recursively", () => {
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+void test("admits only typed cache-health job records", () => {
+  assert.deepEqual(
+    PrCacheHealth.parseJobs(
+      '[{"id":"rust","result":"success","buildExpected":true,"readOnly":false}]',
+    ),
+    [{ id: "rust", result: "success", buildExpected: true, readOnly: false }],
+  );
+  assert.throws(
+    () => PrCacheHealth.parseJobs('[{"id":"rust"}]'),
+    /cache-health job is invalid/,
+  );
 });
 
 void test("PR workflow covers every BuildKit-producing job without another build", () => {

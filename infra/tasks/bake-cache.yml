@@ -348,18 +348,20 @@ tasks:
         grep -Fq 'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""' "$rust_bake"
         grep -Fq 'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"' "$repo_root/nook-app/docker-bake.hcl"
         test "$(grep -Fc 'timeout=${cache_export_timeout}' "$repo_root/nook-app/nook-web/docker/toolchain.docker-bake.hcl")" -eq 3
-        grep -Fq 'general) restore_lineages=(' "$repo_root/.github/actions/nook-docker-setup/action.yml"
-        grep -Fq 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' "$repo_root/.github/actions/nook-docker-setup/action.yml"
-        grep -Fq 'GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        cache_setup="$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
+        grep -Fq 'general) restore_lineages=(' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3' "$cache_setup"
         grep -Fq 'rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE' "$rust_bake"
         grep -Fq '${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache",' "$rust_bake"
         test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",' "$rust_bake")" -eq 0
         test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true' "$rust_bake")" -eq 0
         grep -Fq '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE}' "$rust_bake"
-        grep -Fq 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' "$repo_root/.github/actions/nook-docker-setup/action.yml"
-        grep -Fq 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' "$repo_root/.github/actions/nook-docker-setup/action.yml"
-        grep -Fq 'concurrent=true' "$repo_root/.github/actions/nook-docker-setup/action.yml"
-        ! grep -Fq 'restore_anchor_set_available' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        grep -Fq 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' "$cache_setup"
+        grep -Fq 'concurrent_lineages=true' "$cache_setup"
+        grep -Fq 'lineage_main_fallback' "$cache_setup"
+        ! grep -Fq 'restore_anchor_set_available' "$cache_setup"
         grep -Fq 'GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != ""' "$rust_bake"
         awk '
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {

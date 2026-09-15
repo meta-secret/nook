@@ -14,6 +14,7 @@ sccache_publication_contract="$workflows_dir/../../infra/contracts/sccache-publi
 probe_classification_contract="$workflows_dir/../../infra/contracts/compile-cache-probe-classification.test.sh"
 action_run_limit_contract="$workflows_dir/action-run-expression-limit.test.sh"
 cache_probe_route_contract="$workflows_dir/../scripts/remote-cache-probe-route.test.sh"
+lineage_probe_contract="$workflows_dir/../scripts/select-hosted-buildkit-cache.test.sh"
 proof="$workflows_dir/../../infra/tasks/bake-cache.yml"
 remote_taskfile="$workflows_dir/../../.task/remote-execution.yml"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
@@ -21,6 +22,7 @@ bash "$action_run_limit_contract"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (contains(fromJSON('[\"cache:probe:dependency-policy\",\"cache:probe:deterministic\",\"cache:probe:dylint\",\"cache:probe:rust\",\"cache:probe:wasm\",\"cache:probe:wasm-node\",\"cache:probe:web\"]'), inputs.tasks || inputs.task) && 12 || 360) }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
 bash "$cache_probe_route_contract"
+if (( BASH_VERSINFO[0] >= 4 )); then bash "$lineage_probe_contract"; fi
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'build:compile) timeout --kill-after=10s 240s task build:compile ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'SCCACHE_S3_RW_MODE: READ_WRITE' "$remote"
@@ -71,7 +73,7 @@ for secret_binding in \
   'secrets+=id=sccache_s3_secret_key,src=${secret_key_file}'; do
   grep -Fq -- "--set=build-compile.${secret_binding}" "$compile_script"
 done
-for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'general) restore_lineages=(' 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' 'Immutable lineage probes complete:' 'concurrent=true' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
+for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'general) restore_lineages=(' 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' 'Immutable lineage probes complete:' 'request_timeout_seconds=' 'lineage_timeout_seconds=' 'concurrent_lineages=true' 'lineage_main_fallback' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup_policy"
 done
 
@@ -79,7 +81,7 @@ done
 # registry export for ordinary PR jobs, but must retain the requested exact
 # commit scope so a cache published by another runner remains consumable.
 grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup_policy"
-grep -Fq 'timeout 6s docker buildx imagetools inspect "$ref"' "$setup_policy"
+grep -Fq 'timeout "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref"' "$setup_policy"
 grep -Fq 'wait || true' "$setup_policy"
 if grep -Fq -- '-pr-$pr_number' "$setup_policy"; then
   echo 'mutable PR-number cache scope remains' >&2
