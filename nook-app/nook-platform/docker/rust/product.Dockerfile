@@ -794,18 +794,28 @@ COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
 COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
+RUN RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
 
-FROM builder-wasm-handoff AS builder-wasm
+# wasm-pack's Node tests are compiler-bearing. Keep their sccache authority in
+# an isolated source-derived stage; the browser/runtime stage below consumes
+# only the result stamp and never receives cache credentials.
+FROM builder-wasm-handoff AS builder-wasm-node-compiler
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
+    wasm-pack test --node --release nook-wasm \
     && wasm-pack test --node --release nook-companion-wasm \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
+    && test -x "$runner" \
+    && install -D -m 0755 "$runner" /opt/nook/wasm-bindgen-test-runner \
+    && touch /opt/nook/wasm-node-tests-passed
+
+FROM builder-wasm-handoff AS builder-wasm
+COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed
+COPY --from=builder-wasm-node-compiler /opt/nook/wasm-bindgen-test-runner /opt/nook/wasm-bindgen-test-runner
+RUN echo "nook-wasm declared coverage tests: native=82 browser=147" \
+    && runner=/opt/nook/wasm-bindgen-test-runner \
     && test -x "$runner" \
     && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
     && nook_wasm_floor="$(jq -r '.package_lines_percent["nook-wasm"]' nook-core/coverage-floor.json)" \
