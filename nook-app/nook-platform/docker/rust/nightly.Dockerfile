@@ -25,7 +25,21 @@ RUN cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 
-FROM rust-ecosystem-nightly AS rust-dylint-build
+FROM rust-ecosystem-nightly AS rust-dylint-deps
+
+ARG DYLINT_NIGHTLY=nightly-2026-04-16
+
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml
+COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock
+RUN mkdir -p dylint/nook-domain-api/src \
+    && touch dylint/nook-domain-api/src/lib.rs
+ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
+
+FROM rust-dylint-deps AS rust-dylint-build
 
 ARG DYLINT_NIGHTLY=nightly-2026-04-16
 ARG RUST_DYLINT_COVERAGE_FLOOR

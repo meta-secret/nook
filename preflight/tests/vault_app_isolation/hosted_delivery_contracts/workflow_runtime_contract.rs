@@ -106,12 +106,8 @@ impl WorkflowRuntimeContract<'_> {
                 .and_then(|(_, remainder)| remainder.split_once(end_marker).map(|(job, _)| job))
                 .unwrap_or_else(|| panic!("{workflow} must define a bounded WASM producer job"));
             assert!(
-                wasm_job.contains("timeout-minutes: 30"),
-                "{workflow} WASM producer must reserve a 30-minute cold-build and publication envelope"
-            );
-            assert!(
-                !wasm_job.contains("timeout-minutes: 10"),
-                "{workflow} must not reintroduce the 10-minute WASM producer cap"
+                wasm_job.contains("timeout-minutes: 10"),
+                "{workflow} WASM producer must retain its bounded 10-minute execution envelope"
             );
             for required_step in required_steps {
                 assert!(

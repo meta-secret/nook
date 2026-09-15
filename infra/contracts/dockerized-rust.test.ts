@@ -167,6 +167,52 @@ class DockerizedRustContract {
     );
   }
 
+  dylintDependencyCacheAndSccacheMode(): void {
+    const nightly = this.read(
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+    );
+    const product = this.read(
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    const wrapper = this.read(
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
+    );
+    const dependencyStage = nightly.indexOf(
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+    );
+    const dependencyBuild = nightly.indexOf(
+      "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
+      dependencyStage,
+    );
+    const sourceStage = nightly.indexOf(
+      "FROM rust-dylint-deps AS rust-dylint-build",
+    );
+    const sourceCopy = nightly.indexOf(
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
+      sourceStage,
+    );
+    expect(dependencyStage).toBeGreaterThanOrEqual(0);
+    expect(nightly).toContain(
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml",
+    );
+    expect(nightly).toContain(
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock",
+    );
+    expect(nightly).toContain("mkdir -p dylint/nook-domain-api/src");
+    expect(dependencyBuild).toBeGreaterThan(dependencyStage);
+    expect(sourceStage).toBeGreaterThan(dependencyBuild);
+    expect(
+      nightly.slice(dependencyStage, sourceStage),
+    ).not.toContain(
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
+    );
+    expect(sourceCopy).toBeGreaterThan(sourceStage);
+    expect(product).toContain("ENV SCCACHE_CLIENT_SIDE=0");
+    expect(product).not.toContain("ENV SCCACHE_CLIENT_SIDE=1");
+    expect(wrapper).toContain(": \"${SCCACHE_CLIENT_SIDE:=0}\"");
+    expect(wrapper).not.toContain("SCCACHE_CLIENT_SIDE:=1");
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -844,6 +890,10 @@ test(
 test(
   "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
+);
+test(
+  "Dylint dependencies stay source-free and sccache uses server-side mode",
+  contract.dylintDependencyCacheAndSccacheMode.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
