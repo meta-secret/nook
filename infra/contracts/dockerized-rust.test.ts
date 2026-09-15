@@ -307,26 +307,20 @@ class DockerizedRustContract {
       "--mount=type=secret,id=sccache_s3_access_key,required=false";
     const secretMount =
       "--mount=type=secret,id=sccache_s3_secret_key,required=false";
-    const compilerRuns = nodeDeps.split(
-      "RUN --mount=type=secret,id=sccache_s3_access_key,required=false",
-    );
-    expect(compilerRuns).toHaveLength(3);
+    const compilerRuns = nodeDeps
+      .split(/(?=^RUN\b)/m)
+      .filter((run) => run.includes(accessMount));
+    expect(compilerRuns).toHaveLength(2);
     expect(nodeDeps.match(/^RUN\b/gm)).toHaveLength(4);
     const hostCoverage = requiredText(
-      requiredText(compilerRuns, 1, "WASM host coverage stage is missing").split(
-        "\nRUN --mount",
-      ),
+      compilerRuns,
       0,
-      "WASM host coverage stage has no body",
+      "WASM host coverage stage is missing",
     );
     const browserCoverage = requiredText(
-      requiredText(
-        compilerRuns,
-        2,
-        "WASM browser coverage stage is missing",
-      ).split("\n# Source overlay"),
-      0,
-      "WASM browser coverage stage has no body",
+      compilerRuns,
+      1,
+      "WASM browser coverage stage is missing",
     );
     const assertCompilerMounts = (stage: string, runCount: number): void => {
       expect(stage).toContain(accessMount);
@@ -348,11 +342,11 @@ class DockerizedRustContract {
     expect(bunInstall).not.toContain("--mount=type=secret");
 
     const stage = (startMarker: string, endMarker: string): string => {
-      const start = product.indexOf(startMarker);
-      const end = product.indexOf(endMarker, start + startMarker.length);
+      const start = product.indexOf(`\n${startMarker}\n`);
+      const end = product.indexOf(`\n${endMarker}\n`, start + 1);
       expect(start).toBeGreaterThanOrEqual(0);
       expect(end).toBeGreaterThan(start);
-      return product.slice(start, end);
+      return product.slice(start + 1, end + 1);
     };
     const nodeCompilerStage = stage(
       "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
@@ -391,7 +385,7 @@ class DockerizedRustContract {
       "FROM scratch AS wasm-export",
     );
     expect(browserStage).not.toContain("--mount=type=secret");
-    expect(browserStage.match(/^RUN\b/gm)).toHaveLength(0);
+    expect([...browserStage.matchAll(/^RUN\b/gm)]).toHaveLength(0);
 
     const ecosystem = this.read(
       ".github/workflows/rust-ecosystem-checks.yml",
