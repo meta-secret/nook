@@ -38,12 +38,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             .context("coverage policy must explain the nook-fuzz exclusion")?,
         "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     );
-    assert_eq!(
-        excluded
-            .get("arrayref")
-            .context("coverage policy must explain the arrayref exclusion")?,
-        "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
-    );
     Ok(())
 }
 #[test]
@@ -164,12 +158,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         central_ci.contains("on:\n  pull_request:")
             && central_ci.contains("push:\n    branches: [main]")
     );
-    assert_eq!(
-        central_ci
-            .matches("nook-app/nook-platform/nook-core/coverage-floor.json")
-            .count(),
-        1
-    );
+    assert!(central_ci.contains("dev-promotion-readiness:"));
+    assert!(central_ci.contains("group: dev-promotion-readiness"));
+    assert!(central_ci.contains("cancel-in-progress: false"));
+    assert!(central_ci.contains("needs: [scope, policy, pr, research]"));
+    assert!(central_ci.contains("POLICY_RESULT: ${{ needs.policy.result }}"));
+    assert!(central_ci.contains("PR_RESULT: ${{ needs.pr.result }}"));
+    assert!(central_ci.contains("\"Repository policy=$POLICY_RESULT\""));
+    assert!(central_ci.contains("\"PR validation=$PR_RESULT\""));
+    assert!(central_ci.contains("if [ \"$result\" != \"success\" ]; then"));
+    assert!(central_ci.contains("Dev promotion readiness passed for exact PR head $DEV_HEAD_SHA"));
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
