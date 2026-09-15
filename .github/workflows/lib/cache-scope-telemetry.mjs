@@ -22,20 +22,6 @@ export class CacheScopeTelemetry {
         scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
           ? `nook-build-compile-v4${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
           : "",
-        restore_scope: this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX
-          ? `nook-build-compile-v4${this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX}`
-          : "",
-        available: Boolean(
-          this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE,
-        ),
-        write_enabled:
-          !this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE &&
-          this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
-          this.environment.NOOK_COMPILE_CACHE_MODE === "publish",
-        export_enabled:
-          !this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE &&
-          this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
-          this.environment.NOOK_COMPILE_CACHE_MODE === "publish",
       },
       imports: {
         probes_complete:
