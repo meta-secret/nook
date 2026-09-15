@@ -3,43 +3,108 @@ import { RuntimeMessageDeliveryKind } from '../../../../nook-web-extension/src/c
 
 type SendLoginSaveOffer =
   typeof import('../../../../nook-web-extension/src/content/autofill/login-passkey-actions').authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
+type SendLoginSavePending =
+  typeof import('../../../../nook-web-extension/src/content/autofill/login-passkey-actions').authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
 
 const saveMocks = vi.hoisted(() => ({
   sendOffer: vi.fn<SendLoginSaveOffer>(),
+  sendPending: vi.fn<SendLoginSavePending>(),
 }))
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/login-passkey-actions',
   () => ({
-    RuntimeMessageDeliveryKind: { Unavailable: 'unavailable' },
+    RuntimeMessageDeliveryKind: {
+      Delivered: 'delivered',
+      Unavailable: 'unavailable',
+    },
     authenticationRuntimeTransport: {
       sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
       sendLoginSaveActionRuntimeMessage: vi.fn(),
       sendLoginSaveOfferRuntimeMessage: saveMocks.sendOffer,
-      sendLoginSavePendingRuntimeMessage: vi.fn(),
+      sendLoginSavePendingRuntimeMessage: saveMocks.sendPending,
       sendRuntimeMessageWithoutResponse: vi.fn(),
     },
   }),
 )
-import { loginSaveInteraction } from '../../../../nook-web-extension/src/content/autofill/login-save'
+import {
+  loginSaveInteraction,
+  PendingSaveOfferLoadKind,
+} from '../../../../nook-web-extension/src/content/autofill/login-save'
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
+import { OUTCOME_EVIDENCE_POLL_MS } from '../../../../nook-web-extension/src/content/autofill/workflow-ui'
 
 beforeEach(() => {
   saveMocks.sendOffer.mockResolvedValue({
     kind: RuntimeMessageDeliveryKind.Unavailable,
   })
+  saveMocks.sendPending.mockResolvedValue({
+    kind: RuntimeMessageDeliveryKind.Unavailable,
+  })
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   document.body.replaceChildren()
   saveMocks.sendOffer.mockClear()
   saveMocks.sendOffer.mockResolvedValue({
+    kind: RuntimeMessageDeliveryKind.Unavailable,
+  })
+  saveMocks.sendPending.mockClear()
+  saveMocks.sendPending.mockResolvedValue({
     kind: RuntimeMessageDeliveryKind.Unavailable,
   })
   widgetState.busy = false
 })
 
 describe('submitted login capture', () => {
+  test('recovers a save offer staged after the success page performs its first lookup', async () => {
+    vi.useFakeTimers()
+    document.body.innerHTML =
+      '<main data-nook-auth-outcome="success"><p data-testid="mock-auth-success">Authentication complete</p></main>'
+    saveMocks.sendPending
+      .mockResolvedValueOnce({
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: { ok: true, state: 'unavailable' },
+      })
+      .mockResolvedValueOnce({
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: {
+          ok: true,
+          state: 'available',
+          offer: {
+            offerId: 'navigation-race-offer',
+            decision: 0,
+            vaultStoreId: 'vault-1',
+            vaultName: 'Personal',
+          },
+        },
+      })
+
+    const pendingOffer = loginSaveInteraction.loadPendingSaveOffer()
+    await vi.advanceTimersByTimeAsync(OUTCOME_EVIDENCE_POLL_MS)
+
+    await expect(pendingOffer).resolves.toMatchObject({
+      kind: PendingSaveOfferLoadKind.Loaded,
+      offer: { offerId: 'navigation-race-offer' },
+    })
+    expect(saveMocks.sendPending).toHaveBeenCalledTimes(2)
+  })
+
+  test('does not poll for a pending offer on an authentication form', async () => {
+    document.body.innerHTML =
+      '<form><input autocomplete="username" /><input type="password" /></form>'
+    saveMocks.sendPending.mockResolvedValue({
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: { ok: true, state: 'unavailable' },
+    })
+
+    await expect(loginSaveInteraction.loadPendingSaveOffer()).resolves.toEqual({
+      kind: PendingSaveOfferLoadKind.Absent,
+    })
+    expect(saveMocks.sendPending).toHaveBeenCalledOnce()
+  })
+
   test('requires an explicit submitter inside the bounded login root', () => {
     document.body.innerHTML = `<form id="aspnetForm" method="post">
       <main class="login-panel"><input autocomplete="username" value="pilot@example.test" /><input type="password" autocomplete="current-password" value="secret" /><button id="local" type="submit">Sign in</button></main>
