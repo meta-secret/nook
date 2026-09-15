@@ -49,21 +49,95 @@ variable "NOOK_COMPILE_CACHE_MODE" {
   default = "publish"
 }
 
-// Main and hosted publishers retain complete mode=max graphs. ARC jobs already
-// keep the full writable graph in their private local state, so their exact-SHA
-// registry handoff may use mode=min to preserve retries without re-exporting
-// every intermediate record.
+// Main, hosted, and ARC publishers retain complete mode=max graphs. Complete
+// roots are required because a thin PR-lane export can orphan dependency and
+// compiler ancestry on a fresh shard.
 variable "GHA_CACHE_EXPORT_MODE" {
   default = "max"
 }
 
-// Main keeps this empty. Isolated PR/Remote/local writes use -git-<40-char-sha> so each
-// commit owns a distinct remote-buildcache index and cannot replace trusted Main refs.
+// Main keeps this empty. Feature jobs publish immutable -git-<sha> identities.
+// Every nonempty suffix writes only remote-buildcache and cannot replace
+// trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// Isolated git-scoped writes use this to enable cold-scope Main fallback.
+// Reads may select the nearest immutable first-parent cache while writes keep
+// the current head's GHA_CACHE_SCOPE_SUFFIX. Empty preserves Main/local use.
+variable "GHA_CACHE_RESTORE_SCOPE_SUFFIX" {
+  default = ""
+}
+
+// Producer lineages carry explicit restore identities. Hosted setup fills
+// these only after proving the corresponding immutable scope set complete.
+variable "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+restore_cache_scope_suffix = GHA_CACHE_RESTORE_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_SCOPE_SUFFIX : GHA_CACHE_SCOPE_SUFFIX
+
+// Immutable feature writes use this to enable Main fallback.
 // Per-scope exact probes suppress that fallback when an exact ref is present.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""
@@ -166,6 +240,11 @@ variable "NOOK_REGISTRY_CACHE_HOST" {
 // repositories, not tag prefixes: the remote identity can update nook/remote-buildcache/**
 // while it can only read the trusted nook/buildcache/** lineage published by Main.
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
+
+// A PR cache is optional acceleration and must not consume the validation
+// deadline during a degraded registry event. Main publication owns the longer
+// strict window used to refresh the shared fallback.
+cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"
 
 target "_sccache" {
   args = {

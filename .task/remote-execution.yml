@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run named tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>; PUBLISH_COMPILE_CACHE=false for read-only build:compile warm verification).
+    desc: Run named tasks in one configured remote job (PUBLISH_COMPILE_CACHE=false selects read-only build:compile replay).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
       REQUESTED_PUBLISH_COMPILE_CACHE: '{{.PUBLISH_COMPILE_CACHE}}'
@@ -20,14 +20,16 @@ tasks:
 
         requested_tasks="$REQUESTED_REMOTE_TASKS"
 
+        bash .github/scripts/remote-cache-probe-route.sh --validate "$requested_tasks"
+
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
           echo "Remote execution requires a pushed non-main branch." >&2
           exit 2
         fi
-        if [[ "$requested_tasks" == *build:compile* ]]; then
+        if [[ "$requested_tasks" == build:compile* ]]; then
           if [ "$requested_tasks" != "build:compile" ]; then
-            echo "build:compile must be dispatched as the only remote task." >&2
+            echo "build:compile must be dispatched as one exact remote task." >&2
             exit 2
           fi
           if [ "$branch" = "dev" ]; then
@@ -65,15 +67,12 @@ tasks:
           exit 2
         fi
 
-        if [ "$requested_tasks" != "build:compile" ]; then
+        if [[ "$requested_tasks" != build:compile* ]]; then
           .github/scripts/require-current-base.sh origin main
         fi
 
-        workflow_args=(
-          --ref "$branch"
-          --raw-field "tasks=$requested_tasks"
-          --raw-field "source_sha=$local_sha"
-        )
+        workflow_args=(--ref "$branch" --raw-field "source_sha=$local_sha")
+        workflow_args+=(--raw-field "tasks=$requested_tasks")
         if [ "$requested_tasks" = "build:compile" ]; then
           workflow_args+=(--raw-field "publish_compile_cache=$publish_compile_cache")
         fi

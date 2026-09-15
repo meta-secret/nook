@@ -21,7 +21,9 @@ RUN curl -fsSL \
     && rm -rf /tmp/cargo-fuzz.tgz /tmp/cargo-fuzz \
     && cargo fuzz --version
 
-RUN cargo install cargo-dylint dylint-link \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 
@@ -38,14 +40,20 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
 
-FROM rust-dylint-build AS rust-dylint-self-test
+FROM rust-dylint-build AS rust-dylint-self-test-build
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
+      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report --no-run
+
+FROM rust-dylint-self-test-build AS rust-dylint-self-test
 ARG RUST_DYLINT_COVERAGE_FLOOR
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
     && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
     && RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
-      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report \
+      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report --no-clean \
     && toolchain_id="$(rustup show active-toolchain | cut -d' ' -f1)" \
     && test -n "$toolchain_id" \
     && lint_object="dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so" \

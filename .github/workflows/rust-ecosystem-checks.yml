@@ -8,6 +8,13 @@ name: Rust ecosystem checks
 
 on:
   workflow_call:
+    outputs:
+      dependency-policy-result:
+        value: ${{ jobs.dependency-policy.outputs.cache-result }}
+      deterministic-tests-result:
+        value: ${{ jobs.deterministic-tests.outputs.cache-result }}
+      dylint-result:
+        value: ${{ jobs.dylint.outputs.cache-result }}
     inputs:
       native_coverage_provided:
         description: Required sibling native gate covers replication unit tests.
@@ -38,7 +45,10 @@ jobs:
   dependency-policy:
     name: Dependency policy and RustSec
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
+    outputs:
+      cache-result: ${{ steps.cache-result.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -72,10 +82,23 @@ jobs:
       - name: Run dependency policy
         run: task docker:ecosystem:dependency-policy
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-policy
+      - name: Record cache-health job result
+        id: cache-result
+        if: always()
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
+
   deterministic-tests:
     name: Deterministic tests, fuzz, and Kani
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
+    outputs:
+      cache-result: ${{ steps.cache-result.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -108,12 +131,26 @@ jobs:
         env:
           FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
           NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
+          GHA_CACHE_EXPORT_MODE: ${{ github.event_name == 'pull_request' && 'min' || 'max' }}
         run: task docker:ecosystem:smoke
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-smoke
+      - name: Record cache-health job result
+        id: cache-result
+        if: always()
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
 
   dylint:
     name: Dylint repository lints
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    # Five-minute warm SLO plus two minutes for bounded registry publication/cleanup.
+    timeout-minutes: 7
+    outputs:
+      cache-result: ${{ steps.cache-result.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -144,3 +181,15 @@ jobs:
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
       - name: Bake rust-dylint
         run: task docker:ecosystem:dylint
+        env:
+          GHA_CACHE_EXPORT_MODE: ${{ github.event_name == 'pull_request' && 'min' || 'max' }}
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-dylint
+      - name: Record cache-health job result
+        id: cache-result
+        if: always()
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"

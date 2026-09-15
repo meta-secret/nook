@@ -12,17 +12,17 @@
 // the same way nightly/policy were orphaned.
 
 preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX}:buildcache",
 ] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1:buildcache,ignore-error=true",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_RESTORE_PREFLIGHT_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
-preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+preflight_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m",
 ] : []
 

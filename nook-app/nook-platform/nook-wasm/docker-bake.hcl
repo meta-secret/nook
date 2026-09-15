@@ -31,7 +31,27 @@ target "builder-wasm" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_wasm_deps_cache_from
+  # Node verification reaches source-sensitive clippy, package, coverage, and
+  # wasm-pack test stages. Restoring only the dependency graph makes a fresh
+  # runner replay that entire chain even when the verified WASM source graph
+  # already exists.
+  cache-from = rust_wasm_source_cache_from
+}
+
+// Focused remote cache diagnostics compile the package graph without crossing
+// into clippy, Rust tests, or Node-test execution stages.
+target "builder-wasm-build-cache-probe" {
+  inherits = ["builder-wasm"]
+  target   = "builder-wasm-build"
+  cache-to = []
+  output   = ["type=cacheonly"]
+}
+
+// The normal producer publishes this reusable compiler phase before clippy,
+// tests, wasm-bindgen packaging, and artifact export.
+target "builder-wasm-build-publish" {
+  inherits = ["builder-wasm-build-cache-probe"]
+  cache-to = rust_wasm_source_cache_to
 }
 
 target "_nook-rust-fast-common" {
@@ -60,7 +80,7 @@ target "wasm-export" {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
   cache-from = rust_wasm_source_cache_from
-  cache-to   = rust_wasm_source_cache_to
+  cache-to   = []
 }
 
 target "focused-web-artifacts" {

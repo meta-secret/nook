@@ -103,6 +103,13 @@ report_buildkit_cache_diagnostics() {
 
 # BSD/macOS mktemp requires the X template to end the path.
 log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
+raw_log="${NOOK_BUILDKIT_RAW_LOG:-}"
+if [ -n "$raw_log" ]; then
+  mkdir -p "$(dirname "$raw_log")"
+  # Docker setup truncates this once per job. Every Bake solve appends so raw
+  # progress remains job-authoritative across publication and validation.
+  if [ ! -e "$raw_log" ]; then : >"$raw_log"; fi
+fi
 cleanup() {
   rm -f "$log_file"
 }
@@ -110,7 +117,11 @@ trap cleanup EXIT
 
 for attempt in 1 2; do
   set +e
-  "$@" 2>&1 | tee -a "$log_file"
+  if [ -n "$raw_log" ]; then
+    "$@" 2>&1 | tee -a "$log_file" "$raw_log"
+  else
+    "$@" 2>&1 | tee -a "$log_file"
+  fi
   status=${PIPESTATUS[0]}
   set -e
   report_buildkit_cache_diagnostics "$log_file" "$label"

@@ -1,10 +1,94 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
   BuildkitCacheExportTelemetry,
+  CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
+
+void test("records ordinary compile publication boundaries", () => {
+  assert.deepEqual(
+    new CacheScopeTelemetry({
+      GHA_CACHE_WRITE_ENABLED: "1",
+      GHA_CACHE_ENABLED: "1",
+      NOOK_COMPILE_CACHE_MODE: "publish",
+      GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
+      GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+      GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
+      GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX: `-git-${"d".repeat(40)}`,
+      NOOK_COMPILER_INPUT_FINGERPRINT: "compiler-input-current",
+      NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT: "compiler-input-parent",
+    }).record(),
+    {
+      scope: `exact-git-${"b".repeat(40)}`,
+      compile_dependencies: {
+        scope: "",
+        available: false,
+        write_enabled: false,
+        export_enabled: false,
+      },
+      compile_source: {
+        scope: `nook-build-compile-v4-git-${"b".repeat(40)}`,
+        restore_scope: `nook-build-compile-v4-git-${"c".repeat(40)}`,
+        available: true,
+        write_enabled: false,
+        export_enabled: false,
+      },
+      compiler_input: {
+        fingerprint: "compiler-input-current",
+        restore_fingerprint: "compiler-input-parent",
+      },
+      imports: {
+        probes_complete: false,
+        failure_class: "none",
+        availability: [
+          {
+            name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
+            available: true,
+          },
+        ],
+        restore_suffixes: [
+          {
+            name: "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX",
+            suffix: `-git-${"d".repeat(40)}`,
+          },
+        ],
+      },
+    },
+  );
+});
+
+void test("distinguishes exact, Main, and local-only BuildKit scope selection", () => {
+  assert.equal(
+    new CacheScopeTelemetry({
+      GHA_CACHE_ENABLED: "1",
+      GHA_CACHE_SCOPE_SUFFIX: `-git-${"a".repeat(40)}`,
+    }).record().scope,
+    `exact-git-${"a".repeat(40)}`,
+  );
+  assert.equal(
+    new CacheScopeTelemetry({ GHA_CACHE_ENABLED: "1" }).record().scope,
+    "main",
+  );
+  assert.equal(new CacheScopeTelemetry({}).record().scope, "local-only");
+});
+
+void test("records transient optional probe failures without marking probes incomplete", () => {
+  const scope = new CacheScopeTelemetry({
+    GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
+    GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "transient_unavailable",
+    GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "",
+  }).record();
+
+  assert.equal(scope.imports.probes_complete, true);
+  assert.equal(scope.imports.failure_class, "transient_unavailable");
+  assert.equal(scope.compile_dependencies.available, false);
+  assert.equal(scope.compile_source.available, false);
+});
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {
   const record = CacheTelemetry.buildUnavailableTelemetry({
@@ -47,7 +131,7 @@ void test("uses the trailing build ID for Buildx history log lookup", () => {
   assert.equal(CacheTelemetry.historyLogRef("plain-ref"), "plain-ref");
 });
 
-void test("selects a deterministic bounded set of finalized Buildx records", () => {
+void test("selects cancelled Buildx records so completed stage telemetry survives", () => {
   /**
    * @param {string} ref
    * @param {string} completedAt
@@ -84,11 +168,11 @@ void test("selects a deterministic bounded set of finalized Buildx records", () 
 
   assert.deepEqual(
     selection.records.map(({ ref }) => ref),
-    ["newer", "same-a", "same-b"],
+    ["still-running", "newer", "same-a"],
   );
   assert.deepEqual(selection.warnings, [
-    "buildx_records_unfinished_skipped:1",
-    "buildx_records_truncated:3/4",
+    "buildx_records_unfinished_included:1",
+    "buildx_records_truncated:3/5",
   ]);
 });
 
@@ -112,6 +196,10 @@ void test("maps history logs concurrently while preserving record order", async 
 });
 
 void test("accepts raw Buildx progress JSON from either process stream", () => {
+  assert.match(
+    CacheTelemetry.readHistoryEvents.toString(),
+    /events\.length > 0 \|\| \(status === 0/,
+  );
   assert.deepEqual(
     CacheTelemetry.parseRawJsonProgress(
       '{"vertexes":[]}\nnot-json\n{"logs":[{"vertex":"one","data":"eAo="}]}',
@@ -209,6 +297,23 @@ void test("extracts structured registry cache bytes, timings, and incomplete fai
   });
 });
 
+void test("counts one exporter vertex exposed by multiple Bake target records once", () => {
+  const vertex = {
+    digest: "sha256:shared-export",
+    name: "exporting cache to registry",
+    started: "2026-09-13T01:00:00Z",
+    completed: "2026-09-13T01:00:01Z",
+  };
+  const summary = new BuildkitCacheExportTelemetry([
+    { nook_history_ref: "target-a", vertexes: [vertex] },
+    { nook_history_ref: "target-b", vertexes: [vertex] },
+    { nook_history_ref: "target-root", vertexes: [vertex] },
+  ]).summary();
+  assert.equal(summary.attempts, 1);
+  assert.equal(summary.completed, 1);
+  assert.equal(summary.incomplete_failures, 0);
+});
+
 void test("accepts the documented Buildx JSON array and PascalCase fields", () => {
   const record = CacheTelemetry.parseJsonObjects(
     JSON.stringify([
@@ -230,23 +335,37 @@ void test("accepts the documented Buildx JSON array and PascalCase fields", () =
   assert.equal(record.cache_hit_rate_percent, 25);
 });
 
-void test("deduplicates shared Buildx log markers and aggregates sccache hit rate", () => {
+void test("aggregates publish reports with effective READ_WRITE authority", () => {
   const first = {
     stage: "native-clippy",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 12,
     requests_executed: 10,
     cache_hits: 8,
     cache_misses: 2,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 2,
   };
   const second = {
     stage: "wasm-build",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 6,
     requests_executed: 5,
     cache_hits: 3,
     cache_misses: 2,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 2,
   };
   /** @param {object} payload @param {string} vertex @param {string} timestamp */
@@ -266,27 +385,85 @@ void test("deduplicates shared Buildx log markers and aggregates sccache hit rat
   assert.equal(reports.length, 2);
   assert.deepEqual(CacheTelemetry.summarizeSccache(reports), {
     report_count: 2,
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "counters_observed",
     compile_requests: 18,
     requests_executed: 15,
     cache_hits: 11,
     cache_misses: 4,
     cache_errors: 0,
+    cache_write_errors: 0,
     cache_writes: 4,
+    compile_failures: 0,
+    measurement: "sum_of_zero_based_run_snapshots",
+    fallback: { state: "active", reason: "none" },
+    snapshots: reports,
     hit_rate_percent: 73.33,
   });
 });
 
-void test("reports the selected persistent or fallback Redis backend without credentials", () => {
+void test("extracts zero-based sccache snapshots from a cancelled raw build log", () => {
+  const raw =
+    'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"compile_failures":0}\ncancelled\n';
+  const reports = CacheTelemetry.extractSccacheReportsFromText(raw);
+  assert.equal(reports.length, 1);
+  assert.deepEqual(reports.map((report) => report.cache_hits), [8]);
+});
+
+void test("marks client-side zero-write publication counters pending verification", () => {
+  const report = CacheTelemetry.normalizeSccacheReport({
+    stage: "compile-native",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    publication_status: "pending_verification",
+    compile_requests: 0,
+    requests_executed: 279,
+    cache_hits: 0,
+    cache_misses: 275,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+  });
+
+  const summary = CacheTelemetry.summarizeSccache([report]);
+  assert.equal(summary.counter_reliability, "backend_incomplete");
+  assert.equal(summary.publication_status, "pending_verification");
+  assert.equal(summary.requests_executed, 279);
+});
+
+void test("reports the selected persistent or no-secret fallback backend", () => {
+  const fallbackEvents = [
+    {
+      logs: [
+        {
+          data: Buffer.from(
+            'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_transport_unavailable","remote_writes":0}\n',
+          ).toString("base64"),
+        },
+      ],
+    },
+  ];
+  assert.deepEqual(CacheTelemetry.extractSccacheFallback(fallbackEvents), {
+    state: "fallback",
+    reason: "cache_transport_unavailable",
+  });
   assert.deepEqual(
     CacheTelemetry.cacheBackendFromEnvironment({
       NOOK_SCCACHE_BACKEND: "remote",
       NOOK_SCCACHE_BACKEND_REASON: "persistent_service",
-      SCCACHE_S3_RW_MODE: "READ_ONLY",
+      SCCACHE_S3_RW_MODE: "READ_WRITE",
     }),
     {
       kind: "remote",
       persistent: true,
-      reason: "persistent_service_read_only",
+      reason: "persistent_service",
     },
   );
   assert.deepEqual(CacheTelemetry.cacheBackendFromEnvironment({}), {
@@ -294,6 +471,71 @@ void test("reports the selected persistent or fallback Redis backend without cre
     persistent: false,
     reason: "credentials_unavailable",
   });
+});
+
+void test("a healthy terminal snapshot supersedes an earlier vertex fallback", () => {
+  const text = [
+    'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
+    'NOOK_SCCACHE_STATS {"stage":"compile-wasm","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":602,"requests_executed":602,"cache_hits":592,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"compile_failures":0}',
+  ].join("\n");
+
+  assert.deepEqual(CacheTelemetry.extractSccacheFallbackFromText(text), {
+    state: "active",
+    reason: "none",
+  });
+});
+
+void test("a healthy unrelated stage cannot hide an unresolved circuit-open fallback", () => {
+  const log = [
+    '#31 NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
+    '#47 NOOK_SCCACHE_STATS {"stage":"wasm-build","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":12,"cache_hits":12,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"compile_failures":0}',
+  ].join("\n");
+  assert.deepEqual(CacheTelemetry.extractSccacheFallbackFromText(log), {
+    state: "fallback",
+    reason: "cache_circuit_open",
+  });
+});
+
+void test("raw job progress is authoritative for physical cache exporters", () => {
+  const log = [
+    "#18 exporting cache to registry",
+    "#18 preparing build cache for export 2.0s done",
+    "#18 DONE 70.5s",
+    "#18 exporting cache to registry",
+    "#18 sending cache export",
+  ].join("\n");
+  assert.deepEqual(CacheTelemetry.cacheExportFromRawText(log), {
+    attempts: 2,
+    completed: 1,
+    bytes: 0,
+    duration_ms: 70500,
+    incomplete_failures: 1,
+  });
+});
+
+void test("an exact job raw log prevents shared-runner history contamination", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-job-"));
+  const rawLog = path.join(directory, "run-1-job-rust.raw.log");
+  fs.writeFileSync(rawLog, "#0 building with job-local builder\n#1 CACHED\n");
+  const original = CacheTelemetry.listBuildHistory;
+  CacheTelemetry.listBuildHistory = () => {
+    throw new Error("shared Buildx history must not be read");
+  };
+  try {
+    const record = await CacheTelemetry.collectTelemetry({
+      baselineRefs: [],
+      job: "rust",
+      runId: "1",
+      runAttempt: 1,
+      environment: { NOOK_BUILDKIT_RAW_LOG: rawLog },
+    });
+    assert.equal(record.buildkit.build_record_count, 1);
+    assert.equal(record.buildkit.cached_steps, 1);
+    assert.deepEqual(record.buildkit_records, []);
+  } finally {
+    CacheTelemetry.listBuildHistory = original;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 void test("rejects malformed nested telemetry records at the ingress", () => {
@@ -304,5 +546,24 @@ void test("rejects malformed nested telemetry records at the ingress", () => {
         github: "invalid",
       }),
     /telemetry github context is required/,
+  );
+});
+
+void test("rejects an unknown sccache fallback state", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord({
+      ...record,
+      sccache: {
+        ...record.sccache,
+        fallback: { state: "unknown", reason: "fixture" },
+      },
+    }),
+    /telemetry sccache.fallback is invalid/,
   );
 });

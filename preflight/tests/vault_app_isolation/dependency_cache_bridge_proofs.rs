@@ -315,63 +315,30 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> anyhow::Result<()> {
+fn theorem_compile_cache_uses_one_exact_export() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
-    let script = root.read(".github/scripts/compile-deps-cache-fingerprint.sh");
-    let rust_script = root.read(".github/scripts/rust-deps-cache-fingerprint.sh");
-
-    for input in [
-        "nook-app/nook-platform/Cargo.lock",
-        "nook-app/nook-web/nook-web-app/package.json",
-        "nook-app/nook-web/nook-web-app/bun.lock",
-        "nook-app/nook-web/nook-web-research/package.json",
-        "nook-app/nook-web/nook-web-research/bun.lock",
-        "nook-app/nook-platform/docker/rust/compile.Dockerfile",
-        "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
-        "nook-app/nook-web/docker/toolchain.Dockerfile",
-    ] {
-        assert!(
-            script.contains(input) || rust_script.contains(input),
-            "compile dependency fingerprint is missing source-free input {input}"
-        );
-    }
+    let bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
     assert!(
-        setup.contains("NOOK_COMPILE_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
-            && setup.contains(
-                "bash \"${{ github.action_path }}/../../scripts/compile-deps-cache-fingerprint.sh\"",
-            )
-            && setup.contains(
-                "compile_deps_scope=\"nook-rust-compile-deps-v2-$compile_deps_fingerprint\"",
-            )
-            && setup.contains(
-                "publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE \"$compile_deps_scope\"",
-            )
-            && setup.contains(
-                "publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE \"nook-build-compile-v2$scope_suffix\"",
-            ),
-        "compile dependency and source scopes must use immutable fingerprints and publish exact availability"
+        setup.contains("nook-build-compile-v4$scope_suffix")
+            && setup.contains("git rev-list --first-parent")
+            && !setup.contains("GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE")
+            && !setup.contains("NOOK_COMPILE_DEPS_FINGERPRINT_ROOT"),
+        "compile probing must select immutable exact/ancestor source scopes without a second dependency export"
     );
     assert!(
-        !script.contains("nook-app/nook-web/nook-web-app/src")
-            && !script.contains("nook-app/nook-web/nook-web-research/src"),
-        "compile dependency fingerprint must exclude ordinary product source"
+        bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true")
+            && !bake.contains("compile_deps_cache_to")
+            && !bake.contains("target \"build-compile-dependency-cache\""),
+        "the ordinary compile must have one full-graph best-effort export with a per-operation timeout"
     );
     let compile_dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
-    let dependency_aggregate = compile_dockerfile
-        .split_once("FROM web-deps AS compile-dependencies")
-        .and_then(|(_, tail)| {
-            tail.split_once("FROM compile-native-dependencies AS compile-native-source")
-        })
-        .map(|(stage, _)| stage)
-        .unwrap_or_else(|| panic!("compile dependency aggregate stage is missing"));
     assert!(
-        dependency_aggregate.contains(
-            "COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native",
-        ) && dependency_aggregate.contains(
-            "COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm",
-        ) && !dependency_aggregate.contains("COPY nook-app/"),
-        "compile dependency aggregate must retain every dependency sibling without product source"
+        compile_dockerfile.contains("FROM rust-deps AS compile-native-dependencies")
+            && compile_dockerfile.contains("FROM rust-deps AS compile-wasm-dependencies")
+            && compile_dockerfile.contains("FROM web-toolchain AS web-deps")
+            && !compile_dockerfile.contains("AS compile-dependency-cache"),
+        "source-free stages must remain inside the single rooted compile graph"
     );
     Ok(())
 }

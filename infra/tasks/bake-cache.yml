@@ -95,7 +95,8 @@ tasks:
         builder=""
         buildkit_cfg=""
         proof_log=""
-        rust_source_block=""
+        nook_wasm_source_block=""
+        companion_wasm_source_block=""
         parent_input="$sim_dir/inputs/parent.txt"
         parent_input_orig="$(cat "$parent_input")"
         leaf_input="$sim_dir/inputs/leaf.txt"
@@ -126,9 +127,8 @@ tasks:
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
           fi
-          if [ -n "$rust_source_block" ]; then
-            rm -f "$rust_source_block"
-          fi
+          if [ -n "$nook_wasm_source_block" ]; then rm -f "$nook_wasm_source_block"; fi
+          if [ -n "$companion_wasm_source_block" ]; then rm -f "$companion_wasm_source_block"; fi
           rm -rf -- "$trusted_docker_config"
         }
         trap cleanup EXIT
@@ -193,6 +193,9 @@ tasks:
             GHA_CACHE_WRITE_ENABLED="${BAKE_SIM_CACHE_WRITE_ENABLED}" \
             GHA_CACHE_FALLBACK_ENABLED="${BAKE_SIM_CACHE_FALLBACK_ENABLED}" \
             GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
+            GHA_CACHE_RESTORE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_SCOPE_SUFFIX}}" \
+            GHA_CACHE_RESTORE_PARENT_SCOPE_SUFFIX="${BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_SCOPE_SUFFIX}}}" \
+            GHA_CACHE_RESTORE_LEAF_SCOPE_SUFFIX="${BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_SCOPE_SUFFIX}}}" \
             PARENT_OWN_CACHE_ENABLED="${BAKE_SIM_PARENT_OWN_CACHE_ENABLED}" \
             BASE_OWN_CACHE_ENABLED="${BAKE_SIM_BASE_OWN_CACHE_ENABLED}" \
             RUST_DEPS_INPUT_FINGERPRINT="${BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT:-}" \
@@ -295,18 +298,25 @@ tasks:
         echo "== Rust source-boundary cache proof =="
         product_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/product.Dockerfile"
         nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
-        rust_source_block="$(mktemp)"
+        cargo_dylint_install="$(sed -n '/RUN --mount=type=secret,id=sccache_s3_access_key/,/cargo dylint --version/p' "$nightly_dockerfile")"
+        grep -Fq 'id=sccache_s3_secret_key' <<<"$cargo_dylint_install"
+        grep -Fq 'cargo install cargo-dylint dylint-link' <<<"$cargo_dylint_install"
+        nook_wasm_source_block="$(mktemp)"
+        companion_wasm_source_block="$(mktemp)"
         awk '
-          /^FROM builder-wasm-deps AS builder-wasm-source$/ { capture = 1 }
+          /^FROM builder-wasm-source-base AS builder-nook-wasm-source$/ { capture = 1 }
+          /^FROM builder-wasm-source-base AS builder-companion-wasm-source$/ { capture = 0 }
+          capture { print }
+        ' "$product_dockerfile" >"$nook_wasm_source_block"
+        awk '
+          /^FROM builder-wasm-source-base AS builder-companion-wasm-source$/ { capture = 1 }
           /^FROM builder-wasm-source AS builder-wasm-clippy$/ { capture = 0 }
           capture { print }
-        ' "$product_dockerfile" >"$rust_source_block"
-        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm' "$rust_source_block")" -eq 8
-        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm' "$rust_source_block")" -eq 8
-        if grep -Fq -- '-p nook-wasm -p nook-companion-wasm' "$rust_source_block"; then
-          echo "WASM source prewarm must not use a joint package feature graph" >&2
-          exit 1
-        fi
+        ' "$product_dockerfile" >"$companion_wasm_source_block"
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm' "$nook_wasm_source_block")" -eq 1
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm' "$companion_wasm_source_block")" -eq 1
+        ! grep -Fq 'nook-companion-wasm' "$nook_wasm_source_block"
+        ! grep -Fq -- '-p nook-wasm ' "$companion_wasm_source_block"
         awk '
           /^FROM wasm-coverage-toolchain AS builder-wasm-node-deps$/ { node_deps = NR }
           /apt-get install -y --no-install-recommends clang unzip/ { os_tools = NR }
@@ -329,6 +339,43 @@ tasks:
           echo "source-sensitive WASM Node terminal cache wiring remains" >&2
           exit 1
         fi
+        wasm_bake="$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl"
+        rust_bake="$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl"
+        platform_tasks="$repo_root/nook-app/nook-platform/docker/Taskfile.yml"
+        web_tasks="$repo_root/nook-app/nook-web/docker/Taskfile.yml"
+        grep -Fq 'rust-ecosystem-smoke-publish' "$rust_bake"
+        grep -Fq 'mode=max,compression=zstd' "$rust_bake"
+        test "$(sed -n '/^  docker:ci:cache:publish:wasm:/,/^  [[:alnum:]_:.-]*:$/p' "$platform_tasks" | grep -Fc 'buildx bake')" -eq 1
+        if sed -n '/^  docker:ci:cache:publish:wasm:/,/^  [[:alnum:]_:.-]*:$/p' "$platform_tasks" | grep -Fq 'publish:rust-base'; then
+          echo "WASM producer has more than one rooted export" >&2
+          exit 1
+        fi
+        test "$(sed -n '/^  docker:ci:cache:publish:web:/,/^  [[:alnum:]_:.-]*:$/p' "$web_tasks" | grep -Fc 'buildx bake')" -eq 1
+        awk '
+          /^target "builder-wasm"/ { target = 1; next }
+          /^target "/ && target { exit found ? 0 : 1 }
+          target && /cache-from = rust_wasm_source_cache_from/ { found = 1 }
+          END { if (target) exit found ? 0 : 1 }
+        ' "$wasm_bake"
+        test "$(grep -Fc '${pr_cache_export_error_policy}' "$rust_bake")" -eq 11
+        grep -Fq 'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""' "$rust_bake"
+        grep -Fq 'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"' "$repo_root/nook-app/docker-bake.hcl"
+        test "$(grep -Fc 'timeout=${cache_export_timeout}' "$repo_root/nook-app/nook-web/docker/toolchain.docker-bake.hcl")" -eq 3
+        cache_setup="$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
+        grep -Fq 'general) restore_lineages=(' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX|nook-rust-wasm-source-v3' "$cache_setup"
+        grep -Fq 'rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE' "$rust_bake"
+        grep -Fq '${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache",' "$rust_bake"
+        test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",' "$rust_bake")" -eq 0
+        test "$(grep -Fc '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true' "$rust_bake")" -eq 0
+        grep -Fq '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE}' "$rust_bake"
+        grep -Fq 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' "$cache_setup"
+        grep -Fq 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' "$cache_setup"
+        grep -Fq 'concurrent_lineages=true' "$cache_setup"
+        grep -Fq 'lineage_main_fallback' "$cache_setup"
+        ! grep -Fq 'restore_anchor_set_available' "$cache_setup"
+        grep -Fq 'GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != ""' "$rust_bake"
         awk '
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
             lint_copy = NR
@@ -337,7 +384,7 @@ tasks:
           /COPY nook-app\/nook-platform\/ nook-app\/nook-platform\// && !product_copy {
             product_copy = NR
           }
-          /cargo dylint --all -- --all-targets/ { product_lint = NR }
+          /cargo dylint --all -- --locked --all-targets/ { product_lint = NR }
           END {
             exit !(lint_copy < self_test && self_test < product_copy && product_copy < product_lint)
           }
@@ -670,14 +717,14 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario U ok"
 
-        echo "== Scenario Q: inline PR verification publishes a generic exact leaf =="
+        echo "== Scenario Q: successor head restores an immutable ancestor cache =="
         # A standalone PR workflow first restores its unchanged dependency/tool
-        # stages from trusted Main. The verified build writes only its isolated
-        # exact-head scope. A fresh retry at that SHA must restore the source
-        # leaf as well as the Main-seeded parent.
+        # stages from trusted Main. The verified build updates only its isolated
+        # immutable head scope. A fresh successor publishes a different ref but
+        # restores unchanged source vertices from the selected ancestor.
         printf '%s\n' "$parent_input_orig" >"$parent_input"
         printf 'pr-source-edit\n' >"$leaf_input"
-        exact_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        exact_pr_suffix="-git-4242424242424242424242424242424242424242"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
@@ -692,13 +739,66 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${exact_pr_suffix}"
 
-        BAKE_SIM_CACHE_WRITE_ENABLED=
+        ancestor_pr_suffix="$exact_pr_suffix"
+        exact_pr_suffix="-git-4343434343434343434343434343434343434343"
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$exact_pr_suffix"
+        BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX="$ancestor_pr_suffix"
         BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
         create_builder "nook-bake-sim-q-retry-${suffix}"
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${ancestor_pr_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${exact_pr_suffix}"
+        BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX=
         echo "scenario Q ok"
+
+        echo "== Scenario AA: rooted leaf publication embeds its independently restored parent =="
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf 'independent-lineage-leaf\n' >"$leaf_input"
+        parent_lineage_suffix="-git-4545454545454545454545454545454545454545"
+        leaf_lineage_suffix="-git-4646464646464646464646464646464646464646"
+        current_lineage_suffix="-git-4747474747474747474747474747474747474747"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$parent_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX="$parent_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX="$parent_lineage_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-aa-parent-${suffix}"
+        bake_plain "$proof_log" parent-publish
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${parent_lineage_suffix}"
+
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$leaf_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX="$parent_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX="$leaf_lineage_suffix"
+        BAKE_SIM_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-aa-leaf-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-leaf-v1${leaf_lineage_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$current_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX="$parent_lineage_suffix"
+        BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX="$leaf_lineage_suffix"
+        BAKE_SIM_LEAF_EXACT_AVAILABLE=1
+        # Once the complete mode=max leaf exists it is the sole restore root.
+        # Importing a shorter parent sibling as well can orphan the leaf graph
+        # nondeterministically and no longer models the one-export architecture.
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-aa-consumer-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX=
+        BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX=
+        BAKE_SIM_LEAF_EXACT_AVAILABLE=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        echo "scenario AA ok"
 
         echo "== Scenario R: exact-only replay works across linked and internal parents =="
         # Scenario Q proved that merging exact and Main can orphan the exact

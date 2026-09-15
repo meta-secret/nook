@@ -27,7 +27,8 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`.
   - It requests Fast mode with `service_tier: fast`.
   - Each leaf receives a separate issued child worktree.
 - **Specialist paths**
-  - SRE uses `teams/sre/provisioning/` and `teams/sre/cloud-native/`.
+  - SRE uses `teams/sre/provisioning/`, `teams/sre/cloud-native/`, and
+    `teams/sre/docker-cache-specialist/`.
   - Development Core uses `teams/dev-core/rust-core-developer/` and
     `teams/dev-core/rust-auth2-developer/`.
   - Delivery Pipeline uses `teams/delivery-pipeline/gizmo/`,

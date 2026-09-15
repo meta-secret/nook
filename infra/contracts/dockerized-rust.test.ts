@@ -267,6 +267,8 @@ class DockerizedRustContract {
           .replaceAll("${{ inputs.cache-write }}", "false")
           .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
+          .replaceAll("${{ inputs.registry-username }}", "remote-writer")
+          .replaceAll("${{ inputs.registry-password }}", "remote-secret")
           .replaceAll(
             "${{ github.action_path }}",
             join(this.root, ".github/actions/nook-docker-setup"),
@@ -287,44 +289,150 @@ class DockerizedRustContract {
             NOOK_ARC_RUNNER: "1",
             NOOK_REMOTE_TASK_SELECTION: "",
             NOOK_SELECTED_BUILDER: "test-builder",
+            NOOK_REGISTRY_USERNAME: "remote-writer",
+            NOOK_REGISTRY_PASSWORD: "remote-secret",
           },
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        const exactScopeSuffix = `-git-${"a".repeat(40)}`;
+        const exactScopeSuffix = `-git-${this.command({ cwd: this.root, args: ["rev-parse", "HEAD"] }).trim()}`;
         expect(values).toContain(
           `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
         );
         expect(values).toContain("GHA_CACHE_FALLBACK_ENABLED=1\n");
-        expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
+        expect(values).toContain("GHA_CACHE_WRITE_ENABLED=1\n");
         const calls = readFileSync(probes, "utf8");
         if (profile === "connection-only") {
           expect(calls).toBe("");
         } else {
           expect(calls).toContain(`nook/remote-buildcache/`);
           expect(calls).toContain(exactScopeSuffix);
+          expect(values).toContain("GHA_CACHE_EXACT_PROBES_COMPLETE=1\n");
         }
         if (profile === "ecosystem-smoke") {
-          expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
           expect(calls).toContain("nook-rust-ecosystem-fuzz-");
           expect(calls).toContain("nook-rust-ecosystem-kani-");
         } else if (profile.startsWith("ecosystem-")) {
-          expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain(`nook-rust-${profile}-`);
         }
         if (profile === "preflight") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-v1");
+          expect(calls).toContain("nook-web-deps-v1");
+          expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
+      expect(selection.run).toContain("declare -A restore_suffix_by_env=()");
+      expect(selection.run).toContain(
+        '"GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4"',
+      );
+      expect(selection.run).toContain(
+        '"GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1"',
+      );
+      expect(selection.run).toContain("concurrent=true");
+      expect(selection.run).not.toContain("restore_anchor_set_available");
+
+      const secretFreeScript = selection.run
+        .replaceAll("${{ inputs.cache-selection }}", "native")
+        .replaceAll("${{ github.event_name }}", "pull_request")
+        .replaceAll("${{ github.ref }}", "refs/pull/1/merge")
+        .replaceAll("${{ github.event.pull_request.number }}", "1")
+        .replaceAll("${{ inputs.isolated-cache-write }}", "true")
+        .replaceAll("${{ inputs.main-cache-only }}", "true")
+        .replaceAll("${{ inputs.cache-write }}", "false")
+        .replaceAll("${{ inputs.publish-compile-cache }}", "true")
+        .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
+        .replaceAll("${{ inputs.registry-username }}", "")
+        .replaceAll("${{ inputs.registry-password }}", "")
+        .replaceAll(
+          "${{ github.action_path }}",
+          join(this.root, ".github/actions/nook-docker-setup"),
+        );
+      const secretFreeEnvironment = join(temporary, "secret-free-environment");
+      const secretFreeProbes = join(temporary, "secret-free-probes");
+      writeFileSync(secretFreeEnvironment, "");
+      writeFileSync(secretFreeProbes, "");
+      const secretFreeResult = spawnSync("bash", ["-c", secretFreeScript], {
+        cwd: this.root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          PROBE_LOG: secretFreeProbes,
+          GITHUB_ENV: secretFreeEnvironment,
+          GITHUB_WORKSPACE: this.root,
+          NOOK_SELECTED_BUILDER: "test-builder",
+          NOOK_REGISTRY_USERNAME: "",
+          NOOK_REGISTRY_PASSWORD: "",
+        },
+      });
+      expect(secretFreeResult.status, secretFreeResult.stderr).toBe(0);
+      expect(readFileSync(secretFreeProbes, "utf8")).toBe("");
+      expect(readFileSync(secretFreeEnvironment, "utf8")).toContain(
+        "GHA_CACHE_ENABLED=\n",
+      );
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
+  }
+
+  wasmNodeSourceCache(): void {
+    const bake = this.read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    const target = bake.slice(
+      bake.indexOf('target "builder-wasm"'),
+      bake.indexOf('target "_nook-rust-fast-common"'),
+    );
+    expect(target).toContain("cache-from = rust_wasm_source_cache_from");
+    expect(target).not.toContain("cache-from = rust_wasm_deps_cache_from");
+  }
+
+  prCachePublication(): void {
+    const workflow = this.read(".github/workflows/pr.yml");
+    for (const lane of ["native", "WASM", "web"]) {
+      expect(workflow).toContain(`Publish PR-scoped ${lane} BuildKit cache`);
+    }
+    expect(workflow).not.toContain("ARC keeps the verified");
+    const bake = this.read(
+      "nook-app/nook-platform/docker/rust/docker-bake.hcl",
+    );
+    expect(bake).toContain(
+      'rust_wasm_deps_restore_scope = GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_RESTORE_RUST_WASM_DEPS_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE',
+    );
+    expect(bake).toContain(
+      'rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE',
+    );
+    expect(bake).toContain(
+      'type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_restore_scope}:buildcache',
+    );
+    expect(bake).toContain(
+      'type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE}',
+    );
+    expect(bake).not.toContain(
+      '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",',
+    );
+    expect(bake).not.toContain(
+      '${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true',
+    );
+    expect(bake).toContain(
+      'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""',
+    );
+    expect(bake.match(/\$\{pr_cache_export_error_policy\}/g)?.length).toBe(10);
+    expect(bake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(10);
+    const sharedBake = this.read("nook-app/docker-bake.hcl");
+    expect(sharedBake).toContain(
+      'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"',
+    );
+    const webBake = this.read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    expect(webBake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(2);
+    const webToolchainBake = this.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    expect(webToolchainBake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(3);
+    expect(workflow).not.toContain('GHA_CACHE_WRITE_ENABLED: "1"');
+    expect(workflow).toContain("BROWSER_TEST_OUTCOME: ${{ steps.browser-test.outcome }}");
   }
 
   portableGitMetadata(): void {
@@ -960,8 +1068,16 @@ test(
   contract.workflowTooling.bind(contract),
 );
 test(
-  "ARC probes consumed exact-SHA caches without exporting registry refs",
+  "ARC publishes immutable heads and restores bounded ancestor candidates",
   contract.arcCacheSelection.bind(contract),
+);
+test(
+  "WASM Node verification restores the complete source graph",
+  contract.wasmNodeSourceCache.bind(contract),
+);
+test(
+  "ARC publishes complete PR lanes without making transient export fatal",
+  contract.prCachePublication.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",

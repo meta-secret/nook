@@ -4,12 +4,17 @@ description: Task, Buildx, and authenticated registry BuildKit cache setup.
 inputs:
   cache-selection:
     description: >-
-      Closed cache probe set: general probes every shared Bake lineage; native,
+      Closed cache probe set: general selects every shared Bake lineage independently; native,
       wasm, preflight, and web-e2e probe only the named consumer graph;
       ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
+      compile probes its exact head and immutable first-parent candidates in
+      one bounded batch; all non-compile immutable lineage candidates are
+      probed concurrently within the same bounded discovery window;
+      web-research-deps probes only the research Bun dependency lineage;
+      web-research-image probes the exact research browser graph;
       connection-only performs no registry cache probes.
     required: false
     default: general
@@ -23,10 +28,13 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
-      git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps large graphs in its node-local persistent shard. Never writes Main's
-      nook/buildcache refs.
+      Allow hosted runners to publish only an immutable remote-buildcache ref keyed by
+      commit (-git-<sha>) while restoring the nearest bounded first-parent candidate
+      or Main. Concurrent heads never replace one another, including on ARC. The
+      authorized remote build:compile publication handoff writes only its
+      exact-commit source ref; dependency inputs retain a separate fingerprinted
+      boundary. A read-only build:compile verification never exports a registry cache.
+      Other jobs never write Main's protected refs.
     required: false
     default: "false"
   publish-compile-cache:
@@ -50,10 +58,12 @@ inputs:
     default: registry.dev.nokey.sh
   registry-username:
     description: OCI registry username.
-    required: true
+    required: false
+    default: ""
   registry-password:
     description: OCI registry password or token.
-    required: true
+    required: false
+    default: ""
   sccache-access-key:
     description: SeaweedFS S3 access key for Rust compiler objects.
     required: false
@@ -101,6 +111,7 @@ runs:
         ensure_minimum fs.inotify.max_user_watches 10485760
 
     - name: Login to Nook OCI registry
+      if: ${{ inputs.registry-username != '' && inputs.registry-password != '' }}
       uses: docker/login-action@v4
       with:
         registry: ${{ inputs.registry-host }}
@@ -108,7 +119,7 @@ runs:
         password: ${{ inputs.registry-password }}
 
     - name: Preload hosted BuildKit from Zot
-      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && inputs.registry-username != '' && inputs.registry-password != '' }}
       shell: bash
       run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
 
@@ -117,12 +128,17 @@ runs:
     # The runner carries only client tooling and never receives a Docker daemon
     # or host runtime socket.
     # Taskfiles never pass --builder; the health wrapper selects it.
-    - name: Setup hosted Buildx
+    - name: Setup authenticated hosted Buildx
       id: hosted-buildx
-      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && inputs.registry-username != '' && inputs.registry-password != '' }}
       uses: docker/setup-buildx-action@v4
       with:
         driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
+
+    - name: Setup secret-free hosted Buildx
+      id: hosted-buildx-direct
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && (inputs.registry-username == '' || inputs.registry-password == '') }}
+      uses: docker/setup-buildx-action@v4
 
     - name: Connect ARC Buildx to the node-local BuildKit shard
       id: arc-buildx
@@ -159,298 +175,21 @@ runs:
     - name: Select hosted BuildKit cache
       shell: bash
       env:
+        NOOK_CACHE_EVENT_NAME: ${{ github.event_name }}
+        NOOK_CACHE_GIT_REF: ${{ github.ref }}
+        NOOK_CACHE_PR_NUMBER: ${{ github.event.pull_request.number }}
+        NOOK_CACHE_ACTION_PATH: ${{ github.action_path }}
+        NOOK_CACHE_SELECTION: ${{ inputs.cache-selection }}
+        NOOK_CACHE_REGISTRY_HOST: ${{ inputs.registry-host }}
+        NOOK_CACHE_WRITE_REQUESTED: ${{ inputs.cache-write }}
+        NOOK_CACHE_MAIN_ONLY: ${{ inputs.main-cache-only }}
+        NOOK_CACHE_ISOLATED_WRITE: ${{ inputs.isolated-cache-write }}
+        NOOK_CACHE_PUBLISH_COMPILE: ${{ inputs.publish-compile-cache }}
         NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}
-        NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}
-      run: |
-        set -euo pipefail
-
-        pr_number="${{ github.event.pull_request.number }}"
-        event_name="${{ github.event_name }}"
-        git_ref="${{ github.ref }}"
-        cache_selection="${{ inputs.cache-selection }}"
-        case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
-          *)
-            echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
-            exit 1
-            ;;
-        esac
-        test -n "$NOOK_SELECTED_BUILDER"
-        echo "NOOK_PR_BUILDX_BUILDER=$NOOK_SELECTED_BUILDER" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
-        echo "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}" >> "$GITHUB_ENV"
-
-        read_only=""
-        if [ "$event_name" != "push" ] || [ "$git_ref" != "refs/heads/main" ]; then
-          read_only=1
-          if [[ "$pr_number" =~ ^[0-9]+$ ]] && [ "${{ inputs.cache-write }}" != "false" ]; then
-            echo "::warning::Pull-request jobs are forced to restore Main's cache read-only"
-          fi
-        fi
-        isolated_cache_write="${{ inputs.isolated-cache-write }}"
-        publish_compile_cache="${{ inputs.publish-compile-cache }}"
-        case "$publish_compile_cache" in
-          true|false) ;;
-          *)
-            echo "publish-compile-cache must be true or false (got: ${publish_compile_cache:-empty})" >&2
-            exit 1
-            ;;
-        esac
-        remote_compile_cache_write=""
-        if [ "$event_name" = "workflow_dispatch" ] \
-          && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-          # Feature source output is exact-head scoped. Dependencies use their
-          # content fingerprint below.
-          if [ "$publish_compile_cache" = "true" ]; then
-            remote_compile_cache_write=1
-            echo "build:compile publication mode enables exact-head cache export"
-          else
-            echo "build:compile read-only verification imports caches without registry export"
-          fi
-        elif [ "$publish_compile_cache" != "true" ]; then
-          echo "publish-compile-cache=false requires the remote build:compile task" >&2
-          exit 1
-        fi
-        if [ "$publish_compile_cache" = "true" ]; then
-          echo "NOOK_COMPILE_CACHE_MODE=publish" >> "$GITHUB_ENV"
-        else
-          echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
-        fi
-        if [ "$isolated_cache_write" = "true" ]; then
-          if [ "${{ inputs.main-cache-only }}" != "true" ] \
-            || [ "${{ inputs.cache-write }}" != "false" ]; then
-            echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
-            exit 1
-          fi
-          case "$event_name" in
-            workflow_dispatch)
-              case "$git_ref" in
-                refs/heads/*) ;;
-                *)
-                  echo "isolated-cache-write requires a repository branch ref" >&2
-                  exit 1
-                  ;;
-              esac
-              ;;
-            pull_request)
-              if [[ ! "$pr_number" =~ ^[0-9]+$ ]]; then
-                echo "isolated-cache-write on pull_request requires a PR number" >&2
-                exit 1
-              fi
-              ;;
-            *)
-              echo "isolated-cache-write requires workflow_dispatch or pull_request" >&2
-              exit 1
-              ;;
-          esac
-        elif [ "${{ inputs.main-cache-only }}" = "true" ]; then
-          if [ "${{ inputs.cache-write }}" != "false" ]; then
-            echo "main-cache-only requires cache-write=false" >&2
-            exit 1
-          fi
-          read_only=1
-        fi
-
-        scope_suffix=""
-        fallback_enabled=""
-        if [ "$isolated_cache_write" = "true" ]; then
-          fallback_enabled=1
-          if [ "$event_name" = "pull_request" ]; then
-            # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
-            scope_sha="${{ github.event.pull_request.head.sha }}"
-          else
-            : "${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}"
-            scope_sha="$(git rev-parse HEAD)"
-          fi
-          if [[ ! "$scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "isolated-cache-write requires a 40-char lowercase git SHA (got: ${scope_sha:-empty})" >&2
-            exit 1
-          fi
-          scope_suffix="-git-$scope_sha"
-          echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
-        fi
-        echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-
-        # cache-from entries are merged, not ordered. Importing exact and Main
-        # together can select Main's parent and orphan an exact source leaf.
-        # Probe each full-graph ref and use Main only while that exact ref is absent.
-        registry_host="${{ inputs.registry-host }}"
-        exact_repository="nook/buildcache"
-        if [ -n "$scope_suffix" ]; then
-          exact_repository="nook/remote-buildcache"
-        fi
-        cache_ref_status() {
-          local ref="$1"
-          local probe_output
-          probe_output="$(mktemp)"
-          if docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; then
-            rm -f "$probe_output"
-            return 0
-          fi
-          if grep -Eqi 'not found|manifest unknown|name unknown' "$probe_output"; then
-            rm -f "$probe_output"
-            return 1
-          fi
-          echo "Registry cache probe was inconclusive: $ref" >&2
-          cat "$probe_output" >&2
-          rm -f "$probe_output"
-          return 2
-        }
-        publish_exact_availability() {
-          local env_name="$1"
-          local scope="$2"
-          local ref="$registry_host/$exact_repository/$scope:buildcache"
-          local available=""
-          local probe_status=0
-          cache_ref_status "$ref" || probe_status=$?
-          case "$probe_status" in
-            0)
-              available=1
-              echo "Exact cache available: $scope"
-              ;;
-            1)
-              echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
-              ;;
-            *) return "$probe_status" ;;
-          esac
-          echo "$env_name=$available" >> "$GITHUB_ENV"
-        }
-        publish_main_availability() {
-          local env_name="$1"
-          local scope="$2"
-          local ref="$registry_host/nook/buildcache/$scope:buildcache"
-          local available=""
-          local probe_status=0
-          cache_ref_status "$ref" || probe_status=$?
-          case "$probe_status" in
-            0)
-              available=1
-              echo "Main cache available: $scope"
-              ;;
-            1)
-              echo "Main cache absent; source-free dependency fallback enabled: $scope"
-              ;;
-            *) return "$probe_status" ;;
-          esac
-          echo "$env_name=$available" >> "$GITHUB_ENV"
-        }
-
-        case "$cache_selection" in
-          general|native|wasm|wasm-proof)
-          # Use the same worktree-content fingerprint as local sealed formatting.
-          # Bake cache wiring and source files do not rotate this dependency scope.
-          rust_deps_fingerprint="$(
-            NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
-              bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
-          )"
-          if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Could not fingerprint the hosted Rust dependency graph" >&2
-            exit 1
-          fi
-          echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
-          echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
-          compile_deps_scope="nook-rust-compile-deps-v2-$rust_deps_fingerprint"
-          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-            compile_deps_fingerprint="$({
-              NOOK_COMPILE_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
-                bash "${{ github.action_path }}/../../scripts/compile-deps-cache-fingerprint.sh"
-            })"
-            if [[ ! "$compile_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "Could not fingerprint the hosted compile dependency graph" >&2
-              exit 1
-            fi
-            compile_deps_scope="nook-rust-compile-deps-v2-$compile_deps_fingerprint"
-          fi
-          echo "GHA_RUST_COMPILE_DEPS_SCOPE=$compile_deps_scope" >> "$GITHUB_ENV"
-          ;;
-        esac
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
-          # Native consumes exact dependency scopes and the complete native source graph.
-          # Main source also owns fresh dependency-only restores after publication.
-          if [ "$cache_selection" = "general" ] \
-            && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
-            publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v2$scope_suffix"
-          fi
-          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
-          fi
-          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
-        fi
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then
-          # WASM consumes the base, fingerprinted dependency, and complete WASM source scopes.
-          wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
-          if [ -n "$scope_suffix" ]; then
-            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
-          fi
-          if [ "$cache_selection" != "general" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-          fi
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
-          fi
-        fi
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
-        fi
-        case "$cache_selection" in
-          general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
-          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
-          ;;
-        esac
-
-        cache_write_enabled=""
-        if [ -n "$remote_compile_cache_write" ]; then
-          cache_write_enabled=1
-        elif [ "$isolated_cache_write" = "true" ]; then
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # Even mode=min includes the final result layer. Rust dependency
-            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
-            # HDD and turn a successful verification into a cache failure.
-            # ARC keeps this node-local and reads Main plus sccache instead.
-            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
-          else
-            cache_write_enabled=1
-          fi
-        elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
-          cache_write_enabled=1
-        fi
-        # The Delivery-owned read-only compile handoff is an explicit no-op for
-        # registry publication. Keep this guard next to the generic cache flag
-        # so a future cache-write path cannot accidentally re-enable export.
-        if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
-          && [ "$publish_compile_cache" = "false" ]; then
-          cache_write_enabled=""
-        fi
-        echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
-
+        NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name || steps.hosted-buildx-direct.outputs.name }}
+        NOOK_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        NOOK_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+      run: bash "${{ github.action_path }}/../../scripts/select-hosted-buildkit-cache.sh"
     - name: Set CI environment
       shell: bash
       run: |
@@ -494,5 +233,9 @@ runs:
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
+        job_key="$(printf '%s' "${GITHUB_JOB:-job}" | tr -cs 'A-Za-z0-9_.-' '_')"
+        raw_log="$RUNNER_TEMP/nook-buildkit-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${job_key}.raw.log"
+        : > "$raw_log"
         timeout 15s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"
+        echo "NOOK_BUILDKIT_RAW_LOG=$raw_log" >> "$GITHUB_ENV"

@@ -13,6 +13,7 @@ Load only the authority needed to orchestrate the current SRE packet.
 
 - [Provisioning specialist contract](../provisioning/AGENTS.md)
 - [Cloud-native specialist contract](../cloud-native/AGENTS.md)
+- [Docker cache specialist contract](../docker-cache-specialist/AGENTS.md)
 
 ## Delivery authority
 

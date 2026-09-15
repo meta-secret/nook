@@ -215,7 +215,10 @@ tasks:
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
-      - task: registry-cache:publish:native
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          task registry-cache:publish:native
+        fi
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
@@ -229,7 +232,10 @@ tasks:
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
-      - task: registry-cache:publish:wasm
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          task registry-cache:publish:wasm
+        fi
 
   docker:ci:wasm:node-test:
     desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
@@ -257,7 +263,7 @@ tasks:
         rust-base-publish
 
   docker:ci:cache:publish:native:
-    desc: Export the one complete verified native source graph from this job's builder.
+    desc: Export the native source overlay; sccache owns compiled verification objects.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -270,7 +276,7 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        builder-debug
+        rust-native-source-publish
 
   docker:ci:cache:publish:preflight:
     desc: Export the independently verified preflight graph from its Main job's builder.
@@ -295,7 +301,7 @@ tasks:
         preflight-test
 
   docker:ci:cache:publish:wasm:
-    desc: Export verified ARC-local WASM source state; hosted CI owns the portable dependency ref.
+    desc: Export the reusable WASM compile phase before terminal validation.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -308,8 +314,7 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        wasm-export
-      - task: docker:ci:cache:publish:rust-base
+        builder-wasm-build-publish
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
@@ -369,9 +374,16 @@ tasks:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.
     cmds:
       - |
-        task docker:ecosystem:deterministic & deterministic_pid=$!
-        task docker:ecosystem:fuzz & fuzz_pid=$!
-        task docker:ecosystem:kani & kani_pid=$!
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-smoke-publish.output=type=cacheonly" \
+            rust-ecosystem-smoke-publish
+        fi
+      - |
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:deterministic & deterministic_pid=$!
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:fuzz & fuzz_pid=$!
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:kani & kani_pid=$!
         failed=0
         if wait "$deterministic_pid"; then
           echo "Deterministic tests: success"
@@ -469,6 +481,14 @@ tasks:
     cmds:
       - task: docker:rust-base
       - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            rust-dylint-build-publish
+        else
+          GHA_CACHE_WRITE_ENABLED= {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+            rust-dylint-build
+        fi
+      - |
         failed=0
         floor="$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" || exit 1
         for stage in self-test native wasm; do
@@ -477,7 +497,3 @@ tasks:
             "rust-dylint-$stage" || failed=1
         done
         if [ "$failed" -ne 0 ]; then exit "$failed"; fi
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
-            --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" rust-dylint
-        fi

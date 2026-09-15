@@ -4,7 +4,8 @@ set -euo pipefail
 task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
-    build:compile) echo 30 ;;
+    build:compile) echo 5 ;;
+    cache:probe:dependency-policy|cache:probe:deterministic|cache:probe:dylint|cache:probe:rust|cache:probe:wasm|cache:probe:wasm-node|cache:probe:web) echo 10 ;;
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci) echo 20 ;;
@@ -54,7 +55,15 @@ run_task() {
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
-    build:compile) run_with_timeout "$timeout_minutes" task build:compile ;;
+    # Keep one minute inside the five-minute job budget for BuildKit cleanup and
+    # the always-run raw-log/JSON telemetry collector. A hard job timeout cannot
+    # upload the evidence needed to diagnose the next regression.
+    build:compile) timeout --kill-after=10s 240s task build:compile ;;
+    cache:probe:dependency-policy|cache:probe:deterministic|cache:probe:dylint|cache:probe:rust|cache:probe:wasm|cache:probe:wasm-node|cache:probe:web) run_with_timeout "$timeout_minutes" task "$1" ;;
+    cache:probe:*)
+      echo "Unsupported cache probe selector: $1" >&2
+      return 2
+      ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
@@ -76,6 +85,7 @@ run_batch() {
   local timeout_cleanup_status
   local -a tasks
 
+  bash .github/scripts/remote-cache-probe-route.sh --validate "$raw_tasks"
   IFS=',' read -r -a tasks <<< "$raw_tasks"
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     printf '## Remote task batch\n\n| Task | Result |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
