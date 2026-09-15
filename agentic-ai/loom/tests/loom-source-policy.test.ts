@@ -52,43 +52,55 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain(
     'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
   );
-  const zigSetup = '      - name: Install rootless Zig toolchain';
-  expect(workflow).toContain(zigSetup);
   expect(workflow).not.toContain('sudo -n apt-get');
-  expect(workflow).toContain('exec zig cc "${args[@]}"');
-  expect(workflow).toContain('exec zig c++ "${args[@]}"');
-  expect(workflow).toContain('exec zig ar "$@"');
-  expect(workflow).toContain('echo "$toolchain_dir" >> "$GITHUB_PATH"');
-  expect(workflow).toContain('echo "CC=$toolchain_dir/cc"');
-  expect(workflow).toContain('echo "CXX=$toolchain_dir/c++"');
-  expect(workflow).toContain('echo "AR=$toolchain_dir/ar"');
-  const valeSetup = '      - name: Install rootless Vale 3.19.0';
-  expect(workflow).toContain(valeSetup);
-  expect(workflow).toContain(
-    'https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz',
-  );
-  expect(workflow).toContain(
-    "printf 'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6  %s\\n'",
-  );
-  expect(workflow).toContain('tar -xzf "$vale_archive" -C "$vale_dir" vale');
-  expect(workflow).toContain('export PATH="$vale_dir:$PATH"');
-  expect(workflow).toContain('vale --version');
-  expect(workflow).toContain('echo "$vale_dir" >> "$GITHUB_PATH"');
-  expect(workflow).not.toContain('"$vale_bin"');
   const rustSetup =
     '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
     '        with:\n' +
     '          toolchain: stable\n' +
     '          cache: false';
   expect(workflow).toContain(rustSetup);
-  expect(workflow.indexOf(zigSetup)).toBeLessThan(workflow.indexOf(rustSetup));
-  expect(workflow.indexOf(valeSetup)).toBeLessThan(workflow.indexOf(rustSetup));
-  expect(
-    workflow.indexOf('      - name: Configure rootless native compiler'),
-  ).toBeLessThan(workflow.indexOf('      - run: task tooling:static'));
+  expect(workflow).toContain(
+    '      - run: task loom:repository-policy:setup-native-toolchain',
+  );
+  expect(workflow).not.toContain('run: |');
+  expect(workflow).not.toContain('run: bun ');
+  expect(workflow).not.toContain('run: bash ');
   expect(workflow.indexOf(rustSetup)).toBeLessThan(
     workflow.indexOf('      - run: task tooling:static'),
   );
+  const agenticTaskfile = await readFile(
+    join(repositoryRoot, '.task', 'agentic-ai.yml'),
+    'utf8',
+  );
+  expect(agenticTaskfile).toContain(
+    'loom:repository-policy:setup-native-toolchain:',
+  );
+  expect(agenticTaskfile).toContain('repository-policy-toolchain.ts" setup');
+  const toolchain = await readFile(
+    join(
+      repositoryRoot,
+      'agentic-ai',
+      'loom',
+      'src',
+      'commands',
+      'repository-policy-toolchain.ts',
+    ),
+    'utf8',
+  );
+  for (const required of [
+    '0.15.2',
+    'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6',
+    '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239',
+    'c70d2b5e2828f4c90c36a3b9185b5d4405b0751e9fc7c43231c78711e047a306',
+    'busybox_UNXZ',
+    'unxz',
+    'x86_64-unknown-linux-gnu',
+    'x86_64-linux-gnu',
+    'GITHUB_PATH',
+    'GITHUB_ENV',
+  ]) {
+    expect(toolchain).toContain(required);
+  }
   const preflightTaskfile = await readFile(
     join(repositoryRoot, 'preflight', 'Taskfile.yml'),
     'utf8',
@@ -110,77 +122,6 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
     'runtime failures return `neverthrow` `Result` values with concrete',
   );
   expect(readme).not.toContain('runtime failures throw `LoomFailure`');
-});
-
-test('extracts Zig without delegating XZ decoding to runner tar', async () => {
-  const repositoryRoot = join(import.meta.dir, '..', '..', '..');
-  const workflow = await readFile(
-    join(repositoryRoot, '.github', 'workflows', 'repository-policy.yml'),
-    'utf8',
-  );
-  const extractionStart = workflow.indexOf(
-    '      - name: Install rootless Zig toolchain',
-  );
-  const extractionEnd = workflow.indexOf(
-    '      - name: Configure rootless native compiler',
-    extractionStart,
-  );
-  const extraction = workflow.slice(extractionStart, extractionEnd);
-
-  expect(extraction).not.toContain('mlugg/setup-zig');
-  expect(extraction).toContain(
-    'https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz',
-  );
-  expect(extraction).toContain(
-    'https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox_UNXZ',
-  );
-  expect(extraction).toContain(
-    "printf '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239  %s\\n'",
-  );
-  expect(extraction).toContain(
-    "printf 'c70d2b5e2828f4c90c36a3b9185b5d4405b0751e9fc7c43231c78711e047a306  %s\\n'",
-  );
-  expect(extraction).toContain('"$zig_archive" |');
-  expect(extraction).toContain('"$xz_decoder" |');
-  expect(extraction).toContain('sha256sum -c -');
-  expect(extraction).toContain(
-    'export PATH="${RUNNER_TEMP}/nook-native-toolchain:$PATH"',
-  );
-  expect(extraction).toContain('unxz -c "$zig_archive"');
-  expect(extraction).not.toContain('"$xz_decoder" -c "$zig_archive"');
-  expect(extraction).toContain('tar -xf "$zig_tar"');
-  expect(extraction).not.toContain('tar -xJ');
-  expect(extraction).not.toContain('tar --xz');
-});
-
-test('translates cc-rs GNU targets for Zig without dropping compiler arguments', async () => {
-  const repositoryRoot = join(import.meta.dir, '..', '..', '..');
-  const workflow = await readFile(
-    join(repositoryRoot, '.github', 'workflows', 'repository-policy.yml'),
-    'utf8',
-  );
-  const compilerStart = workflow.indexOf(
-    '      - name: Configure rootless native compiler',
-  );
-  const compilerEnd = workflow.indexOf(
-    '      - uses: actions-rust-lang/setup-rust-toolchain@v2',
-    compilerStart,
-  );
-  const compiler = workflow.slice(compilerStart, compilerEnd);
-  expect(
-    compiler.split('\n              --target=x86_64-unknown-linux-gnu)').length,
-  ).toBe(3);
-  expect(
-    compiler.split('\n              -target=x86_64-unknown-linux-gnu)').length,
-  ).toBe(3);
-  expect(compiler.split('--target|-target)').length).toBe(3);
-  expect(compiler.split('args+=("--target=x86_64-linux-gnu")').length).toBe(3);
-  expect(compiler.split('args+=("-target=x86_64-linux-gnu")').length).toBe(3);
-  expect(compiler.split('args+=("x86_64-linux-gnu")').length).toBe(3);
-  expect(compiler).toContain('args+=("$1")');
-  expect(compiler).toContain('args+=("$2")');
-  expect(compiler).not.toContain('sed ');
-  expect(compiler).not.toContain('shift 2');
 });
 
 test('rejects reusable unowned functions in a reviewed source file', async () => {
