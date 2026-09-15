@@ -242,9 +242,14 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Continue the source-free Rust dependency ancestry through Minds before
-# authored Hive source enters the graph.
-FROM compile-wasm-dependencies AS compile-minds-base
+# Minds/Hive and platform WASM are independent dependency domains. Start them
+# from the shared manifest/toolchain root so BuildKit can solve both expensive
+# compiler branches concurrently during an ordinary build.
+FROM rust-base AS compile-minds-base
+
+ENV CARGO_INCREMENTAL=0
+ENV RUSTFLAGS="--remap-path-prefix=/meta-secret/nook=/workspace"
+ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git openssh-client \
@@ -481,13 +486,14 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && touch /opt/nook/loom-compile-passed
 
 # Source-free export root used only as a sibling of the ordinary product
-# target in the first publish Bake session. No authored product source stage
-# can reach this target.
+# target in the first publish Bake session. Its real dependency artifacts root
+# both independent compiler branches for the mode=max export; no authored
+# product source stage can reach this target.
 FROM compile-web-dependencies AS compile-dependency-cache
 
-RUN install -D /opt/nook/compile-native-dependencies /compile/native \
-    && install -D /opt/nook/compile-wasm-dependencies /compile/wasm \
-    && install -D /opt/nook/compile-hive-dependencies /compile/hive \
+COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
+COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
+RUN install -D /opt/nook/compile-hive-dependencies /compile/hive \
     && install -D /opt/nook/compile-hive-console-dependencies /compile/hive-console \
     && install -D /opt/nook/compile-web-app-dependencies /compile/web-app-deps \
     && install -D /opt/nook/compile-web-dependencies /compile/web-research-deps

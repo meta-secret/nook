@@ -45,7 +45,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
   && sleep 1 \
   && echo bake-sim-compile-wasm-dependencies
 
-FROM compile-wasm-dependencies AS compile-hive-dependencies
+FROM compile-toolchain AS compile-hive-dependencies
 COPY inputs/compile-hive-lock.txt /tmp/hive-lock.txt
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
@@ -135,9 +135,9 @@ RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
   && echo bake-sim-compile-extension-package
 
 FROM compile-web-dependencies AS compile-dependency-cache
-RUN install -D /opt/compile-native-dependencies /compile/native \
-  && install -D /opt/compile-wasm-dependencies /compile/wasm \
-  && install -D /opt/compile-hive-dependencies /compile/hive \
+COPY --from=compile-native-dependencies /opt/compile-native-dependencies /compile/native
+COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
+RUN install -D /opt/compile-hive-dependencies /compile/hive \
   && install -D /opt/compile-hive-console-dependencies /compile/hive-console \
   && install -D /opt/compile-web-app-dependencies /compile/web-app \
   && install -D /opt/compile-web-dependencies /compile/web

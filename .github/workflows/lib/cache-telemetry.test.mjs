@@ -106,7 +106,7 @@ void test("uses the trailing build ID for Buildx history log lookup", () => {
   assert.equal(CacheTelemetry.historyLogRef("plain-ref"), "plain-ref");
 });
 
-void test("selects a deterministic bounded set of finalized Buildx records", () => {
+void test("selects cancelled Buildx records so completed stage telemetry survives", () => {
   /**
    * @param {string} ref
    * @param {string} completedAt
@@ -143,11 +143,11 @@ void test("selects a deterministic bounded set of finalized Buildx records", () 
 
   assert.deepEqual(
     selection.records.map(({ ref }) => ref),
-    ["newer", "same-a", "same-b"],
+    ["still-running", "newer", "same-a"],
   );
   assert.deepEqual(selection.warnings, [
-    "buildx_records_unfinished_skipped:1",
-    "buildx_records_truncated:3/4",
+    "buildx_records_unfinished_included:1",
+    "buildx_records_truncated:3/5",
   ]);
 });
 
@@ -171,6 +171,10 @@ void test("maps history logs concurrently while preserving record order", async 
 });
 
 void test("accepts raw Buildx progress JSON from either process stream", () => {
+  assert.match(
+    CacheTelemetry.readHistoryEvents.toString(),
+    /events\.length > 0 \|\| \(status === 0/,
+  );
   assert.deepEqual(
     CacheTelemetry.parseRawJsonProgress(
       '{"vertexes":[]}\nnot-json\n{"logs":[{"vertex":"one","data":"eAo="}]}',

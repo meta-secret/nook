@@ -68,7 +68,7 @@ export class CacheScopeTelemetry {
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
-const HISTORY_LOG_TIMEOUT_MS = 4_000;
+const HISTORY_LOG_TIMEOUT_MS = 12_000;
 const HISTORY_RECORD_LIMIT = 32;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
@@ -369,14 +369,13 @@ export class CacheTelemetry {
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
    */
   static selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
-    const finalized = records
-      .filter((record) => record.completed_at)
+    const selected = [...records]
       .sort((left, right) => {
-        const completed = CacheTelemetry.compareStrings(
-          String(right.completed_at),
-          String(left.completed_at),
+        const activity = CacheTelemetry.compareStrings(
+          String(right.completed_at || right.started_at || ""),
+          String(left.completed_at || left.started_at || ""),
         );
-        if (completed !== 0) return completed;
+        if (activity !== 0) return activity;
         const started = CacheTelemetry.compareStrings(
           String(right.started_at || ""),
           String(left.started_at || ""),
@@ -385,14 +384,16 @@ export class CacheTelemetry {
         return CacheTelemetry.compareStrings(left.ref, right.ref);
       });
     const warnings = [];
-    const unfinishedCount = records.length - finalized.length;
+    const unfinishedCount = records.filter(
+      (record) => !record.completed_at,
+    ).length;
     if (unfinishedCount > 0) {
-      warnings.push(`buildx_records_unfinished_skipped:${unfinishedCount}`);
+      warnings.push(`buildx_records_unfinished_included:${unfinishedCount}`);
     }
-    if (finalized.length > limit) {
-      warnings.push(`buildx_records_truncated:${limit}/${finalized.length}`);
+    if (selected.length > limit) {
+      warnings.push(`buildx_records_truncated:${limit}/${selected.length}`);
     }
-    return { records: finalized.slice(0, limit), warnings };
+    return { records: selected.slice(0, limit), warnings };
   }
 
   /**
@@ -730,7 +731,7 @@ export class CacheTelemetry {
           ...parsedStdout.diagnostics,
           ...parsedStderr.diagnostics,
         ];
-        if (status === 0 && (events.length > 0 || diagnostics.length === 0)) {
+        if (events.length > 0 || (status === 0 && diagnostics.length === 0)) {
           resolve(events);
         } else {
           reject(

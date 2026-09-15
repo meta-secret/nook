@@ -1012,6 +1012,12 @@ tasks:
     expect(production).toContain('target     = "compile-dependency-cache"');
     expect(production).toContain("cache-to   = compile_deps_cache_to");
     expect(production).toContain('NOOK_COMPILE_CACHE_MODE == "publish"');
+    expect(productionDockerfile).toContain(
+      "FROM rust-base AS compile-minds-base",
+    );
+    expect(productionDockerfile).toContain(
+      "COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm",
+    );
     expect(cacheTelemetry).toContain("compile_dependencies");
     expect(cacheTelemetry).toContain("compile_source");
     expect(cacheTelemetry).toContain("failure_class");
@@ -1126,7 +1132,7 @@ tasks:
       "compile_targets=(compile-dependency-cache compile-warm)",
     );
     expect(proof).toContain(
-      "Next unseeded head: dependency reuse plus cross-commit sccache hits",
+      "Next unseeded head: nearest-ancestor BuildKit reuse plus cross-commit sccache hits",
     );
     expect(proof).toContain(
       "Repeated next-head zero hits: publication verification fails",

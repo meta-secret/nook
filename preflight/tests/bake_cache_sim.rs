@@ -111,6 +111,7 @@ fn bake_cache_sim_proves_stable_rust_dependency_replay() {
     );
     assert!(
         compile_dockerfile.contains("AS compile-wasm-dependencies")
+            && compile_dockerfile.contains("FROM compile-toolchain AS compile-hive-dependencies")
             && compile_dockerfile.contains("AS compile-wasm-source-base")
             && compile_dockerfile.contains("AS compile-nook-wasm-source")
             && compile_dockerfile.contains("AS compile-companion-wasm-source")
