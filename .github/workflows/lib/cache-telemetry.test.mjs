@@ -455,8 +455,10 @@ void test("extracts zero-based sccache snapshots from a cancelled raw build log"
 });
 
 void test("merges raw-log and BuildKit-history reports for distinct compiler stages", async () => {
-  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
-  const originalReadHistoryEvents = CacheTelemetry.readHistoryEvents;
+  const originalListBuildHistory =
+    CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
+  const originalReadHistoryEvents =
+    CacheTelemetry.readHistoryEvents.bind(CacheTelemetry);
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-telemetry-"));
   const report = {
     stage: "wasm-node-test-and-coverage",
@@ -494,7 +496,7 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
       cached_steps: 0,
     },
   ];
-  CacheTelemetry.readHistoryEvents = async () => [
+  CacheTelemetry.readHistoryEvents = () => Promise.resolve([
     {
       logs: [
         {
@@ -506,7 +508,7 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
         },
       ],
     },
-  ];
+  ]);
 
   try {
     const record = await CacheTelemetry.collectTelemetry({
