@@ -82,6 +82,45 @@ test('accepts document-level team and shared graphs', () => {
   ).toEqual([]);
 });
 
+test('allows every child graph to reference the root circuit breaker read-only', () => {
+  const circuitBreakerPath = '.cortex/CIRCUIT-BREAKER.md';
+  const childGraphPath =
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: circuitBreakerPath,
+      content: '# Agent Derailment Circuit Breaker\n',
+    }),
+  );
+  const linkedDocuments = documents.map((document) => {
+    if (document.relativePath === '.cortex/knowledge-graph.md') {
+      return {
+        ...document,
+        content: `${document.content}\n- [Circuit breaker](CIRCUIT-BREAKER.md)\n`,
+      };
+    }
+    if (document.relativePath === childGraphPath) {
+      return {
+        ...document,
+        content: `${document.content}\n- [Circuit breaker](../../../CIRCUIT-BREAKER.md)\n`,
+      };
+    }
+    if (document.relativePath === PIPELINE_GRAPH_PATH) {
+      return {
+        ...document,
+        content: `${document.content}\n- [Circuit breaker](../../CIRCUIT-BREAKER.md)\n`,
+      };
+    }
+    return document;
+  });
+
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(linkedDocuments),
+  ).toEqual([]);
+});
+
 test('indexes Dev Manager documents only through their owning graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();

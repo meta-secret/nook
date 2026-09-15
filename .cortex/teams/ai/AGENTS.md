@@ -6,10 +6,6 @@ Read and follow the root [Agent Derailment Circuit
 Breaker](../../CIRCUIT-BREAKER.md) before this contract or any other AI
 authority. It is the highest-priority rule for every AI-team task.
 
-Do not design, implement, test, or approve custom security machinery for
-trusted agent-internal communication, evidence, handoffs, integration, or Git
-actions. Stop that work immediately and report a circuit-breaker violation.
-
 ## Mission
 
 The AI team owns Nook's agent knowledge system and deterministic agent
@@ -36,38 +32,9 @@ selection.
 
 ### Trusted in-thread handoffs
 
-Team Gizmos and Team Agents that operate inside the same active Codex
-thread/harness form a highly trusted orchestration domain. Their handoff is
-ordinary typed coordination data:
-
-- the task and dependency state;
-- the bounded file scope and issued worktree;
-- the committed result, status, and ordinary evidence observation; and
-- the upward report to the parent.
-
-The AI team MUST NOT model those peers as attackers. A contract or review that
-adds any of the following solely to protect one trusted Team Gizmo or Team
-Agent from another fails review as a P1 defect:
-
-- encryption or signatures for an internal task or result handoff;
-- anti-forgery checks, key registries, or authority registries;
-- replay defenses framed as hostile-agent protection;
-- cryptographic agent identity, result identity, or digest authority;
-- one-use capability issuance or consumption theatrics; or
-- redundant or double verification of the same internal task or result.
-
-Keep the simple typed handoff. Preserve dependency ordering, wave admission,
-write-scope exclusions, and minimal current-head or clean-worktree checks.
-
-This trust rule does not weaken validation at a real boundary. Strong checks
-remain mandatory for GitHub, network, and provider responses; credentials and
-secrets; user data; third-party artifacts; independently supplied build or
-promotion evidence; and data crossing process or system boundaries. Product
-cryptography, Git delivery integrity, and external evidence policy remain with
-their owning authorities. Git baseline, path, symlink, gitlink, and worktree
-checks remain required for handoff tooling. Loom's `lib/base-evidence` checks
-and independent build or promotion evidence remain required at their actual
-boundaries.
+Follow the root [Agent Derailment Circuit Breaker](../../CIRCUIT-BREAKER.md).
+AI handoffs retain only the typed task, dependency, scope, worktree, result,
+status, evidence, and upward-report fields required by their owning workflow.
 
 ### Harness admission
 

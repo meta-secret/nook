@@ -193,7 +193,7 @@ test('rejects drift in repository-reading evidence-surface requirements', async 
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
-test('rejects drift between diagnostic and trusted handoff roles', async () => {
+test('rejects drift between diagnostic and circuit-breaker handoff roles', async () => {
   const sources =
     await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const forbiddenDrifts = [
@@ -202,8 +202,8 @@ test('rejects drift between diagnostic and trusted handoff roles', async () => {
       '`system_coherence_synthesizer` is an ordinary synthesis role.',
     ],
     [
-      'No internal\ncryptographic receipt, replay gate, or result-authority token belongs in this\nregistry.',
-      'This registry requires peer receipts.',
+      'Team Gizmos and Team Agents follow the root\n[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
+      'Team Gizmos and Team Agents use a local policy copy.',
     ],
   ] as const;
 
@@ -229,8 +229,8 @@ test('rejects drift from typed trusted handoffs', async () => {
   const sources =
     await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const trustedHandoffMarkers = [
-    'This is a typed task and result handoff. It does not require signatures,\nanti-forgery checks, replay gates, digests, one-use capabilities, or duplicate\nverification between trusted Team Gizmos and Team Agents.',
-    'The parent still\nreviews the ordinary result before assigning edits.',
+    'This is a typed task and result handoff.',
+    'The parent reviews the ordinary result\nbefore assigning edits.',
   ] as const;
 
   for (const marker of trustedHandoffMarkers) {

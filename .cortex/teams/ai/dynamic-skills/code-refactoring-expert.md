@@ -35,8 +35,8 @@ mutate lifecycle state.
 Follow the canonical
 [structural expert registry](../architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
-Internal Team Gizmo and Team Agent handoffs follow the
-[trusted in-thread handoff boundary](../AGENTS.md#trusted-in-thread-handoffs).
+Internal Team Gizmo and Team Agent handoffs follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Examples
 

@@ -58,19 +58,13 @@ an effort, quality, or billing measure.
 ### Replay boundary
 
 Lifecycle replay is an event-sourcing concern. It is also a projection concern.
-It is not a security check against a trusted Team Gizmo or Team Agent. The
-document-authority locator is a Cortex-document reference. It is not a
-credential. It is not a signature. It is not a digest. It is not an authority
-token for internal agent handoffs.
+The document-authority locator is a Cortex-document reference.
 
 ### In-thread handoff
 
-Team Gizmos and Team Agents use the ordinary trusted handoff described by the
-[AI team contract](../AGENTS.md#trusted-in-thread-handoffs). The handoff carries
-the typed task, bounded scope or worktree, status, committed result, ordinary
-evidence observation, and upward report. No internal receipt, cryptographic
-identity, one-use capability, or duplicate verification is added for this
-trusted path.
+Team Gizmos and Team Agents follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). Loom retains
+only its typed task, scope, status, result, and evidence fields.
 
 ## Invoke a leaf tool
 

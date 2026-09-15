@@ -5,17 +5,11 @@
 Read the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) before any
 other Cortex document. Follow it for the entire task.
 
-It prohibits custom security and adversarial-evidence machinery for trusted
-internal agent coordination, handoffs, Git operations, integration evidence,
-and validation results. Treat a violation as a P1 finding and stop the
-prohibited work immediately.
-
-Genuine Nook product security boundaries remain governed by their owning
-authorities.
-
-This file is the repository entry point. It selects one owning context and
-states only boundaries that apply everywhere. Detailed delivery and delegation
-rules belong to Gizmo Prime's linked authorities.
+- Treat a circuit-breaker violation as a P1 finding.
+- Stop prohibited work immediately.
+- Keep genuine Nook product security under its owning authority.
+- Use this file to select one owning context and universal boundary.
+- Use Gizmo Prime's linked authorities for detailed delivery and delegation.
 
 ## Canonical Cortex tree
 
@@ -103,39 +97,9 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
 
 ### Trusted in-thread handoffs
 
-Team Gizmos and Team Agents operating inside the same active Codex
-thread/harness are a highly trusted orchestration domain. Use the simplest
-typed handoff:
-
-- the task, dependency state, and wave order;
-- the bounded write scope and issued worktree;
-- the ordinary committed result, status, and evidence observation; and
-- the upward report to the parent.
-
-Team Gizmos and Team Agents MUST NOT be treated as hostile peers. Any contract,
-implementation, or review that adds the following solely to protect one such
-peer from another fails review as a P1 defect:
-
-- encryption or signatures for an internal task or result handoff;
-- anti-forgery checks, key registries, or authority registries;
-- replay defenses framed as hostile-agent protection;
-- cryptographic agent identity, result identity, or digest authority;
-- one-use capability issuance or consumption theatrics; or
-- redundant or double verification of the same internal task or result.
-
-Keep dependency ordering, active-harness admission, write-scope exclusions, and
-minimal current-head or clean-worktree checks. These checks coordinate trusted
-work; they do not authenticate peers.
-
-This boundary does not weaken real trust boundaries. Strong validation remains
-mandatory for GitHub, network, and provider responses; credentials and secrets;
-user data; third-party artifacts; independently supplied build or promotion
-evidence; and data crossing process or system boundaries. Product
-cryptography, event-sourcing replay, Git delivery integrity, and external
-evidence policy remain owned by their respective authorities. Git handoff
-baseline, path, symlink, gitlink, and worktree checks remain required.
-Loom `lib/base-evidence` and independent build or promotion evidence remain
-required at their actual boundaries.
+Follow the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md). Keep the
+role-specific typed task, scope, worktree, dependency, result, and upward-report
+fields required by the owning workflow.
 
 ## Mandatory context selection
 
@@ -151,6 +115,10 @@ required at their actual boundaries.
      to the Dev Manager.
    - The manager retains publication, slow-validation, and promotion authority.
 4. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
+   - Every team and leaf entry inherits this first-read rule through its
+     Prime-issued packet.
+   - That packet records that the circuit breaker was read before direct team
+     context loading.
    - Assigned Team Agents load their packet's team context directly.
    - Workers do not recursively become Gizmo or restart user-task routing.
    - Trusted CI publishers retain their explicit execution contracts.

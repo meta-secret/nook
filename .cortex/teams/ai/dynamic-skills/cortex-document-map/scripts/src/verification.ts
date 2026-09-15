@@ -197,6 +197,8 @@ export class CortexDocumentMapVerifier {
       for (const indexedPath of indexedPaths) {
         if (
           new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+          (new CortexDocumentPath(indexedPath).isCircuitBreakerPath() &&
+            graphPath !== rootPath) ||
           new CortexChildGraphReference({ graphPath, indexedPath }).isReadOnly()
         ) {
           continue;

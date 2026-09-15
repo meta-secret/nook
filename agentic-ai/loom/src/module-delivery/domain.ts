@@ -269,7 +269,8 @@ export type ModuleDeliveryResourceClaims = {
 
 /**
  * A manager-issued acceptance reference. Loom records and validates its
- * declared scopes; the external manager resolves and executes the selector.
+ * declared scopes. The external manager forwards and executes the selector;
+ * the remote runner owns an unknown-selector failure.
  */
 export type ModuleDeliveryAcceptanceCommand = {
   readonly selector: string;

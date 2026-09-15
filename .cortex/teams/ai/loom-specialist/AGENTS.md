@@ -1,5 +1,8 @@
 # Loom Specialist Team Agent Contract
 
+Read the root [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md)
+before this contract.
+
 ## Mission
 
 The Loom Specialist is a bounded AI and Loom Team Agent for AI Team Gizmo.

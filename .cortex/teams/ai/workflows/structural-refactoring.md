@@ -98,9 +98,8 @@ The parent provides the task dependencies and the ordered child observations.
 Each observation reports its task, status, result, and ordinary evidence. The
 synthesizer receives no repository read authority.
 
-The trusted in-thread handoff does not require signatures, anti-forgery checks,
-replay gates, digests, one-use capabilities, or duplicate verification. Follow
-the [AI trusted in-thread handoff boundary](../AGENTS.md#trusted-in-thread-handoffs).
+The handoff follows the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 The synthesizer then:
 

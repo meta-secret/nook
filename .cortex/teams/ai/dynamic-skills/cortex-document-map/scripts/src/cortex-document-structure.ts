@@ -88,6 +88,10 @@ export class CortexDocumentPath {
     );
   }
 
+  isCircuitBreakerPath(): boolean {
+    return this.filePath === '.cortex/CIRCUIT-BREAKER.md';
+  }
+
   owningKnowledgeGraphPath(): string {
     const childDirectory = this.childDirectoryPath();
     if (childDirectory !== false) return `${childDirectory}/knowledge-graph.md`;
@@ -161,6 +165,7 @@ export class CortexChildGraphReference {
 
   isAllowed(): boolean {
     if (!this.graphPath.isChildGraphPath()) return true;
+    if (this.indexedPath.isCircuitBreakerPath()) return true;
     if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
       return true;
     }
@@ -194,6 +199,7 @@ export class CortexChildGraphReference {
 
   isReadOnly(): boolean {
     if (!this.graphPath.isChildGraphPath()) return false;
+    if (this.indexedPath.isCircuitBreakerPath()) return true;
     if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
       return false;
     }
@@ -300,6 +306,8 @@ export class CortexDocumentStructure {
         for (const indexedPath of indexedFiles) {
           if (
             new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+            (new CortexDocumentPath(indexedPath).isCircuitBreakerPath() &&
+              graphPath !== rootGraphPath) ||
             new CortexChildGraphReference({
               graphPath,
               indexedPath,

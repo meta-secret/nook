@@ -82,6 +82,28 @@ const AI_TYPESCRIPT_POLICY_ROUTES = [
   },
 ] as const;
 
+const CIRCUIT_BREAKER_LINK = 'CIRCUIT-BREAKER.md';
+
+const AI_CIRCUIT_BREAKER_ROUTES = [
+  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/gizmo/AGENTS.md',
+  '.cortex/teams/ai/cortex-specialist/AGENTS.md',
+  '.cortex/teams/ai/loom-specialist/AGENTS.md',
+] as const;
+
+const TRUSTED_HANDOFF_DUPLICATION_SURFACES = [
+  '.cortex/AGENTS.md',
+  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/architecture/refactoring-experts.md',
+  '.cortex/teams/ai/workflows/structural-refactoring.md',
+  '.cortex/teams/ai/references/loom-tools.md',
+  '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
+  '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
+  '.cortex/teams/ai/dynamic-skills/module-expert.md',
+  '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
+  'agentic-ai/loom/README.md',
+] as const;
+
 test('extracts index metadata and renders markdown', () => {
   const documents = [
     {
@@ -264,6 +286,77 @@ test('routes every AI TypeScript leaf through the minimal policy authorities', (
   );
   expect(aiIndex).toContain(
     '[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
+  );
+});
+
+test('keeps the circuit breaker first and mandatory across root and AI entries', () => {
+  const repositoryEntry = readFileSync(
+    path.join(REPOSITORY_ROOT, 'AGENTS.md'),
+    'utf8',
+  );
+  expect(repositoryEntry).toContain(
+    '[`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md)',
+  );
+  expect(repositoryEntry.indexOf('.cortex/CIRCUIT-BREAKER.md')).toBeLessThan(
+    repositoryEntry.indexOf('.cortex/AGENTS.md'),
+  );
+
+  for (const relativePath of AI_CIRCUIT_BREAKER_ROUTES) {
+    const document = readFileSync(
+      path.join(REPOSITORY_ROOT, relativePath),
+      'utf8',
+    );
+    expect(document).toContain(CIRCUIT_BREAKER_LINK);
+    expect(document.indexOf(CIRCUIT_BREAKER_LINK)).toBeLessThan(
+      document.indexOf('## Mission'),
+    );
+  }
+
+  const rootContract = CortexContextRouterScenario.normalizeMarkdown(
+    readFileSync(path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'), 'utf8'),
+  );
+  expect(rootContract).toContain(
+    'Every team and leaf entry inherits this first-read rule through its Prime-issued packet.',
+  );
+  expect(rootContract).toContain(
+    'That packet records that the circuit breaker was read before direct team context loading.',
+  );
+});
+
+test('keeps trusted-agent prohibitions single-sourced in the circuit breaker', () => {
+  const prohibitedDuplicates = [
+    'anti-forgery checks, key registries, or authority registries',
+    'one-use capability issuance or consumption theatrics',
+    'No signature, anti-forgery check, replay gate, digest',
+    'signatures, encrypted receipts, capability registries, replay ledgers',
+  ] as const;
+
+  for (const relativePath of TRUSTED_HANDOFF_DUPLICATION_SURFACES) {
+    const document = readFileSync(
+      path.join(REPOSITORY_ROOT, relativePath),
+      'utf8',
+    );
+    for (const duplicate of prohibitedDuplicates) {
+      expect(document).not.toContain(duplicate);
+    }
+  }
+});
+
+test('forwards remote Task selectors without catalog prevalidation', () => {
+  const circuitBreaker = CortexContextRouterScenario.normalizeMarkdown(
+    readFileSync(
+      path.join(REPOSITORY_ROOT, '.cortex/CIRCUIT-BREAKER.md'),
+      'utf8',
+    ),
+  );
+  expect(circuitBreaker).toContain(
+    'Forward the user-requested remote Task selector without checking whether it exists in a local catalog.',
+  );
+  expect(circuitBreaker).toContain(
+    'An unknown or missing selector is valid dispatch input and fails naturally on the GitHub Actions runner.',
+  );
+  expect(circuitBreaker).toContain(
+    'Do not add selector discovery, existence validation, aliases, fallback resolution, or pre-dispatch build machinery.',
   );
 });
 

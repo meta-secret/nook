@@ -36,7 +36,7 @@ based on the parent feature worktree's exact baseline. The worker returns the
 exact commit for its iteration and focused evidence. The delivery parent
 reports its ordinary status and evidence, then verifies and integrates that
 commit into the parent worktree before deciding whether to continue. Follow the
-[trusted in-thread handoff boundary](../AGENTS.md#trusted-in-thread-handoffs).
+root [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Scope
 

@@ -177,19 +177,17 @@ mechanical boundary; it does not provide worker lifecycle or recovery
 machinery.
 
 Acceptance commands are typed external-manager references. Each reference
-declares its selector plus read, write, and output claims; Loom validates that
-those claims stay within the task resources, while the external manager
-resolves and executes the selector and returns ordinary evidence. Loom never
-executes acceptance commands itself.
+declares its selector plus read, write, and output claims. Loom validates that
+those claims stay within the task resources. It forwards the selector without
+catalog or existence validation. The external manager executes it and returns
+ordinary evidence. An unknown selector fails naturally in GitHub Actions. Loom
+never executes acceptance commands itself.
 
-Module delivery results are trusted typed in-process handoffs because Team
-Gizmos and Team Agents run in the same Codex harness. Admission state carries
-dependency readiness, resource claims, attempt status, current Git head, and
-provider results directly. Loom does not add signatures, encrypted receipts,
-capability registries, replay ledgers, or redundant authenticity checks between
-these cooperating agents. Git commit, baseline, path, symlink, gitlink,
-worktree, and independently supplied evidence checks remain at their actual
-external boundaries.
+Module delivery follows the root
+[Agent Derailment Circuit Breaker](../../.cortex/CIRCUIT-BREAKER.md). Admission
+state carries dependency readiness, resource claims, attempt status, current
+Git head, and provider results directly. Git and independently supplied
+evidence checks remain at their owning external boundaries.
 
 ## Structural refactoring experts
 

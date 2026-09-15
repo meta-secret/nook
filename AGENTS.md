@@ -1,7 +1,9 @@
 # Nook Agent Entry Point
 
-Read [`.cortex/AGENTS.md`](.cortex/AGENTS.md) and [`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md)
-before making changes in this repository. They are the system of record and central
+Read [`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md) before every
+other Cortex document. Then read [`.cortex/AGENTS.md`](.cortex/AGENTS.md) and
+[`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
+changes in this repository. They are the system of record and central
 knowledge graph for architecture, product context, rules, and workflows.
 
 ## Review guidelines

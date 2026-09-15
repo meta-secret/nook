@@ -11,13 +11,6 @@ This is the `loom-structural-experts` profile and produces
 Use this role only when multiple structural terminal-observation streams need a
 shared diagnostic join.
 
-### Trusted handoff boundary
-
-The [AI team contract](../AGENTS.md#trusted-in-thread-handoffs) describes the
-ordinary trusted handoff. Team Gizmos use that handoff. Team Agents use that
-handoff. This role does not add a peer-authentication protocol. It does not add
-a peer-integrity protocol.
-
 ## Problem pattern
 
 Independent code and Cortex findings can conflict or prescribe the wrong
@@ -51,10 +44,12 @@ The input boundary requires:
 The synthesizer does not inspect source, create new evidence, apply patches,
 authorize writes, schedule successors, or mutate lifecycle state.
 
+The handoff follows the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). This role adds
+only the structural observations required for synthesis.
+
 The parent orders dependencies and supplies the typed observations after the
-required children finish. No signature, anti-forgery check, replay gate, digest,
-one-use capability, or duplicate verification is required between trusted
-peers.
+required children finish.
 
 ### Ordinary synthesis boundary
 

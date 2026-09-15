@@ -1,5 +1,8 @@
 # AI Team Gizmo Contract
 
+Read the root [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md)
+before this contract.
+
 ## Mission
 
 AI Team Gizmo is the AI team's direct child orchestrator under Gizmo Prime.

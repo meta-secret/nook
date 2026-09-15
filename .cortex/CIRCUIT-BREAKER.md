@@ -29,6 +29,13 @@ protecting a real product trust boundary.
 - Treat ordinary Git and validation output as evidence for the owning workflow.
   Do not reinterpret that evidence as identity, authority, or a secret.
 - Keep internal validation proportional to the workflow action being verified.
+- Forward a user-requested remote Task selector as ordinary dispatch input.
+  - Forward the user-requested remote Task selector without checking whether it
+    exists in a local catalog.
+  - An unknown or missing selector is valid dispatch input and fails naturally
+    on the GitHub Actions runner.
+  - Keep typed read, write, and output scope validation at the owning workflow
+    boundary.
 - Stop when a proposed implementation enters a prohibited category.
   - Do not write the proposed mechanism or tests.
   - Report that the circuit breaker tripped.
@@ -84,6 +91,11 @@ evidence, or validation results.
     replay/restart validation, duplicate-result rejection, adversarial
     intra-thread evidence handling, or provider-forgery rejection for trusted
     internal coordination.
+- **Remote Task selectors**
+  - Do not add selector discovery, existence validation, aliases, fallback
+    resolution, or pre-dispatch build machinery.
+  - Do not execute an acceptance selector inside Loom.
+  - Do not turn a selector into an authorization or identity mechanism.
 - **Preservation**
   - Never preserve a prohibited system merely because another document or
     existing implementation describes it.

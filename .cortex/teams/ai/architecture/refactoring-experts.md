@@ -23,10 +23,9 @@ role. It receives typed `Completed` and `Failed` structural observations from
 the active harness and does not inspect the repository. A failed observation
 remains failed. The aggregate is diagnostic output for the delivery owner.
 
-Team Gizmos and Team Agents use the ordinary trusted handoff described by the
-[AI team contract](../AGENTS.md#trusted-in-thread-handoffs). No internal
-cryptographic receipt, replay gate, or result-authority token belongs in this
-registry.
+Team Gizmos and Team Agents follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). This registry
+adds only its typed structural-observation fields.
 
 These roles are separate from the production
 [module expert registry](module-experts.md).
@@ -126,10 +125,8 @@ the exact source commit, bounded read claims, and exact evidence paths. The
 diagnostic aggregator receives the child status and result observations after
 their declared dependencies complete.
 
-This is a typed task and result handoff. It does not require signatures,
-anti-forgery checks, replay gates, digests, one-use capabilities, or duplicate
-verification between trusted Team Gizmos and Team Agents. The parent still
-reviews the ordinary result before assigning edits.
+This is a typed task and result handoff. The parent reviews the ordinary result
+before assigning edits.
 
 ### Code refactoring result
 
@@ -319,7 +316,12 @@ Examples include:
 - canonical skill-card registration and harness-mirror absence;
 - exact duplicate blocks;
 - source-size and closed-vocabulary checks;
-- existence of named Task entrypoints.
+- existence of Task entrypoints declared by canonical Cortex workflow
+  contracts.
+
+User-requested remote Task selectors are dispatch input. Their existence is not
+a deterministic pre-dispatch candidate. Follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 Semantic decisions remain in Cortex.
 
