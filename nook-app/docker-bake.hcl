@@ -56,16 +56,22 @@ variable "GHA_CACHE_EXPORT_MODE" {
   default = "max"
 }
 
-// Main keeps this empty. Ordinary PR jobs use a stable -pr-<number> lane so
-// successive heads and fresh ARC shards reuse the previous verified graph.
-// Remote build:compile and local publications retain immutable -git-<sha>
-// identities. Every nonempty suffix writes only remote-buildcache and cannot
-// replace trusted Main refs.
+// Main keeps this empty. Feature jobs publish immutable -git-<sha> identities.
+// Every nonempty suffix writes only remote-buildcache and cannot replace
+// trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// Isolated PR-number and exact-git writes use this to enable Main fallback.
+// Reads may select the nearest immutable first-parent cache while writes keep
+// the current head's GHA_CACHE_SCOPE_SUFFIX. Empty preserves Main/local use.
+variable "GHA_CACHE_RESTORE_SCOPE_SUFFIX" {
+  default = ""
+}
+
+restore_cache_scope_suffix = GHA_CACHE_RESTORE_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_SCOPE_SUFFIX : GHA_CACHE_SCOPE_SUFFIX
+
+// Immutable feature writes use this to enable Main fallback.
 // Per-scope exact probes suppress that fallback when an exact ref is present.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""

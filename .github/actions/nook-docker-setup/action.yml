@@ -27,9 +27,9 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
-      pull-request number (-pr-<number>) while using Main when that PR ref is absent.
-      Successive heads of the same PR update that isolated lane, including on ARC. The
+      Allow hosted runners to publish only an immutable remote-buildcache ref keyed by
+      commit (-git-<sha>) while restoring the nearest bounded first-parent candidate
+      or Main. Concurrent heads never replace one another, including on ARC. The
       authorized remote build:compile publication handoff writes only its
       exact-commit source ref; dependency inputs retain a separate fingerprinted
       boundary. A read-only build:compile verification never exports a registry cache.
@@ -57,10 +57,12 @@ inputs:
     default: registry.dev.nokey.sh
   registry-username:
     description: OCI registry username.
-    required: true
+    required: false
+    default: ""
   registry-password:
     description: OCI registry password or token.
-    required: true
+    required: false
+    default: ""
   sccache-access-key:
     description: SeaweedFS S3 access key for Rust compiler objects.
     required: false
@@ -108,6 +110,7 @@ runs:
         ensure_minimum fs.inotify.max_user_watches 10485760
 
     - name: Login to Nook OCI registry
+      if: ${{ inputs.registry-username != '' && inputs.registry-password != '' }}
       uses: docker/login-action@v4
       with:
         registry: ${{ inputs.registry-host }}
@@ -115,7 +118,7 @@ runs:
         password: ${{ inputs.registry-password }}
 
     - name: Preload hosted BuildKit from Zot
-      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && inputs.registry-username != '' && inputs.registry-password != '' }}
       shell: bash
       run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
 
@@ -124,12 +127,17 @@ runs:
     # The runner carries only client tooling and never receives a Docker daemon
     # or host runtime socket.
     # Taskfiles never pass --builder; the health wrapper selects it.
-    - name: Setup hosted Buildx
+    - name: Setup authenticated hosted Buildx
       id: hosted-buildx
-      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && inputs.registry-username != '' && inputs.registry-password != '' }}
       uses: docker/setup-buildx-action@v4
       with:
         driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
+
+    - name: Setup secret-free hosted Buildx
+      id: hosted-buildx-direct
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') && (inputs.registry-username == '' || inputs.registry-password == '') }}
+      uses: docker/setup-buildx-action@v4
 
     - name: Connect ARC Buildx to the node-local BuildKit shard
       id: arc-buildx
@@ -167,7 +175,9 @@ runs:
       shell: bash
       env:
         NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}
-        NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}
+        NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name || steps.hosted-buildx-direct.outputs.name }}
+        NOOK_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        NOOK_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
       run: |
         set -euo pipefail
 
@@ -184,6 +194,24 @@ runs:
         esac
         test -n "$NOOK_SELECTED_BUILDER"
         echo "NOOK_PR_BUILDX_BUILDER=$NOOK_SELECTED_BUILDER" >> "$GITHUB_ENV"
+        registry_username="$NOOK_REGISTRY_USERNAME"
+        registry_password="$NOOK_REGISTRY_PASSWORD"
+        if { [ -n "$registry_username" ] && [ -z "$registry_password" ]; } \
+          || { [ -z "$registry_username" ] && [ -n "$registry_password" ]; }; then
+          echo "Registry username and password must either both be present or both be absent" >&2
+          exit 1
+        fi
+        if [ -z "$registry_username" ]; then
+          echo "Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export"
+          echo "GHA_CACHE_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=" >> "$GITHUB_ENV"
+          echo "NOOK_REGISTRY_CACHE_HOST=" >> "$GITHUB_ENV"
+          exit 0
+        fi
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
         echo "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}" >> "$GITHUB_ENV"
 
@@ -268,25 +296,17 @@ runs:
 
         scope_suffix=""
         fallback_enabled=""
-        # Ordinary PR jobs use a stable isolated lane so a fresh runner can
-        # consume the preceding head. Remote build:compile remains an immutable
-        # exact-commit proof artifact.
+        # Every feature publication is immutable. A bounded first-parent search
+        # chooses a prior cache for restore without allowing concurrent heads
+        # to replace each other's tags.
         if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then
           fallback_enabled=1
-          if [ "$event_name" = "pull_request" ]; then
-            scope_suffix="-pr-$pr_number"
-          else
-            if [ -z "$NOOK_REMOTE_TASK_SELECTION" ]; then
-              echo "isolated-cache-write requires a dispatched task selection" >&2
-              exit 1
-            fi
-            scope_sha="$(git rev-parse HEAD)"
-            if [[ ! "$scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "isolated-cache-write requires a 40-char lowercase git SHA (got: ${scope_sha:-empty})" >&2
-              exit 1
-            fi
-            scope_suffix="-git-$scope_sha"
+          scope_sha="$(git rev-parse HEAD)"
+          if [[ ! "$scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "isolated-cache-write requires a 40-char lowercase git SHA (got: ${scope_sha:-empty})" >&2
+            exit 1
           fi
+          scope_suffix="-git-$scope_sha"
           if [ "$isolated_cache_write" = "true" ]; then
             echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
           else
@@ -294,6 +314,7 @@ runs:
           fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
 
         # cache-from entries are merged, not ordered. Importing exact and Main
@@ -304,6 +325,7 @@ runs:
         if [ -n "$scope_suffix" ]; then
           exact_repository="nook/remote-buildcache"
         fi
+        cache_probe_failure_class=none
         cache_ref_status() {
           local ref="$1"
           local probe_output
@@ -357,6 +379,10 @@ runs:
             1)
               echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
               ;;
+            2)
+              cache_probe_failure_class=transient_unavailable
+              echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
+              ;;
             *) return "$probe_status" ;;
           esac
           echo "$env_name=$available" >> "$GITHUB_ENV"
@@ -377,10 +403,76 @@ runs:
             1)
               echo "Main cache absent; source-free dependency fallback enabled: $scope"
               ;;
+            2)
+              cache_probe_failure_class=transient_unavailable
+              echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
+              ;;
             *) return "$probe_status" ;;
           esac
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
+
+        restore_scope_suffix="$scope_suffix"
+        if [ -n "$scope_suffix" ] \
+          && [ "$cache_selection" != "compile" ] \
+          && [ "$cache_selection" != "connection-only" ] \
+          && [ "$cache_selection" != "wasm-proof" ]; then
+          case "$cache_selection" in
+            general|native) restore_anchor=nook-rust-base-v2 ;;
+            wasm) restore_anchor=nook-rust-wasm-source-v3 ;;
+            preflight) restore_anchor=nook-preflight-v1 ;;
+            web-e2e|web-research-image) restore_anchor=nook-web-e2e-v1 ;;
+            web-research-deps) restore_anchor=nook-web-research-deps-v1 ;;
+            ecosystem-dylint) restore_anchor=nook-rust-ecosystem-dylint-v4 ;;
+            ecosystem-fuzz) restore_anchor=nook-rust-ecosystem-fuzz-v4 ;;
+            ecosystem-policy-tools) restore_anchor=nook-rust-ecosystem-policy-tools-v5 ;;
+            ecosystem-deterministic) restore_anchor=nook-rust-ecosystem-deterministic-v2 ;;
+            ecosystem-kani|ecosystem-smoke) restore_anchor=nook-rust-ecosystem-kani-v2 ;;
+            *) restore_anchor="" ;;
+          esac
+          restore_status=0
+          cache_ref_status "$registry_host/$exact_repository/$restore_anchor$scope_suffix:buildcache" || restore_status=$?
+          if [ "$restore_status" -eq 1 ]; then
+            ancestor_probe_limit=8
+            ancestor_probe_dir="$(mktemp -d)"
+            mapfile -t restore_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
+            for ancestor_sha in "${restore_ancestors[@]}"; do
+              (
+                ancestor_status=0
+                cache_ref_status "$registry_host/$exact_repository/$restore_anchor-git-$ancestor_sha:buildcache" || ancestor_status=$?
+                printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
+              ) &
+            done
+            wait || true
+            for ancestor_sha in "${restore_ancestors[@]}"; do
+              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
+              if [ "$ancestor_status" -eq 3 ]; then
+                rm -rf "$ancestor_probe_dir"
+                exit 3
+              fi
+            done
+            for ancestor_sha in "${restore_ancestors[@]}"; do
+              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
+              case "$ancestor_status" in
+                0)
+                  restore_scope_suffix="-git-$ancestor_sha"
+                  echo "Nearest immutable cache candidate available: $restore_anchor at $ancestor_sha"
+                  break
+                  ;;
+                1) ;;
+                2) cache_probe_failure_class=transient_unavailable ;;
+                *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
+              esac
+            done
+            rm -rf "$ancestor_probe_dir"
+          elif [ "$restore_status" -eq 2 ]; then
+            cache_probe_failure_class=transient_unavailable
+            echo "Immutable cache discovery unavailable; continuing with trusted Main/cold fallback"
+          elif [ "$restore_status" -ne 0 ]; then
+            exit "$restore_status"
+          fi
+          echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+        fi
 
         case "$cache_selection" in
           general|native|wasm|wasm-proof|compile)
@@ -425,7 +517,7 @@ runs:
           compile_restore_scope_suffix=""
           if [ -n "$compile_exact_available" ]; then
             compile_restore_scope_suffix="$scope_suffix"
-          else
+          elif [ "$compile_probe_failure_class" = "none" ]; then
             # Exact refs are immutable proof artifacts. Probe a small first-
             # parent window in parallel and import only the nearest successful
             # full graph, so a new commit can reuse unchanged source vertices
@@ -440,7 +532,14 @@ runs:
                 printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
               ) &
             done
-            wait
+            wait || true
+            for ancestor_sha in "${compile_ancestors[@]}"; do
+              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
+              if [ "$ancestor_status" -eq 3 ]; then
+                rm -rf "$ancestor_probe_dir"
+                exit 3
+              fi
+            done
             for ancestor_sha in "${compile_ancestors[@]}"; do
               ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
               case "$ancestor_status" in
@@ -456,6 +555,7 @@ runs:
             rm -rf "$ancestor_probe_dir"
           fi
           echo "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
           echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
           echo "Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6"
         fi
@@ -463,10 +563,10 @@ runs:
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
           # Main source also owns fresh dependency-only restores after publication.
-          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$restore_scope_suffix"
           if [ -n "$scope_suffix" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$restore_scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$restore_scope_suffix"
           fi
           publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
         fi
@@ -475,45 +575,45 @@ runs:
           # WASM consumes the base, fingerprinted dependency, and complete WASM source scopes.
           wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
           if [ -n "$scope_suffix" ]; then
-            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
+            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$restore_scope_suffix"
           fi
           if [ "$cache_selection" != "general" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$restore_scope_suffix"
           fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$restore_scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
           fi
         fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$restore_scope_suffix"
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \
           || [ "$cache_selection" = "web-research-image" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$restore_scope_suffix"
           # Keep the aggregate dependency graph and its independent lockfile
           # children distinct from the source-bearing browser image. Each
           # importer selects exact-or-Main rather than merging cache versions.
-          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$restore_scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$restore_scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
             publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
@@ -521,7 +621,7 @@ runs:
           fi
         fi
         if [ "$cache_selection" = "web-research-deps" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$restore_scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
           fi
@@ -529,6 +629,9 @@ runs:
         case "$cache_selection" in
           general|native|wasm|compile|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
+          if [ "$cache_selection" != "compile" ]; then
+            echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$cache_probe_failure_class" >> "$GITHUB_ENV"
+          fi
           ;;
         esac
 

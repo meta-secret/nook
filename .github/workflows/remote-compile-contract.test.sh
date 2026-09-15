@@ -50,7 +50,7 @@ for secret_binding in \
   'secrets+=id=sccache_s3_secret_key,src=${secret_key_file}'; do
   grep -Fq -- "--set=build-compile.${secret_binding}" "$compile_script"
 done
-for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
+for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'Nearest immutable cache candidate available' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
 done
 
@@ -59,6 +59,14 @@ done
 # commit scope so a cache published by another runner remains consumable.
 grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup"
 grep -Fq 'timeout 6s docker buildx imagetools inspect "$ref"' "$setup"
+grep -Fq 'wait || true' "$setup"
+if grep -Fq -- '-pr-$pr_number' "$setup"; then
+  echo 'mutable PR-number cache scope remains' >&2
+  exit 1
+fi
+for required in 'inputs.registry-username != '\''\''' 'inputs.registry-password != '\''\''' 'Setup secret-free hosted Buildx' 'GHA_CACHE_ENABLED='; do
+  grep -Fq -- "$required" "$setup"
+done
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
   grep -Fq -- "$required" "$probe_classification_contract"
 done

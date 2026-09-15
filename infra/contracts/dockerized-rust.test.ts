@@ -267,6 +267,8 @@ class DockerizedRustContract {
           .replaceAll("${{ inputs.cache-write }}", "false")
           .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
+          .replaceAll("${{ inputs.registry-username }}", "remote-writer")
+          .replaceAll("${{ inputs.registry-password }}", "remote-secret")
           .replaceAll(
             "${{ github.action_path }}",
             join(this.root, ".github/actions/nook-docker-setup"),
@@ -287,11 +289,13 @@ class DockerizedRustContract {
             NOOK_ARC_RUNNER: "1",
             NOOK_REMOTE_TASK_SELECTION: "",
             NOOK_SELECTED_BUILDER: "test-builder",
+            NOOK_REGISTRY_USERNAME: "remote-writer",
+            NOOK_REGISTRY_PASSWORD: "remote-secret",
           },
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        const exactScopeSuffix = "-pr-1";
+        const exactScopeSuffix = `-git-${this.command({ cwd: this.root, args: ["rev-parse", "HEAD"] }).trim()}`;
         expect(values).toContain(
           `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
         );
@@ -305,26 +309,66 @@ class DockerizedRustContract {
           expect(calls).toContain(exactScopeSuffix);
         }
         if (profile === "ecosystem-smoke") {
-          expect(calls.trim().split("\n")).toHaveLength(3);
+          expect(calls.trim().split("\n")).toHaveLength(4);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
           expect(calls).toContain("nook-rust-ecosystem-fuzz-");
           expect(calls).toContain("nook-rust-ecosystem-kani-");
         } else if (profile.startsWith("ecosystem-")) {
-          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls.trim().split("\n")).toHaveLength(2);
           expect(calls).toContain(`nook-rust-${profile}-`);
         }
         if (profile === "preflight") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls.trim().split("\n")).toHaveLength(2);
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(4);
+          expect(calls.trim().split("\n")).toHaveLength(8);
           expect(calls).toContain("nook-web-e2e-v1");
           expect(calls).toContain("nook-web-deps-v1");
           expect(calls).toContain("nook-web-app-deps-v1");
           expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
+
+      const secretFreeScript = selection.run
+        .replaceAll("${{ inputs.cache-selection }}", "native")
+        .replaceAll("${{ github.event_name }}", "pull_request")
+        .replaceAll("${{ github.ref }}", "refs/pull/1/merge")
+        .replaceAll("${{ github.event.pull_request.number }}", "1")
+        .replaceAll("${{ inputs.isolated-cache-write }}", "true")
+        .replaceAll("${{ inputs.main-cache-only }}", "true")
+        .replaceAll("${{ inputs.cache-write }}", "false")
+        .replaceAll("${{ inputs.publish-compile-cache }}", "true")
+        .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
+        .replaceAll("${{ inputs.registry-username }}", "")
+        .replaceAll("${{ inputs.registry-password }}", "")
+        .replaceAll(
+          "${{ github.action_path }}",
+          join(this.root, ".github/actions/nook-docker-setup"),
+        );
+      const secretFreeEnvironment = join(temporary, "secret-free-environment");
+      const secretFreeProbes = join(temporary, "secret-free-probes");
+      writeFileSync(secretFreeEnvironment, "");
+      writeFileSync(secretFreeProbes, "");
+      const secretFreeResult = spawnSync("bash", ["-c", secretFreeScript], {
+        cwd: this.root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          PROBE_LOG: secretFreeProbes,
+          GITHUB_ENV: secretFreeEnvironment,
+          GITHUB_WORKSPACE: this.root,
+          NOOK_SELECTED_BUILDER: "test-builder",
+          NOOK_REGISTRY_USERNAME: "",
+          NOOK_REGISTRY_PASSWORD: "",
+        },
+      });
+      expect(secretFreeResult.status, secretFreeResult.stderr).toBe(0);
+      expect(readFileSync(secretFreeProbes, "utf8")).toBe("");
+      expect(readFileSync(secretFreeEnvironment, "utf8")).toContain(
+        "GHA_CACHE_ENABLED=\n",
+      );
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
@@ -995,7 +1039,7 @@ test(
   contract.workflowTooling.bind(contract),
 );
 test(
-  "ARC updates and restores the stable isolated PR cache lane",
+  "ARC publishes immutable heads and restores bounded ancestor candidates",
   contract.arcCacheSelection.bind(contract),
 );
 test(

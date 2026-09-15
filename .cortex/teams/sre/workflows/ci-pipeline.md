@@ -75,11 +75,11 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Cache health consumes deterministic JSON telemetry from all seven BuildKit
   producers and also records the terminal status of the exact-image UI demo,
   extension, and full-browser consumers. Skipped optional consumers are
-  neutral; a selected consumer `failure` or `cancelled` result activates the
-  Docker Cache Specialist because GitHub may report a job timeout as either
-  conclusion and the downstream result alone cannot distinguish it from a
-  functional failure.
-- Each ordinary PR uses one isolated `-pr-<number>` cache lane. All seven
+  neutral. Each selected consumer publishes a start sentinel after its exact
+  image launches. A later functional failure is diagnostic only; a missing
+  sentinel on failure/cancellation identifies cache setup or timeout and
+  activates the Docker Cache Specialist.
+- Each ordinary PR publishes isolated immutable `-git-<head-sha>` cache refs. All seven
   producers, including ARC jobs, may update their own target ref after a
   successful solve, so a fresh shard and the next PR head restore the prior
   graph. Main remains read-only fallback and remote `build:compile` retains its
@@ -331,15 +331,16 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - Trusted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
 - Trusted ARC PR verification reuses the persistent BuildKit shard on its node
-  and publishes the completed graph to its isolated PR-number lane.
+  and publishes the completed graph to its immutable head lane.
 - Exact-SHA handoffs retain commit-scoped registry identity.
 - Native, WASM, and web ARC producers perform a post-verification cache-only
   solve against the same persistent shard to publish their already-completed
   graph. The solve must remain cached; it must not repeat validation commands.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
-- Once a PR-number scope exists, setup imports that scope alone.
+- Setup restores the current immutable head when present, otherwise the nearest
+  available cache from a bounded first-parent window, then Main/cold fallback.
 - BuildKit merges cache importers; list order is not fallback precedence.
-- Isolated PR-number lanes own cross-head and repeat-run acceleration without
+- Immutable head lanes plus bounded ancestor discovery own cross-head and repeat-run acceleration without
   mutable global branch refs.
 - WASM consumers read the verified dependency ref instead of competing with the larger native dependency lineage.
 - Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
@@ -347,7 +348,7 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
-- Cache-publishing PR jobs write isolated PR-number refs; Remote jobs write
+- Cache-publishing PR jobs and Remote jobs write
   git-commit refs. Both use Main only while their isolated scope is absent and
   cannot replace shared Main manifests.
 - The legacy registered `nook` runner is not used.
@@ -469,8 +470,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Browser commands execute directly inside the exact-source image built by
     the verified PR web job.
 - **Isolated PR cache policy:**
-  - PR browser producers publish only isolated PR-number cache refs.
-  - Each consumer uses its PR-number browser ref.
+  - PR browser producers publish only isolated immutable-head cache refs.
+  - Each consumer uses the run-scoped browser image produced from that head.
   - An available PR ref is imported alone.
   - A missing PR ref falls back to the browser-image seed owned by trusted Main.
   - Neither web shard nor its join writes a competing browser cache.
@@ -569,7 +570,7 @@ verification.
 - The demo job starts after the WASM handoff is ready.
 - Its browser-image solve is read-only.
 - The verified web producer publishes the browser graph to the isolated
-  PR-number scope before Playwright consumers start.
+  immutable head scope before Playwright consumers start.
 - Demo-only waits may hold meaningful before and after states for review.
   - Ordinary regression specs remain full-speed.
 - CI retains the Actions result for 90 days.
@@ -810,11 +811,14 @@ authenticator-domain to 90 percent.
 - Protected default-branch Zot refs remain available to every node and hosted
   job. ARC jobs reuse a warm local shard before registry transfer.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
-- PR Bake exporters write only PR-number refs under `nook/remote-buildcache/**`.
+- PR Bake exporters write only immutable head refs under `nook/remote-buildcache/**`.
 - Docker setup probes each full-graph PR ref separately.
-- Existing PR refs are imported alone. Missing refs use dependency
-  fingerprints and trusted Main.
+- The selected immutable head or nearest first-parent ref is imported alone.
+  Missing candidates use dependency fingerprints and trusted Main.
 - Fork pull requests receive no registry credentials.
+- Secret absence is the complete private-registry boundary: those jobs skip
+  Zot login, BuildKit-image preload, registry probes, imports, and exports and
+  use the local cold BuildKit path.
 - Native coverage and WASM source-sensitive layers have separate Zot refs in addition to the manifest-only dependency refs, so non-Rust pushes do not repeat unchanged Cargo compilation.
 
 **SeaweedFS sccache:**

@@ -87,6 +87,25 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
   assert.ok(model.warnings.includes("verify:cache_sample_too_small:10<20"));
 });
 
+void test("activates the specialist for a bounded transient cache probe", () => {
+  const record = telemetry("rust", {
+    cache_scope: {
+      ...telemetry("rust").cache_scope,
+      imports: {
+        probes_complete: true,
+        failure_class: "transient_unavailable",
+        availability: [],
+      },
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [{ id: "rust", result: "success", buildExpected: true, readOnly: false }],
+    telemetry: [record],
+  });
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(model.gate.reasons.includes("rust:cache_import_probe_transient"));
+});
+
 void test("tracks image consumers without requiring BuildKit telemetry", () => {
   const skipped = new PrCacheHealth().evaluate({
     jobs: [
@@ -102,9 +121,10 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
       { id: "extension-e2e", result: "failure", buildExpected: false, readOnly: true, consumer: true },
     ],
     telemetry: [],
+    consumerStarts: new Set(["extension-e2e"]),
   });
-  assert.equal(failed.gate.verdict, "fail");
-  assert.ok(failed.gate.reasons.includes("extension-e2e:consumer_failure_or_timeout"));
+  assert.equal(failed.gate.verdict, "pass");
+  assert.ok(failed.warnings.includes("extension-e2e:consumer_functional_failure"));
 
   const cancelled = new PrCacheHealth().evaluate({
     jobs: [
@@ -113,7 +133,7 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
     telemetry: [],
   });
   assert.equal(cancelled.gate.verdict, "fail");
-  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_failure_or_timeout"));
+  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_setup_or_timeout"));
 });
 
 void test("records a legitimate cold build without applying the warm threshold", () => {
@@ -160,6 +180,14 @@ void test("fails changed-head zero-hit verification and cache write errors", () 
       cache_hits: 0,
       cache_write_errors: 1,
     },
+    cache_scope: {
+      ...telemetry("rust").cache_scope,
+      compile_source: {
+        ...telemetry("rust").cache_scope.compile_source,
+        scope: "nook-build-compile-v4-git-new",
+        restore_scope: "nook-build-compile-v4-git-parent",
+      },
+    },
   });
   const model = new PrCacheHealth().evaluate({
     jobs: [
@@ -171,6 +199,24 @@ void test("fails changed-head zero-hit verification and cache write errors", () 
   assert.ok(model.gate.reasons.includes("rust:sccache_write_errors:1"));
   assert.ok(model.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
   assert.ok(!model.gate.reasons.includes("rust:telemetry_incomplete"));
+});
+
+void test("does not require sccache hits for unrelated BuildKit imports", () => {
+  const unrelated = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      publication_status: "pending_verification",
+      cache_hits: 0,
+      cache_misses: 10,
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [{ id: "rust", result: "success", buildExpected: true, readOnly: false }],
+    telemetry: [unrelated],
+  });
+  assert.equal(model.gate.verdict, "pass");
+  assert.ok(model.warnings.includes("rust:publication_pending_verification"));
+  assert.ok(!model.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
 });
 
 void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {
@@ -191,6 +237,18 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
+void test("reads browser consumer start sentinels recursively", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-consumer-"));
+  const nestedDirectory = path.join(directory, "artifact");
+  fs.mkdirSync(nestedDirectory, { recursive: true });
+  fs.writeFileSync(path.join(nestedDirectory, "one.started"), "ui-demo\n");
+  try {
+    assert.deepEqual([...PrCacheHealth.readConsumerStarts(directory)], ["ui-demo"]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 void test("PR workflow covers every BuildKit-producing job without another build", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
   const ecosystem = fs.readFileSync(
@@ -199,6 +257,11 @@ void test("PR workflow covers every BuildKit-producing job without another build
   );
   assert.match(workflow, /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify, ui-demo, extension-e2e, full-e2e-shard\]/);
   assert.match(workflow, /node \.github\/workflows\/lib\/pr-cache-health\.mjs/);
+  assert.match(workflow, /pattern: cache-consumer-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-\*/);
+  assert.equal(
+    workflow.match(/name: Mark browser cache consumer started/g)?.length,
+    3,
+  );
   assert.doesNotMatch(workflow, /cache-health:[\s\S]*docker buildx (?:build|bake)/);
   assert.doesNotMatch(workflow, /ARC keeps the verified (?:native|WASM|web) graph local/);
   assert.equal(

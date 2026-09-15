@@ -40,10 +40,10 @@ export class PrCacheHealth {
   }
 
   /**
-   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[]}} request
+   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[], consumerStarts?: Set<string>}} request
    * @returns {PrCacheHealthModel}
    */
-  evaluate({ jobs, telemetry }) {
+  evaluate({ jobs, telemetry, consumerStarts = new Set() }) {
     const recordsByJob = new Map(
       telemetry.map((record) => [record.github.job, record]),
     );
@@ -56,12 +56,11 @@ export class PrCacheHealth {
       if (
         job.consumer &&
         (job.result === "failure" || job.result === "cancelled")
-      )
-        reasons.push(`${job.id}:consumer_failure_or_timeout`);
-      else if (
-        !job.consumer &&
-        job.result !== "success"
-      )
+      ) {
+        if (consumerStarts.has(job.id))
+          warnings.push(`${job.id}:consumer_functional_failure`);
+        else reasons.push(`${job.id}:consumer_setup_or_timeout`);
+      } else if (!job.consumer && job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
         if (job.buildExpected) reasons.push(`${job.id}:telemetry_missing`);
@@ -86,6 +85,12 @@ export class PrCacheHealth {
       ) {
         reasons.push(`${job.id}:cache_import_probes_incomplete`);
       }
+      if (
+        job.buildExpected &&
+        record.cache_scope.imports?.failure_class === "transient_unavailable"
+      ) {
+        reasons.push(`${job.id}:cache_import_probe_transient`);
+      }
       if (record.sccache.cache_errors > 0)
         reasons.push(
           `${job.id}:sccache_errors:${record.sccache.cache_errors}`,
@@ -109,13 +114,19 @@ export class PrCacheHealth {
       const hasAvailableImport = imports.availability.some(
         (candidate) => candidate.available,
       );
+      const comparableCompilerRestore = Boolean(
+        record.cache_scope.compile_source?.restore_scope &&
+          record.cache_scope.compile_source.restore_scope !==
+            record.cache_scope.compile_source.scope &&
+          record.sccache.requests_executed > 0,
+      );
       if (
         job.buildExpected &&
         record.sccache.publication_status === "pending_verification"
       ) {
-        if (hasAvailableImport && record.sccache.cache_hits === 0) {
+        if (comparableCompilerRestore && record.sccache.cache_hits === 0) {
           reasons.push(`${job.id}:sccache_next_head_zero_hits`);
-        } else if (!hasAvailableImport) {
+        } else if (!comparableCompilerRestore) {
           warnings.push(`${job.id}:publication_pending_verification`);
         }
       }
@@ -247,16 +258,38 @@ export class PrCacheHealth {
     return telemetry;
   }
 
+  /** @param {string} directory @returns {Set<string>} */
+  static readConsumerStarts(directory) {
+    const starts = new Set();
+    if (!fs.existsSync(directory)) return starts;
+    const pending = [directory];
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (!current) continue;
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const entryPath = path.join(current, entry.name);
+        if (entry.isDirectory()) pending.push(entryPath);
+        else if (entry.isFile() && entry.name.endsWith(".started")) {
+          const job = fs.readFileSync(entryPath, "utf8").trim();
+          if (job) starts.add(job);
+        }
+      }
+    }
+    return starts;
+  }
+
   static main() {
     const directory = process.env.NOOK_PR_CACHE_TELEMETRY_DIR || "";
     const output = process.env.NOOK_PR_CACHE_HEALTH_JSON || "";
     const summary = process.env.NOOK_PR_CACHE_HEALTH_MARKDOWN || "";
+    const consumerDirectory = process.env.NOOK_PR_CACHE_CONSUMER_DIR || "";
     const jobs = JSON.parse(process.env.NOOK_PR_CACHE_JOBS || "[]");
     if (!directory || !output || !summary)
       throw new Error("cache-health paths are required");
     const model = new PrCacheHealth().evaluate({
       jobs,
       telemetry: PrCacheHealth.readTelemetry(directory),
+      consumerStarts: PrCacheHealth.readConsumerStarts(consumerDirectory),
     });
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, `${JSON.stringify(model, null, 2)}\n`);

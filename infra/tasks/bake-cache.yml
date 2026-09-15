@@ -193,6 +193,7 @@ tasks:
             GHA_CACHE_WRITE_ENABLED="${BAKE_SIM_CACHE_WRITE_ENABLED}" \
             GHA_CACHE_FALLBACK_ENABLED="${BAKE_SIM_CACHE_FALLBACK_ENABLED}" \
             GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
+            GHA_CACHE_RESTORE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX:-${BAKE_SIM_CACHE_SCOPE_SUFFIX}}" \
             PARENT_OWN_CACHE_ENABLED="${BAKE_SIM_PARENT_OWN_CACHE_ENABLED}" \
             BASE_OWN_CACHE_ENABLED="${BAKE_SIM_BASE_OWN_CACHE_ENABLED}" \
             RUST_DEPS_INPUT_FINGERPRINT="${BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT:-}" \
@@ -681,14 +682,14 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario U ok"
 
-        echo "== Scenario Q: successive PR heads share an isolated cache lane =="
+        echo "== Scenario Q: successor head restores an immutable ancestor cache =="
         # A standalone PR workflow first restores its unchanged dependency/tool
         # stages from trusted Main. The verified build updates only its isolated
-        # PR-number scope. A fresh successor head must restore unchanged source
-        # vertices from that lane while changed vertices execute.
+        # immutable head scope. A fresh successor publishes a different ref but
+        # restores unchanged source vertices from the selected ancestor.
         printf '%s\n' "$parent_input_orig" >"$parent_input"
         printf 'pr-source-edit\n' >"$leaf_input"
-        exact_pr_suffix="-pr-42"
+        exact_pr_suffix="-git-4242424242424242424242424242424242424242"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
@@ -703,12 +704,19 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${exact_pr_suffix}"
 
-        BAKE_SIM_CACHE_WRITE_ENABLED=
+        ancestor_pr_suffix="$exact_pr_suffix"
+        exact_pr_suffix="-git-4343434343434343434343434343434343434343"
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$exact_pr_suffix"
+        BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX="$ancestor_pr_suffix"
         BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
         create_builder "nook-bake-sim-q-retry-${suffix}"
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${ancestor_pr_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${exact_pr_suffix}"
+        BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX=
         echo "scenario Q ok"
 
         echo "== Scenario R: exact-only replay works across linked and internal parents =="
