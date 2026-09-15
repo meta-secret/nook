@@ -102,22 +102,15 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
+fn complete_validation_dispatches_and_rechecks_exact_head() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let readme = read_fallible("README.md")?;
     let current_base_position = direct_validation
         .find(".github/scripts/require-current-base.sh origin \"$base_ref\"")
         .context("direct validation must require a current base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
-    let review_opt_in_position = direct_validation
-        .find("if [ \"$REQUEST_CODEX_REVIEW\" = \"1\" ]; then")
-        .context("direct validation must gate review behind an explicit opt-in")?;
-    let review_request_position = direct_validation
-        .find("if review_request_output=\"$(task pr:review \\")
-        .context("opted-in validation must request exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
@@ -126,10 +119,8 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         .context("direct validation must recheck base freshness after label dispatch")?;
     assert!(
         current_base_position < validation_label_position
-            && validation_label_position < review_opt_in_position
-            && review_opt_in_position < review_request_position
-            && review_request_position < dispatched_head_position,
-        "complete validation must dispatch before an opted-in review and then reject a head change"
+            && validation_label_position < dispatched_head_position,
+        "complete validation must dispatch and then reject a head change"
     );
     assert!(
         dispatched_head_position < dispatched_base_position,
@@ -139,45 +130,18 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         "pr:review-local:",
         "codex review --base origin/main",
         "Cloud review remains Codex-only; hosted validation dispatch never waits for it.",
-        "pr:review:",
-        "CI_AGENT_CMD: pr-review",
-        "pr:review:stabilize:",
-        "CI_AGENT_CMD: pr-review-stabilize",
-        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default \"0\" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'",
-        "REVIEW_WAIT_SECONDS: '{{default \"0\" .REVIEW_WAIT_SECONDS}}'",
     ] {
         assert!(
             agentic_tasks.contains(required),
             "review delivery contract missing: {required}"
         );
     }
-    assert!(
-        !direct_validation.contains("pr:review:stabilize")
-            && !direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
-        "complete validation must not wait for review before dispatch"
-    );
-    for required in [
-        "REQUEST_CODEX_REVIEW: '{{default \"0\" .CODEX_REVIEW}}'",
-        "CODEX_REVIEW must be 0 or 1.",
-        "review_request_state=\"disabled\"",
-        "review_request_state=\"not-requested\"",
-        "grep -Fq '\"state\": \"requested\"'",
-        "Keep this validation running; collect or retry review separately without restarting validation.",
-        "Codex review opt-in: $REQUEST_CODEX_REVIEW.",
-        "Exact-head review request state: $review_request_state.",
-        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",
-    ] {
+    for removed in ["task pr:review", "CODEX_REVIEW", "REVIEW_CIRCUIT_BREAKER"] {
         assert!(
-            direct_validation.contains(required),
-            "post-dispatch review partial-state contract missing: {required}"
+            !direct_validation.contains(removed),
+            "direct validation must not dispatch the removed review tooling: {removed}"
         );
     }
-    assert!(
-        readme.contains(
-            "task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch"
-        ),
-        "public command catalog must place review stabilization after hosted dispatch"
-    );
     assert!(
         direct_validation.contains(
             "changed head or base while validation was dispatched; removed $validation_label from the replacement state."
@@ -323,7 +287,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let system_path = env::var("PATH")?;
     let output = Command::new("bash")
         .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
-        .args(["--run", "preflight,rust:ci,arbitrary:task,hive:verify"])
+        .args(["--run", "preflight,rust:ci,arbitrary:task"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
         .env("GITHUB_STEP_SUMMARY", &summary)
@@ -341,14 +305,13 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     );
     assert_eq!(
         fs::read_to_string(&task_log)?,
-        "preflight\nci:pr:rust\narbitrary:task\nhive:verify\n",
+        "preflight\nci:pr:rust\narbitrary:task\n",
         "a failed task must not prevent later selections from running"
     );
     let summary = fs::read_to_string(&summary)?;
     assert!(summary.contains("| `preflight` | passed |"));
     assert!(summary.contains("| `rust:ci` | failed (exit 1) |"));
     assert!(summary.contains("| `arbitrary:task` | passed |"));
-    assert!(summary.contains("| `hive:verify` | passed |"));
 
     fs::remove_dir_all(fixture)?;
     Ok(())
@@ -457,17 +420,11 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
         0,
         "trusted remote execution must not consume GitHub-hosted capacity"
     );
+    assert!(workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'"));
     assert!(
-        workflow.contains("inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')")
-            && workflow.contains("vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive'")
-            && workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'")
-            && workflow.contains("runs-on: nook-k0s-container"),
-        "remote tasks must select the general, Hive, or container ARC scale set"
-    );
-    assert!(
-        !workflow.contains("Start hosted Hive Neo4j service")
+        !workflow.contains("Start hosted Nook Neo4j service")
             && !workflow.contains("docker run --detach"),
-        "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"
+        "ARC remote tasks must use the Nook scale set sidecar instead of a nested daemon"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
@@ -536,26 +493,12 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
-    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
+    assert!(docker_setup.contains(
+        ": \"${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}\""
+    ));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
-    assert!(workflow.contains(
-        "REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}"
-    ));
-    assert!(workflow.contains(
-        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
-    ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
-    assert!(batch_script.contains(
-        "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
-    ), "Hive must not publish a per-branch cache even when another task makes a mixed ARC batch writable");
-    assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
-    assert_eq!(
-        workflow
-            .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
-            .count(),
-        1,
-        "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
-    );
+    assert!(workflow.contains("isolated-cache-write: \"true\""));
     Ok(())
 }
 
