@@ -18,9 +18,10 @@ EOF
 cat > "$fixture/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 ref="${*: -1}"
+printf '%s\n' "$ref" >> "$DOCKER_CALLS"
 case "$ref" in
-  *nook-rust-base-v2-git-0000000000000000000000000000000000000001:buildcache) exit 0 ;;
-  *nook-rust-deps-v4*) echo 'context canceled' >&2; exit 1 ;;
+  *nook-rust-base-v2-git-0000000000000000000000000000000000000001:buildcache) echo 'context canceled' >&2; exit 1 ;;
+  *nook-rust-deps-v4-git-0000000000000000000000000000000000000001:buildcache) exit 0 ;;
   *nook-rust-native-source-v4-git-0000000000000000000000000000000000000001:buildcache) echo 'manifest unknown' >&2; exit 1 ;;
   *nook-rust-native-source-v4-git-0000000000000000000000000000000000000002:buildcache) exit 0 ;;
   *) exit 0 ;;
@@ -29,7 +30,9 @@ EOF
 chmod +x "$fixture/bin/git" "$fixture/bin/docker"
 
 env_file="$fixture/github-env"
+calls_file="$fixture/docker-calls"
 PATH="$fixture/bin:$PATH" \
+DOCKER_CALLS="$calls_file" \
 GITHUB_ENV="$env_file" \
 GITHUB_WORKSPACE="$repo_root" \
 NOOK_SELECTED_BUILDER=fixture \
@@ -50,9 +53,14 @@ bash "$repo_root/.github/scripts/select-hosted-buildkit-cache.sh" >"$fixture/out
 
 grep -Fqx 'GHA_CACHE_ENABLED=1' "$env_file"
 ! grep -Fqx 'GHA_CACHE_ENABLED=' "$env_file"
-grep -Fqx 'GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX=-git-0000000000000000000000000000000000000001' "$env_file"
-grep -Fqx 'GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX=' "$env_file"
+grep -Fqx 'GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX=' "$env_file"
+grep -Fqx 'GHA_CACHE_RESTORE_RUST_DEPS_SCOPE_SUFFIX=-git-0000000000000000000000000000000000000001' "$env_file"
 grep -Fqx 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX=-git-0000000000000000000000000000000000000002' "$env_file"
 grep -Fqx 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=transient_unavailable' "$env_file"
 grep -Fq '"action":"lineage_main_fallback"' "$fixture/output"
+if grep -Fq 'nook-rust-base-v2-git-0000000000000000000000000000000000000002:buildcache' "$calls_file"; then
+  echo 'farther lineage candidate was probed after a nearer transient result' >&2
+  exit 1
+fi
+grep -Fq -- 'timeout --kill-after=1s' "$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
 echo 'hosted BuildKit lineage probe isolation contract passed'

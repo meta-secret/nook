@@ -164,7 +164,7 @@ cache_ref_status() {
   probe_output="$(mktemp)"
   # Cache discovery is optional acceleration and must never consume an
   # unbounded share of a validation job.
-  timeout "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
+  timeout --kill-after=1s "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
   failure_class="$(bash "${NOOK_CACHE_ACTION_PATH:?NOOK_CACHE_ACTION_PATH is required}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
   case "$failure_class" in
   available)
@@ -368,7 +368,10 @@ if [ -n "$scope_suffix" ] \
         cache_ref_status "$cache_ref" "$request_timeout_seconds" || candidate_status=$?
         printf '%s|%s|%s\n' "$candidate_index" "$candidate_status" "$cache_ref" >> "$probe_file"
         case "$candidate_status" in
-          0|3) break ;;
+          # A transient result leaves every farther candidate uncertain. Stop
+          # this lineage and use its safe Main fallback rather than claiming a
+          # farther hit is the nearest immutable cache.
+          0|2|3) break ;;
         esac
       done
     ) &

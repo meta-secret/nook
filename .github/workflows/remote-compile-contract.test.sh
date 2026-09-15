@@ -15,6 +15,7 @@ probe_classification_contract="$workflows_dir/../../infra/contracts/compile-cach
 action_run_limit_contract="$workflows_dir/action-run-expression-limit.test.sh"
 cache_probe_route_contract="$workflows_dir/../scripts/remote-cache-probe-route.test.sh"
 lineage_probe_contract="$workflows_dir/../scripts/select-hosted-buildkit-cache.test.sh"
+producer_timeout_contract="$workflows_dir/pr-docker-producer-timeout.test.sh"
 proof="$workflows_dir/../../infra/tasks/bake-cache.yml"
 remote_taskfile="$workflows_dir/../../.task/remote-execution.yml"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
@@ -22,6 +23,7 @@ bash "$action_run_limit_contract"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (contains(fromJSON('[\"cache:probe:dependency-policy\",\"cache:probe:deterministic\",\"cache:probe:dylint\",\"cache:probe:rust\",\"cache:probe:wasm\",\"cache:probe:wasm-node\",\"cache:probe:web\"]'), inputs.tasks || inputs.task) && 12 || 360) }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
 bash "$cache_probe_route_contract"
+bash "$producer_timeout_contract"
 if (( BASH_VERSINFO[0] >= 4 )); then bash "$lineage_probe_contract"; fi
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'build:compile) timeout --kill-after=10s 240s task build:compile ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
@@ -81,7 +83,7 @@ done
 # registry export for ordinary PR jobs, but must retain the requested exact
 # commit scope so a cache published by another runner remains consumable.
 grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup_policy"
-grep -Fq 'timeout "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref"' "$setup_policy"
+grep -Fq 'timeout --kill-after=1s "${request_timeout_seconds}s" docker buildx imagetools inspect "$ref"' "$setup_policy"
 grep -Fq 'wait || true' "$setup_policy"
 if grep -Fq -- '-pr-$pr_number' "$setup_policy"; then
   echo 'mutable PR-number cache scope remains' >&2
