@@ -199,11 +199,6 @@
     "source": "research",
     "template": "member-id-password"
   },
-  "anthropic-console": {
-    "loginUrl": "https://claude.ai/login",
-    "source": "capture",
-    "template": "claude"
-  },
   "apple": {
     "loginUrl": "https://appleid.apple.com/sign-in",
     "source": "capture",
