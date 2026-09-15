@@ -161,7 +161,17 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         errorVisible: true,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Error)
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: true,
+        pickerVisible: false,
+        errorVisible: true,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,

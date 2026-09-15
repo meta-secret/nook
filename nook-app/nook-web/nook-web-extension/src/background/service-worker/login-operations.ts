@@ -506,29 +506,45 @@ export async function websiteLoginSavePending({
   if (delivery0_9.isErr()) {
     return delivery0_9.error.response
   }
-  const response = decode_website_login_save_pending_response(delivery0_9.value)
-  if (response.ok !== true || !('state' in response)) {
-    return response
+  const pending = delivery0_9.value
+  if (
+    !pending ||
+    typeof pending !== 'object' ||
+    !('state' in pending) ||
+    pending.state !== 'available' ||
+    !('offer' in pending) ||
+    !pending.offer ||
+    typeof pending.offer !== 'object' ||
+    !('vaultStoreId' in pending.offer) ||
+    typeof pending.offer.vaultStoreId !== 'string'
+  ) {
+    return decode_website_login_save_pending_response(pending)
   }
-  if (response.state !== 'available') return response
-  const staged = response.offer
+  const staged = pending.offer
   const grant = grants.find(
     (candidate) => candidate.vaultStoreId === staged.vaultStoreId,
   )
   if (
     !grant ||
+    !('offerId' in staged) ||
+    typeof staged.offerId !== 'string' ||
+    !('decision' in staged) ||
     (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
       staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
     return { ok: true, state: 'unavailable' }
   }
-  const offer: WebsiteLoginSaveOfferView = {
-    offerId: staged.offerId,
-    decision: staged.decision,
-    vaultStoreId: grant.vaultStoreId,
-    vaultName: grant.vaultName,
+  const response: WebsiteLoginSavePendingResponse = {
+    ok: true,
+    state: 'available',
+    offer: {
+      offerId: staged.offerId,
+      decision: staged.decision,
+      vaultStoreId: grant.vaultStoreId,
+      vaultName: grant.vaultName,
+    },
   }
-  return { ok: true, state: 'available', offer }
+  return decode_website_login_save_pending_response(response)
 }
 
 type WebsiteLoginSaveCommitArgs = {
