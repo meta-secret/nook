@@ -154,7 +154,10 @@ export function createManifest(
         js: ['content/autofill.js'],
         // Companion-ready uses top-level await; classic content scripts reject TLA.
         type: ExtensionManifestType.Module,
-        run_at: ContentScriptRunAt.DocumentIdle,
+        // Begin each committed document's lifecycle before the page can finish
+        // a post-authentication render. The bundle awaits companion readiness
+        // internally, so early registration does not weaken WASM ownership.
+        run_at: ContentScriptRunAt.DocumentStart,
         all_frames: true,
       },
       {
