@@ -47,7 +47,6 @@ if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
 fi
 check_manifest nook-app/nook-platform
 check_manifest nook-app/nook-platform/fuzz
-check_manifest agentic-ai/minds
 check_manifest preflight
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "outdated=$outdated" >> "$GITHUB_OUTPUT"

@@ -323,9 +323,12 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
@@ -352,9 +355,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml()
     -> anyhow::Result<()> {
@@ -384,9 +390,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn github_tree_response_decodes_entries_and_truncation() -> anyhow::Result<()> {
         let response: GitTreeResponse = serde_json::from_str(
@@ -406,9 +415,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn github_repo_response_projects_missing_errors_and_json() -> anyhow::Result<()> {
         assert!(matches!(
@@ -452,9 +464,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn github_tree_response_projects_missing_errors_truncation_and_entries() -> anyhow::Result<()> {
         assert!(matches!(
@@ -492,9 +507,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn event_tree_projection_filters_non_event_entries_and_retries() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
@@ -523,9 +541,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn event_content_accepts_utf8_and_rejects_binary_payloads() -> anyhow::Result<()> {
         assert_eq!(
@@ -541,9 +562,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
         let (identity, _) = SigningIdentity::generate()?;

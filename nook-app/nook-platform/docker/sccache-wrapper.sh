@@ -75,7 +75,7 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   export SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL SCCACHE_S3_RW_MODE
   # A remote read is an optimization, not a compiler availability boundary.
   # One SDK attempt prevents transient DNS/HTTP failures from consuming the
-  # three-minute build budget before the wrapper can compile directly.
+  # five-minute build budget before the wrapper can compile directly.
   : "${AWS_MAX_ATTEMPTS:=1}"
   export AWS_MAX_ATTEMPTS
   # SeaweedFS serves path-style buckets; do not enable virtual-host style.

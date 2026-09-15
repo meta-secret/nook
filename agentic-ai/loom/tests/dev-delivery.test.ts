@@ -124,6 +124,41 @@ test('exact push uses an ordinary refspec without force or merge policy flags', 
   expect(request?.args).toEqual(['push', 'origin', `${SHA_A}:refs/heads/dev`]);
 });
 
+test('main promotion verifies and pushes the exact selected commit object', () => {
+  const runner = new RecordingRunner();
+  const root = '/tmp/nook-dev-repository';
+  const repository = new DevGitRepository({ root, runner });
+  const sha = CommitSha.parse(SHA_A);
+  expect(sha.isOk()).toBe(true);
+  if (sha.isErr()) return;
+
+  const result = repository.promoteExact({
+    sha: sha.value,
+    workingDirectory: root,
+  });
+
+  expect(result.isOk()).toBe(true);
+  expect(runner.requests).toEqual([
+    {
+      executable: CommandExecutable.Git,
+      args: ['cat-file', '-e', `${SHA_A}^{commit}`],
+      workingDirectory: root,
+      repositoryRoot: root,
+    },
+    {
+      executable: CommandExecutable.Git,
+      args: ['push', 'origin', `${SHA_A}:refs/heads/main`],
+      workingDirectory: root,
+      repositoryRoot: root,
+    },
+  ]);
+  expect(
+    runner.requests.every(
+      ({ args }) => !args.includes('commit-tree') && !args.includes('merge'),
+    ),
+  ).toBe(true);
+});
+
 test('promotion fast-forwards a behind local dev without rewriting it', () => {
   const runner = new FastForwardRunner();
   const root = '/tmp/nook-dev-repository';

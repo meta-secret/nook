@@ -35,7 +35,7 @@ This card does not authorize Docker inside k8s or k0s. Cluster execution follows
   requirement such as `age = "0.11.3"` is a compatible range, not an exact pin.
   Use `=0.11.3` only when the owning dependency policy requires an exact
   manifest pin.
-- **Web packages:** Svelte and Loom packages are managed with Bun; commit `bun.lock` alongside `package.json`. (`agentic-ai/ci-agent` is the only maintained Node/npm package).
+- **Web packages:** Svelte and Loom packages are managed with Bun; commit `bun.lock` alongside `package.json`..
 
 ## Scope
 

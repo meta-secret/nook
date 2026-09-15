@@ -186,8 +186,7 @@ test('renders the complete canonical Cortex context router', () => {
 
   const teamOwnershipContracts = [
     '[Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,',
-    'New feature and child branches follow the [branch naming contract](gizmo-prime/dynamic-skills/branch-naming.md).',
-    '[Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical',
+    'Its owner graph routes delivery architecture and branch naming.',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
@@ -209,7 +208,7 @@ test('renders the complete canonical Cortex context router', () => {
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });
 
-test('keeps AI and Delivery Pipeline authority links on the canonical tree', () => {
+test('routes AI and Delivery Pipeline authorities through their owner graphs', () => {
   const aiGraph = readFileSync(
     new URL('../../../../../../teams/ai/knowledge-graph.md', import.meta.url),
     'utf8',
@@ -236,14 +235,14 @@ test('keeps AI and Delivery Pipeline authority links on the canonical tree', () 
     'utf8',
   );
 
-  expect(aiGraph).toContain(
-    '[Dev manager context](../delivery-pipeline/dev-manager/AGENTS.md)',
+  expect(aiGraph).not.toContain('../delivery-pipeline/');
+  expect(aiSkills).not.toContain('dynamic-skills/dev-publish.md');
+  expect(aiSkills).not.toContain('dynamic-skills/dev-promote.md');
+  expect(aiSkills).toContain(
+    '[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)',
   );
   expect(aiSkills).toContain(
-    '[Dev publication](../../delivery-pipeline/dev-manager/dynamic-skills/dev-publish.md)',
-  );
-  expect(aiSkills).toContain(
-    '[Dev promotion](../../delivery-pipeline/dev-manager/dynamic-skills/dev-promote.md)',
+    '[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)',
   );
   expect(pipelineGizmo).toContain(
     '[Delivery Pipeline team contract](../AGENTS.md)',

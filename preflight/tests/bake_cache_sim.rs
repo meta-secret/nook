@@ -4,7 +4,6 @@ use std::{env, fs, ops::Deref};
 struct RepositoryFixture {
     path: PathBuf,
 }
-
 impl RepositoryFixture {
     fn repository_root() -> Self {
         Self {
@@ -14,141 +13,314 @@ impl RepositoryFixture {
             ),
         }
     }
-
-    fn read(&self, relative_path: &str) -> String {
-        fs::read_to_string(self.join(relative_path))
-            .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
-    }
 }
-
 impl Deref for RepositoryFixture {
     type Target = PathBuf;
-
     fn deref(&self) -> &PathBuf {
         &self.path
     }
 }
-
 impl AsRef<Path> for RepositoryFixture {
     fn as_ref(&self) -> &Path {
         &self.path
     }
 }
 
+impl RepositoryFixture {
+    fn read(&self, relative_path: &str) -> String {
+        fs::read_to_string(self.join(relative_path))
+            .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
+    }
+}
+
 #[test]
-fn bake_cache_sim_proves_stable_rust_dependency_replay() {
-    let fixture = RepositoryFixture::repository_root();
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache simulation verifies the complete parent and leaf scope matrix"
+)]
+fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     let sim = "infra/sim/bake-cache";
     for path in [
         format!("{sim}/zot-config.json"),
-        format!("{sim}/rust-deps-replay.docker-bake.hcl"),
-        format!("{sim}/hive.Dockerfile"),
-        format!("{sim}/compile-warm.docker-bake.hcl"),
-        format!("{sim}/compile-warm.Dockerfile"),
+        format!("{sim}/docker-bake.hcl"),
+        format!("{sim}/base.Dockerfile"),
+        format!("{sim}/parent.Dockerfile"),
+        format!("{sim}/parent-nested.Dockerfile"),
+        format!("{sim}/combined-nightly.Dockerfile"),
+        format!("{sim}/platform-nested.Dockerfile"),
+        format!("{sim}/leaf.Dockerfile"),
+        format!("{sim}/leaf-platform.Dockerfile"),
         format!("{sim}/inputs/base.txt"),
         format!("{sim}/inputs/parent.txt"),
+        format!("{sim}/inputs/platform.txt"),
         format!("{sim}/inputs/crate-a.txt"),
         format!("{sim}/inputs/crate-b.txt"),
         format!("{sim}/inputs/leaf.txt"),
-        format!("{sim}/inputs/compile-base.txt"),
-        format!("{sim}/inputs/compile-hive-lock.txt"),
-        format!("{sim}/inputs/compile-wasm-manifest.txt"),
-        format!("{sim}/inputs/compile-wasm-shared.txt"),
-        format!("{sim}/inputs/compile-nook-wasm.txt"),
-        format!("{sim}/inputs/compile-companion-wasm.txt"),
+        format!("{sim}/inputs/consumer.txt"),
     ] {
         assert!(
-            fixture.join(&path).is_file(),
-            "missing bake-cache fixture {path}"
+            RepositoryFixture::repository_root().join(&path).is_file(),
+            "missing bake-cache sim fixture {path}"
         );
     }
 
-    let bake = fixture.read(&format!("{sim}/rust-deps-replay.docker-bake.hcl"));
-    let compile_bake = fixture.read(&format!("{sim}/compile-warm.docker-bake.hcl"));
-    let tasks = fixture.read("infra/tasks/bake-cache.yml");
-    let hive = fixture.read(&format!("{sim}/hive.Dockerfile"));
-    let compile_dockerfile = fixture.read(&format!("{sim}/compile-warm.Dockerfile"));
-    let zot = fixture.read(&format!("{sim}/zot-config.json"));
+    let bake = RepositoryFixture::repository_root().read(&format!("{sim}/docker-bake.hcl"));
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
+    let zot = RepositoryFixture::repository_root().read(&format!("{sim}/zot-config.json"));
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md");
 
     assert!(
         zot.contains("\"compat\": [\"docker2s2\"]") && zot.contains("anonymousPolicy"),
         "sim Zot must allow anonymous docker2s2 push/pull"
     );
     assert!(
-        bake.contains("target \"rust-deps-replay\"")
-            && bake.contains("nook/buildcache/nook-bake-sim-rust-deps-v1:buildcache")
-            && bake
-                .matches("type=registry,ref=${rust_deps_cache_ref}")
-                .count()
-                == 2
-            && bake.contains("mode=max")
-            && !bake.contains("branch")
-            && !bake.contains("SHA")
-            && !bake.contains("fingerprint"),
-        "plain proof must use one stable registry ref and native BuildKit digests"
+        bake.contains("target \"base\"")
+            && bake.contains("target \"base-publish\"")
+            && bake.contains("target \"parent\"")
+            && bake.contains("target \"parent-publish\"")
+            && bake.contains("target \"parent-input-publish\"")
+            && bake.contains("target \"parent-input-verify\"")
+            && bake.contains("target \"parent-nested\"")
+            && bake.contains("target \"parent-nested-restore\"")
+            && bake.contains("target \"parent-nested-importing\"")
+            && bake.contains("target \"parent-nested-publish\"")
+            && bake.contains("target \"platform-nested-broken\"")
+            && bake.contains("target \"leaf-via-platform-broken\"")
+            && bake.contains("target \"combined-leaf\"")
+            && bake.contains("target \"combined-consumer\"")
+            && bake.contains("target \"preflight-source\"")
+            && bake.contains("target \"nook\"")
+            && bake.contains("target \"leaf\"")
+            && bake.contains("target \"leaf-short-chain\"")
+            && bake.contains("target \"parent-pr-cold\""),
+        "sim Bake must expose restore/publish plus broken and fixed nested leaf topologies"
     );
     assert!(
-        hive.contains("AS fetched-dependencies")
-            && hive.contains("AS test-dependencies")
-            && hive.contains("AS clippy-dependencies")
-            && hive.contains("COPY inputs/leaf.txt /tmp/hive-source")
-            && hive.matches("bake-sim-hive-").count() >= 6,
-        "Rust simulator must separate source-free dependency vertices from source vertices"
+        tasks.contains("bake-sim-preflight-coverage-dependencies-expensive")
+            && tasks.contains("bake-sim-preflight-coverage-execution-expensive")
+            && tasks.contains("preflight-source.args.REPOSITORY_SOURCE=${suffix}-${revision}"),
+        "sim must prove repository-source edits preserve preflight coverage dependencies"
     );
     assert!(
-        compile_bake.contains("target \"compile-warm\"")
-            && compile_bake.contains("nook/buildcache/nook-bake-sim-compile-v1:buildcache")
-            && compile_bake
-                .matches("type=registry,ref=${compile_cache_ref}")
-                .count()
-                == 2
-            && compile_bake.contains("COMPILE_CACHE_WRITE_ENABLED != \"\"")
-            && compile_bake.contains("mode=max")
-            && compile_bake.contains("compression=zstd")
-            && !compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX")
-            && !compile_bake.contains("fingerprint"),
-        "compile simulator must use one stable mode=max registry scope with explicit writes"
+        bake.contains("BASE_OWN_CACHE_ENABLED")
+            && bake.contains("parent-publish")
+            && bake.contains("cache-to = parent_cache_to")
+            && !assignment_mentions_cache_to(&bake, "parent")
+            && !assignment_mentions_cache_to(&bake, "base"),
+        "publishers own cache-to; context base/parent must not"
+    );
+    let nested_parent = target_body(&bake, "parent-nested");
+    let nested_restore = target_body(&bake, "parent-nested-restore");
+    let combined_leaf = target_body(&bake, "combined-leaf");
+    assert!(
+        !nested_parent.lines().any(|line| {
+            let line = line.trim_start();
+            line.starts_with("cache-from") || line.starts_with("cache-to")
+        }) && nested_restore.contains("cache-from = parent_nested_cache_from"),
+        "nested context parent must be cache-free and its restore target must import the scope"
     );
     assert!(
-        compile_dockerfile.contains("AS compile-wasm-dependencies")
-            && compile_dockerfile.contains("FROM compile-toolchain AS compile-hive-dependencies")
-            && compile_dockerfile.contains("AS compile-wasm-source-base")
-            && compile_dockerfile.contains("AS compile-nook-wasm-source")
-            && compile_dockerfile.contains("AS compile-companion-wasm-source")
-            && compile_dockerfile.contains("AS compile-nook-wasm-build")
-            && compile_dockerfile.contains("AS compile-companion-wasm-build")
-            && compile_dockerfile.matches("bake-sim-compile-").count() >= 8
-            && !compile_dockerfile.contains("--mount=type=cache"),
-        "compile simulator must isolate package source leaves after reusable dependencies"
+        !combined_leaf.contains("contexts =")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS base"),
+        "fixed control must keep base, parent, and leaf in one Dockerfile lineage"
+    );
+    let leaf_from = assignment_body(&bake, "leaf_cache_from");
+    let nested_leaf_from = assignment_body(&bake, "nested_leaf_cache_from");
+    let short_from = assignment_body(&bake, "leaf_short_chain_cache_from");
+    assert!(
+        !leaf_from.contains("nook-bake-sim-parent-v1"),
+        "own-scope leaf must not list parent scope in cache-from"
+    );
+    assert!(
+        short_from.contains("nook-bake-sim-parent-v1")
+            && !short_from.contains("nook-bake-sim-leaf-v1"),
+        "short-chain leaf must cache-from only parent scope (no leaf own-scope)"
+    );
+    assert!(
+        leaf_from.contains("LEAF_EXACT_AVAILABLE")
+            && nested_leaf_from.contains("NESTED_LEAF_EXACT_AVAILABLE")
+            && tasks.contains("BAKE_SIM_LEAF_EXACT_AVAILABLE=1")
+            && tasks.contains("BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1"),
+        "source-leaf retries must import exact alone instead of merging exact with Main"
+    );
+    assert!(
+        !bake.contains("cache-from=\"\"")
+            && !bake.contains("cache-to=\"\"")
+            && !tasks.contains("cache-from=")
+            && !tasks.contains("cache-to="),
+        "sim Bake/Task must not clear cache-from/cache-to"
     );
     assert!(
         tasks.contains("bake-cache:prove:")
-            && tasks.contains("rust-deps-replay.docker-bake.hcl")
             && tasks.contains("buildx create")
             && tasks.contains("network create")
             && tasks.contains("require_cached_step")
-            && tasks.contains("require_uncached_step")
-            && tasks.contains("require_cache_write")
-            && tasks.contains("bake-sim-hive-toolchain")
-            && tasks.contains("bake-sim-hive-cargo-fetch")
-            && tasks.contains("bake-sim-hive-test-dependencies")
-            && tasks.contains("bake-sim-hive-clippy-dependencies")
-            && tasks.contains("bake-sim-hive-test-source")
-            && tasks.contains("bake-sim-hive-clippy-source")
-            && tasks.contains("rust-source-only-edit")
-            && tasks.contains("cached=4 uncached=2")
-            && tasks.contains("cached=6 uncached=0")
-            && tasks.contains("compile-warm.docker-bake.hcl")
-            && tasks.contains("COMPILE_CACHE_WRITE_ENABLED")
-            && tasks.contains("compile package-source-only")
-            && tasks.contains("compile warm")
-            && tasks.contains("require_no_cache_write")
-            && tasks.contains("elapsed=${compile_elapsed}s limit=120s")
-            && tasks.contains("-lt 120")
-            && !tasks.contains("RUST_DEPS_INPUT_FINGERPRINT")
-            && !tasks.contains("GHA_CACHE_SCOPE_SUFFIX")
-            && !tasks.contains("-git-")
-            && !tasks.contains("Scenario "),
-        "runtime proof must cover Rust replay and compile-shaped warm acceptance"
+            && tasks.contains("bake-sim-parent-expensive")
+            && tasks.contains("bake-sim-leaf-expensive")
+            && tasks.contains("Scenario D:")
+            && tasks.contains("Scenario E:")
+            && tasks.contains("Scenario F:")
+            && tasks.contains("Scenario H:")
+            && tasks.contains("Scenario I:")
+            && tasks.contains("Scenario J:")
+            && tasks.contains("Scenario K:")
+            && tasks.contains("Scenario L:")
+            && tasks.contains("Scenario M:")
+            && tasks.contains("Scenario N:")
+            && tasks.contains("Scenario O:")
+            && tasks.contains("Scenario P: hosted-verified formatter deps feed fresh PR runner")
+            && tasks.contains("Scenario Q: inline PR verification publishes a generic exact leaf")
+            && tasks
+                .contains("Scenario R: exact-only replay works across linked and internal parents")
+            && tasks
+                .contains("Scenario S: Kani-style full graph falls back once then replays exact")
+            && tasks
+                .contains("Scenario T: unverified local candidate cannot poison stable PR input")
+            && tasks.contains("Scenario U: promoter setup failure leaves stable input intact")
+            && tasks
+                .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
+            && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
+            && tasks.contains("Scenario Z: persistent ARC-shaped shard survives daemon restart")
+            && tasks.contains("buildx inspect \"$builder\" --bootstrap")
+            && tasks.contains("bake-sim-crate-a-expensive")
+            && tasks.contains("bake-sim-crate-b-expensive")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-a")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-b")
+            && tasks.contains("promote_registry_tag")
+            && tasks.contains("bake-sim-base-layer")
+            && tasks.contains("leaf-via-platform-broken")
+            && tasks.contains("combined-leaf")
+            && tasks.contains("parent-pr-cold")
+            && tasks.contains("require_registry_ref")
+            && tasks.contains("require_no_registry_ref")
+            && tasks.contains("nook/remote-buildcache/")
+            && bake.contains("PARENT_OWN_CACHE_ENABLED")
+            && bake.contains("BASE_OWN_CACHE_ENABLED")
+            && bake.contains("write_cache_repository"),
+        "infra proof must cover fallback, PR isolation, concurrent graphs, persistent shard restart reuse, and the broken/fixed nightly leaf graph"
     );
+    let parent_from = assignment_body(&bake, "parent_cache_from");
+    assert!(
+        parent_from.contains("nook/buildcache/nook-bake-sim-parent-v1")
+            && parent_from.contains("nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}"),
+        "sim cold parent scope must model exact and trusted Main candidates"
+    );
+    assert!(
+        quality.contains("task infra:bake-cache:prove")
+            && quality.contains("bake_cache_proofs.rs")
+            && quality.contains("parallel PR git-scope isolation")
+            && quality.contains("Scenario X proves sequential crate COPY+RUN layers"),
+        "cortex quality must document the runtime sim beside static theorems"
+    );
+}
+
+#[test]
+fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
+    let root = RepositoryFixture::repository_root();
+    let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
+    let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
+
+    for path in [
+        "infra/sim/bake-cache/inputs/compile-base.txt",
+        "infra/sim/bake-cache/inputs/compile-wasm-manifest.txt",
+        "infra/sim/bake-cache/inputs/compile-wasm-shared.txt",
+        "infra/sim/bake-cache/inputs/compile-nook-wasm.txt",
+        "infra/sim/bake-cache/inputs/compile-companion-wasm.txt",
+        "infra/sim/bake-cache/inputs/compile-web-source.txt",
+        "infra/sim/bake-cache/inputs/compile-web-legal.txt",
+        "infra/sim/bake-cache/inputs/compile-extension-locales.txt",
+        "infra/sim/bake-cache/inputs/compile-policy-catalog.txt",
+    ] {
+        assert!(
+            root.join(path).is_file(),
+            "missing compile cache fixture {path}"
+        );
+    }
+
+    assert!(dockerfile.contains("SCCACHE_S3_RW_MODE=READ_WRITE"));
+    assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION"));
+    assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE"));
+    assert!(dockerfile.contains("AS compile-native-dependencies"));
+    assert!(dockerfile.contains("AS compile-wasm-dependencies"));
+    assert!(dockerfile.contains("AS compile-web-dependencies"));
+    assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
+    assert!(!dockerfile.contains("ci-agent"));
+    assert!(bake.contains("target \"compile-dependency-cache\""));
+    assert!(bake.contains("target \"compile-warm\""));
+    assert!(bake.contains("COMPILE_RESTORE_SOURCE_SCOPE"));
+    assert!(bake.contains("mode=max") && bake.contains("mode=min"));
+    assert!(!bake.to_ascii_lowercase().contains("seed"));
+}
+
+fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {
+    target_body(bake, target)
+        .lines()
+        .any(|line| line.trim_start().starts_with("cache-to"))
+}
+
+fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
+    let marker = format!("{name} =");
+    let rest = bake.split_once(marker.as_str()).map_or_else(
+        || panic!("missing Bake assignment {name}"),
+        |(_, rest)| rest,
+    );
+    let mut end = rest.len();
+    for (idx, _) in rest.match_indices('\n') {
+        let line = rest
+            .get(idx + 1..)
+            .unwrap_or_else(|| panic!("Bake assignment {name} line must be valid UTF-8"))
+            .split('\n')
+            .next()
+            .unwrap_or_else(|| panic!("Bake assignment {name} must expose its next line"));
+        if line.starts_with("target \"") {
+            end = idx;
+            break;
+        }
+        if let Some((ident, _)) = line.split_once(" =")
+            && !ident.is_empty()
+            && ident.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            end = idx;
+            break;
+        }
+    }
+    rest.get(..end)
+        .unwrap_or_else(|| panic!("Bake assignment {name} boundary must be valid UTF-8"))
+        .trim()
+}
+
+fn target_body<'a>(bake: &'a str, name: &str) -> &'a str {
+    let marker = format!("target \"{name}\"");
+    let rest = bake
+        .split_once(marker.as_str())
+        .map_or_else(|| panic!("missing Bake target {name}"), |(_, rest)| rest);
+    let start = rest
+        .find('{')
+        .unwrap_or_else(|| panic!("target {name} missing body"));
+    let mut depth = 0usize;
+    let body = rest
+        .get(start..)
+        .unwrap_or_else(|| panic!("Bake target {name} body must start on a character boundary"));
+    for (idx, ch) in body.char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return rest.get(start..=start + idx).unwrap_or_else(|| {
+                        panic!("Bake target {name} body must end on a character boundary")
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("target {name} body did not close");
 }

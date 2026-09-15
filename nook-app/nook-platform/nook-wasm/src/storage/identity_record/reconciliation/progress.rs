@@ -182,9 +182,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn progression_preserves_identity_and_accepts_identical_stage_updates() -> Result<(), NookError>
     {
@@ -213,9 +216,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn checkpoint_requires_the_committed_epoch_and_cannot_change_it() -> Result<(), NookError> {
         let fixture = ProgressFixture::new()?;
@@ -242,9 +248,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn malformed_marker_keeps_decode_error_context() {
         assert!(matches!(PendingIdentityReconciliation::decode("{broken"),

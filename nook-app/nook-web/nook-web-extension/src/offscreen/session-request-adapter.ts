@@ -375,91 +375,95 @@ export function stageExtensionSessionSensitiveRequest(
   }
 }
 
-function isExtensionSessionMessageType(
-  value: string,
-): value is ExtensionSessionMessageType {
-  return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
-}
-
 type ExtensionSessionQueueEnvelope = {
   kind: string
 }
 
-function isExtensionSessionQueueEnvelope(
-  value: unknown,
-): value is ExtensionSessionQueueEnvelope {
-  if (!value || typeof value !== 'object') return false
-  return 'kind' in value && typeof value.kind === 'string'
-}
+class ExtensionSessionIngressAdmission {
+  constructor(private readonly value: unknown) {}
 
-function hasExtensionSessionQueue(payload: unknown): boolean {
-  if (!payload || typeof payload !== 'object') return false
-  return 'queue' in payload && isExtensionSessionQueueEnvelope(payload.queue)
-}
+  private isExtensionSessionMessageType(
+    value: string,
+  ): value is ExtensionSessionMessageType {
+    return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
+  }
 
-function isParsedExtensionSessionTransportRequest(
-  value: unknown,
-): value is ParsedExtensionSessionTransportRequest {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !('type' in value) ||
-    typeof value.type !== 'string' ||
-    !isExtensionSessionMessageType(value.type) ||
-    !('payload' in value) ||
-    !value.payload ||
-    typeof value.payload !== 'object'
-  ) {
-    return false
+  private isExtensionSessionQueueEnvelope(
+    value: unknown,
+  ): value is ExtensionSessionQueueEnvelope {
+    if (!value || typeof value !== 'object') return false
+    return 'kind' in value && typeof value.kind === 'string'
   }
-  return true
-}
 
-function stageExtensionSessionIngressRequest(
-  value: unknown,
-): ExtensionSessionIngressStage {
-  if (!isParsedExtensionSessionTransportRequest(value)) {
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  private hasExtensionSessionQueue(payload: unknown): boolean {
+    if (!payload || typeof payload !== 'object') return false
+    return (
+      'queue' in payload && this.isExtensionSessionQueueEnvelope(payload.queue)
+    )
   }
-  const request = value
-  if (!hasExtensionSessionQueue(request.payload)) {
-    clearExtensionSessionIngressRequest(request)
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
+
+  private isParsedRequest(
+    value: unknown,
+  ): value is ParsedExtensionSessionTransportRequest {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('type' in value) ||
+      typeof value.type !== 'string' ||
+      !this.isExtensionSessionMessageType(value.type) ||
+      !('payload' in value) ||
+      !value.payload ||
+      typeof value.payload !== 'object'
+    ) {
+      return false
+    }
+    return true
   }
-  if (request.type === ExtensionSessionMessageType.ImportVault) {
-    const providers = request.payload.providers
-    if (!Array.isArray(providers)) {
-      request.payload.providers = []
+
+  stage(): ExtensionSessionIngressStage {
+    if (!this.isParsedRequest(this.value)) {
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
-    try {
-      const stagedProviders = structuredClone(providers)
-      new ProviderCredentialBuffer(providers).clear()
-      request.payload.providers = []
-      return {
-        kind: ExtensionSessionIngressStageKind.Staged,
-        request: {
-          ...request,
-          payload: { ...request.payload, providers: stagedProviders },
-        },
+    const request = this.value
+    if (!this.hasExtensionSessionQueue(request.payload)) {
+      clearExtensionSessionIngressRequest(request)
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+    if (request.type === ExtensionSessionMessageType.ImportVault) {
+      const providers = request.payload.providers
+      if (!Array.isArray(providers)) {
+        request.payload.providers = []
+        return { kind: ExtensionSessionIngressStageKind.Invalid }
       }
-    } catch {
-      new ProviderCredentialBuffer(providers).clear()
-      request.payload.providers = []
+      try {
+        const stagedProviders = structuredClone(providers)
+        new ProviderCredentialBuffer(providers).clear()
+        request.payload.providers = []
+        return {
+          kind: ExtensionSessionIngressStageKind.Staged,
+          request: {
+            ...request,
+            payload: { ...request.payload, providers: stagedProviders },
+          },
+        }
+      } catch {
+        new ProviderCredentialBuffer(providers).clear()
+        request.payload.providers = []
+        return { kind: ExtensionSessionIngressStageKind.Invalid }
+      }
+    }
+
+    const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
-  }
-
-  const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
-  if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
-  }
-  return {
-    kind: ExtensionSessionIngressStageKind.Staged,
-    request:
-      sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
-        ? sensitiveStage.request
-        : request,
+    return {
+      kind: ExtensionSessionIngressStageKind.Staged,
+      request:
+        sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
+          ? sensitiveStage.request
+          : request,
+    }
   }
 }
 
@@ -477,7 +481,7 @@ function clearExtensionSessionIngressRequest(
 export async function parseExtensionSessionRequest(
   value: unknown,
 ): Promise<ExtensionSessionRequestParse> {
-  const ingressStage = stageExtensionSessionIngressRequest(value)
+  const ingressStage = new ExtensionSessionIngressAdmission(value).stage()
   if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }

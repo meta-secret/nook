@@ -358,7 +358,7 @@ There is no checked-in sample-file catalog.
 | `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
 | `skill-scaffold`        | Create a dynamic-skill card                       |
 | `agent-stats`           | Assemble / validate / publish AI-agent stats YAML |
-| `pr-land`               | Status / validate / ready / merge-check           |
+| `pr-land`               | Status / validate                                 |
 | `dependency-popularity` | Reject low-adoption npm packages and crates       |
 
 ## Quality bar

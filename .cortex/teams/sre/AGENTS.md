@@ -72,10 +72,6 @@ For an assigned SRE unit, own:
 - validation-failure fixes caused by the change; and
 - a bounded evidence handoff.
 
-Docker and BuildKit cache architecture, cache proofs, and remote-build latency
-route exclusively to the Docker Cache Specialist. Provisioning and
-cloud-native packets return that work to SRE Team Gizmo for reassignment.
-
 ## Validation
 
 Use repository-owned contracts for manifests and workflow topology. Never

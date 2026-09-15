@@ -16,7 +16,9 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "unknown", from_wasm_abi)]
-pub struct WebsiteLoginOptionsAdmission(nook_companion_core::WebsiteLoginOptionsWireValue);
+pub struct WebsiteLoginOptionsAdmission(
+    pub(crate) nook_companion_core::WebsiteLoginOptionsWireValue,
+);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]

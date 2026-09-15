@@ -2,6 +2,8 @@
 
 ## Mission
 
+### Delivery authority
+
 For the current flow, follow
 [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md). Gizmo Prime
 authorizes the canonical feature branch name for feature compilation. PR
@@ -12,15 +14,21 @@ dev PR validation and guarded fast-forward promotion. The manager retains the sl
 verdict. The PR Lifecycle Agent verifies actual PR status after fast-forward publication.
 It never substitutes squash, rebase, a merge commit, or manual PR closure.
 
+### Operational boundary
+
 The PR Lifecycle Agent is the Delivery Pipeline agent for bounded pull-request
 observation and review mechanics. It executes only live-agent GitHub
 operations that its owning controller explicitly authorizes, including
 read-only commands and indirect wrappers. It does not create or update pull
 requests.
 
+### Agent identity
+
 The PR Lifecycle Agent is a direct Team Agent context.
 It is not a product-engineering functional team.
 It does not create a sixth functional ownership domain.
+
+### Controller verdicts
 
 Gizmo owns feature sequencing and acceptance. The dev manager owns snapshot
 selection, slow validation, and promotion. Each retains its own verdict.

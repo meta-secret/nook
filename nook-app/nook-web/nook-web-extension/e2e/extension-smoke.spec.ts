@@ -48,25 +48,29 @@ type LoginAccountResponse = {
   websiteHost: string
 }
 
-function isLoginAccountResponse(value: unknown): value is LoginAccountResponse {
-  if (!value || typeof value !== 'object') return false
-  return (
-    'secretId' in value &&
-    typeof value.secretId === 'string' &&
-    'username' in value &&
-    typeof value.username === 'string' &&
-    'websiteUrl' in value &&
-    typeof value.websiteUrl === 'string' &&
-    'websiteHost' in value &&
-    typeof value.websiteHost === 'string'
-  )
+class ExtensionSmokeScenario {
+  isLoginAccountResponseList(value: unknown): value is LoginAccountResponse[] {
+    return Array.isArray(value) && value.every(this.isLoginAccountResponse)
+  }
+
+  private isLoginAccountResponse(
+    value: unknown,
+  ): value is LoginAccountResponse {
+    if (!value || typeof value !== 'object') return false
+    return (
+      'secretId' in value &&
+      typeof value.secretId === 'string' &&
+      'username' in value &&
+      typeof value.username === 'string' &&
+      'websiteUrl' in value &&
+      typeof value.websiteUrl === 'string' &&
+      'websiteHost' in value &&
+      typeof value.websiteHost === 'string'
+    )
+  }
 }
 
-function isLoginAccountResponseList(
-  value: unknown,
-): value is LoginAccountResponse[] {
-  return Array.isArray(value) && value.every(isLoginAccountResponse)
-}
+const extensionSmokeScenario = new ExtensionSmokeScenario()
 
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
@@ -604,7 +608,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
                 !('ok' in value) ||
                 typeof value.ok !== 'boolean' ||
                 !('accounts' in value) ||
-                !isLoginAccountResponseList(value.accounts)
+                !extensionSmokeScenario.isLoginAccountResponseList(
+                  value.accounts,
+                )
               ) {
                 reject(new Error('unexpected login lookup response'))
                 return

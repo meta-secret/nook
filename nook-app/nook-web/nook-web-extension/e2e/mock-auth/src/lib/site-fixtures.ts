@@ -99,40 +99,50 @@ type SiteShellRef = {
   steps?: SiteFixtureStep[]
 }
 
-function isSiteShellRef(value: unknown): value is SiteShellRef {
-  if (!value || typeof value !== 'object') return false
-  return (
-    'template' in value &&
-    typeof value.template === 'string' &&
-    'source' in value &&
-    (value.source === SiteFixtureSource.Capture ||
-      value.source === SiteFixtureSource.Research) &&
-    'loginUrl' in value &&
-    typeof value.loginUrl === 'string'
-  )
-}
+class SiteFixtureCatalogAdmission {
+  isSiteShellRef(value: unknown): value is SiteShellRef {
+    if (!value || typeof value !== 'object') return false
+    return (
+      'template' in value &&
+      typeof value.template === 'string' &&
+      'source' in value &&
+      (value.source === SiteFixtureSource.Capture ||
+        value.source === SiteFixtureSource.Research) &&
+      'loginUrl' in value &&
+      typeof value.loginUrl === 'string'
+    )
+  }
 
-function parsePilotExpectation(
-  value: unknown,
-): SiteFixturePilotExpectation | false {
-  switch (value) {
-    case SiteFixturePilotExpectation.ContinueWithNook:
-      return SiteFixturePilotExpectation.ContinueWithNook
-    case SiteFixturePilotExpectation.FailClosedAlternateAuthentication:
-      return SiteFixturePilotExpectation.FailClosedAlternateAuthentication
-    default:
-      return false
+  parsePilotExpectation(value: unknown): SiteFixturePilotExpectation | false {
+    switch (value) {
+      case SiteFixturePilotExpectation.ContinueWithNook:
+        return SiteFixturePilotExpectation.ContinueWithNook
+      case SiteFixturePilotExpectation.FailClosedAlternateAuthentication:
+        return SiteFixturePilotExpectation.FailClosedAlternateAuthentication
+      default:
+        return false
+    }
+  }
+
+  isShellTemplateRaw(value: unknown): value is ShellTemplateRaw {
+    if (!value || typeof value !== 'object') return false
+    if (!('quirks' in value) || !Array.isArray(value.quirks)) return false
+    return 'steps' in value && Array.isArray(value.steps)
   }
 }
 
+const siteFixtureCatalogAdmission = new SiteFixtureCatalogAdmission()
+
 const siteShells = new Map<string, SiteShellRef>()
 for (const [id, value] of Object.entries(siteShellsJson)) {
-  if (isSiteShellRef(value)) siteShells.set(id, value)
+  if (siteFixtureCatalogAdmission.isSiteShellRef(value)) {
+    siteShells.set(id, value)
+  }
 }
 
 const pilotExpectations = new Map<string, SiteFixturePilotExpectation>()
 for (const [id, value] of Object.entries(pilotExpectationsJson)) {
-  const expectation = parsePilotExpectation(value)
+  const expectation = siteFixtureCatalogAdmission.parsePilotExpectation(value)
   if (expectation) pilotExpectations.set(id, expectation)
 }
 
@@ -141,19 +151,13 @@ const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
   import: 'default',
 })
 
-function isShellTemplateRaw(value: unknown): value is ShellTemplateRaw {
-  if (!value || typeof value !== 'object') return false
-  if (!('quirks' in value) || !Array.isArray(value.quirks)) return false
-  return 'steps' in value && Array.isArray(value.steps)
-}
-
 const templatesById = new Map<string, ShellTemplate>()
 for (const [pathKey, template] of Object.entries(templateModules)) {
   const id = pathKey
     .split('/')
     .pop()
     ?.replace(/\.json$/u, '')
-  if (!id || !isShellTemplateRaw(template)) continue
+  if (!id || !siteFixtureCatalogAdmission.isShellTemplateRaw(template)) continue
   const pilotExpectation = pilotExpectations.get(id)
   if (!pilotExpectation) {
     throw new Error(`missing Pilot expectation for shell template ${id}`)

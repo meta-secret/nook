@@ -45,22 +45,9 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
   && sleep 1 \
   && echo bake-sim-compile-wasm-dependencies
 
-FROM compile-toolchain AS compile-hive-dependencies
-COPY inputs/compile-hive-lock.txt /tmp/hive-lock.txt
+FROM compile-toolchain AS compile-web-app-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
-  && sleep 1 \
-  && echo bake-sim-compile-hive-dependencies
-
-FROM compile-hive-dependencies AS compile-hive-console-dependencies
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    cat /opt/compile-hive-dependencies >/opt/compile-hive-console-dependencies \
-  && sleep 1 \
-  && echo bake-sim-compile-hive-console-dependencies
-
-FROM compile-hive-console-dependencies AS compile-web-app-dependencies
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    cat /opt/compile-hive-console-dependencies >/opt/compile-web-app-dependencies \
+    cat /opt/compile-toolchain >/opt/compile-web-app-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-web-app-dependencies
 
@@ -69,12 +56,6 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cat /opt/compile-web-app-dependencies >/opt/compile-web-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-web-dependencies
-
-FROM compile-hive-dependencies AS compile-hive-source
-COPY inputs/compile-hive-source.txt /tmp/hive-source.txt
-RUN cat /tmp/hive-source.txt >/opt/compile-hive-source \
-  && sleep 1 \
-  && echo bake-sim-compile-hive-source
 
 FROM compile-wasm-dependencies AS compile-wasm-source-base
 COPY inputs/compile-wasm-shared.txt /tmp/wasm-shared.txt
@@ -137,13 +118,10 @@ RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
 FROM compile-web-dependencies AS compile-dependency-cache
 COPY --from=compile-native-dependencies /opt/compile-native-dependencies /compile/native
 COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
-RUN install -D /opt/compile-hive-dependencies /compile/hive \
-  && install -D /opt/compile-hive-console-dependencies /compile/hive-console \
-  && install -D /opt/compile-web-app-dependencies /compile/web-app \
+RUN install -D /opt/compile-web-app-dependencies /compile/web-app \
   && install -D /opt/compile-web-dependencies /compile/web
 
 FROM compile-nook-wasm-build AS compile
-COPY --from=compile-hive-source /opt/compile-hive-source /compile/hive
 COPY --from=compile-web-source /opt/compile-web-source /compile/web
 COPY --from=compile-extension-package /opt/compile-extension-package /compile/extension
 RUN install -D /opt/compile-nook-wasm-build /compile/nook-wasm \

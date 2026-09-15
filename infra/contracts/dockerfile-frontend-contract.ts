@@ -7,7 +7,6 @@ import {
 import { resolve } from "node:path";
 
 enum DockerfileFrontendConsumer {
-  Hive = "agentic-ai/minds/hive/Dockerfile",
   RustNightly = "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
   RustPolicyTools = "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
   RustProduct = "nook-app/nook-platform/docker/rust/product.Dockerfile",

@@ -41,8 +41,71 @@ import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-ver
 
 import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
 
+import { DelegationJournalCli } from '../../src/agent-workflow/delegation-cli.ts';
+
+type DelegationCliResult = {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+};
+
 export class AgentWorkflowDelegationCliScenario {
   private constructor(private readonly request: string) {}
+
+  static async runDelegationCli(
+    ...arguments_: readonly string[]
+  ): Promise<DelegationCliResult> {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const originalStdoutWrite = process.stdout.write;
+    const originalStderrWrite = process.stderr.write;
+    const captureStdout = (chunk: string | Uint8Array): boolean => {
+      stdout.push(
+        typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+    const captureStderr = (chunk: string | Uint8Array): boolean => {
+      stderr.push(
+        typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+    console.log = (...values: readonly string[]) => {
+      stdout.push(`${values.join(' ')}\n`);
+    };
+    console.error = (...values: readonly string[]) => {
+      stderr.push(`${values.join(' ')}\n`);
+    };
+    process.stdout.write = ((chunk: string | Uint8Array) =>
+      captureStdout(chunk)) as typeof originalStdoutWrite;
+    process.stderr.write = ((chunk: string | Uint8Array) =>
+      captureStderr(chunk)) as typeof originalStderrWrite;
+    try {
+      return {
+        exitCode: await DelegationJournalCli.main([
+          process.execPath,
+          'loom-agent-delegation',
+          ...arguments_,
+        ]),
+        stdout: stdout.join(''),
+        stderr: stderr.join(''),
+      };
+    } catch {
+      return {
+        exitCode: 1,
+        stdout: stdout.join(''),
+        stderr: stderr.join(''),
+      };
+    } finally {
+      console.log = originalConsoleLog;
+      console.error = originalConsoleError;
+      process.stdout.write = originalStdoutWrite;
+      process.stderr.write = originalStderrWrite;
+    }
+  }
 
   static commitFixture(workingDirectory: string): string {
     return new AgentWorkflowDelegationCliScenario(workingDirectory).execute();
@@ -66,7 +129,7 @@ export class AgentWorkflowDelegationCliScenario {
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
-const FEATURE_BRANCH = 'codex/hive-delegation-cli-tests';
+const FEATURE_BRANCH = 'codex/delegation-cli-tests';
 
 describe('delegated agent journal CLI', () => {
   test('records an ordinary delegated attempt with its semantic view', async () => {
@@ -165,27 +228,17 @@ describe('delegated agent journal CLI', () => {
         ],
       };
       await writeFile(planPath, JSON.stringify(plan), 'utf8');
-      const delegationCli = join(
-        import.meta.dir,
-        '../../src/agent-workflow/delegation-cli.ts',
-      );
-      const startCommand = [
-        process.execPath,
-        delegationCli,
-        'start',
-        '--plan',
-        planPath,
-        '--working-directory',
-        workingDirectory,
-      ];
-      const spawnOptions = {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      } as const;
-      const startProcess = Bun.spawn(startCommand, spawnOptions);
-      expect(await startProcess.exited).toBe(0);
-      const startStdout = await new Response(startProcess.stdout).text();
-      const startStderr = await new Response(startProcess.stderr).text();
+      const startResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'start',
+          '--plan',
+          planPath,
+          '--working-directory',
+          workingDirectory,
+        );
+      expect(startResult.exitCode, startResult.stderr).toBe(0);
+      const startStdout = startResult.stdout;
+      const startStderr = startResult.stderr;
       expect(() => {
         JSON.parse(startStdout);
       }).not.toThrow();
@@ -212,31 +265,23 @@ describe('delegated agent journal CLI', () => {
         parent: request.parent,
       };
       await writeFile(admissionPath, JSON.stringify(admissionRequest), 'utf8');
-      const admissionCommand = [
-        process.execPath,
-        delegationCli,
-        'admit',
-        '--request',
-        admissionPath,
-        '--working-directory',
-        workingDirectory,
-      ];
-      const admissionProcess = Bun.spawn(admissionCommand, spawnOptions);
-      const admissionExit = await admissionProcess.exited;
-      const admissionStderr = await new Response(
-        admissionProcess.stderr,
-      ).text();
-      expect(admissionExit, admissionStderr).toBe(0);
-      await new Response(admissionProcess.stdout).text();
-      const command = [
-        process.execPath,
-        delegationCli,
-        'record',
-        '--request',
-        requestPath,
-        '--working-directory',
-        workingDirectory,
-      ];
+      const admissionResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'admit',
+          '--request',
+          admissionPath,
+          '--working-directory',
+          workingDirectory,
+        );
+      expect(admissionResult.exitCode, admissionResult.stderr).toBe(0);
+      const runRecord = () =>
+        AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'record',
+          '--request',
+          requestPath,
+          '--working-directory',
+          workingDirectory,
+        );
 
       const legacyActivityRequest = {
         ...request,
@@ -252,9 +297,8 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(legacyActivityRequest),
         'utf8',
       );
-      const legacyActivityProcess = Bun.spawn(command, spawnOptions);
-      expect(await legacyActivityProcess.exited).not.toBe(0);
-      await new Response(legacyActivityProcess.stderr).text();
+      const legacyActivityResult = await runRecord();
+      expect(legacyActivityResult.exitCode).not.toBe(0);
       const attemptDirectory = join(
         workingDirectory,
         'workflow',
@@ -279,9 +323,8 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(extraTerminalFieldRequest),
         'utf8',
       );
-      const extraTerminalProcess = Bun.spawn(command, spawnOptions);
-      expect(await extraTerminalProcess.exited).not.toBe(0);
-      await new Response(extraTerminalProcess.stderr).text();
+      const extraTerminalResult = await runRecord();
+      expect(extraTerminalResult.exitCode).not.toBe(0);
       await expect(stat(attemptDirectory)).rejects.toThrow();
 
       const mismatchedSourceRequest = {
@@ -293,19 +336,15 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(mismatchedSourceRequest),
         'utf8',
       );
-      const mismatchedSourceProcess = Bun.spawn(command, spawnOptions);
-      expect(await mismatchedSourceProcess.exited).not.toBe(0);
-      await new Response(mismatchedSourceProcess.stderr).text();
+      const mismatchedSourceResult = await runRecord();
+      expect(mismatchedSourceResult.exitCode).not.toBe(0);
       await expect(stat(attemptDirectory)).rejects.toThrow();
 
       await writeFile(requestPath, JSON.stringify(request), 'utf8');
-      const processResult = Bun.spawn(command, spawnOptions);
-      const exitCode = await processResult.exited;
-      const stdout = await new Response(processResult.stdout).text();
-      const stderr = await new Response(processResult.stderr).text();
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain('events.jsonl');
-      expect(stderr).not.toContain('runtime-activity');
+      const recordResult = await runRecord();
+      expect(recordResult.exitCode).toBe(0);
+      expect(recordResult.stdout).toContain('events.jsonl');
+      expect(recordResult.stderr).not.toContain('runtime-activity');
       expect(await readFile(join(attemptDirectory, 'view.md'), 'utf8')).toBe(
         '# Contract view\n\nConsistent.\n',
       );
@@ -355,18 +394,15 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(finalizationRequest),
         'utf8',
       );
-      const finalizeCommand = [
-        process.execPath,
-        delegationCli,
-        'finalize',
-        '--request',
-        finalizationPath,
-        '--working-directory',
-        workingDirectory,
-      ];
-      const finalizeProcess = Bun.spawn(finalizeCommand, spawnOptions);
-      expect(await finalizeProcess.exited).toBe(0);
-      await new Response(finalizeProcess.stdout).text();
+      const finalizeResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'finalize',
+          '--request',
+          finalizationPath,
+          '--working-directory',
+          workingDirectory,
+        );
+      expect(finalizeResult.exitCode, finalizeResult.stderr).toBe(0);
       const runDirectory = join(
         workingDirectory,
         'workflow',
@@ -408,9 +444,8 @@ describe('delegated agent journal CLI', () => {
         runId: '../../../../escaped-delegation-run',
       };
       await writeFile(requestPath, JSON.stringify(unsafeRequest), 'utf8');
-      const unsafeProcess = Bun.spawn(command, spawnOptions);
-      expect(await unsafeProcess.exited).not.toBe(0);
-      await new Response(unsafeProcess.stderr).text();
+      const unsafeResult = await runRecord();
+      expect(unsafeResult.exitCode).not.toBe(0);
 
       const malformedOutputRequest = {
         ...request,
@@ -427,9 +462,8 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(malformedOutputRequest),
         'utf8',
       );
-      const malformedProcess = Bun.spawn(command, spawnOptions);
-      expect(await malformedProcess.exited).not.toBe(0);
-      await new Response(malformedProcess.stderr).text();
+      const malformedResult = await runRecord();
+      expect(malformedResult.exitCode).not.toBe(0);
       const malformedRunDirectory = join(
         workingDirectory,
         'workflow',
@@ -445,9 +479,8 @@ describe('delegated agent journal CLI', () => {
         depth: 4,
       };
       await writeFile(requestPath, JSON.stringify(depthFourRequest), 'utf8');
-      const depthFourProcess = Bun.spawn(command, spawnOptions);
-      expect(await depthFourProcess.exited).not.toBe(0);
-      await new Response(depthFourProcess.stderr).text();
+      const depthFourResult = await runRecord();
+      expect(depthFourResult.exitCode).not.toBe(0);
       const depthFourRunDirectory = join(
         workingDirectory,
         'workflow',
@@ -487,9 +520,8 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(forgedModuleExpertRequest),
         'utf8',
       );
-      const forgedProcess = Bun.spawn(command, spawnOptions);
-      expect(await forgedProcess.exited).not.toBe(0);
-      await new Response(forgedProcess.stderr).text();
+      const forgedResult = await runRecord();
+      expect(forgedResult.exitCode).not.toBe(0);
       const forgedRunDirectory = join(
         workingDirectory,
         'workflow',
@@ -513,14 +545,6 @@ describe('delegated agent journal CLI', () => {
       TaskTerminalKind.TimedOut,
       TaskTerminalKind.Skipped,
     ];
-    const delegationCli = join(
-      import.meta.dir,
-      '../../src/agent-workflow/delegation-cli.ts',
-    );
-    const spawnOptions = {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    } as const;
     try {
       for (const kind of terminalKinds) {
         const runId = `terminal-${kind}`;
@@ -551,18 +575,15 @@ describe('delegated agent journal CLI', () => {
         };
         const planPath = join(workingDirectory, `${runId}-plan.json`);
         await writeFile(planPath, JSON.stringify(plan), 'utf8');
-        const startCommand = [
-          process.execPath,
-          delegationCli,
-          'start',
-          '--plan',
-          planPath,
-          '--working-directory',
-          workingDirectory,
-        ];
-        const startProcess = Bun.spawn(startCommand, spawnOptions);
-        expect(await startProcess.exited).toBe(0);
-        await new Response(startProcess.stdout).text();
+        const startResult =
+          await AgentWorkflowDelegationCliScenario.runDelegationCli(
+            'start',
+            '--plan',
+            planPath,
+            '--working-directory',
+            workingDirectory,
+          );
+        expect(startResult.exitCode, startResult.stderr).toBe(0);
 
         const requestPath = join(workingDirectory, `${runId}-request.json`);
         const request = {
@@ -583,18 +604,15 @@ describe('delegated agent journal CLI', () => {
           },
         };
         await writeFile(requestPath, JSON.stringify(request), 'utf8');
-        const recordCommand = [
-          process.execPath,
-          delegationCli,
-          'record',
-          '--request',
-          requestPath,
-          '--working-directory',
-          workingDirectory,
-        ];
-        const recordProcess = Bun.spawn(recordCommand, spawnOptions);
-        expect(await recordProcess.exited).toBe(0);
-        await new Response(recordProcess.stdout).text();
+        const recordResult =
+          await AgentWorkflowDelegationCliScenario.runDelegationCli(
+            'record',
+            '--request',
+            requestPath,
+            '--working-directory',
+            workingDirectory,
+          );
+        expect(recordResult.exitCode, recordResult.stderr).toBe(0);
         const viewPath = join(
           workingDirectory,
           'workflow',

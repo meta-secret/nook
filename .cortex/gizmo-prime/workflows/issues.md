@@ -118,9 +118,7 @@ Every focused issue follows
 - links to relevant Nook code, PRs, and historical discussions.
 
 Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
-`cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
-reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
-dispatcher. The bounded implementation workflow must not claim those records.
+`cancelled`. `automation` is `manual` or `agent`.
 
 This combination makes a record eligible for explicit dispatch to the bounded
 Nook implementation worker:
@@ -146,10 +144,6 @@ At least one ownership unit must use that ID.
 - Creating or editing any other record must not start implementation.
 - The worker claims an eligible record by committing `status: in_progress`
   before it runs.
-- Main-failure handoff records use `status: ready` with `automation: hive`.
-
-Existing Hive metadata belongs to its separately documented paused platform.
-It does not start a dev manager or authorize automatic repair work.
 The manually run manager routes slow-stage failures through feature Gizmos.
 
 ## Choose update versus create
@@ -246,12 +240,11 @@ The plan must contain:
 - feature branch and integration provenance where applicable; and
 - a safety review excluding raw prompts, secrets, private data, and raw logs.
 
-Each ownership unit uses the exact field order from
-`.github/prompts/agent-plan.md`. It names one functional owner and capability
-acceptance contract. When an expertise provider will change files, it also
-enumerates exact repository-relative code, test, and forbidden paths,
-consumer interfaces, and provider-owned evidence. Otherwise every expertise
-field is `None`.
+Each ownership unit uses the exact field order below. It names one functional
+owner and capability acceptance contract. When an expertise provider will
+change files, it also enumerates exact repository-relative code, test, and
+forbidden paths, consumer interfaces, and provider-owned evidence. Otherwise
+every expertise field is `None`.
 
 The plan contract uses these validator-recognized labels:
 

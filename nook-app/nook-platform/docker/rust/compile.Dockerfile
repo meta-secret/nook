@@ -242,56 +242,16 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Minds/Hive and platform WASM are independent dependency domains. Start them
-# from the shared manifest/toolchain root so BuildKit can solve both expensive
-# compiler branches concurrently during an ordinary build.
-FROM rust-base AS compile-minds-base
-
-ENV CARGO_INCREMENTAL=0
-ENV RUSTFLAGS="--remap-path-prefix=/meta-secret/nook=/workspace"
-ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git openssh-client \
-    && rm -rf /var/lib/apt/lists/*
-
-FROM compile-minds-base AS compile-minds-dependencies
-
-WORKDIR /meta-secret/nook/agentic-ai/minds
-COPY agentic-ai/minds/Cargo.toml agentic-ai/minds/Cargo.lock ./
-COPY agentic-ai/minds/vendor vendor
-COPY agentic-ai/minds/hive/Cargo.toml hive/Cargo.toml
-RUN mkdir -p hive/src/bin \
-    && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs
-RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release -p hive \
-      --features observer-contract-export --lib \
-    && nook-sccache-report compile-hive-dependencies \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/compile-hive-dependencies
-
-# Copy only the Bun and Node runtimes from web-base into the source-free Rust
-# lineage; do not merge either product tree. Package manifests enter in the
-# sequential dependency stages below.
-FROM compile-minds-dependencies AS compile-node-dependency-toolchain
+# Copy only the Bun and Node runtimes from web-base into a source-free lineage;
+# package manifests enter in the sequential dependency stages below.
+FROM rust-base AS compile-node-dependency-toolchain
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 COPY --from=web-base /usr/local/bun /usr/local/bun
 COPY --from=web-base /usr/local/bin/node /usr/local/bin/node
 
-FROM compile-node-dependency-toolchain AS compile-hive-console-dependencies
-
-WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
-COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
-RUN bun install --frozen-lockfile \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/compile-hive-console-dependencies
-
-FROM compile-hive-console-dependencies AS compile-web-app-dependencies
+FROM compile-node-dependency-toolchain AS compile-web-app-dependencies
 
 WORKDIR /meta-secret/nook
 COPY nook-app/nook-web/nook-web-app/package.json nook-app/nook-web/nook-web-app/bun.lock ./nook-app/nook-web/nook-web-app/
@@ -307,42 +267,6 @@ RUN cd nook-app/nook-web/nook-web-research \
     && bun install --frozen-lockfile \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-web-dependencies
-
-FROM compile-minds-dependencies AS compile-minds-source
-
-COPY agentic-ai/minds/hive/src hive/src
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    find hive/src -type f -name '*.rs' -exec touch {} + \
-    && cargo build --locked --release -p hive \
-      --features observer-contract-export --bins \
-    && mkdir -p /opt/nook/hive-observer-contract \
-    && target/release/hive-export-observer-contract \
-      --output /opt/nook/hive-observer-contract \
-    && touch /opt/nook/hive-compile-passed
-
-FROM compile-hive-console-dependencies AS compile-hive-console
-
-COPY --from=compile-minds-source /opt/nook/hive-observer-contract /opt/nook/hive-observer-contract
-ENV HIVE_OBSERVER_CONTRACT_INPUT=/opt/nook/hive-observer-contract
-COPY agentic-ai/minds/hive-console/index.html \
-     agentic-ai/minds/hive-console/svelte.config.js \
-     agentic-ai/minds/hive-console/tsconfig.json \
-     agentic-ai/minds/hive-console/vite.config.ts \
-     agentic-ai/minds/hive-console/eslint.config.js \
-     agentic-ai/minds/hive-console/.prettierrc ./
-COPY agentic-ai/minds/hive-console/src src
-COPY agentic-ai/minds/hive-console/locales locales
-COPY agentic-ai/minds/hive-console/scripts scripts
-COPY agentic-ai/minds/hive-console/.prettierignore ./
-COPY agentic-ai/minds/hive-console/tsconfig.compile.json ./
-RUN bun run contracts \
-    && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
-    && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
-    && node_modules/.bin/vite build \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/hive-console-compile-passed
 
 FROM web-base AS compile-web
 
@@ -444,24 +368,12 @@ RUN cd nook-app/nook-web/nook-web-extension \
        bun scripts/build.ts
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
-FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS compile-ci-agent
-
-WORKDIR /meta-secret/nook/agentic-ai/ci-agent
-COPY agentic-ai/ci-agent/package.json agentic-ai/ci-agent/package-lock.json ./
-RUN npm ci --ignore-scripts
-COPY agentic-ai/ci-agent/tsconfig.json ./
-COPY agentic-ai/ci-agent/src/main src/main
-RUN node_modules/.bin/tsc \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/ci-agent-compile-passed
-
 FROM web-base AS compile-repository-tooling
 
 WORKDIR /meta-secret/nook
 COPY package.json bun.lock tsconfig.json tsconfig.compile.json eslint.config.mjs ./
 COPY .github .github
 COPY infra infra
-COPY agentic-ai/minds/hive/controller agentic-ai/minds/hive/controller
 RUN bun install --frozen-lockfile --ignore-scripts \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
@@ -493,9 +405,7 @@ FROM compile-web-dependencies AS compile-dependency-cache
 
 COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
 COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
-RUN install -D /opt/nook/compile-hive-dependencies /compile/hive \
-    && install -D /opt/nook/compile-hive-console-dependencies /compile/hive-console \
-    && install -D /opt/nook/compile-web-app-dependencies /compile/web-app-deps \
+RUN install -D /opt/nook/compile-web-app-dependencies /compile/web-app-deps \
     && install -D /opt/nook/compile-web-dependencies /compile/web-research-deps
 
 # The exact source cache is deliberately exported with mode=min. Keep the
@@ -508,8 +418,5 @@ FROM compile-wasm-source AS compile
 COPY --from=compile-native-source /opt/nook/compile-native-passed /compile/native
 RUN install -D /opt/nook/wasm-compile-passed /compile/wasm
 COPY --from=compile-web /opt/nook/web-compile-passed /compile/web
-COPY --from=compile-minds-source /opt/nook/hive-compile-passed /compile/hive
-COPY --from=compile-hive-console /opt/nook/hive-console-compile-passed /compile/hive-console
-COPY --from=compile-ci-agent /opt/nook/ci-agent-compile-passed /compile/ci-agent
 COPY --from=compile-repository-tooling /opt/nook/repository-tooling-compile-passed /compile/repository-tooling
 COPY --from=compile-loom /opt/nook/loom-compile-passed /compile/loom

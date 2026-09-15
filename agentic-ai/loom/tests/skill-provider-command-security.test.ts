@@ -74,22 +74,40 @@ test('repository PATH cannot shadow the trusted Docker CLI', async () => {
   ).toThrow('Command-scoped PATH mutation');
 });
 
-test('pins the sole repository source helper', () => {
+test('local web orchestration keeps every stage executable statically bounded', async () => {
+  const wrapper = '.github/scripts/ci-pr-web-local.sh';
+  const buildkitWrapper = '.github/scripts/with-healthy-buildkit.sh';
+  const wrapperSource = await Bun.file(
+    join(import.meta.dir, '../../..', wrapper),
+  ).text();
+  const buildkitWrapperSource = await Bun.file(
+    join(import.meta.dir, '../../..', buildkitWrapper),
+  ).text();
   const graph: ConfigurationScriptGraph = {
     executablePaths: new Set(),
-    roots: ['agentic-ai/minds/hive/Taskfile.yml'],
+    roots: ['Taskfile.yml'],
     sources: new Map([
-      [
-        'agentic-ai/minds/hive/Taskfile.yml',
-        'tasks: {x: {cmds: [. "$HIVE_TASK_DIR/prepare-sccache-context.sh"]}}',
-      ],
-      ['agentic-ai/minds/hive/prepare-sccache-context.sh', 'echo unsafe'],
+      ['Taskfile.yml', `tasks: {x: {cmds: [bash ${wrapper}]}}`],
+      [wrapper, wrapperSource],
+      [buildkitWrapper, buildkitWrapperSource],
     ]),
     symlinkPaths: new Set(),
   };
+
   expect(() =>
     SkillProviderConfigBoundaryScenario.configurationScriptPaths(graph),
-  ).toThrow('helper has drifted');
+  ).not.toThrow();
+
+  const dynamicGraph: ConfigurationScriptGraph = {
+    ...graph,
+    sources: new Map(graph.sources).set(
+      wrapper,
+      `${wrapperSource}\nstage_command=(task ci:pr:wasm)\n"\${stage_command[@]}"`,
+    ),
+  };
+  expect(() =>
+    SkillProviderConfigBoundaryScenario.configurationScriptPaths(dynamicGraph),
+  ).toThrow('Unknown dynamic executable is forbidden');
 });
 
 test('bounds action manifests and package metadata before parsing', () => {

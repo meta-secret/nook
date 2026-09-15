@@ -97,9 +97,12 @@ mod tests {
         bytes: Vec<u8>,
     }
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn outbox_publication_failure_and_durable_completion() -> anyhow::Result<()> {
         let fixture = OutboxFixture {

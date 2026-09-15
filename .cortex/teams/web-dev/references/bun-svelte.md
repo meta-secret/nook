@@ -5,8 +5,6 @@
 - Nook web and Loom use Bun for JavaScript/TypeScript tooling.
 - Use their Task or Bun commands instead of npm/yarn.
 - Do not check in `package-lock.json` or `yarn.lock` in Bun-owned packages.
-- `agentic-ai/ci-agent` is the maintained Node/npm exception.
-- It owns its checked-in `package-lock.json` and runs through Task wrappers.
 
 ## 2. Dev Server and Build
 

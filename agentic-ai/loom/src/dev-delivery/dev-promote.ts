@@ -138,8 +138,7 @@ export class DevPromoteCommand {
             'origin/main changed to a non-ancestor; refusing to rewrite it',
         });
       }
-      const pushed = workspace.git.pushExact({
-        target: ManagedBranch.Main,
+      const pushed = workspace.git.promoteExact({
         sha: this.request.expectedSha,
         workingDirectory: workspace.root,
       });

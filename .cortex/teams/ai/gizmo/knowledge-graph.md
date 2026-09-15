@@ -7,18 +7,16 @@ Load only the authority needed to orchestrate the current AI packet.
 - [AI Team Gizmo contract](AGENTS.md)
 - [AI team contract](../AGENTS.md)
 - [AI team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime contract](../../../gizmo-prime/AGENTS.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- Gizmo Prime is the parent mission authority.
 
 ## Specialist contexts
 
-- [Loom specialist knowledge graph](../loom-specialist/knowledge-graph.md)
-- [Cortex specialist knowledge graph](../cortex-specialist/knowledge-graph.md)
+- [Loom specialist contract](../loom-specialist/AGENTS.md)
+- [Cortex specialist contract](../cortex-specialist/AGENTS.md)
 
 ## Delivery authority
 
-- [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
-- [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
+Prime supplies the applicable delivery authority in the packet.
 
 Every AI packet names the canonical feature branch and may carry bootstrap
 evidence: `originMainSha` for the exact freshly fetched main and

@@ -215,9 +215,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn preparation_selects_only_pending_empty_bucket_deletions() -> anyhow::Result<()> {
         let fixture = CatalogFixture::new()?;
@@ -236,9 +239,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn malformed_ciphertext_and_bucket_json_require_rebuild() -> anyhow::Result<()> {
         let fixture = CatalogFixture::new()?;
@@ -260,9 +266,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn persistence_deletes_captured_buckets_and_retains_unrelated_pending_bits()
     -> anyhow::Result<()> {
@@ -304,9 +313,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn manager_catalog_guards_rebuild_invalid_cache_and_purge_legacy_data()
     -> anyhow::Result<()> {

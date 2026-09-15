@@ -231,7 +231,7 @@ tasks:
       - task: kubernetes:tools:status
 
   kubernetes:tools:status:
-    desc: Verify standalone kubectl, Helm, and k9s clients on the Hive host.
+    desc: Verify standalone kubectl, Helm, and k9s clients on the Nook host.
     silent: true
     cmds:
       - |
@@ -267,7 +267,7 @@ tasks:
         REMOTE
 
   kvm:verify:
-    desc: Verify the Hive host, nested virtualization, KVM modules, and firewall.
+    desc: Verify the Nook host, nested virtualization, KVM modules, and firewall.
     silent: true
     cmds:
       - |

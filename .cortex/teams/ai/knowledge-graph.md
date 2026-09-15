@@ -11,11 +11,8 @@ Load only the category that owns the assigned AI functionality.
 Use these documents for AI runtime design and read-only expert routing.
 
 - [Module expert registry](architecture/module-experts.md)
-- [Dev delivery contract](../../gizmo-prime/architecture/dev-delivery.md)
-- [Dev manager context](../delivery-pipeline/dev-manager/AGENTS.md)
 - [Structural refactoring expert registry](architecture/refactoring-experts.md)
 - [Core agent-first beliefs](design-docs/core-beliefs.md)
-- [Docker cache specialist activation](architecture/docker-cache-specialist-activation.md)
 - [Design document catalog](design-docs/index.md)
 
 ## Cortex authoring and maintenance
@@ -62,6 +59,9 @@ Use these workflows for AI-owned skills and cross-package changes.
 - [Loom tools](references/loom-tools.md)
 
 ## Team topology
+
+- [Docker cache specialist activation](architecture/docker-cache-specialist-activation.md)
+  defines deterministic SRE routing from cache-health telemetry.
 
 - [AI Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded AI-team mechanics.
 - [Loom specialist](loom-specialist/knowledge-graph.md) handles packeted AI-owned Loom work.

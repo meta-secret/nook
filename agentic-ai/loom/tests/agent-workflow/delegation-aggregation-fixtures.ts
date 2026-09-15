@@ -69,7 +69,7 @@ export const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
-const FEATURE_BRANCH = 'codex/hive-delegation-aggregation-tests';
+const FEATURE_BRANCH = 'codex/delegation-agg-tests';
 
 export class AgentWorkflowDelegationAggregationScenario {
   private constructor(private readonly request: FixtureInput) {}

@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { expect, test } from 'bun:test';
 
 import { DevPromoteCommand } from '../src/dev-delivery/dev-promote.ts';
@@ -9,7 +9,7 @@ import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   DevLock,
   DevLockName,
-  type DevLockLease,
+  DevLockLease,
 } from '../src/dev-delivery/dev-lock.ts';
 import {
   type CommandOutput,
@@ -27,6 +27,23 @@ class RefreshFailureRunner implements CommandRunner {
 
   run(_request: CommandRequest) {
     return err<CommandOutput, DevFailure>(this.failure);
+  }
+}
+
+class RecordingLease extends DevLockLease {
+  releaseCount = 0;
+
+  constructor(private readonly releaseResult: Result<void, DevFailure>) {
+    super({
+      lockPath: '/unused',
+      ownerPath: '/unused/owner',
+      token: 'unused',
+    });
+  }
+
+  override release(): Result<void, DevFailure> {
+    this.releaseCount += 1;
+    return this.releaseResult;
   }
 }
 
@@ -95,6 +112,46 @@ test('promotion releases publication after local lock release fails', () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Lock);
     expect(existsSync(join(root, DevLockName.Publication))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('promotion attempts both lease releases and preserves local failure precedence', () => {
+  const root = mkdtempSync(join(tmpdir(), 'nook-dev-promote-lock-'));
+  try {
+    const localFailure: DevFailure = {
+      kind: DevFailureKind.Lock,
+      message: 'local release failed',
+    };
+    const publicationFailure: DevFailure = {
+      kind: DevFailureKind.Lock,
+      message: 'publication release failed',
+    };
+    const local = new RecordingLease(err(localFailure));
+    const publication = new RecordingLease(err(publicationFailure));
+    const workspace = new LeaseInjectingWorkspace({
+      root,
+      publication,
+      local,
+      failure: {
+        kind: DevFailureKind.Git,
+        message: 'refresh failed',
+      },
+    });
+    const expectedSha = CommitSha.parse(SHA);
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+
+    const result = new DevPromoteCommand({
+      workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+
+    expect(local.releaseCount).toBe(1);
+    expect(publication.releaseCount).toBe(1);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error).toEqual(localFailure);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -2,22 +2,20 @@ version: '3'
 
 vars:
   ARC_RUNNER_LABEL: nook-k0s
-  ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 # ARC GitHub routing and exact-run operational smoke controls.
 tasks:
   arc:activate:
-    desc: Route trusted workflows to the Nook ARC scale sets.
+    desc: Route trusted workflows to the Nook ARC scale set.
     preconditions:
       - sh: gh auth status >/dev/null 2>&1
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
-      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body "{{.ARC_HIVE_RUNNER_LABEL}}"
       - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
-      - echo "Trusted workflows now target {{.ARC_RUNNER_LABEL}} and {{.ARC_HIVE_RUNNER_LABEL}}"
+      - echo "Trusted workflows now target {{.ARC_RUNNER_LABEL}}"
 
   arc:fallback:
     desc: Route trusted workflows back to GitHub-hosted capacity.
@@ -26,7 +24,6 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
-      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
       - echo "Trusted workflows now target ubuntu-latest"
 
@@ -43,7 +40,6 @@ tasks:
         smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
         case "$smoke_runner_label" in
           "{{.ARC_RUNNER_LABEL}}") route_variable=NOOK_RUNS_ON ;;
-          "{{.ARC_HIVE_RUNNER_LABEL}}") route_variable=NOOK_HIVE_RUNS_ON ;;
           *)
             echo "Unsupported ARC runner label: $smoke_runner_label" >&2
             exit 2
@@ -99,11 +95,3 @@ tasks:
         vars:
           ARC_SMOKE_TASK: arc:runtime
           ARC_SMOKE_RUNNER_LABEL: nook-k0s
-
-  arc:smoke:hive:
-    desc: Validate the Hive ARC route.
-    cmds:
-      - task: arc:smoke
-        vars:
-          ARC_SMOKE_TASK: hive:verify
-          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive

@@ -6,10 +6,17 @@ import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import {
   BranchName,
   CommitSha,
+  DevLandBuildProofMode,
   DevFailureKind,
+  LocalBuildEvidenceController,
+  LocalBuildEvidenceSelectionAuthorization,
+  LocalBuildTask,
+  type DevLandBuildProof,
   type DevFailure,
   type DevLandRequest,
+  type LocalBuildEvidenceRequest,
 } from './dev-types.ts';
+import { LOCAL_BUILD_TASKS } from './local-build-evidence.ts';
 
 export interface DevCliMessage {
   readonly message: string;
@@ -23,6 +30,8 @@ export interface DevCliMessage {
 export interface DevLandProvenancePacket {
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
+  /** Optional explicit one-off local proof; remote proof is the default. */
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
 }
 
 /** Provides the manual task boundary and a single human-readable failure format. */
@@ -82,8 +91,13 @@ export class DevCli {
   static requiredDevLandPacket(): Result<DevLandProvenancePacket, DevFailure> {
     const featureBranch = DevCli.requiredFeatureBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);
+    const localBuildEvidence = DevCli.optionalLocalBuildEvidence();
+    if (localBuildEvidence.isErr()) return err(localBuildEvidence.error);
     return ok({
       featureBranch: featureBranch.value,
+      ...(localBuildEvidence.value.mode === DevLandBuildProofMode.Local
+        ? { localBuildEvidence: localBuildEvidence.value.evidence }
+        : {}),
     });
   }
 
@@ -92,6 +106,66 @@ export class DevCli {
     return typeof raw === 'string'
       ? BranchName.parseFeature(raw)
       : DevCli.missingEnvironment('FEATURE_BRANCH');
+  }
+
+  static optionalLocalBuildEvidence(): Result<DevLandBuildProof, DevFailure> {
+    const path = process.env.LOCAL_BUILD_EVIDENCE_PATH;
+    const authorization = process.env.LOCAL_BUILD_EVIDENCE_AUTHORIZATION;
+    const noSelection =
+      (typeof path !== 'string' || path === '') &&
+      (typeof authorization !== 'string' || authorization === '');
+    if (noSelection) return ok({ mode: DevLandBuildProofMode.Remote });
+    if (
+      authorization !==
+      LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          'LOCAL_BUILD_EVIDENCE_AUTHORIZATION must record explicit one-off Gizmo Prime authority when local proof is selected',
+      });
+    }
+    const evidencePath = DevCli.requiredAbsolutePath(
+      'LOCAL_BUILD_EVIDENCE_PATH',
+    );
+    if (evidencePath.isErr()) return err(evidencePath.error);
+    const sourceSha = DevCli.requiredCommitSha(
+      'LOCAL_BUILD_EVIDENCE_SOURCE_SHA',
+    );
+    if (sourceSha.isErr()) return err(sourceSha.error);
+    const task = LOCAL_BUILD_TASKS.find(
+      (candidate) => candidate === process.env.LOCAL_BUILD_EVIDENCE_TASK,
+    );
+    if (!task) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `LOCAL_BUILD_EVIDENCE_TASK must be one of: ${LOCAL_BUILD_TASKS.join(', ')}`,
+      });
+    }
+    const artifactDigest = process.env.LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST;
+    if (
+      typeof artifactDigest !== 'string' ||
+      !/^sha256:[0-9a-f]{64}$/u.test(artifactDigest)
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          'LOCAL_BUILD_EVIDENCE_ARTIFACT_DIGEST must be an exact sha256 digest',
+      });
+    }
+    return ok({
+      mode: DevLandBuildProofMode.Local,
+      evidence: {
+        path: evidencePath.value,
+        authorization:
+          LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff,
+        controller: LocalBuildEvidenceController.GizmoPrime,
+        sourceSha: sourceSha.value,
+        task:
+          task === 'build' ? LocalBuildTask.Build : LocalBuildTask.RustBuild,
+        artifactDigest,
+      },
+    });
   }
 
   /** Binds the serialized target to the feature worktree state observed locally. */

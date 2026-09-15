@@ -80,8 +80,6 @@ Workbench state.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - `loom:verify` uses the general `nook-k0s` scale set.
-- Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
-- Batches containing `hive:verify` use `nook-k0s-hive`.
 - Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
 - Browser jobs use ordinary Pods on `nook-k0s-container`.
@@ -110,12 +108,7 @@ ARC cache rules:
 - Import an exact Zot ref alone when it exists.
 - Otherwise restore source-free dependencies and trusted Main.
 - Publish commit-scoped refs only under `nook/remote-buildcache/**`.
-- Treat `nook-build-compile-v3` as the minimum compatible exact-source
-  generation. Never probe or import legacy `v2` source manifests as warm-build
-  evidence. An ordinary compile populates missing dependency and exact-source
-  state without a preparatory task.
 - Publish shared Main refs only from trusted Main.
-- Keep Hive's exact-head lineage separate.
 - Never use GitHub Actions cache for BuildKit layers.
 
 Zot carries cache state between nodes and hosted runners. SeaweedFS carries
@@ -131,10 +124,8 @@ Security rules:
 - Prohibit `docker run`, `docker create`, `docker start`, `docker exec`, and equivalent container runtime lifecycle commands inside cluster Pods.
 - Run Playwright directly in a purpose-built browser Pod image. Installing Playwright directly in an Actions Pod is the slower fallback; never launch a browser container from another Pod.
 - Treat BuildKit as a build-only service. A produced image executes later as an ordinary Kubernetes Pod or Job.
-- Use the single GitHub sccache credential pair in `READ_WRITE` mode whenever
-  the pair is available. Secret absence is the complete remote-cache boundary
-  and falls back safely without classifying the triggering event.
-- Keep BuildKit registry export authority task-controlled and scoped.
+- Give Remote read-only access to Main cache refs.
+- Give Remote write access only to commit-scoped refs.
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.
 - Never place credential bytes in build arguments, layers, or cache checksums.
 
@@ -149,8 +140,6 @@ The named ARC tasks avoid a general container-runtime requirement:
   - It proves Task, Bun, and Cargo before starting the named task.
   - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
-- `hive:verify` executes exported tests through its pinned native runtime
-  sidecar.
 - `web:build`, `web:e2e`, `extension:e2e`, `check`, `ci:pr`, and `ci:pr:e2e`
   execute directly inside an ordinary exact-image Pod.
 

@@ -27,7 +27,7 @@ const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
     'security',
     ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
   ],
-  ['sre', ['gizmo', 'provisioning', 'cloud-native', 'docker-cache-specialist']],
+  ['sre', ['gizmo', 'provisioning', 'cloud-native']],
   ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
   ['delivery-pipeline', ['gizmo', 'dev-manager', 'pr-lifecycle']],
 ]);
@@ -64,6 +64,18 @@ export class CortexDocumentPath {
     return child && this.filePath.endsWith('/knowledge-graph.md')
       ? child.team
       : false;
+  }
+
+  childTeam(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? child.team : false;
+  }
+
+  isChildAuthorityPath(): boolean {
+    return (
+      this.filePath.endsWith('/AGENTS.md') &&
+      this.canonicalChildDirectory() !== false
+    );
   }
 
   isKnowledgeGraphPath(): boolean {
@@ -165,6 +177,15 @@ export class CortexChildGraphReference {
       parentTeamPath !== false &&
       indexedPath ===
         parentTeamPath.replace('/knowledge-graph.md', '/AGENTS.md')
+    ) {
+      return true;
+    }
+    const graphTeam = this.graphPath.childGraphTeam();
+    const indexedTeam = this.indexedPath.childTeam();
+    if (
+      graphTeam !== false &&
+      indexedTeam === graphTeam &&
+      this.indexedPath.isChildAuthorityPath()
     ) {
       return true;
     }

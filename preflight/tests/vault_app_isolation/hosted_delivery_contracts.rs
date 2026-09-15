@@ -66,6 +66,10 @@ fn repository_delivery_policy_executes_only_the_trusted_default_branch_verifier(
 fn assert_docker_setup_contract(root: &Path) {
     let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
     let pr = (root).read(".github/workflows/pr.yml");
+    let native = section(&pr, "\n  rust:\n", "\n  wasm:\n");
+    let wasm = section(&pr, "\n  wasm:\n", "\n  wasm-node-test:\n");
+    let wasm_node = section(&pr, "\n  wasm-node-test:\n", "\n  verify:\n");
+    let web = section(&pr, "\n  verify:\n", "\n  ui-demo:\n");
     let arc_values = (root).read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let container_values =
         (root).read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
@@ -103,6 +107,19 @@ fn assert_docker_setup_contract(root: &Path) {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        native.contains("cache-selection: native")
+            && wasm.contains("cache-selection: wasm")
+            && wasm_node.contains("cache-selection: wasm")
+            && web.contains("cache-selection: web-e2e"),
+        "PR Docker consumers must select only the cache graph they execute"
+    );
+    assert!(
+        setup.contains("web-research-deps|web-research-image)")
+            && setup.contains("arc_exact_scope_required=1")
+            && setup.contains("|| [ -n \"$arc_exact_scope_required\" ]"),
+        "ARC research producers and consumers must preserve PR exact-head cache scopes without forcing Main's stable research cache through the remote-task path"
+    );
     assert!(
         container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
             && container_values.contains("value: \"true\"")
@@ -387,7 +404,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         ci.contains("name: Dev promotion readiness")
-            && ci.contains("needs: [scope, policy, pr, hive, research]")
+            && ci.contains("needs: [scope, policy, pr, nook, research]")
             && ci.contains("github.event.pull_request.head.ref == 'dev'")
             && ci.contains(
                 "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"

@@ -593,7 +593,7 @@ tasks:
             --no-taints \
             --config /etc/k0s/k0s.yaml \
             --kubelet-extra-args='--node-ip=10.202.0.1' \
-            --labels='nook.nokey.sh/node-role=control-storage,hive.nook.sh/storage=local,hive.nook.sh/kata=enabled'
+            --labels='nook.nokey.sh/node-role=control-storage,nook.nokey.sh/storage=local,nook.nokey.sh/kata=enabled'
           sudo -n systemctl daemon-reload
           sudo -n systemctl restart k0scontroller
           for _ in $(seq 1 120); do
@@ -620,8 +620,8 @@ tasks:
         test "$(sudo -n k0s kubectl get node "$controller_node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')" = 10.202.0.1
         sudo -n k0s kubectl label node "$controller_node" \
           nook.nokey.sh/node-role=control-storage \
-          hive.nook.sh/storage=local \
-          hive.nook.sh/kata=enabled \
+          nook.nokey.sh/storage=local \
+          nook.nokey.sh/kata=enabled \
           --overwrite
         REMOTE
 

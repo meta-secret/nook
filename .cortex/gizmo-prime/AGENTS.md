@@ -2,6 +2,8 @@
 
 ## Mission
 
+### Routing
+
 Gizmo Prime is the first actor for every new user-originated repository task.
 It interprets the request and selects its scope-appropriate terminal outcome.
 It routes bounded work through Team Gizmos and owns feature delivery.
@@ -12,6 +14,8 @@ Trusted CI publishers retain their explicit execution contracts.
 Gizmo routes manually requested dev operations through Delivery Pipeline to
 the Dev Manager.
 
+### Feature ownership
+
 Each feature has its own Gizmo Prime delivery owner, branch, and worktree.
 It assigns bounded Team Agent work and integrates scoped child commits.
 Concurrent features have independent Gizmos. Read the complete
@@ -19,10 +23,14 @@ Concurrent features have independent Gizmos. Read the complete
 before planning or acting, then follow
 [dev delivery](architecture/dev-delivery.md) for the authoritative stage rules.
 
+### Mission hierarchy
+
 Within each feature mission, its Gizmo Prime is the mission/root coordinator
 and single root delivery owner. Every team has a Team Gizmo that reports
 upward to Gizmo Prime; Team Gizmo is an internal team orchestrator, not a
 second Prime.
+
+### Delivery authority
 
 Gizmo Prime authorizes the canonical feature branch name for publication and
 remote `build:compile` execution. The branch name is the workflow authority.
@@ -108,6 +116,8 @@ contract. Report meaningful changes and one compact terminal outcome.
 
 ## Ownership
 
+### Owned outcomes
+
 Gizmo owns:
 
 - the requested outcome and completion evidence;
@@ -119,12 +129,16 @@ Gizmo owns:
 - Workbench completion; and
 - the feature delivery verdict.
 
+### Controller boundaries
+
 The Dev Manager controls dev PR creation/update, slow evidence, readiness, and
 promotion. Team Gizmos route authorized mechanics to their internal Team
 Agents; Delivery Pipeline's PR Lifecycle Agent performs those mechanics under
 the applicable manager packet or Prime-authored canonical feature packet.
 PR Lifecycle must never push a temporary leaf branch or invoke a remote task
 while checked out on one.
+
+### GitHub execution
 
 Gizmo delegates all GitHub execution, including read-only commands and wrappers,
 to Delivery Pipeline Team Gizmo, which dispatches the
@@ -133,11 +147,15 @@ The [Delivery Pipeline knowledge graph](../teams/delivery-pipeline/knowledge-gra
 defines this operational context. PR Lifecycle Agent never acts without an
 explicit operation packet from the controller that owns the requested stage.
 
+### Evidence requests
+
 Workers send missing PR-information requests to Gizmo through the active
 harness. Gizmo routes dev PR evidence requests to the Dev Manager. The manager
 authorizes PR Lifecycle's collection and returns the result. Gizmo Prime
 authorizes the canonical feature branch publication and compilation request, plus
 local landing requests.
+
+### Prohibited ownership
 
 Gizmo does not:
 
@@ -160,12 +178,16 @@ Feature slices. Prefer the smallest sufficient change without numeric size gates
 
 ## Team routing
 
+### Team packet flow
+
 Every team routes through one Team Gizmo reporting to Gizmo Prime. Team Gizmo
 receives the high-level packet, decomposes only mechanics owned by that team,
 dispatches internal Team Agents through the active harness, synthesizes
 branch/head evidence and blockers, and reports the high-level result to Prime. It does
 not make functional ownership, readiness, promotion, or final delivery
 decisions.
+
+### Validation repair waves
 
 For a terminal dev-validation failure, Prime receives the complete inventory of
 every failed or cancelled required job. Prime groups the diagnostics by owning
@@ -176,6 +198,8 @@ Prime integrates all returned team clusters into local dev before the Dev
 Manager publishes one new snapshot and requests one full validation rerun.
 Prime never pushes or reruns validation after an individual fix.
 
+### Harness admission
+
 The active harness owns admission and actual spawn results. Prime immediately
 attempts every dependency-ready Team Gizmo with a disjoint scope concurrently. A temporary
 admission refusal queues the work for retry when capacity releases. Host or
@@ -183,6 +207,8 @@ session allocation is current availability, not an architecture or product
 limit. Prime does not pre-check or budget a dispatch wave against a numeric
 limit. Prime and its Team Gizmos never encode, infer, or repeat a fixed numeric
 agent or subagent concurrency cap.
+
+### Team Agent boundaries
 
 Each Team Agent task has exactly one team identity, bounded file scope, and named
 acceptance evidence.

@@ -8,22 +8,12 @@ import {
 import { resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 import { workflowSchema } from "./arc-manifest-model";
-
-enum HostedRunnerBoundary {
-  Trusted = "trusted",
-  Untrusted = "untrusted",
-}
-
 export class ArcWorkflowPlacementContract {
   constructor(private readonly root: string) {}
   async assert(): Promise<Result<void, OperationalContractFailure>> {
-    const hostedRunnerBoundaries = new Map<string, HostedRunnerBoundary>([
-      ["ci.yml#scope", HostedRunnerBoundary.Untrusted],
-      ["hive.yml#verify-fork", HostedRunnerBoundary.Untrusted],
-      ["hive.yml#console-untrusted", HostedRunnerBoundary.Untrusted],
-      ["web-research.yml#validate-untrusted", HostedRunnerBoundary.Untrusted],
-      ["dev-pr-manager.yml#manage", HostedRunnerBoundary.Trusted],
-      ["repository-delivery-policy.yml#verify", HostedRunnerBoundary.Trusted],
+    const hostedUntrustedBoundary = new Set([
+      "ci.yml#scope",
+      "web-research.yml#validate-untrusted",
     ]);
     const workflowsDir = resolve(this.root, ".github/workflows");
     let entries: string[];
@@ -62,8 +52,7 @@ export class ArcWorkflowPlacementContract {
         }
         const identity = `${workflowFile}#${jobName}`;
         if (placement === "ubuntu-latest") {
-          const boundary = hostedRunnerBoundaries.get(identity);
-          if (!boundary) {
+          if (!hostedUntrustedBoundary.has(identity)) {
             return err({
               kind: OperationalContractFailureKind.Requirement,
               message: `${identity} routes trusted work to GitHub cloud`,
@@ -75,7 +64,6 @@ export class ArcWorkflowPlacementContract {
           ]);
           const { if: condition = "" } = job;
           if (
-            boundary === HostedRunnerBoundary.Untrusted &&
             identity !== "ci.yml#scope" &&
             (!condition.includes("head.repo.full_name") ||
               !condition.includes("dependabot[bot]"))
@@ -108,7 +96,7 @@ export class ArcWorkflowPlacementContract {
       }
     }
 
-    for (const exception of hostedRunnerBoundaries.keys()) {
+    for (const exception of hostedUntrustedBoundary) {
       if (!observedHostedExceptions.has(exception)) {
         return err({
           kind: OperationalContractFailureKind.Requirement,
