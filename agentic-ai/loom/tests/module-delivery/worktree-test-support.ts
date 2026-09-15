@@ -54,6 +54,8 @@ type FixtureTemplateState =
 export class ModuleDeliveryWorktreeTestSupportScenario {
   private constructor(private readonly request: GitFixture) {}
 
+  private static readonly FIXTURE_GIT_TIMEOUT_MILLISECONDS = 4_500;
+
   private static fixtureTemplate: FixtureTemplateState = {
     kind: FixtureTemplateStateKind.Empty,
   };
@@ -133,7 +135,10 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       cwd: command.cwd,
       encoding: 'utf8',
       env: process.env,
+      killSignal: 'SIGKILL',
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout:
+        ModuleDeliveryWorktreeTestSupportScenario.FIXTURE_GIT_TIMEOUT_MILLISECONDS,
     };
     const result: SpawnSyncReturns<string> = spawnSync(
       'git',

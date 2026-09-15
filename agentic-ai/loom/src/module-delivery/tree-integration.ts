@@ -79,18 +79,6 @@ export class ModuleWaveTree {
       throw new Error(
         `Child worktree handoff ${handoff.taskId} is unrelated to its baseline.`,
       );
-    const count = ModuleWaveTree.git({
-      cwd: workspacePath,
-      args: [
-        'rev-list',
-        '--count',
-        `${handoff.baselineCommit}..${handoff.commit}`,
-      ],
-    });
-    if (count !== '1')
-      throw new Error(
-        `Child worktree handoff ${handoff.taskId} contains more than one commit.`,
-      );
     const changedPaths = ModuleCommitHandoff.moduleCommitChangedPaths({
       workspace,
       baselineCommit: handoff.baselineCommit,
@@ -145,6 +133,7 @@ export class ModuleWaveTree {
   private static assertNoParentChangesInClaims(
     request: ParentChangesRequest,
   ): void {
+    if (request.baselineCommit === request.currentHead) return;
     const changedPaths = ModuleCommitHandoff.moduleCommitChangedPaths({
       workspace: request.workspace,
       baselineCommit: request.baselineCommit,

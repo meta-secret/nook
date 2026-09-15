@@ -29,6 +29,10 @@ export class ModuleExpertsRuntimeContractScenario {
     private readonly request: RuntimeIsolationFixtureRequest,
   ) {}
 
+  private static readonly AUTHENTICATION_COMMAND_TIMEOUT_MILLISECONDS = 5_000;
+
+  private static readonly BROKER_SOCKET_TIMEOUT_MILLISECONDS = 4_500;
+
   static toolAttemptEvents(
     request: ToolAttemptEventsRequest,
   ): readonly SseEvent[] {
@@ -267,6 +271,20 @@ export class ModuleExpertsRuntimeContractScenario {
   static redeemBrokerSocket(request: BrokerSocketRequest): Promise<string> {
     return new Promise((resolveRedemption) => {
       let response = '';
+      let state = BrokerSocketState.Running;
+      let activeSocket: Bun.Socket | false = false;
+      const finish = (result: string): void => {
+        if (state !== BrokerSocketState.Running) return;
+        state = BrokerSocketState.Completed;
+        clearTimeout(timeout);
+        resolveRedemption(result);
+      };
+      const timeout = setTimeout(() => {
+        if (state !== BrokerSocketState.Running) return;
+        state = BrokerSocketState.TimedOut;
+        if (activeSocket !== false) activeSocket.close();
+        resolveRedemption('');
+      }, ModuleExpertsRuntimeContractScenario.BROKER_SOCKET_TIMEOUT_MILLISECONDS);
       const socketOptions: Bun.UnixSocketOptions = {
         unix: request.socketPath,
         socket: {
@@ -276,18 +294,27 @@ export class ModuleExpertsRuntimeContractScenario {
             response += data.toString('utf8');
             socket.close();
           },
-          close: () => resolveRedemption(response),
-          error: () => resolveRedemption(response),
+          close: () => finish(response),
+          error: () => finish(response),
           open: (socket) => {
+            if (state !== BrokerSocketState.Running) {
+              socket.close();
+              return;
+            }
+            activeSocket = socket;
             const midpoint = Math.floor(request.nonce.length / 2);
             socket.write(request.nonce.slice(0, midpoint));
             setTimeout(() => {
+              if (state !== BrokerSocketState.Running) {
+                socket.close();
+                return;
+              }
               socket.write(`${request.nonce.slice(midpoint)}\n`);
             }, 1);
           },
         },
       };
-      void Bun.connect(socketOptions);
+      void Bun.connect(socketOptions).catch(() => finish(response));
     });
   }
 
@@ -298,15 +325,27 @@ export class ModuleExpertsRuntimeContractScenario {
       env: run.isolation.codexOptions.env,
       stderr: 'pipe',
       stdout: 'pipe',
+      signal: AbortSignal.timeout(
+        ModuleExpertsRuntimeContractScenario.AUTHENTICATION_COMMAND_TIMEOUT_MILLISECONDS,
+      ),
     } as const;
     const child = Bun.spawn(
       [run.command.command, ...run.command.args],
       spawnOptions,
     );
-    const exitCode = await child.exited;
-    const stdout = await new Response(child.stdout).text();
-    await new Response(child.stderr).text();
-    return { exitCode, stdout };
+    let state = AuthenticationChildState.Running;
+    try {
+      const exitCode = await child.exited;
+      state = AuthenticationChildState.Exited;
+      const stdout = await new Response(child.stdout).text();
+      await new Response(child.stderr).text();
+      return { exitCode, stdout };
+    } finally {
+      if (state === AuthenticationChildState.Running) {
+        child.kill(9);
+        await child.exited;
+      }
+    }
   }
 
   static async treeContains(request: TreeContainsRequest): Promise<boolean> {
@@ -330,6 +369,17 @@ export class ModuleExpertsRuntimeContractScenario {
     }
     return false;
   }
+}
+
+enum AuthenticationChildState {
+  Running = 'running',
+  Exited = 'exited',
+}
+
+enum BrokerSocketState {
+  Running = 'running',
+  Completed = 'completed',
+  TimedOut = 'timed-out',
 }
 
 export const EXPERT_NAME = 'app_common_expert';

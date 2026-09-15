@@ -7,6 +7,8 @@ export class ModuleRepositoryGit {
   private constructor() {}
   private static readonly MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
 
+  private static readonly MAX_GIT_DURATION_MILLISECONDS = 4_500;
+
   private static readonly MAX_GIT_ARGUMENTS = 1024;
 
   private static readonly MAX_GIT_ARGUMENT_BYTES = 1024 * 1024;
@@ -58,7 +60,9 @@ export class ModuleRepositoryGit {
         WINDIR: process.env.WINDIR,
       },
       maxBuffer: ModuleRepositoryGit.MAX_GIT_OUTPUT_BYTES,
+      killSignal: 'SIGKILL',
       stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: ModuleRepositoryGit.MAX_GIT_DURATION_MILLISECONDS,
     };
     if (typeof request.input === 'string')
       options.input = Buffer.from(request.input, 'utf8');
