@@ -71,13 +71,63 @@ jobs:
           cat > "$toolchain_dir/cc" <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
-          args=("$@")
+          args=()
+          while (($# > 0)); do
+            case "$1" in
+              --target=x86_64-unknown-linux-gnu)
+                args+=("--target=x86_64-linux-gnu")
+                ;;
+              -target=x86_64-unknown-linux-gnu)
+                args+=("-target=x86_64-linux-gnu")
+                ;;
+              --target|-target)
+                args+=("$1")
+                if (($# > 1)); then
+                  if [[ "$2" == "x86_64-unknown-linux-gnu" ]]; then
+                    args+=("x86_64-linux-gnu")
+                  else
+                    args+=("$2")
+                  fi
+                  shift
+                fi
+                ;;
+              *)
+                args+=("$1")
+                ;;
+            esac
+            shift
+          done
           exec zig cc "${args[@]}"
           EOF
           cat > "$toolchain_dir/c++" <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
-          args=("$@")
+          args=()
+          while (($# > 0)); do
+            case "$1" in
+              --target=x86_64-unknown-linux-gnu)
+                args+=("--target=x86_64-linux-gnu")
+                ;;
+              -target=x86_64-unknown-linux-gnu)
+                args+=("-target=x86_64-linux-gnu")
+                ;;
+              --target|-target)
+                args+=("$1")
+                if (($# > 1)); then
+                  if [[ "$2" == "x86_64-unknown-linux-gnu" ]]; then
+                    args+=("x86_64-linux-gnu")
+                  else
+                    args+=("$2")
+                  fi
+                  shift
+                fi
+                ;;
+              *)
+                args+=("$1")
+                ;;
+            esac
+            shift
+          done
           exec zig c++ "${args[@]}"
           EOF
           cat > "$toolchain_dir/ar" <<'EOF'
