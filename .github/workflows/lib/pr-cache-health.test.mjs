@@ -39,6 +39,9 @@ void test("passes warm no-export Docker jobs while sccache remains writable", ()
   assert.equal(model.gate.verdict, "pass");
   assert.deepEqual(model.gate.reasons, []);
   assert.match(PrCacheHealth.renderMarkdown(model), /80 cached \/ 100 completed/);
+  assert.match(PrCacheHealth.renderMarkdown(model), /80%/);
+  assert.match(PrCacheHealth.renderMarkdown(model), /1 available/);
+  assert.match(PrCacheHealth.renderMarkdown(model), /0 ms/);
 });
 
 void test("fails missing telemetry, failed jobs, broken collection, and read-only exports", () => {
@@ -82,6 +85,26 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
   assert.equal(model.gate.verdict, "pass");
   assert.ok(model.warnings.includes("wasm:build_not_expected"));
   assert.ok(model.warnings.includes("verify:cache_sample_too_small:10<20"));
+});
+
+void test("tracks image consumers without requiring BuildKit telemetry", () => {
+  const skipped = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "ui-demo", result: "skipped", buildExpected: false, readOnly: true },
+    ],
+    telemetry: [],
+  });
+  assert.equal(skipped.gate.verdict, "pass");
+  assert.ok(skipped.warnings.includes("ui-demo:telemetry_not_expected"));
+
+  const failed = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "extension-e2e", result: "failure", buildExpected: false, readOnly: true },
+    ],
+    telemetry: [],
+  });
+  assert.equal(failed.gate.verdict, "fail");
+  assert.ok(failed.gate.reasons.includes("extension-e2e:upstream_failure_or_timeout"));
 });
 
 void test("records a legitimate cold build without applying the warm threshold", () => {
@@ -165,7 +188,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
     ".github/workflows/rust-ecosystem-checks.yml",
     "utf8",
   );
-  assert.match(workflow, /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify\]/);
+  assert.match(workflow, /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify, ui-demo, extension-e2e, full-e2e-shard\]/);
   assert.match(workflow, /node \.github\/workflows\/lib\/pr-cache-health\.mjs/);
   assert.doesNotMatch(workflow, /cache-health:[\s\S]*docker buildx (?:build|bake)/);
   assert.equal(

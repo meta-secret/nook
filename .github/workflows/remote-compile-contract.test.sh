@@ -53,6 +53,12 @@ done
 for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
 done
+
+# Restore selection and export authority are separate. ARC deliberately avoids
+# registry export for ordinary PR jobs, but must retain the requested exact
+# commit scope so a cache published by another runner remains consumable.
+grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup"
+grep -Fq 'timeout 6s docker buildx imagetools inspect "$ref"' "$setup"
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
   grep -Fq -- "$required" "$probe_classification_contract"
 done

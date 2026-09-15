@@ -52,7 +52,10 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
-      if (job.result !== "success")
+      if (
+        job.result !== "success" &&
+        !(job.result === "skipped" && !job.buildExpected)
+      )
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
         if (job.buildExpected) reasons.push(`${job.id}:telemetry_missing`);
@@ -175,8 +178,8 @@ export class PrCacheHealth {
       `- Docker Cache Specialist activation: **${model.gate.specialist_activation_required ? "required" : "not required"}**`,
       `- Policy: at least ${model.policy.minimum_buildkit_hit_rate_percent}% BuildKit reuse for samples with ${model.policy.minimum_completed_steps}+ completed steps`,
       "",
-      "| Job | Result | Telemetry | BuildKit | sccache | Exports |",
-      "| --- | --- | --- | ---: | ---: | ---: |",
+      "| Job | Result | Telemetry | BuildKit | Imports | sccache | Exports |",
+      "| --- | --- | --- | ---: | ---: | ---: | ---: |",
     ];
     for (const job of model.jobs) {
       const buildkit = /** @type {Partial<NonNullable<typeof job.counters.buildkit>>} */ (
@@ -185,8 +188,18 @@ export class PrCacheHealth {
       const sccache = /** @type {Partial<NonNullable<typeof job.counters.sccache>>} */ (
         job.counters.sccache || {}
       );
+      const imports = /** @type {{availability?: Array<{available: boolean}>}} */ (
+        job.imports || {}
+      );
+      const availableImports = (imports.availability || []).filter(
+        (candidate) => candidate.available,
+      ).length;
+      const buildkitRate =
+        typeof buildkit.cache_hit_rate_percent === "number"
+          ? `${buildkit.cache_hit_rate_percent}%`
+          : "n/a";
       lines.push(
-        `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} |`,
+        `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed (${buildkitRate}) | ${availableImports} available | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} attempts / ${job.timing.cache_export_ms ?? "n/a"} ms |`,
       );
     }
     if (model.gate.reasons.length)

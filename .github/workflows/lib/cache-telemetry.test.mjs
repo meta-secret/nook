@@ -17,7 +17,7 @@ void test("records ordinary compile publication boundaries", () => {
       GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
     }).record(),
     {
-      scope: "",
+      scope: `exact-git-${"b".repeat(40)}`,
       compile_dependencies: {
         scope: "",
         available: false,
@@ -43,6 +43,21 @@ void test("records ordinary compile publication boundaries", () => {
       },
     },
   );
+});
+
+void test("distinguishes exact, Main, and local-only BuildKit scope selection", () => {
+  assert.equal(
+    new CacheScopeTelemetry({
+      GHA_CACHE_ENABLED: "1",
+      GHA_CACHE_SCOPE_SUFFIX: `-git-${"a".repeat(40)}`,
+    }).record().scope,
+    `exact-git-${"a".repeat(40)}`,
+  );
+  assert.equal(
+    new CacheScopeTelemetry({ GHA_CACHE_ENABLED: "1" }).record().scope,
+    "main",
+  );
+  assert.equal(new CacheScopeTelemetry({}).record().scope, "local-only");
 });
 
 void test("records transient optional probe failures without marking probes incomplete", () => {

@@ -15,12 +15,18 @@ export class CacheScopeTelemetry {
   }
 
   record() {
+    const cacheEnabled = this.environment.GHA_CACHE_ENABLED === "1";
+    const scopeSuffix = this.environment.GHA_CACHE_SCOPE_SUFFIX || "";
     const cacheAvailability = Object.entries(this.environment)
       .filter(([name]) => /^GHA_CACHE_(?:EXACT|MAIN)_.+_AVAILABLE$/.test(name))
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, value]) => ({ name, available: value === "1" }));
     return {
-      scope: "",
+      scope: !cacheEnabled
+        ? "local-only"
+        : scopeSuffix
+          ? `exact${scopeSuffix}`
+          : "main",
       compile_dependencies: {
         scope: "",
         available: false,

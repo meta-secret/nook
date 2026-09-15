@@ -72,6 +72,14 @@ and manual ecosystem execution in one Actions run named `CI`.
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
+- Cache health consumes deterministic JSON telemetry from all seven BuildKit
+  producers and also records the terminal status of the exact-image UI demo,
+  extension, and full-browser consumers. Skipped optional consumers are
+  neutral; a selected consumer failure or timeout activates the Docker Cache
+  Specialist even when its producer completed successfully.
+- ARC PR jobs retain the requested exact-commit restore scope even though they
+  do not export the registry graph. Restore selection and export authority are
+  independent; Main remains the fallback when the exact graph is absent.
 
 **`repository-policy.yml`**
 

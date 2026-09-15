@@ -31,7 +31,11 @@ target "builder-wasm" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_wasm_deps_cache_from
+  # Node verification reaches source-sensitive clippy, package, coverage, and
+  # wasm-pack test stages. Restoring only the dependency graph makes a fresh
+  # runner replay that entire chain even when the verified WASM source graph
+  # already exists.
+  cache-from = rust_wasm_source_cache_from
 }
 
 target "_nook-rust-fast-common" {

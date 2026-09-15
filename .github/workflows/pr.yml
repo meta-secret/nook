@@ -603,7 +603,7 @@ jobs:
   cache-health:
     name: Docker cache health
     if: always() && inputs.validation_requested
-    needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify]
+    needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify, ui-demo, extension-e2e, full-e2e-shard]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -635,7 +635,10 @@ jobs:
               {"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},
-              {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}
+              {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false},
+              {"id":"ui-demo","result":"${{ needs.ui-demo.result }}","buildExpected":false,"readOnly":true},
+              {"id":"extension-e2e","result":"${{ needs.extension-e2e.result }}","buildExpected":false,"readOnly":true},
+              {"id":"full-e2e-shard","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true}
             ]
         run: node .github/workflows/lib/pr-cache-health.mjs
 

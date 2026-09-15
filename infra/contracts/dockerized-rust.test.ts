@@ -327,6 +327,16 @@ class DockerizedRustContract {
     }
   }
 
+  wasmNodeSourceCache(): void {
+    const bake = this.read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    const target = bake.slice(
+      bake.indexOf('target "builder-wasm"'),
+      bake.indexOf('target "_nook-rust-fast-common"'),
+    );
+    expect(target).toContain("cache-from = rust_wasm_source_cache_from");
+    expect(target).not.toContain("cache-from = rust_wasm_deps_cache_from");
+  }
+
   portableGitMetadata(): void {
     const temporary = mkdtempSync(join(tmpdir(), "nook-policy-git-"));
     try {
@@ -962,6 +972,10 @@ test(
 test(
   "ARC probes consumed exact-SHA caches without exporting registry refs",
   contract.arcCacheSelection.bind(contract),
+);
+test(
+  "WASM Node verification restores the complete source graph",
+  contract.wasmNodeSourceCache.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",

@@ -280,7 +280,7 @@ runs:
         # Exact source identity is required for both publication and read-only
         # verification. ARC may disable write authorization above, but that must
         # not erase the scope/probes exported to the later task step.
-        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
+        if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
@@ -320,11 +320,9 @@ runs:
           local probe_status=0
           local failure_class
           probe_output="$(mktemp)"
-          if [ "$cache_selection" = "compile" ]; then
-            timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          else
-            docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          fi
+          # Cache discovery is optional acceleration and must never consume an
+          # unbounded share of a validation job.
+          timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
           failure_class="$(bash "${{ github.action_path }}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
           case "$failure_class" in
           available)
