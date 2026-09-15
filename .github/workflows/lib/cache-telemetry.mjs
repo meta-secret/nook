@@ -9,9 +9,7 @@ import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
-
 export { CacheScopeTelemetry };
-
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
@@ -323,6 +321,7 @@ export class CacheTelemetry {
         report.cache_write_errors,
       ),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
+      remote_writes: CacheTelemetry.nonNegativeInteger(report.remote_writes),
       compile_failures: CacheTelemetry.nonNegativeInteger(
         report.compile_failures,
       ),
@@ -351,6 +350,7 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_write_errors: 0,
       cache_writes: 0,
+      remote_writes: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
@@ -385,6 +385,7 @@ export class CacheTelemetry {
       summary.cache_errors += report.cache_errors;
       summary.cache_write_errors += report.cache_write_errors;
       summary.cache_writes += report.cache_writes;
+      summary.remote_writes += report.remote_writes;
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
@@ -406,7 +407,6 @@ export class CacheTelemetry {
       ),
     };
   }
-
   /**
    * @param {readonly BuildHistoryRecord[]} records
    * @param {readonly JsonRecord[]} [events]

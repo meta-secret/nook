@@ -291,6 +291,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             "\n  wasm-node-test:\n",
         ),
         ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
+        ("Web verification", "\n  verify:\n", "\n  cache-health:\n"),
     ] {
         let job = pr
             .split_once(start)
@@ -303,20 +304,35 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
                 "Rust-producing PR job {job_name} must receive {credential}"
             );
         }
+        assert!(
+            job.contains("require-sccache: \"true\""),
+            "trusted compiler job {job_name} must fail closed without writable sccache"
+        );
     }
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            3,
-            "only the three Rust-producing PR jobs may receive {credential}"
+            4,
+            "only the four trusted PR compiler jobs may receive {credential}"
         );
     }
+    assert_eq!(
+        pr.matches("require-sccache: \"true\"").count(),
+        4,
+        "every trusted PR compiler job must require writable sccache"
+    );
     assert_eq!(
         pr.matches("isolated-cache-write: \"true\"").count(),
         pr_docker_setups,
         "PR Docker jobs must write only isolated remote-buildcache scopes"
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
+
+    let coverage = RepositoryFixture::repository_root().read(".github/workflows/pr-coverage.yml");
+    assert!(
+        !coverage.contains("nook-cache-telemetry"),
+        "artifact-only coverage must not publish compiler-cache telemetry"
+    );
 
     let ecosystem =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml");

@@ -51,6 +51,7 @@ const telemetry = (job, overrides = {}) => ({
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 2,
+    remote_writes: 2,
     compile_failures: 0,
     measurement: "sum_of_zero_based_run_snapshots",
     fallback: { state: "active", reason: "none" },
@@ -246,6 +247,45 @@ void test("fails changed-head zero-hit verification and cache write errors", () 
   assert.ok(model.gate.reasons.includes("rust:sccache_write_errors:1"));
   assert.ok(model.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
   assert.ok(!model.gate.reasons.includes("rust:telemetry_incomplete"));
+});
+
+void test("requires remote write evidence only when compiler misses occur", () => {
+  const missWithoutWrite = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      cache_hits: 0,
+      cache_misses: 2,
+      cache_writes: 0,
+      remote_writes: 0,
+    },
+  });
+  const missModel = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [missWithoutWrite],
+  });
+  assert.equal(missModel.gate.verdict, "fail");
+  assert.ok(
+    missModel.gate.reasons.includes("rust:sccache_remote_writes_missing"),
+  );
+
+  const fullyCached = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      cache_hits: 2,
+      cache_misses: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+    },
+  });
+  const cachedModel = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: true },
+    ],
+    telemetry: [fullyCached],
+  });
+  assert.equal(cachedModel.gate.verdict, "pass");
 });
 
 void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {

@@ -16,7 +16,7 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {{job: string}} github
  * @property {{persistent: boolean}} cache_backend
  * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
- * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
+ * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, remote_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
  * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
  * @property {{complete: boolean}} collection
  */
@@ -94,6 +94,12 @@ export class PrCacheHealth {
         reasons.push(
           `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
         );
+      if (
+        job.buildExpected &&
+        record.sccache.cache_misses > 0 &&
+        record.sccache.remote_writes === 0
+      )
+        reasons.push(`${job.id}:sccache_remote_writes_missing`);
       if (record.buildkit.cache_export.incomplete_failures > 0)
         reasons.push(`${job.id}:cache_export_incomplete`);
       if (job.readOnly && record.buildkit.cache_export.attempts > 0)

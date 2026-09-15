@@ -93,6 +93,7 @@ export class CacheTelemetryValidator {
       "cache_errors",
       "cache_write_errors",
       "cache_writes",
+      "remote_writes",
       "compile_failures",
     ]);
     this.validateOptionalRate(candidate, "hit_rate_percent", "sccache");

@@ -53,6 +53,7 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
         cache_errors: (.stats.cache_errors | count_values),
         cache_write_errors: (if (.stats.cache_write_errors | type) == "object" then (.stats.cache_write_errors | count_values) else (.stats.cache_write_errors // 0) end),
         cache_writes: (.stats.cache_writes // 0),
+        remote_writes: (.stats.cache_writes // 0),
         compile_failures: (.stats.compile_errors | scalar_or_counts)
       }
     ' <<<"$stats_json"

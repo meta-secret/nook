@@ -383,6 +383,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 2,
+    remote_writes: 2,
   };
   const second = {
     stage: "wasm-build",
@@ -399,6 +400,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 2,
+    remote_writes: 2,
   };
   /** @param {object} payload @param {string} vertex @param {string} timestamp */
   const log = (payload, vertex, timestamp) => ({
@@ -430,6 +432,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 4,
+    remote_writes: 4,
     compile_failures: 0,
     measurement: "sum_of_zero_based_run_snapshots",
     fallback: { state: "active", reason: "none" },
@@ -440,7 +443,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
 
 void test("extracts zero-based sccache snapshots from a cancelled raw build log", () => {
   const raw =
-    'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"compile_failures":0}\ncancelled\n';
+    'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"remote_writes":2,"compile_failures":0}\ncancelled\n';
   const reports = CacheTelemetry.extractSccacheReportsFromText(raw);
   assert.equal(reports.length, 1);
   const [report] = reports;
@@ -464,6 +467,7 @@ void test("marks client-side zero-write publication counters pending verificatio
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 0,
+    remote_writes: 0,
   });
 
   const summary = CacheTelemetry.summarizeSccache([report]);
@@ -510,7 +514,7 @@ void test("reports the selected persistent or no-secret fallback backend", () =>
 void test("a healthy terminal snapshot supersedes an earlier vertex fallback", () => {
   const text = [
     'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
-    'NOOK_SCCACHE_STATS {"stage":"compile-wasm","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":602,"requests_executed":602,"cache_hits":592,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"compile_failures":0}',
+    'NOOK_SCCACHE_STATS {"stage":"compile-wasm","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":602,"requests_executed":602,"cache_hits":592,"cache_misses":0,"cache_errors":0,"cache_write_errors":0,"cache_writes":0,"remote_writes":0,"compile_failures":0}',
   ].join("\n");
 
   assert.deepEqual(CacheTelemetry.extractSccacheFallbackFromText(text), {

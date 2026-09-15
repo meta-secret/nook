@@ -86,6 +86,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         "cache_misses",
         "cache_errors",
         "cache_writes",
+        "remote_writes",
     ] {
         assert!(
             reporter.contains(required),
