@@ -62,6 +62,19 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain('echo "CC=$toolchain_dir/cc"');
   expect(workflow).toContain('echo "CXX=$toolchain_dir/c++"');
   expect(workflow).toContain('echo "AR=$toolchain_dir/ar"');
+  const valeSetup = '      - name: Install rootless Vale 3.19.0';
+  expect(workflow).toContain(valeSetup);
+  expect(workflow).toContain(
+    'https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz',
+  );
+  expect(workflow).toContain(
+    "printf 'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6  %s\\n'",
+  );
+  expect(workflow).toContain('tar -xzf "$vale_archive" -C "$vale_dir" vale');
+  expect(workflow).toContain('export PATH="$vale_dir:$PATH"');
+  expect(workflow).toContain('vale --version');
+  expect(workflow).toContain('echo "$vale_dir" >> "$GITHUB_PATH"');
+  expect(workflow).not.toContain('"$vale_bin"');
   const rustSetup =
     '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
     '        with:\n' +
@@ -69,6 +82,7 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
     '          cache: false';
   expect(workflow).toContain(rustSetup);
   expect(workflow.indexOf(zigSetup)).toBeLessThan(workflow.indexOf(rustSetup));
+  expect(workflow.indexOf(valeSetup)).toBeLessThan(workflow.indexOf(rustSetup));
   expect(
     workflow.indexOf('      - name: Configure rootless native compiler'),
   ).toBeLessThan(workflow.indexOf('      - run: task tooling:static'));

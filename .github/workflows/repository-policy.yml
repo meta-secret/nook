@@ -34,6 +34,23 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: "3.52.0"
+      - name: Install rootless Vale 3.19.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          vale_archive="${RUNNER_TEMP}/vale_3.19.0_Linux_64-bit.tar.gz"
+          vale_dir="${RUNNER_TEMP}/nook-native-toolchain/vale-3.19.0"
+          mkdir -p "$vale_dir"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$vale_archive" \
+            "https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz"
+          printf 'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6  %s\n' "$vale_archive" |
+            sha256sum -c -
+          tar -xzf "$vale_archive" -C "$vale_dir" vale
+          chmod 0755 "$vale_dir/vale"
+          export PATH="$vale_dir:$PATH"
+          vale --version
+          echo "$vale_dir" >> "$GITHUB_PATH"
       - name: Install rootless Zig toolchain
         shell: bash
         run: |
