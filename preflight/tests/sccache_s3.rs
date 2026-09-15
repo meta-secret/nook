@@ -464,6 +464,94 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn dockerfile_run_instructions(source: &str) -> Vec<String> {
+    let mut instructions = Vec::new();
+    let mut continued: Option<String> = None;
+
+    for line in source.lines() {
+        if let Some(instruction) = continued.as_mut() {
+            instruction.push('\n');
+            instruction.push_str(line);
+            if !line.trim_end().ends_with('\\')
+                && let Some(instruction) = continued.take()
+            {
+                instructions.push(instruction);
+            }
+            continue;
+        }
+
+        let trimmed = line.trim_start();
+        if trimmed == "RUN" || trimmed.starts_with("RUN ") {
+            if line.trim_end().ends_with('\\') {
+                continued = Some(trimmed.to_owned());
+            } else {
+                instructions.push(trimmed.to_owned());
+            }
+        }
+    }
+
+    if let Some(instruction) = continued {
+        instructions.push(instruction);
+    }
+    instructions
+}
+
+fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
+    const ACCESS_MOUNT: &str = "--mount=type=secret,id=sccache_s3_access_key,required=false";
+    const SECRET_MOUNT: &str = "--mount=type=secret,id=sccache_s3_secret_key,required=false";
+
+    let mut report_runs = 0;
+    let mut replay_runs = 0;
+    for (run_index, run) in dockerfile_run_instructions(dockerfile).iter().enumerate() {
+        let has_replay_report = run.contains("nook-sccache-report --replay ");
+        let has_report = run
+            .split("nook-sccache-report ")
+            .skip(1)
+            .any(|suffix| !suffix.starts_with("--replay "));
+        if !has_replay_report && !has_report {
+            continue;
+        }
+
+        let access_mounts = run.matches(ACCESS_MOUNT).count();
+        let secret_mounts = run.matches(SECRET_MOUNT).count();
+        if has_replay_report {
+            assert!(
+                !has_report,
+                "replay report RUN #{run_index} in {path} must not also query sccache"
+            );
+            replay_runs += 1;
+            assert_eq!(
+                access_mounts, 0,
+                "replay report RUN #{run_index} in {path} must not mount the sccache access key"
+            );
+            assert_eq!(
+                secret_mounts, 0,
+                "replay report RUN #{run_index} in {path} must not mount the sccache secret key"
+            );
+        }
+        if has_report {
+            report_runs += 1;
+            assert_eq!(
+                access_mounts, 1,
+                "reported compiler RUN #{run_index} in {path} must mount exactly one optional sccache access key"
+            );
+            assert_eq!(
+                secret_mounts, 1,
+                "reported compiler RUN #{run_index} in {path} must mount exactly one optional sccache secret key"
+            );
+        }
+    }
+
+    assert!(
+        report_runs > 0,
+        "{path} must contain at least one non-replay sccache report RUN"
+    );
+    assert!(
+        replay_runs > 0,
+        "{path} must contain at least one replay-only sccache report RUN"
+    );
+}
+
 fn assert_rust_build_cache_boundary() {
     let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
@@ -515,26 +603,33 @@ fn assert_rust_build_cache_boundary() {
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);
     // Replay-only terminal reads consume the persisted report from a cached
-    // compiler layer and intentionally do not receive cache credentials. Count
-    // only the report calls that query sccache and therefore require mounts.
-    let reports = dockerfile
-        .lines()
-        .filter(|line| {
-            line.contains("nook-sccache-report ") && !line.contains("nook-sccache-report --replay ")
-        })
-        .count();
-    assert!(
-        reports > 0
-            && dockerfile
-                .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
-                .count()
-                == reports
-            && dockerfile
-                .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
-                .count()
-                == reports,
-        "every reported compiler vertex in {path} must use the same two optional secret mounts"
-    );
+    // compiler layer and intentionally do not receive cache credentials. The
+    // mount contract is therefore checked per Dockerfile RUN, not by comparing
+    // global counts (mounted compiler RUNs may legitimately omit a report).
+    assert_sccache_report_mounts(&dockerfile, path);
     assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
     assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
+}
+
+#[cfg(test)]
+mod sccache_report_mount_tests {
+    use super::{assert_sccache_report_mounts, dockerfile_run_instructions};
+
+    #[test]
+    fn checks_report_mounts_per_run_and_ignores_unreported_compiler_runs() {
+        let dockerfile = concat!(
+            "FROM base\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo check \\\n",
+            "    && nook-sccache-report compiler\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo metadata\n",
+            "RUN if [ \"$REPLAY\" != disabled ]; then nook-sccache-report --replay compiler; fi\n",
+        );
+
+        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 3);
+        assert_sccache_report_mounts(dockerfile, "fixture.Dockerfile");
+    }
 }
