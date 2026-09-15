@@ -169,12 +169,14 @@ jobs:
       - name: Load untrusted image
         if: needs.rust-build.outputs.trusted != 'true'
         run: zstd -dc "${RUNNER_TEMP}/nook-pr-rust-image/nook-pr-rust-image.tar.zst" | docker load
-      - name: Pull trusted image
+      - name: Rust format, clippy, tests, and coverage through BuildKit
         if: needs.rust-build.outputs.trusted == 'true'
         env:
-          RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
-        run: docker pull "$RUST_IMAGE"
-      - name: Rust format, clippy, tests, and coverage
+          CI: true
+          DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
+        run: task docker:ci:rust:verify-built-buildkit CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+      - name: Rust format, clippy, tests, and coverage in hosted Docker
+        if: needs.rust-build.outputs.trusted != 'true'
         env:
           CI: true
           DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}

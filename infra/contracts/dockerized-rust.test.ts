@@ -167,6 +167,62 @@ class DockerizedRustContract {
     );
   }
 
+  trustedRustConsumerUsesBuildKit(): void {
+    const workflow = z
+      .object({
+        jobs: z.record(
+          z.string(),
+          z.object({
+            steps: z
+              .array(
+                z.object({
+                  name: z.string().optional(),
+                  if: z.string().optional(),
+                  run: z.string().optional(),
+                }),
+              )
+              .optional(),
+          }),
+        ),
+      })
+      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
+    const rustSteps = workflow.jobs.rust?.steps ?? [];
+    const trustedRuntimeCommands = rustSteps.filter(
+      (step) =>
+        step.if?.includes("needs.rust-build.outputs.trusted == 'true'") &&
+        /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run ?? ""),
+    );
+    expect(trustedRuntimeCommands).toEqual([]);
+    expect(rustSteps).toContainEqual(
+      expect.objectContaining({
+        if: "needs.rust-build.outputs.trusted == 'true'",
+        run: expect.stringContaining(
+          "task docker:ci:rust:verify-built-buildkit",
+        ),
+      }),
+    );
+
+    const dockerTasks = this.read(
+      "nook-app/nook-platform/docker/Taskfile.yml",
+    );
+    expect(dockerTasks).toContain("docker:ci:rust:verify-built-buildkit:");
+    expect(dockerTasks).toMatch(
+      /docker:ci:rust:verify-built-buildkit:[\s\S]*?buildx bake[\s\S]*?pr-native-verify/,
+    );
+    const trustedTask = dockerTasks.match(
+      /docker:ci:rust:verify-built-buildkit:[\s\S]*?(?=\n  [a-z][^\n]*:\n)/,
+    )?.[0];
+    expect(trustedTask).not.toMatch(/\bdocker\s+(?:pull|run|create|start|exec)\b/);
+
+    const bake = this.read(
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    );
+    expect(bake).toContain('target "pr-native-verify"');
+    expect(bake).toContain(
+      'pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"',
+    );
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -844,6 +900,10 @@ test(
 test(
   "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
+);
+test(
+  "trusted ARC Rust validation consumes the producer through BuildKit",
+  contract.trustedRustConsumerUsesBuildKit.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",

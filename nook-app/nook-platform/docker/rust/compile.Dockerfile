@@ -165,6 +165,20 @@ RUN test -f nook-app/Taskfile.yml \
     && git add -A \
     && git commit -q -m "PR native build source snapshot" >/dev/null
 
+# Trusted ARC consumers have a remote BuildKit API but no container runtime.
+# Import the producer's exact Zot image as a named context, execute validation
+# as a normal solve vertex, then expose only the small coverage handoff.
+FROM pr-native-image AS pr-native-verify
+
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task _rust:ci:verify-built
+
+FROM scratch AS pr-native-verify-export
+
+COPY --from=pr-native-verify /ci-artifacts/ /
+
 FROM compile-wasm-dependencies AS compile-wasm-source
 
 ARG WASM_BUILD_MODE=dev

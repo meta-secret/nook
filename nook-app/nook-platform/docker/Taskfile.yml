@@ -96,6 +96,28 @@ tasks:
         {{.DOCKER_RUST_IMAGE}}
         task _rust:ci:verify-built'
 
+  docker:ci:rust:verify-built-buildkit:
+    desc: Consume the exact producer image through BuildKit and export native coverage.
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.CI_ARTIFACT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        rm -rf "$out_dir"; mkdir -p "$out_dir";
+        runtime_mode_file="$(mktemp)";
+        trap '\''rm -f -- "$runtime_mode_file"'\'' EXIT;
+        printf '\''READ_WRITE\n'\'' > "$runtime_mode_file";
+        chmod 600 "$runtime_mode_file";
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --allow="fs.read=$runtime_mode_file"
+        --allow="fs.write=$out_dir"
+        --set "pr-native-verify.secrets+=id=sccache_runtime_mode,src=$runtime_mode_file"
+        --set "pr-native-verify.output=type=local,dest=$out_dir"
+        pr-native-verify'
+
   docker:rust:browser:task:
     internal: true
     desc: Run a Task target in the on-demand Rust/WASM image with Chromium.
