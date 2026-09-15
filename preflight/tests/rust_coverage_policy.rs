@@ -252,7 +252,7 @@ fn read(path: &Path) -> anyhow::Result<String> {
 }
 fn dockerfile_run_instructions(stage: &str) -> Vec<String> {
     let mut runs = Vec::new();
-    let mut current = None;
+    let mut current: Option<String> = None;
     for line in stage.lines() {
         let trimmed = line.trim();
         if let Some(run) = current.as_mut() {
