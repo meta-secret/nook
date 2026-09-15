@@ -1,12 +1,17 @@
 import { TeamKey } from '../team-agents/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 2;
+export const MODULE_DELIVERY_PLAN_VERSION = 5;
 export type ModuleDeliveryPlanInputVersion =
-  1 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  1 | 2 | 3 | 4 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
-export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
+/** A plan can describe every directed edge between distinct task nodes. */
+export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
+  MAX_MODULE_DELIVERY_NODES * (MAX_MODULE_DELIVERY_NODES - 1);
+/** Evidence synthesis may name each task node at most once. */
+export const MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS = MAX_MODULE_DELIVERY_NODES;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
@@ -43,7 +48,6 @@ export enum ModuleDeliveryTaskProfile {
 export class ModuleTaskOwnership {
   private constructor() {}
   static readonly SRE_EXACT_OPERATIONAL_FILES = [
-    'agentic-ai/minds/Taskfile.yml',
     'nook-app/Taskfile.yml',
     'nook-app/docker-bake.hcl',
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
@@ -61,10 +65,6 @@ export class ModuleTaskOwnership {
   private static readonly ORDINARY_TASK_FILE_ROOTS = new Set<string>([
     ...ModuleTaskOwnership.SRE_EXACT_OPERATIONAL_FILES,
     '.task/agentic-ai.yml',
-    'agentic-ai/minds/Cargo.lock',
-    'agentic-ai/minds/Cargo.toml',
-    'agentic-ai/minds/clippy.toml',
-    'agentic-ai/minds/hive/Cargo.toml',
     'nook-app/nook-platform/Cargo.lock',
     'nook-app/nook-platform/Cargo.toml',
     'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
@@ -178,12 +178,6 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'preflight/tests/loom_contracts.rs',
   ],
   [TeamKey.DevelopmentCore]: [
-    'agentic-ai/minds/Cargo.lock',
-    'agentic-ai/minds/Cargo.toml',
-    'agentic-ai/minds/clippy.toml',
-    'agentic-ai/minds/hive/Cargo.toml',
-    'agentic-ai/minds/hive/src',
-    'agentic-ai/minds/hive/tests',
     'nook-app/nook-platform/Cargo.lock',
     'nook-app/nook-platform/Cargo.toml',
     'nook-app/nook-platform/fuzz',
@@ -198,6 +192,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-platform/nook-wasm',
   ],
   [TeamKey.Security]: [],
+  [TeamKey.DeliveryPipeline]: [],
   [TeamKey.Sre]: [
     ...ModuleTaskOwnership.SRE_EXACT_OPERATIONAL_FILES,
     'infra',
@@ -220,12 +215,8 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
     'preflight',
     '.task',
-    'agentic-ai/ci-agent',
   ],
-  [TeamKey.WebDevelopment]: [
-    'nook-app/nook-web',
-    'agentic-ai/minds/hive-console',
-  ],
+  [TeamKey.WebDevelopment]: ['nook-app/nook-web'],
 } as const;
 
 export type ModuleDeliveryTaskTeamRequest = {
@@ -276,8 +267,20 @@ export type ModuleDeliveryResourceClaims = {
   readonly evidenceSurface: readonly string[];
 };
 
+/**
+ * A manager-issued acceptance reference. Loom records and validates its
+ * declared scopes. The external manager forwards and executes the selector;
+ * the remote runner owns an unknown-selector failure.
+ */
+export type ModuleDeliveryAcceptanceCommand = {
+  readonly selector: string;
+  readonly read: readonly string[];
+  readonly write: readonly string[];
+  readonly output: readonly string[];
+};
+
 export type ModuleDeliveryAcceptance = {
-  readonly commands: readonly string[];
+  readonly commands: readonly ModuleDeliveryAcceptanceCommand[];
   readonly evidence: readonly string[];
 };
 
@@ -356,11 +359,57 @@ export type ModuleDeliveryParentJoin = {
   readonly validationCommands: readonly string[];
 };
 
+/** Historical V2 plan shape. Keep this wire contract free of bootstrap fields. */
 export type ModuleDeliveryPlanV2 = {
-  readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly version: 2;
   readonly generation: number;
   readonly sourceCommit: string;
   readonly maxConcurrency: number;
+  readonly maxAgentDepth: number;
+  readonly maxAttempts: number;
+  readonly parentOwnedResources: readonly string[];
+  readonly parentJoin: ModuleDeliveryParentJoin;
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
+  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+/** Historical V3 plan shape. Keep this wire contract free of feature-head evidence. */
+export type ModuleDeliveryPlanV3 = {
+  readonly version: 3;
+  readonly generation: number;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly maxAgentDepth: number;
+  readonly maxAttempts: number;
+  readonly parentOwnedResources: readonly string[];
+  readonly parentJoin: ModuleDeliveryParentJoin;
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
+  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+/** Historical V4 plan shape. Its feature head is retained only for migration. */
+export type ModuleDeliveryPlanV4 = {
+  readonly version: 4;
+  readonly generation: number;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
+  readonly maxAgentDepth: number;
+  readonly maxAttempts: number;
+  readonly parentOwnedResources: readonly string[];
+  readonly parentJoin: ModuleDeliveryParentJoin;
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
+  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+/** Current plan authority: the canonical branch moves; Delivery resolves its head per stage. */
+export type ModuleDeliveryPlanV5 = PinnedDevBaseEvidence & {
+  readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly featureBranch: string;
+  readonly generation: number;
+  readonly sourceCommit: string;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
@@ -374,8 +423,9 @@ export type LegacyModuleDeliveryResourceClaims = {
   readonly write: readonly string[];
 };
 
+/** Historical plans retain string commands until the compatibility decoder. */
 export type LegacyModuleDeliveryAcceptance = {
-  readonly commands: readonly string[];
+  readonly commands: readonly (string | ModuleDeliveryAcceptanceCommand)[];
   readonly evidence: readonly string[];
 };
 
@@ -428,7 +478,11 @@ export type ModuleDeliveryNode =
   LegacyModuleDeliveryNode | ModuleDeliveryNodeV2;
 
 export type ModuleDeliveryPlanInput =
-  LegacyModuleDeliveryPlan | ModuleDeliveryPlanV2;
+  | LegacyModuleDeliveryPlan
+  | ModuleDeliveryPlanV2
+  | ModuleDeliveryPlanV3
+  | ModuleDeliveryPlanV4
+  | ModuleDeliveryPlanV5;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -440,6 +494,7 @@ export enum ModuleDeliveryIssueCode {
   ModuleOwnershipMismatch = 'module-ownership-mismatch',
   WriteScopeMismatch = 'write-scope-mismatch',
   BaselineMismatch = 'baseline-mismatch',
+  BaseEvidenceMismatch = 'base-evidence-mismatch',
   MissingDependency = 'missing-dependency',
   SelfDependency = 'self-dependency',
   DependencyCycle = 'dependency-cycle',
@@ -472,11 +527,32 @@ export enum ModuleDeliveryCompatibilityStatus {
   Rejected = 'rejected',
 }
 
-export type DecodedCompatibleModuleDeliveryPlan = {
-  readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-  readonly inputVersion: ModuleDeliveryPlanInputVersion;
-  readonly plan: ModuleDeliveryPlanV2;
-};
+export type DecodedCompatibleModuleDeliveryPlan =
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: 1;
+      readonly plan: LegacyModuleDeliveryPlan;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: 2;
+      readonly plan: ModuleDeliveryPlanV2;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: 3;
+      readonly plan: ModuleDeliveryPlanV3;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: 4;
+      readonly plan: ModuleDeliveryPlanV4;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+      readonly plan: ModuleDeliveryPlanV5;
+    };
 
 export type RejectedCompatibleModuleDeliveryPlan = {
   readonly status: ModuleDeliveryCompatibilityStatus.Rejected;
@@ -489,7 +565,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

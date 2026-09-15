@@ -12,6 +12,7 @@ import {
   KnownDashboardText,
   UnknownDashboardText,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const known = (value: string): DashboardText => new KnownDashboardText(value)
@@ -20,6 +21,10 @@ const unknown: DashboardText = new UnknownDashboardText()
 
 /** Translations are exercised by e2e; here the key and its data are the subject. */
 const vault = VaultStateTestFixture.create()
+vault.t = (request: Parameters<VaultState['t']>[0]) =>
+  typeof request === 'string'
+    ? request
+    : `${request.key}(${JSON.stringify(request.replacements)})`
 
 const vaultAccess = (label: string, verified: boolean) => ({
   storeId: `store-${label}`,
@@ -67,10 +72,7 @@ describe('access chain nodes', () => {
     expect(vaults.title).toBe('Family')
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: {
-        key: I18N_KEYS.DevicesAccessVerifiedSummary,
-        replacements: { verified: '1', total: '2' },
-      },
+      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}(${JSON.stringify({ verified: '1', total: '2' })})`,
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
@@ -96,10 +98,9 @@ describe('access chain nodes', () => {
     })
 
     if (!vaults) expect.fail('the access chain must contain a vault node')
-    expect(vaults.title).toEqual({
-      key: I18N_KEYS.DevicesAccessVerifiedPlusMore,
-      replacements: { label: 'Family', count: '2' },
-    })
+    expect(vaults.title).toBe(
+      `${I18N_KEYS.DevicesAccessVerifiedPlusMore}(${JSON.stringify({ label: 'Family', count: '2' })})`,
+    )
   })
 
   test('does not claim access to vaults this device key never opened', () => {
@@ -119,10 +120,7 @@ describe('access chain nodes', () => {
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: {
-        key: I18N_KEYS.DevicesAccessVerifiedSummary,
-        replacements: { verified: '0', total: '2' },
-      },
+      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}(${JSON.stringify({ verified: '0', total: '2' })})`,
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,

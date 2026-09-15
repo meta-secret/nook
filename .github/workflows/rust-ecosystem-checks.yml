@@ -1,6 +1,6 @@
 # Shared Rust ecosystem gates (dependency policy, deterministic tests, fuzz,
 # Kani, Dylint). Called from the labeled PR workflow and from the thin
-# Main and specialist schedule, manual, and minds-only PR entry points.
+# Main and specialist scheduled and manual entry points.
 # Kept reusable so PR validation shows every job on one run page without
 # duplicating Bake steps across callers.
 
@@ -25,7 +25,7 @@ on:
         description: Exact pull-request head SHA for source-pinned checkouts.
         type: string
         required: false
-        default: ''
+        default: ""
 
 permissions:
   contents: read
@@ -54,7 +54,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-policy-tools
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -71,6 +70,12 @@ jobs:
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
       - name: Run dependency policy
         run: task docker:ecosystem:dependency-policy
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-policy
 
   deterministic-tests:
     name: Deterministic tests, fuzz, and Kani
@@ -91,7 +96,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-smoke
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -110,10 +114,16 @@ jobs:
           NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
         run: task docker:ecosystem:smoke
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-smoke
+
   dylint:
     name: Dylint repository lints
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -129,7 +139,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-dylint
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -144,3 +153,9 @@ jobs:
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
       - name: Bake rust-dylint
         run: task docker:ecosystem:dylint
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: ecosystem-dylint

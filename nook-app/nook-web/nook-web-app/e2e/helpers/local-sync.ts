@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
-import { fetchGithubVaultYaml, GithubVaultYamlFetchKind } from '../github-api'
+import { fetchGithubEventLog, GithubEventLogFetchKind } from '../github-api'
 import {
   assertJoinPendingYaml,
   parseVaultEventLogSnapshot,
@@ -827,10 +827,8 @@ export async function syncSecretCount(
       ? parseVaultEventLogSnapshot(events).secretIds.length
       : 0
   }
-  const result = await fetchGithubVaultYaml(target.pat, target.repoName)
-  return parseVaultYamlSnapshot(
-    result.kind === GithubVaultYamlFetchKind.Available
-      ? result.yaml
-      : 'secrets: []',
+  const result = await fetchGithubEventLog(target.pat, target.repoName)
+  return parseVaultEventLogSnapshot(
+    result.kind === GithubEventLogFetchKind.Available ? result.eventYamls : [],
   ).secretIds.length
 }

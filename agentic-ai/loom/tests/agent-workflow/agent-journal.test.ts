@@ -33,6 +33,7 @@ import type { RmOptions } from 'node:fs';
 import type {
   CompletedTaskTerminal,
   FailedTaskTerminal,
+  ModuleExpertTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
 
 import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/agent-journal.ts';
@@ -44,6 +45,7 @@ import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts
 import type { ReplayAgentAttemptJournalRequest } from '../../src/agent-workflow/agent-replay.ts';
 
 import {
+  CAPABILITY_BOUND_AGENT_ATTEMPT_WORKFLOW_VERSION,
   CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
   PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION,
@@ -68,6 +70,9 @@ export class AgentWorkflowAgentJournalScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect',
       agent: 'auditor',
       attempt: 1,
@@ -411,6 +416,9 @@ describe('agent attempt journal', () => {
         workflow: configured.workflow,
         workflowVersion: configured.workflowVersion,
         sourceCommit: configured.sourceCommit,
+        originMainSha: configured.originMainSha,
+        pinnedLocalDevSha: configured.pinnedLocalDevSha,
+        featureHeadSha: configured.pinnedLocalDevSha,
         task: configured.task,
         agent: configured.agent,
         attempt: configured.attempt,
@@ -481,14 +489,14 @@ describe('agent attempt journal', () => {
       };
 
       await expect(journal.finalize(terminal)).rejects.toThrow(
-        'isolated invocation adapter',
+        'module expert invocation adapter',
       );
     } finally {
       await rm(runDirectory, removeOptions);
     }
   });
 
-  test('rejects a structurally forged module expert journal adapter', () => {
+  test('accepts a typed module expert journal without a runtime authority', () => {
     const forgedConfiguration =
       AgentWorkflowAgentJournalScenario.configuration('/tmp');
     Reflect.set(
@@ -497,9 +505,98 @@ describe('agent attempt journal', () => {
       AgentAttemptAdapterKind.ModuleExpertInvocation,
     );
 
-    expect(() => new AgentAttemptJournal(forgedConfiguration)).toThrow(
-      'runtime completion authority',
+    expect(() => new AgentAttemptJournal(forgedConfiguration)).not.toThrow();
+  });
+
+  test('records trusted module and structural terminal handoffs directly', async () => {
+    const moduleRunDirectory = await mkdtemp(
+      join(tmpdir(), 'loom-trusted-module-journal-'),
     );
+    const structuralRunDirectory = await mkdtemp(
+      join(tmpdir(), 'loom-trusted-structural-journal-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const moduleConfiguration = {
+        ...AgentWorkflowAgentJournalScenario.configuration(moduleRunDirectory),
+        task: 'module-inspect',
+        agent: 'module-expert',
+      };
+      const modulePrepared = AgentAttemptJournal.createModuleExpert({
+        configuration: moduleConfiguration,
+      });
+      const moduleJournal = await modulePrepared.initialize();
+      const moduleOutput: ModuleExpertTaskOutput = {
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
+        summary: 'Module handoff completed.',
+        materializedViewMarkdown: '# Module handoff\n\nCompleted.',
+        findings: [],
+        notesForParent: [],
+        artifacts: [],
+        continuation: {
+          externalApi: ['Public facade.'],
+          dependencies: ['Direct provider.'],
+          consumers: ['Immediate consumer.'],
+          behaviorInvariants: ['Preserve behavior.'],
+          securityInvariants: ['Preserve security.'],
+          compatibilityInvariants: ['Preserve compatibility.'],
+          owningTests: ['Provider tests.'],
+          focusedValidation: ['Focused validation.'],
+          risks: ['No additional risk.'],
+          unresolvedDecisions: ['No unresolved decision.'],
+          parentActions: ['Review evidence.'],
+        },
+      };
+      const moduleProcessing = await moduleJournal.finalizeModuleExpert({
+        terminal: {
+          kind: TaskTerminalKind.Completed,
+          task: 'module-inspect',
+          attempt: 1,
+          threadId: 'module-thread',
+          output: moduleOutput,
+        },
+      });
+      expect(moduleProcessing.view.presence).toBe(
+        MaterializedViewPresence.Recorded,
+      );
+
+      const structuralConfiguration = {
+        ...AgentWorkflowAgentJournalScenario.configuration(
+          structuralRunDirectory,
+        ),
+        task: 'structural-inspect',
+        agent: 'structural-expert',
+      };
+      const structuralPrepared = AgentAttemptJournal.createStructuralExpert({
+        configuration: structuralConfiguration,
+      });
+      const structuralJournal = await structuralPrepared.initialize();
+      const structuralProcessing =
+        await structuralJournal.finalizeStructuralExpert({
+          terminal: {
+            kind: TaskTerminalKind.Completed,
+            task: 'structural-inspect',
+            attempt: 1,
+            threadId: 'structural-thread',
+            output: {
+              resultKind: WorkflowResultKind.StructuralExpertPlan,
+              summary: 'Structural handoff completed.',
+              materializedViewMarkdown: '# Structural handoff\n\nCompleted.',
+              findings: [],
+              notesForParent: [],
+              artifacts: [],
+            },
+          },
+        });
+      expect(structuralProcessing.view.presence).toBe(
+        MaterializedViewPresence.Recorded,
+      );
+    } finally {
+      await Promise.all([
+        rm(moduleRunDirectory, removeOptions),
+        rm(structuralRunDirectory, removeOptions),
+      ]);
+    }
   });
 
   test('rejects path traversal in attempt identities', () => {
@@ -538,6 +635,9 @@ describe('agent attempt journal', () => {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect',
       agent: 'auditor',
       attempt: 1,
@@ -563,7 +663,7 @@ describe('agent attempt journal', () => {
 
     const unsupportedVersion = {
       ...legacyWithoutAdapter,
-      workflowVersion: '5.0.0',
+      workflowVersion: '7.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
     expect(() => AgentAttemptReplay.replay(unsupportedReplayRequest)).toThrow(
@@ -586,5 +686,13 @@ describe('agent attempt journal', () => {
     expect(() =>
       AgentAttemptReplay.replay({ events: [persistedActivityVersion] }),
     ).toThrow('may contain persisted runtime activity');
+
+    const capabilityBoundVersion = {
+      ...legacyWithoutAdapter,
+      workflowVersion: CAPABILITY_BOUND_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    };
+    expect(() =>
+      AgentAttemptReplay.replay({ events: [capabilityBoundVersion] }),
+    ).toThrow('contains removed internal handoff authority fields');
   });
 });

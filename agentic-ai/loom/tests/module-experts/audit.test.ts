@@ -51,12 +51,6 @@ import {
   ModuleExpertIsolation,
   type ModuleExpertCodexOptionsRequest,
 } from '../../src/module-experts/runtime-contract.ts';
-import {
-  CargoWorkspaceInventoryKind,
-  type CargoWorkspaceInventory,
-  type DecodeCargoWorkspaceMetadataArgs,
-  CargoWorkspaceMetadata,
-} from '../../src/module-experts/cargo-workspace.ts';
 
 /** Owns the module experts audit fixture registry and its capability transitions. */
 export class ModuleExpertsAuditFixture {
@@ -416,20 +410,20 @@ describe('module expert audit', () => {
       '.cortex/teams/dev-core/AGENTS.md',
       '.cortex/teams/dev-core/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/ai/AGENTS.md',
       '.cortex/teams/ai/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/web-dev/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_SKILL_PATHS).toEqual([
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
@@ -440,7 +434,7 @@ describe('module expert audit', () => {
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/ai/architecture/module-experts.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
       '.cortex/shared/architecture/packages.md',
@@ -623,6 +617,7 @@ describe('module expert audit', () => {
       'nook-app/nook-web/nook-web-extension/src/background/service-worker/account-pickers.ts',
       'nook-app/nook-web/nook-web-extension/src/background/service-worker/authentication-workflow-routing.ts',
       'nook-app/nook-web/nook-web-extension/src/background/service-worker/pairing-identity.ts',
+      'nook-app/nook-web/nook-web-extension/src/background/service-worker/website-login-options-wire-adapter.ts',
       'nook-app/nook-web/nook-web-extension/src/content/autofill/state.ts',
       'nook-app/nook-web/nook-web-shared/src/extension/password-form-classified-observations.ts',
       'nook-app/nook-web/nook-web-shared/src/extension/password-form-passkey-only-workflows.ts',
@@ -775,34 +770,6 @@ describe('module expert audit', () => {
     ).toContain('cortex-module-expert-contract-semantic-drift');
   });
 
-  test('uses Cargo workspace identities instead of manifest text matches', () => {
-    const liveManifest = join(
-      ModuleExpertsAuditFixture.REPO_ROOT,
-      'nook-app/nook-platform/live-crate/Cargo.toml',
-    );
-    const decoyManifest = join(
-      ModuleExpertsAuditFixture.REPO_ROOT,
-      'nook-app/nook-platform/retired-crate/Cargo.toml',
-    );
-    const metadata = {
-      packages: [
-        { id: 'live 1.0.0', manifest_path: liveManifest },
-        { id: 'retired 1.0.0', manifest_path: decoyManifest },
-      ],
-      workspace_members: ['live 1.0.0'],
-    };
-    const decodeArgs: DecodeCargoWorkspaceMetadataArgs = {
-      repoRoot: ModuleExpertsAuditFixture.REPO_ROOT,
-      source: JSON.stringify(metadata),
-    };
-
-    const expected: CargoWorkspaceInventory = {
-      kind: CargoWorkspaceInventoryKind.Complete,
-      roots: ['nook-app/nook-platform/live-crate'],
-    };
-    expect(CargoWorkspaceMetadata.decode(decodeArgs)).toEqual(expected);
-  });
-
   test('uses an isolated non-delegating Codex runtime', () => {
     const threadOptionsArgs = {
       workingDirectory: ModuleExpertsAuditFixture.REPO_ROOT,
@@ -917,8 +884,7 @@ describe('module expert audit', () => {
 
   test('rejects generic and module-expert runtime routing drift', () => {
     const safeModuleCliSource = 'invokeModuleExpert(invokeArgs);';
-    const safeTrustedRuntimeSource =
-      'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs);';
+    const safeTrustedRuntimeSource = 'executeIsolated(executionArgs);';
     const moduleRoutingMutations: readonly AuditModuleExpertRuntimeRoutingArgs[] =
       [
         {
@@ -933,17 +899,15 @@ describe('module expert audit', () => {
         {
           moduleExpertCliSource: safeModuleCliSource,
           trustedRuntimeSource:
-            'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs); new CodexSdkAgentRuntime<string, string>();',
+            'executeIsolated(executionArgs); new CodexSdkAgentRuntime<string, string>();',
         },
         {
           moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource:
-            'consumeIsolatedModuleExpertExecution(consumeArgs);',
+          trustedRuntimeSource: 'consumeIsolated(consumeArgs);',
         },
         {
           moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource:
-            'executeIsolatedModuleExpertAgent(executionArgs);',
+          trustedRuntimeSource: 'executeOther(executionArgs);',
         },
       ];
     for (const mutation of moduleRoutingMutations) {

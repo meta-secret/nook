@@ -1,10 +1,7 @@
 import { expect, test } from 'bun:test';
 import assert from 'node:assert/strict';
 
-import {
-  AgentAttemptParentKind,
-  WorkflowResultKind,
-} from '../../src/agent-workflow/domain.ts';
+import { WorkflowResultKind } from '../../src/agent-workflow/domain.ts';
 
 import type {
   ModuleDevelopmentPlanTaskOutput,
@@ -46,20 +43,6 @@ export class AgentWorkflowStructuredResultCodecScenario {
       findings: [],
       notesForParent: [],
       artifacts: [],
-      moduleExpertAuthorizations: [
-        {
-          task: 'inspect-core-contract',
-          expert: 'core_expert',
-          attempt: 1,
-          depth: 2,
-          parent: {
-            kind: AgentAttemptParentKind.AgentAttempt,
-            task: 'feature-synthesis',
-            agent: 'delivery-owner',
-            attempt: 1,
-          },
-        },
-      ],
     };
   }
 
@@ -127,12 +110,12 @@ test('requires typed continuation fields for module expert evidence', () => {
   expect(JSON.stringify(schema.properties)).not.toContain('cortex-evidence');
 });
 
-test('requires typed child authorizations for a module development plan', () => {
+test('accepts a typed module development plan without internal handoff authority', () => {
   const schema = WorkflowResultSchema.workflowTaskOutputSchema(
     WorkflowResultKind.ModuleDevelopmentPlan,
   );
-  expect(schema.required).toContain('moduleExpertAuthorizations');
-  expect(JSON.stringify(schema.properties)).toContain('parent');
+  expect(schema.required).not.toContain('moduleExpertAuthorizations');
+  expect(JSON.stringify(schema.properties)).not.toContain('authorization');
 
   const output =
     AgentWorkflowStructuredResultCodecScenario.moduleDevelopmentPlanOutput();
@@ -142,93 +125,26 @@ test('requires typed child authorizations for a module development plan', () => 
   );
 });
 
-test('rejects missing, duplicate, or invalid module expert authorizations', () => {
+test('rejects removed internal handoff authority fields at the result boundary', () => {
   const output =
     AgentWorkflowStructuredResultCodecScenario.moduleDevelopmentPlanOutput();
-  const missingAuthorization =
+  const outputWithModuleAuthority =
     AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
-  delete missingAuthorization.moduleExpertAuthorizations;
-  const duplicateAuthorization: ModuleDevelopmentPlanTaskOutput = {
-    ...output,
-    moduleExpertAuthorizations: [
-      ...output.moduleExpertAuthorizations,
-      ...output.moduleExpertAuthorizations,
-    ],
-  };
-  const firstAuthorization = output.moduleExpertAuthorizations[0];
-  if (!firstAuthorization) {
-    throw new Error('Expected an authorization in the test fixture.');
-  }
-  const collidingStorageKey: ModuleDevelopmentPlanTaskOutput = {
-    ...output,
-    moduleExpertAuthorizations: [
-      firstAuthorization,
-      {
-        ...firstAuthorization,
-        expert: 'web_expert',
-        parent: {
-          kind: AgentAttemptParentKind.AgentAttempt,
-          task: 'alternate-parent',
-          agent: 'alternate-owner',
-          attempt: 2,
-        },
-      },
-    ],
-  };
-  const childReusesParentStorageKey: ModuleDevelopmentPlanTaskOutput = {
-    ...output,
-    moduleExpertAuthorizations: [
-      {
-        ...firstAuthorization,
-        task: firstAuthorization.parent.task,
-        expert: 'different_expert',
-        attempt: firstAuthorization.parent.attempt,
-      },
-    ],
-  };
-  const invalidDepth =
+  outputWithModuleAuthority.moduleExpertAuthorizations = [];
+  const outputWithStructuralAuthority =
     AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
-  if (!('moduleExpertAuthorizations' in invalidDepth))
-    throw new Error('Expected module expert authorizations.');
-  const authorizationNode = invalidDepth.moduleExpertAuthorizations;
-  if (
-    !UntrustedYamlBoundary.isList(authorizationNode) ||
-    !authorizationNode[0] ||
-    !UntrustedYamlBoundary.isRecord(authorizationNode[0])
-  ) {
-    throw new Error('Expected an authorization in the test fixture.');
-  }
-  const authorizationNodeValue = authorizationNode[0];
-  if (!authorizationNodeValue) throw new Error('Authorization is missing.');
-  const authorization: MutableYamlMap = {};
-  for (const [key, entry] of Object.entries(authorizationNodeValue))
-    authorization[key] = entry;
-  authorization.depth = 4;
-  invalidDepth.moduleExpertAuthorizations = [authorization];
+  outputWithStructuralAuthority.structuralExpertAuthorizations = [];
 
   expect(() =>
     WorkflowResultSchema.decodeWorkflowTaskOutput(
-      JSON.stringify(missingAuthorization),
+      JSON.stringify(outputWithModuleAuthority),
     ),
   ).toThrow('missing or extra fields');
   expect(() =>
     WorkflowResultSchema.decodeWorkflowTaskOutput(
-      JSON.stringify(duplicateAuthorization),
+      JSON.stringify(outputWithStructuralAuthority),
     ),
-  ).toThrow('journal storage keys must be unique');
-  expect(() =>
-    WorkflowResultSchema.decodeWorkflowTaskOutput(
-      JSON.stringify(collidingStorageKey),
-    ),
-  ).toThrow('journal storage keys must be unique');
-  expect(() =>
-    WorkflowResultSchema.decodeWorkflowTaskOutput(
-      JSON.stringify(childReusesParentStorageKey),
-    ),
-  ).toThrow('identity is invalid');
-  expect(() =>
-    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(invalidDepth)),
-  ).toThrow('identity is invalid');
+  ).toThrow('missing or extra fields');
 });
 
 test('rejects extra fields at the structured output boundary', () => {

@@ -104,40 +104,6 @@ export class PrLandFamilyDecoder {
         };
         return FieldDecodeProjection.map(mapDecodeArgs3);
       }
-      case PrLandOperation.Ready: {
-        const decodePrLandPrPayloadArgs2: DecodePrLandPrPayloadArgs = {
-          value: selected.value.payload,
-          path: operationPath,
-        };
-        const mapDecodeArgs2: MapDecodeArgs<
-          PrLandPrRequest,
-          PrLandLoomRequest
-        > = {
-          outcome: PrLandPullRequestPayload.decode(decodePrLandPrPayloadArgs2),
-          build: (ready) => ({
-            family: RequestFamily.PrLand,
-            operation: PrLandOperation.Ready,
-            ready,
-          }),
-        };
-        return FieldDecodeProjection.map(mapDecodeArgs2);
-      }
-      case PrLandOperation.MergeCheck: {
-        const decodePrLandPrPayloadArgs: DecodePrLandPrPayloadArgs = {
-          value: selected.value.payload,
-          path: operationPath,
-        };
-        const mapDecodeArgs: MapDecodeArgs<PrLandPrRequest, PrLandLoomRequest> =
-          {
-            outcome: PrLandPullRequestPayload.decode(decodePrLandPrPayloadArgs),
-            build: (mergeCheck) => ({
-              family: RequestFamily.PrLand,
-              operation: PrLandOperation.MergeCheck,
-              mergeCheck,
-            }),
-          };
-        return FieldDecodeProjection.map(mapDecodeArgs);
-      }
     }
   }
 
@@ -156,16 +122,6 @@ export type PrLandLoomRequest =
       readonly family: RequestFamily.PrLand;
       readonly operation: PrLandOperation.Validate;
       readonly validate: PrLandValidateRequest;
-    }
-  | {
-      readonly family: RequestFamily.PrLand;
-      readonly operation: PrLandOperation.Ready;
-      readonly ready: PrLandPrRequest;
-    }
-  | {
-      readonly family: RequestFamily.PrLand;
-      readonly operation: PrLandOperation.MergeCheck;
-      readonly mergeCheck: PrLandPrRequest;
     };
 
 export type DecodePrLandFamilyArgs = {

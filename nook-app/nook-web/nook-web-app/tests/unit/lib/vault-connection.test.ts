@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow'
+import { ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   GITHUB_PROVIDER_TYPE,
@@ -92,7 +92,10 @@ function connectionScenario(
   state.syncFromStorage = vi.fn<VaultState['syncFromStorage']>(async () =>
     ok(ProviderSyncOutcome.Synced),
   )
-  state.enqueueStorage = vi.fn(async (operation) => operation())
+  const immediateStorage = async <Value, Failure = Error>(
+    operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+  ): Promise<Result<Value, Failure>> => operation()
+  state.enqueueStorage = immediateStorage
   state.startIdleSessionTracking = vi.fn()
   state.startVaultSync = vi.fn()
   state.dismissSuccess = vi.fn()

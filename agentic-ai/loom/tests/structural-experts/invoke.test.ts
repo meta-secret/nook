@@ -23,7 +23,6 @@ import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
-  StructuralExpertAuthorizationKind,
   StructuralFindingCategory,
   StructuralFindingDisposition,
   StructuralFindingSeverity,
@@ -34,7 +33,6 @@ import {
 import type {
   CodeRefactoringTaskOutput,
   FailedTaskTerminal,
-  StructuralExpertAuthorization,
   StructuralExpertPlanTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
 
@@ -97,15 +95,6 @@ export class StructuralExpertsInvokeScenario {
 
   private async execute(): Promise<void> {
     const request = this.request;
-    const authorization: StructuralExpertAuthorization = {
-      kind: StructuralExpertAuthorizationKind.RepositoryEvidence,
-      task: request.task,
-      expert: request.expert,
-      attempt: request.attempt,
-      depth: 2,
-      parent: request.parent,
-      evidencePaths: request.evidencePaths,
-    };
     const output: StructuralExpertPlanTaskOutput = {
       resultKind: WorkflowResultKind.StructuralExpertPlan,
       summary: 'Structural plan approved.',
@@ -113,7 +102,6 @@ export class StructuralExpertsInvokeScenario {
       findings: [],
       notesForParent: [],
       artifacts: [],
-      structuralExpertAuthorizations: [authorization],
     };
     const parentRequest = {
       repoRoot: REPO_ROOT,
@@ -139,6 +127,9 @@ export class StructuralExpertsInvokeScenario {
       runId: `${prefix}-${randomUUID()}`,
       expert: 'code_refactoring_expert',
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-code',
       attempt: 1,
       depth: 2,
@@ -306,7 +297,7 @@ class OutOfScopeEvidenceRuntime implements AgentTaskRuntime<string, string> {
   }
 }
 
-test('records completed structural evidence only through structural provenance', async () => {
+test('records completed structural evidence through the typed handoff', async () => {
   const request =
     StructuralExpertsInvokeScenario.invocationRequest('structural-success');
   const runDirectory = StructuralExpertsInvokeScenario.processingRunDirectory(
@@ -333,7 +324,7 @@ test('records completed structural evidence only through structural provenance',
   }
 });
 
-test('invalid completion becomes a replayable sanitized failed terminal', async () => {
+test('invalid completion becomes a sanitized failed terminal', async () => {
   const request = StructuralExpertsInvokeScenario.invocationRequest(
     'structural-invalid-completion',
   );
@@ -368,13 +359,16 @@ test('invalid completion becomes a replayable sanitized failed terminal', async 
   }
 });
 
-test('out-of-snapshot evidence becomes a replayable sanitized failed terminal', async () => {
+test('out-of-snapshot evidence becomes a sanitized failed terminal', async () => {
   const base = StructuralExpertsInvokeScenario.invocationRequest(
     'structural-out-of-scope-evidence',
   );
   const request: StructuralEvidenceInvocationRequest = {
     ...base,
     sourceCommit: TRACKED_SOURCE_COMMIT,
+    originMainSha: TRACKED_SOURCE_COMMIT,
+    pinnedLocalDevSha: TRACKED_SOURCE_COMMIT,
+    featureHeadSha: TRACKED_SOURCE_COMMIT,
     evidencePaths: ['Taskfile.yml'],
   };
   const runDirectory = StructuralExpertsInvokeScenario.processingRunDirectory(

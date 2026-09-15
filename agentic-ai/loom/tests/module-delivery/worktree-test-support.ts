@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   chmodSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -13,14 +14,6 @@ import { tmpdir } from 'node:os';
 
 import { join } from 'node:path';
 
-import {
-  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-  ModuleDeliveryEvidenceVerdict,
-  ModuleDeliveryProviderSubmissionKind,
-  TeamKey,
-  ModuleEvidenceBoundary,
-} from '../../src/module-delivery/index.ts';
-
 import type {
   SpawnSyncOptionsWithStringEncoding,
   SpawnSyncReturns,
@@ -28,93 +21,39 @@ import type {
 
 import type {
   ModuleWorktreeHandle,
-  ModuleDeliveryAttemptLease,
-  ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceDigestRequest,
-  ModuleDeliveryEvidenceSynthesisNodeV2,
-  ModuleDeliveryReadOnlyEvidenceSubmission,
-  ModuleDeliveryReadOnlyNodeV2,
-  ModuleIntegrationState,
   PrepareModuleWorktreeRequest,
 } from '../../src/module-delivery/index.ts';
+
+enum FixtureTemplateStateKind {
+  Empty = 'empty',
+  Ready = 'ready',
+}
+
+type FixtureTemplateState =
+  | { readonly kind: FixtureTemplateStateKind.Empty }
+  | {
+      readonly kind: FixtureTemplateStateKind.Ready;
+      readonly fixture: GitFixture;
+    };
 
 export class ModuleDeliveryWorktreeTestSupportScenario {
   private constructor(private readonly request: GitFixture) {}
 
-  static evidenceSubmission(
-    input: EvidenceFixtureInput,
-  ): ModuleDeliveryReadOnlyEvidenceSubmission {
-    const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
-      repositoryRoot: input.state.workspace.sourceRepositoryRoot,
-      sourceCommit: input.state.headCommit,
-      evidenceSurface: input.node.resources.evidenceSurface,
-    };
-    const evidence = [`${input.node.taskId} completed`];
-    const artifactIdentity = `${input.node.taskId}/report.json`;
-    const acceptedProviderEvidence = input.lease.authorizedProviderEvidence;
-    const digestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
-      artifactIdentity,
-      evidence,
-      acceptanceRequirements: input.lease.acceptanceRequirements,
-      acceptedProviderEvidence,
-    };
-    return {
-      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-      taskId: input.node.taskId,
-      attempt: input.lease.attempt,
-      generation: input.lease.generation,
-      planDigest: input.lease.planDigest,
-      sourceCommit: input.state.headCommit,
-      producerTeam: input.node.team,
-      functionalOwner: input.node.functionalOwner,
-      acceptanceOwner: input.node.acceptanceOwner,
-      acceptanceRequirements: input.lease.acceptanceRequirements,
-      acceptedProviderEvidence,
-      claimIdentities:
-        ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
-          claimRequest,
-        ),
-      artifactIdentity,
-      artifactDigest:
-        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
-          digestRequest,
-        ),
-      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
-      evidence,
-    };
-  }
+  private static readonly FIXTURE_GIT_TIMEOUT_MILLISECONDS = 4_500;
 
-  static invalidEvidenceCases(
-    valid: ModuleDeliveryReadOnlyEvidenceSubmission,
-  ): readonly InvalidEvidenceCase[] {
-    const claim = valid.claimIdentities[0];
-    if (!claim) throw new Error('Evidence claim fixture is missing.');
-    return [
-      [{ ...valid, producerTeam: TeamKey.WebDevelopment }, 'metadata'],
-      [{ ...valid, generation: valid.generation + 1 }, 'obsolete'],
-      [{ ...valid, attempt: valid.attempt + 1 }, 'authoritative'],
-      [{ ...valid, sourceCommit: '0'.repeat(40) }, 'metadata'],
-      [
-        {
-          ...valid,
-          claimIdentities: [{ ...claim, contentDigest: '0'.repeat(64) }],
-        },
-        'stale',
-      ],
-      [{ ...valid, claimIdentities: [] }, 'stale'],
-      [{ ...valid, artifactIdentity: '../forged' }, 'metadata'],
-      [{ ...valid, artifactDigest: '0'.repeat(64) }, 'invalid'],
-      [{ ...valid, evidence: ['stale evidence'] }, 'invalid'],
-    ];
-  }
+  private static fixtureTemplate: FixtureTemplateState = {
+    kind: FixtureTemplateStateKind.Empty,
+  };
 
   static executeGit(command: GitExecution): string {
     const options: SpawnSyncOptionsWithStringEncoding = {
       cwd: command.cwd,
       encoding: 'utf8',
       env: process.env,
+      killSignal: 'SIGKILL',
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout:
+        ModuleDeliveryWorktreeTestSupportScenario.FIXTURE_GIT_TIMEOUT_MILLISECONDS,
     };
     const result: SpawnSyncReturns<string> = spawnSync(
       'git',
@@ -128,7 +67,32 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
   }
 
   static createGitFixture(): GitFixture {
+    const template =
+      ModuleDeliveryWorktreeTestSupportScenario.getFixtureTemplate();
     const createdRoot = mkdtempSync(join(tmpdir(), 'nook-module-worktree-'));
+    const root = realpathSync(createdRoot);
+    const sourceRoot = join(root, 'source');
+    const workspaceRoot = join(root, 'workspaces');
+    cpSync(template.sourceRoot, sourceRoot, { recursive: true });
+    mkdirSync(workspaceRoot);
+    return {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: template.baselineCommit,
+      originMainSha: template.originMainSha,
+      pinnedLocalDevSha: template.pinnedLocalDevSha,
+      sourceCommit: template.sourceCommit,
+    };
+  }
+
+  private static getFixtureTemplate(): GitFixture {
+    const existing = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (existing.kind === FixtureTemplateStateKind.Ready)
+      return existing.fixture;
+    const createdRoot = mkdtempSync(
+      join(tmpdir(), 'nook-module-worktree-template-'),
+    );
     const root = realpathSync(createdRoot);
     const sourceRoot = join(root, 'source');
     const workspaceRoot = join(root, 'workspaces');
@@ -139,6 +103,9 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       sourceRoot,
       workspaceRoot,
       baselineCommit: '',
+      originMainSha: '',
+      pinnedLocalDevSha: '',
+      sourceCommit: '',
     };
     const git =
       ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(provisional);
@@ -153,12 +120,58 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(initialWrite);
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'baseline']);
-    const baselineCommit = git(['rev-parse', 'HEAD']);
-    return { root, sourceRoot, workspaceRoot, baselineCommit };
+    const originMainSha = git(['rev-parse', 'HEAD']);
+    git(['update-ref', 'refs/remotes/origin/main', originMainSha]);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/pinned-local-dev.txt',
+      contents: 'pinned local dev\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'pinned local dev']);
+    const pinnedLocalDevSha = git(['rev-parse', 'HEAD']);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/source.txt',
+      contents: 'source commit\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'source']);
+    const sourceCommit = git(['rev-parse', 'HEAD']);
+    const template: GitFixture = {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
+      sourceCommit,
+    };
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Ready,
+      fixture: template,
+    };
+    process.once('exit', () =>
+      ModuleDeliveryWorktreeTestSupportScenario.disposeFixtureTemplate(),
+    );
+    return template;
+  }
+
+  private static disposeFixtureTemplate(): void {
+    const state = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (state.kind === FixtureTemplateStateKind.Empty) return;
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Empty,
+    };
+    rmSync(state.fixture.root, { recursive: true, force: true });
   }
 
   static disposeGitFixture(fixture: GitFixture): void {
     return new ModuleDeliveryWorktreeTestSupportScenario(fixture).execute();
+  }
+
+  static disposeGitFixtureWithoutWorktrees(fixture: GitFixture): void {
+    rmSync(fixture.root, { recursive: true, force: true });
   }
 
   private execute(): void {
@@ -253,6 +266,9 @@ export type GitFixture = {
   readonly sourceRoot: string;
   readonly workspaceRoot: string;
   readonly baselineCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly sourceCommit: string;
 };
 
 type GitExecution = {
@@ -280,15 +296,3 @@ export type WorktreeFileWrite = {
   readonly relativePath: string;
   readonly contents: string;
 };
-
-export type EvidenceFixtureInput = {
-  readonly state: ModuleIntegrationState;
-  readonly node:
-    ModuleDeliveryReadOnlyNodeV2 | ModuleDeliveryEvidenceSynthesisNodeV2;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
-
-export type InvalidEvidenceCase = readonly [
-  submission: ModuleDeliveryReadOnlyEvidenceSubmission,
-  error: string,
-];

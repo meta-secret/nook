@@ -227,6 +227,11 @@ export enum AgentReasoningEffort {
   Low = 'low',
   Medium = 'medium',
   High = 'high',
+  XHigh = 'xhigh',
+}
+
+export enum AgentServiceTier {
+  Fast = 'fast',
 }
 
 export enum TaskTerminalKind {
@@ -276,7 +281,15 @@ export type AgentProfile<TAgent extends string> = {
   readonly instructionPrefix: string;
   readonly workspacePolicy: AgentWorkspacePolicy;
   readonly reasoningEffort: AgentReasoningEffort;
+  readonly model?: string;
+  readonly serviceTier?: AgentServiceTier;
 };
+
+export type ResolvedAgentProfile<TAgent extends string> =
+  AgentProfile<TAgent> & {
+    readonly model: string;
+    readonly serviceTier: AgentServiceTier;
+  };
 
 export type AgentTaskExecution<TAgent extends string> = {
   readonly kind: WorkflowExecutorKind.Agent;
@@ -346,58 +359,6 @@ export type ModuleExpertContinuation = {
   readonly unresolvedDecisions: readonly string[];
   readonly parentActions: readonly string[];
 };
-
-export type ModuleExpertAuthorization = {
-  readonly task: string;
-  readonly expert: string;
-  readonly attempt: WorkflowAttemptNumber;
-  readonly depth: number;
-  readonly parent: ParentAgentAttempt;
-};
-
-export enum StructuralExpertAuthorizationKind {
-  RepositoryEvidence = 'repository-evidence',
-  VerifiedViewSynthesis = 'verified-view-synthesis',
-}
-
-export type StructuralChildProjectionAuthorization = {
-  readonly task: string;
-  readonly expert: string;
-  readonly attempt: WorkflowAttemptNumber;
-  readonly resultPath: string;
-  readonly resultSha256: string;
-  readonly viewPath: string;
-  readonly viewSha256: string;
-};
-
-export type StructuralChildLanePreauthorization = {
-  readonly task: string;
-  readonly expert: string;
-  readonly attempt: WorkflowAttemptNumber;
-};
-
-type StructuralExpertAuthorizationFields = {
-  readonly task: string;
-  readonly expert: string;
-  readonly attempt: WorkflowAttemptNumber;
-  readonly depth: 2;
-  readonly parent: ParentAgentAttempt;
-};
-
-export type StructuralEvidenceAuthorization =
-  StructuralExpertAuthorizationFields & {
-    readonly kind: StructuralExpertAuthorizationKind.RepositoryEvidence;
-    readonly evidencePaths: readonly string[];
-  };
-
-export type StructuralSynthesisPreauthorization =
-  StructuralExpertAuthorizationFields & {
-    readonly kind: StructuralExpertAuthorizationKind.VerifiedViewSynthesis;
-    readonly childLanes: readonly StructuralChildLanePreauthorization[];
-  };
-
-export type StructuralExpertAuthorization =
-  StructuralEvidenceAuthorization | StructuralSynthesisPreauthorization;
 
 export enum StructuralFindingCategory {
   Architecture = 'architecture',
@@ -582,50 +543,36 @@ type WorkflowTaskOutputFields = {
 export type StandardWorkflowTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.CortexEvidence;
   readonly continuation?: never;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type ModuleDevelopmentPlanTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.ModuleDevelopmentPlan;
   readonly continuation?: never;
-  readonly moduleExpertAuthorizations: readonly ModuleExpertAuthorization[];
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type ModuleExpertTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.ModuleExpertEvidence;
   readonly continuation: ModuleExpertContinuation;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type StructuralExpertPlanTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.StructuralExpertPlan;
   readonly continuation?: never;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations: readonly StructuralExpertAuthorization[];
 };
 
 export type CodeRefactoringTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.CodeRefactoringEvidence;
   readonly continuation: CodeRefactoringContinuation;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type CortexRefactoringTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.CortexRefactoringEvidence;
   readonly continuation: CortexRefactoringContinuation;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type SystemCoherenceTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.SystemCoherenceSynthesis;
   readonly continuation: SystemCoherenceContinuation;
-  readonly moduleExpertAuthorizations?: never;
-  readonly structuralExpertAuthorizations?: never;
 };
 
 export type StructuralTaskOutput =

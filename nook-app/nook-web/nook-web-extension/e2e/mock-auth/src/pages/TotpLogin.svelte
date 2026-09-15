@@ -14,9 +14,13 @@
   import { navigate, recordLoginSubmission } from '../lib/navigation'
   import { setPendingTotpSession } from '../lib/session'
 
-  const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
+  const fixtureAccountCandidate = MOCK_AUTH_ACCOUNTS.find(
     (account) => account.totpSecret,
-  )!
+  )
+  if (!fixtureAccountCandidate) {
+    throw new Error('TOTP login fixture account is missing')
+  }
+  const fixtureAccount = fixtureAccountCandidate
 
   let error = $state('')
 

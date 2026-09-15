@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  AgentAttemptParentKind,
   WorkflowArtifactKind,
   WorkflowFindingSeverity,
   WorkflowResultKind,
@@ -31,14 +30,25 @@ class WorkflowTextValue {
     });
   }
 }
-const error = (message: string) => ({
-  error: (issue: { readonly code: string }) =>
-    issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
-      ? MISSING_FIELDS
-      : message,
-});
+class WorkflowResultErrorPolicy {
+  private constructor() {}
+
+  static forMessage(message: string) {
+    return {
+      error: (issue: { readonly code: string }) =>
+        issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
+          ? MISSING_FIELDS
+          : message,
+    };
+  }
+}
+
 const exact = { error: MISSING_FIELDS };
-const string = z.string(error('workflow structured result expected a string'));
+const string = z.string(
+  WorkflowResultErrorPolicy.forMessage(
+    'workflow structured result expected a string',
+  ),
+);
 const bounded = string
   .max(4096, 'workflow structured result expected a bounded string')
   .refine(
@@ -48,7 +58,9 @@ const bounded = string
   .meta({ minLength: 1, pattern: '\\S' });
 const strings = z.array(
   string,
-  error('workflow structured result expected a string array'),
+  WorkflowResultErrorPolicy.forMessage(
+    'workflow structured result expected a string array',
+  ),
 );
 const view = string
   .max(
@@ -72,7 +84,9 @@ const BASE = {
         {
           severity: z.enum(
             WorkflowFindingSeverity,
-            error('workflow finding severity is invalid'),
+            WorkflowResultErrorPolicy.forMessage(
+              'workflow finding severity is invalid',
+            ),
           ),
           title: string,
           summary: string.meta({ maxLength: 4096 }),
@@ -92,7 +106,9 @@ const BASE = {
         },
         exact,
       ),
-      error('workflow findings must be an array'),
+      WorkflowResultErrorPolicy.forMessage(
+        'workflow findings must be an array',
+      ),
     )
     .meta({ maxItems: 100 }),
   notesForParent: strings.meta({ maxItems: 100 }),
@@ -102,66 +118,21 @@ const BASE = {
         {
           kind: z.enum(
             WorkflowArtifactKind,
-            error('workflow artifact kind is invalid'),
+            WorkflowResultErrorPolicy.forMessage(
+              'workflow artifact kind is invalid',
+            ),
           ),
           location: string,
           description: string,
         },
         exact,
       ),
-      error('workflow artifacts must be an array'),
+      WorkflowResultErrorPolicy.forMessage(
+        'workflow artifacts must be an array',
+      ),
     )
     .meta({ maxItems: 100 }),
 };
-const identityMessage = 'module expert authorization identity is invalid';
-const id = string
-  .max(128, identityMessage)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u, identityMessage);
-const positive = z
-  .int(error('workflow structured result expected an integer'))
-  .positive(identityMessage);
-const AUTHORIZATION = z
-  .strictObject(
-    {
-      task: id,
-      expert: id,
-      attempt: positive,
-      depth: z.union([z.literal(2), z.literal(3)], error(identityMessage)),
-      parent: z.strictObject(
-        {
-          kind: z.literal(
-            AgentAttemptParentKind.AgentAttempt,
-            error(identityMessage),
-          ),
-          task: id,
-          agent: id,
-          attempt: positive,
-        },
-        exact,
-      ),
-    },
-    exact,
-  )
-  .refine(
-    (value) =>
-      value.task !== value.parent.task ||
-      value.attempt !== value.parent.attempt,
-    identityMessage,
-  );
-const AUTHORIZATIONS = z
-  .array(
-    AUTHORIZATION,
-    error('module development plan requires bounded expert authorizations'),
-  )
-  .min(1, 'module development plan requires bounded expert authorizations')
-  .max(100, 'module development plan requires bounded expert authorizations')
-  .refine(
-    (values) =>
-      new Set(values.map((value) => `${value.task}\u0000${value.attempt}`))
-        .size === values.length,
-    'module expert authorization journal storage keys must be unique',
-  )
-  .meta({ uniqueItems: true });
 const continuationMessage =
   'module expert continuation fields require bounded non-empty entries';
 const continuationEntries = strings
@@ -209,7 +180,6 @@ const RESULT_SCHEMAS = {
     {
       ...BASE,
       resultKind: z.literal(WorkflowResultKind.ModuleDevelopmentPlan),
-      moduleExpertAuthorizations: AUTHORIZATIONS,
     },
     exact,
   ),
@@ -273,7 +243,12 @@ export class WorkflowResultSchema {
       .object(
         {
           resultKind: string.pipe(
-            z.enum(WorkflowResultKind, error('workflow resultKind is invalid')),
+            z.enum(
+              WorkflowResultKind,
+              WorkflowResultErrorPolicy.forMessage(
+                'workflow resultKind is invalid',
+              ),
+            ),
           ),
         },
         { error: 'workflow output must be an object' },

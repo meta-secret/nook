@@ -33,26 +33,25 @@ describe('mock-auth Pilot expectation catalog', () => {
       }
     }
 
-    expect(continueWithNookTemplateCount).toBe(30)
+    expect(continueWithNookTemplateCount).toBe(29)
     expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
   })
 
   test('keeps the Airbnb identity label structural and associated', () => {
-    expect(getShellTemplate('airbnb')).toMatchObject({
-      quirks: expect.arrayContaining(['visible-associated-label']),
-      steps: [
-        {
-          fields: [
-            {
-              type: 'text',
-              inputmode: 'email',
-              autocomplete: 'tel-national',
-              label: 'Phone number or email',
-            },
-          ],
-          submit: { type: 'submit', label: 'Continue' },
-        },
-      ],
-    })
+    const airbnbTemplate = getShellTemplate('airbnb')
+    if (!airbnbTemplate) {
+      throw new Error('Airbnb shell template is missing')
+    }
+    expect(airbnbTemplate.quirks).toContain('visible-associated-label')
+    const step = airbnbTemplate.steps[0]
+    if (!step) throw new Error('Airbnb shell step is missing')
+    const field = step.fields[0]
+    if (!field) throw new Error('Airbnb shell identity field is missing')
+    expect(field.type).toBe('text')
+    expect(field.inputmode).toBe('email')
+    expect(field.autocomplete).toBe('tel-national')
+    expect(field.label).toBe('Phone number or email')
+    expect(step.submit.type).toBe('submit')
+    expect(step.submit.label).toBe('Continue')
   })
 })

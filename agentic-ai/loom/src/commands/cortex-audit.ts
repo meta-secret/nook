@@ -19,7 +19,7 @@ import {
   type ValeNativeAlert,
   ValeFileDiagnostics,
 } from '../lib/vale-files.ts';
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 import {
   UntrustedYamlBoundary,
   UntrustedYamlPropertyPresence,
@@ -29,7 +29,6 @@ import {
 
 import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
-import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
   CortexStructureFindingCode,
   type CortexDocumentSource,
@@ -116,11 +115,10 @@ export class CortexAuditCommand {
     const repoRoot = discovery1.value;
     const cortexRoot = path.join(repoRoot, '.cortex');
     if (!existsSync(cortexRoot)) {
-      const loomFailureDetailArgs: LoomFailureDetailArgs = {
+      return err({
         code: LoomFailureCode.CortexAuditFailed,
-        text: '.cortex directory is missing',
-      };
-      LoomFailure.detail(loomFailureDetailArgs);
+        message: '.cortex directory is missing',
+      });
     }
 
     const allMarkdownFiles =
@@ -240,7 +238,7 @@ export class CortexAuditCommand {
     const aiSkillsDir = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
     const skillDirectories = [
       aiSkillsDir,
-      path.join(cortexRoot, 'gizmo', 'dynamic-skills'),
+      path.join(cortexRoot, 'gizmo-prime', 'dynamic-skills'),
       path.join(cortexRoot, 'shared', 'dynamic-skills'),
       path.join(cortexRoot, 'teams', 'dev-core', 'dynamic-skills'),
       path.join(cortexRoot, 'teams', 'security', 'dynamic-skills'),

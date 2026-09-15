@@ -19,6 +19,46 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     Ok(())
 }
 
+#[test]
+fn repository_delivery_policy_executes_only_the_trusted_default_branch_verifier() {
+    let root = RepositoryFixture::repository_root();
+    let workflow = root.read(".github/workflows/repository-delivery-policy.yml");
+    let checkout = section(
+        &workflow,
+        "      - name: Checkout policy verifier\n",
+        "      - name: Require policy inspection credential\n",
+    );
+
+    assert!(
+        workflow.contains(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+        ),
+        "manual policy verification must reject dispatches outside the trusted default branch"
+    );
+    assert!(
+        checkout.contains("ref: ${{ github.event.repository.default_branch }}")
+            && checkout.contains("persist-credentials: false"),
+        "manual policy verification must check out verifier code from the trusted default branch"
+    );
+    assert!(
+        !checkout.contains("NOOK_GITHUB_PAT") && !checkout.contains("token:"),
+        "the admin-capable policy credential must not be exposed to checkout"
+    );
+    assert_eq!(
+        workflow
+            .matches("GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}")
+            .count(),
+        2,
+        "the policy credential must be scoped only to the credential check and trusted verifier"
+    );
+    assert!(
+        !workflow.contains("ref: ${{ github.ref }}")
+            && !workflow.contains("ref: ${{ inputs.")
+            && workflow.contains("run: bash .github/scripts/verify-github-delivery-policy.sh"),
+        "a dispatched ref must not select executable verifier code, while trusted manual verification remains available"
+    );
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one setup contract verifies the complete hosted Docker boundary"
@@ -143,7 +183,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -193,7 +233,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -316,8 +356,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "authentication-sensitive PR changes must run only the focused extension regression in the exact trusted browser image"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
@@ -347,13 +393,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         ci.contains("name: Dev promotion readiness")
-            && ci.contains("needs: [scope, policy, pr, hive, research]")
+            && ci.contains("needs: [scope, policy, pr, research]")
             && ci.contains("github.event.pull_request.head.ref == 'dev'")
             && ci.contains(
                 "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"
             )
             && ci.contains("'dev-pr'")
-            && ci.contains("cancel-in-progress: >-"),
+            && ci.contains("cancel-in-progress: false"),
         "dev promotion must expose one stable exact-head gate with serialized native concurrency"
     );
     assert!(
@@ -452,8 +498,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("EXTENSION_E2E_RESULT")
@@ -561,6 +613,16 @@ fn assert_preflight_reporter_contract(root: &Path) {
             "preflight Docker cache topology is missing: {required}"
         );
     }
+    let recipe_normalizer = preflight_dockerfile
+        .split_once("RUN <<'EOF'\n")
+        .and_then(|(_, body)| body.split_once("\nEOF\n"))
+        .map_or("", |(body, _)| body);
+    assert!(
+        recipe_normalizer.contains("cargo chef prepare --recipe-path recipe.json")
+            && recipe_normalizer.contains(".skeleton.manifests")
+            && preflight_dockerfile.contains("recipe.normalized.json"),
+        "cargo-chef recipe normalization must remain inside one valid Docker heredoc RUN"
+    );
     assert!(
         !preflight_dockerfile.contains("FROM rust:")
             && !preflight_dockerfile.contains("FROM rust@"),
@@ -781,7 +843,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         .context("release workflow must configure BuildKit from current side-checkout tooling")?;
     assert!(
         release_source < release_setup,
-        "release must fingerprint its requested source before connecting BuildKit"
+        "release must check out its requested source before connecting BuildKit"
     );
     assert!(release.contains(
         "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"

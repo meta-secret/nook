@@ -146,7 +146,7 @@ Do not run a broad workflow audit merely because a task was substantial.
 - Keep semantic policy and judgment in the owning Cortex authority.
 - Move deterministic assertions to Loom, Task, or another typed tool.
 - Delegate bounded semantic evidence only under the canonical
-  [subagent contract](../../../gizmo/workflows/subagent-delegation.md).
+  [subagent contract](../../../gizmo-prime/workflows/subagent-delegation.md).
 - Return shared-edit and synthesis decisions to Gizmo.
 - Reject task-specific or speculative instructions.
 

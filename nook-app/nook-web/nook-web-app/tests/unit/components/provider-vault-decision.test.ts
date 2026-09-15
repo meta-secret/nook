@@ -1,4 +1,4 @@
-import type { Result } from 'neverthrow'
+import { ok } from 'neverthrow'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { describe, expect, test, vi } from 'vitest'
 import {
@@ -54,10 +54,9 @@ function panelVault(
   manager.provider_vault_decision_request = async () => load()
   const vault = VaultStateTestFixture.create()
   vault.openManager(manager)
-  const immediateStorage = async <T, E = Error>(
-    operation: () => Result<T, E> | Promise<Result<T, E>>,
-  ): Promise<Result<T, E>> => operation()
-  vault.enqueueStorage = immediateStorage
+  vault.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
+  VaultStateTestFixture.runStorageImmediately(vault)
   return vault
 }
 
@@ -173,17 +172,20 @@ test('selected local target survives loading the selected identity providers', a
   state.providersLoaded = false
   state.openActiveVault = openActiveVault
   const manager = new NookVaultManager()
-  manager.load_auth_providers_snapshot = async () => ({
+  vi.spyOn(manager, 'load_auth_providers_snapshot').mockResolvedValue({
     providers: [identityProvider],
     activeVaultStoreId: { state: 'storeId', value: 'store-b' },
   })
   state.openManager(manager)
+  state.admitManager = vi.fn(() => ok(manager))
+  VaultStateTestFixture.runStorageImmediately(state)
   const request: Parameters<VaultProviderActions['loadProviders']>[0] = {
     options: { ensureLocalRow: false },
   }
 
-  await new VaultProviderActions(state).loadProviders(request)
+  const loaded = await new VaultProviderActions(state).loadProviders(request)
 
+  if (loaded.isErr()) throw loaded.error
   expect(state.providers).toEqual([identityProvider])
   expect(openActiveVault).toHaveBeenCalledWith('store-a')
   expect(openActiveVault).not.toHaveBeenCalledWith('store-b')
@@ -191,6 +193,8 @@ test('selected local target survives loading the selected identity providers', a
 
 test('clears verification after remote conflict import returns before manager admission', async () => {
   const state = VaultStateTestFixture.create()
+  state.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
   state.stageStoreIdSyncConflictForTesting({
     providerLabel: 'Backup',
     localStoreId: 'store-local',
@@ -245,14 +249,16 @@ test('completed import transitions to the selected locked identity', async () =>
   state.devicePublicKey = 'outgoing-key'
   state.errorMsg = ''
   const manager = new NookVaultManager()
-  manager.activate_local_identity = async () => {
+  vi.spyOn(manager, 'activate_local_identity').mockImplementation(async () => {
     calls.push('activate')
-  }
-  manager.device_protection_status = async () => {
+  })
+  vi.spyOn(manager, 'device_protection_status').mockImplementation(async () => {
     calls.push('status')
     return DeviceProtectionStatus.Pin
-  }
+  })
   state.openManager(manager)
+  state.admitManager = vi.fn(() => ok(manager))
+  VaultStateTestFixture.runStorageImmediately(state)
   state.clearIdentityProviderSession = () => calls.push('clear-session')
   state.selectLoginVault = (storeId: string) => calls.push(`select:${storeId}`)
   state.t = () => 'vault imported; identity selection failed'
@@ -317,11 +323,13 @@ test('status failure keeps the activated identity transition fail closed', async
   state.devicePublicKey = 'outgoing-key'
   state.errorMsg = ''
   const manager = new NookVaultManager()
-  manager.activate_local_identity = async () => {}
-  manager.device_protection_status = async () => {
+  vi.spyOn(manager, 'activate_local_identity').mockResolvedValue()
+  vi.spyOn(manager, 'device_protection_status').mockImplementation(async () => {
     throw new Error('status unavailable')
-  }
+  })
   state.openManager(manager)
+  state.admitManager = vi.fn(() => ok(manager))
+  VaultStateTestFixture.runStorageImmediately(state)
   state.clearIdentityProviderSession = clearIdentityProviderSession
   state.selectLoginVault = selectLoginVault
   state.t = () => 'vault imported; identity selection failed'
@@ -331,6 +339,7 @@ test('status failure keeps the activated identity transition fail closed', async
     importedStoreId: 'store-a',
   })
 
+  expect(manager.activate_local_identity).toHaveBeenCalledOnce()
   expect(clearIdentityProviderSession).toHaveBeenCalledOnce()
   expect(selectLoginVault).toHaveBeenCalledWith('store-a')
   expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Error)

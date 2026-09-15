@@ -82,9 +82,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test callback"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
     )]
     fn ceremony_error_classification_preserves_variants_and_case_sensitive_markers() {
         let variants: [fn(String) -> NookError; 2] = [NookError::Encryption, NookError::Database];
@@ -114,9 +117,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox()
     -> Result<(), JsError> {
@@ -145,9 +151,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn remote_store_discovery_drops_stale_vault_session_state() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -165,9 +174,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
         NookDatabase::clear_identity_directory_for_test().await?;
@@ -243,9 +255,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn paired_identity_handoff_rejects_a_different_connected_vault() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
@@ -284,9 +299,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn paired_session_unlock_clears_pending_without_enrolling() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
@@ -318,9 +336,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn local_assessment_reports_new_vault_and_connect_recovery_is_toggleable()
     -> Result<(), JsError> {
@@ -348,9 +369,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     fn genesis_key_helpers_cover_simple_and_sentinel_architectures() -> Result<(), JsError> {
         let identity = nook_core::DeviceIdentity::generate()?;
@@ -405,9 +429,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn connect_fresh_local_bootstraps_genesis_and_can_be_assessed() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -437,9 +464,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn connect_existing_local_content_rejects_legacy_without_event_log() -> Result<(), JsError>
     {
@@ -464,9 +494,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn initialize_empty_local_session_persists_a_ready_event_log() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();

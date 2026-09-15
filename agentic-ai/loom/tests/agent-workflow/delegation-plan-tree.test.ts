@@ -18,6 +18,8 @@ import type {
 
 import { DelegationPlanTree } from '../../src/agent-workflow/delegation-plan-tree.ts';
 
+import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
+
 export class AgentWorkflowDelegationPlanTreeScenario {
   private constructor(
     private readonly request: readonly DelegationAttemptDeclaration[],
@@ -51,6 +53,9 @@ export class AgentWorkflowDelegationPlanTreeScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: 'visual-plan',
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       rootMaterializer: ROOT,
       attempts,
     };
@@ -58,6 +63,8 @@ export class AgentWorkflowDelegationPlanTreeScenario {
 }
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
+const FEATURE_BRANCH = 'codex/delegation-plan-test';
 
 const ROOT: DelegationAttemptIdentity = {
   task: 'coordinate-delivery',

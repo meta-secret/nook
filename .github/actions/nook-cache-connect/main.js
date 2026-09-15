@@ -20,12 +20,6 @@ if (!githubEnvironmentPath) {
   process.exit(1);
 }
 
-const hostedDelivery =
-  process.env.GITHUB_ACTIONS === "true" || process.env.NOOK_ENV === "ci";
-const missingCredentialReason = hostedDelivery
-  ? "hosted_secret_free_by_design"
-  : "credentials_unavailable";
-
 fs.appendFileSync(
   githubEnvironmentPath,
   [
@@ -33,11 +27,10 @@ fs.appendFileSync(
     `NOOK_SCCACHE_BACKEND_REASON=${
       credentialsPresent
         ? "persistent_credential_available"
-        : missingCredentialReason
+        : "credentials_unavailable"
     }`,
-    // Hosted jobs without SeaweedFS credentials (forks, release, arbitrary-ref)
-    // cold-compile. Local `task sccache:ensure` fails closed without them; mark
-    // those CI paths as an explicit cold-compile exception.
+    // Secret availability is the whole boundary. A job without the pair
+    // cold-compiles and never receives remote-cache access.
     ...(credentialsPresent ? [] : ["SCCACHE_OPTIONAL=1"]),
     "",
   ].join("\n"),
@@ -58,16 +51,25 @@ const credentialDirectory = path.join(runnerTemp, "nook-cache-credentials");
 fs.mkdirSync(credentialDirectory, { recursive: true, mode: 0o700 });
 fs.chmodSync(credentialDirectory, 0o700);
 
-/** @param {string} filename @param {string} value @returns {string} */
-function writeCredential(filename, value) {
-  const credentialPath = path.join(credentialDirectory, filename);
-  fs.writeFileSync(credentialPath, value, { encoding: "utf8", mode: 0o600 });
-  fs.chmodSync(credentialPath, 0o600);
-  return credentialPath;
+/** Owns the private on-runner files used by the sccache process boundary. */
+class CacheCredentialFiles {
+  /** @param {string} directory */
+  constructor(directory) {
+    this.directory = directory;
+  }
+
+  /** @param {string} filename @param {string} value @returns {string} */
+  write(filename, value) {
+    const credentialPath = path.join(this.directory, filename);
+    fs.writeFileSync(credentialPath, value, { encoding: "utf8", mode: 0o600 });
+    fs.chmodSync(credentialPath, 0o600);
+    return credentialPath;
+  }
 }
 
-const accessKeyFile = writeCredential("sccache-access-key", accessKey);
-const secretKeyFile = writeCredential("sccache-secret-key", secretKey);
+const credentialFiles = new CacheCredentialFiles(credentialDirectory);
+const accessKeyFile = credentialFiles.write("sccache-access-key", accessKey);
+const secretKeyFile = credentialFiles.write("sccache-secret-key", secretKey);
 delete process.env["INPUT_SCCACHE-ACCESS-KEY"];
 delete process.env["INPUT_SCCACHE-SECRET-KEY"];
 

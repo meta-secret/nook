@@ -5,7 +5,6 @@ import {
 } from '../commands/agent-stats.ts';
 import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
-import type { PrePushFailure } from '../commands/pre-push.ts';
 import {
   PullRequestValidationCommand,
   type PrLandFailure,
@@ -21,7 +20,6 @@ import {
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { CORTEX_SESSION_CLEAN_INPUT_SCHEMA } from '../codec/args/cortex-session-clean.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
-import { PRE_PUSH_INPUT_SCHEMA } from '../codec/args/pre-push.ts';
 import {
   PR_LAND_PR_INPUT_SCHEMA,
   PR_LAND_VALIDATE_INPUT_SCHEMA,
@@ -61,7 +59,6 @@ import {
   type PrLandReport,
   PullRequestDeliveryCommand,
 } from '../commands/pr-land.ts';
-import { type PrePushReport, PrePushCommand } from '../commands/pre-push.ts';
 import {
   type SkillScaffoldReport,
   SkillScaffoldCommand,
@@ -71,7 +68,7 @@ import {
   AGENT_TEMP_DIR_TOKEN,
   AgentTemporaryPath,
 } from '../lib/agent-temp-path.ts';
-import { RepositoryRoot, BunExecutable } from '../lib/repo.ts';
+import { RepositoryRoot } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
@@ -86,13 +83,18 @@ export type DiscoverableRequest = {
 };
 
 export type LoomCommandResult =
-  | PrePushReport
   | CortexAuditReport
   | CortexSessionCleanReport
   | SkillScaffoldReport
   | AgentStatsReport
   | PrLandReport
   | DependencyPopularityReport;
+
+type RetiredRequestFailure = {
+  readonly code: LoomFailureCode.CommandFailed;
+  readonly message: string;
+};
+
 type DiscoverableRequestDefinition = Omit<
   DiscoverableRequest,
   'exampleYaml' | 'resolvedExampleYaml'
@@ -150,12 +152,6 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     inputSchema: TOOLS_LIST_INPUT_SCHEMA,
   },
   {
-    family: RequestFamily.PrePush,
-    description: 'Host-apply task format and enforce the UI demo contract.',
-    exampleRequest: 'task loom:pre-push',
-    inputSchema: PRE_PUSH_INPUT_SCHEMA,
-  },
-  {
     family: RequestFamily.CortexAudit,
     description: 'Audit .cortex structure, links, and typed policy contracts.',
     exampleRequest: 'task loom:cortex-audit',
@@ -205,23 +201,9 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     description:
-      'Run prePush and task pr:validate with final-head Codex review opted in, then require hosted checks and review collection before readiness.',
+      'Dispatch remote build-only work and later manager-owned CI validation, then return hosted check evidence to the dev manager.',
     exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
     inputSchema: PR_LAND_VALIDATE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Ready,
-    description: 'Run task pr:ready for a PR.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_PR_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.MergeCheck,
-    description: 'Summarize merge readiness without merging.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_PR_INPUT_SCHEMA,
   },
   {
     family: RequestFamily.DependencyPopularity,
@@ -241,7 +223,7 @@ export class LoomRequestExecution {
       | CortexSessionFailure
       | SkillScaffoldFailure
       | PrLandFailure
-      | PrePushFailure
+      | RetiredRequestFailure
       | RegistryFailure
       | ManifestFailure
       | AgentStatisticsFailure
@@ -250,14 +232,11 @@ export class LoomRequestExecution {
     const request = this.request;
     switch (request.family) {
       case RequestFamily.PrePush: {
-        const discovery2 = BunExecutable.discover();
-        if (discovery2.isErr()) return err(discovery2.error);
-        const discovery3 = new RepositoryRoot().locate();
-        if (discovery3.isErr()) return err(discovery3.error);
-        return new PrePushCommand({
-          request: request.prePush,
-          repoRoot: discovery3.value,
-        }).execute();
+        return err({
+          code: LoomFailureCode.CommandFailed,
+          message:
+            'prePush is deprecated and does not execute; use remote build:compile and the manager-owned CI validation cycle',
+        });
       }
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
@@ -304,22 +283,6 @@ export class LoomRequestExecution {
               repoRoot: discovery7.value,
               request: request.validate,
             }).execute();
-          }
-          case PrLandOperation.Ready: {
-            const discovery8 = new RepositoryRoot().locate();
-            if (discovery8.isErr()) return err(discovery8.error);
-            return new PullRequestDeliveryCommand({
-              repoRoot: discovery8.value,
-              prNumber: request.ready.prNumber,
-            }).readiness();
-          }
-          case PrLandOperation.MergeCheck: {
-            const discovery9 = new RepositoryRoot().locate();
-            if (discovery9.isErr()) return err(discovery9.error);
-            return new PullRequestDeliveryCommand({
-              repoRoot: discovery9.value,
-              prNumber: request.mergeCheck.prNumber,
-            }).mergeReadiness();
           }
         }
         break;

@@ -182,7 +182,6 @@ export function buildFiller(existingIds) {
     'Pinecone',
     'Weaviate Cloud',
     'OpenAI Platform',
-    'Anthropic Console',
     'Cohere Dashboard',
     'Hugging Face',
     'Replicate',

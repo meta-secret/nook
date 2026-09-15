@@ -13,7 +13,6 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     ".github/scripts/with-remote-buildkit.sh",
     ".github/scripts/ci-release-deploy-vaults.sh",
     ".github/scripts/remote-task-batch.sh",
-    ".github/scripts/wait-hive-neo4j.sh",
     "nook-app/ci/Taskfile.yml",
 ];
 
@@ -210,8 +209,8 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
 
     for path in [
         "README.md",
-        ".cortex/gizmo/workflows/mission-delivery.md",
-        ".cortex/gizmo/workflows/pull-requests.md",
+        ".cortex/gizmo-prime/workflows/mission-delivery.md",
+        ".cortex/gizmo-prime/workflows/pull-requests.md",
     ] {
         let documentation = RepositoryFixture::repository_root().read(path);
         assert!(documentation.contains("task remote TASK_NAME=web:build"));

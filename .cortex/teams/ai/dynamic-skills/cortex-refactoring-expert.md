@@ -43,6 +43,8 @@ topology from Markdown, or mutate lifecycle state.
 Follow the canonical
 [structural expert registry](../architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
+Internal Team Gizmo and Team Agent handoffs follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Examples
 
@@ -54,5 +56,5 @@ Follow the canonical
 
 Run the mechanical Cortex audit alongside semantic review.
 A green mechanical audit does not prove that active claims agree.
-The typed result binds every evidence-surface claim to exact repository-source
-provenance.
+The typed result reports the ordinary source observation for each bounded
+evidence path.

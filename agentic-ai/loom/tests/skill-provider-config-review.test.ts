@@ -101,11 +101,6 @@ test('production hydration loads every statically reached shell target', async (
     ['scripts/first.bash', 'sh scripts/second.command'],
     ['scripts/second.command', 'bun scripts/provider.ts'],
   ]);
-  const readSource = async (path: string): Promise<string> => {
-    const source = storedSources.get(path);
-    if (!source) throw new Error(`Unexpected source read: ${path}`);
-    return source;
-  };
   const graph: ConfigurationScriptGraph = {
     executablePaths: new Set(),
     roots: ['package.json'],
@@ -115,7 +110,13 @@ test('production hydration loads every statically reached shell target', async (
   const request = {
     discover: SkillProviderConfigBoundaryScenario.configurationScriptPaths,
     graph,
-    readSource,
+    // The hydration API owns this injected callback boundary; keep its
+    // implementation limited to reading the fixture's already-admitted map.
+    readSource: async (path: string): Promise<string> => {
+      const source = storedSources.get(path);
+      if (!source) throw new Error(`Unexpected source read: ${path}`);
+      return source;
+    },
     sources,
     unreadPaths,
   };

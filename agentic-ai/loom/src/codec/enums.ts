@@ -1,5 +1,6 @@
 /** Root YAML request family. Top-level domain object keys. */
 export enum RequestFamily {
+  /** @deprecated Retained for decoding old requests; execution is retired. */
   PrePush = 'prePush',
   CortexAudit = 'cortexAudit',
   CortexSessionClean = 'cortexSessionClean',
@@ -20,8 +21,6 @@ export enum AgentStatsOperation {
 export enum PrLandOperation {
   Status = 'status',
   Validate = 'validate',
-  Ready = 'ready',
-  MergeCheck = 'mergeCheck',
 }
 
 export enum ResponsePhase {

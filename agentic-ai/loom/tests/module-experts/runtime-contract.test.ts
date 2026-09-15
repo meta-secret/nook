@@ -82,6 +82,9 @@ describe('module expert runtime isolation', () => {
         parentEnvironment,
         selectedContextPaths: [],
         sourceCommit: repository.sourceCommit,
+        originMainSha: repository.sourceCommit,
+        pinnedLocalDevSha: repository.sourceCommit,
+        featureHeadSha: repository.sourceCommit,
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
       };
@@ -731,7 +734,7 @@ describe('module expert runtime isolation', () => {
         await thread.run('Inspect the assigned module.', turnOptions);
         const [requestBody = ''] = [requestBodies[0]];
         expect(requestBody).not.toBe('');
-        const capturedRequest = capturedCodexRequestFromHost(
+        const capturedRequest = CapturedCodexRequestFixture.fromHost(
           UntrustedYamlBoundary.fromJson(JSON.parse(requestBody)),
         );
         const metadataValues = capturedRequest.client_metadata;
@@ -739,7 +742,7 @@ describe('module expert runtime isolation', () => {
         const encodedMetadata = metadataValues['x-codex-turn-metadata'];
         expect(encodedMetadata).toBeString();
         if (!encodedMetadata) throw new Error('Expected turn metadata.');
-        const metadata = capturedCodexTurnMetadataFromHost(
+        const metadata = CapturedCodexTurnMetadataFixture.fromHost(
           UntrustedYamlBoundary.fromJson(JSON.parse(encodedMetadata)),
         );
         const emptyToolNames: CapturedCodexTurnMetadata['code_mode_tool_names'] =
@@ -798,48 +801,63 @@ type CapturedCodexTurnMetadata = {
   >;
 };
 
-function capturedCodexRequestFromHost(
-  value: UntrustedYamlNode,
-): CapturedCodexRequest {
-  if (!UntrustedYamlBoundary.isRecord(value))
-    throw new Error('Expected a captured Codex request.');
-  if (!('client_metadata' in value))
-    throw new Error('Expected Codex client metadata.');
-  const metadata = value.client_metadata;
-  if (!UntrustedYamlBoundary.isRecord(metadata))
-    throw new Error('Expected Codex client metadata.');
-  const values: Record<string, string> = {};
-  for (const [key, entry] of Object.entries(metadata)) {
-    if (typeof entry !== 'string')
-      throw new Error('Expected Codex client metadata values.');
-    values[key] = entry;
+class CapturedCodexRequestFixture {
+  private constructor(private readonly value: UntrustedYamlNode) {}
+
+  static fromHost(value: UntrustedYamlNode): CapturedCodexRequest {
+    return new CapturedCodexRequestFixture(value).decode();
   }
-  return { client_metadata: values };
+
+  private decode(): CapturedCodexRequest {
+    const value = this.value;
+    if (!UntrustedYamlBoundary.isRecord(value))
+      throw new Error('Expected a captured Codex request.');
+    if (!('client_metadata' in value))
+      throw new Error('Expected Codex client metadata.');
+    const metadata = value.client_metadata;
+    if (!UntrustedYamlBoundary.isRecord(metadata))
+      throw new Error('Expected Codex client metadata.');
+    const values: Record<string, string> = {};
+    for (const [key, entry] of Object.entries(metadata)) {
+      if (typeof entry !== 'string')
+        throw new Error('Expected Codex client metadata values.');
+      values[key] = entry;
+    }
+    return { client_metadata: values };
+  }
 }
 
-function capturedCodexTurnMetadataFromHost(
-  value: UntrustedYamlNode,
-): CapturedCodexTurnMetadata {
-  if (!UntrustedYamlBoundary.isRecord(value))
-    throw new Error('Expected Codex turn metadata.');
-  if (!('code_mode_tool_names' in value)) return {};
-  const toolValues = value.code_mode_tool_names;
-  if (!UntrustedYamlBoundary.isRecord(toolValues))
-    throw new Error('Expected Codex tool names.');
-  const names: Record<string, { name: string; namespace?: string }> = {};
-  for (const [key, entry] of Object.entries(toolValues)) {
-    if (
-      !UntrustedYamlBoundary.isRecord(entry) ||
-      typeof entry.name !== 'string'
-    )
-      throw new Error('Expected Codex tool names.');
-    const name: { name: string; namespace?: string } = { name: entry.name };
-    if ('namespace' in entry && entry.namespace !== null) {
-      if (typeof entry.namespace !== 'string')
-        throw new Error('Expected Codex tool namespace.');
-      name.namespace = entry.namespace;
-    }
-    names[key] = name;
+class CapturedCodexTurnMetadataFixture {
+  private constructor(private readonly value: UntrustedYamlNode) {}
+
+  static fromHost(value: UntrustedYamlNode): CapturedCodexTurnMetadata {
+    return new CapturedCodexTurnMetadataFixture(value).decode();
   }
-  return { code_mode_tool_names: names };
+
+  private decode(): CapturedCodexTurnMetadata {
+    const value = this.value;
+    if (!UntrustedYamlBoundary.isRecord(value))
+      throw new Error('Expected Codex turn metadata.');
+    if (!('code_mode_tool_names' in value)) return {};
+    const toolValues = value.code_mode_tool_names;
+    if (!UntrustedYamlBoundary.isRecord(toolValues))
+      throw new Error('Expected Codex tool names.');
+    const names: Record<string, { name: string; namespace?: string }> = {};
+    for (const [key, entry] of Object.entries(toolValues)) {
+      if (
+        !UntrustedYamlBoundary.isRecord(entry) ||
+        typeof entry.name !== 'string'
+      )
+        throw new Error('Expected Codex tool names.');
+      const name: { name: string; namespace?: string } = { name: entry.name };
+      if ('namespace' in entry) {
+        const namespace = entry.namespace;
+        if (typeof namespace === 'string') name.namespace = namespace;
+        else if (!(typeof namespace === 'object' && !namespace))
+          throw new Error('Expected Codex tool namespace.');
+      }
+      names[key] = name;
+    }
+    return { code_mode_tool_names: names };
+  }
 }

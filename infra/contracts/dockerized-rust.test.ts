@@ -13,11 +13,6 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 
-const actionSchema = z.object({
-  runs: z.object({
-    steps: z.array(z.object({ name: z.string(), run: z.string().default("") })),
-  }),
-});
 const tasksSchema = z.object({
   tasks: z.object({
     "preflight:policy:run": z.object({ cmds: z.array(z.string()) }),
@@ -170,26 +165,6 @@ class DockerizedRustContract {
     expect(product).toContain(
       "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
     );
-    const hive = this.read("agentic-ai/minds/hive/Dockerfile");
-    const dependencies = hive
-      .split("FROM fetched-dependencies AS observer-contract-dependencies")[1]
-      ?.split(
-        "FROM observer-contract-dependencies AS observer-contract-exporter",
-      )[0];
-    expect(dependencies).toContain(
-      "COPY --from=chef-planner /build/recipe.json recipe.json",
-    );
-    expect(dependencies).toContain("cargo chef cook --locked");
-    expect(dependencies).toContain(
-      "--features observer-contract-export --bin hive-export-observer-contract",
-    );
-    expect(dependencies).not.toContain("COPY hive/src");
-    expect(hive).toContain(
-      "FROM observer-contract-dependencies AS observer-contract-exporter\nCOPY hive/src hive/src",
-    );
-    expect(hive).toContain(
-      "--bin hive-export-observer-contract -- --output /observer-contract",
-    );
   }
 
   workflowTooling(): void {
@@ -210,7 +185,6 @@ class DockerizedRustContract {
     expect(ecosystem.match(/uses: docker\/setup-buildx-action/g)).toHaveLength(
       3,
     );
-    expect(ecosystem.match(/cache-selection: ecosystem-/g)).toHaveLength(3);
     let routedJobs = 0;
     for (const line of ecosystem.split("\n")) {
       if (!line.trimStart().startsWith("runs-on:")) continue;
@@ -230,9 +204,6 @@ class DockerizedRustContract {
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
     );
-    expect(this.read("agentic-ai/minds/hive/Dockerfile")).toContain(
-      "prettier-skill.json",
-    );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
     expect(audit).toContain('no-cache-filter = ["audit"]');
     expect(audit).not.toContain("no-cache = true");
@@ -247,100 +218,6 @@ class DockerizedRustContract {
       dockerignore.indexOf(`!${generatedWasm}/.gitignore`),
     ).toBeGreaterThan(dockerignore.indexOf(`${generatedWasm}*`));
     expect(dockerignore).toContain("**/node_modules");
-  }
-
-  arcCacheSelection(): void {
-    const action = actionSchema.parse(
-      Bun.YAML.parse(this.read(".github/actions/nook-docker-setup/action.yml")),
-    );
-    const selection = action.runs.steps.find(this.isCacheSelection);
-    if (!selection) throw new Error("Cache selection script missing");
-    const temporary = mkdtempSync(join(tmpdir(), "nook-cache-contract-"));
-    try {
-      const bin = join(temporary, "bin");
-      mkdirSync(bin);
-      writeFileSync(
-        join(bin, "docker"),
-        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PROBE_LOG"\n',
-        { mode: 0o755 },
-      );
-      for (const profile of [
-        "preflight",
-        "web-e2e",
-        "connection-only",
-        "native",
-        "hive",
-        "ecosystem-dylint",
-        "ecosystem-fuzz",
-        "ecosystem-policy-tools",
-        "ecosystem-deterministic",
-        "ecosystem-kani",
-        "ecosystem-smoke",
-      ]) {
-        const script = selection.run
-          .replaceAll("${{ inputs.cache-selection }}", profile)
-          .replaceAll("${{ github.event_name }}", "pull_request")
-          .replaceAll("${{ github.ref }}", "refs/pull/1/merge")
-          .replaceAll("${{ github.event.pull_request.number }}", "1")
-          .replaceAll(
-            "${{ github.event.pull_request.head.sha }}",
-            "a".repeat(40),
-          )
-          .replaceAll("${{ inputs.isolated-cache-write }}", "true")
-          .replaceAll("${{ inputs.main-cache-only }}", "true")
-          .replaceAll("${{ inputs.cache-write }}", "false")
-          .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
-          .replaceAll(
-            "${{ github.action_path }}",
-            join(this.root, ".github/actions/nook-docker-setup"),
-          );
-        const environment = join(temporary, "environment");
-        const probes = join(temporary, "probes");
-        writeFileSync(environment, "");
-        writeFileSync(probes, "");
-        const result = spawnSync("bash", ["-c", script], {
-          cwd: this.root,
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            PATH: `${bin}:${process.env.PATH}`,
-            PROBE_LOG: probes,
-            GITHUB_ENV: environment,
-            GITHUB_WORKSPACE: this.root,
-            NOOK_ARC_RUNNER: "1",
-            NOOK_SELECTED_BUILDER: "test-builder",
-          },
-        });
-        expect(result.status, result.stderr).toBe(0);
-        const values = readFileSync(environment, "utf8");
-        expect(values).toContain("GHA_CACHE_SCOPE_SUFFIX=\n");
-        expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
-        expect(values).not.toContain("HIVE_CACHE_TO=");
-        const calls = readFileSync(probes, "utf8");
-        expect(calls).not.toContain("-git-");
-        if (profile === "connection-only" || profile === "hive")
-          expect(calls).toBe("");
-        if (profile === "ecosystem-smoke") {
-          expect(calls.trim().split("\n")).toHaveLength(3);
-          expect(calls).toContain("nook-rust-ecosystem-deterministic-");
-          expect(calls).toContain("nook-rust-ecosystem-fuzz-");
-          expect(calls).toContain("nook-rust-ecosystem-kani-");
-        } else if (profile.startsWith("ecosystem-")) {
-          expect(calls.trim().split("\n")).toHaveLength(1);
-          expect(calls).toContain(`nook-rust-${profile}-`);
-        }
-        if (profile === "preflight") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
-          expect(calls).toContain("nook-preflight-v1");
-        }
-        if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
-          expect(calls).toContain("nook-web-e2e-v1");
-        }
-      }
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
-    }
   }
 
   portableGitMetadata(): void {
@@ -600,7 +477,7 @@ class DockerizedRustContract {
       jobs: z.record(
         z.string(),
         z.object({
-          "timeout-minutes": z.number().optional(),
+          "timeout-minutes": z.union([z.number(), z.string()]).optional(),
           strategy: z
             .object({ "fail-fast": z.boolean().optional() })
             .optional(),
@@ -666,11 +543,7 @@ class DockerizedRustContract {
     const groupedTask = webTasks.tasks["_web:test:e2e:run-groups"];
     const webOnlyTask = ciTasks.tasks["_ci:main:web:e2e-only"];
     const fullTask = ciTasks.tasks["_ci:main"];
-    if (
-      !groupedTask?.cmds ||
-      !webOnlyTask?.cmds ||
-      !fullTask?.cmds
-    ) {
+    if (!groupedTask?.cmds || !webOnlyTask?.cmds || !fullTask?.cmds) {
       throw new Error("E2E completion task definitions are missing");
     }
     const grouped = z.string().parse(groupedTask.cmds[0]);
@@ -893,7 +766,6 @@ tasks:
       const packages = [
         ".",
         "agentic-ai/loom",
-        "agentic-ai/ci-agent",
         ".cortex/teams/ai/dynamic-skills/example/scripts",
       ];
       for (const directory of packages) {
@@ -952,9 +824,6 @@ if [ "$action" = install ] && [ "$directory" = "${"${FAIL_INSTALL:-}"}" ]; then 
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
-  private isCacheSelection(this: void, step: { name: string }): boolean {
-    return step.name === "Select hosted BuildKit cache";
-  }
   private command(request: GitFixtureCommand): string {
     const { cwd, args } = request;
     const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -973,16 +842,12 @@ test(
   contract.ecosystemResults.bind(contract),
 );
 test(
-  "PR dedup retains standalone coverage and source-correct Hive exports",
+  "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
-);
-test(
-  "ARC probes only consumed Main caches and never exports unused exact refs",
-  contract.arcCacheSelection.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",
@@ -992,6 +857,7 @@ test(
 test(
   "trusted formatter exports only bounded files and rejects hostile paths",
   contract.formatterExport.bind(contract),
+  15_000,
 );
 
 test(

@@ -29,13 +29,17 @@ and boundary checks; it does not add worker lifecycle or recovery machinery.
 
 ## Agent action references
 
+### Document identifiers
+
 `.cortex/identifiers.json` assigns stable compact identifiers to Cortex
 categories and selected documents or headings. Category IDs use `CX-<NAME>`;
 document and item IDs add a five-character random suffix. Published IDs are
 never removed or reassigned when a title or locator changes. Each entry carries
-an immutable authority key; the Cortex audit compares those assignments with
-the registry at the pull request's exact published base commit. The audit fails
-closed when an established base cannot be resolved.
+an immutable document-authority locator. The Cortex audit compares those
+assignments with the registry at the pull request's exact published base
+commit. The audit fails closed when an established base cannot be resolved.
+
+### Lifecycle activity
 
 Every persisted agent-attempt event receives an action ID derived from its
 one-based event sequence, such as `a0002`. Runtime activities are live,
@@ -45,9 +49,22 @@ They may attach bounded registered Cortex references whose relation is one of
 to stderr without writing them to `events.jsonl`; optional display failure
 cannot block the lifecycle journal.
 
+### Persisted evidence
+
 Persisted records expose replayable lifecycle and terminal handoff evidence,
 not private reasoning. Live activity counts are diagnostic signals and are not
 an effort, quality, or billing measure.
+
+### Replay boundary
+
+Lifecycle replay is an event-sourcing concern. It is also a projection concern.
+The document-authority locator is a Cortex-document reference.
+
+### In-thread handoff
+
+Team Gizmos and Team Agents follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). Loom retains
+only its typed task, scope, status, result, and evidence fields.
 
 ## Invoke a leaf tool
 
@@ -178,17 +195,18 @@ Prefer libraries over boilerplate:
 ## Common requests
 
 `task loom:tools-list` returns the canonical invoke command in
-`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every
+`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every active
 direct request below.
 `resolvedExampleYaml` equals the generated example for static requests and
 fills dynamic tokens for the current worktree and commit. Consume that output
 instead of maintaining request bodies in Cortex.
 
-### prePush
+### prePush (deprecated)
 
-This legacy task is not a local feature gate. Follow
-[dev delivery](../../../gizmo/architecture/dev-delivery.md) for permitted
-compilation and manager-stage validation.
+The historical request identifier is retained only for compatibility and fails
+closed without executing commands. Follow [dev
+delivery](../../../gizmo-prime/architecture/dev-delivery.md) for the remote
+build-only compilation stage and the manager-owned CI validation stage.
 
 ### cortexAudit
 
@@ -225,17 +243,17 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
-[Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
+[Agent PR Statistics](../../../gizmo-prime/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
-### prLand (status / validate / ready / mergeCheck)
+### prLand (status / validate)
 
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
-`prLand.validate` dispatches hosted validation first. It explicitly opts the
-final coherent head into exact-head Codex review. Its `nextStep` requires the
-repository-owned checks and opted-in review to settle before `prLand.ready`.
+`prLand.status` reports the current pull-request state. `prLand.validate`
+dispatches hosted validation and directs the caller to return the resulting
+repository-owned check evidence to the dev manager.
 
 ### toolsCall
 

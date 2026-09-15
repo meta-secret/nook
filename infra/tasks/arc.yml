@@ -5,7 +5,6 @@ vars:
   ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
   ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
   ARC_RUNNER_LABEL: nook-k0s
-  ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
@@ -547,13 +546,7 @@ tasks:
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
         container_render="$(mktemp)"
-        hive_values="$(mktemp)"
-        hive_render="$(mktemp)"
-        trap 'rm -f "$controller_render" "$runner_render" "$container_render" "$hive_values" "$hive_render"' EXIT
-
-        ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
-          "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
-          "$hive_values"
+        trap 'rm -f "$controller_render" "$runner_render" "$container_render"' EXIT
         helm template nook-arc \
           "{{.ARC_CONTROLLER_CHART}}" \
           --version "$chart_version" \
@@ -566,12 +559,6 @@ tasks:
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           > "$runner_render"
-        helm template nook-k0s-hive \
-          "{{.ARC_RUNNER_CHART}}" \
-          --version "$chart_version" \
-          --namespace arc-runners \
-          --values "$hive_values" \
-          > "$hive_render"
         helm template nook-k0s-container \
           "{{.ARC_RUNNER_CHART}}" \
           --version "$chart_version" \
@@ -580,13 +567,12 @@ tasks:
           > "$container_render"
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
-        grep -q 'kind: AutoscalingRunnerSet' "$hive_render"
         grep -q 'kind: AutoscalingRunnerSet' "$container_render"
         grep -q 'ACTIONS_RUNNER_CONTAINER_HOOKS' "$container_render"
         grep -q 'ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE' "$container_render"
         grep -q 'nook-k0s-container' "$container_render"
         grep -q 'tcp://nook-buildkit.arc-runners.svc.cluster.local:1234' "$runner_render"
-        if grep -Eq 'runtimeClassName:|docker:dind|dockerd|docker\.sock|podman|privileged: true|hostPath:' "$runner_render" "$hive_render"; then
+        if grep -Eq 'runtimeClassName:|docker:dind|dockerd|docker\.sock|podman|privileged: true|hostPath:' "$runner_render"; then
           echo "Rendered ARC runner violates the regular-pod rootless-BuildKit contract" >&2
           exit 1
         fi
@@ -616,8 +602,7 @@ tasks:
         controller_chart="{{.ARC_CONTROLLER_CHART}}"
         runner_chart="{{.ARC_RUNNER_CHART}}"
         kubeconfig="$(mktemp)"
-        hive_values="$(mktemp)"
-        trap 'rm -f "$kubeconfig" "$hive_values"' EXIT
+        trap 'rm -f "$kubeconfig"' EXIT
         sudo -n k0s kubeconfig admin > "$kubeconfig"
         chmod 0600 "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
@@ -644,15 +629,8 @@ tasks:
           exit 1
         fi
 
-        ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
-          "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
-          "$hive_values"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
-        kubectl create configmap nook-arc-hive-test-runtime \
-          --namespace arc-runners \
-          --from-file=run-hive-test-runtime="$remote_dir/infra/k0s/scripts/run-hive-test-runtime" \
-          --dry-run=client -o yaml | kubectl apply -f -
 
         helm upgrade --install nook-arc \
           "$controller_chart" \
@@ -698,12 +676,6 @@ tasks:
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           --wait --timeout 10m
-        helm upgrade --install nook-k0s-hive \
-          "$runner_chart" \
-          --version "$chart_version" \
-          --namespace arc-runners \
-          --values "$hive_values" \
-          --wait --timeout 10m
         helm upgrade --install nook-k0s-container \
           "$runner_chart" \
           --version "$chart_version" \
@@ -714,11 +686,9 @@ tasks:
 
         test "$(kubectl get autoscalingrunnerset/nook-k0s \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 35
-        test "$(kubectl get autoscalingrunnerset/nook-k0s-hive \
-          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 10
         test "$(kubectl get autoscalingrunnerset/nook-k0s-container \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 20
-        for scale_set in nook-k0s nook-k0s-hive nook-k0s-container; do
+        for scale_set in nook-k0s nook-k0s-container; do
           deadline="$(( $(date +%s) + 600 ))"
           until kubectl get pod --namespace arc-systems \
             -l "actions.github.com/scale-set-name=$scale_set" \

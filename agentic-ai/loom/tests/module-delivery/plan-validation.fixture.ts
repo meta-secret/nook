@@ -14,9 +14,12 @@ import {
 import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
+  ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -31,7 +34,7 @@ export class ModuleDeliveryPlanValidationScenario {
       fixture.dependencies.length === 0
         ? {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -60,7 +63,14 @@ export class ModuleDeliveryPlanValidationScenario {
       },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
       acceptance: {
-        commands: [`task ${fixture.taskId}:test`],
+        commands: [
+          {
+            selector: `task ${fixture.taskId}:test`,
+            read: fixture.read,
+            write: fixture.write,
+            output: [],
+          },
+        ],
         evidence: [`${fixture.taskId} behavior passes`],
       },
       workspace: {
@@ -77,7 +87,7 @@ export class ModuleDeliveryPlanValidationScenario {
       fixture.dependencies.length === 0
         ? {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -103,7 +113,14 @@ export class ModuleDeliveryPlanValidationScenario {
       },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
       acceptance: {
-        commands: [`task ${fixture.taskId}:audit`],
+        commands: [
+          {
+            selector: `task ${fixture.taskId}:audit`,
+            read: [`${fixture.moduleRoot}/**`],
+            write: [],
+            output: [`${fixture.moduleRoot}/**`],
+          },
+        ],
         evidence: [`${fixture.taskId} review is complete`],
       },
     };
@@ -123,17 +140,52 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
-    const fixture = this.request;
+  static historicalV2Plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     return {
       version: 2,
+      generation: plan.generation,
+      sourceCommit: plan.sourceCommit,
+      maxConcurrency: 1,
+      maxAgentDepth: plan.maxAgentDepth,
+      maxAttempts: plan.maxAttempts,
+      parentOwnedResources: plan.parentOwnedResources,
+      parentJoin: plan.parentJoin,
+      nodes: plan.nodes,
+      edgeContracts: plan.edgeContracts,
+    };
+  }
+
+  static historicalV3Plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
+    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
+    return {
+      version: 3,
+      generation: plan.generation,
+      sourceCommit: plan.sourceCommit,
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      maxAgentDepth: plan.maxAgentDepth,
+      maxAttempts: plan.maxAttempts,
+      parentOwnedResources: plan.parentOwnedResources,
+      parentJoin: plan.parentJoin,
+      nodes: plan.nodes,
+      edgeContracts: plan.edgeContracts,
+    };
+  }
+
+  private execute(): ModuleDeliveryPlanV5 {
+    const fixture = this.request;
+    return {
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 3,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
@@ -147,8 +199,36 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
+  }
+
+  static acceptanceCommand(
+    request: Readonly<{ node: ModuleDeliveryNodeV2; selector: string }>,
+  ): ModuleDeliveryAcceptanceCommand {
+    return {
+      selector: request.selector,
+      read: request.node.resources.read,
+      write: request.node.resources.write,
+      output: request.node.resources.evidenceSurface,
+    };
+  }
+
+  static emptyAcceptanceCommand(
+    selector: string,
+  ): ModuleDeliveryAcceptanceCommand {
+    return { selector, read: [], write: [], output: [] };
+  }
+
+  static acceptsNode(node: ModuleDeliveryNodeV2): boolean {
+    return (
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan({
+          nodes: [node],
+          edgeContracts: [],
+        }),
+      ).status === ModuleDeliveryValidationStatus.Accepted
+    );
   }
 
   static legacyPlan(): LegacyModuleDeliveryPlan {
@@ -197,7 +277,11 @@ export class ModuleDeliveryPlanValidationScenario {
   }
 }
 
-export const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+export const SOURCE_COMMIT = '3'.repeat(40);
+
+export const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+export const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 export const PARENT_OWNED_RESOURCES: readonly string[] = [
   ...REQUIRED_PARENT_OWNED_RESOURCES,

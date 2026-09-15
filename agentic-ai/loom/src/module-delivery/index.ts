@@ -1,6 +1,10 @@
 export { ModuleDeliveryPlanDecoder } from './validation.ts';
 export { ModuleDeliveryPlanSchema } from './codec.ts';
 export {
+  ModuleDeliveryPlanTransportLimit,
+  ModuleDeliveryPlanTransportLimitCode,
+} from './codec-fields.ts';
+export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
@@ -9,36 +13,59 @@ export {
 export type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
+  ModuleDeliveryAdmission,
+  ModuleDeliveryAdmissionSelection,
   ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptDisposition,
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryLeaseRecording,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
+  ModuleDeliveryLeaseRecording,
+  ModuleDeliveryWriterFrontier,
+  RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
   RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
 } from './admission.ts';
+export { ModuleSourceAuthority } from './authority.ts';
 export { TeamKey } from '../team-agents/catalog.ts';
 export { ModuleEvidenceBoundary } from './evidence.ts';
 export type {
-  ModuleDeliveryAcceptedProviderEvidenceIdentity,
-  ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceDigestRequest,
+  ModuleDeliveryEvidenceSubmissionVerification,
+  ModuleDeliveryEvidenceSubmissionValidation,
 } from './evidence.ts';
+export {
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+  MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_PLAN_DEPTH,
+  MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
+} from './evidence-limits.ts';
 export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryProviderResultsKind,
   ModuleDeliveryProviderSubmissionKind,
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
-  AcceptedModuleDeliveryWrite,
+  CleanupModuleIntegrationRequest,
+  CleanupModuleIntegrationResult,
+  FinalizeModuleDeliveryIntegrationRequest,
+  IntegrateVerifiedModuleDeliveryTaskRequest,
+  ModuleDeliveryHandoffSubmission,
+  ModuleDeliveryProviderResult,
+  ModuleDeliveryProviderResults,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
-  ModuleDeliveryWriteProviderSubmission,
+  ModuleIntegrationCleanupHandle,
+  ModuleIntegrationState,
+  PrepareModuleIntegrationRequest,
+  SourceRepositorySnapshot,
+  SourceSnapshotExpectation,
 } from './integration-provenance.ts';
-export { ModuleWorktree } from './workspace.ts';
+export { ModuleWorktree, ModuleWorktreeRole } from './workspace.ts';
 export { ModuleCommitHandoff } from './handoff.ts';
 export { ModuleWaveTree } from './tree-integration.ts';
 export type {
@@ -47,32 +74,15 @@ export type {
   TreeHandoff,
 } from './tree-integration.ts';
 export { ModuleIntegrationCoordinator } from './integration.ts';
-export { ModuleIntegrationEvidence } from './integration-evidence-replay.ts';
-export type { RestoreModuleDeliveryIntegrationEvidenceRequest } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,
   CleanupModuleWorktreeResult,
   ModuleWorktreeHandle,
-  ModuleWorktreeRole,
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
 export type {
+  ModuleCommitPathRequest,
   VerifiedModuleCommitHandoff,
   VerifyModuleCommitHandoffRequest,
 } from './handoff.ts';
-export type {
-  AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-  ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration.ts';
-export type {
-  CleanupModuleIntegrationRequest,
-  CleanupModuleIntegrationResult,
-  FinalizeModuleDeliveryIntegrationRequest,
-  IntegrateVerifiedModuleDeliveryTaskRequest,
-  ModuleDeliveryHandoffSubmission,
-  ModuleIntegrationCleanupHandle,
-  ModuleIntegrationState,
-  PrepareModuleIntegrationRequest,
-  RecordModuleDeliveryAttemptDispositionRequest,
-} from './integration-provenance.ts';

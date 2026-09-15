@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact pull-request head SHA for source-pinned checkouts.
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions:
@@ -58,7 +58,6 @@ jobs:
           github.event.pull_request.user.login != 'dependabot[bot]')
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: preflight
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}

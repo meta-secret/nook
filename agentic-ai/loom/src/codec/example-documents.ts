@@ -114,6 +114,7 @@ export enum DefaultableExamplePresence {
 export type ExampleOperation =
   AgentStatsOperation | PrLandOperation | ExampleOperationMarker.FamilyRoot;
 
+/** @deprecated Retained only to decode old request documents. */
 export type PrePushExampleDocument = {
   readonly prePush: PrePushRequest;
 };
@@ -162,18 +163,6 @@ export type PrLandStatusExampleDocument = {
   };
 };
 
-export type PrLandReadyExampleDocument = {
-  readonly prLand: {
-    readonly ready: PrLandPrRequest;
-  };
-};
-
-export type PrLandMergeCheckExampleDocument = {
-  readonly prLand: {
-    readonly mergeCheck: PrLandPrRequest;
-  };
-};
-
 export type PrLandValidateExamplePayload = {
   readonly prNumber: number;
   readonly runFullE2e: boolean;
@@ -186,7 +175,7 @@ export type PrLandValidateExampleDocument = {
 };
 
 export type ToolsCallExampleDocument = {
-  readonly toolsCall: PrePushExampleDocument;
+  readonly toolsCall: ToolsListExampleDocument;
 };
 
 export type ExampleDocument =
@@ -200,8 +189,6 @@ export type ExampleDocument =
   | AgentStatsValidateExampleDocument
   | AgentStatsPublishExampleDocument
   | PrLandStatusExampleDocument
-  | PrLandReadyExampleDocument
-  | PrLandMergeCheckExampleDocument
   | PrLandValidateExampleDocument
   | ToolsCallExampleDocument;
 
@@ -212,11 +199,13 @@ export type ExampleCatalogEntry = {
   readonly dispatch: ExampleDispatchKind;
 };
 
+/** @deprecated Retained only to decode old request documents. */
 export const PRE_PUSH_EXAMPLE: PrePushRequest = {
   stageHostUpdates: true,
   fetchOriginMain: true,
 };
 
+/** @deprecated Retained only to decode old request documents. */
 export const PRE_PUSH_EXAMPLE_DOCUMENT: PrePushExampleDocument = {
   prePush: PRE_PUSH_EXAMPLE,
 };
@@ -298,19 +287,6 @@ export const PR_LAND_STATUS_EXAMPLE_DOCUMENT: PrLandStatusExampleDocument = {
   },
 };
 
-export const PR_LAND_READY_EXAMPLE_DOCUMENT: PrLandReadyExampleDocument = {
-  prLand: {
-    ready: PR_LAND_PR_EXAMPLE,
-  },
-};
-
-export const PR_LAND_MERGE_CHECK_EXAMPLE_DOCUMENT: PrLandMergeCheckExampleDocument =
-  {
-    prLand: {
-      mergeCheck: PR_LAND_PR_EXAMPLE,
-    },
-  };
-
 export const PR_LAND_VALIDATE_EXAMPLE_DOCUMENT: PrLandValidateExampleDocument =
   {
     prLand: {
@@ -322,16 +298,10 @@ export const PR_LAND_VALIDATE_EXAMPLE_DOCUMENT: PrLandValidateExampleDocument =
   };
 
 export const TOOLS_CALL_EXAMPLE_DOCUMENT: ToolsCallExampleDocument = {
-  toolsCall: PRE_PUSH_EXAMPLE_DOCUMENT,
+  toolsCall: TOOLS_LIST_EXAMPLE_DOCUMENT,
 };
 
 export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
-  {
-    family: RequestFamily.PrePush,
-    operation: ExampleOperationMarker.FamilyRoot,
-    document: PRE_PUSH_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Defaultable,
-  },
   {
     family: RequestFamily.ToolsList,
     operation: ExampleOperationMarker.FamilyRoot,
@@ -384,18 +354,6 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     document: PR_LAND_VALIDATE_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Ready,
-    document: PR_LAND_READY_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.MergeCheck,
-    document: PR_LAND_MERGE_CHECK_EXAMPLE_DOCUMENT,
     dispatch: ExampleDispatchKind.Parameterized,
   },
   {

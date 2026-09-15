@@ -1,6 +1,6 @@
 // nook-wasm build target: wasm32 clippy + release package + release-test compile + Node tests.
-// Clippy, package export, and `cargo build --tests --release` are siblings from builder-wasm-source
-// so the Node-test join reuses the test unit graph instead of rebuilding after `wasm-pack build --lib`.
+// Clippy and `cargo build --tests --release` use the joined builder-wasm-source graph, while each
+// wasm-pack package export uses its package-specific source/build sibling before the final join.
 // The WASM branch starts from builder-wasm-deps; native verification extends it as builder-core-deps. Hosted BuildKit
 // runs them concurrently; only their small generated outputs join at web-artifacts.
 // Loadable nook-rust / nook-rust-fast / nook-rust-browser tags live here next to their commons.

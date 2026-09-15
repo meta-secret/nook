@@ -24,6 +24,7 @@ import type {
 import { AgentAttemptSchema } from './agent-attempt-version.ts';
 
 import { AgentEventPresentation } from './agent-event-renderer.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 export class AgentAttemptReplay {
   private constructor(
@@ -39,16 +40,6 @@ export class AgentAttemptReplay {
     const first = request.events[0];
     if (!first || first.kind !== AgentAttemptEventKind.AttemptStarted) {
       throw new Error('Agent attempt journal must start with attempt-started.');
-    }
-    const moduleExpertAttempt =
-      first.adapter === AgentAttemptAdapterKind.ModuleExpertInvocation;
-    if (
-      moduleExpertAttempt
-        ? !first.invocationContextSha256 ||
-          !/^[0-9a-f]{64}$/u.test(first.invocationContextSha256)
-        : first.invocationContextSha256
-    ) {
-      throw new Error('Agent attempt invocation context binding is invalid.');
     }
     AgentAttemptSchema.assertCurrent(first.workflowVersion);
     let projectedResult: ProjectionReference | false = false;
@@ -197,6 +188,14 @@ export class AgentAttemptReplay {
     ) {
       throw new Error('Agent attempt journal identity is invalid.');
     }
+    try {
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha: event.originMainSha,
+        pinnedLocalDevSha: event.pinnedLocalDevSha,
+      });
+    } catch {
+      throw new Error('Agent attempt bootstrap evidence is invalid.');
+    }
     if (event.parent.kind === AgentAttemptParentKind.WorkflowRoot) {
       if (event.depth !== 1 || Object.keys(event.parent).length !== 1) {
         throw new Error('Root agent attempt lineage is invalid.');
@@ -248,13 +247,8 @@ export class AgentAttemptReplay {
   }
 
   private eventHasExactKeys(event: AgentAttemptEvent): boolean {
-    const startFields =
-      event.kind === AgentAttemptEventKind.AttemptStarted &&
-      event.invocationContextSha256
-        ? ['invocationContextSha256']
-        : [];
     const fieldsByKind: Record<AgentAttemptEventKind, readonly string[]> = {
-      [AgentAttemptEventKind.AttemptStarted]: startFields,
+      [AgentAttemptEventKind.AttemptStarted]: [],
       [AgentAttemptEventKind.ResultProjected]: ['result'],
       [AgentAttemptEventKind.ViewProjected]: ['view'],
       [AgentAttemptEventKind.AttemptTerminalRecorded]: [
@@ -283,6 +277,9 @@ export class AgentAttemptReplay {
       actual.workflow !== expected.workflow ||
       actual.workflowVersion !== expected.workflowVersion ||
       actual.sourceCommit !== expected.sourceCommit ||
+      actual.originMainSha !== expected.originMainSha ||
+      actual.pinnedLocalDevSha !== expected.pinnedLocalDevSha ||
+      actual.featureHeadSha !== expected.featureHeadSha ||
       actual.task !== expected.task ||
       actual.agent !== expected.agent ||
       actual.attempt !== expected.attempt ||
@@ -330,6 +327,9 @@ const EVENT_METADATA_KEYS = [
   'workflow',
   'workflowVersion',
   'sourceCommit',
+  'originMainSha',
+  'pinnedLocalDevSha',
+  'featureHeadSha',
   'task',
   'agent',
   'attempt',

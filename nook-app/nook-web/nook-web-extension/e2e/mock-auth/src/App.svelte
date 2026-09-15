@@ -1,6 +1,5 @@
 <script lang="ts">
   import DetectionCombined from './pages/DetectionCombined.svelte'
-  import DetectionClaude from './pages/DetectionClaude.svelte'
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionAmazon from './pages/DetectionAmazon.svelte'
@@ -62,9 +61,6 @@
   const isAirbnbLogin = $derived(
     location.hostname === 'www.airbnb.com' && pathname === '/login',
   )
-  const isClaudeLogin = $derived(
-    location.hostname === 'claude.ai' && pathname === '/login',
-  )
   const isBookingLogin = $derived(
     location.hostname === 'account.booking.com' && pathname === '/sign-in',
   )
@@ -100,8 +96,6 @@
   <DetectionAirbnb />
 {:else if isNetflixLogin}
   <DetectionNetflix />
-{:else if isClaudeLogin}
-  <DetectionClaude />
 {:else if isBookingLogin}
   <DetectionBooking />
 {:else if isTeslaLogin}

@@ -35,6 +35,8 @@ mutate lifecycle state.
 Follow the canonical
 [structural expert registry](../architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
+Internal Team Gizmo and Team Agent handoffs follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Examples
 
@@ -44,5 +46,5 @@ Follow the canonical
 ## Validation
 
 Evidence names affected paths, preserved invariants, owning tests, risks,
-unresolved decisions, and focused validation. Its typed handoff binds every
-evidence-surface claim to exact repository-source provenance.
+unresolved decisions, and focused validation. Its typed handoff reports the
+ordinary source observation for each bounded evidence path.

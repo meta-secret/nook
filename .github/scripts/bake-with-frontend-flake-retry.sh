@@ -17,10 +17,6 @@ is_buildkit_transport_flake() {
   # the frontend, transferring the source context, or exporting a verified cache.
   grep -Eiq \
     -e 'failed to read dockerfile' \
-    -e 'error reading dockerfile' \
-    -e 'failed to load LLB definition' \
-    -e 'dockerfile: parse error' \
-    -e 'error from sender' \
     -e 'rpc error: code = Unavailable' \
     -e 'rpc error: code = DeadlineExceeded' \
     -e 'rpc error: code = Canceled' \
@@ -48,15 +44,28 @@ is_unattributed_syntax_frontend_exit() {
 
 is_frontend_authorization_timeout() {
   local log_file="$1"
-  # Docker Hub token lookup can fail before the pinned Dockerfile frontend is
-  # loaded. Require the transient transport error on that same BuildKit vertex
-  # so a later application vertex cannot reuse a successful frontend marker.
+  # Authorization transport can fail before a frontend pull or while an exact
+  # cache ref is imported/exported. Require an approved registry operation and
+  # its transient error on the same BuildKit vertex. Credential rejections are
+  # permanent and intentionally do not match.
   awk '
-    /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
-      frontend_vertex = $1
-    }
-    /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {
-      found = 1
+    $1 ~ /^#[0-9]+$/ {
+      approved_operation = \
+        $0 ~ /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ || \
+        $0 ~ /importing cache manifest from .*registry\.dev\.nokey\.sh/ || \
+        $0 ~ /exporting cache to registry/
+      if (approved_operation) registry_vertex[$1] = 1
+
+      transient_authorization = \
+        $0 ~ /TLS handshake timeout/ || \
+        $0 ~ /connection reset by peer/ || \
+        $0 ~ /unexpected EOF/ || \
+        $0 ~ /i\/o timeout/ || \
+        $0 ~ /429 Too Many Requests/ || \
+        $0 ~ /5[0-9][0-9] (Bad Gateway|Service Unavailable|Gateway Timeout)/
+      if (registry_vertex[$1] && /failed to authorize:/ && transient_authorization) {
+        found = 1
+      }
     }
     END { exit(found ? 0 : 1) }
   ' "$log_file"
@@ -94,6 +103,11 @@ report_buildkit_cache_diagnostics() {
 
 # BSD/macOS mktemp requires the X template to end the path.
 log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
+raw_log="${NOOK_BUILDKIT_RAW_LOG:-}"
+if [ -n "$raw_log" ]; then
+  mkdir -p "$(dirname "$raw_log")"
+  : >"$raw_log"
+fi
 cleanup() {
   rm -f "$log_file"
 }
@@ -101,7 +115,11 @@ trap cleanup EXIT
 
 for attempt in 1 2; do
   set +e
-  "$@" 2>&1 | tee -a "$log_file"
+  if [ -n "$raw_log" ]; then
+    "$@" 2>&1 | tee -a "$log_file" "$raw_log"
+  else
+    "$@" 2>&1 | tee -a "$log_file"
+  fi
   status=${PIPESTATUS[0]}
   set -e
   report_buildkit_cache_diagnostics "$log_file" "$label"

@@ -28,6 +28,7 @@ ARG LLVM_COV_VERSION=0.8.7
 ARG SCCACHE_VERSION=0.17.0
 ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
 ARG SCCACHE_S3_MODE=external
+ARG SCCACHE_S3_RW_MODE=READ_WRITE
 ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
@@ -50,11 +51,15 @@ ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
 ENV NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}
+ENV SCCACHE_S3_RW_MODE=${SCCACHE_S3_RW_MODE}
 ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}
 ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
 ENV SCCACHE_REGION=auto
 ENV SCCACHE_S3_USE_SSL=true
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
+# sccache 0.17 waits for compiler-side cache work before returning. This makes
+# publication statistics final when the following report command runs.
+ENV SCCACHE_CLIENT_SIDE=1
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
 # short-lived local sccache daemons isolated even while their S3 storage is shared.
 ENV SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock
@@ -639,79 +644,43 @@ RUN mkdir -p /opt/nook \
 ENV CARGO_TARGET_DIR=/opt/nook/cargo-target
 WORKDIR /meta-secret/nook
 
-# nook-wasm source stage shared by sibling clippy, package-export, and release-test branches. The
-# exported package does not wait for clippy or Node tests; the later join still gates those paths.
-
-FROM builder-wasm-deps AS builder-wasm-source
+# Keep the source-free dependency graph common, but make package compiler leaves siblings. A package
+# edit must not invalidate the other package's source COPY/RUN layer or its output stamp.
+FROM builder-wasm-deps AS builder-wasm-source-base
 
 ARG WASM_BUILD_MODE=dev
 
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
-
-# Per-crate COPY+RUN so a later crate edit reuses earlier wasm32 compile layers.
-# Compile the WASM package roots separately after each COPY, matching wasm-pack's
-# package-by-package `cargo build --lib` feature graphs. A joint Cargo invocation
-# unifies features across the roots and makes the second wasm-pack call rebuild.
-# Sibling clippy/package/test stages still join from this snapshot.
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
+COPY nook-app/nook-platform/nook-auth2 nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-core
+
+# Clippy and release-test branches require both package roots, while package export leaves remain
+# independent below. Dummy roots inherited from builder-wasm-deps satisfy the other workspace member.
+FROM builder-wasm-source-base AS builder-wasm-source
+COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-wasm
+
+FROM builder-wasm-source-base AS builder-nook-wasm-source
+COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     touch nook-app-common/src/i18n.rs \
     && cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-app-common
+    && nook-sccache-report wasm-source-nook-wasm
 
-COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
-COPY nook-app/nook-platform/nook-auth2 nook-auth2
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-auth
-
-COPY nook-app/nook-platform/nook-replication nook-replication
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-replication
-
-COPY nook-app/nook-platform/nook-event-log nook-event-log
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-event-log
-
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-companion-core
-
-COPY nook-app/nook-platform/nook-core nook-core
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-core
-
+FROM builder-wasm-source-base AS builder-companion-wasm-source
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
+    cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
     && nook-sccache-report wasm-source-companion-wasm
-
-COPY nook-app/nook-platform/nook-wasm nook-wasm
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
-    && nook-sccache-report wasm-source-wasm
 
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
@@ -727,9 +696,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report wasm-clippy \
     && install -D /dev/null /opt/nook/wasm-clippy-passed
 
-FROM builder-wasm-source AS builder-wasm-build
+FROM builder-nook-wasm-source AS builder-nook-wasm-build
 
-# Emit the vault-app WASM package and the tiny companion package into the shared web source tree.
+# Emit nook-wasm independently; the companion package has its own source and compiler leaf below.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     case "$WASM_BUILD_MODE" in \
@@ -737,15 +706,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
+    && mkdir -p ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
     && wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
-    && wasm-pack build nook-companion-wasm --target web \
-         --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
-         --out-name nook_companion_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
            nook-wasm/Cargo.toml nook-wasm/src \
-           nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
            nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
            nook-core/Cargo.toml nook-core/src \
@@ -759,14 +725,48 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          | sha256sum \
          | cut -d' ' -f1)" \
          && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
-         && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
          && echo "$stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook-wasm-build-mode \
          && mkdir -p /opt/nook/wasm-handoff \
-         && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ \
+         && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ ) \
+    && nook-sccache-report wasm-build-nook-wasm
+
+FROM builder-companion-wasm-source AS builder-companion-wasm-build
+
+ARG WASM_BUILD_MODE=dev
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    case "$WASM_BUILD_MODE" in \
+      prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
+      dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
+      *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p ../nook-web/nook-web-shared/src/extension/nook-companion-wasm \
+    && wasm-pack build nook-companion-wasm --target web \
+         --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
+         --out-name nook_companion_wasm $wasm_opt_flag \
+    && ( current="$(find Cargo.toml Cargo.lock \
+           nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
+           nook-companion-core/Cargo.toml nook-companion-core/src \
+           \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
+         | LC_ALL=C sort -z \
+         | xargs -0 sha256sum \
+         | sha256sum \
+         | cut -d' ' -f1)" \
+         && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
          && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
          && cp -a ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
               /opt/nook/wasm-handoff/nook-companion-wasm/ ) \
-    && nook-sccache-report wasm-build
+    && nook-sccache-report wasm-build-companion-wasm
+
+FROM builder-nook-wasm-build AS builder-wasm-build
+
+COPY --from=builder-companion-wasm-build \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
+COPY --from=builder-companion-wasm-build \
+    /opt/nook/wasm-handoff/nook-companion-wasm \
+    /opt/nook/wasm-handoff/nook-companion-wasm
 
 FROM builder-wasm-source AS builder-wasm-tests
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the

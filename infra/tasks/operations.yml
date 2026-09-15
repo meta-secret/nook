@@ -10,7 +10,7 @@ tasks:
         set -u
         docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" ps
         sudo -n k0s kubectl get deployment,pod,svc,pvc \
-          --namespace hive-data \
+          --namespace nook-infra \
           -l app.kubernetes.io/name=nook-zot \
           -o wide || true
         curl -sS -o /dev/null -w 'registry.dev.nokey.sh/v2/ -> %{http_code}\n' \
@@ -27,6 +27,6 @@ tasks:
         set -u
         docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" logs --tail=100
         sudo -n k0s kubectl logs deployment/nook-zot \
-          --namespace hive-data \
+          --namespace nook-infra \
           --tail=100 || true
         REMOTE

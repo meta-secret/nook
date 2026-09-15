@@ -54,67 +54,6 @@ tasks:
         bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:web
 
-  registry-cache:publish:local-format-deps:
-    internal: true
-    desc: Publish source-free Rust dependency graphs completed by sealed local formatting.
-    cmds:
-      - |
-        set -euo pipefail
-        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:-}" != "1" ]; then exit 0; fi
-        if ! bash "{{.REPO_ROOT}}/.github/scripts/rust-deps-cache-publish-guard.sh"; then
-          echo "registry-cache:publish:local-format-deps: unsafe cache recipe; publication skipped" >&2
-          exit 0
-        fi
-        # Local writes are unique quarantine tags. PR jobs cannot import them.
-        # A Main-defined hosted workflow reads every blob twice before it adds
-        # the stable content-fingerprint tag.
-        candidate="$(date -u +%Y%m%d%H%M%S)-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
-        fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing Rust dependency fingerprint}"
-        source_sha="$(git rev-parse HEAD)"
-        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
-          {{.NOOK_BAKE_FILES}} \
-          --set "*.output=type=cacheonly" \
-          builder-wasm-deps-input-publish; then
-          echo "registry-cache:publish:local-format-deps: WASM candidate upload failed; stable cache unchanged" >&2
-          exit 0
-        fi
-        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
-          {{.NOOK_BAKE_FILES}} \
-          --set "*.output=type=cacheonly" \
-          builder-core-deps-input-publish; then
-          echo "registry-cache:publish:local-format-deps: native candidate upload failed; stable cache unchanged" >&2
-          exit 0
-        fi
-        if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
-          echo "registry-cache:publish:local-format-deps: candidate quarantined; GitHub dispatch unavailable" >&2
-          exit 0
-        fi
-        if [ -n "$(git status --porcelain -- \
-          .github/scripts/rust-deps-cache-fingerprint.sh \
-          nook-app/nook-platform/Cargo.toml \
-          nook-app/nook-platform/Cargo.lock \
-          nook-app/nook-platform/clippy.toml \
-          nook-app/nook-platform/docker/rust/product.Dockerfile \
-          nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore \
-          nook-app/nook-platform/docker/sccache-wrapper.sh \
-          nook-app/nook-platform/docker/sccache-report.sh \
-          ':(glob)nook-app/**/Cargo.toml' \
-          ':(glob)nook-app/nook-platform/.cargo/**' \
-          ':(glob)nook-app/nook-platform/.config/**')" ]; then
-          echo "registry-cache:publish:local-format-deps: candidate quarantined; dependency inputs are not committed" >&2
-          exit 0
-        fi
-        if ! gh workflow run remote.yml \
-          --ref main \
-          --raw-field "task=rust-cache:promote" \
-          --raw-field "cache_fingerprint=$fingerprint" \
-          --raw-field "cache_candidate=$candidate" \
-          --raw-field "cache_source_sha=$source_sha"; then
-          echo "registry-cache:publish:local-format-deps: candidate quarantined; hosted promotion dispatch failed" >&2
-          exit 0
-        fi
-        echo "registry-cache:publish:local-format-deps: hosted promotion dispatched for $candidate"
-
   docker:rust:task:
     internal: true
     desc: Run a Task target in the on-demand source-sealed Rust/WASM image.
@@ -364,7 +303,6 @@ tasks:
       - task: rust:dependency-policy
       - task: preflight:dependency-policy
       - task: fuzz:dependency-policy
-      - task: minds:dependency-policy
 
   docker:ecosystem:smoke:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.

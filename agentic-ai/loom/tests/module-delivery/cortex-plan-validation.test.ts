@@ -22,7 +22,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -52,7 +52,7 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       consumerOutcome: `${request.taskId} Cortex guidance is current.`,
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE_COMMIT,
+        sourceCommit: PINNED_LOCAL_DEV_SHA,
       },
       agentDepthLimit: 2,
       dependencies: [],
@@ -69,7 +69,14 @@ export class ModuleDeliveryCortexPlanValidationScenario {
         (claim) => claim !== '.cortex/**',
       ),
       acceptance: {
-        commands: ['task loom:cortex-audit'],
+        commands: [
+          {
+            selector: 'task loom:cortex-audit',
+            read: request.selectedSkillPaths,
+            write: [],
+            output: [],
+          },
+        ],
         evidence: [`${request.taskId} guidance is audited.`],
       },
       workspace: {
@@ -79,17 +86,19 @@ export class ModuleDeliveryCortexPlanValidationScenario {
     };
   }
 
-  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV2 {
+  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryCortexPlanValidationScenario(nodes).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
+  private execute(): ModuleDeliveryPlanV5 {
     const nodes = this.request;
     return {
-      version: 2,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 2,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -152,7 +161,11 @@ export class ModuleDeliveryCortexPlanValidationScenario {
   }
 }
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const SRE_SKILL = '.cortex/teams/sre/dynamic-skills/quality.md';
 
@@ -210,7 +223,7 @@ describe('Cortex module-delivery plan validation', () => {
   });
 
   test('admits only an exact Gizmo grant owned by Gizmo Prime and written by AI', () => {
-    const claim = '.cortex/gizmo/workflows/subagent-delegation.md';
+    const claim = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
     const gizmo: ModuleDeliveryWriteNodeV2 = {
       ...ModuleDeliveryCortexPlanValidationScenario.cortexNode({
         taskId: 'gizmo-workflow',
@@ -230,21 +243,21 @@ describe('Cortex module-delivery plan validation', () => {
       { ...gizmo, acceptanceOwner: TeamKey.Ai },
       {
         ...gizmo,
-        resources: { ...gizmo.resources, write: ['.cortex/gizmo/**'] },
+        resources: { ...gizmo.resources, write: ['.cortex/gizmo-prime/**'] },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo/**'],
+          sharedWriteClaims: ['.cortex/gizmo-prime/**'],
         },
       },
       {
         ...gizmo,
         resources: {
           ...gizmo.resources,
-          write: ['.cortex/gizmo/workflows'],
+          write: ['.cortex/gizmo-prime/workflows'],
         },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo/workflows'],
+          sharedWriteClaims: ['.cortex/gizmo-prime/workflows'],
         },
       },
     ])

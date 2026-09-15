@@ -4,10 +4,8 @@ import {
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
-import { ArcHiveRenderContract } from "./arc-hive-render-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
-import { DockerCacheSelectionContract } from "./docker-cache-selection-contract";
 
 import { resolve } from "node:path";
 import {
@@ -48,7 +46,6 @@ class ArcManifestContract {
       mainWorkflow,
       prWorkflow,
       authSensitiveJob,
-      hiveWorkflow,
       repositoryPolicyWorkflow,
       webResearchWorkflow,
       nodeSetup,
@@ -434,7 +431,7 @@ class ArcManifestContract {
     const admittedContract19 = network.requireAll([
       "name: arc-runner-default-deny-ingress",
       "name: arc-runner-to-buildkit",
-      'values: ["arc-runner", "arc-hive-runner", "arc-buildkit-benchmark"]',
+      'values: ["arc-runner", "arc-buildkit-benchmark"]',
       "port: 1234",
     ]);
     if (admittedContract19.isErr()) return err(admittedContract19.error);
@@ -480,7 +477,7 @@ class ArcManifestContract {
       "infra/k0s/manifests/arc/buildkit.yaml",
       "rollout status statefulset/nook-buildkit",
       "one persistent rootless BuildKit shard per build node",
-      "for scale_set in nook-k0s nook-k0s-hive",
+      "for scale_set in nook-k0s nook-k0s-container",
       "helm uninstall nook-k0s-cache",
       "arc-build-nodes",
       "arc-container-job-nodes",
@@ -522,7 +519,7 @@ class ArcManifestContract {
       "- task: arc:build-hosts:quarantine\n      - task: arc:container-hosts:reconcile\n      - task: arc:buildkit:storage:prepare",
       "container-runner-scale-set-values.yaml",
       "container-hook.yaml",
-      "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
+      "for scale_set in nook-k0s nook-k0s-container",
     ]);
     if (admittedContract25.isErr()) return err(admittedContract25.error);
     const admittedContract26 = mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
@@ -537,11 +534,10 @@ class ArcManifestContract {
       ".vale.ini | .vale/*",
       "uses: ./.github/workflows/pr.yml",
       "uses: ./.github/workflows/main.yml",
-      "uses: ./.github/workflows/hive.yml",
       "uses: ./.github/workflows/repository-policy.yml",
       "uses: ./.github/workflows/web-research.yml",
       "github.event_name == 'push' && 'main'",
-      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      "cancel-in-progress: false",
       "needs.scope.outputs.validation-requested == 'true'",
       "persist-credentials: false",
     ]);
@@ -617,7 +613,7 @@ class ArcManifestContract {
       "EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}",
       "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
       "WASM Node tests=$WASM_NODE_RESULT",
-      "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+      "needs:\n      [\n        validation-request,\n        rust,\n        wasm,\n        verify,\n        wasm-node-test,\n        ui-demo,\n        extension-e2e,\n      ]",
       "Extension e2e finished with $EXTENSION_E2E_RESULT",
       "task _extension:test:e2e:file",
     ]);
@@ -667,21 +663,6 @@ class ArcManifestContract {
       second: "run: task ci:repository-policy:trusted",
     });
     if (admittedContract40.isErr()) return err(admittedContract40.error);
-    const admittedContract41 = hiveWorkflow.requireAll([
-      "Build Hive Control Center browser image",
-      "nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}",
-      "needs: console-image",
-      "runs-on: nook-k0s-container",
-      "console-untrusted:",
-      "Validate untrusted Hive Control Center source",
-      "task hive:console:verify",
-      "without private credentials",
-    ]);
-    if (admittedContract41.isErr()) return err(admittedContract41.error);
-    const admittedContract42 = hiveWorkflow.forbid(
-      "task hive:console:e2e:prepare",
-    );
-    if (admittedContract42.isErr()) return err(admittedContract42.error);
     const admittedContract43 = webResearchWorkflow.requireAll([
       "Build research browser image",
       "nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -704,9 +685,7 @@ class ArcManifestContract {
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
       "Publish from the already-selected node-local rootless BuildKit shard",
-      "repair solve never imports the ref it is replacing",
-      "nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}",
-      "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
+      'cache_scope="nook-rust-wasm-deps-v6"',
       "compression=zstd,force-compression=true",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
       "verify-registry-cache-blobs.ts",
@@ -792,15 +771,8 @@ class ArcManifestContract {
     if (admittedContract53.isErr()) return err(admittedContract53.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();
     if (worker.isErr()) return err(worker.error);
-    const cache = await new DockerCacheSelectionContract(root).assert();
-    if (cache.isErr()) return err(cache.error);
     const frontend = await new DockerfileFrontendContract(root).assert();
     if (frontend.isErr()) return err(frontend.error);
-    const hive = await new ArcHiveRenderContract({
-      root,
-    }).execute();
-    if (hive.isErr()) return err(hive.error);
-
     return new ArcWorkflowPlacementContract(root).assert();
   }
 }

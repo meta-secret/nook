@@ -146,10 +146,12 @@ impl DirectHandoffScenario {
 }
 
 #[wasm_bindgen_test]
-#[allow(
-    unknown_lints,
-    non_local_effect_before_unhandled_error,
-    reason = "the test intentionally observes one-shot mutation and pending-state clearing before handling each rejection"
+#[cfg_attr(
+    dylint_lib = "non_local_effect_before_unhandled_error",
+    allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes one-shot mutation and pending-state clearing before handling each rejection"
+    )
 )]
 fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
 -> Result<(), CompanionOperationError> {
@@ -215,10 +217,12 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
 }
 
 #[wasm_bindgen_test]
-#[allow(
-    unknown_lints,
-    non_local_effect_before_unhandled_error,
-    reason = "the test intentionally observes that every rejected begin transaction clears previously pending secret state"
+#[cfg_attr(
+    dylint_lib = "non_local_effect_before_unhandled_error",
+    allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes that every rejected begin transaction clears previously pending secret state"
+    )
 )]
 fn rejected_discovery_and_context_clear_existing_pending_secret()
 -> Result<(), CompanionOperationError> {
@@ -269,10 +273,12 @@ fn rejected_discovery_and_context_clear_existing_pending_secret()
 }
 
 #[wasm_bindgen_test]
-#[allow(
-    unknown_lints,
-    non_local_effect_before_unhandled_error,
-    reason = "the test intentionally observes fail-closed nonce consumption after the real sealer rejects its active vault"
+#[cfg_attr(
+    dylint_lib = "non_local_effect_before_unhandled_error",
+    allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes fail-closed nonce consumption after the real sealer rejects its active vault"
+    )
 )]
 fn sealing_failure_consumes_nonce_and_requires_fresh_discovery()
 -> Result<(), CompanionOperationError> {
@@ -294,10 +300,12 @@ fn sealing_failure_consumes_nonce_and_requires_fresh_discovery()
 }
 
 #[wasm_bindgen_test]
-#[allow(
-    unknown_lints,
-    non_local_effect_before_unhandled_error,
-    reason = "the test intentionally observes transaction cleanup after stale authorization and concurrent discovery"
+#[cfg_attr(
+    dylint_lib = "non_local_effect_before_unhandled_error",
+    allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes transaction cleanup after stale authorization and concurrent discovery"
+    )
 )]
 fn production_endpoint_consumes_stale_and_concurrent_transactions()
 -> Result<(), CompanionOperationError> {
@@ -349,10 +357,12 @@ fn production_endpoint_consumes_stale_and_concurrent_transactions()
 }
 
 #[wasm_bindgen_test]
-#[allow(
-    unknown_lints,
-    non_local_effect_before_unhandled_error,
-    reason = "the test intentionally installs a different real app key before observing fail-closed sealing rejection"
+#[cfg_attr(
+    dylint_lib = "non_local_effect_before_unhandled_error",
+    allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally installs a different real app key before observing fail-closed sealing rejection"
+    )
 )]
 fn real_manager_rejects_an_installation_app_key_mismatch() -> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;

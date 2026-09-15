@@ -47,7 +47,7 @@ export class ModuleExpertsReadContextMcpScenario {
       method: 'POST',
     };
     const response = await fetch(call.server.url, requestOptions);
-    return mcpResponseFromHost(
+    return ModuleExpertsReadContextMcpScenario.responseFromHost(
       UntrustedYamlBoundary.fromHost(await response.json()),
     );
   }
@@ -106,9 +106,75 @@ export class ModuleExpertsReadContextMcpScenario {
       method: 'POST',
     };
     const response = await fetch(server.url, requestOptions);
-    return mcpResponseFromHost(
+    return ModuleExpertsReadContextMcpScenario.responseFromHost(
       UntrustedYamlBoundary.fromHost(await response.json()),
     );
+  }
+
+  static responseFromHost(value: UntrustedYamlNode): McpResponse {
+    if (!UntrustedYamlBoundary.isRecord(value))
+      throw new Error('Expected an MCP response object.');
+    const response: MutableMcpResponse = {};
+    if ('error' in value) {
+      const error = value.error;
+      if (
+        !UntrustedYamlBoundary.isRecord(error) ||
+        typeof error.code !== 'number' ||
+        typeof error.message !== 'string'
+      )
+        throw new Error('Expected a valid MCP error response.');
+      response.error = { code: error.code, message: error.message };
+    }
+    if ('result' in value) {
+      const resultValue = value.result;
+      if (!UntrustedYamlBoundary.isRecord(resultValue))
+        throw new Error('Expected a valid MCP result response.');
+      const result: MutableMcpResult = {};
+      if ('capabilities' in resultValue) {
+        const capabilities = resultValue.capabilities;
+        if (
+          !UntrustedYamlBoundary.isRecord(capabilities) ||
+          !('tools' in capabilities) ||
+          !UntrustedYamlBoundary.isRecord(capabilities.tools) ||
+          typeof capabilities.tools.listChanged !== 'boolean'
+        )
+          throw new Error('Expected valid MCP capabilities.');
+        result.capabilities = {
+          tools: { listChanged: capabilities.tools.listChanged },
+        };
+      }
+      if ('content' in resultValue) {
+        const content = resultValue.content;
+        if (!UntrustedYamlBoundary.isList(content) || content.length !== 1)
+          throw new Error('Expected valid MCP content.');
+        const item = content[0];
+        if (
+          !item ||
+          !UntrustedYamlBoundary.isRecord(item) ||
+          typeof item.text !== 'string' ||
+          typeof item.type !== 'string'
+        )
+          throw new Error('Expected valid MCP content.');
+        result.content = [{ text: item.text, type: item.type }];
+      }
+      if ('tools' in resultValue) {
+        const tools = resultValue.tools;
+        if (!UntrustedYamlBoundary.isList(tools))
+          throw new Error('Expected valid MCP tools.');
+        const toolNames: { name: string }[] = [];
+        for (const tool of tools) {
+          if (
+            !UntrustedYamlBoundary.isRecord(tool) ||
+            typeof tool.name !== 'string'
+          )
+            throw new Error('Expected valid MCP tools.');
+          toolNames.push({ name: tool.name });
+        }
+        result.tools = toolNames;
+      }
+      response.result = result;
+    }
+    return response;
   }
 
   static createTestRepository(fixtureRoot: string): Promise<TestRepository> {
@@ -235,72 +301,6 @@ type MutableMcpResponse = {
   error?: { readonly code: number; readonly message: string };
   result?: MutableMcpResult;
 };
-
-function mcpResponseFromHost(value: UntrustedYamlNode): McpResponse {
-  if (!UntrustedYamlBoundary.isRecord(value))
-    throw new Error('Expected an MCP response object.');
-  const response: MutableMcpResponse = {};
-  if ('error' in value) {
-    const error = value.error;
-    if (
-      !UntrustedYamlBoundary.isRecord(error) ||
-      typeof error.code !== 'number' ||
-      typeof error.message !== 'string'
-    )
-      throw new Error('Expected a valid MCP error response.');
-    response.error = { code: error.code, message: error.message };
-  }
-  if ('result' in value) {
-    const resultValue = value.result;
-    if (!UntrustedYamlBoundary.isRecord(resultValue))
-      throw new Error('Expected a valid MCP result response.');
-    const result: MutableMcpResult = {};
-    if ('capabilities' in resultValue) {
-      const capabilities = resultValue.capabilities;
-      if (
-        !UntrustedYamlBoundary.isRecord(capabilities) ||
-        !('tools' in capabilities) ||
-        !UntrustedYamlBoundary.isRecord(capabilities.tools) ||
-        typeof capabilities.tools.listChanged !== 'boolean'
-      )
-        throw new Error('Expected valid MCP capabilities.');
-      result.capabilities = {
-        tools: { listChanged: capabilities.tools.listChanged },
-      };
-    }
-    if ('content' in resultValue) {
-      const content = resultValue.content;
-      if (!UntrustedYamlBoundary.isList(content) || content.length !== 1)
-        throw new Error('Expected valid MCP content.');
-      const item = content[0];
-      if (
-        !item ||
-        !UntrustedYamlBoundary.isRecord(item) ||
-        typeof item.text !== 'string' ||
-        typeof item.type !== 'string'
-      )
-        throw new Error('Expected valid MCP content.');
-      result.content = [{ text: item.text, type: item.type }];
-    }
-    if ('tools' in resultValue) {
-      const tools = resultValue.tools;
-      if (!UntrustedYamlBoundary.isList(tools))
-        throw new Error('Expected valid MCP tools.');
-      const toolNames: { name: string }[] = [];
-      for (const tool of tools) {
-        if (
-          !UntrustedYamlBoundary.isRecord(tool) ||
-          typeof tool.name !== 'string'
-        )
-          throw new Error('Expected valid MCP tools.');
-        toolNames.push({ name: tool.name });
-      }
-      result.tools = toolNames;
-    }
-    response.result = result;
-  }
-  return response;
-}
 
 type McpCall = {
   readonly request: McpRequest;

@@ -27,19 +27,41 @@ impl WasmModuleSources<'_> {
     }
 }
 
+#[cfg(test)]
+mod bounds_tests {
+    use super::WasmModuleSources;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn alias_configuration_search_stops_at_the_web_workspace() {
+        let source = Path::new("/checkout/nook-app/nook-web/nook-web-app/src/lib/provider.ts");
+        assert_eq!(
+            WasmModuleSources::configuration_ancestors(source),
+            vec![
+                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app/src/lib"),
+                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app/src"),
+                PathBuf::from("/checkout/nook-app/nook-web/nook-web-app"),
+                PathBuf::from("/checkout/nook-app/nook-web"),
+            ],
+            "module resolution must not inspect sibling worktrees or filesystem ancestors"
+        );
+    }
+}
+
 impl WasmModuleSources<'_> {
     pub(super) fn configured_alias_path(
         module: &str,
         source_path: &Path,
     ) -> Result<PathBuf, ModuleResolutionFailure> {
-        for ancestor in source_path.ancestors() {
+        let ancestors = WasmModuleSources::configuration_ancestors(source_path);
+        for ancestor in &ancestors {
             if let Ok(path) =
                 WasmModuleSources::tsconfig_alias_path(&ancestor.join("tsconfig.json"), module)
             {
                 return WasmModuleSources::resolve_local_module(&path);
             }
         }
-        for ancestor in source_path.ancestors() {
+        for ancestor in ancestors {
             let Ok(entries) = fs::read_dir(ancestor) else {
                 continue;
             };
@@ -53,6 +75,24 @@ impl WasmModuleSources<'_> {
             }
         }
         Err(ModuleResolutionFailure::UnresolvedAlias)
+    }
+}
+
+impl WasmModuleSources<'_> {
+    fn configuration_ancestors(source_path: &Path) -> Vec<PathBuf> {
+        let ancestors = source_path
+            .parent()
+            .into_iter()
+            .flat_map(Path::ancestors)
+            .map(Path::to_path_buf)
+            .collect::<Vec<_>>();
+        let Some(web_root) = ancestors
+            .iter()
+            .position(|ancestor| ancestor.file_name().is_some_and(|name| name == "nook-web"))
+        else {
+            return ancestors;
+        };
+        ancestors.into_iter().take(web_root + 1).collect()
     }
 }
 

@@ -5,10 +5,13 @@ import {
   type ActiveStructuralExpertJournal,
   type AgentAttemptJournalConfiguration,
 } from '../../src/agent-workflow/agent-journal.ts';
+import { type ModuleExpertRuntimeSession } from '../../src/module-experts/trusted-runtime.ts';
 import {
-  ModuleExpertRuntimeSession,
-  ModuleExpertRuntimeCapabilityKind,
-} from '../../src/module-experts/trusted-runtime.ts';
+  AgentReasoningEffort,
+  AgentWorkspacePolicy,
+  WorkflowExecutorKind,
+  WorkflowResultKind,
+} from '../../src/agent-workflow/domain.ts';
 import { ReadOnlyExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
 import { DelegationLifecycleLease } from '../../src/agent-workflow/delegation-run-journal.ts';
 
@@ -33,10 +36,34 @@ export class ForbiddenExpertTransitions {
     // @ts-expect-error Structural journals cannot consume module completion authority.
     void journal.finalizeModuleExpert;
   }
-  static capabilityConstruction(): void {
-    // @ts-expect-error Runtime authority classes cannot be fabricated from their discriminator.
+  static trustedHandoffData(): void {
     const session: ModuleExpertRuntimeSession = {
-      kind: ModuleExpertRuntimeCapabilityKind.Session,
+      invocation: {
+        task: 'module-review',
+        attempt: 1,
+        sourceCommit: '0'.repeat(40),
+        originMainSha: '0'.repeat(40),
+        pinnedLocalDevSha: '0'.repeat(40),
+        featureHeadSha: '0'.repeat(40),
+        runId: 'typestate-run',
+        workingDirectory: '.',
+        upstreamOutputs: [],
+        signal: AbortSignal.abort(),
+        observe: async () => {},
+        execution: {
+          kind: WorkflowExecutorKind.Agent,
+          agent: 'module_expert',
+          instruction: 'Inspect the bounded module scope.',
+          resultKind: WorkflowResultKind.ModuleExpertEvidence,
+        },
+        agentProfile: {
+          name: 'module_expert',
+          instructionPrefix: 'Read-only module expert.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.High,
+        },
+      },
+      selectedContextPaths: [],
     };
     void session;
     // @ts-expect-error Only successful isolation setup can construct live resources.

@@ -66,24 +66,6 @@ export type PrStewardDeliveryId = Opaque<string, IdentityKind.Delivery>;
 export type PrStewardEventId = Opaque<string, IdentityKind.Event>;
 export type PrStewardHeadSha = Opaque<string, IdentityKind.Head>;
 export type PrStewardPullRequest = Opaque<number, IdentityKind.PullRequest>;
-
-function isPrStewardPullRequest(
-  value: UntrustedYamlNode,
-): value is PrStewardPullRequest {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-}
-
-function isPrStewardHeadSha(
-  value: UntrustedYamlNode,
-): value is PrStewardHeadSha {
-  return typeof value === 'string' && /^[0-9a-f]{40}$/u.test(value);
-}
-
-function isOpaqueText<Kind extends IdentityKind>(
-  value: string,
-): value is Opaque<string, Kind> {
-  return value.length > 0;
-}
 enum Meta {
   Author = 'author',
   CommentId = 'commentId',
@@ -146,51 +128,6 @@ type PrStewardRoutingCandidate = {
   readonly runId: number | false;
   readonly author: string | false;
 };
-
-function isPrStewardRoutingRecord(
-  value: PrStewardRoutingCandidate,
-): value is PrStewardRoutingRecord {
-  switch (value.source) {
-    case PrStewardSource.PullRequest:
-    case PrStewardSource.PullRequestReview:
-      return (
-        value.path === false &&
-        value.line === false &&
-        value.reviewId === false &&
-        value.commentId === false &&
-        value.runId === false
-      );
-    case PrStewardSource.PullRequestReviewComment:
-      return true;
-    case PrStewardSource.IssueComment:
-      return (
-        value.path === false &&
-        value.line === false &&
-        value.reviewId === false &&
-        value.runId === false
-      );
-    case PrStewardSource.CheckRun:
-    case PrStewardSource.WorkflowRun:
-      return (
-        value.path === false &&
-        value.line === false &&
-        value.reviewId === false &&
-        value.commentId === false &&
-        value.author === false
-      );
-    case PrStewardSource.CheckSuite:
-      return (
-        value.path === false &&
-        value.line === false &&
-        value.reviewId === false &&
-        value.commentId === false &&
-        value.runId === false &&
-        value.author === false
-      );
-    case PrStewardSource.WorkflowJob:
-      return false;
-  }
-}
 export enum PrStewardBlockerCode {
   GithubObservationUnavailable = 'github-observation-unavailable',
   MalformedEvent = 'malformed-event',
@@ -263,7 +200,7 @@ export class PrStewardDecodeError extends Error {
     readonly cause: Error | false;
   }) {
     super(
-      `PR Steward decode failed: ${request.code}`,
+      `PR Lifecycle Agent decode failed: ${request.code}`,
       request.cause === false ? {} : { cause: request.cause },
     );
     this.name = 'PrStewardDecodeError';
@@ -341,13 +278,13 @@ type RecordField = {
 
 export class PrStewardNdjsonCodec {
   static pullRequest(value: UntrustedYamlNode): PrStewardPullRequest {
-    if (!isPrStewardPullRequest(value))
+    if (!this.#isPrStewardPullRequest(value))
       return this.#reject(PrStewardDecodeCode.InvalidField);
     return value;
   }
 
   static headSha(value: UntrustedYamlNode): PrStewardHeadSha {
-    if (!isPrStewardHeadSha(value))
+    if (!this.#isPrStewardHeadSha(value))
       return this.#reject(PrStewardDecodeCode.InvalidField);
     return value;
   }
@@ -505,7 +442,7 @@ export class PrStewardNdjsonCodec {
       line,
       author,
     };
-    if (!isPrStewardRoutingRecord(routing))
+    if (!this.#isPrStewardRoutingRecord(routing))
       return this.#reject(PrStewardDecodeCode.InvalidCombination);
     return routing;
   }
@@ -579,9 +516,74 @@ export class PrStewardNdjsonCodec {
       field: request.field,
       limit: 128,
     });
-    if (!isOpaqueText<Kind>(value))
+    if (!this.#isOpaqueText<Kind>(value))
       return this.#reject(PrStewardDecodeCode.InvalidField);
     return value;
+  }
+
+  static #isPrStewardPullRequest(
+    value: UntrustedYamlNode,
+  ): value is PrStewardPullRequest {
+    return (
+      typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    );
+  }
+
+  static #isPrStewardHeadSha(
+    value: UntrustedYamlNode,
+  ): value is PrStewardHeadSha {
+    return typeof value === 'string' && /^[0-9a-f]{40}$/u.test(value);
+  }
+
+  static #isOpaqueText<Kind extends IdentityKind>(
+    value: string,
+  ): value is Opaque<string, Kind> {
+    return value.length > 0;
+  }
+
+  static #isPrStewardRoutingRecord(
+    value: PrStewardRoutingCandidate,
+  ): value is PrStewardRoutingRecord {
+    switch (value.source) {
+      case PrStewardSource.PullRequest:
+      case PrStewardSource.PullRequestReview:
+        return (
+          value.path === false &&
+          value.line === false &&
+          value.reviewId === false &&
+          value.commentId === false &&
+          value.runId === false
+        );
+      case PrStewardSource.PullRequestReviewComment:
+        return true;
+      case PrStewardSource.IssueComment:
+        return (
+          value.path === false &&
+          value.line === false &&
+          value.reviewId === false &&
+          value.runId === false
+        );
+      case PrStewardSource.CheckRun:
+      case PrStewardSource.WorkflowRun:
+        return (
+          value.path === false &&
+          value.line === false &&
+          value.reviewId === false &&
+          value.commentId === false &&
+          value.author === false
+        );
+      case PrStewardSource.CheckSuite:
+        return (
+          value.path === false &&
+          value.line === false &&
+          value.reviewId === false &&
+          value.commentId === false &&
+          value.runId === false &&
+          value.author === false
+        );
+      case PrStewardSource.WorkflowJob:
+        return false;
+    }
   }
 
   static #required(request: RecordField): UntrustedYamlNode {

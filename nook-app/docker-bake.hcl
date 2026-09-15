@@ -5,7 +5,7 @@
 //   nook-app/nook-web/docker/web.docker-bake.hcl       -> web/e2e bases + final-image cache scopes
 //   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, focused rust leaves
 //   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, nook-rust*
-//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
+//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + independent Bun dependency scopes
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> loadable nook-web* images
 //   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
 // Callers pass all files via NOOK_BAKE_FILES / PREFLIGHT_BAKE_FILES (bake has no `include`).
@@ -20,6 +20,10 @@ variable "SCCACHE_BUCKET" {
 
 variable "SCCACHE_S3_MODE" {
   default = "external"
+}
+
+variable "SCCACHE_S3_RW_MODE" {
+  default = "READ_WRITE"
 }
 
 // Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
@@ -37,6 +41,14 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+// The remote build:compile handoff defaults to publication so ordinary feature
+// invocations retain their existing semantics. Delivery may explicitly select
+// read-only for a warm verification; that mode must not create any registry
+// exporter, regardless of the generic cache-write flag.
+variable "NOOK_COMPILE_CACHE_MODE" {
+  default = "publish"
+}
+
 // Main and hosted publishers retain complete mode=max graphs. ARC jobs already
 // keep the full writable graph in their private local state, so their exact-SHA
 // registry handoff may use mode=min to preserve retries without re-exporting
@@ -48,83 +60,6 @@ variable "GHA_CACHE_EXPORT_MODE" {
 // Main keeps this empty. Isolated PR/Remote/local writes use -git-<40-char-sha> so each
 // commit owns a distinct remote-buildcache index and cannot replace trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
-  default = ""
-}
-
-// Isolated git-scoped writes use this to enable cold-scope Main fallback.
-// Per-scope exact probes suppress that fallback when an exact ref is present.
-variable "GHA_CACHE_FALLBACK_ENABLED" {
-  default = ""
-}
-
-// BuildKit merges cache importers; their list order is not fallback precedence.
-// Hosted setup probes each exact ref and trusted Main native/WASM source refs.
-// A present exact or Main source ref must be imported alone. A missing source
-// ref may fall back to dependency fingerprints.
-variable "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_KANI_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE" {
-  default = ""
-}
-
-// Hosted setup sets this after it probes every exact ref. Local Task runs do
-// not probe, so an empty availability value there means unknown, not absent.
-variable "GHA_CACHE_EXACT_PROBES_COMPLETE" {
-  default = ""
-}
-
-variable "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE" {
-  default = ""
-}
-
-// Retained for local/manual compatibility with explicitly suffixed cache experiments.
-variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
 }
 
@@ -140,6 +75,7 @@ write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache"
 target "_sccache" {
   args = {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
+    SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
     SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
     SCCACHE_BUCKET   = SCCACHE_BUCKET
   }

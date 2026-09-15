@@ -1,0 +1,4 @@
+lockfileVersion: 1
+packages:
+  "@nook/app-runtime":
+    resolution: "workspace:*"

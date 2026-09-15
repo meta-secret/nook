@@ -1,24 +1,16 @@
-import type { ModuleDeliveryAcceptedProviderEvidenceIdentity } from './evidence.ts';
-
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
-
 import type { TeamKey } from '../team-agents/catalog.ts';
-
 import type { TeamTaskContext } from '../team-agents/context.ts';
-
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 import type {
   ModuleDeliveryOwnerIdentity,
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
+import type { ModuleDeliveryProviderResult } from './integration-provenance.ts';
+import type { ModuleGenerationAuthority } from './admission-authority.ts';
 
-import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
-
-import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
-
-import type { ModuleDeliveryCanonicalEvidenceTransition } from './integration-provenance.ts';
-
-import type { ModuleDeliveryGenerationAuthority } from './admission.ts';
+export type ModuleDeliveryGenerationAuthority = ModuleGenerationAuthority;
 
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
@@ -42,25 +34,23 @@ export type ModuleDeliveryExpectedLineage = Readonly<{
   parentLineage: AgentAttemptParent;
 }>;
 
-export type CreateModuleDeliveryGenerationAuthorityRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
-  readonly repositoryRoot: string;
-};
+export type CreateModuleDeliveryGenerationAuthorityRequest = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  expectedLineage: readonly ModuleDeliveryExpectedLineage[];
+  repositoryRoot: string;
+}>;
 
-export type CreateModuleDeliveryAdmissionStateRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly headCommit: string;
-  readonly integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
-  readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
-};
+export type CreateModuleDeliveryAdmissionStateRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  headCommit: string;
+  integratedWriterFrontiers: readonly ModuleDeliveryWriterFrontier[];
+  acceptedEvidence: readonly ModuleDeliveryProviderResult[];
+}>;
 
 export type PrepareFinalModuleDeliveryAdmissionStateRequest =
-  CreateModuleDeliveryAdmissionStateRequest & {
-    readonly previousState: ModuleDeliveryAdmissionState;
-    readonly canonicalTransition: ModuleDeliveryCanonicalEvidenceTransition;
-  };
+  CreateModuleDeliveryAdmissionStateRequest &
+    Readonly<{ previousState: ModuleDeliveryAdmissionState }>;
 
 export type CommitFinalModuleDeliveryAdmissionStateRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
@@ -74,12 +64,12 @@ export type RollbackFinalModuleDeliveryAdmissionStateRequest = Readonly<{
   previousState: ModuleDeliveryAdmissionState;
 }>;
 
-export type RestartModuleDeliveryGenerationRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly previousState: ModuleDeliveryAdmissionState;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
-};
+export type RestartModuleDeliveryGenerationRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  previousState: ModuleDeliveryAdmissionState;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  expectedLineage: readonly ModuleDeliveryExpectedLineage[];
+}>;
 
 export type AttemptIdentity = Readonly<{
   taskId: string;
@@ -88,17 +78,18 @@ export type AttemptIdentity = Readonly<{
   planDigest: string;
 }>;
 
-export type ModuleDeliveryAdmission = AttemptIdentity & {
-  readonly startingFrontier: string;
-  readonly resources: ModuleDeliveryResourceClaims;
-  readonly context?: TeamTaskContext;
-  readonly team: TeamKey;
-  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
-  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  readonly parentLineage: AgentAttemptParent;
-  readonly acceptanceRequirements: readonly string[];
-  readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-};
+/** A trusted in-process admission. It is scheduler data, not a capability. */
+export type ModuleDeliveryAdmission = AttemptIdentity &
+  PinnedDevBaseEvidence & {
+    readonly startingFrontier: string;
+    readonly resources: ModuleDeliveryResourceClaims;
+    readonly context?: TeamTaskContext;
+    readonly team: TeamKey;
+    readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+    readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
+    readonly parentLineage: AgentAttemptParent;
+    readonly acceptanceRequirements: readonly string[];
+  };
 
 export type ModuleDeliveryAttemptLease = ModuleDeliveryAdmission;
 
@@ -107,34 +98,55 @@ export type ModuleDeliveryAttemptDisposition = AttemptIdentity & {
   readonly conclusion: ModuleDeliveryGenerationFenceKind;
 };
 
-export type ModuleDeliveryAdmissionState = Readonly<{
-  generation: number;
-  planDigest: string;
+export type ModuleDeliveryWriterFrontier = Readonly<{
+  taskId: string;
+  attempt: number;
   headCommit: string;
-  integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  integratedTaskIds: readonly string[];
 }>;
 
-export type SelectModuleDeliveryAdmissionsRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleDeliveryAdmissionState;
-};
+/** Immutable scheduler state reduced after each trusted task result. */
+export type ModuleDeliveryAdmissionState = PinnedDevBaseEvidence &
+  Readonly<{
+    generation: number;
+    planDigest: string;
+    headCommit: string;
+    integratedWriterFrontiers: readonly ModuleDeliveryWriterFrontier[];
+    acceptedProviderEvidence: readonly ModuleDeliveryProviderResult[];
+  }>;
 
-export type ModuleDeliveryAdmissionSelection = {
-  readonly status: ModuleDeliveryAdmissionSelectionStatus;
-  readonly admissions: readonly ModuleDeliveryAdmission[];
-  readonly pendingTaskIds: readonly string[];
-  readonly blockedTaskIds: readonly string[];
-};
+export type SelectModuleDeliveryAdmissionsRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleDeliveryAdmissionState;
+}>;
 
-export type RecordModuleDeliveryAttemptLeasesRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly state: ModuleDeliveryAdmissionState;
-  readonly admissions: readonly ModuleDeliveryAdmission[];
-};
+export type ModuleDeliveryAdmissionSelection = Readonly<{
+  status: ModuleDeliveryAdmissionSelectionStatus;
+  admissions: readonly ModuleDeliveryAdmission[];
+  pendingTaskIds: readonly string[];
+  blockedTaskIds: readonly string[];
+}>;
 
-export type ModuleDeliveryLeaseRecording = {
-  readonly state: ModuleDeliveryAdmissionState;
-  readonly leases: readonly ModuleDeliveryAttemptLease[];
-};
+export type RecordModuleDeliveryAttemptLeasesRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+  admissions: readonly ModuleDeliveryAdmission[];
+}>;
+
+export type ModuleDeliveryLeaseRecording = Readonly<{
+  state: ModuleDeliveryAdmissionState;
+  leases: readonly ModuleDeliveryAttemptLease[];
+}>;
+
+export type ModuleDeliveryDispositionOutcome = Readonly<{
+  kind: ModuleDeliveryAttemptDispositionKind;
+  conclusion: ModuleDeliveryGenerationFenceKind;
+}>;
+
+export type RecordModuleDeliveryAttemptDispositionRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+  outcome: ModuleDeliveryDispositionOutcome;
+}>;

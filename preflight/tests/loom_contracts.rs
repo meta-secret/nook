@@ -134,7 +134,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let skills_workspace = root.read(".cortex/package.json");
     for required in [
         "@nook/executable-skills-workspace",
-        "gizmo/dynamic-skills/*/scripts",
+        "gizmo-prime/dynamic-skills/*/scripts",
         "shared/dynamic-skills/*/scripts",
         "teams/*/dynamic-skills/*/scripts",
     ] {
@@ -178,7 +178,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
     assert!(
         format_contract
-            .contains("bash \"{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh\"")
+            .contains("bun test \"{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts\"")
             && !format_contract.contains("deps:")
             && !format_contract.contains("install")
             && !format_contract.contains("loom:"),

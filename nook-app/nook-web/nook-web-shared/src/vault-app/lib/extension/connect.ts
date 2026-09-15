@@ -24,19 +24,31 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
+type ChromeRuntimeResponseArguments = unknown[];
+
 type ChromeRuntimeHost = {
   // eslint-disable-next-line max-params -- Chrome owns this positional API.
-  sendMessage?: (
+  sendMessage: (
     extensionId: string,
     message: unknown,
-    callback: (response?: unknown) => void,
+    callback: (...responses: ChromeRuntimeResponseArguments) => void,
   ) => void;
-  lastError?: typeof globalThis.chrome.runtime.lastError;
 };
 
-type ExtensionBrowserHost = typeof globalThis & {
-  chrome?: { runtime?: ChromeRuntimeHost };
-};
+type ExtensionBrowserHost = typeof globalThis;
+
+enum ChromeRuntimeAvailabilityKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+type ChromeRuntimeAvailability =
+  | { readonly kind: ChromeRuntimeAvailabilityKind.Unavailable }
+  | {
+      readonly kind: ChromeRuntimeAvailabilityKind.Available;
+      readonly runtime: ChromeRuntimeHost;
+    };
+
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
   admit_companion_handoff_response,
@@ -52,7 +64,6 @@ import {
   ExtensionPairedVaultIdentityHandoffRequestMessageType,
   ExtensionPairedVaultIdentityStatusMessageStatus,
   ExtensionPairedVaultUnlockRequestMessageType,
-  ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionIdentityHandoffRequestMessageType,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
@@ -69,10 +80,20 @@ import {
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "./extension-pairing-delivery";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
 export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export {
+  ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
+  type ExtensionPairingDelivery,
+} from "./extension-pairing-delivery";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -147,60 +168,6 @@ enum ExtensionMessageDeliveryKind {
 type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | { kind: ExtensionMessageDeliveryKind.Received; response: unknown };
-
-export enum ExtensionPairingDeliveryKind {
-  Delivered = "delivered",
-  MessagingUnavailable = "messaging-unavailable",
-  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
-  Rejected = "rejected",
-}
-
-export enum ExtensionPairingRejectionReason {
-  AuthenticationSurfaceRefreshFailed = "authentication-surface-refresh-failed",
-  EventLogAccessNotGranted = "event-log-access-not-granted",
-  EventLogImportFailed = "event-log-import-failed",
-  ExtensionSessionDocumentClosed = "extension-session-document-closed",
-  ExtensionSessionDocumentClosureFailed = "extension-session-document-closure-failed",
-  ExtensionSessionDocumentCreationFailed = "extension-session-document-creation-failed",
-  ExtensionSessionDocumentObservationFailed = "extension-session-document-observation-failed",
-  ExtensionSessionDeliveryFailed = "extension-session-delivery-failed",
-  ExtensionRuntimeUnavailable = "extension-runtime-unavailable",
-  ExtensionVaultImportFailed = "extension-vault-import-failed",
-  ForbiddenSender = "forbidden-sender",
-  InvalidPairingGrant = "invalid-pairing-grant",
-  InvalidPairingGrantApprovedAt = ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
-  InvalidPairingGrantDeviceId = ExtensionPairingApprovedMessageAdmissionFailure.DeviceId,
-  InvalidPairingGrantDeviceLabel = ExtensionPairingApprovedMessageAdmissionFailure.DeviceLabel,
-  InvalidPairingGrantDevicePublicKey = ExtensionPairingApprovedMessageAdmissionFailure.DevicePublicKey,
-  InvalidPairingGrantDeviceSigningPublicKey = ExtensionPairingApprovedMessageAdmissionFailure.DeviceSigningPublicKey,
-  InvalidPairingGrantEventLogRecordEvent = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
-  InvalidPairingGrantEventLogRecordEventId = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
-  InvalidPairingGrantEventLogRecordPath = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
-  InvalidPairingGrantEventLogRecordSchemaVersion = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
-  InvalidPairingGrantEventLogRecordsEmpty = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsEmpty,
-  InvalidPairingGrantEventLogRecordsNotArray = ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
-  InvalidPairingGrantMessageEnvelope = ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
-  InvalidPairingGrantPayload = ExtensionPairingApprovedMessageAdmissionFailure.Payload,
-  InvalidPairingGrantProviders = ExtensionPairingApprovedMessageAdmissionFailure.Providers,
-  InvalidPairingGrantScopes = ExtensionPairingApprovedMessageAdmissionFailure.Scopes,
-  InvalidPairingGrantVaultName = ExtensionPairingApprovedMessageAdmissionFailure.VaultName,
-  InvalidPairingGrantVaultStoreId = ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId,
-  InvalidPairingGrantVaultType = ExtensionPairingApprovedMessageAdmissionFailure.VaultType,
-  InvalidProviderPayload = "invalid-provider-payload",
-  PairingGrantAdmissionFailed = "pairing-grant-admission-failed",
-}
-
-export type ExtensionPairingDelivery =
-  | {
-      readonly kind: Exclude<
-        ExtensionPairingDeliveryKind,
-        ExtensionPairingDeliveryKind.Rejected
-      >;
-    }
-  | {
-      readonly kind: ExtensionPairingDeliveryKind.Rejected;
-      readonly reason?: ExtensionPairingRejectionReason;
-    };
 
 function isAcceptedIdentityHandoffResponse(value: unknown): value is {
   readonly ok: true;
@@ -278,6 +245,47 @@ class PendingExtensionResponse {
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
+
+  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
+    return (
+      typeof value === "object" &&
+      !!value &&
+      "sendMessage" in value &&
+      typeof value.sendMessage === "function"
+    );
+  }
+
+  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
+    if (!("lastError" in runtime)) return false;
+    const error = runtime.lastError;
+    return (
+      typeof error === "object" &&
+      !!error &&
+      "message" in error &&
+      typeof error.message === "string" &&
+      error.message.length > 0
+    );
+  }
+
+  private chromeRuntime(): ChromeRuntimeAvailability {
+    if (!("chrome" in this.browser)) {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    const chromeHost = this.browser.chrome;
+    if (
+      typeof chromeHost !== "object" ||
+      !chromeHost ||
+      !("runtime" in chromeHost)
+    ) {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    return this.isChromeRuntimeHost(chromeHost.runtime)
+      ? {
+          kind: ChromeRuntimeAvailabilityKind.Available,
+          runtime: chromeHost.runtime,
+        }
+      : { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+  }
 
   isExtensionConnectPath(pathname: string): boolean {
     const normalized =
@@ -372,32 +380,38 @@ class ExtensionConnectionBrowser {
     responseWait,
   }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
     return new Promise((resolve) => {
-      const runtime = this.browser.chrome?.runtime;
-      const sendMessage = runtime?.sendMessage?.bind(runtime);
-      if (!sendMessage) {
+      const runtimeAvailability = this.chromeRuntime();
+      if (
+        runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable
+      ) {
         const resolveArgs: Parameters<typeof resolve>[0] = {
           kind: ExtensionMessageDeliveryKind.Unavailable,
         };
         resolve(resolveArgs);
         return;
       }
+      const { runtime } = runtimeAvailability;
+      const sendMessage = runtime.sendMessage.bind(runtime);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
         wait: responseWait,
         resolve,
       });
-      function receiveExtensionResponse(response?: unknown): void {
-        if (runtime?.lastError?.message) {
+      const receiveExtensionResponse = (
+        ...responses: ChromeRuntimeResponseArguments
+      ): void => {
+        if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
         }
-        if (arguments.length === 0) {
+        if (responses.length === 0) {
           pending.unavailable();
           return;
         }
+        const [response] = responses;
         pending.receive(response);
-      }
+      };
       sendMessage(extensionId, message, receiveExtensionResponse);
     });
   }
@@ -436,11 +450,12 @@ class ExtensionConnectionBrowser {
         reason: admittedReason,
       };
     }
-    return {
-      kind: migrationRequired
-        ? ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
-        : ExtensionPairingDeliveryKind.Rejected,
-    };
+    if (migrationRequired) {
+      return {
+        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+      };
+    }
+    return { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
   async deliverExtensionPairingApproval({
@@ -682,8 +697,8 @@ class ExtensionConnectionBrowser {
   }: IdentityEnvelopeRequest): Promise<
     Result<{ envelope: string; nextNonce: string }, VaultStorageFailure>
   > {
-    const runtime = this.browser.chrome?.runtime;
-    if (!runtime?.sendMessage)
+    const runtimeAvailability = this.chromeRuntime();
+    if (runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable)
       return Promise.resolve(
         err(
           new VaultStorageFailure(
@@ -691,32 +706,11 @@ class ExtensionConnectionBrowser {
           ),
         ),
       );
+    const { runtime } = runtimeAvailability;
     return new Promise((resolve) => {
       try {
-        runtime.sendMessage?.(
-          request.extensionRuntimeId,
-          message,
-          (response) => {
-            if (runtime.lastError?.message) {
-              resolve(
-                err(
-                  new VaultStorageFailure(
-                    VaultStorageFailureKind.IdentityHandoffRejected,
-                  ),
-                ),
-              );
-              return;
-            }
-            if (isAcceptedIdentityHandoffResponse(response)) {
-              resolve(
-                // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                ok({
-                  envelope: response.envelope,
-                  nextNonce: response.nextNonce,
-                }),
-              );
-              return;
-            }
+        runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
+          if (this.chromeRuntimeLastError(runtime)) {
             resolve(
               err(
                 new VaultStorageFailure(
@@ -724,8 +718,26 @@ class ExtensionConnectionBrowser {
                 ),
               ),
             );
-          },
-        );
+            return;
+          }
+          if (isAcceptedIdentityHandoffResponse(response)) {
+            resolve(
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+              ok({
+                envelope: response.envelope,
+                nextNonce: response.nextNonce,
+              }),
+            );
+            return;
+          }
+          resolve(
+            err(
+              new VaultStorageFailure(
+                VaultStorageFailureKind.IdentityHandoffRejected,
+              ),
+            ),
+          );
+        });
       } catch {
         resolve(
           err(

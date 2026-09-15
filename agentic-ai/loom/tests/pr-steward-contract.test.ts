@@ -13,31 +13,38 @@ import {
 import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
 const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const routing = (fields: UntrustedYamlMap = {}) => ({
-  kind: Kind.Routing,
-  eventId: 'event-1',
-  deliveryId: 'delivery-1',
-  repository: REPO,
-  pullRequest: 1564,
-  headSha: HEAD,
-  source: Source.PullRequest,
-  objectId: false,
-  commentId: false,
-  runId: false,
-  githubEvent: GithubEvent.PullRequest,
-  action: false,
-  state: false,
-  reviewId: false,
-  url: false,
-  path: false,
-  line: false,
-  author: false,
-  ...fields,
-});
-const envelope = (record: UntrustedYamlMap) =>
-  JSON.stringify({ schemaVersion: Version.V2, record });
 
-describe('closed PR Steward NDJSON codec', () => {
+class PrStewardContractScenario {
+  static routing(fields: UntrustedYamlMap = {}): UntrustedYamlMap {
+    return {
+      kind: Kind.Routing,
+      eventId: 'event-1',
+      deliveryId: 'delivery-1',
+      repository: REPO,
+      pullRequest: 1564,
+      headSha: HEAD,
+      source: Source.PullRequest,
+      objectId: false,
+      commentId: false,
+      runId: false,
+      githubEvent: GithubEvent.PullRequest,
+      action: false,
+      state: false,
+      reviewId: false,
+      url: false,
+      path: false,
+      line: false,
+      author: false,
+      ...fields,
+    };
+  }
+
+  static envelope(record: UntrustedYamlMap): string {
+    return JSON.stringify({ schemaVersion: Version.V2, record });
+  }
+}
+
+describe('closed PR Lifecycle Agent NDJSON codec', () => {
   test('round trips every supported source-discriminated routing state', () => {
     const variants: [Source, UntrustedYamlMap][] = [
       [Source.PullRequest, {}],
@@ -59,7 +66,11 @@ describe('closed PR Steward NDJSON codec', () => {
     ];
     for (const [source, fields] of variants) {
       const record = Codec.routing(
-        routing({ ...fields, source, githubEvent: Codec.githubEvent(source) }),
+        PrStewardContractScenario.routing({
+          ...fields,
+          source,
+          githubEvent: Codec.githubEvent(source),
+        }),
       );
       expect(Codec.decode(Codec.encode(record)).record).toEqual(record);
     }
@@ -81,9 +92,11 @@ describe('closed PR Steward NDJSON codec', () => {
       { body: 'forbidden' },
     ];
     for (const fields of invalid) {
-      const raw = routing(fields);
+      const raw = PrStewardContractScenario.routing(fields);
       expect(() => Codec.routing(raw)).toThrow();
-      expect(() => Codec.decode(envelope(raw))).toThrow();
+      expect(() =>
+        Codec.decode(PrStewardContractScenario.envelope(raw)),
+      ).toThrow();
     }
   });
 

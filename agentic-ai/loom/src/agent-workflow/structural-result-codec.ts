@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import {
-  AgentAttemptParentKind,
   StructuralAssessmentKind,
-  StructuralExpertAuthorizationKind,
   StructuralFindingCategory,
   WorkflowArtifactKind,
   WorkflowFindingSeverity,
@@ -14,8 +12,6 @@ import {
   EXTRACTION_CANDIDATES,
 } from './structural-evidence-codec.ts';
 import {
-  STRUCTURAL_ID,
-  STRUCTURAL_INTEGER,
   structuralError,
   structuralObjectError,
   structuralPaths,
@@ -62,89 +58,6 @@ const BASE = {
     )
     .max(100, 'structural result array is invalid'),
 };
-const AUTHORIZATION_FIELDS = {
-  task: STRUCTURAL_ID,
-  expert: STRUCTURAL_ID,
-  attempt: STRUCTURAL_INTEGER,
-  depth: z.literal(
-    2,
-    structuralError('structural authorization depth is invalid'),
-  ),
-  parent: z.strictObject(
-    {
-      kind: z.literal(
-        AgentAttemptParentKind.AgentAttempt,
-        structuralError('structural authorization identity is invalid'),
-      ),
-      task: STRUCTURAL_ID,
-      agent: STRUCTURAL_ID,
-      attempt: STRUCTURAL_INTEGER,
-    },
-    structuralObjectError,
-  ),
-};
-const CHILD_LANES = z
-  .array(
-    z.strictObject(
-      {
-        task: STRUCTURAL_ID,
-        expert: STRUCTURAL_ID,
-        attempt: STRUCTURAL_INTEGER,
-      },
-      structuralObjectError,
-    ),
-    structuralError('structural result array is invalid'),
-  )
-  .min(2, 'structural result array is invalid')
-  .max(16, 'child lane count is invalid')
-  .refine(
-    (values) =>
-      new Set(values.map((value) => `${value.task}\u0000${value.attempt}`))
-        .size === values.length,
-    'child lane identifiers must be unique',
-  );
-const AUTHORIZATION = z
-  .discriminatedUnion(
-    'kind',
-    [
-      z.strictObject(
-        {
-          ...AUTHORIZATION_FIELDS,
-          kind: z.literal(StructuralExpertAuthorizationKind.RepositoryEvidence),
-          evidencePaths: structuralPaths(),
-        },
-        structuralObjectError,
-      ),
-      z.strictObject(
-        {
-          ...AUTHORIZATION_FIELDS,
-          kind: z.literal(
-            StructuralExpertAuthorizationKind.VerifiedViewSynthesis,
-          ),
-          childLanes: CHILD_LANES,
-        },
-        structuralObjectError,
-      ),
-    ],
-    structuralError('structural closed vocabulary is invalid'),
-  )
-  .refine(
-    (value) =>
-      value.task !== value.parent.task ||
-      value.attempt !== value.parent.attempt,
-    'structural authorization identity is invalid',
-  );
-const AUTHORIZATIONS = z
-  .array(AUTHORIZATION, structuralError('structural result array is invalid'))
-  .min(1, 'structural result array is invalid')
-  .max(16, 'structural authorizations exceed bound')
-  .refine(
-    (values) =>
-      new Set(values.map((value) => `${value.task}\u0000${value.attempt}`))
-        .size === values.length,
-    'structural authorization identifiers must be unique',
-  );
-
 const CODE_ASSESSMENTS = {
   architectureFindings: StructuralEvidenceCodec.findingAssessment(
     StructuralFindingCategory.Architecture,
@@ -278,7 +191,6 @@ export const STRUCTURAL_RESULT_SCHEMAS = {
     {
       ...BASE,
       resultKind: z.literal(WorkflowResultKind.StructuralExpertPlan),
-      structuralExpertAuthorizations: AUTHORIZATIONS,
     },
     structuralObjectError,
   ),

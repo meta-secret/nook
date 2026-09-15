@@ -1,15 +1,7 @@
-# Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
-# build and deploy the preview, and the shared Rust ecosystem gates. Dev PRs always request the
-# ordinary validation suite; full browser regression remains an explicit ci:full-e2e opt-in. Authentication-
-# sensitive extension changes run one focused real-extension spec. Headless UI demos are
-# temporarily disabled while their implementation remains available for later re-enable.
-# Main still runs the full local-provider and extension suites. Live-provider
-# sync checks remain available through the manually dispatched e2e-pr.yml workflow.
-# Research-only changes are handled by web-research.yml. Cortex, Cursor,
-# Vale-policy, repository-policy-only, and agentic-AI-only changes do not need the product
-# pipeline. Agent statistics live in meta-secret/nook-workbench.
-# Central ci.yml owns event selection and native cancellation. Dev callers pass an immutable source
-# SHA so every checkout and evidence path stays on the PR head rather than a merge ref.
+# PRs run the ordinary Rust/WASM/web validation, preview, and ecosystem gates; full browser
+# regression remains an explicit ci:full-e2e opt-in, while main owns the complete browser suites.
+# Central ci.yml owns event selection and cancellation. Dev callers pass an immutable source SHA,
+# keeping every checkout and evidence path on the PR head rather than a merge ref.
 
 name: PR
 
@@ -24,7 +16,7 @@ on:
         type: boolean
       source_sha:
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions:
@@ -81,6 +73,8 @@ jobs:
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
+    outputs:
+      cache-build-expected: ${{ steps.trusted-native.outputs.found != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -222,6 +216,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
+      cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -475,9 +470,6 @@ jobs:
       - name: Test Main build statistics collector
         run: node --test .github/workflows/lib/main-build-stats.test.mjs
 
-      - name: Test Main failure handoff
-        run: node --test .github/workflows/lib/main-failure-handoff.test.cjs
-
       - name: Test Workbench agent records
         run: node --test .github/scripts/workbench-records.test.cjs
 
@@ -595,6 +587,14 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
+  cache-health:
+    if: always() && inputs.validation_requested
+    needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify]
+    uses: ./.github/workflows/pr-cache-health.yml
+    with:
+      source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      jobs_json: >-
+        [{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}]
   ui-demo:
     name: Headless UI demo
     if: >-
@@ -718,7 +718,16 @@ jobs:
       inputs.validation_requested
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]
+    needs:
+      [
+        validation-request,
+        rust,
+        wasm,
+        verify,
+        wasm-node-test,
+        ui-demo,
+        extension-e2e,
+      ]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:

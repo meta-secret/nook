@@ -26,8 +26,8 @@ export const DELEGATION_VISUALIZATION_RENDER_EXAMPLE = `delegationVisualization:
         description: create security key component
         dependencies:
           - update-cortex
-      - id: steward-pr
-        team: pr-steward
+      - id: delivery-pipeline-pr-lifecycle
+        team: delivery-pipeline
         description: perform authorized pull-request delivery mechanics
         dependencies:
           - create-security-key

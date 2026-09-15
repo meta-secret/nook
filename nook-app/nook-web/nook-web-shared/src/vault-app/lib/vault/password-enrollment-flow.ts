@@ -344,7 +344,8 @@ export class PasswordEnrollmentActions {
             if (preset === "icloud") {
               const existingProvider = sharedProvider;
               const existingConfiguration =
-                existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
+                existingProvider.kind ===
+                SharedGrantProviderOutcomeKind.Existing
                   ? existingProvider.provider.oauthFile
                   : oauthConfigurationNotApplicable();
               const existingConfig = isConfiguredOAuthFile(
@@ -422,17 +423,20 @@ export class PasswordEnrollmentActions {
               const provider: StorageProvider = {
                 ...providerPersistenceDefaults(),
                 id:
-                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
+                  existingProvider.kind ===
+                  SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.id
                     : "enrollment-shared-icloud",
                 type: OAUTH_FILE_PROVIDER_TYPE,
                 label:
-                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
+                  existingProvider.kind ===
+                  SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.label
                     : state.t(I18N_KEYS.ProviderPickerIcloud),
                 oauthFile: configuredOAuthFile(configured.value),
                 createdAt:
-                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
+                  existingProvider.kind ===
+                  SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.createdAt
                     : isoTimestamp(),
               };

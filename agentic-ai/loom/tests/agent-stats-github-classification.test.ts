@@ -112,7 +112,6 @@ describe('agent stats GitHub classification', () => {
           name: 'Repository policy / Enforce repository policy',
           conclusion: 'success',
         },
-        { name: 'Hive / Verify', conclusion: 'success' },
         {
           name: 'Web research / Build and deploy research catalog',
           conclusion: 'success',

@@ -11,7 +11,6 @@ import {
   assertNoVaultError,
   triggerVaultSyncRefresh,
   type GithubE2eTarget,
-  waitForGithubVaultProjectionState,
   waitForGithubVaultState,
 } from './github-sync'
 import {
@@ -105,9 +104,9 @@ export async function addSecret(
           tx.oncomplete = () => db.close()
         }
       })
-      return {
+      const storageMode: unknown = vault?.storageMode
+      const debug = {
         secrets: vault?.secrets?.length,
-        storageMode: vault?.storageMode,
         localVaultPresent: vault?.localVaultPresent,
         syncProviders: vault?.syncProviders?.length,
         isSaving: vault?.isSaving,
@@ -118,6 +117,7 @@ export async function addSecret(
           idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length,
         ),
       }
+      return typeof storageMode === 'string' ? { ...debug, storageMode } : debug
     }, key)
     throw new Error(
       `Secret row "${key}" did not appear. Debug: ${JSON.stringify(debug)}. Original: ${
@@ -200,9 +200,8 @@ export async function deleteSecret(
   await waitForSecretOnDevice(page, key, github)
   const beforeCount = github
     ? (
-        await waitForGithubVaultProjectionState(
-          github.pat,
-          github.repoName,
+        await waitForGithubVaultState(
+          github,
           (yaml) => yaml.secretIds.length > 0,
         )
       ).secretIds.length

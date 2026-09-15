@@ -163,7 +163,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
 });
 
-describe('PR Steward credentials and invocation codec', () => {
+describe('PR Lifecycle Agent credentials and invocation codec', () => {
   test('loads only the infrastructure-owned credential shape', () => {
     const directory = mkdtempSync(join(tmpdir(), 'nook-pr-events-'));
     temporaryPaths.push(directory);
@@ -699,7 +699,7 @@ describe('exact-head routing observations', () => {
 test('documents the direct foreground process', () => {
   const lifecycle = readFileSync(
     new URL(
-      '../../../.cortex/teams/pr-steward/workflows/pull-request-lifecycle.md',
+      '../../../.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/pull-request-lifecycle.md',
       import.meta.url,
     ),
     'utf8',

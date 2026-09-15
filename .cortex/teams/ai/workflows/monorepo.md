@@ -2,8 +2,8 @@
 
 ## Delivery and ownership
 
-Use [mission delivery](../../../gizmo/workflows/mission-delivery.md) and the
-[dev contract](../../../gizmo/architecture/dev-delivery.md). Each feature Gizmo
+Use [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md) and the
+[dev contract](../../../gizmo-prime/architecture/dev-delivery.md). Each feature Gizmo
 owns a branch and isolated Team Agent children. The AI worker returns scoped
 commits to its feature Gizmo. The worker does not publish or promote branches.
 
@@ -19,9 +19,11 @@ commits to its feature Gizmo. The worker does not publish or promote branches.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Commit the complete scoped iteration.
 10. Return authored tests and interface evidence to Gizmo.
-11. Have Gizmo push the feature and request remote build-only execution through Steward.
+11. Have Gizmo push the feature and request remote build-only execution through
+    the PR Lifecycle Agent.
 12. Route corrections through the responsible team and repeat compilation.
-13. After acceptance, Gizmo authorizes Steward's serialized local integration.
+13. After acceptance, Gizmo authorizes the PR Lifecycle Agent's serialized local
+    integration.
 14. Hand publication, full slow checks, and promotion to the dev manager.
 
 ## Package boundaries
@@ -39,8 +41,6 @@ nook-core → nook-wasm → nook-web
 - Use Bun for Nook web and Loom JavaScript tooling.
 - Use remote Task execution for compilation and the manager's slow checks.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
-  - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
-    `package-lock.json`.
 
 ## New vault item type checklist
 

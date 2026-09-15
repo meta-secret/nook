@@ -3,5 +3,7 @@
 
 /** @param {LoginFixtureJson | LoginFixtureJson[] | Record<string, LoginFixtureJson>} value */
 export function prettyJson(value) {
-  return JSON.stringify(value, (_key, nestedValue) => nestedValue, 2)
+  /** @param {string} _key @param {unknown} nestedValue @returns {unknown} */
+  const replacer = (_key, nestedValue) => nestedValue
+  return JSON.stringify(value, replacer, 2)
 }

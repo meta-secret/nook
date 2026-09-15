@@ -1,7 +1,7 @@
 apiVersion: k0s.k0sproject.io/v1beta1
 kind: ClusterConfig
 metadata:
-  name: nook-hive
+  name: nook-infra
 spec:
   api:
     address: 10.201.0.1
@@ -10,7 +10,7 @@ spec:
       - localhost
       - 10.201.0.1
     extraArgs:
-      encryption-provider-config: /var/lib/k0s/pki/hive-encryption-provider.yaml
+      encryption-provider-config: /var/lib/k0s/pki/nook-encryption-provider.yaml
   controllerManager:
     extraArgs:
       terminated-pod-gc-threshold: "200"

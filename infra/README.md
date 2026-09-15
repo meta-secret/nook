@@ -18,7 +18,7 @@ This directory owns Nook's stateful server infrastructure:
   events for 24 hours. This feed has no Sensor or trigger, so it performs no
   operational-event processing.
 - A pinned Zot OCI registry runs in k0s with retained local storage at
-  `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
+  `/var/lib/nook/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - Pinned Actions Runner Controller scale sets run trusted jobs in disposable
   ordinary Pods. Each qualified node owns one retained 128 GiB rootless BuildKit
@@ -29,9 +29,8 @@ This directory owns Nook's stateful server infrastructure:
   unprivileged Pods cannot mount the nested `/proc` used by the OCI sandbox.
   Therefore only trusted same-repository jobs use ARC. Fork and Dependabot jobs
   remain hosted.
-- The general `nook-k0s` set permits 35 concurrent jobs. The dedicated
-  `nook-k0s-hive` set permits ten. Hive adds pinned Neo4j and non-root Trixie
-  test-runtime sidecars. The `nook-k0s-container` set permits twenty declared
+- The general `nook-k0s` set permits 35 concurrent jobs. The
+  `nook-k0s-container` set permits twenty declared
   job containers through ARC's Kubernetes lifecycle hooks. These jobs become
   ordinary short-lived Pods and never receive a Docker daemon or runtime socket.
 - Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
@@ -73,7 +72,6 @@ task infra:arc:diagnose
 task infra:arc:activate
 task infra:arc:fallback
 task infra:arc:smoke
-task infra:arc:hive:smoke
 task infra:kubernetes-cache:prove
 task infra:webhook-ingress:check
 task infra:webhook-ingress:deploy
@@ -187,8 +185,7 @@ stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
 `preflight`, `rust:ci`, and `arc:runtime` Remote selections use
-`nook-k0s` through `NOOK_RUNS_ON`. Trusted Hive Rust uses `nook-k0s-hive`
-through `NOOK_HIVE_RUNS_ON`. The browser image is built and pushed by
+`nook-k0s` through `NOOK_RUNS_ON`. The browser image is built and pushed by
 `nook-k0s`; browser tasks then run that exact image on `nook-k0s-container`.
 Forks and Dependabot retain hosted routing.
 
@@ -212,8 +209,8 @@ by the compiler cache.
 
 Each node's shared BuildKit Pod requests 4 CPU and 8 GiB and has no CPU or
 memory limit. Large parallel solves may use available node memory. Disposable
-general runners, container coordinators, Hive runners, and job containers
-declare no resource requests or limits. Support init containers and Hive
+general runners, container coordinators, and job containers
+declare no resource requests or limits. Support init containers and
 helpers retain role-specific memory envelopes. These are ordinary Pods, not
 per-job microVMs. Scale-set ceilings bound the runner count, not the resources
 shared by those Pods.

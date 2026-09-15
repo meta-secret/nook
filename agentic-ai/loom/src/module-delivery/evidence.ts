@@ -1,606 +1,221 @@
-import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-import { ModuleSourceAuthority } from './authority.ts';
-import type { AcceptedModuleDeliveryEvidenceRegistry } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
-import { ModuleRepositoryGit } from './git-command.ts';
-import {
-  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-  ModuleDeliveryEvidenceVerdict,
-  ModuleDeliveryProviderSubmissionKind,
-  ModuleIntegrationProvenanceRegistry,
-} from './integration-provenance.ts';
-import {
-  MAX_MODULE_DELIVERY_ARTIFACT_IDENTITY_CODE_UNITS,
-  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
-  MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
-} from './evidence-limits.ts';
-
-import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
-import type { TeamKey } from '../team-agents/catalog.ts';
+import { ModuleSourceAuthority } from './authority.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import type {
-  ModuleDeliveryAttemptLease,
   ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
 import type {
   ModuleDeliveryNodeV2,
-  ModuleDeliveryOwnerIdentity,
+  ModuleDeliveryEvidenceSynthesisNodeV2,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
-import type { GitCommandRequest } from './git-command.ts';
-import type {
-  AcceptedModuleDeliveryEvidence,
-  ModuleDeliveryReadOnlyEvidenceSubmission,
+import {
+  MAX_MODULE_DELIVERY_ACCEPTANCE_REQUIREMENTS,
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
+  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+} from './evidence-limits.ts';
+import {
+  ModuleDeliveryProviderSubmissionKind,
+  ModuleDeliveryProviderResultsKind,
+  type ModuleDeliveryProviderResult,
+  type ModuleDeliveryProviderResults,
+  type ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
 
-export type ModuleDeliveryEvidenceDigestRequest = {
-  readonly repositoryRoot: string;
-  readonly sourceCommit: string;
-  readonly evidenceSurface: readonly string[];
-};
-
-export type ModuleDeliveryEvidenceClaimIdentity = Readonly<{
-  claim: string;
-  contentDigest: string;
-}>;
-
-export type ModuleDeliveryEvidenceArtifactDigestRequest = {
-  readonly artifactIdentity: string;
-  readonly evidence: readonly string[];
-  readonly acceptanceRequirements: readonly string[];
-  readonly acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-};
-
-export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
-  schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
-  generation: number;
-  planDigest: string;
-  taskId: string;
-  attempt: number;
-  producerTeam: TeamKey;
-  functionalOwner: ModuleDeliveryOwnerIdentity;
-  acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  sourceCommit: string;
-  verifiedHeadCommit: string;
-  artifactIdentity: string;
-  artifactDigest: string;
-  sourceProvenanceDigest: string;
-  verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
-  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
-  acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-}>;
-
-export type ModuleDeliveryEvidenceSubmissionVerification = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly repositoryRoot: string;
-  readonly state: ModuleDeliveryAdmissionState;
-  readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
-  readonly lease: ModuleDeliveryAttemptLease;
-  readonly authorizedProviderEvidence: readonly AcceptedModuleDeliveryEvidence[];
-};
-
-export type ModuleDeliveryEvidenceSubmissionValidation = Readonly<{
-  verification: ModuleDeliveryEvidenceSubmissionVerification;
-  acceptedPlan: ValidatedModuleDeliveryPlan;
-  authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-}>;
-
-export type RestoreModuleDeliveryCanonicalEvidenceReceiptRequest = Readonly<{
-  authority: ModuleDeliveryGenerationAuthority;
-  acceptedPlan: ValidatedModuleDeliveryPlan;
-  state: ModuleDeliveryAdmissionState;
-  lease: ModuleDeliveryAttemptLease;
-  acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
-  receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity;
-}>;
-
-type GitTreeEntry = Readonly<{ metadata: string; path: string }>;
-type EvidenceArtifactDigestContent = Readonly<{
-  artifactIdentity: string;
-  evidence: readonly string[];
-  acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-}>;
-type EvidenceSourceProvenanceContent = Readonly<{
-  sourceCommit: string;
-  generation: number;
-  planDigest: string;
-  taskId: string;
-  attempt: number;
-  producerTeam: TeamKey;
-  functionalOwner: ModuleDeliveryOwnerIdentity;
-  acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  artifactIdentity: string;
-  artifactDigest: string;
-  verdict: ModuleDeliveryEvidenceVerdict;
-  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
-  acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-}>;
-type EvidenceSynthesisNode = Extract<
-  ModuleDeliveryNodeV2,
-  { kind: ModuleDeliveryTaskKind.EvidenceSynthesis }
->;
-type TreeDigestRequest = {
-  readonly entries: readonly GitTreeEntry[];
-  readonly claims: readonly string[];
-};
-type SubmissionMetadataRequest = {
-  readonly verification: ModuleDeliveryEvidenceSubmissionVerification;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly node: ModuleDeliveryNodeV2;
-};
-type RepositoryEvidenceRequest = {
-  readonly verification: ModuleDeliveryEvidenceSubmissionVerification;
-  readonly node: ModuleDeliveryNodeV2;
-};
-type SynthesisInputsRequest = {
-  readonly node: EvidenceSynthesisNode;
-  readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
-  readonly authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-};
-type FreezeAcceptedEvidenceRequest = {
-  readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
-  readonly provenance: string;
-  readonly verificationHeadCommit: string;
-};
-type EvidenceNodeRequest = {
-  readonly plan: ValidatedModuleDeliveryPlan;
-  readonly taskId: string;
-};
-type RestoreCanonicalEvidenceReceiptRequest =
-  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest &
-    Readonly<{
-      registry: AcceptedModuleDeliveryEvidenceRegistry;
-      node: ModuleDeliveryNodeV2;
-    }>;
-
-/** Owns the module evidence boundary registry and its capability transitions. */
+/** Validates results at the boundary where an agent result enters the scheduler. */
 export class ModuleEvidenceBoundary {
   private constructor() {}
-  private static readonly COMMIT = /^[0-9a-f]{40}$/u;
-
-  private static readonly DIGEST = /^[0-9a-f]{64}$/u;
-
-  static moduleDeliveryEvidenceClaimIdentities(
-    request: ModuleDeliveryEvidenceDigestRequest,
-  ): readonly ModuleDeliveryEvidenceClaimIdentity[] {
-    const entries = ModuleEvidenceBoundary.gitTreeEntries(request);
-    return Object.freeze(
-      request.evidenceSurface.map((claim) => {
-        const digestRequest: TreeDigestRequest = { entries, claims: [claim] };
-        const identity: ModuleDeliveryEvidenceClaimIdentity = {
-          claim,
-          contentDigest: ModuleEvidenceBoundary.treeDigest(digestRequest),
-        };
-        return Object.freeze(identity);
-      }),
-    );
-  }
-
-  static moduleDeliveryEvidenceArtifactDigest(
-    request: ModuleDeliveryEvidenceArtifactDigestRequest,
-  ): string {
-    ModuleSourceAuthority.assertEvidenceBound(request.acceptedProviderEvidence);
-    const content: EvidenceArtifactDigestContent = {
-      artifactIdentity: request.artifactIdentity,
-      evidence: request.evidence,
-      acceptanceRequirements: request.acceptanceRequirements,
-      acceptedProviderEvidence: request.acceptedProviderEvidence,
-    };
-    return ModuleEvidenceBoundary.digest(content);
-  }
 
   static validateModuleDeliveryEvidenceSubmission(
-    request: ModuleDeliveryEvidenceSubmissionValidation,
-  ): AcceptedModuleDeliveryEvidence {
-    const verification = request.verification;
-    const acceptedPlan = request.acceptedPlan;
-    const nodeRequest: EvidenceNodeRequest = {
-      plan: acceptedPlan,
-      taskId: verification.lease.taskId,
-    };
-    const node = ModuleEvidenceBoundary.nodeFor(nodeRequest);
-    const metadataRequest: SubmissionMetadataRequest = {
-      verification,
-      acceptedPlan,
-      node,
-    };
-    ModuleEvidenceBoundary.assertSubmissionMetadata(metadataRequest);
-    const authorized = request.authorized;
-    ModuleSourceAuthority.assertEvidenceBound(
-      verification.submission.acceptedProviderEvidence,
-    );
-    if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
-      if (
-        JSON.stringify(authorized) !==
-        JSON.stringify(verification.lease.authorizedProviderEvidence)
-      )
-        throw new Error(
-          `Evidence synthesis inputs are invalid for ${node.taskId}.`,
-        );
-      const synthesisRequest: SynthesisInputsRequest = {
-        node,
-        submission: verification.submission,
-        authorized,
-      };
-      ModuleEvidenceBoundary.assertSynthesisInputs(synthesisRequest);
-    } else {
-      const repositoryRequest: RepositoryEvidenceRequest = {
-        verification,
-        node,
-      };
-      ModuleEvidenceBoundary.assertRepositoryEvidence(repositoryRequest);
-      if (
-        authorized.length > 0 ||
-        verification.submission.acceptedProviderEvidence.length > 0
-      )
-        throw new Error(
-          `Repository evidence cannot bind provider inputs for ${node.taskId}.`,
-        );
-    }
-    const artifactRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
-      artifactIdentity: verification.submission.artifactIdentity,
-      evidence: verification.submission.evidence,
-      acceptanceRequirements: verification.submission.acceptanceRequirements,
-      acceptedProviderEvidence:
-        verification.submission.acceptedProviderEvidence,
-    };
+    request: ModuleDeliveryEvidenceSubmissionVerification,
+  ): ModuleDeliveryProviderResult {
+    const { acceptedPlan, lease, submission, state } = request;
     if (
-      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
-        artifactRequest,
-      ) !== verification.submission.artifactDigest
+      submission.kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence
     )
-      throw new Error(
-        `Evidence artifact digest is invalid for ${node.taskId}.`,
-      );
-    const freezeRequest: FreezeAcceptedEvidenceRequest = {
-      submission: verification.submission,
-      provenance: ModuleEvidenceBoundary.sourceProvenanceDigest(
-        verification.submission,
-      ),
-      verificationHeadCommit: verification.state.headCommit,
-    };
-    return ModuleEvidenceBoundary.freezeAcceptedEvidence(freezeRequest);
-  }
-
-  private static assertSubmissionMetadata(
-    request: SubmissionMetadataRequest,
-  ): void {
-    const submission = request.verification.submission;
-    const lease = request.verification.lease;
-    const node = request.node;
+      throw new Error('Evidence boundary accepts read-only results only.');
     if (
-      node.kind === ModuleDeliveryTaskKind.Write ||
-      submission.kind !==
-        ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence ||
-      submission.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION ||
-      submission.taskId !== node.taskId ||
       submission.taskId !== lease.taskId ||
       submission.attempt !== lease.attempt ||
       submission.generation !== lease.generation ||
-      submission.generation !== request.acceptedPlan.plan.generation ||
-      submission.planDigest !== lease.planDigest ||
-      submission.planDigest !== request.acceptedPlan.planDigest ||
-      submission.sourceCommit !== lease.startingFrontier ||
-      submission.producerTeam !== lease.team ||
-      submission.functionalOwner !== lease.functionalOwner ||
-      submission.acceptanceOwner !== lease.acceptanceOwner ||
-      submission.producerTeam !== node.team ||
-      submission.functionalOwner !== node.functionalOwner ||
-      submission.acceptanceOwner !== node.acceptanceOwner ||
-      submission.verdict !== ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
-      !ModuleEvidenceBoundary.COMMIT.test(submission.sourceCommit) ||
-      !ModuleEvidenceBoundary.validIdentity(submission.artifactIdentity) ||
-      !ModuleEvidenceBoundary.DIGEST.test(submission.artifactDigest) ||
-      !ModuleEvidenceBoundary.validEvidenceEntries(submission.evidence) ||
-      JSON.stringify(submission.acceptanceRequirements) !==
-        JSON.stringify(lease.acceptanceRequirements) ||
-      JSON.stringify(submission.acceptanceRequirements) !==
-        JSON.stringify(node.acceptance.evidence)
+      submission.planDigest !== acceptedPlan.planDigest ||
+      submission.sourceCommit !== acceptedPlan.plan.sourceCommit
     )
-      throw new Error(`Evidence metadata is invalid for ${node.taskId}.`);
-  }
-
-  private static assertRepositoryEvidence(
-    request: RepositoryEvidenceRequest,
-  ): void {
-    const verification = request.verification;
-    const node = request.node;
-    if (!ModuleEvidenceBoundary.COMMIT.test(verification.state.headCommit))
-      throw new Error('Current evidence frontier must be an exact commit.');
-    const sourceRequest: ModuleDeliveryEvidenceDigestRequest = {
-      repositoryRoot: verification.repositoryRoot,
-      sourceCommit: verification.submission.sourceCommit,
-      evidenceSurface: node.resources.evidenceSurface,
-    };
-    const currentRequest: ModuleDeliveryEvidenceDigestRequest = {
-      ...sourceRequest,
-      sourceCommit: verification.state.headCommit,
-    };
-    const source =
-      ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
-        sourceRequest,
-      );
-    const current =
-      ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
-        currentRequest,
-      );
+      throw new Error('Provider result metadata does not match its admission.');
     if (
-      JSON.stringify(source) !== JSON.stringify(current) ||
-      JSON.stringify(source) !==
-        JSON.stringify(verification.submission.claimIdentities)
-    )
-      throw new Error(`Repository evidence is stale for ${node.taskId}.`);
-  }
-
-  private static assertSynthesisInputs(request: SynthesisInputsRequest): void {
-    const node = request.node;
-    const submission = request.submission;
-    const authorized = request.authorized;
-    if (
-      node.evidenceInput.expectedProducers.length === 0 ||
-      submission.claimIdentities.length !== 0 ||
-      authorized.length !== node.evidenceInput.expectedProducers.length ||
-      JSON.stringify(submission.acceptedProviderEvidence) !==
-        JSON.stringify(authorized)
+      !Number.isSafeInteger(submission.attempt) ||
+      submission.attempt < 1 ||
+      !Number.isSafeInteger(submission.generation) ||
+      submission.generation < 1 ||
+      !/^[0-9a-f]{40}$/u.test(submission.sourceCommit) ||
+      !/^[0-9a-f]{64}$/u.test(submission.planDigest) ||
+      Buffer.byteLength(JSON.stringify(submission), 'utf8') >
+        MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES
     )
       throw new Error(
-        `Evidence synthesis inputs are invalid for ${node.taskId}.`,
+        'Provider result exceeds its bounded transport contract.',
       );
-    for (const producer of node.evidenceInput.expectedProducers) {
-      const identity = authorized.find(
-        ({ taskId }) => taskId === producer.taskId,
-      );
-      if (
-        !identity ||
-        identity.producerTeam !== producer.team ||
-        identity.functionalOwner !== producer.functionalOwner ||
-        identity.acceptanceOwner !== producer.acceptanceOwner ||
-        identity.generation !== submission.generation ||
-        identity.planDigest !== submission.planDigest
-      )
-        throw new Error(
-          `Evidence synthesis producer is invalid for ${node.taskId}.`,
-        );
-    }
-  }
-
-  static restoreModuleDeliveryCanonicalEvidenceReceipt(
-    request: RestoreCanonicalEvidenceReceiptRequest,
-  ): AcceptedModuleDeliveryEvidence {
-    if (request.node.kind === ModuleDeliveryTaskKind.Write)
-      throw new Error(
-        'Canonical evidence receipts cannot restore write tasks.',
-      );
-    const existing = request.acceptedEvidence.map((evidence) => {
-      request.registry.assert({ authority: request.authority, evidence });
-      return request.registry.identity(evidence);
+    ModuleEvidenceBoundary.assertBoundedStrings({
+      label: 'acceptance requirements',
+      values: submission.acceptanceRequirements,
+      maximumEntries: MAX_MODULE_DELIVERY_ACCEPTANCE_REQUIREMENTS,
+      maximumCodeUnits: MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+    });
+    ModuleEvidenceBoundary.assertBoundedStrings({
+      label: 'result entries',
+      values: submission.result,
+      maximumEntries: MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
+      maximumCodeUnits: MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
+    });
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: submission.originMainSha,
+      pinnedLocalDevSha: submission.pinnedLocalDevSha,
     });
     if (
-      JSON.stringify(existing) !==
-      JSON.stringify(request.state.acceptedProviderEvidence)
+      submission.originMainSha !== acceptedPlan.plan.originMainSha ||
+      submission.pinnedLocalDevSha !== acceptedPlan.plan.pinnedLocalDevSha
     )
-      throw new Error('Canonical evidence receipt state is inconsistent.');
-
-    const receipt = ModuleSourceAuthority.freezeProviderEvidenceIdentity(
-      request.receipt,
-    );
-    const canonicalReceipt: ModuleDeliveryAcceptedProviderEvidenceIdentity =
-      ModuleSourceAuthority.freezeProviderEvidenceIdentity({
-        schemaVersion: receipt.schemaVersion,
-        generation: receipt.generation,
-        planDigest: receipt.planDigest,
-        taskId: receipt.taskId,
-        attempt: receipt.attempt,
-        producerTeam: receipt.producerTeam,
-        functionalOwner: receipt.functionalOwner,
-        acceptanceOwner: receipt.acceptanceOwner,
-        sourceCommit: receipt.sourceCommit,
-        verifiedHeadCommit: receipt.verifiedHeadCommit,
-        artifactIdentity: receipt.artifactIdentity,
-        artifactDigest: receipt.artifactDigest,
-        sourceProvenanceDigest: receipt.sourceProvenanceDigest,
-        verdict: receipt.verdict,
-        claimIdentities: receipt.claimIdentities,
-        acceptanceRequirements: receipt.acceptanceRequirements,
-        acceptedProviderEvidence: receipt.acceptedProviderEvidence,
+      throw new Error(
+        'Provider result bootstrap evidence does not match the plan.',
+      );
+    const node = ModuleSourceAuthority.moduleDeliveryNode({
+      plan: acceptedPlan,
+      taskId: lease.taskId,
+    });
+    ModuleEvidenceBoundary.validateNodeMetadata({ node, submission });
+    if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis)
+      ModuleEvidenceBoundary.validateSynthesisInputs({
+        node,
+        submission,
+        accepted: state.acceptedProviderEvidence,
       });
-    const expectedClaims =
-      request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-        ? []
-        : request.node.resources.evidenceSurface;
-    if (
-      receipt.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION ||
-      receipt.generation !== request.lease.generation ||
-      receipt.planDigest !== request.lease.planDigest ||
-      receipt.taskId !== request.lease.taskId ||
-      receipt.attempt !== request.lease.attempt ||
-      receipt.producerTeam !== request.lease.team ||
-      receipt.functionalOwner !== request.lease.functionalOwner ||
-      receipt.acceptanceOwner !== request.lease.acceptanceOwner ||
-      receipt.sourceCommit !== request.lease.startingFrontier ||
-      receipt.verifiedHeadCommit !== request.state.headCommit ||
-      !ModuleEvidenceBoundary.validIdentity(receipt.artifactIdentity) ||
-      !ModuleEvidenceBoundary.DIGEST.test(receipt.artifactDigest) ||
-      !ModuleEvidenceBoundary.DIGEST.test(receipt.sourceProvenanceDigest) ||
-      receipt.verdict !== ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
-      JSON.stringify(receipt.claimIdentities.map(({ claim }) => claim)) !==
-        JSON.stringify(expectedClaims) ||
-      receipt.claimIdentities.some(
-        ({ contentDigest }) =>
-          !ModuleEvidenceBoundary.DIGEST.test(contentDigest),
-      ) ||
-      JSON.stringify(receipt.acceptanceRequirements) !==
-        JSON.stringify(request.lease.acceptanceRequirements) ||
-      JSON.stringify(receipt.acceptedProviderEvidence) !==
-        JSON.stringify(request.lease.authorizedProviderEvidence) ||
-      JSON.stringify(canonicalReceipt) !== JSON.stringify(request.receipt)
-    )
-      throw new Error(
-        'Canonical evidence receipt does not match its plan and lease state.',
-      );
-
-    const evidence: AcceptedModuleDeliveryEvidence = Object.freeze({
-      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      ...canonicalReceipt,
-      evidence: Object.freeze([]),
-    });
-    const [defaulted1 = []] = [
-      request.state.integratedWriterFrontiers[0]?.integratedTaskIds,
-    ];
-    request.registry.register({
-      authority: request.authority,
-      evidence,
-      integratedTaskIds: defaulted1,
-    });
-    return evidence;
-  }
-
-  private static sourceProvenanceDigest(
-    submission: ModuleDeliveryReadOnlyEvidenceSubmission,
-  ): string {
-    const content: EvidenceSourceProvenanceContent = {
-      sourceCommit: submission.sourceCommit,
-      generation: submission.generation,
-      planDigest: submission.planDigest,
-      taskId: submission.taskId,
-      attempt: submission.attempt,
-      producerTeam: submission.producerTeam,
-      functionalOwner: submission.functionalOwner,
-      acceptanceOwner: submission.acceptanceOwner,
-      artifactIdentity: submission.artifactIdentity,
-      artifactDigest: submission.artifactDigest,
-      verdict: submission.verdict,
-      claimIdentities: submission.claimIdentities,
-      acceptanceRequirements: submission.acceptanceRequirements,
-      acceptedProviderEvidence: submission.acceptedProviderEvidence,
-    };
-    return ModuleEvidenceBoundary.digest(content);
-  }
-
-  private static freezeAcceptedEvidence(
-    request: FreezeAcceptedEvidenceRequest,
-  ): AcceptedModuleDeliveryEvidence {
-    const submission = request.submission;
-    const accepted: AcceptedModuleDeliveryEvidence = {
+    const common = {
       ...submission,
       acceptanceRequirements: Object.freeze([
         ...submission.acceptanceRequirements,
       ]),
-      claimIdentities: ModuleEvidenceBoundary.frozenClaims(
-        submission.claimIdentities,
+      result: Object.freeze([...submission.result]),
+    };
+    return Object.freeze({
+      ...common,
+      providerResults: ModuleEvidenceBoundary.copyProviderResults(
+        submission.providerResults,
       ),
-      acceptedProviderEvidence: Object.freeze(
-        submission.acceptedProviderEvidence.map(
-          ModuleSourceAuthority.freezeProviderEvidenceIdentity,
+    });
+  }
+
+  private static validateNodeMetadata(
+    request: Readonly<{
+      node: ModuleDeliveryNodeV2;
+      submission: ModuleDeliveryProviderResult;
+    }>,
+  ): void {
+    const { node, submission } = request;
+    if (
+      submission.producerTeam !== node.team ||
+      submission.functionalOwner !== node.functionalOwner ||
+      submission.acceptanceOwner !== node.acceptanceOwner ||
+      JSON.stringify(submission.acceptanceRequirements) !==
+        JSON.stringify([
+          ...node.acceptance.commands.map(({ selector }) => selector),
+          ...node.acceptance.evidence,
+        ])
+    )
+      throw new Error(
+        'Provider result ownership or acceptance metadata is invalid.',
+      );
+  }
+
+  private static assertBoundedStrings(
+    request: Readonly<{
+      label: string;
+      values: readonly string[];
+      maximumEntries: number;
+      maximumCodeUnits: number;
+    }>,
+  ): void {
+    const { label, values, maximumEntries, maximumCodeUnits } = request;
+    if (values.length > maximumEntries)
+      throw new Error(`${label} exceed their bounded entry limit.`);
+    if (values.some((value) => value.length > maximumCodeUnits))
+      throw new Error(`${label} exceed their bounded string limit.`);
+  }
+
+  private static validateSynthesisInputs(
+    request: Readonly<{
+      node: ModuleDeliveryEvidenceSynthesisNodeV2;
+      submission: ModuleDeliveryProviderResult;
+      accepted: readonly ModuleDeliveryProviderResult[];
+    }>,
+  ): void {
+    const { node, submission, accepted } = request;
+    const expected = node.evidenceInput.expectedProducers.map(
+      ({ taskId }) => taskId,
+    );
+    const inputs =
+      submission.providerResults.kind ===
+      ModuleDeliveryProviderResultsKind.Present
+        ? submission.providerResults.values
+        : [];
+    if (inputs.length > MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES)
+      throw new Error(
+        'Evidence synthesis provider dependencies exceed their bound.',
+      );
+    for (const input of inputs)
+      ModuleEvidenceBoundary.assertBoundedStrings({
+        label: `provider result ${input.taskId}`,
+        values: input.result,
+        maximumEntries: MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
+        maximumCodeUnits: MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
+      });
+    const available = new Map(
+      [...accepted, ...inputs].map((result) => [result.taskId, result]),
+    );
+    if (expected.some((taskId) => !available.has(taskId)))
+      throw new Error(
+        'Evidence synthesis result is missing a provider dependency.',
+      );
+    if (new Set(inputs.map(({ taskId }) => taskId)).size !== inputs.length)
+      throw new Error(
+        'Evidence synthesis provider dependencies must be unique.',
+      );
+  }
+
+  private static copyProviderResults(
+    providerResults: ModuleDeliveryProviderResults,
+  ): ModuleDeliveryProviderResults {
+    if (providerResults.kind === ModuleDeliveryProviderResultsKind.None)
+      return providerResults;
+    return {
+      kind: ModuleDeliveryProviderResultsKind.Present,
+      values: Object.freeze(
+        providerResults.values.map((result) =>
+          Object.freeze({
+            ...result,
+            result: Object.freeze([...result.result]),
+            providerResults: ModuleEvidenceBoundary.copyProviderResults(
+              result.providerResults,
+            ),
+          }),
         ),
       ),
-      evidence: Object.freeze([...submission.evidence]),
-      sourceProvenanceDigest: request.provenance,
-      verifiedHeadCommit: request.verificationHeadCommit,
     };
-    return Object.freeze(accepted);
-  }
-
-  private static frozenClaims(
-    claims: readonly ModuleDeliveryEvidenceClaimIdentity[],
-  ): readonly ModuleDeliveryEvidenceClaimIdentity[] {
-    return Object.freeze(
-      claims.map((claim) => {
-        const copy: ModuleDeliveryEvidenceClaimIdentity = { ...claim };
-        return Object.freeze(copy);
-      }),
-    );
-  }
-
-  private static gitTreeEntries(
-    request: ModuleDeliveryEvidenceDigestRequest,
-  ): readonly GitTreeEntry[] {
-    if (request.evidenceSurface.some((claim) => claim.startsWith('git:')))
-      throw new Error('Git-state evidence claims are unsupported.');
-    const gitRequest: GitCommandRequest = {
-      cwd: request.repositoryRoot,
-      args: ['ls-tree', '-r', '-z', '--full-tree', request.sourceCommit],
-    };
-    const output = ModuleRepositoryGit.runModuleDeliveryGit(gitRequest).stdout;
-    if (output.length === 0) return [];
-    if (output.at(-1) !== 0)
-      throw new Error('Evidence tree listing requires NUL termination.');
-    return output
-      .subarray(0, -1)
-      .toString('utf8')
-      .split('\0')
-      .map((record) => {
-        const separator = record.indexOf('\t');
-        if (separator < 1) throw new Error('Evidence tree entry is malformed.');
-        const entry: GitTreeEntry = {
-          metadata: record.slice(0, separator),
-          path: record.slice(separator + 1),
-        };
-        return Object.freeze(entry);
-      });
-  }
-
-  private static treeDigest(request: TreeDigestRequest): string {
-    const matching = request.entries
-      .filter((entry) =>
-        request.claims.some((claim) => {
-          const pair: TaskResourcePatternPair = {
-            first: claim,
-            second: entry.path,
-          };
-          return TaskResourceClaim.taskResourcePatternsOverlap(pair);
-        }),
-      )
-      .map((entry) => `${entry.path}\0${entry.metadata}`)
-      .sort();
-    return ModuleIntegrationProvenanceRegistry.moduleDeliveryEvidenceSha256(
-      matching.map((entry) => `${entry}\0`).join(''),
-    );
-  }
-
-  private static nodeFor(request: EvidenceNodeRequest): ModuleDeliveryNodeV2 {
-    const node = request.plan.plan.nodes.find(
-      (candidate) => candidate.taskId === request.taskId,
-    );
-    if (!node)
-      throw new Error(`Validated plan is missing task ${request.taskId}.`);
-    return node;
-  }
-
-  private static validIdentity(identity: string): boolean {
-    return (
-      identity.length > 0 &&
-      identity.length <= MAX_MODULE_DELIVERY_ARTIFACT_IDENTITY_CODE_UNITS &&
-      /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/u.test(identity)
-    );
-  }
-
-  private static validEvidenceEntries(entries: readonly string[]): boolean {
-    return (
-      entries.length > 0 &&
-      entries.length <= MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES &&
-      entries.every(
-        (entry) =>
-          entry.trim().length > 0 &&
-          entry.length <= MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS &&
-          [...entry].every((character) => {
-            const code = character.charCodeAt(0);
-            return code > 31 && code !== 127;
-          }),
-      )
-    );
-  }
-
-  private static digest(value: DigestValue): string {
-    return ModuleIntegrationProvenanceRegistry.moduleDeliveryEvidenceSha256(
-      JSON.stringify(value),
-    );
   }
 }
 
-type DigestValue =
-  EvidenceArtifactDigestContent | EvidenceSourceProvenanceContent;
+export type ModuleDeliveryEvidenceSubmissionVerification = Readonly<{
+  authority?: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  repositoryRoot?: string;
+  state: ModuleDeliveryAdmissionState;
+  submission: ModuleDeliveryReadOnlyEvidenceSubmission;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+
+export type ModuleDeliveryEvidenceSubmissionValidation = Readonly<{
+  submission: ModuleDeliveryProviderResult;
+}>;

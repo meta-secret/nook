@@ -24,8 +24,11 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-Gizmo publishes its feature branch and authorizes PR Steward to dispatch
-the required remote build-only capability for that exact SHA.
+The owning Feature Gizmo publishes its canonical feature branch. Gizmo Prime
+authorizes the branch delivery packet, and Delivery Pipeline Team Gizmo
+dispatches PR Lifecycle Agent through the active harness to run the required
+remote build-only capability. Each stage re-fetches and resolves the latest
+committed branch head; the returned exact SHA is observational evidence only.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
 - Preserve that boundary through every transitive Task and Docker stage.
@@ -34,9 +37,15 @@ the required remote build-only capability for that exact SHA.
 
 ## Slow dev PR validation
 
-The manually started dev manager authorizes Steward to publish the selected
-snapshot and run the full existing PR checks. Follow
-[dev delivery](../../../gizmo/architecture/dev-delivery.md).
+The manually started dev manager authorizes publication of the selected
+snapshot and the full existing PR checks. Delivery Pipeline Team Gizmo routes
+that manager-authorized packet through the active harness to PR Lifecycle Agent
+for snapshot publication and bounded check execution. The dev manager
+retains policy authority, and manager-only `dev:pr-manager` remains the sole
+path for pull-request creation/update. Team Gizmo and PR Lifecycle Agent do
+not create or update pull requests or decide policy, readiness, or promotion
+verdicts. Follow
+[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 - Freeze origin/dev during validation and promotion.
 - Check out the captured dev SHA in every job.
@@ -53,14 +62,24 @@ operations. Their existence never permits feature-stage test execution.
 
 Routing rules:
 
+All remote task and PR-check invocations below are routed through Delivery
+Pipeline Team Gizmo. For feature build-only work, the owning Feature Gizmo
+submits the canonical feature branch and Gizmo Prime authorizes the packet.
+PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
+before each stage and returns the exact SHA as observational evidence only. A
+stale caller-provided feature SHA does not reject branch-authorized execution.
+For manager-stage publication, slow checks, and promotion, the dev manager
+authorizes the packet. Delivery Pipeline Team Gizmo dispatches PR Lifecycle
+Agent through the active harness. Neither Team Gizmo nor PR Lifecycle Agent may
+create or update pull requests or decide policy, readiness, promotion, or
+Workbench state.
+
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.
 - Complete PR validation with `task pr:validate PR=<number>`.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - `loom:verify` uses the general `nook-k0s` scale set.
-- Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
-- Batches containing `hive:verify` use `nook-k0s-hive`.
 - Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
 - Browser jobs use ordinary Pods on `nook-k0s-container`.
@@ -90,7 +109,6 @@ ARC cache rules:
 - Otherwise restore source-free dependencies and trusted Main.
 - Publish commit-scoped refs only under `nook/remote-buildcache/**`.
 - Publish shared Main refs only from trusted Main.
-- Keep Hive's exact-head lineage separate.
 - Never use GitHub Actions cache for BuildKit layers.
 
 Zot carries cache state between nodes and hosted runners. SeaweedFS carries
@@ -122,8 +140,6 @@ The named ARC tasks avoid a general container-runtime requirement:
   - It proves Task, Bun, and Cargo before starting the named task.
   - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
-- `hive:verify` executes exported tests through its pinned native runtime
-  sidecar.
 - `web:build`, `web:e2e`, `extension:e2e`, `check`, `ci:pr`, and `ci:pr:e2e`
   execute directly inside an ordinary exact-image Pod.
 

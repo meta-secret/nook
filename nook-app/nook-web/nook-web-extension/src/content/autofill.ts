@@ -1,4 +1,7 @@
-import { authenticationRouteBrowser } from '../../../nook-web-shared/src/extension/authentication-route-history'
+import {
+  authenticationRouteBrowser,
+  type AuthenticationSourceMessage,
+} from '../../../nook-web-shared/src/extension/authentication-route-history'
 import {
   AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
   authenticationFactObserverOptions,
@@ -343,7 +346,9 @@ void companionWasmReady.then(async () => {
   authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
     scheduleScan,
   )
-  window.addEventListener('message', (event) => {
+  const handleWindowMessage = (
+    event: MessageEvent<AuthenticationSourceMessage>,
+  ) => {
     if (
       !authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(event) &&
       !authenticationFactObserver.isAuthenticationSubmitValueMessage(event)
@@ -351,7 +356,8 @@ void companionWasmReady.then(async () => {
       return
     }
     scheduleScan()
-  })
+  }
+  window.addEventListener('message', handleWindowMessage)
   for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {
     const options: AddEventListenerOptions = {
       capture: eventName === 'scroll',

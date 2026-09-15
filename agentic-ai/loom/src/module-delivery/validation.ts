@@ -15,32 +15,23 @@ import {
   AgentAttemptParentKind,
   TaskResourceClaim,
 } from '../agent-workflow/domain.ts';
-
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
-
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
-
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
-
 import { ModuleScope } from './module-scope-validation.ts';
-
 import { CortexContextTopology } from './cortex-context-topology.ts';
-
+import { ModuleDeliveryAcceptanceScopeValidation } from './acceptance-scope-validation.ts';
 import type { ModuleScopeValidationRequest } from './module-scope-validation.ts';
-
 import type {
   CortexAuthoringValidationRequest,
   CortexWriteAuthorizationRequest,
   ParentOwnedExclusionsRequest,
 } from './cortex-authoring-validation.ts';
-
 import { ModuleDeliveryPlanSchema } from './codec.ts';
-
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
   MAX_MODULE_DELIVERY_ATTEMPTS,
-  MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
@@ -53,16 +44,15 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleTaskOwnership,
 } from './domain.ts';
-
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
 } from './domain.ts';
-
 import * as claimContainment from './resource-claim-containment.ts';
 
 export class ModuleDeliveryPlanDecoder {
@@ -81,11 +71,14 @@ export class ModuleDeliveryPlanDecoder {
       };
       return rejection;
     }
-    if (decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION) {
+    if (
+      decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION ||
+      decoded.plan.version !== MODULE_DELIVERY_PLAN_VERSION
+    ) {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 2.',
+        message: 'Canonical validation requires authored plan version 5.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -97,7 +90,7 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV2,
+    plan: ModuleDeliveryPlanV5,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();
@@ -130,11 +123,6 @@ export class ModuleDeliveryPlanDecoder {
         maximum: MAX_MODULE_DELIVERY_NODES,
       },
       {
-        path: '$.maxConcurrency',
-        actual: state.plan.maxConcurrency,
-        maximum: MAX_MODULE_DELIVERY_CONCURRENCY,
-      },
-      {
         path: '$.maxAgentDepth',
         actual: state.plan.maxAgentDepth,
         maximum: MAX_MODULE_DELIVERY_AGENT_DEPTH,
@@ -159,14 +147,34 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateCommit(state: ValidationState): void {
-    if (!/^[0-9a-f]{40}$/u.test(state.plan.sourceCommit)) {
-      const request: IssueRequest = {
+    const commits = [
+      ['sourceCommit', state.plan.sourceCommit],
+      ['originMainSha', state.plan.originMainSha],
+      ['pinnedLocalDevSha', state.plan.pinnedLocalDevSha],
+    ] as const;
+    for (const [name, value] of commits) {
+      if (!/^[0-9a-f]{40}$/u.test(value)) {
+        const request: IssueRequest = {
+          state,
+          code:
+            name === 'sourceCommit'
+              ? ModuleDeliveryIssueCode.InvalidField
+              : ModuleDeliveryIssueCode.BaseEvidenceMismatch,
+          path: `$.${name}`,
+          message: `${name} must be an exact lowercase 40-hex commit.`,
+        };
+        this.issue(request);
+      }
+    }
+    try {
+      CanonicalFeatureBranchContract.parse(state.plan.featureBranch);
+    } catch {
+      this.issue({
         state,
         code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.sourceCommit',
-        message: 'sourceCommit must be an exact lowercase 40-hex commit.',
-      };
-      this.issue(request);
+        path: '$.featureBranch',
+        message: 'featureBranch must be a canonical codex branch.',
+      });
     }
   }
 
@@ -348,7 +356,6 @@ export class ModuleDeliveryPlanDecoder {
         `${request.path}.parentOwnedExclusions`,
         request.node.parentOwnedExclusions,
       ],
-      [`${request.path}.acceptance.commands`, request.node.acceptance.commands],
       [`${request.path}.acceptance.evidence`, request.node.acceptance.evidence],
       ...(request.node.kind === ModuleDeliveryTaskKind.Write &&
       request.node.cortexAuthoring
@@ -372,6 +379,11 @@ export class ModuleDeliveryPlanDecoder {
       };
       this.validateUnique(uniqueRequest);
     }
+    for (const issue of ModuleDeliveryAcceptanceScopeValidation.validate({
+      path: request.path,
+      node: request.node,
+    }))
+      this.issue({ state: request.state, ...issue });
     if (
       request.node.baseline.kind ===
       ModuleDeliveryBaselineKind.IntegratedDependencies
@@ -528,13 +540,15 @@ export class ModuleDeliveryPlanDecoder {
       if (
         request.node.baseline.kind !==
           ModuleDeliveryBaselineKind.SourceCommit ||
-        request.node.baseline.sourceCommit !== request.state.plan.sourceCommit
+        request.node.baseline.sourceCommit !==
+          request.state.plan.pinnedLocalDevSha
       ) {
         const issueRequest: IssueRequest = {
           state: request.state,
           code: ModuleDeliveryIssueCode.BaselineMismatch,
           path: `${request.path}.baseline`,
-          message: 'Independent tasks require the exact plan source baseline.',
+          message:
+            'Independent tasks require the pinned local-dev bootstrap base.',
         };
         this.issue(issueRequest);
       }

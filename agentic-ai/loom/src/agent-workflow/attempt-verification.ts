@@ -26,7 +26,7 @@ import {
   WorkflowResultSchema,
 } from './structured-result-codec.ts';
 
-/** Owns the verified attempt artifacts registry and its capability transitions. */
+/** Reads and validates bounded attempt artifacts at the filesystem boundary. */
 export class VerifiedAttemptArtifacts {
   private constructor() {}
   private static readonly MAX_PARENT_EVENTS_BYTES = 1_048_576;
@@ -56,7 +56,7 @@ export class VerifiedAttemptArtifacts {
     const attempt =
       await VerifiedAttemptArtifacts.readVerifiedBarrierAttempt(args);
     if (attempt.terminal.kind !== TaskTerminalKind.Completed) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     return {
       firstEvent: attempt.firstEvent,
@@ -100,13 +100,13 @@ export class VerifiedAttemptArtifacts {
         VerifiedAttemptArtifacts.readVerifiedProjection(viewRead),
       ]);
     } catch {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     if (
       viewSerialized.length >
       VerifiedAttemptArtifacts.MAX_PARENT_VIEW_CHARACTERS
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     let events: readonly AgentAttemptEvent[];
     let terminal: TaskTerminal<string>;
@@ -114,14 +114,14 @@ export class VerifiedAttemptArtifacts {
       events = AgentAttemptTransport.decodeEvents(eventsSerialized);
       terminal = AgentAttemptTransport.decodeTerminal(resultSerialized);
     } catch {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     const replayRequest = { events };
     let replayed: ReturnType<typeof AgentAttemptReplay.replay>;
     try {
       replayed = AgentAttemptReplay.replay(replayRequest);
     } catch {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     const firstEvent = events[0];
     const terminalEvents = events.filter(
@@ -139,6 +139,9 @@ export class VerifiedAttemptArtifacts {
       firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
       firstEvent.workflowVersion !== args.workflowVersion ||
       firstEvent.sourceCommit !== args.sourceCommit ||
+      firstEvent.originMainSha !== args.originMainSha ||
+      firstEvent.pinnedLocalDevSha !== args.pinnedLocalDevSha ||
+      firstEvent.featureHeadSha !== args.featureHeadSha ||
       firstEvent.task !== args.identity.task ||
       firstEvent.agent !== args.identity.agent ||
       firstEvent.attempt !== args.identity.attempt ||
@@ -167,7 +170,7 @@ export class VerifiedAttemptArtifacts {
         terminalEvent.view.projection.sha256 ||
       JSON.stringify(replayed.view) !== JSON.stringify(terminalEvent.view)
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     if (terminal.kind !== TaskTerminalKind.Completed) {
       const expectedView = VerifiedAttemptArtifacts.failedAttemptView(terminal);
@@ -177,7 +180,7 @@ export class VerifiedAttemptArtifacts {
         viewSerialized !== expectedView ||
         terminalEvent.view.authorKind !== MaterializedViewAuthorKind.LoomRuntime
       ) {
-        VerifiedAttemptArtifacts.authorizationFailed();
+        VerifiedAttemptArtifacts.invalidArtifact();
       }
       return {
         firstEvent,
@@ -189,7 +192,7 @@ export class VerifiedAttemptArtifacts {
       };
     }
     if (terminal.threadId.trim() === '')
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     let decodedOutput: ReturnType<
       typeof WorkflowResultSchema.decodeWorkflowTaskOutput
     >;
@@ -198,7 +201,7 @@ export class VerifiedAttemptArtifacts {
         terminal.output,
       );
     } catch {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     if (
       viewSerialized !== `${decodedOutput.materializedViewMarkdown.trim()}\n` ||
@@ -206,7 +209,7 @@ export class VerifiedAttemptArtifacts {
       (decodedOutput.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
         firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation)
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     const normalizedTerminal: CompletedTaskTerminal<string> = {
       ...terminal,
@@ -233,7 +236,7 @@ export class VerifiedAttemptArtifacts {
     );
     try {
       const status = await handle.stat();
-      if (!status.isFile()) VerifiedAttemptArtifacts.authorizationFailed();
+      if (!status.isFile()) VerifiedAttemptArtifacts.invalidArtifact();
       const buffer = Buffer.alloc(args.maxBytes + 1);
       let bytesRead = 0;
       while (bytesRead < buffer.length) {
@@ -246,8 +249,7 @@ export class VerifiedAttemptArtifacts {
         if (read.bytesRead === 0) break;
         bytesRead += read.bytesRead;
       }
-      if (bytesRead > args.maxBytes)
-        VerifiedAttemptArtifacts.authorizationFailed();
+      if (bytesRead > args.maxBytes) VerifiedAttemptArtifacts.invalidArtifact();
       return buffer.subarray(0, bytesRead).toString('utf8');
     } finally {
       await handle.close();
@@ -264,14 +266,14 @@ export class VerifiedAttemptArtifacts {
       projectionRelativePath === '' ||
       VerifiedAttemptArtifacts.pathEscapesRunDirectory(projectionRelativePath)
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     const runDirectoryStatus = await lstat(runDirectory);
     if (
       runDirectoryStatus.isSymbolicLink() ||
       !runDirectoryStatus.isDirectory()
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     const pathSegments = projectionRelativePath.split(sep);
     let currentPath = runDirectory;
@@ -283,7 +285,7 @@ export class VerifiedAttemptArtifacts {
         status.isSymbolicLink() ||
         (isProjectionFile ? !status.isFile() : !status.isDirectory())
       ) {
-        VerifiedAttemptArtifacts.authorizationFailed();
+        VerifiedAttemptArtifacts.invalidArtifact();
       }
     }
     const resolvedRunDirectory = await realpath(runDirectory);
@@ -296,7 +298,7 @@ export class VerifiedAttemptArtifacts {
       resolvedRelativePath === '' ||
       VerifiedAttemptArtifacts.pathEscapesRunDirectory(resolvedRelativePath)
     ) {
-      VerifiedAttemptArtifacts.authorizationFailed();
+      VerifiedAttemptArtifacts.invalidArtifact();
     }
     return projectionPath;
   }
@@ -340,8 +342,8 @@ export class VerifiedAttemptArtifacts {
     return createHash('sha256').update(value).digest('hex');
   }
 
-  private static authorizationFailed(): never {
-    throw new Error('Module expert parent authorization failed.');
+  private static invalidArtifact(): never {
+    throw new Error('Agent attempt artifact is invalid.');
   }
 }
 
@@ -362,6 +364,9 @@ export type ReadParentAttemptArgs = {
   readonly runId: string;
   readonly workflowVersion: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly identity: ParentAttemptIdentity;
 };
 

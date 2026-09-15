@@ -24,6 +24,7 @@ import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow
 
 import {
   DELEGATION_PLAN_SCHEMA_VERSION,
+  LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
   DelegationBarrierPolicy,
   DelegationRunEventKind,
   DelegationPlanContract,
@@ -34,6 +35,7 @@ import type {
   DelegationAdmissionRequest,
   DelegationAttemptIdentity,
   DelegationPlan,
+  DelegationPlanV1,
 } from '../../src/agent-workflow/delegation-domain.ts';
 
 import { DelegationJournalSchema } from '../../src/agent-workflow/delegation-codec.ts';
@@ -45,6 +47,8 @@ import type {
   LoadDelegationPlanInput,
   StartDelegationRunInput,
 } from '../../src/agent-workflow/delegation-run-journal.ts';
+
+import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
 
 export class AgentWorkflowDelegationAdmissionScenario {
   private constructor(private readonly request: DelegationAttemptDeclaration) {}
@@ -82,6 +86,9 @@ export class AgentWorkflowDelegationAdmissionScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       rootMaterializer: ROOT,
       attempts: [root, expert, specialist],
     };
@@ -93,25 +100,29 @@ export class AgentWorkflowDelegationAdmissionScenario {
     return new AgentWorkflowDelegationAdmissionScenario(declaration).execute();
   }
 
+  static requiredAttempt(request: {
+    readonly attempts: readonly DelegationAttemptDeclaration[];
+    readonly index: number;
+  }): DelegationAttemptDeclaration {
+    const attempt = request.attempts[request.index];
+    if (!attempt) throw new Error('Attempt is missing.');
+    return attempt;
+  }
+
   private execute(): DelegationAdmissionRequest {
     const declaration = this.request;
     return {
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+      featureHeadSha: SOURCE_COMMIT,
       identity: declaration.identity,
       depth: declaration.depth,
       parent: declaration.parent,
     };
   }
-}
-
-function requiredAttempt(request: {
-  readonly attempts: readonly DelegationAttemptDeclaration[];
-  readonly index: number;
-}): DelegationAttemptDeclaration {
-  const attempt = request.attempts[request.index];
-  if (!attempt) throw new Error('Attempt is missing.');
-  return attempt;
 }
 
 const REMOVE_DIRECTORY_OPTIONS: {
@@ -123,6 +134,8 @@ const REMOVE_DIRECTORY_OPTIONS: {
 };
 
 const SOURCE_COMMIT = 'a'.repeat(40);
+
+const FEATURE_BRANCH = 'codex/delegation-admission';
 
 const RUN_ID = 'ordinary-delegation-test';
 
@@ -160,6 +173,42 @@ describe('ordinary delegation admission', () => {
     );
     expect(decoded).toEqual(plan);
     expect(decoded.attempts).toHaveLength(3);
+  });
+
+  test('decodes and migrates the historical v1 plan without mutating it', () => {
+    const current = AgentWorkflowDelegationAdmissionScenario.validPlan();
+    const {
+      featureBranch: _featureBranch,
+      originMainSha: _originMainSha,
+      pinnedLocalDevSha: _pinnedLocalDevSha,
+      ...withoutFeature
+    } = current;
+    const historical: DelegationPlanV1 = {
+      ...withoutFeature,
+      schemaVersion: LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
+    };
+    const before = structuredClone(historical);
+    const decoded = DelegationJournalSchema.decodeCompatibleDelegationPlan(
+      JSON.stringify(historical),
+    );
+    expect(decoded).toEqual(historical);
+    expect(Object.hasOwn(decoded, 'featureHeadSha')).toBe(false);
+    expect(() =>
+      DelegationJournalSchema.decodeDelegationPlan(JSON.stringify(historical)),
+    ).toThrow('schema version is unsupported');
+    const migrated = DelegationJournalSchema.migrateDelegationPlan({
+      plan: historical,
+      featureBranch: FEATURE_BRANCH,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+    });
+    expect(historical).toEqual(before);
+    expect(migrated.schemaVersion).toBe(DELEGATION_PLAN_SCHEMA_VERSION);
+    expect(migrated.originMainSha).toBe(SOURCE_COMMIT);
+    expect(migrated.pinnedLocalDevSha).toBe(SOURCE_COMMIT);
+    expect(migrated.featureBranch).toBe(
+      CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+    );
   });
 
   test('rejects a barrier that omits a declared direct child', () => {
@@ -245,7 +294,10 @@ describe('ordinary delegation admission', () => {
     const expertInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt({ attempts: plan.attempts, index: 1 }),
+        AgentWorkflowDelegationAdmissionScenario.requiredAttempt({
+          attempts: plan.attempts,
+          index: 1,
+        }),
       ),
     };
     await expect(
@@ -254,7 +306,10 @@ describe('ordinary delegation admission', () => {
 
     const wrongSourceRequest: DelegationAdmissionRequest = {
       ...AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt({ attempts: plan.attempts, index: 0 }),
+        AgentWorkflowDelegationAdmissionScenario.requiredAttempt({
+          attempts: plan.attempts,
+          index: 0,
+        }),
       ),
       sourceCommit: 'b'.repeat(40),
     };
@@ -269,6 +324,10 @@ describe('ordinary delegation admission', () => {
     const wrongRootRequest: DelegationAdmissionRequest = {
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+      featureHeadSha: SOURCE_COMMIT,
       identity: ROOT,
       depth: 2,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },
@@ -284,7 +343,10 @@ describe('ordinary delegation admission', () => {
     const rootInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt({ attempts: plan.attempts, index: 0 }),
+        AgentWorkflowDelegationAdmissionScenario.requiredAttempt({
+          attempts: plan.attempts,
+          index: 0,
+        }),
       ),
     };
     await DelegationRunJournal.admitDelegationAttempt(rootInput);
@@ -299,12 +361,15 @@ describe('ordinary delegation admission', () => {
     const specialistInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt({ attempts: plan.attempts, index: 2 }),
+        AgentWorkflowDelegationAdmissionScenario.requiredAttempt({
+          attempts: plan.attempts,
+          index: 2,
+        }),
       ),
     };
     await expect(
       DelegationRunJournal.admitDelegationAttempt(specialistInput),
-    ).rejects.toThrow('parent authorization failed');
+    ).rejects.toThrow('Agent attempt artifact is invalid');
     const expertDeclaration = plan.attempts[1];
     if (!expertDeclaration) throw new Error('Expert declaration is missing.');
     const journalConfiguration: AgentAttemptJournalConfiguration = {
@@ -314,6 +379,9 @@ describe('ordinary delegation admission', () => {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: plan.sourceCommit,
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha: SOURCE_COMMIT,
       task: expertDeclaration.identity.task,
       agent: expertDeclaration.identity.agent,
       attempt: expertDeclaration.identity.attempt,

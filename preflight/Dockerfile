@@ -11,7 +11,32 @@ COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
     && printf '\n' > src/lib.rs
-RUN cargo chef prepare --recipe-path recipe.json
+# cargo-chef currently copies the package edition onto every generated target,
+# which Cargo now deprecates. Keep the package edition and strip only those
+# redundant target fields before the dependency cook consumes the recipe.
+RUN <<'EOF'
+set -eu
+cargo chef prepare --recipe-path recipe.json
+jq '
+  .skeleton.manifests |= map(
+    .contents |= (
+      reduce (split("\n")[]) as $line
+        ({section: null, lines: []};
+         if $line == "[package]" then
+           .section = "package" | .lines += [$line]
+         elif ($line == "[lib]" or ($line | startswith("[["))) then
+           .section = "target" | .lines += [$line]
+         elif .section == "target" and $line == "edition = \"2024\"" then
+           .
+         else
+           .lines += [$line]
+         end)
+      | .lines | join("\n")
+    )
+  )
+' recipe.json > recipe.normalized.json
+mv recipe.normalized.json recipe.json
+EOF
 
 FROM rust-base AS deps
 

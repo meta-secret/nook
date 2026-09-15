@@ -485,8 +485,8 @@ describe('provider-neutral executable skill YAML host', () => {
             depends_on: ['update-cortex'],
           },
           {
-            id: 'steward-pr',
-            team: 'pr-steward',
+            id: 'delivery-pipeline-pr-lifecycle',
+            team: 'delivery-pipeline',
             description: 'perform authorized pull-request delivery mechanics',
             depends_on: ['create-security-key'],
           },

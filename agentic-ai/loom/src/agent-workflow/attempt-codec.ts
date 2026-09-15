@@ -2,7 +2,14 @@ import {
   AgentAttemptEventKind,
   type AgentAttemptEvent,
   type AgentAttemptEventMetadata,
+  type LegacyAgentAttemptEvent,
+  type LegacyAgentAttemptEventMetadata,
 } from './agent-events.ts';
+import {
+  AgentAttemptSchema,
+  BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+} from './agent-attempt-version.ts';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -22,8 +29,10 @@ import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-/** Decodes persisted attempt artifacts before lifecycle or authorization logic. */
+/** Decodes persisted attempt artifacts before lifecycle processing. */
 export class AgentAttemptTransport {
   private constructor() {}
 
@@ -34,10 +43,42 @@ export class AgentAttemptTransport {
       .map((line) => AgentAttemptTransport.decodeEvent(line));
   }
 
+  static decodeCompatibleEvents(
+    serialized: string,
+  ): readonly (AgentAttemptEvent | LegacyAgentAttemptEvent)[] {
+    return serialized
+      .trim()
+      .split('\n')
+      .map((line) => AgentAttemptTransport.decodeCompatibleEvent(line));
+  }
+
   static decodeEvent(serialized: string): AgentAttemptEvent {
+    const event = AgentAttemptTransport.decodeCompatibleEvent(serialized);
+    if (!AgentAttemptTransport.isCurrentEvent(event))
+      throw new AgentAttemptDecodeError();
+    return event;
+  }
+
+  private static isCurrentEvent(
+    event: AgentAttemptEvent | LegacyAgentAttemptEvent,
+  ): event is AgentAttemptEvent {
+    return (
+      event.workflowVersion === CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION &&
+      Object.hasOwn(event, 'featureHeadSha')
+    );
+  }
+
+  /** Decodes V4 and current events while preserving the V4 shape verbatim. */
+  static decodeCompatibleEvent(
+    serialized: string,
+  ): AgentAttemptEvent | LegacyAgentAttemptEvent {
     const value = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
     const node = AgentAttemptTransport.record(value);
-    const metadata: AgentAttemptEventMetadata = {
+    const workflowVersion = AgentAttemptTransport.string(
+      AgentAttemptTransport.field(node, 'workflowVersion'),
+    );
+    AgentAttemptSchema.assertCompatible(workflowVersion);
+    const commonMetadata = {
       adapter: AgentAttemptTransport.enumeration({
         value: AgentAttemptTransport.field(node, 'adapter'),
         values: Object.values(AgentAttemptAdapterKind),
@@ -49,9 +90,7 @@ export class AgentAttemptTransport {
         value: AgentAttemptTransport.field(node, 'workflow'),
         values: Object.values(DelegatedAgentWorkflowName),
       }),
-      workflowVersion: AgentAttemptTransport.string(
-        AgentAttemptTransport.field(node, 'workflowVersion'),
-      ),
+      workflowVersion,
       sourceCommit: AgentAttemptTransport.string(
         AgentAttemptTransport.field(node, 'sourceCommit'),
       ),
@@ -78,6 +117,42 @@ export class AgentAttemptTransport {
         AgentAttemptTransport.field(node, 'occurredAt'),
       ),
     };
+    const hasFeatureHead = Object.hasOwn(node, 'featureHeadSha');
+    const hasOriginMain = Object.hasOwn(node, 'originMainSha');
+    const hasPinnedLocalDev = Object.hasOwn(node, 'pinnedLocalDevSha');
+    if (
+      workflowVersion === BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION &&
+      (hasFeatureHead || hasOriginMain || hasPinnedLocalDev)
+    )
+      throw new AgentAttemptDecodeError();
+    if (
+      workflowVersion === CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION &&
+      (!hasFeatureHead || !hasOriginMain || !hasPinnedLocalDev)
+    )
+      throw new AgentAttemptDecodeError();
+    const metadata:
+      AgentAttemptEventMetadata | LegacyAgentAttemptEventMetadata =
+      hasFeatureHead
+        ? {
+            ...commonMetadata,
+            originMainSha: AgentAttemptTransport.string(
+              AgentAttemptTransport.field(node, 'originMainSha'),
+            ),
+            pinnedLocalDevSha: AgentAttemptTransport.string(
+              AgentAttemptTransport.field(node, 'pinnedLocalDevSha'),
+            ),
+            featureHeadSha: AgentAttemptTransport.string(
+              AgentAttemptTransport.field(node, 'featureHeadSha'),
+            ),
+          }
+        : commonMetadata;
+    if (hasFeatureHead) {
+      if (!('featureHeadSha' in metadata)) throw new AgentAttemptDecodeError();
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha: metadata.originMainSha,
+        pinnedLocalDevSha: metadata.pinnedLocalDevSha,
+      });
+    }
     const fields = Object.keys(metadata);
     const kind = AgentAttemptTransport.enumeration({
       value: AgentAttemptTransport.field(node, 'kind'),
@@ -85,18 +160,12 @@ export class AgentAttemptTransport {
     });
     switch (kind) {
       case AgentAttemptEventKind.AttemptStarted: {
-        const optional = Object.hasOwn(node, 'invocationContextSha256')
-          ? {
-              invocationContextSha256: AgentAttemptTransport.string(
-                AgentAttemptTransport.field(node, 'invocationContextSha256'),
-              ),
-            }
-          : {};
         AgentAttemptTransport.exactKeys({
           node,
-          fields: [...fields, 'kind', ...Object.keys(optional)],
+          fields: [...fields, 'kind'],
         });
-        return { ...metadata, kind, ...optional };
+        return { ...metadata, kind } as
+          AgentAttemptEvent | LegacyAgentAttemptEvent;
       }
       case AgentAttemptEventKind.ResultProjected:
         AgentAttemptTransport.exactKeys({
@@ -109,7 +178,7 @@ export class AgentAttemptTransport {
           result: AgentAttemptTransport.projection(
             AgentAttemptTransport.field(node, 'result'),
           ),
-        };
+        } as AgentAttemptEvent | LegacyAgentAttemptEvent;
       case AgentAttemptEventKind.ViewProjected:
         AgentAttemptTransport.exactKeys({
           node,
@@ -121,7 +190,7 @@ export class AgentAttemptTransport {
           view: AgentAttemptTransport.view(
             AgentAttemptTransport.field(node, 'view'),
           ),
-        };
+        } as AgentAttemptEvent | LegacyAgentAttemptEvent;
       case AgentAttemptEventKind.AttemptTerminalRecorded:
         AgentAttemptTransport.exactKeys({
           node,
@@ -140,10 +209,45 @@ export class AgentAttemptTransport {
           view: AgentAttemptTransport.view(
             AgentAttemptTransport.field(node, 'view'),
           ),
-        };
+        } as AgentAttemptEvent | LegacyAgentAttemptEvent;
       default:
         throw new AgentAttemptDecodeError();
     }
+  }
+
+  /** Copies a V4 event into the current wire shape with explicitly supplied evidence. */
+  static migrateEvent(
+    request: AgentAttemptEventMigrationRequest,
+  ): AgentAttemptEvent {
+    const { event, featureHeadSha, originMainSha, pinnedLocalDevSha } = request;
+    if (event.workflowVersion !== BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION)
+      throw new AgentAttemptDecodeError();
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha,
+      pinnedLocalDevSha,
+    });
+    if (!/^[0-9a-f]{40}$/.test(featureHeadSha))
+      throw new AgentAttemptDecodeError();
+    return {
+      ...event,
+      originMainSha,
+      pinnedLocalDevSha,
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+      featureHeadSha,
+    } as AgentAttemptEvent;
+  }
+
+  static migrateEvents(
+    request: AgentAttemptEventsMigrationRequest,
+  ): readonly AgentAttemptEvent[] {
+    return request.events.map((event) =>
+      AgentAttemptTransport.migrateEvent({
+        event,
+        featureHeadSha: request.featureHeadSha,
+        originMainSha: request.originMainSha,
+        pinnedLocalDevSha: request.pinnedLocalDevSha,
+      }),
+    );
   }
 
   static decodeTerminal(serialized: string): TaskTerminal<string> {
@@ -342,6 +446,16 @@ type AttemptFieldsDecode = {
 type AttemptFieldDecode = {
   readonly node: AttemptTransportRecord;
   readonly key: string;
+};
+
+export type AgentAttemptEventMigrationRequest = PinnedDevBaseEvidence & {
+  readonly event: LegacyAgentAttemptEvent;
+  readonly featureHeadSha: string;
+};
+
+export type AgentAttemptEventsMigrationRequest = PinnedDevBaseEvidence & {
+  readonly events: readonly LegacyAgentAttemptEvent[];
+  readonly featureHeadSha: string;
 };
 
 export class AgentAttemptDecodeError extends Error {

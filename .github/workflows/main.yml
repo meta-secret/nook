@@ -11,9 +11,8 @@
 # Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
-# Vale-policy, repository-policy-only, and non-minds agentic-AI-only changes do not need
-# this workflow. Minds-only changes run the ecosystem gates here but skip the
-# product pipeline. A trusted workflow_run collector records each attempt in
+# Vale-policy, repository-policy-only, and agentic-AI-only changes do not need
+# this workflow. A trusted workflow_run collector records each attempt in
 # meta-secret/nook-workbench.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
@@ -78,7 +77,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: preflight
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -139,7 +137,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: native
           monitor-buildkit-storage: "true"
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
@@ -220,7 +217,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: wasm
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -271,8 +267,6 @@ jobs:
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes source state from the verified job-scoped graph. The
-          # portable dependency ref is owned by the later writer/proof job.
           WASM_BUILD_MODE: dev
 
       - name: Preserve cache telemetry
@@ -309,7 +303,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: wasm-proof
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -330,6 +323,10 @@ jobs:
           NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   web:
     name: Verify web build
     timeout-minutes: 10
@@ -345,7 +342,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -404,10 +400,6 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Publish verified web BuildKit cache
         if: success()
         run: task ci:main:publish-web-cache
@@ -415,6 +407,10 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e
@@ -551,7 +547,6 @@ jobs:
               prNumber: pullRequest.number,
             })
             core.info(`Published Main UI demos to ${issue.identifier}: ${issue.url}`)
-
 
   deploy:
     name: Deploy development

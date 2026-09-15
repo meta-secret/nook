@@ -66,6 +66,11 @@ impl RegisteredType {
     }
 }
 
+// The UI suite executes these rustc callbacks through the separately loaded
+// Dylint shared object. LLVM cannot reconcile that driver's profile with this
+// unit-test binary, so keep callback coverage owned by the behavior-focused UI
+// cases while measuring the registry decisions in this binary.
+#[coverage(off)]
 impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
     fn check_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx Item<'tcx>) {
         if !matches!(item.kind, ItemKind::Impl(_)) {
@@ -88,8 +93,7 @@ impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
             .any(|attribute| attribute.has_name(sym::automatically_derived));
 
         if RegisteredType::secret(&type_path)
-            && (trait_path == "core::fmt::Display"
-                || (trait_path == "core::fmt::Debug" && derived))
+            && (trait_path == "core::fmt::Display" || (trait_path == "core::fmt::Debug" && derived))
         {
             span_lint_and_help(
                 cx,
@@ -160,5 +164,43 @@ impl<'tcx> LateLintPass<'tcx> for TrustedValueDeclarations {
                 "keep unchecked construction private to the validating owner",
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RegisteredType;
+
+    #[test]
+    fn registered_validated_ids_are_exact_type_identities() {
+        for path in [
+            "nook_auth2::ids::CompactToken",
+            "nook_auth2::ids::AppId",
+            "nook_auth2::ids::StoreId",
+            "nook_auth2::ids::SecretId",
+            "nook_auth2::ids::AuthKeyId",
+        ] {
+            assert!(RegisteredType::validated_id(path));
+        }
+        assert!(!RegisteredType::validated_id("other::ids::AppId"));
+        assert!(!RegisteredType::validated_id(
+            "nook_auth2::ids::AppIdSuffix"
+        ));
+    }
+
+    #[test]
+    fn registered_secrets_are_exact_type_identities() {
+        for path in [
+            "nook_auth2::wire::SymmetricKey",
+            "nook_auth2::wire::SigningSeedHex",
+            "nook_auth2::wire::DecryptedPlaintext",
+            "nook_auth2::wire::DeviceIdentitySecret",
+        ] {
+            assert!(RegisteredType::secret(path));
+        }
+        assert!(!RegisteredType::secret("other::wire::SymmetricKey"));
+        assert!(!RegisteredType::secret(
+            "nook_auth2::wire::DeviceIdentitySecretSuffix"
+        ));
     }
 }

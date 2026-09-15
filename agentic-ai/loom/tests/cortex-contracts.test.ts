@@ -132,7 +132,7 @@ test('uses the first duplicate Markdown reference definition', () => {
 test('adapts inline and fenced runtime commands without prose inference', () => {
   const documents = CortexContractDocuments.adaptCortexContractDocuments([
     {
-      relativePath: '.cortex/gizmo/workflows/subagent-delegation.md',
+      relativePath: '.cortex/gizmo-prime/workflows/subagent-delegation.md',
       content: `# Delegation
 
 Prose mentions loom-agent-delegation but does not invoke it.

@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
 import type { LoginCredentials } from '../../nook-web-shared/src/extension/password-form-field-actions'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type {
@@ -68,6 +69,28 @@ function pickerApproval(): AuthenticationWorkflowApproval {
 }
 
 const addListener = mock(() => {})
+class ContentPickerDocumentFixture {
+  install(): void {
+    Object.assign(globalThis, {
+      document: {
+        createElement: () => this.fakeElement(),
+      },
+    })
+  }
+
+  private fakeElement() {
+    return {
+      disabled: false,
+      hidden: false,
+      isConnected: true,
+      remove: mock(() => {}),
+      replaceChildren: mock(() => {}),
+      append: mock(() => {}),
+      textContent: '',
+    }
+  }
+}
+new ContentPickerDocumentFixture().install()
 type RuntimeResponseCallback = (response: unknown) => void
 
 enum RuntimeResponseStateKind {
@@ -170,17 +193,33 @@ test('delivers cleanup cancellation through the content-script router', async ()
     await import('../src/content/autofill/state')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
-  const description = { textContent: '' } as HTMLParagraphElement
-  const continueButton = {
-    disabled: true,
-    hidden: false,
-    isConnected: true,
-  } as HTMLButtonElement
+  const description = document.createElement('p')
+  const continueButton = document.createElement('button')
+  continueButton.disabled = true
+  continueButton.hidden = false
+  const workflow: PasswordFormObservation = {
+    root: document,
+    formScope: { kind: PasswordFormScopeKind.Unowned },
+    summary: {
+      passwordFieldCount: 1,
+      currentPasswordFieldCount: 1,
+      newPasswordFieldCount: 0,
+      genericPasswordFieldCount: 0,
+      usernameFieldCount: 1,
+      oneTimeCodeFieldCount: 0,
+      manualCheckpointPresent: false,
+      passkeyControlPresent: false,
+      formCount: 1,
+      observedAt: 1,
+    },
+  }
+  const step = document.createElement('p')
+  const title = document.createElement('h2')
   pickerState.openLogin({
     requestId: 'login-request',
-    workflow: {} as PasswordFormObservation,
-    step: {} as HTMLParagraphElement,
-    title: {} as HTMLHeadingElement,
+    workflow,
+    step,
+    title,
     description,
     continueButton,
     timeoutId: 7,
@@ -221,15 +260,19 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({
-    remove,
-    isConnected: true,
-  } as unknown as HTMLElement)
+  const host = document.createElement('div')
+  host.remove = remove
+  widgetState.attachHost(host)
   widgetState.dismissed = true
   widgetState.busy = true
   const staleOfferId = 'stale-save-offer'
   saveOfferState.watchPage({
-    offer: { offerId: staleOfferId } as WebsiteLoginSaveOfferView,
+    offer: {
+      offerId: staleOfferId,
+      decision: 0,
+      vaultStoreId: 'vault-store',
+      vaultName: 'Vault',
+    } satisfies WebsiteLoginSaveOfferView,
     startedAt: 1,
     authPath: '/login',
     sawMutation: false,
@@ -274,12 +317,16 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({
-    isConnected: true,
-    remove,
-  } as unknown as HTMLElement)
+  const host = document.createElement('div')
+  host.remove = remove
+  widgetState.attachHost(host)
   saveOfferState.watchPage({
-    offer: { offerId: 'rejected-save-offer' } as WebsiteLoginSaveOfferView,
+    offer: {
+      offerId: 'rejected-save-offer',
+      decision: 0,
+      vaultStoreId: 'vault-store',
+      vaultName: 'Vault',
+    } satisfies WebsiteLoginSaveOfferView,
     startedAt: 1,
     authPath: '/login',
     sawMutation: false,
@@ -305,11 +352,95 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   expect(sendResponse).toHaveBeenCalledWith({ ok: false })
 })
 
+test('keeps a submitted login offer when the success page advances the scan', async () => {
+  const { SavePageWatchKind, saveOfferState, scanState } =
+    await import('../src/content/autofill/state')
+  const { loginSaveInteraction } =
+    await import('../src/content/autofill/login-save')
+  const credentials: LoginCredentials = {
+    username: 'person@example.test',
+    password: 'submitted-password',
+  }
+  const originalMutationObserver = globalThis.MutationObserver
+  const originalSetInterval = window.setInterval
+  const originalClearInterval = window.clearInterval
+  const originalDocumentElement = document.documentElement
+  const originalEvaluatePendingSaveEvidence =
+    loginSaveInteraction.evaluatePendingSaveEvidence
+  loginSaveInteraction.evaluatePendingSaveEvidence = async () => {}
+  class SubmittedLoginMutationObserver {
+    observe(): void {}
+    disconnect(): void {}
+  }
+  Object.assign(globalThis, {
+    MutationObserver: SubmittedLoginMutationObserver,
+  })
+  Object.defineProperty(document, 'documentElement', {
+    configurable: true,
+    value: {},
+  })
+  Object.assign(window, {
+    setInterval: () => 7,
+    clearInterval: () => {},
+  })
+  deferRuntimeResponse()
+  sendMessage.mockClear()
+  const initialSequence = scanState.sequence
+  const staging = loginSaveInteraction.stageSaveForCredentials(credentials)
+  scanState.sequence = initialSequence + 1
+
+  resolveDeferredRuntimeResponse({
+    response: {
+      kind: 'offer-available',
+      offer: {
+        offerId: 'successful-submit-offer',
+        decision: 0,
+        vaultStoreId: 'vault-1',
+        vaultName: 'Personal',
+      },
+    },
+    subsequentResponse: { kind: 'unavailable' },
+  })
+  await staging
+
+  expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Watching)
+  expect(credentials).toEqual({ username: '', password: '' })
+  expect(sendMessage).toHaveBeenCalledTimes(1)
+
+  loginSaveInteraction.stopPendingSaveWatch()
+  Object.assign(globalThis, { MutationObserver: originalMutationObserver })
+  Object.defineProperty(document, 'documentElement', {
+    configurable: true,
+    value: originalDocumentElement,
+  })
+  loginSaveInteraction.evaluatePendingSaveEvidence =
+    originalEvaluatePendingSaveEvidence
+  Object.assign(window, {
+    setInterval: originalSetInterval,
+    clearInterval: originalClearInterval,
+  })
+})
+
 test('refresh dismisses an in-flight save offer before rescanning', async () => {
   const { SavePageWatchKind, scanState, saveOfferState } =
     await import('../src/content/autofill/state')
   const { loginSaveInteraction } =
     await import('../src/content/autofill/login-save')
+  const originalEvaluatePendingSaveEvidence =
+    loginSaveInteraction.evaluatePendingSaveEvidence
+  loginSaveInteraction.evaluatePendingSaveEvidence = async () => {}
+  const originalMutationObserver = globalThis.MutationObserver
+  const originalSetInterval = window.setInterval
+  const originalClearInterval = window.clearInterval
+  class RefreshMutationObserver {
+    observe(): void {}
+    disconnect(): void {}
+  }
+  Object.assign(globalThis, { MutationObserver: RefreshMutationObserver })
+  Object.assign(window, {
+    setInterval: () => 7,
+    clearInterval: () => {},
+  })
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const credentials: LoginCredentials = {
@@ -362,4 +493,11 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     expect.any(Function),
   )
   expect(schedule).toHaveBeenCalledTimes(1)
+  loginSaveInteraction.evaluatePendingSaveEvidence =
+    originalEvaluatePendingSaveEvidence
+  Object.assign(globalThis, { MutationObserver: originalMutationObserver })
+  Object.assign(window, {
+    setInterval: originalSetInterval,
+    clearInterval: originalClearInterval,
+  })
 })

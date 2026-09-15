@@ -12,7 +12,6 @@ web_app_files=()
 web_shared_typescript_files=()
 extension_files=()
 research_files=()
-hive_console_files=()
 loom_files=()
 skill_application_files=()
 skill_application_roots=()
@@ -21,7 +20,7 @@ while IFS= read -r -d '' path; do
     continue
   fi
   case "$path" in
-    nook-app/nook-platform/*.rs | nook-app/nook-platform/**/*.rs | preflight/*.rs | preflight/**/*.rs | agentic-ai/minds/*.rs | agentic-ai/minds/**/*.rs)
+    nook-app/nook-platform/*.rs | nook-app/nook-platform/**/*.rs | preflight/*.rs | preflight/**/*.rs)
       rust_files+=("$path")
       ;;
     nook-app/nook-web/nook-web-shared/src/vault-app/*.ts)
@@ -39,14 +38,11 @@ while IFS= read -r -d '' path; do
     nook-app/nook-web/nook-web-research/*)
       research_files+=("${path#nook-app/nook-web/nook-web-research/}")
       ;;
-    agentic-ai/minds/hive-console/*)
-      hive_console_files+=("${path#agentic-ai/minds/hive-console/}")
-      ;;
     agentic-ai/loom/*)
       loom_files+=("${path#agentic-ai/loom/}")
       ;;
-    .cortex/gizmo/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
-      if [[ ! "$path" =~ ^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
+    .cortex/gizmo-prime/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
+      if [[ ! "$path" =~ ^(\.cortex/(gizmo-prime|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
         echo "format: invalid executable-skill path: $path" >&2
         exit 1
       fi
@@ -98,9 +94,6 @@ if [[ "${#extension_files[@]}" -gt 0 ]]; then
 fi
 if [[ "${#research_files[@]}" -gt 0 ]]; then
   format_changed_files "$web_config" "$repo_root/nook-app/nook-web/nook-web-research" "${research_files[@]}"
-fi
-if [[ "${#hive_console_files[@]}" -gt 0 ]]; then
-  format_changed_files "$default_config" "$repo_root/agentic-ai/minds/hive-console" "${hive_console_files[@]}"
 fi
 if [[ "${#loom_files[@]}" -gt 0 ]]; then
   format_changed_files "$default_config" "$repo_root/agentic-ai/loom" "${loom_files[@]}"

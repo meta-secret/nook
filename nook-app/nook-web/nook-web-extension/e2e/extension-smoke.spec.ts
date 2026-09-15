@@ -46,10 +46,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
 
-  const manifest = JSON.parse(
-    await readFile(path.join(extensionDir, 'manifest.json'), 'utf8'),
-  ) as { action?: { default_popup?: string } }
-  expect(manifest.action?.default_popup).toBe('popup/index.html')
+  const manifestText = await readFile(
+    path.join(extensionDir, 'manifest.json'),
+    'utf8',
+  )
+  expect(manifestText).toMatch(/"default_popup"\s*:\s*"popup\/index\.html"/u)
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
@@ -517,34 +518,110 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       verifiedPopupPage.getByTestId('companion-vault-status'),
     ).toContainText('Replacement vault')
-    const replacementGrantEntry = repairedGrants.find(
-      ([, grant]) =>
-        (grant as { vaultName: string }).vaultName === 'Replacement vault',
-    )
+    const replacementGrantEntry = repairedGrants.find(([, grant]) => {
+      if (typeof grant !== 'object') return false
+      if (!grant) return false
+      return 'vaultName' in grant && grant.vaultName === 'Replacement vault'
+    })
     if (!replacementGrantEntry) {
       throw new Error('replacement vault grant must exist after repair')
     }
     const replacementGrant = replacementGrantEntry[1]
+    if (
+      typeof replacementGrant !== 'object' ||
+      !replacementGrant ||
+      !('vaultStoreId' in replacementGrant) ||
+      typeof replacementGrant.vaultStoreId !== 'string' ||
+      !('deviceId' in replacementGrant) ||
+      typeof replacementGrant.deviceId !== 'string' ||
+      !('devicePublicKey' in replacementGrant) ||
+      typeof replacementGrant.devicePublicKey !== 'string' ||
+      !('deviceSigningPublicKey' in replacementGrant) ||
+      typeof replacementGrant.deviceSigningPublicKey !== 'string'
+    ) {
+      throw new Error('replacement vault grant identity must be complete')
+    }
+    const replacementGrantIdentity = {
+      vaultStoreId: replacementGrant.vaultStoreId,
+      deviceId: replacementGrant.deviceId,
+      devicePublicKey: replacementGrant.devicePublicKey,
+      deviceSigningPublicKey: replacementGrant.deviceSigningPublicKey,
+    }
     const vaultBackedLookup = await verifiedPopupPage.evaluate(
-      async (grant) => {
+      async (grantIdentity) => {
         await chrome.runtime.sendMessage({
           type: 'nook:ensure-extension-session-runtime',
         })
-        return chrome.runtime.sendMessage({
-          type: 'nook:extension-session-list-logins',
-          payload: {
-            ...(grant as {
-              vaultStoreId: string
-              deviceId: string
-              devicePublicKey: string
-              deviceSigningPublicKey: string
-            }),
-            origin: 'https://example.com',
-            queue: { kind: 'message-default' },
-          },
+        const response = await new Promise<{
+          ok: boolean
+          accounts: Array<{
+            secretId: string
+            username: string
+            websiteUrl: string
+            websiteHost: string
+          }>
+        }>((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            {
+              type: 'nook:extension-session-list-logins',
+              payload: {
+                ...grantIdentity,
+                origin: 'https://example.com',
+                queue: { kind: 'message-default' },
+              },
+            },
+            (value: unknown) => {
+              if (
+                typeof value !== 'object' ||
+                !value ||
+                !('ok' in value) ||
+                typeof value.ok !== 'boolean' ||
+                !('accounts' in value) ||
+                !Array.isArray(value.accounts)
+              ) {
+                reject(new Error('unexpected login lookup response'))
+                return
+              }
+              const admittedAccounts: Array<{
+                secretId: string
+                username: string
+                websiteUrl: string
+                websiteHost: string
+              }> = []
+              const accounts: readonly unknown[] = value.accounts
+              for (const account of accounts) {
+                if (
+                  !account ||
+                  typeof account !== 'object' ||
+                  !('secretId' in account) ||
+                  typeof account.secretId !== 'string' ||
+                  !('username' in account) ||
+                  typeof account.username !== 'string' ||
+                  !('websiteUrl' in account) ||
+                  typeof account.websiteUrl !== 'string' ||
+                  !('websiteHost' in account) ||
+                  typeof account.websiteHost !== 'string'
+                ) {
+                  reject(new Error('unexpected login lookup response'))
+                  return
+                }
+                admittedAccounts.push({
+                  secretId: account.secretId,
+                  username: account.username,
+                  websiteUrl: account.websiteUrl,
+                  websiteHost: account.websiteHost,
+                })
+              }
+              resolve({
+                ok: value.ok,
+                accounts: admittedAccounts,
+              })
+            },
+          )
         })
+        return response
       },
-      replacementGrant,
+      replacementGrantIdentity,
     )
     expect(vaultBackedLookup).toEqual({ ok: true, accounts: [] })
   } finally {

@@ -28,7 +28,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 70.0,
-            "hive" => 60.0,
             _ => 90.0,
         };
         assert!(*floor >= expected);
@@ -38,12 +37,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             .get("nook-fuzz")
             .context("coverage policy must explain the nook-fuzz exclusion")?,
         "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
-    );
-    assert_eq!(
-        excluded
-            .get("arrayref")
-            .context("coverage policy must explain the arrayref exclusion")?,
-        "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
     );
     Ok(())
 }
@@ -58,20 +51,15 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
-    let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
     let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
-    let hive_ci = read(&root.join(".github/workflows/hive.yml"))?;
-    let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
-    let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
-    let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
     let policy =
         CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
     let enforced = policy.enforced_packages.clone();
     for package in &enforced {
         assert!(
-            [&product, &nightly, &platform_tasks, &hive, &preflight]
+            [&product, &nightly, &platform_tasks, &preflight]
                 .iter()
                 .flat_map(|source| source.lines())
                 .filter(|line| line.contains("llvm-cov") || line.contains("for package in"))
@@ -170,37 +158,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         central_ci.contains("on:\n  pull_request:")
             && central_ci.contains("push:\n    branches: [main]")
     );
-    assert_eq!(
-        central_ci
-            .matches("nook-app/nook-platform/nook-core/coverage-floor.json")
-            .count(),
-        1
-    );
-    let hive_route = central_ci
-        .split_once("\n  hive:\n")
-        .and_then(|(_, remainder)| remainder.split_once("\n  research:\n"))
-        .map(|(route, _)| route)
-        .context("central CI must retain an independently routed Hive job")?;
-    assert!(
-        hive_route.contains("if: needs.scope.outputs.hive == 'true'")
-            && hive_route.contains("uses: ./.github/workflows/hive.yml")
-    );
-    assert!(hive_ci.contains("workflow_call:"));
-    assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
-    assert!(hive.contains("cargo llvm-cov report -p hive"));
-    assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
-    assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
-    assert!(hive.contains(
-        "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
-    ));
-    assert!(hive.contains("sha256sum -c -"));
-    assert!(hive.contains("cargo llvm-cov show-env --export-prefix"));
-    assert!(hive.contains("CARGO_TARGET_DIR=target/llvm-cov-target cargo test"));
-    assert!(hive.contains("COPY --from=hive-coverage-profiles"));
-    assert!(hive.contains("mkdir -p target/llvm-cov-target"));
-    assert!(hive_tasks.contains("hive-coverage-profiles=$profiles"));
-    assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
-    assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));
+    assert!(central_ci.contains("dev-promotion-readiness:"));
+    assert!(central_ci.contains("group: dev-promotion-readiness"));
+    assert!(central_ci.contains("cancel-in-progress: false"));
+    assert!(central_ci.contains("needs: [scope, policy, pr, research]"));
+    assert!(central_ci.contains("POLICY_RESULT: ${{ needs.policy.result }}"));
+    assert!(central_ci.contains("PR_RESULT: ${{ needs.pr.result }}"));
+    assert!(central_ci.contains("\"Repository policy=$POLICY_RESULT\""));
+    assert!(central_ci.contains("\"PR validation=$PR_RESULT\""));
+    assert!(central_ci.contains("if [ \"$result\" != \"success\" ]; then"));
+    assert!(central_ci.contains("Dev promotion readiness passed for exact PR head $DEV_HEAD_SHA"));
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
@@ -231,7 +198,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
-    assert!(minds_manifest.contains("exclude = [\"vendor/arrayref\"]"));
     assert!(fuzz_manifest.contains("cargo-fuzz = true") && fuzz_manifest.contains("test = false"));
     Ok(())
 }

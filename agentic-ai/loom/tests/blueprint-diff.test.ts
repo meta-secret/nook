@@ -15,15 +15,15 @@ import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 describe('blueprint explanation', () => {
   test('emits a unified diff from the diff package', () => {
     const explanationArgs4 = {
-      prePush: { stageHostUpdates: true },
+      toolsList: { extra: true },
     };
     const explanation =
       RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs4);
     expect(explanation.kind).toBe(BlueprintExplanationKind.Structural);
-    expect(explanation.blueprintPath).toBe('prePush');
+    expect(explanation.blueprintPath).toBe('toolsList');
     expect(explanation.unifiedDiff).toContain('--- ');
     expect(explanation.unifiedDiff).toContain('+++ received.yaml');
-    expect(explanation.unifiedDiff).toContain('fetchOriginMain');
+    expect(explanation.unifiedDiff).toContain('extra');
   });
 
   test('marks unknown roots against the default blueprint', () => {
@@ -34,12 +34,12 @@ describe('blueprint explanation', () => {
     const explanation =
       RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs3);
     expect(explanation.unifiedDiff).toContain('name');
-    expect(explanation.blueprintYaml).toContain('prePush:');
+    expect(explanation.blueprintYaml).toContain('toolsList:');
   });
 
   test('syntax failures include parse message and unified diff', () => {
     const explanationArgs2: ExplainSyntaxFailureArgs = {
-      receivedYaml: 'prePush: [\n',
+      receivedYaml: 'toolsList: [\n',
       parseMessage: 'unexpected end of stream',
     };
     const explanation =
@@ -55,7 +55,7 @@ describe('blueprint explanation', () => {
 describe('decode error encoding', () => {
   test('dispatch decode errors expose unifiedDiff', async () => {
     const outcomeArgs = {
-      prePush: { stageHostUpdates: true },
+      toolsList: { extra: true },
     };
     const outcome = await LoomRequestDispatch.dispatchValue(outcomeArgs);
     expect(outcome.exitCode).toBe(2);
@@ -64,7 +64,7 @@ describe('decode error encoding', () => {
       return;
     }
     if (typeof outcome.body.explanation.unifiedDiff !== 'string') return;
-    expect(outcome.body.explanation.unifiedDiff).toContain('fetchOriginMain');
+    expect(outcome.body.explanation.unifiedDiff).toContain('extra');
     const encoded = LoomResponseEncoder.encodeResponse(outcome.body);
     if (!UntrustedYamlBoundary.isRecord(encoded))
       throw new Error('Invalid response.');
@@ -82,12 +82,12 @@ describe('decode error encoding', () => {
 
   test('encodeResponse includes issue codes and explanation', () => {
     const explanationArgs = {
-      prePush: { stageHostUpdates: true },
+      toolsList: {},
     };
     const explanation =
       RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs);
     const fieldErrorArgs: FieldErrorArgs = {
-      path: 'prePush.fetchOriginMain',
+      path: 'toolsList',
       issue: FieldIssue.MissingRequiredField,
     };
     const decodeErrorResponseArgs: DecodeErrorResponseArgs = {

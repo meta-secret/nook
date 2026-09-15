@@ -9,11 +9,7 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
-import {
-  RepositoryBunScript,
-  RepositoryCommand,
-  RepositoryCommandExecutable,
-} from '../lib/run.ts';
+import { RepositoryCommand, RepositoryCommandExecutable } from '../lib/run.ts';
 
 import { LoomFailureCode } from '../loom-failure.ts';
 
@@ -29,9 +25,7 @@ export type PrLandReport = {
 };
 
 export const PR_LAND_VALIDATE_NEXT_STEP =
-  'watch repository-owned checks and collect the opted-in exact-head review concurrently; after both settle, run a prLand.ready request';
-
-export const PR_LAND_CODEX_REVIEW_ARG = 'CODEX_REVIEW=1';
+  'watch repository-owned checks and return the resulting evidence to the dev manager';
 
 type PrLandStatusArgs = {
   readonly repoRoot: string;
@@ -41,11 +35,6 @@ type PrLandStatusArgs = {
 type PrLandValidateArgs = {
   readonly repoRoot: string;
   readonly request: PrLandValidateRequest;
-};
-
-type PrLandReadyArgs = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
 };
 
 export type PrLandFailure =
@@ -91,75 +80,12 @@ export class PullRequestDeliveryCommand {
       messages: [view.stdout.trim()],
     });
   }
-  async readiness(): Promise<Result<PrLandReport, PrLandFailure>> {
-    const { repoRoot, prNumber } = this.request;
-
-    const resultArgs: RepositoryCommandRequest = {
-      command: RepositoryCommandExecutable.Task,
-      args: ['pr:ready', `PR=${prNumber}`],
-      rootDirectory: repoRoot,
-      workingDirectory: repoRoot,
-    };
-    const resultLaunch = new RepositoryCommand(resultArgs).execute();
-    if (resultLaunch.isErr()) return err(resultLaunch.error);
-    const result = resultLaunch.value;
-    const passed = result.exitCode === 0;
-    return ok({
-      family: RequestFamily.PrLand,
-      operation: PrLandOperation.Ready,
-      prNumber,
-      ready: passed,
-      nextStep: passed
-        ? 'use task dev:land, task dev:publish, and guarded task dev:promote after manager evidence passes'
-        : 'fix readiness gaps, then re-run a prLand.ready request',
-      messages: [
-        (result.stdout || result.stderr || `exit ${result.exitCode}`).trim(),
-      ],
-    });
-  }
-  async mergeReadiness(): Promise<Result<PrLandReport, PrLandFailure>> {
-    const { prNumber } = this.request;
-
-    const result = await this.readiness();
-    if (result.isErr()) return err(result.error);
-    const readiness = result.value;
-    return ok({
-      family: RequestFamily.PrLand,
-      operation: PrLandOperation.MergeCheck,
-      prNumber,
-      ready: readiness.ready,
-      nextStep: readiness.ready
-        ? 'dev-manager will promote via an ordinary non-forced fast-forward; Loom will not merge directly'
-        : readiness.nextStep,
-      messages: [
-        ...readiness.messages,
-        'Loom does not mutate pull requests; the manager-controlled dev flow owns promotion',
-      ],
-    });
-  }
 }
 
 export class PullRequestValidationCommand {
   constructor(private readonly request: PrLandValidateArgs) {}
   async execute(): Promise<Result<PrLandReport, PrLandFailure>> {
     const { repoRoot, request } = this.request;
-
-    const prePushArgs: RepositoryCommandRequest = {
-      command: RepositoryCommandExecutable.Bun,
-      script: RepositoryBunScript.Loom,
-      args: ['--default', 'prePush'],
-      rootDirectory: repoRoot,
-      workingDirectory: repoRoot,
-    };
-    const prePushLaunch = new RepositoryCommand(prePushArgs).execute();
-    if (prePushLaunch.isErr()) return err(prePushLaunch.error);
-    const prePush = prePushLaunch.value;
-    if (prePush.exitCode !== 0) {
-      return err({
-        code: LoomFailureCode.CommandFailed,
-        message: `prePush failed before validate: ${prePush.stderr || prePush.stdout}`,
-      });
-    }
 
     if (request.remoteTask.presence === RemoteTaskPresence.Specified) {
       const remoteArgs: RepositoryCommandRequest = {
@@ -179,11 +105,7 @@ export class PullRequestValidationCommand {
       }
     }
 
-    const validateArgs = [
-      'pr:validate',
-      `PR=${request.prNumber}`,
-      PR_LAND_CODEX_REVIEW_ARG,
-    ];
+    const validateArgs = ['pr:validate', `PR=${request.prNumber}`];
     if (request.runFullE2e) {
       validateArgs.push('FULL_E2E=1');
     }
@@ -209,10 +131,7 @@ export class PullRequestValidationCommand {
       prNumber: request.prNumber,
       nextStep: PR_LAND_VALIDATE_NEXT_STEP,
       ready: false,
-      messages: [
-        'prePush passed',
-        (validated.stdout || 'pr:validate dispatched').trim(),
-      ],
+      messages: [(validated.stdout || 'pr:validate dispatched').trim()],
     });
   }
 }

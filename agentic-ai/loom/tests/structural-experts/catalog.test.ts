@@ -11,7 +11,7 @@ import {
   StructuralExpertKind,
 } from '../../src/structural-experts/catalog.ts';
 
-/** Owns the structural experts catalog fixture registry and its capability transitions. */
+/** Owns the structural experts catalog fixture and its typed role contracts. */
 export class StructuralExpertsCatalogFixture {
   private constructor() {}
   static readonly REPO_ROOT = resolve(import.meta.dir, '../../../..');
@@ -60,8 +60,8 @@ export class StructuralExpertsCatalogFixture {
         request: {
           ...sources,
           registrySource: sources.registrySource.replace(
-            'The third alternative is documentary only: no role/profile/result identity or\nruntime support exists, and ordinary dispatch remains fail-closed.',
-            'The third alternative is implemented.',
+            '`system_coherence_synthesizer` is the `loom-structural-experts` diagnostic\nrole.',
+            '`system_coherence_synthesizer` is an ordinary synthesis role.',
           ),
         },
       },
@@ -71,7 +71,7 @@ export class StructuralExpertsCatalogFixture {
         request: {
           ...sources,
           skillSource: sources.skillSource.replace(
-            'Failed observations never count as accepted provider\nevidence, and the legacy output cannot satisfy an ordinary provider edge,',
+            'Failed observations never count as accepted provider evidence.',
             'Failed observations count as accepted provider evidence.',
           ),
         },
@@ -193,17 +193,17 @@ test('rejects drift in repository-reading evidence-surface requirements', async 
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
-test('rejects drift between diagnostic and future synthesis', async () => {
+test('rejects drift between diagnostic and circuit-breaker handoff roles', async () => {
   const sources =
     await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const forbiddenDrifts = [
     [
-      '`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.',
-      '`system_coherence_synthesizer` is the ordinary synthesis role.',
+      '`system_coherence_synthesizer` is the `loom-structural-experts` diagnostic\nrole.',
+      '`system_coherence_synthesizer` is an ordinary synthesis role.',
     ],
     [
-      'Future ordinary accepted-evidence synthesis must use a distinct typed role,\nprofile, and result contract before implementation. None is named or registered\nhere, and ordinary dispatch remains fail-closed.',
-      'Future ordinary synthesis reuses system_coherence_synthesizer.',
+      'Team Gizmos and Team Agents follow the root\n[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
+      'Team Gizmos and Team Agents use a local policy copy.',
     ],
   ] as const;
 
@@ -225,20 +225,19 @@ test('rejects drift between diagnostic and future synthesis', async () => {
   }
 });
 
-test('rejects drift across authorization evidence alternatives', async () => {
+test('rejects drift from typed trusted handoffs', async () => {
   const sources =
     await StructuralExpertsCatalogFixture.cortexAuthoritySources();
-  const authorizationAlternatives = [
-    'a repository-reading expert binds the exact source commit, bounded read\n  claims, non-empty evidence surface, and exact evidence paths;',
-    'the legacy `system_coherence_synthesizer` binds the exact\n  `loom-structural-experts` parent-authorized structural all-terminal\n  observation barrier, including each verified `StructuralExpertPlan` child\n  task, expert, attempt, `Completed` or `Failed` status, result/view identity,\n  digest, and inherited source provenance; or',
-    'a future unnamed ordinary accepted-evidence role would bind generation-frozen\n  provider edges, expected producer identities, typed input schema, and\n  acceptance criteria, then exact accepted artifacts, digests, and provenance\n  when Gizmo authorizes its ready attempt.',
+  const trustedHandoffMarkers = [
+    'This is a typed task and result handoff.',
+    'The parent reviews the ordinary result\nbefore assigning edits.',
   ] as const;
 
-  for (const alternative of authorizationAlternatives) {
-    expect(sources.registrySource).toContain(alternative);
+  for (const marker of trustedHandoffMarkers) {
+    expect(sources.registrySource).toContain(marker);
     const registrySource = sources.registrySource.replace(
-      alternative,
-      'authorization may use any available input.',
+      marker,
+      'The handoff uses an unbounded peer protocol.',
     );
     const authorityRequest = { ...sources, registrySource };
     expect(
@@ -254,7 +253,7 @@ test('rejects drift that promotes the structural diagnostic lane', async () => {
     await StructuralExpertsCatalogFixture.cortexAuthoritySources();
   const laneContracts = [
     [
-      'Its `SystemCoherenceSynthesis` output is diagnostic-only. Neither an input\nfailure nor the aggregate can satisfy an ordinary provider edge, authorize\nimplementation, or establish compliance with ordinary accepted-evidence\nsynthesis.',
+      'Its `SystemCoherenceSynthesis` output is diagnostic-only. A failed child does\nnot become accepted evidence, and the aggregate cannot authorize implementation.',
       'The structural aggregate satisfies ordinary provider edges.',
     ],
   ] as const;

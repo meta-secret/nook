@@ -3,108 +3,41 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
+import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
+import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
+
+export { BuildkitCacheExportTelemetry };
+
+export { CacheScopeTelemetry };
+
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
+const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
-const HISTORY_LOG_TIMEOUT_MS = 4_000;
+const HISTORY_LOG_TIMEOUT_MS = 12_000;
 const HISTORY_RECORD_LIMIT = 32;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
   Unavailable: "unavailable",
 });
 
-/** @typedef {Record<string, unknown>} JsonRecord */
-/**
- * @typedef {object} BuildHistoryRecord
- * @property {string} ref
- * @property {string} name
- * @property {string} status
- * @property {number} completed_steps
- * @property {number} total_steps
- * @property {number} cached_steps
- * @property {string} [started_at]
- * @property {string} [completed_at]
- * @property {number} [cache_hit_rate_percent]
- */
-/**
- * @typedef {object} SccacheReport
- * @property {string} stage
- * @property {number} compile_requests
- * @property {number} requests_executed
- * @property {number} cache_hits
- * @property {number} cache_misses
- * @property {number} cache_errors
- * @property {number} cache_writes
- */
-/**
- * @typedef {object} SccacheSummary
- * @property {number} report_count
- * @property {number} compile_requests
- * @property {number} requests_executed
- * @property {number} cache_hits
- * @property {number} cache_misses
- * @property {number} cache_errors
- * @property {number} cache_writes
- * @property {number} [hit_rate_percent]
- */
-/**
- * @typedef {object} BuildkitSummary
- * @property {number} build_record_count
- * @property {number} completed_steps
- * @property {number} cached_steps
- * @property {number} [cache_hit_rate_percent]
- * @property {'buildx_target_record_steps'} measurement
- */
-/**
- * @typedef {object} CacheBackend
- * @property {'remote' | 'direct_compile'} kind
- * @property {boolean} persistent
- * @property {string} reason
- */
-/**
- * @typedef {object} CacheTelemetryRecord
- * @property {1} schema_version
- * @property {{run_id: string, run_attempt: number, job: string}} github
- * @property {CacheBackend} cache_backend
- * @property {SccacheSummary} sccache
- * @property {BuildkitSummary} buildkit
- * @property {readonly BuildHistoryRecord[]} buildkit_records
- * @property {{complete: boolean, warnings: readonly string[]}} collection
- */
-/**
- * @typedef {object} RawJsonProgress
- * @property {readonly JsonRecord[]} objects
- * @property {readonly string[]} diagnostics
- */
-/**
- * @typedef {object} TelemetryIdentityExpectation
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- */
-/**
- * @typedef {object} CollectTelemetryRequest
- * @property {readonly string[]} baselineRefs
- * @property {readonly string[]} [baselineWarnings]
- * @property {string} [job]
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- * @property {NodeJS.ProcessEnv} [environment]
- */
-/**
- * @typedef {object} BuildHistoryBaseline
- * @property {readonly string[]} refs
- * @property {readonly string[]} warnings
- */
+/** @typedef {import("./cache-telemetry-contracts.mjs").JsonRecord} JsonRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryRecord} BuildHistoryRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheSummary} SccacheSummary */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildkitSummary} BuildkitSummary */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheBackend} CacheBackend */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CollectionFailure} CollectionFailure */
+/** @typedef {import("./cache-telemetry-contracts.mjs").RawJsonProgress} RawJsonProgress */
+/** @typedef {import("./cache-telemetry-contracts.mjs").TelemetryIdentityExpectation} TelemetryIdentityExpectation */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CollectTelemetryRequest} CollectTelemetryRequest */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaseline */
 /**
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
-/**
- * @typedef {object} UnavailableTelemetryRequest
- * @property {string} warning
- * @property {string} [job]
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- * @property {NodeJS.ProcessEnv} [environment]
- */
+/** @typedef {import("./cache-telemetry-contracts.mjs").UnavailableTelemetryRequest} UnavailableTelemetryRequest */
 
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
@@ -279,30 +212,30 @@ export class CacheTelemetry {
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
    */
   static selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
-    const finalized = records
-      .filter((record) => record.completed_at)
-      .sort((left, right) => {
-        const completed = CacheTelemetry.compareStrings(
-          String(right.completed_at),
-          String(left.completed_at),
-        );
-        if (completed !== 0) return completed;
-        const started = CacheTelemetry.compareStrings(
-          String(right.started_at || ""),
-          String(left.started_at || ""),
-        );
-        if (started !== 0) return started;
-        return CacheTelemetry.compareStrings(left.ref, right.ref);
-      });
+    const selected = [...records].sort((left, right) => {
+      const activity = CacheTelemetry.compareStrings(
+        String(right.completed_at || right.started_at || ""),
+        String(left.completed_at || left.started_at || ""),
+      );
+      if (activity !== 0) return activity;
+      const started = CacheTelemetry.compareStrings(
+        String(right.started_at || ""),
+        String(left.started_at || ""),
+      );
+      if (started !== 0) return started;
+      return CacheTelemetry.compareStrings(left.ref, right.ref);
+    });
     const warnings = [];
-    const unfinishedCount = records.length - finalized.length;
+    const unfinishedCount = records.filter(
+      (record) => !record.completed_at,
+    ).length;
     if (unfinishedCount > 0) {
-      warnings.push(`buildx_records_unfinished_skipped:${unfinishedCount}`);
+      warnings.push(`buildx_records_unfinished_included:${unfinishedCount}`);
     }
-    if (finalized.length > limit) {
-      warnings.push(`buildx_records_truncated:${limit}/${finalized.length}`);
+    if (selected.length > limit) {
+      warnings.push(`buildx_records_truncated:${limit}/${selected.length}`);
     }
-    return { records: finalized.slice(0, limit), warnings };
+    return { records: selected.slice(0, limit), warnings };
   }
 
   /**
@@ -313,24 +246,65 @@ export class CacheTelemetry {
    * @returns {Promise<Output[]>}
    */
   static async mapWithConcurrency(items, concurrency, mapper) {
-    /** @type {Output[]} */
-    const results = new Array(items.length);
-    const entries = items.entries();
-    async function worker() {
-      for (const [index, item] of entries) {
-        results[index] = await mapper(item, index);
-      }
-    }
-    const workerCount = Math.min(concurrency, items.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    return results;
+    return new OrderedConcurrentMapper(concurrency).map(items, mapper);
   }
 
   /** @param {JsonRecord} report @returns {SccacheReport} */
   static normalizeSccacheReport(report) {
-    const { stage = "" } = report;
+    const {
+      stage = "",
+      baked_runtime_mode: bakedRuntimeMode = "",
+      runtime_mode: runtimeMode = "",
+      runtime_mode_source: runtimeModeSource = "",
+    } = report;
+    const normalizedStage = String(stage);
+    const normalizedBakedRuntimeMode = String(bakedRuntimeMode);
+    const normalizedRuntimeMode = String(runtimeMode);
+    const normalizedRuntimeModeSource = String(runtimeModeSource);
+    if (!normalizedStage)
+      throw new Error("sccache report is missing its stage");
+    if (normalizedBakedRuntimeMode !== "READ_WRITE") {
+      throw new Error(
+        `sccache report has invalid baked_runtime_mode: ${normalizedBakedRuntimeMode}`,
+      );
+    }
+    if (normalizedRuntimeMode !== "READ_WRITE") {
+      throw new Error(
+        `sccache report has invalid runtime_mode: ${normalizedRuntimeMode}`,
+      );
+    }
+    if (
+      normalizedRuntimeModeSource !== "environment" &&
+      normalizedRuntimeModeSource !== "runtime_secret"
+    ) {
+      throw new Error(
+        `sccache report has invalid runtime_mode_source: ${normalizedRuntimeModeSource}`,
+      );
+    }
+    if (typeof report.client_side !== "boolean") {
+      throw new Error("sccache report has invalid client_side");
+    }
+    if (
+      report.counter_reliability !== "authoritative" &&
+      report.counter_reliability !== "backend_incomplete"
+    ) {
+      throw new Error("sccache report has invalid counter_reliability");
+    }
+    if (
+      report.publication_status !== "pending_verification" &&
+      report.publication_status !== "counters_observed"
+    ) {
+      throw new Error("sccache report has invalid publication_status");
+    }
+    /** @type {SccacheReport} */
     const normalized = {
-      stage: String(stage),
+      stage: normalizedStage,
+      baked_runtime_mode: normalizedBakedRuntimeMode,
+      runtime_mode: normalizedRuntimeMode,
+      runtime_mode_source: normalizedRuntimeModeSource,
+      client_side: report.client_side,
+      counter_reliability: report.counter_reliability,
+      publication_status: report.publication_status,
       compile_requests: CacheTelemetry.nonNegativeInteger(
         report.compile_requests,
       ),
@@ -340,32 +314,84 @@ export class CacheTelemetry {
       cache_hits: CacheTelemetry.nonNegativeInteger(report.cache_hits),
       cache_misses: CacheTelemetry.nonNegativeInteger(report.cache_misses),
       cache_errors: CacheTelemetry.nonNegativeInteger(report.cache_errors),
+      cache_write_errors: CacheTelemetry.nonNegativeInteger(
+        report.cache_write_errors,
+      ),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
+      compile_failures: CacheTelemetry.nonNegativeInteger(
+        report.compile_failures,
+      ),
     };
-    if (!normalized.stage)
-      throw new Error("sccache report is missing its stage");
     return normalized;
   }
 
   /** @param {readonly SccacheReport[]} reports @returns {SccacheSummary} */
   static summarizeSccache(reports) {
+    const terminalReports = [
+      ...new Map(reports.map((report) => [report.stage, report])).values(),
+    ];
+    /** @type {SccacheSummary} */
     const summary = {
-      report_count: reports.length,
+      report_count: terminalReports.length,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
       compile_requests: 0,
       requests_executed: 0,
       cache_hits: 0,
       cache_misses: 0,
       cache_errors: 0,
+      cache_write_errors: 0,
       cache_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
     };
-    for (const report of reports) {
+    const first = terminalReports[0];
+    if (first) {
+      summary.baked_runtime_mode = first.baked_runtime_mode;
+      summary.runtime_mode = first.runtime_mode;
+      summary.runtime_mode_source = first.runtime_mode_source;
+      summary.client_side = first.client_side;
+      summary.counter_reliability = first.counter_reliability;
+    }
+    for (const report of terminalReports) {
+      for (const field of /** @type {const} */ ([
+        "baked_runtime_mode",
+        "runtime_mode",
+        "runtime_mode_source",
+        "client_side",
+        "counter_reliability",
+      ])) {
+        if (report[field] !== summary[field]) {
+          throw new Error(
+            `inconsistent sccache ${field}: ${summary[field]} != ${report[field]}`,
+          );
+        }
+      }
       summary.compile_requests += report.compile_requests;
       summary.requests_executed += report.requests_executed;
       summary.cache_hits += report.cache_hits;
       summary.cache_misses += report.cache_misses;
       summary.cache_errors += report.cache_errors;
+      summary.cache_write_errors += report.cache_write_errors;
       summary.cache_writes += report.cache_writes;
+      summary.compile_failures += report.compile_failures;
     }
+    if (terminalReports.length > 0) {
+      summary.publication_status =
+        summary.client_side &&
+        summary.cache_errors === 0 &&
+        summary.cache_write_errors === 0 &&
+        summary.cache_writes === 0
+          ? "pending_verification"
+          : "counters_observed";
+    }
+    summary.snapshots = terminalReports;
     return {
       ...summary,
       ...CacheTelemetry.percentageField(
@@ -376,8 +402,12 @@ export class CacheTelemetry {
     };
   }
 
-  /** @param {readonly BuildHistoryRecord[]} records @returns {BuildkitSummary} */
-  static summarizeBuildkit(records) {
+  /**
+   * @param {readonly BuildHistoryRecord[]} records
+   * @param {readonly JsonRecord[]} [events]
+   * @returns {BuildkitSummary}
+   */
+  static summarizeBuildkit(records, events = []) {
     const completedSteps = records.reduce(
       (total, record) => total + record.completed_steps,
       0,
@@ -395,6 +425,7 @@ export class CacheTelemetry {
         cachedSteps,
         completedSteps,
       ),
+      cache_export: new BuildkitCacheExportTelemetry(events).summary(),
       measurement: "buildx_target_record_steps",
     };
   }
@@ -449,6 +480,93 @@ export class CacheTelemetry {
       inspectLine(line, { vertex: key, timestamp: "unterminated" });
     }
     return reports;
+  }
+
+  /** @param {string} text @returns {SccacheReport[]} */
+  static extractSccacheReportsFromText(text) {
+    /** @type {Map<string, SccacheReport>} */
+    const latestByStage = new Map();
+    for (const line of text.split(/\r?\n/)) {
+      const markerAt = line.indexOf(SCCACHE_MARKER);
+      if (markerAt === -1) continue;
+      try {
+        const report = CacheTelemetry.normalizeSccacheReport(
+          CacheTelemetry.parseJsonRecord(
+            line.slice(markerAt + SCCACHE_MARKER.length).trim(),
+          ),
+        );
+        latestByStage.set(report.stage, report);
+      } catch {
+        // A cancelled write can leave one partial terminal line. Completed
+        // stage records remain usable and the collection warning identifies
+        // the cancelled overall solve.
+      }
+    }
+    return [...latestByStage.values()];
+  }
+
+  /** @param {string} text @returns {{state: 'active' | 'fallback', reason: string}} */
+  static extractSccacheFallbackFromText(text) {
+    let reason = "none";
+    for (const line of text.split(/\r?\n/)) {
+      const reportAt = line.indexOf(SCCACHE_MARKER);
+      if (reportAt !== -1) {
+        try {
+          const report = CacheTelemetry.normalizeSccacheReport(
+            CacheTelemetry.parseJsonRecord(
+              line.slice(reportAt + SCCACHE_MARKER.length).trim(),
+            ),
+          );
+          // A completed healthy READ_WRITE snapshot is the terminal effective
+          // state for that compiler stage. BuildKit's interleaved log retains
+          // fallback markers from earlier vertices, so an any-event reduction
+          // incorrectly labels a later healthy build as direct compilation.
+          if (
+            report.runtime_mode === "READ_WRITE" &&
+            report.cache_errors === 0 &&
+            report.cache_write_errors === 0 &&
+            report.compile_failures === 0 &&
+            (report.cache_hits > 0 || report.cache_misses > 0)
+          ) {
+            reason = "none";
+          }
+        } catch {
+          // Partial reports are expected when cancellation interrupts a line.
+        }
+      }
+      const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
+      if (markerAt === -1) continue;
+      try {
+        const fallback = CacheTelemetry.parseJsonRecord(
+          line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
+        );
+        if (typeof fallback.reason === "string" && fallback.reason) {
+          reason = fallback.reason;
+        }
+      } catch {
+        reason = "malformed_fallback_event";
+      }
+    }
+    return reason === "none"
+      ? { state: "active", reason }
+      : { state: "fallback", reason };
+  }
+
+  /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
+  static extractSccacheFallback(events) {
+    let text = "";
+    for (const event of events) {
+      const candidates = Array.isArray(event.logs) ? event.logs : [];
+      for (const candidate of candidates) {
+        if (
+          !CacheTelemetry.isJsonRecord(candidate) ||
+          typeof candidate.data !== "string"
+        )
+          continue;
+        text += `${Buffer.from(candidate.data, "base64").toString("utf8")}\n`;
+      }
+    }
+    return CacheTelemetry.extractSccacheFallbackFromText(text);
   }
 
   /** @returns {BuildHistoryRecord[]} */
@@ -516,7 +634,7 @@ export class CacheTelemetry {
           ...parsedStdout.diagnostics,
           ...parsedStderr.diagnostics,
         ];
-        if (status === 0 && (events.length > 0 || diagnostics.length === 0)) {
+        if (events.length > 0 || (status === 0 && diagnostics.length === 0)) {
           resolve(events);
         } else {
           reject(
@@ -537,12 +655,13 @@ export class CacheTelemetry {
       environment.NOOK_SCCACHE_BACKEND === "remote"
         ? "remote"
         : "direct_compile";
+    const configuredReason =
+      environment.NOOK_SCCACHE_BACKEND_REASON ||
+      (kind === "remote" ? "persistent_service" : "credentials_unavailable");
     return {
       kind,
       persistent: kind === "remote",
-      reason:
-        environment.NOOK_SCCACHE_BACKEND_REASON ||
-        (kind === "remote" ? "persistent_service" : "credentials_unavailable"),
+      reason: configuredReason,
     };
   }
 
@@ -552,133 +671,7 @@ export class CacheTelemetry {
    * @returns {JsonRecord}
    */
   static validateTelemetryRecord(record, expected = {}) {
-    if (!CacheTelemetry.isJsonRecord(record))
-      throw new Error("telemetry record is required");
-    if (record.schema_version !== 1)
-      throw new Error("telemetry schema_version must be 1");
-    const github = record.github;
-    if (!CacheTelemetry.isJsonRecord(github)) {
-      throw new Error("telemetry github context is required");
-    }
-    if (typeof github.run_id !== "string") {
-      throw new Error("telemetry github.run_id must be a string");
-    }
-    if (
-      !Number.isInteger(github.run_attempt) ||
-      typeof github.run_attempt !== "number" ||
-      github.run_attempt < 1
-    ) {
-      throw new Error(
-        "telemetry github.run_attempt must be a positive integer",
-      );
-    }
-    if (typeof github.job !== "string" || !github.job) {
-      throw new Error("telemetry github.job must be a non-empty string");
-    }
-    if ("runId" in expected && github.run_id !== String(expected.runId)) {
-      throw new Error(
-        `telemetry run ${github.run_id} does not match expected run ${expected.runId}`,
-      );
-    }
-    if (
-      "runAttempt" in expected &&
-      github.run_attempt !== Number(expected.runAttempt)
-    ) {
-      throw new Error(
-        `telemetry attempt ${github.run_attempt} does not match expected attempt ${expected.runAttempt}`,
-      );
-    }
-    const cacheBackend = record.cache_backend;
-    if (
-      !CacheTelemetry.isJsonRecord(cacheBackend) ||
-      (cacheBackend.kind !== "remote" && cacheBackend.kind !== "direct_compile")
-    ) {
-      throw new Error("telemetry cache_backend.kind is invalid");
-    }
-    if (typeof cacheBackend.persistent !== "boolean") {
-      throw new Error("telemetry cache_backend.persistent must be boolean");
-    }
-    if (cacheBackend.persistent !== (cacheBackend.kind === "remote")) {
-      throw new Error("telemetry cache backend persistence is inconsistent");
-    }
-    if (typeof cacheBackend.reason !== "string" || !cacheBackend.reason) {
-      throw new Error("telemetry cache_backend.reason is required");
-    }
-    const sccache = record.sccache;
-    if (!CacheTelemetry.isJsonRecord(sccache)) {
-      throw new Error("telemetry sccache summary is required");
-    }
-    for (const [field, value] of Object.entries({
-      report_count: sccache.report_count,
-      compile_requests: sccache.compile_requests,
-      requests_executed: sccache.requests_executed,
-      cache_hits: sccache.cache_hits,
-      cache_misses: sccache.cache_misses,
-      cache_errors: sccache.cache_errors,
-      cache_writes: sccache.cache_writes,
-    })) {
-      if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
-        throw new Error(
-          `telemetry sccache.${field} must be a non-negative integer`,
-        );
-      }
-    }
-    CacheTelemetry.validateOptionalRate(sccache, "hit_rate_percent", "sccache");
-    const buildkit = record.buildkit;
-    if (!CacheTelemetry.isJsonRecord(buildkit)) {
-      throw new Error("telemetry buildkit summary is required");
-    }
-    for (const [field, value] of Object.entries({
-      build_record_count: buildkit.build_record_count,
-      completed_steps: buildkit.completed_steps,
-      cached_steps: buildkit.cached_steps,
-    })) {
-      if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
-        throw new Error(
-          `telemetry buildkit.${field} must be a non-negative integer`,
-        );
-      }
-    }
-    CacheTelemetry.validateOptionalRate(
-      buildkit,
-      "cache_hit_rate_percent",
-      "buildkit",
-    );
-    const collection = record.collection;
-    if (
-      !CacheTelemetry.isJsonRecord(collection) ||
-      typeof collection.complete !== "boolean"
-    ) {
-      throw new Error("telemetry collection status is required");
-    }
-    if (
-      !Array.isArray(collection.warnings) ||
-      !collection.warnings.every((warning) => typeof warning === "string")
-    ) {
-      throw new Error("telemetry collection.warnings must be an array");
-    }
-    return record;
-  }
-
-  /**
-   * @param {JsonRecord} summary
-   * @param {string} field
-   * @param {string} label
-   * @returns {void}
-   */
-  static validateOptionalRate(summary, field, label) {
-    if (!(field in summary)) return;
-    const rate = summary[field];
-    if (typeof rate !== "number" || !Number.isFinite(rate)) {
-      throw new Error(
-        `telemetry ${label} cache rate must be numeric when present`,
-      );
-    }
-    if (rate < 0 || rate > 100) {
-      throw new Error(
-        `telemetry ${label} cache rate must be 0..100 when measured`,
-      );
-    }
+    return new CacheTelemetryValidator().validate(record, expected);
   }
 
   /** @param {CollectTelemetryRequest} request @returns {Promise<CacheTelemetryRecord>} */
@@ -691,6 +684,12 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     const warnings = [...baselineWarnings];
+    /** @type {CollectionFailure[]} */
+    const failures = baselineWarnings.map((warning) => ({
+      component: "buildx_history",
+      reference: "baseline",
+      message: warning,
+    }));
     /** @type {BuildHistoryRecord[]} */
     let records = [];
     try {
@@ -702,13 +701,38 @@ export class CacheTelemetry {
       records = selection.records;
       warnings.push(...selection.warnings);
     } catch (error) {
-      warnings.push(
-        `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
-      );
+      const message = CacheTelemetry.errorMessage(error);
+      warnings.push(`buildx_history_unavailable: ${message}`);
+      failures.push({
+        component: "buildx_history",
+        reference: "current",
+        message,
+      });
     }
 
     /** @type {SccacheReport[]} */
     const reports = [];
+    /** @type {JsonRecord[]} */
+    const historyEvents = [];
+    let rawBuildLog = "";
+    const rawBuildLogPath =
+      environment.NOOK_BUILDKIT_RAW_LOG ||
+      (environment.RUNNER_TEMP
+        ? path.join(environment.RUNNER_TEMP, "nook-build-compile.raw.log")
+        : "");
+    if (rawBuildLogPath && fs.existsSync(rawBuildLogPath)) {
+      try {
+        rawBuildLog = fs.readFileSync(rawBuildLogPath, "utf8");
+        reports.push(
+          ...CacheTelemetry.extractSccacheReportsFromText(rawBuildLog),
+        );
+      } catch (error) {
+        warnings.push(
+          `buildx_raw_log_unavailable: ${CacheTelemetry.errorMessage(error)}`,
+        );
+      }
+    }
+    const reportsFromRawLog = reports.length > 0;
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -735,14 +759,46 @@ export class CacheTelemetry {
           warnings.push(
             `buildx_logs_unavailable:${result.record.ref}: ${result.message}`,
           );
+          failures.push({
+            component: "buildx_logs",
+            reference: result.record.ref,
+            message: result.message,
+          });
           break;
         case HistoryLogCollectionKind.Collected:
-          reports.push(
-            ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
+          historyEvents.push(
+            ...result.events.map((event) => ({
+              ...event,
+              nook_history_ref: result.record.ref,
+            })),
           );
+          if (!reportsFromRawLog) {
+            reports.push(
+              ...CacheTelemetry.extractSccacheReports(
+                result.events,
+                seenReports,
+              ),
+            );
+          }
           break;
       }
     }
+
+    const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    if (buildkit.cache_export.incomplete_failures > 0) {
+      warnings.push(
+        `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
+      );
+      failures.push({
+        component: "buildkit_cache_export",
+        reference: "registry",
+        message: `${buildkit.cache_export.incomplete_failures} cache export attempts did not complete`,
+      });
+    }
+    const sccache = CacheTelemetry.summarizeSccache(reports);
+    sccache.fallback = rawBuildLog
+      ? CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog)
+      : CacheTelemetry.extractSccacheFallback(historyEvents);
 
     return {
       schema_version: 1,
@@ -752,12 +808,14 @@ export class CacheTelemetry {
         job: String(job),
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
-      sccache: CacheTelemetry.summarizeSccache(reports),
-      buildkit: CacheTelemetry.summarizeBuildkit(records),
+      cache_scope: new CacheScopeTelemetry(environment).record(),
+      sccache,
+      buildkit,
       buildkit_records: records,
       collection: {
         complete: warnings.length === 0,
         warnings,
+        failures,
       },
     };
   }
@@ -781,12 +839,20 @@ export class CacheTelemetry {
         job: String(job),
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
+      cache_scope: new CacheScopeTelemetry(environment).record(),
       sccache: CacheTelemetry.summarizeSccache([]),
       buildkit: CacheTelemetry.summarizeBuildkit([]),
       buildkit_records: [],
       collection: {
         complete: false,
         warnings: [String(warning)],
+        failures: [
+          {
+            component: "collector",
+            reference: "cache-telemetry",
+            message: String(warning),
+          },
+        ],
       },
     };
   }
@@ -821,8 +887,16 @@ export class CacheTelemetry {
         "### Cache telemetry",
         "",
         `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
+        `- sccache authority: baked=\`${record.sccache.baked_runtime_mode}\`, effective=\`${record.sccache.runtime_mode}\`, source=\`${record.sccache.runtime_mode_source}\``,
+        `- sccache counters: \`${record.sccache.counter_reliability}\` (client-side=\`${record.sccache.client_side}\`)`,
+        `- sccache publication: \`${record.sccache.publication_status}\``,
+        `- sccache measurement: \`${record.sccache.measurement}\`; fallback=\`${record.sccache.fallback.state}\` (${record.sccache.fallback.reason})`,
+        `- sccache requests: ${record.sccache.compile_requests} received, ${record.sccache.requests_executed} executed, ${record.sccache.compile_failures} compile failures`,
+        `- sccache cache results: ${record.sccache.cache_hits} hits, ${record.sccache.cache_misses} misses, ${record.sccache.cache_writes} writes`,
+        `- sccache errors: ${record.sccache.cache_errors} cache operations, ${record.sccache.cache_write_errors} cache writes`,
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
+        `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
         "",
       ].join("\n"),
     );

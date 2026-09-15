@@ -1,8 +1,5 @@
 import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
-import type {
-  ParentAgentAttempt,
-  StructuralChildProjectionAuthorization,
-} from '../agent-workflow/domain.ts';
+import type { ParentAgentAttempt } from '../agent-workflow/domain.ts';
 import {
   UntrustedYamlPropertyPresence,
   UntrustedYamlBoundary,
@@ -14,6 +11,7 @@ import type {
 } from '../lib/guards.ts';
 import { StructuralExpertKind, StructuralExpertCatalog } from './catalog.ts';
 import { StructuralExpertContract } from './audit.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Owns the structural expert request decoder registry and its capability transitions. */
 export class StructuralExpertRequestDecoder {
@@ -50,9 +48,12 @@ export class StructuralExpertRequestDecoder {
             'depth',
             'evidencePaths',
             'expert',
+            'featureHeadSha',
             'instruction',
             'kind',
+            'originMainSha',
             'parent',
+            'pinnedLocalDevSha',
             'runId',
             'sourceCommit',
             'task',
@@ -62,9 +63,12 @@ export class StructuralExpertRequestDecoder {
             'childProjections',
             'depth',
             'expert',
+            'featureHeadSha',
             'instruction',
             'kind',
+            'originMainSha',
             'parent',
+            'pinnedLocalDevSha',
             'runId',
             'sourceCommit',
             'task',
@@ -116,6 +120,9 @@ export class StructuralExpertRequestDecoder {
     const reader = new StructuralRequestReader(node);
     const runId = reader.string('runId');
     const sourceCommit = reader.string('sourceCommit');
+    const originMainSha = reader.string('originMainSha');
+    const pinnedLocalDevSha = reader.string('pinnedLocalDevSha');
+    const featureHeadSha = reader.string('featureHeadSha');
     const task = reader.string('task');
     const instruction = reader.string('instruction');
     const attempt = reader.number('attempt');
@@ -137,10 +144,21 @@ export class StructuralExpertRequestDecoder {
     ) {
       StructuralExpertRequestDecoder.invalidRequest();
     }
+    try {
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha,
+        pinnedLocalDevSha,
+      });
+    } catch {
+      StructuralExpertRequestDecoder.invalidRequest();
+    }
     return {
       runId,
       expert: request.expert,
       sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
+      featureHeadSha,
       task,
       attempt,
       depth: 2,
@@ -317,12 +335,24 @@ export class StructuralExpertRequestDecoder {
   }
 }
 
-export type StructuralChildProjection = StructuralChildProjectionAuthorization;
+/** Identifies one child result and view that a synthesis task must read. */
+export type StructuralChildProjection = Readonly<{
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: number;
+  readonly resultPath: string;
+  readonly resultSha256: string;
+  readonly viewPath: string;
+  readonly viewSha256: string;
+}>;
 
 type StructuralInvocationFields = {
   readonly runId: string;
   readonly expert: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: 2;

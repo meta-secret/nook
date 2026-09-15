@@ -28,10 +28,7 @@ export class ModuleExpertRuntimeRouting {
       !moduleExpertCallNames.includes('invokeModuleExpert') ||
       moduleExpertRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime') ||
       moduleExpertRuntimeNames.includes('CodexSdkAgentRuntime') ||
-      !trustedRuntimeCallNames.includes('executeIsolatedModuleExpertAgent') ||
-      !trustedRuntimeCallNames.includes(
-        'consumeIsolatedModuleExpertExecution',
-      ) ||
+      !trustedRuntimeCallNames.includes('executeIsolated') ||
       trustedRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime') ||
       trustedRuntimeNames.includes('CodexSdkAgentRuntime')
     ) {

@@ -42,12 +42,14 @@ import {
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
-globalThis.chrome = {
-  runtime: {
-    id: 'nook-extension',
-    getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
+Object.assign(globalThis, {
+  chrome: {
+    runtime: {
+      id: 'nook-extension',
+      getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
+    },
   },
-} as typeof chrome
+})
 
 const { AccountPickerCleanupMarkerStatus } =
   await import('../src/background/service-worker/account-pickers')
@@ -742,12 +744,17 @@ describe('service worker routing', () => {
     const authenticator = new ExtensionAuthenticatorSession({
       sendSessionMessage: sendSession,
     })
-    expect(
+    const authenticatorResponse =
       await authenticator.authenticatorCodeFromSession({
         grant: routedGrant,
         secretId: 'authenticator-1',
-      }),
-    ).toEqual(ok({ ok: true, code: '012345', expiresAt: expect.any(Number) }))
+      })
+    expect(authenticatorResponse.isOk()).toBe(true)
+    if (authenticatorResponse.isOk()) {
+      expect(authenticatorResponse.value.ok).toBe(true)
+      expect(authenticatorResponse.value.code).toBe('012345')
+      expect(typeof authenticatorResponse.value.expiresAt).toBe('number')
+    }
     expect(delivered).toEqual([
       ExtensionSessionMessageType.ClassifyGrantAuthority,
       ExtensionSessionMessageType.UpdateVault,

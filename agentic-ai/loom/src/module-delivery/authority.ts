@@ -1,44 +1,28 @@
 import { realpathSync } from 'node:fs';
-
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-
 import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
 } from './domain.ts';
-
 import { ModuleRepositoryGit } from './git-command.ts';
-
 import { ModuleDeliveryPlanDecoder } from './validation.ts';
-
-import { MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES } from './evidence-limits.ts';
-
 import type {
   AgentAttemptParent,
   TaskResourcePatternPair,
 } from '../agent-workflow/domain.ts';
-
 import type {
   ModuleDeliveryAdmission,
   ModuleDeliveryAdmissionSelection,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryExpectedLineage,
-  ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
-
 import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 
-import type {
-  ModuleDeliveryAcceptedProviderEvidenceIdentity,
-  ModuleDeliveryEvidenceClaimIdentity,
-} from './evidence.ts';
-
-import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
-
+/** Owns source-repository checks and deterministic plan/resource snapshots. */
 export class ModuleSourceAuthority {
   private constructor(
     private readonly request: AuthenticateModuleDeliverySourceCommitRequest,
@@ -51,25 +35,23 @@ export class ModuleSourceAuthority {
   }
 
   private execute(): string {
-    const request = this.request;
-    const repositoryRoot = realpathSync(request.repositoryRoot);
-    const rootRequest = {
+    const repositoryRoot = realpathSync(this.request.repositoryRoot);
+    const root = ModuleRepositoryGit.runModuleDeliveryGit({
       cwd: repositoryRoot,
       args: ['rev-parse', '--show-toplevel'],
       allowFailure: true,
-    };
-    const rootResult = ModuleRepositoryGit.runModuleDeliveryGit(rootRequest);
+    });
     if (
-      rootResult.exitCode !== 0 ||
-      realpathSync(ModuleRepositoryGit.gitText(rootResult)) !== repositoryRoot
+      root.exitCode !== 0 ||
+      realpathSync(ModuleRepositoryGit.gitText(root)) !== repositoryRoot
     )
       throw new Error('Module delivery repository root is not canonical.');
-    const commitRequest = {
+    const commit = ModuleRepositoryGit.runModuleDeliveryGit({
       cwd: repositoryRoot,
-      args: ['cat-file', '-e', `${request.sourceCommit}^{commit}`],
+      args: ['cat-file', '-e', `${this.request.sourceCommit}^{commit}`],
       allowFailure: true,
-    };
-    if (ModuleRepositoryGit.runModuleDeliveryGit(commitRequest).exitCode !== 0)
+    });
+    if (commit.exitCode !== 0)
       throw new Error('Module delivery source commit is not authenticated.');
     return repositoryRoot;
   }
@@ -89,9 +71,7 @@ export class ModuleSourceAuthority {
       JSON.stringify(accepted.executionPrecedence) !==
         JSON.stringify(candidate.executionPrecedence)
     )
-      throw new Error(
-        'Validated module delivery plan metadata is inconsistent.',
-      );
+      throw new Error('Validated module delivery plan is inconsistent.');
     return accepted;
   }
 
@@ -102,17 +82,15 @@ export class ModuleSourceAuthority {
       request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
         ? []
         : request.node.dependencies.flatMap((taskId) => {
-            const lookupRequest: ModuleDeliveryNodeLookupRequest = {
+            const provider = ModuleSourceAuthority.moduleDeliveryNode({
               plan: request.plan,
               taskId,
-            };
-            const provider =
-              ModuleSourceAuthority.moduleDeliveryNode(lookupRequest);
+            });
             return provider.kind === ModuleDeliveryTaskKind.ReadOnly
               ? provider.resources.evidenceSurface
               : [];
           });
-    const resources: ModuleDeliveryResourceClaims = {
+    return Object.freeze({
       read: Object.freeze([
         ...new Set([...request.node.resources.read, ...evidenceReads]),
       ]),
@@ -120,8 +98,7 @@ export class ModuleSourceAuthority {
       evidenceSurface: Object.freeze([
         ...request.node.resources.evidenceSurface,
       ]),
-    };
-    return Object.freeze(resources);
+    });
   }
 
   static moduleDeliveryNode(
@@ -152,334 +129,88 @@ export class ModuleSourceAuthority {
           JSON.stringify(node.parentLineage)
       )
         throw new Error(`Expected lineage is invalid for ${entry.taskId}.`);
-      const parent: AgentAttemptParent = { ...entry.parentLineage };
-      result.set(entry.taskId, Object.freeze(parent));
+      result.set(entry.taskId, Object.freeze({ ...entry.parentLineage }));
     }
     return result;
-  }
-
-  private static claimsOverlap(request: ResourceClaimPair): boolean {
-    return request.first.some((left) =>
-      request.second.some((right) => {
-        const pair: TaskResourcePatternPair = { first: left, second: right };
-        return TaskResourceClaim.taskResourcePatternsOverlap(pair);
-      }),
-    );
   }
 
   static moduleDeliveryResourcesConflict(
     request: ResourceConflictRequest,
   ): boolean {
-    const pairs: readonly ResourceClaimPair[] = [
+    const claims: readonly ResourceClaimPair[] = [
       { first: request.first.write, second: request.second.write },
       { first: request.first.write, second: request.second.read },
       { first: request.first.read, second: request.second.write },
     ];
-    return pairs.some(ModuleSourceAuthority.claimsOverlap);
-  }
-
-  private static frozenClaim(
-    claim: ModuleDeliveryEvidenceClaimIdentity,
-  ): ModuleDeliveryEvidenceClaimIdentity {
-    const copy: ModuleDeliveryEvidenceClaimIdentity = { ...claim };
-    return Object.freeze(copy);
-  }
-
-  static assertEvidenceBound(
-    identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
-  ): void {
-    if (identities.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
-      throw new Error('Accepted provider evidence ancestry is too large.');
-    const pending = [...identities];
-    const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
-    for (const current of pending) {
-      if (seen.has(current))
-        throw new Error('Accepted provider evidence ancestry is cyclic.');
-      seen.add(current);
-      if (
-        pending.length + current.acceptedProviderEvidence.length >
-        MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES
-      )
-        throw new Error('Accepted provider evidence ancestry is too large.');
-      pending.push(...current.acceptedProviderEvidence);
-    }
-  }
-
-  static freezeProviderEvidenceIdentity(
-    identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
-  ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
-    ModuleSourceAuthority.assertEvidenceBound([identity]);
-    const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
-      ...identity,
-      claimIdentities: Object.freeze(
-        identity.claimIdentities.map(ModuleSourceAuthority.frozenClaim),
-      ),
-      acceptanceRequirements: Object.freeze([
-        ...identity.acceptanceRequirements,
-      ]),
-      acceptedProviderEvidence: Object.freeze(
-        identity.acceptedProviderEvidence.map(
-          ModuleSourceAuthority.freezeProviderEvidenceIdentity,
+    return claims.some((claim) =>
+      claim.first.some((left) =>
+        claim.second.some((right) =>
+          TaskResourceClaim.taskResourcePatternsOverlap({
+            first: left,
+            second: right,
+          } as TaskResourcePatternPair),
         ),
       ),
-    };
-    return Object.freeze(copy);
+    );
   }
 
   static freezeModuleDeliveryAdmissionSelection(
     request: Readonly<ModuleDeliveryAdmissionSelection>,
   ): ModuleDeliveryAdmissionSelection {
-    const selection: ModuleDeliveryAdmissionSelection = {
+    return Object.freeze({
       ...request,
       admissions: Object.freeze([...request.admissions]),
       pendingTaskIds: Object.freeze([...request.pendingTaskIds]),
       blockedTaskIds: Object.freeze([...request.blockedTaskIds]),
-    };
-    return Object.freeze(selection);
+    });
   }
 
   static copyModuleDeliveryAdmission(
     admission: ModuleDeliveryAdmission,
   ): ModuleDeliveryAttemptLease {
-    const resources: ModuleDeliveryResourceClaims = {
-      read: Object.freeze([...admission.resources.read]),
-      write: Object.freeze([...admission.resources.write]),
-      evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
-    };
-    const parentLineage: AgentAttemptParent = { ...admission.parentLineage };
-    return {
+    return Object.freeze({
       ...admission,
-      resources: Object.freeze(resources),
-      parentLineage: Object.freeze(parentLineage),
+      resources: Object.freeze({
+        read: Object.freeze([...admission.resources.read]),
+        write: Object.freeze([...admission.resources.write]),
+        evidenceSurface: Object.freeze([
+          ...admission.resources.evidenceSurface,
+        ]),
+      }),
+      parentLineage: Object.freeze({ ...admission.parentLineage }),
       acceptanceRequirements: Object.freeze([
         ...admission.acceptanceRequirements,
       ]),
-      authorizedProviderEvidence: Object.freeze([
-        ...admission.authorizedProviderEvidence,
-      ]),
-    };
-  }
-
-  static createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDeliveryEvidenceRegistry {
-    const authorities = new WeakMap<
-      AcceptedModuleDeliveryEvidence,
-      ModuleDeliveryGenerationAuthority
-    >();
-    const closures = new WeakMap<
-      ModuleDeliveryGenerationAuthority,
-      Map<string, readonly string[]>
-    >();
-    const evidenceFreshAtHead = (
-      request: EvidenceFreshnessRequest,
-    ): boolean => {
-      const closure = closures
-        .get(request.authority)
-        ?.get(JSON.stringify(request.identity));
-      if (!closure) return false;
-      const laterWrites = request.integratedWrites.filter(
-        ({ taskId }) => !closure.includes(taskId),
-      );
-      const claims: ResourceClaimPair = {
-        first: request.identity.claimIdentities.map(({ claim }) => claim),
-        second: laterWrites.flatMap(({ claims }) => claims),
-      };
-      return (
-        (request.identity.verifiedHeadCommit === request.headCommit ||
-          (laterWrites.length > 0 &&
-            !ModuleSourceAuthority.claimsOverlap(claims))) &&
-        request.identity.acceptedProviderEvidence.every((identity) => {
-          const nestedRequest: EvidenceFreshnessRequest = {
-            authority: request.authority,
-            identity,
-            headCommit: request.headCommit,
-            integratedWrites: request.integratedWrites,
-          };
-          return evidenceFreshAtHead(nestedRequest);
-        })
-      );
-    };
-    const assert = (
-      request: AcceptedModuleDeliveryEvidenceInspection,
-    ): void => {
-      if (authorities.get(request.evidence) !== request.authority)
-        throw new Error(
-          'Accepted module delivery evidence authority is invalid.',
-        );
-    };
-    const identity = (
-      evidence: AcceptedModuleDeliveryEvidence,
-    ): ModuleDeliveryAcceptedProviderEvidenceIdentity => {
-      if (!authorities.has(evidence))
-        throw new Error('Accepted module delivery evidence is forged.');
-      const acceptedIdentity: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
-        schemaVersion: evidence.schemaVersion,
-        generation: evidence.generation,
-        planDigest: evidence.planDigest,
-        taskId: evidence.taskId,
-        attempt: evidence.attempt,
-        producerTeam: evidence.producerTeam,
-        functionalOwner: evidence.functionalOwner,
-        acceptanceOwner: evidence.acceptanceOwner,
-        sourceCommit: evidence.sourceCommit,
-        verifiedHeadCommit: evidence.verifiedHeadCommit,
-        artifactIdentity: evidence.artifactIdentity,
-        artifactDigest: evidence.artifactDigest,
-        sourceProvenanceDigest: evidence.sourceProvenanceDigest,
-        verdict: evidence.verdict,
-        claimIdentities: evidence.claimIdentities,
-        acceptanceRequirements: evidence.acceptanceRequirements,
-        acceptedProviderEvidence: evidence.acceptedProviderEvidence,
-      };
-      return ModuleSourceAuthority.freezeProviderEvidenceIdentity(
-        acceptedIdentity,
-      );
-    };
-    const register = (
-      request: AcceptedModuleDeliveryEvidenceRegistration,
-    ): void => {
-      ModuleSourceAuthority.freezeProviderEvidenceIdentity(request.evidence);
-      if (authorities.has(request.evidence))
-        throw new Error(
-          'Accepted module delivery evidence is already registered.',
-        );
-      authorities.set(request.evidence, request.authority);
-      const key = JSON.stringify(identity(request.evidence));
-      let authorityClosures = closures.get(request.authority);
-      if (!authorityClosures) {
-        authorityClosures = new Map<string, readonly string[]>();
-      }
-      const existing = authorityClosures.get(key);
-      if (
-        existing &&
-        JSON.stringify(existing) !== JSON.stringify(request.integratedTaskIds)
-      ) {
-        authorities.delete(request.evidence);
-        throw new Error(
-          'Accepted evidence integration closure is inconsistent.',
-        );
-      }
-      authorityClosures.set(key, Object.freeze([...request.integratedTaskIds]));
-      closures.set(request.authority, authorityClosures);
-    };
-    const collect = (
-      request: AcceptedModuleDeliveryEvidenceCollectionRequest,
-    ): AcceptedModuleDeliveryEvidenceCollection => {
-      ModuleSourceAuthority.assertEvidenceBound(request.entries);
-      const seen = new Set<string>();
-      const accepted = request.entries.map((evidence) => {
-        const inspection: AcceptedModuleDeliveryEvidenceInspection = {
-          authority: request.authority,
-          evidence,
-        };
-        assert(inspection);
-        const acceptedIdentity = identity(evidence);
-        const freshnessRequest: EvidenceFreshnessRequest = {
-          authority: request.authority,
-          identity: acceptedIdentity,
-          headCommit: request.headCommit,
-          integratedWrites: request.integratedWrites,
-        };
-        if (
-          acceptedIdentity.generation !==
-            request.acceptedPlan.plan.generation ||
-          acceptedIdentity.planDigest !== request.acceptedPlan.planDigest ||
-          seen.has(acceptedIdentity.taskId) ||
-          !evidenceFreshAtHead(freshnessRequest)
-        )
-          throw new Error(
-            `Accepted evidence is invalid for ${acceptedIdentity.taskId}.`,
-          );
-        seen.add(acceptedIdentity.taskId);
-        return evidence;
-      });
-      const collection: AcceptedModuleDeliveryEvidenceCollection = {
-        accepted: Object.freeze([...accepted]),
-        identities: Object.freeze(accepted.map(identity)),
-      };
-      return Object.freeze(collection);
-    };
-    const registry: AcceptedModuleDeliveryEvidenceRegistry = {
-      register,
-      assert,
-      identity,
-      collect,
-    };
-    return Object.freeze(registry);
+    });
   }
 }
 
-export type AcceptedModuleDeliveryEvidenceInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly evidence: AcceptedModuleDeliveryEvidence;
-};
-
-export type AcceptedModuleDeliveryEvidenceRegistration =
-  AcceptedModuleDeliveryEvidenceInspection & {
-    readonly integratedTaskIds: readonly string[];
-  };
-
-export type ModuleDeliveryIntegratedWrite = Readonly<{
-  taskId: string;
-  claims: readonly string[];
-}>;
-
-export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
-  authority: ModuleDeliveryGenerationAuthority;
+export type ExpectedLineageMapRequest = Readonly<{
   acceptedPlan: ValidatedModuleDeliveryPlan;
-  entries: readonly AcceptedModuleDeliveryEvidence[];
-  headCommit: string;
-  integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
+  entries: readonly ModuleDeliveryExpectedLineage[];
 }>;
 
-export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
-  accepted: readonly AcceptedModuleDeliveryEvidence[];
-  identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+export type ResourceConflictRequest = Readonly<{
+  first: ModuleDeliveryResourceClaims;
+  second: ModuleDeliveryResourceClaims;
 }>;
 
-export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
-  register: (request: AcceptedModuleDeliveryEvidenceRegistration) => void;
-  assert: (request: AcceptedModuleDeliveryEvidenceInspection) => void;
-  identity: (
-    evidence: AcceptedModuleDeliveryEvidence,
-  ) => ModuleDeliveryAcceptedProviderEvidenceIdentity;
-  collect: (
-    request: AcceptedModuleDeliveryEvidenceCollectionRequest,
-  ) => AcceptedModuleDeliveryEvidenceCollection;
+type ResourceClaimPair = Readonly<{
+  first: readonly string[];
+  second: readonly string[];
 }>;
 
-type EvidenceFreshnessRequest = Readonly<{
-  authority: ModuleDeliveryGenerationAuthority;
-  identity: ModuleDeliveryAcceptedProviderEvidenceIdentity;
-  headCommit: string;
-  integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
+export type AuthenticateModuleDeliverySourceCommitRequest = Readonly<{
+  repositoryRoot: string;
+  sourceCommit: string;
 }>;
 
-export type ExpectedLineageMapRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly entries: readonly ModuleDeliveryExpectedLineage[];
-};
+export type FrozenModuleDeliveryResourcesRequest = Readonly<{
+  node: ModuleDeliveryNodeV2;
+  plan: ValidatedModuleDeliveryPlan;
+}>;
 
-export type ResourceConflictRequest = {
-  readonly first: ModuleDeliveryResourceClaims;
-  readonly second: ModuleDeliveryResourceClaims;
-};
-
-type ResourceClaimPair = {
-  readonly first: readonly string[];
-  readonly second: readonly string[];
-};
-
-export type AuthenticateModuleDeliverySourceCommitRequest = {
-  readonly repositoryRoot: string;
-  readonly sourceCommit: string;
-};
-
-export type FrozenModuleDeliveryResourcesRequest = {
-  readonly node: ModuleDeliveryNodeV2;
-  readonly plan: ValidatedModuleDeliveryPlan;
-};
-
-export type ModuleDeliveryNodeLookupRequest = {
-  readonly plan: ValidatedModuleDeliveryPlan;
-  readonly taskId: string;
-};
+export type ModuleDeliveryNodeLookupRequest = Readonly<{
+  plan: ValidatedModuleDeliveryPlan;
+  taskId: string;
+}>;

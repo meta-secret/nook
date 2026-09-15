@@ -12,9 +12,18 @@ type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
 >[0]
 
+export type ExternalCompanionMessage = {
+  [key: string]:
+    | string
+    | number
+    | boolean
+    | ExternalCompanionMessage
+    | ExternalCompanionMessage[]
+}
+
 export type ExternalCompanionRoutingRequest = {
   dependencies: ExternalCompanionRoutingDependencies
-  message: Parameters<ChromeMessageListener>[0]
+  message: ExternalCompanionMessage
   sender: chrome.runtime.MessageSender
   sendResponse: Parameters<ChromeMessageListener>[2]
 }
@@ -35,9 +44,7 @@ export type ExternalCompanionRoutingDependencies = {
   requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
 }
 
-type MessageResponse = Parameters<
-  ExternalCompanionRoutingRequest['sendResponse']
->[0]
+type MessageResponse = { ok: boolean; reason?: string }
 
 const forbiddenSenderResponse: MessageResponse = {
   ok: false,

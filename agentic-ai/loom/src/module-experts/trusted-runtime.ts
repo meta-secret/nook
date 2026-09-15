@@ -1,33 +1,23 @@
-import { err, ok, type Result } from 'neverthrow';
-import {
-  type AgentExecutionFailure,
-  AgentExecutionFailureKind,
+import type { Result } from 'neverthrow';
+import type {
+  AgentExecutionCompletion,
+  AgentExecutionFailure,
+  AgentExecutionInvocation,
+  RuntimeActivityObserver,
 } from '../agent-workflow/runtime.ts';
-import { createHash } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
-  AgentAttemptParentKind,
   AgentReasoningEffort,
   AgentWorkspacePolicy,
-  DelegatedAgentWorkflowName,
   WorkflowExecutorKind,
   WorkflowResultKind,
 } from '../agent-workflow/domain.ts';
 import type {
-  AgentAttemptParent,
   AgentProfile,
   AgentTaskExecution,
 } from '../agent-workflow/domain.ts';
-import { ModuleExpertIsolationReceipts } from './isolation-receipt.ts';
-import type {
-  ConsumeIsolatedModuleExpertExecutionArgs,
-  ExecuteIsolatedModuleExpertAgentArgs,
-} from './isolation-receipt.ts';
-import type {
-  AgentExecutionCompletion,
-  AgentExecutionInvocation,
-  RuntimeActivityObserver,
-} from '../agent-workflow/runtime.ts';
+import { ModuleExpertCodexSdkAgentRuntime } from '../agent-workflow/codex-runtime.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../agent-workflow/agent-attempt-version.ts';
 import { ModuleExpertContract } from './audit.ts';
 import {
   MODULE_EXPERT_AGENT_INSTRUCTIONS,
@@ -35,180 +25,36 @@ import {
   WEB_EXPERT_SKILL_PATHS,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
-import { ModuleExpertParentAuthorization } from './parent-authorization.ts';
-import type { VerifiedModuleExpertParentAuthorization } from './parent-authorization.ts';
 import { ModuleExpertRequestDecoder } from './request-codec.ts';
 import type { ModuleExpertInvocationRequest } from './request-codec.ts';
-import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../agent-workflow/agent-attempt-version.ts';
 
 export const MODULE_EXPERT_WORKFLOW_VERSION =
   CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION;
 
-export enum ModuleExpertRuntimeCapabilityKind {
-  Session = 'module-expert-runtime-session',
-  JournalAuthority = 'module-expert-journal-authority',
-  JournalBinding = 'module-expert-journal-binding',
-  CompletionAuthority = 'module-expert-completion-authority',
-}
-
-export type ModuleExpertRuntimeIdentity = {
-  readonly runDirectory: string;
-  readonly workingDirectory: string;
-  readonly runId: string;
-  readonly workflow: DelegatedAgentWorkflowName.AgentWork;
-  readonly workflowVersion: string;
-  readonly sourceCommit: string;
-  readonly task: string;
-  readonly agent: string;
-  readonly attempt: number;
-  readonly depth: number;
-  readonly parent: AgentAttemptParent;
-  readonly instruction: string;
+/** Plain task data passed through the trusted in-process handoff. */
+export type ModuleExpertRuntimeSession = Readonly<{
+  readonly invocation: AgentExecutionInvocation<string, string>;
   readonly selectedContextPaths: readonly string[];
-};
+}>;
 
-export class ModuleExpertRuntimeSession {
-  readonly kind = ModuleExpertRuntimeCapabilityKind.Session;
-  private seal(): void {
-    Object.freeze(this);
-  }
-  private constructor() {}
-  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertRuntimeSession {
-    if (key !== AUTHORITY_ISSUANCE)
-      throw new Error('Invalid capability issuance.');
-    const capability = new ModuleExpertRuntimeSession();
-    capability.seal();
-    return capability;
-  }
-}
-
-export class ModuleExpertJournalAuthority {
-  readonly kind = ModuleExpertRuntimeCapabilityKind.JournalAuthority;
-  private seal(): void {
-    Object.freeze(this);
-  }
-  private constructor() {}
-  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertJournalAuthority {
-    if (key !== AUTHORITY_ISSUANCE)
-      throw new Error('Invalid capability issuance.');
-    const capability = new ModuleExpertJournalAuthority();
-    capability.seal();
-    return capability;
-  }
-}
-
-export class ModuleExpertJournalBinding {
-  readonly kind = ModuleExpertRuntimeCapabilityKind.JournalBinding;
-  private seal(): void {
-    Object.freeze(this);
-  }
-  private constructor() {}
-  static issue(key: typeof AUTHORITY_ISSUANCE): ModuleExpertJournalBinding {
-    if (key !== AUTHORITY_ISSUANCE)
-      throw new Error('Invalid capability issuance.');
-    const capability = new ModuleExpertJournalBinding();
-    capability.seal();
-    return capability;
-  }
-}
-
-export class ModuleExpertCompletionAuthority {
-  readonly kind = ModuleExpertRuntimeCapabilityKind.CompletionAuthority;
-  private seal(): void {
-    Object.freeze(this);
-  }
-  private constructor() {}
-  static issue(
-    key: typeof AUTHORITY_ISSUANCE,
-  ): ModuleExpertCompletionAuthority {
-    if (key !== AUTHORITY_ISSUANCE)
-      throw new Error('Invalid capability issuance.');
-    const capability = new ModuleExpertCompletionAuthority();
-    capability.seal();
-    return capability;
-  }
-}
-
-export type TrustedModuleExpertExecution = {
-  readonly completion: AgentExecutionCompletion;
-  readonly authority: ModuleExpertCompletionAuthority;
-};
-
-export type CreateModuleExpertRuntimeSessionArgs = {
+export type CreateModuleExpertRuntimeSessionArgs = Readonly<{
   readonly repoRoot: string;
   readonly request: ModuleExpertInvocationRequest;
-  readonly parentAuthorization: VerifiedModuleExpertParentAuthorization;
-};
+}>;
 
-export type CreatedModuleExpertRuntimeSession = {
+export type CreatedModuleExpertRuntimeSession = Readonly<{
   readonly session: ModuleExpertRuntimeSession;
-  readonly journalAuthority: ModuleExpertJournalAuthority;
-  readonly identity: ModuleExpertRuntimeIdentity;
-};
+}>;
 
-export type ExecuteModuleExpertAgentArgs = {
+export type ExecuteModuleExpertAgentArgs = Readonly<{
   readonly session: ModuleExpertRuntimeSession;
   readonly signal: AbortSignal;
   readonly observe: RuntimeActivityObserver;
-};
+}>;
 
-export type ConsumeModuleExpertJournalAuthorityArgs = {
-  readonly authority: ModuleExpertJournalAuthority;
-  readonly identity: ModuleExpertRuntimeIdentity;
-};
-
-export type ConsumeModuleExpertCompletionAuthorityArgs = {
-  readonly binding: ModuleExpertJournalBinding;
-  readonly execution: TrustedModuleExpertExecution;
-  readonly terminalCompletion: AgentExecutionCompletion;
-};
-
-type ModuleExpertSessionRecord = {
-  readonly identity: ModuleExpertRuntimeIdentity;
-  readonly identityDigest: string;
-  readonly agentProfile: AgentProfile<string>;
-  readonly execution: AgentTaskExecution<string>;
-  readonly selectedContextPaths: readonly string[];
-};
-
-type ModuleExpertJournalAuthorityRecord = {
-  readonly session: ModuleExpertRuntimeSession;
-  readonly identityDigest: string;
-};
-
-type ModuleExpertCompletionAuthorityRecord =
-  ModuleExpertJournalAuthorityRecord & {
-    readonly completionDigest: string;
-  };
-
-type ModuleExpertPromptContext = {
-  readonly profile: ModuleExpertProfile;
-  readonly instruction: string;
-  readonly selectedContextPaths: readonly string[];
-};
-
-/** Owns the module expert runtime authority registry and its capability transitions. */
-export class ModuleExpertRuntimeAuthority {
+/** Builds and runs one bounded module expert task. */
+export class ModuleExpertRuntime {
   private constructor() {}
-  private static readonly MODULE_EXPERT_SESSIONS = new WeakMap<
-    ModuleExpertRuntimeSession,
-    ModuleExpertSessionRecord
-  >();
-
-  private static readonly MODULE_EXPERT_JOURNAL_AUTHORITIES = new WeakMap<
-    ModuleExpertJournalAuthority,
-    ModuleExpertJournalAuthorityRecord
-  >();
-
-  private static readonly MODULE_EXPERT_JOURNAL_BINDINGS = new WeakMap<
-    ModuleExpertJournalBinding,
-    ModuleExpertJournalAuthorityRecord
-  >();
-
-  private static readonly MODULE_EXPERT_COMPLETION_AUTHORITIES = new WeakMap<
-    ModuleExpertCompletionAuthority,
-    ModuleExpertCompletionAuthorityRecord
-  >();
 
   static createModuleExpertRuntimeSession(
     args: CreateModuleExpertRuntimeSessionArgs,
@@ -217,74 +63,25 @@ export class ModuleExpertRuntimeAuthority {
       ModuleExpertRequestDecoder.validatedModuleExpertInvocationRequest(
         args.request,
       );
-    if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
-      throw new Error('Module expert runtime parent identity is invalid.');
+    if (request.parent.kind !== 'agent-attempt') {
+      throw new Error('Module expert runtime parent shape is invalid.');
     }
     const repoRoot = resolve(args.repoRoot);
-    const auditArgs = { repoRoot };
-    const audit = ModuleExpertContract.auditModuleExperts(auditArgs);
+    const audit = ModuleExpertContract.auditModuleExperts({ repoRoot });
     const profile = MODULE_EXPERT_CATALOG.find(
       (candidate) => candidate.name === request.expert,
     );
     if (!audit.auditOk || !profile) {
       throw new Error('Module expert runtime contract is invalid.');
     }
-    const runDirectory = join(
-      repoRoot,
-      'workflow',
-      'processing',
-      DelegatedAgentWorkflowName.AgentWork,
-      request.runId,
-    );
-    const parentRequest = {
-      runId: request.runId,
-      sourceCommit: request.sourceCommit,
-      task: request.task,
-      expert: profile.name,
-      attempt: request.attempt,
-      depth: request.depth,
-      parent: request.parent,
-    };
-    const consumeArgs = {
-      runDirectory,
-      workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
-      request: parentRequest,
-      expertNames: MODULE_EXPERT_CATALOG.map((expert) => expert.name),
-      authorization: args.parentAuthorization,
-    };
-    ModuleExpertParentAuthorization.consumeModuleExpertParentAuthorization(
-      consumeArgs,
-    );
-    const promptContext: ModuleExpertPromptContext = {
+    const selectedContextPaths = Object.freeze([
+      ...request.selectedContextPaths,
+    ]);
+    const instruction = ModuleExpertRuntime.moduleExpertInstruction({
       profile,
       instruction: request.instruction,
-      selectedContextPaths: request.selectedContextPaths,
-    };
-    const instruction =
-      ModuleExpertRuntimeAuthority.moduleExpertInstruction(promptContext);
-    const parentCopy: AgentAttemptParent = { ...request.parent };
-    const parent = Object.freeze(parentCopy);
-    const identityValue: ModuleExpertRuntimeIdentity = {
-      runDirectory,
-      workingDirectory: repoRoot,
-      runId: request.runId,
-      workflow: DelegatedAgentWorkflowName.AgentWork,
-      workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
-      sourceCommit: request.sourceCommit,
-      task: request.task,
-      agent: profile.name,
-      attempt: request.attempt,
-      depth: request.depth,
-      parent,
-      instruction,
-      selectedContextPaths: Object.freeze([...request.selectedContextPaths]),
-    };
-    const identity = Object.freeze(identityValue);
-    const sessionValue = ModuleExpertRuntimeSession.issue(AUTHORITY_ISSUANCE);
-    const session: ModuleExpertRuntimeSession = sessionValue;
-    const authorityValue =
-      ModuleExpertJournalAuthority.issue(AUTHORITY_ISSUANCE);
-    const journalAuthority: ModuleExpertJournalAuthority = authorityValue;
+      selectedContextPaths,
+    });
     const agentProfile: AgentProfile<string> = {
       name: profile.name,
       instructionPrefix: MODULE_EXPERT_AGENT_INSTRUCTIONS,
@@ -297,194 +94,66 @@ export class ModuleExpertRuntimeAuthority {
       instruction,
       resultKind: WorkflowResultKind.ModuleExpertEvidence,
     };
-    const identityDigest =
-      ModuleExpertRuntimeAuthority.moduleExpertIdentityDigest(identity);
-    const record: ModuleExpertSessionRecord = {
-      identity,
-      identityDigest,
-      agentProfile,
+    const invocation: AgentExecutionInvocation<string, string> = {
+      task: request.task,
+      attempt: request.attempt,
+      sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
+      runId: request.runId,
+      workingDirectory: repoRoot,
+      upstreamOutputs: [],
+      signal: AbortSignal.abort(),
+      observe: async () => {},
       execution,
-      selectedContextPaths: identity.selectedContextPaths,
+      agentProfile,
     };
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_SESSIONS.set(session, record);
-    const authorityRecord: ModuleExpertJournalAuthorityRecord = {
-      session,
-      identityDigest,
-    };
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_AUTHORITIES.set(
-      journalAuthority,
-      authorityRecord,
-    );
-    const created = { session, journalAuthority, identity };
-    return Object.freeze(created);
+    return Object.freeze({
+      session: Object.freeze({ invocation, selectedContextPaths }),
+    });
   }
 
-  static async executeModuleExpertAgent(
+  static executeModuleExpertAgent(
     args: ExecuteModuleExpertAgentArgs,
-  ): Promise<Result<TrustedModuleExpertExecution, AgentExecutionFailure>> {
-    const record = ModuleExpertRuntimeAuthority.MODULE_EXPERT_SESSIONS.get(
-      args.session,
-    );
-    if (!record) {
-      return err({
-        kind: AgentExecutionFailureKind.RuntimeSession,
-        message: 'Module expert runtime session identity is invalid.',
-      });
-    }
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_SESSIONS.delete(args.session);
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const invocation: AgentExecutionInvocation<string, string> = {
-      task: record.identity.task,
-      attempt: record.identity.attempt,
-      sourceCommit: record.identity.sourceCommit,
-      runId: record.identity.runId,
-      workingDirectory: record.identity.workingDirectory,
-      upstreamOutputs: [],
+      ...args.session.invocation,
       signal: args.signal,
       observe: args.observe,
-      execution: record.execution,
-      agentProfile: record.agentProfile,
     };
-    const executionArgs: ExecuteIsolatedModuleExpertAgentArgs<string, string> =
-      {
-        invocation,
-        selectedContextPaths: record.selectedContextPaths,
-      };
-    const isolatedExecutionResult =
-      await ModuleExpertIsolationReceipts.executeIsolatedModuleExpertAgent(
-        executionArgs,
-      );
-    if (isolatedExecutionResult.isErr())
-      return err(isolatedExecutionResult.error);
-    const isolatedExecution = isolatedExecutionResult.value;
-    const consumeArgs: ConsumeIsolatedModuleExpertExecutionArgs<
-      string,
-      string
-    > = {
-      execution: isolatedExecution,
+    return ModuleExpertCodexSdkAgentRuntime.executeIsolated({
       invocation,
-      selectedContextPaths: record.selectedContextPaths,
-    };
-    ModuleExpertIsolationReceipts.consumeIsolatedModuleExpertExecution(
-      consumeArgs,
-    );
-    const completion = isolatedExecution.completion;
-    const authorityValue =
-      ModuleExpertCompletionAuthority.issue(AUTHORITY_ISSUANCE);
-    const authority: ModuleExpertCompletionAuthority = authorityValue;
-    const authorityRecord: ModuleExpertCompletionAuthorityRecord = {
-      session: args.session,
-      identityDigest: record.identityDigest,
-      completionDigest:
-        ModuleExpertRuntimeAuthority.moduleExpertCompletionDigest(completion),
-    };
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_COMPLETION_AUTHORITIES.set(
-      authority,
-      authorityRecord,
-    );
-    const execution = { completion, authority };
-    return ok(Object.freeze(execution));
-  }
-
-  static consumeModuleExpertJournalAuthority(
-    args: ConsumeModuleExpertJournalAuthorityArgs,
-  ): ModuleExpertJournalBinding {
-    const record =
-      ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_AUTHORITIES.get(
-        args.authority,
-      );
-    if (
-      !record ||
-      record.identityDigest !==
-        ModuleExpertRuntimeAuthority.moduleExpertIdentityDigest(args.identity)
-    ) {
-      throw new Error('Module expert journal authority is invalid.');
-    }
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_AUTHORITIES.delete(
-      args.authority,
-    );
-    const bindingValue = ModuleExpertJournalBinding.issue(AUTHORITY_ISSUANCE);
-    const binding: ModuleExpertJournalBinding = bindingValue;
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_BINDINGS.set(
-      binding,
-      record,
-    );
-    return binding;
-  }
-
-  static consumeModuleExpertCompletionAuthority(
-    args: ConsumeModuleExpertCompletionAuthorityArgs,
-  ): void {
-    const journalRecord =
-      ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_BINDINGS.get(
-        args.binding,
-      );
-    const completionRecord =
-      ModuleExpertRuntimeAuthority.MODULE_EXPERT_COMPLETION_AUTHORITIES.get(
-        args.execution.authority,
-      );
-    if (
-      !journalRecord ||
-      !completionRecord ||
-      journalRecord.session !== completionRecord.session ||
-      journalRecord.identityDigest !== completionRecord.identityDigest ||
-      completionRecord.completionDigest !==
-        ModuleExpertRuntimeAuthority.moduleExpertCompletionDigest(
-          args.execution.completion,
-        ) ||
-      completionRecord.completionDigest !==
-        ModuleExpertRuntimeAuthority.moduleExpertCompletionDigest(
-          args.terminalCompletion,
-        )
-    ) {
-      throw new Error('Module expert completion authority is invalid.');
-    }
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_JOURNAL_BINDINGS.delete(
-      args.binding,
-    );
-    ModuleExpertRuntimeAuthority.MODULE_EXPERT_COMPLETION_AUTHORITIES.delete(
-      args.execution.authority,
-    );
-  }
-
-  private static moduleExpertCompletionDigest(
-    completion: AgentExecutionCompletion,
-  ): string {
-    return createHash('sha256')
-      .update(JSON.stringify(completion))
-      .digest('hex');
-  }
-
-  private static moduleExpertIdentityDigest(
-    identity: ModuleExpertRuntimeIdentity,
-  ): string {
-    return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+      selectedContextPaths: args.session.selectedContextPaths,
+    });
   }
 
   private static moduleExpertInstruction(
-    context: ModuleExpertPromptContext,
+    context: Readonly<{
+      readonly profile: ModuleExpertProfile;
+      readonly instruction: string;
+      readonly selectedContextPaths: readonly string[];
+    }>,
   ): string {
-    const profile = context.profile;
     const selectedSkillPaths = context.selectedContextPaths.filter((path) =>
       WEB_EXPERT_SKILL_PATHS.some((skillPath) => skillPath === path),
     );
     return [
-      `Assigned module expert: ${profile.name}`,
-      `Description: ${profile.description}`,
-      `Module roots: ${JSON.stringify(profile.moduleRoots)}`,
-      `Additional scope: ${JSON.stringify(profile.scopePaths)}`,
+      `Assigned module expert: ${context.profile.name}`,
+      `Description: ${context.profile.description}`,
+      `Module roots: ${JSON.stringify(context.profile.moduleRoots)}`,
+      `Additional scope: ${JSON.stringify(context.profile.scopePaths)}`,
       `Selected task context: ${JSON.stringify(context.selectedContextPaths)}`,
       `Task-selected skill paths: ${JSON.stringify(selectedSkillPaths)}`,
-      `Generated scope: ${JSON.stringify(profile.generatedScopePaths.map((scope) => scope.path))}`,
-      `Excluded paths: ${JSON.stringify(profile.excludedPaths)}`,
-      `Public entry points: ${JSON.stringify(profile.publicEntryPoints)}`,
-      `Authority paths: ${JSON.stringify(profile.authorityPaths)}`,
-      `Skill paths: ${JSON.stringify(profile.skillPaths)}`,
-      `Focused validation selectors: ${JSON.stringify(profile.validationSelectors)}`,
+      `Generated scope: ${JSON.stringify(context.profile.generatedScopePaths.map((scope) => scope.path))}`,
+      `Excluded paths: ${JSON.stringify(context.profile.excludedPaths)}`,
+      `Public entry points: ${JSON.stringify(context.profile.publicEntryPoints)}`,
+      `Authority paths: ${JSON.stringify(context.profile.authorityPaths)}`,
+      `Skill paths: ${JSON.stringify(context.profile.skillPaths)}`,
+      `Focused validation selectors: ${JSON.stringify(context.profile.validationSelectors)}`,
       'Structured continuation: populate externalApi, dependencies, consumers, behaviorInvariants, securityInvariants, compatibilityInvariants, owningTests, focusedValidation, risks, unresolvedDecisions, and parentActions with at least one concrete entry each. Use an explicit none-with-reason entry when a category has no items.',
       'Parent actions are evidence for the delivery owner. They do not authorize scheduling, writes, or further delegation.',
       `Requested analysis:\n${context.instruction}`,
     ].join('\n\n');
   }
 }
-
-const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

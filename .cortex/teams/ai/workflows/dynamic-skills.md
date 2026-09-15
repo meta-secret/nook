@@ -8,7 +8,7 @@ or refactor pattern that should become durable agent knowledge.
 Nook's canonical repository-local skill cards live in `dynamic-skills/`
 directories under Gizmo, shared Cortex, or one engineering team.
 
-- Delivery-control cards live under `.cortex/gizmo/dynamic-skills/`.
+- Delivery-control cards live under `.cortex/gizmo-prime/dynamic-skills/`.
 - Shared ownerless repository-wide cards live under
   `.cortex/shared/dynamic-skills/`.
 - AI cards live under `.cortex/teams/ai/dynamic-skills/`.
@@ -48,6 +48,26 @@ Use <skill-name> and refactor <scope>
 
 Read the named skill card, read any linked skill, inspect the target
 scope, and apply the pattern with normal coding workflow and validation.
+
+## Delivery and Workbench routing
+
+AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
+authors any Workbench record or request content and decides its Workbench
+state. For feature build or check mechanics, the owning Feature Gizmo submits
+the exact head to Gizmo Prime. Gizmo Prime authorizes Delivery Pipeline Team
+Gizmo, which dispatches PR Lifecycle Agent through the active harness and
+returns the evidence. The dev manager authorizes manager-stage publication,
+slow checks, and promotion through the same Delivery Pipeline Team Gizmo to
+PR Lifecycle Agent route.
+
+For Workbench publication, Feature Gizmo approves the exact record and state.
+Gizmo Prime routes the approved packet through Delivery Pipeline Team Gizmo,
+which dispatches PR Lifecycle Agent through the active harness to publish
+only that controller-authored content.
+
+Team Gizmo and PR Lifecycle Agent perform only packetized mechanics. They do
+not create or update pull requests, author Workbench content, or decide policy,
+readiness, promotion, or Workbench state.
 
 ## Intake Workflow
 
@@ -130,10 +150,10 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/shared/architecture/system.md`](../../../shared/architecture/system.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run the focused worker proof and required formatters. Commit every resulting
-   mutation in the allowed paths and return the exact handoff to Gizmo. If
-   integrated pre-push hygiene mutates AI-owned content, the AI team returns a
-   fresh formatted commit. Gizmo continues from it, reruns hygiene, and pushes.
-   Gizmo authorizes PR Steward to dispatch hosted validation.
-   Use focused remote evidence until the head is ready.
-   Dispatch complete exact-head validation immediately when it is ready.
+6. Apply only the permitted scoped formatting or inexpensive diagnostics during
+   implementation. Commit every resulting mutation in the allowed paths and
+   return the exact handoff to the owning Feature Gizmo. Do not run a local
+   pre-push or broad validation gate. For applicable feature build or check
+   mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
+   Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
+   remote build-only task. The Dev Manager owns later CI validation.

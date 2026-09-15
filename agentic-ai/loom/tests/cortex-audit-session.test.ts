@@ -16,8 +16,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { expect, test } from 'bun:test';
+import { ok } from 'neverthrow';
 
 import { CortexAuditCommand } from '../src/commands/cortex-audit.ts';
+import { RepositoryRoot } from '../src/lib/repo.ts';
+import { LoomFailureCode } from '../src/loom-failure.ts';
 
 import { CortexMarkdownInventory } from '../src/lib/cortex-markdown-files.ts';
 
@@ -56,7 +59,28 @@ export class CortexAuditSessionScenario {
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
-test('uses the pre-push commit for push stability audits', () => {
+test('returns a typed failure when a discovered repository loses its Cortex root', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-missing-root-'));
+  const originalLocate = RepositoryRoot.prototype.locate;
+  RepositoryRoot.prototype.locate = () => ok(repoRoot);
+  try {
+    const result = await CortexAuditCommand.runCortexAuditFromDirectory({
+      request: { includeDensityLint: false },
+      startDirectory: repoRoot,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error).toEqual({
+      code: LoomFailureCode.CortexAuditFailed,
+      message: '.cortex directory is missing',
+    });
+  } finally {
+    RepositoryRoot.prototype.locate = originalLocate;
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('uses the event commit for publication stability audits', () => {
   const before = '1'.repeat(40);
   const base = '2'.repeat(40);
   expect(
@@ -468,7 +492,7 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');
-    const gizmoRoot = path.join(cortexRoot, 'gizmo');
+    const gizmoRoot = path.join(cortexRoot, 'gizmo-prime');
     const gizmoSkillsRoot = path.join(gizmoRoot, 'dynamic-skills');
     const skillsRoot = path.join(aiRoot, 'dynamic-skills');
     const gizmoSkillSlugs = [
@@ -483,7 +507,9 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
       .map((slug) => `- [${slug}](dynamic-skills/${slug}.md)`)
       .join('\n');
     const gizmoIndexRows = gizmoSkillSlugs
-      .map((slug) => `- [${slug}](../../../gizmo/dynamic-skills/${slug}.md)`)
+      .map(
+        (slug) => `- [${slug}](../../../gizmo-prime/dynamic-skills/${slug}.md)`,
+      )
       .join('\n');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
@@ -500,7 +526,7 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
       `# Knowledge Graph
 
 - [Agent Map](AGENTS.md)
-- [Gizmo](gizmo/knowledge-graph.md)
+- [Gizmo](gizmo-prime/knowledge-graph.md)
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
 - [Security](teams/security/knowledge-graph.md)
@@ -575,17 +601,17 @@ ${gizmoIndexRows}
         },
         {
           code: CortexStructureFindingCode.MissingIndex,
-          file: '.cortex/teams/dev-manager/knowledge-graph.md',
+          file: '.cortex/teams/delivery-pipeline/knowledge-graph.md',
           line: 1,
           message:
-            'Required owner knowledge graph is missing: .cortex/teams/dev-manager/knowledge-graph.md',
+            'Required owner knowledge graph is missing: .cortex/teams/delivery-pipeline/knowledge-graph.md',
         },
         {
           code: CortexStructureFindingCode.MissingFromIndex,
           file: '.cortex/knowledge-graph.md',
           line: 1,
           message:
-            'Root knowledge graph must link the owner graph: .cortex/teams/dev-manager/knowledge-graph.md',
+            'Root knowledge graph must link the owner graph: .cortex/teams/delivery-pipeline/knowledge-graph.md',
         },
       ],
       articleStructureFindings: [],
@@ -634,9 +660,9 @@ ${gizmoIndexRows}
         },
         {
           code: CortexContractFindingCode.MissingRuntimeDocument,
-          file: '.cortex/gizmo/workflows/subagent-delegation.md',
+          file: '.cortex/gizmo-prime/workflows/subagent-delegation.md',
           message:
-            'Cortex runtime references a missing document: .cortex/gizmo/workflows/subagent-delegation.md',
+            'Cortex runtime references a missing document: .cortex/gizmo-prime/workflows/subagent-delegation.md',
         },
       ],
       auditOk: false,

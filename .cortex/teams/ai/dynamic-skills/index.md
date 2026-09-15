@@ -11,14 +11,18 @@ consolidated.
 Team-owned Cortex cards are the sole repository-local semantic skill authority.
 Harness profile directories must not mirror or redefine these cards.
 
+AI-authored TypeScript packet requirements live in the
+[AI team contract](../AGENTS.md#authored-implementation-routing). This index
+catalogs the linked authorities without copying their policies.
+
 ## Skill catalog
 
-- **[Dev publication](../../dev-manager/dynamic-skills/dev-publish.md)**
-  - Purpose: Manually publish dev snapshots and coordinate full slow validation.
-- **[Dev promotion](../../dev-manager/dynamic-skills/dev-promote.md)**
-  - Purpose: Fast-forward main to the tested dev SHA with verified remote state.
-- **[team-oriented-development.md](../../../gizmo/dynamic-skills/team-oriented-development.md)**
-  - Purpose: Route capabilities through all five implementation teams with optional bounded expertise providers and Gizmo-owned cross-team joins
+- **[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)**
+  - Purpose: Name feature, Team Gizmo, and Team Agent branches consistently.
+- **[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)**
+  - Purpose: Preserve repository and generated-state hygiene before publication.
+- **[team-oriented-development.md](../../../gizmo-prime/dynamic-skills/team-oriented-development.md)**
+  - Purpose: Route capabilities across the root/controller graphs plus six engineering/operational owner graphs, including Delivery Pipeline and its nested internal graphs, with optional bounded expertise providers and Gizmo-owned cross-team joins
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
@@ -59,25 +63,23 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: Render Gizmo's ordered ephemeral Team Agent plan without acquiring lifecycle authority
 - **[product-spec-lifecycle.md](product-spec-lifecycle.md)**
   - Purpose: **P1 / critical product spec rule:** read owning product specs before implementation; update specs on new knowledge from chat, tasks, or PR iterations
-- **[agent-feature-ownership.md](../../../gizmo/dynamic-skills/agent-feature-ownership.md)**
+- **[agent-feature-ownership.md](../../../gizmo-prime/dynamic-skills/agent-feature-ownership.md)**
   - Purpose: Keep every agent inside its assigned feature and focused issue set
-- **[code-review-comments.md](../../../gizmo/dynamic-skills/code-review-comments.md)**
+- **[code-review-comments.md](../../../gizmo-prime/dynamic-skills/code-review-comments.md)**
   - Purpose: Address active actionable feedback and resolve its review conversations
 - **[dynamic-skill-authoring.md](dynamic-skill-authoring.md)**
   - Purpose: Capture user feedback as durable team-owned Cortex skill cards
-- **[efficient-pr-delivery.md](../../../gizmo/dynamic-skills/efficient-pr-delivery.md)**
+- **[efficient-pr-delivery.md](../../../gizmo-prime/dynamic-skills/efficient-pr-delivery.md)**
   - Purpose: Route current dev delivery and retain prior PR runtime reference
 - **[github-actions-only-validation.md](../../sre/dynamic-skills/github-actions-only-validation.md)**
   - Purpose: Route feature compilation and manager slow checks to remote execution
 - **[kubernetes-native-cluster-execution.md](../../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
-- **[pre-push-hygiene.md](../../sre/dynamic-skills/pre-push-hygiene.md)**
-  - Purpose: Describe prior pre-push runtime under the current dev-stage restrictions
 - **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts
-- **[feature-issue-planning.md](../../../gizmo/dynamic-skills/feature-issue-planning.md)**
+- **[feature-issue-planning.md](../../../gizmo-prime/dynamic-skills/feature-issue-planning.md)**
   - Purpose: Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state
-- **[issue-scope-management.md](../../../gizmo/dynamic-skills/issue-scope-management.md)**
+- **[issue-scope-management.md](../../../gizmo-prime/dynamic-skills/issue-scope-management.md)**
   - Purpose: Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents
 - **[module-expert.md](module-expert.md)**
   - Purpose: Route exact-baseline production-module analysis through one named read-only expert without granting write or scheduling authority
@@ -98,7 +100,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[rust-wasm-name-coherence.md](../../dev-core/dynamic-skills/rust-wasm-name-coherence.md)**
   - Purpose: Keep exported Rust WASM functions and methods directly searchable under their authored names across generated bindings and TypeScript
 - **[svelte-state-modeling.md](../../web-dev/dynamic-skills/svelte-state-modeling.md)**
-  - Purpose: Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM
+  - Purpose: Model browser and visual lifecycle state explicitly while keeping closed portable domain states in Rust/WASM
 - **[typescript-serial-operation-queues.md](../../web-dev/dynamic-skills/typescript-serial-operation-queues.md)**
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
 - **[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)**
@@ -130,7 +132,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map](cortex-document-map/SKILL.md)**
-  - Purpose: Centralize Cortex navigation in the root router, one Gizmo graph, five team graphs, and one shared graph
+  - Purpose: Centralize Cortex navigation across root/controller graphs, six engineering/operational owner graphs including Delivery Pipeline, shared knowledge, and nested Delivery Pipeline internals
 - **[testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md)**
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor
 - **[docker-container-harness.md](../../sre/dynamic-skills/docker-container-harness.md)**

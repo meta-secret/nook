@@ -4,7 +4,11 @@ import {
   TeamTaskContextResolver,
 } from '../../src/team-agents/context.ts';
 import type { TeamTaskContextRequest } from '../../src/team-agents/context.ts';
-import { GizmoOwnedAgentKey, TeamKey } from '../../src/team-agents/catalog.ts';
+import {
+  TeamGizmoKey,
+  TeamInternalAgentKey,
+  TeamKey,
+} from '../../src/team-agents/catalog.ts';
 import { join } from 'node:path';
 import {
   mkdirSync,
@@ -22,9 +26,13 @@ const SRE_CONTEXT_PATHS = [
 ] as const;
 const SRE_DELTA_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
-const PR_STEWARD_CONTEXT_PATHS = [
-  '.cortex/teams/pr-steward/AGENTS.md',
-  '.cortex/teams/pr-steward/knowledge-graph.md',
+const DELIVERY_PIPELINE_GIZMO_CONTEXT_PATHS = [
+  '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+  '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+] as const;
+const DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS = [
+  '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+  '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
 ] as const;
 
 describe('team task context', () => {
@@ -87,18 +95,35 @@ describe('team task context', () => {
     expect(context.skillPaths).toEqual([]);
   });
 
-  test('composes the independent PR Steward Team Agent context', () => {
+  test('composes the Delivery Pipeline Team Gizmo context', () => {
     const request: TeamTaskContextRequest = {
       repositoryRoot: REPO_ROOT,
-      team: GizmoOwnedAgentKey.PrSteward,
+      team: TeamGizmoKey.DeliveryPipeline,
       readClaims: [],
       writeClaims: [],
       selectedSkillPaths: [],
     };
     const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
-    expect(context.team).toBe(GizmoOwnedAgentKey.PrSteward);
-    expect(context.contextPaths).toEqual(PR_STEWARD_CONTEXT_PATHS);
+    expect(context.team).toBe(TeamGizmoKey.DeliveryPipeline);
+    expect(context.contextPaths).toEqual(DELIVERY_PIPELINE_GIZMO_CONTEXT_PATHS);
+    expect(context.skillPaths).toEqual([]);
+  });
+
+  test('composes the internal PR Lifecycle Team Agent context', () => {
+    const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
+      team: TeamInternalAgentKey.PrLifecycle,
+      readClaims: [],
+      writeClaims: [],
+      selectedSkillPaths: [],
+    };
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
+
+    expect(context.team).toBe(TeamInternalAgentKey.PrLifecycle);
+    expect(context.contextPaths).toEqual(
+      DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS,
+    );
     expect(context.skillPaths).toEqual([]);
   });
 

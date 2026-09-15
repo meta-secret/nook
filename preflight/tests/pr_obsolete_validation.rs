@@ -90,7 +90,7 @@ fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()
     let workflow = root.read(path)?;
     for required in [
         "types: [opened, synchronize, reopened, labeled, edited, closed]",
-        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "cancel-in-progress: false",
         "github.event.changes.base.ref.from != ''",
         "if: github.event",
         "github.event.label.name == 'ci:validate'",

@@ -3,13 +3,12 @@ use std::{
     env, fs,
     ops::Deref,
     path::{Path, PathBuf},
-    process::Command,
 };
-
-use anyhow::Context;
 
 #[path = "infra/kubernetes_cache_sim.rs"]
 mod kubernetes_cache_sim;
+#[path = "infra/migration_contracts.rs"]
+mod migration_contracts;
 #[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
 
@@ -37,7 +36,6 @@ impl AsRef<Path> for RepositoryFixture {
         &self.path
     }
 }
-
 impl RepositoryFixture {
     fn read(&self, path: &str) -> String {
         fs::read_to_string(self.join(path))
@@ -45,9 +43,57 @@ impl RepositoryFixture {
     }
 }
 
-fn read_fallible(path: &str) -> anyhow::Result<String> {
-    fs::read_to_string(RepositoryFixture::repository_root().join(path))
-        .with_context(|| format!("failed to read {path}"))
+#[test]
+fn web_static_container_entrypoint_is_top_level_reachable() {
+    let tasks = RepositoryFixture::repository_root().read(".task/static-checks.yml");
+    let public_web_static = tasks
+        .split("\n  web:static:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  web:static:container:\n").next())
+        .unwrap_or_else(|| panic!("static checks must define the public web:static route"));
+    let container_entrypoint = tasks
+        .split("\n  web:static:container:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  static:check:\n").next())
+        .unwrap_or_else(|| panic!("static checks must define a dedicated container entrypoint"));
+
+    assert!(
+        public_web_static.contains("vars: { TASK: web:static:container }"),
+        "web:static must launch its dedicated top-level container entrypoint"
+    );
+    assert!(
+        !container_entrypoint.contains("internal: true"),
+        "the selector launched as a top-level container command must be public"
+    );
+    assert!(
+        container_entrypoint.contains("nook-web-app/node_modules/.bin/eslint")
+            && container_entrypoint.contains("nook-web-app/node_modules/.bin/svelte-check"),
+        "the container entrypoint must retain the complete web static-check body"
+    );
+}
+
+#[test]
+fn parallel_web_verification_invokes_the_static_container_entrypoint() {
+    let root = RepositoryFixture::repository_root();
+    let app_tasks = root.read("nook-app/Taskfile.yml");
+    let parallel_verification = app_tasks
+        .split("\n  _verify:parallel:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  _lint:parallel:\n").next())
+        .unwrap_or_else(|| panic!("app tasks must define the parallel verification gate"));
+
+    assert!(
+        parallel_verification.contains(
+            "task --parallel web:static:container _lint:parallel _test:parallel || failed=1"
+        ),
+        "parallel verification must run the static container entrypoint concurrently within its bounded gate"
+    );
+
+    let web_dockerfile = root.read("nook-app/nook-web/nook-web-app/Dockerfile");
+    assert!(
+        web_dockerfile.contains("timeout --kill-after=10s 10m task _ci:pr"),
+        "the complete concurrent static, lint, and test gate must retain enough bounded runtime"
+    );
 }
 
 fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
@@ -104,13 +150,10 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
 
     let proof = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
     let zot = RepositoryFixture::repository_root().read("infra/sim/bake-cache/zot-config.json");
-    let hive_values =
-        RepositoryFixture::repository_root().read("infra/k0s/scripts/arc-hive-values.rb");
     assert!(proof.contains("registry_ref"));
     assert!(proof.contains("library/alpine"));
     assert!(zot.contains("\"onDemand\": true"));
     assert!(zot.contains("\"preserveDigest\": true"));
-    assert!(hive_values.contains("registry.dev.nokey.sh/library/neo4j:"));
 }
 
 #[test]
@@ -169,7 +212,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                     || trusted_formatter_context
                     || matches!(
                         reference,
-                        "rust-base" | "web-base" | "web-runtime" | "wasm-deps"
+                        "rust-base" | "web-base" | "web-runtime" | "web-deps" | "wasm-deps"
                     )
                     || resolved.starts_with("registry.dev.nokey.sh/"),
                 "{path} resolves a production base outside Zot: {resolved}"
@@ -189,7 +232,6 @@ fn arc_smoke_uses_only_supported_persistent_buildkit_routes() {
     let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc-smoke.yml");
 
     assert!(tasks.contains("ARC_RUNNER_LABEL: nook-k0s"));
-    assert!(tasks.contains("ARC_HIVE_RUNNER_LABEL: nook-k0s-hive"));
     assert!(tasks.contains("ARC_SMOKE_TASK: arc:runtime"));
     assert!(tasks.contains("gh run watch"));
     assert!(tasks.contains("runnerName"));
@@ -288,8 +330,6 @@ fn arc_mesh_reconciliation_fails_closed() {
 fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let values = RepositoryFixture::repository_root()
         .read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
-    let hive_values =
-        RepositoryFixture::repository_root().read("infra/k0s/scripts/arc-hive-values.rb");
     let buildkit =
         RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/buildkit.yaml");
     let container_hook =
@@ -332,11 +372,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC runner contains {forbidden}"
         );
     }
-    assert!(
-        hive_values.contains("hive_values[\"maxRunners\"] = 10")
-            && hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\""),
-        "Hive ARC must own its bounded independent spread group"
-    );
     assert_eq!(buildkit.matches("kind: PersistentVolume\n").count(), 4);
     assert!(buildkit.contains("internalTrafficPolicy: Local"));
     assert!(buildkit.contains("replicas: 4"));
@@ -406,7 +441,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "arc:buildkit:storage:prepare:",
         "rollout status statefulset/nook-buildkit",
         "autoscalingrunnerset/nook-k0s",
-        "autoscalingrunnerset/nook-k0s-hive",
         "arc:build-hosts:activate:",
         "arc:container-hosts:reconcile:",
         "arc-container-job-nodes",
@@ -451,363 +485,4 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         .find("kubectl taint node \"${tier_nodes[@]}\"")
         .unwrap_or_else(|| panic!("ARC activation must expose each tier as one group"));
     assert!(primary < grouped);
-}
-
-#[test]
-fn hive_dispatcher_avoids_dragonball_network_churn_and_bounds_terminal_pods() {
-    let workers =
-        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/deployment.yaml");
-    let dispatcher =
-        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/dispatcher.yaml");
-    let observer =
-        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/observer.yaml");
-    let reaper = RepositoryFixture::repository_root()
-        .read("infra/k0s/manifests/hive/reaper-controller.yaml");
-    let k0s = RepositoryFixture::repository_root().read("infra/k0s/config/k0s.yaml");
-
-    for manifest in [&workers, &dispatcher, &observer, &reaper] {
-        assert!(
-            manifest.contains("replicas: 0"),
-            "Hive must remain paused until duplicate repair orchestration is corrected"
-        );
-    }
-    assert!(
-        workers.contains("runtimeClassName: kata-dragonball")
-            && workers.contains("nook.nokey.sh/node-role: compute"),
-        "Hive workers must keep their private sidecar channel inside Dragonball compute VMs"
-    );
-    assert!(
-        dispatcher.contains("runtimeClassName: kata-qemu-runtime-rs")
-            && dispatcher.contains("nook.nokey.sh/node-role: compute")
-            && dispatcher.contains("sizeLimit: 1Gi"),
-        "the persistent Hive dispatcher must use QEMU Kata on the compute tier with enough bounded checkout space"
-    );
-    assert!(
-        k0s.contains("terminated-pod-gc-threshold: \"200\""),
-        "k0s must bound retained terminal Pods for operational diagnosis"
-    );
-}
-
-#[test]
-fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let output = Command::new("bash")
-        .arg(root.join("preflight/tests/neo4j_credentials.sh"))
-        .arg(root.as_ref())
-        .output()?;
-    assert!(
-        output.status.success(),
-        "Neo4j credential reconciliation harness failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let task = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
-    let credential_validation = task
-        .find("reconcile_neo4j_credentials \"$secret_dir\" \"$retained_storage\"")
-        .context("Neo4j task must reconcile credentials")?;
-    let tls_secret_apply = task
-        .find("kubectl create secret generic hive-neo4j-tls")
-        .context("Neo4j task must publish its TLS secret")?;
-    assert!(
-        credential_validation < tls_secret_apply,
-        "credentials must be validated before replacement TLS Secrets are published"
-    );
-    Ok(())
-}
-
-#[test]
-fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
-    let manifest = read_fallible("infra/k0s/manifests/hive/dispatcher.yaml")?;
-    assert!(!manifest.contains("GH_TOKEN"));
-    assert!(!manifest.contains("hive-github-publication"));
-
-    let client = read_fallible("agentic-ai/minds/hive/src/dispatcher/github.rs")?;
-    assert!(
-        client.contains("https://github.com/meta-secret/nook/actions/runs"),
-        "Hive dispatcher must use the public run page outside the REST API rate budget"
-    );
-    assert!(
-        !client.contains("api.github.com") && !client.contains("Authorization"),
-        "Hive dispatcher must not own a GitHub credential"
-    );
-    assert!(
-        client.contains("kill_on_drop(true)") && client.contains("timeout("),
-        "Hive dispatcher GitHub requests must remain bounded"
-    );
-    Ok(())
-}
-
-#[test]
-fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    for (harness, description) in [
-        (
-            "preflight/tests/hive_auth_sync.sh",
-            "Hive auth synchronization",
-        ),
-        (
-            "preflight/tests/hive_auth_rotation.sh",
-            "Hive auth rotation",
-        ),
-        ("preflight/tests/hive_auth_staging.sh", "Hive auth staging"),
-        (
-            "preflight/tests/hive_mutation_serialization.sh",
-            "Hive mutation serialization",
-        ),
-        (
-            "preflight/tests/hive_deploy_convergence.sh",
-            "Hive deployment convergence",
-        ),
-    ] {
-        let output = Command::new("bash")
-            .arg(root.join(harness))
-            .arg(root.as_ref())
-            .output()?;
-        assert!(
-            output.status.success(),
-            "{description} harness failed:\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let tasks = read_fallible("infra/tasks/hive.yml")?;
-    let rotate = tasks
-        .split("\n  hive:auth:rotate:\n")
-        .nth(1)
-        .and_then(|tail| tail.split("\n  hive:auth:bootstrap:\n").next())
-        .context("Hive tasks must define explicit Codex auth rotation")?;
-    let publish_task = tasks
-        .split("\n  hive:auth:publish:\n")
-        .nth(1)
-        .and_then(|tail| tail.split("\n  hive:auth:sync:\n").next())
-        .context("Hive tasks must define internal Codex auth publication")?;
-    let deploy = tasks
-        .split("\n  hive:deploy:\n")
-        .nth(1)
-        .context("Hive tasks must define deployment")?;
-    assert!(
-        rotate.contains("HIVE_AUTH_PUBLICATION_MODE: replace")
-            && publish_task.contains("HIVE_CODEX_AUTH_FILE is required")
-            && publish_task.contains("IFS= read -r -d '' remote_program <<'REMOTE' || true")
-            && !publish_task.contains("remote_program=\"$(cat <<'REMOTE'")
-            && publish_task.contains("encoded_program=")
-            && publish_task.contains("base64 -d")
-            && publish_task.contains("HIVE_AUTH_REMOTE_BEGIN"),
-        "explicit auth rotation must validate and stream the local credential"
-    );
-    assert!(
-        !publish_task.contains("cat >\"$auth_file\"")
-            && !publish_task.contains("NOOK_HIVE_AUTH_STAGING_ROOT")
-            && publish_task.contains("data: {\"auth.json\": (tojson | @base64)}")
-            && publish_task.contains("kubectl scale deployment/hive")
-            && publish_task.contains("--replicas=0")
-            && publish_task.contains("--for=delete")
-            && publish_task.contains("exec 9>/run/lock/nook/hive-mutation.lock")
-            && publish_task.contains("flock --exclusive --timeout 900 9")
-            && publish_task.contains("nook.nokey.sh/hive-auth-desired-replicas")
-            && !publish_task.contains("$remote_dir/hive-auth-desired-replicas")
-            && publish_task.contains("kubectl rollout status deployment/hive"),
-        "explicit auth rotation must stream the Secret without staging, quiesce brokers, and restore the pool"
-    );
-    assert!(
-        deploy.contains("exec 9>/run/lock/nook/hive-mutation.lock")
-            && deploy.contains("flock --exclusive --timeout 900 9"),
-        "Hive deployment and auth rotation must share the host-global mutation lock"
-    );
-    let neo4j = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
-    assert!(
-        neo4j.contains(
-            "if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN"
-        ) && neo4j.contains("exec 9>/run/lock/nook/hive-mutation.lock")
-            && neo4j.contains("flock --exclusive --timeout 900 9"),
-        "Neo4j TLS rotation must share Hive's host-global mutation lock"
-    );
-    let quiesce = publish_task
-        .find("--replicas=0")
-        .context("auth rotation must quiesce the warm pool")?;
-    let publish = publish_task
-        .find("data: {\"auth.json\": (tojson | @base64)}")
-        .context("auth rotation must publish the replacement Secret")?;
-    let restore = publish_task
-        .rfind("restore_hive_workers")
-        .context("auth rotation must restore the warm pool")?;
-    assert!(
-        quiesce < publish && publish < restore,
-        "auth rotation must stop brokers before publication and restore them afterward"
-    );
-    Ok(())
-}
-
-#[test]
-fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
-    let tasks = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
-    let start = tasks
-        .find("NEO4J_CREDENTIAL_RECONCILIATION_BEGIN")
-        .context("Neo4j task must delimit credential reconciliation")?;
-    let reconciliation = tasks
-        .get(start..)
-        .context("Neo4j reconciliation marker must be a character boundary")?;
-
-    for required in [
-        "tr -d '\\r\\n' > \"$secret_dir/password\"",
-        "Refusing to generate Neo4j credentials while retained data exists",
-        "if ! test -s \"$secret_dir/password\"",
-        "test \"$client_exists\" = true",
-        "test -s \"$secret_dir/password\"",
-        "kubectl apply -f -",
-        "Refusing divergent non-empty Neo4j credentials",
-        "auth_secret_needs_reconcile=true",
-    ] {
-        assert!(
-            reconciliation.contains(required),
-            "Neo4j credential reconciliation is missing: {required}"
-        );
-    }
-    for required in [
-        "hive.nook.sh/neo4j-client-sha256",
-        "hive-workbench-dispatcher",
-        "hive-observer",
-        "kubectl patch",
-        "kubectl rollout status",
-    ] {
-        assert!(
-            tasks.contains(required),
-            "Neo4j client rollout is missing: {required}"
-        );
-    }
-    let retained_probe = tasks
-        .find("retained_storage=false")
-        .context("Neo4j task must probe retained storage")?;
-    let storage_apply = tasks
-        .find("manifests/neo4j/storage.yaml")
-        .context("Neo4j task must apply its storage manifest")?;
-    assert!(
-        retained_probe < storage_apply,
-        "retained storage must be detected before storage resources are applied"
-    );
-    assert!(
-        tasks.contains("sudo -n find /var/lib/hive/neo4j"),
-        "retained host files must fail closed"
-    );
-    assert!(
-        tasks.contains("if ! retained_path=\"$(")
-            && tasks.contains("Failed to inspect retained Neo4j storage"),
-        "a failed retained-storage probe must abort credential reconciliation"
-    );
-    assert!(
-        !tasks
-            .get(retained_probe..storage_apply)
-            .context("Neo4j retained-storage section must have valid boundaries")?
-            .contains("kubectl get pvc"),
-        "an empty PVC from interrupted bootstrap is not retained Neo4j data"
-    );
-    assert!(
-        reconciliation.contains("if grep -Fq '(NotFound)'"),
-        "only a verified Secret NotFound response may be treated as absence"
-    );
-    assert!(
-        reconciliation.contains("Failed to inspect Secret"),
-        "other Secret lookup failures must be propagated"
-    );
-
-    let neo4j_ready = reconciliation
-        .find("kubectl rollout status statefulset/hive-neo4j")
-        .context("Neo4j task must wait for the StatefulSet")?;
-    let client_restart = reconciliation
-        .find("hive.nook.sh/neo4j-client-sha256")
-        .context("Neo4j task must restart clients for credential changes")?;
-    assert!(
-        client_restart > neo4j_ready,
-        "clients restart only after Neo4j is available"
-    );
-    Ok(())
-}
-
-#[test]
-fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
-    for manifest in [
-        "infra/k0s/manifests/hive/deployment.yaml",
-        "infra/k0s/manifests/hive/dispatcher.yaml",
-        "infra/k0s/manifests/hive/observer.yaml",
-    ] {
-        let deployment = RepositoryFixture::repository_root().read(manifest);
-        assert!(
-            deployment.contains("strategy:\n    type: Recreate"),
-            "{manifest} must drain its prior graph-schema revision before starting a new one"
-        );
-    }
-    let worker_manifest =
-        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/deployment.yaml");
-    for required in [
-        "terminationGracePeriodSeconds: 75",
-        "while [ ! -e /workspace/.hive-task-finished ]",
-        "/workspace/.hive-task-finished",
-        "&& [ -e /workspace/.hive-worker-ready ]",
-    ] {
-        assert!(
-            worker_manifest.contains(required),
-            "Hive rollout must preserve worker lease release through coordinator shutdown: \
-             missing {required}"
-        );
-    }
-    let coordinator_start = worker_manifest
-        .find("        - name: coordinator\n")
-        .ok_or_else(|| anyhow::anyhow!("Hive coordinator container"))?;
-    let coordinator = worker_manifest
-        .get(coordinator_start..)
-        .context("Hive coordinator marker must be a character boundary")?;
-    let coordinator_end = coordinator
-        .find("        - name: auth-broker\n")
-        .ok_or_else(|| anyhow::anyhow!("container after Hive coordinator"))?;
-    let coordinator = coordinator
-        .get(..coordinator_end)
-        .context("Hive coordinator boundary must be valid UTF-8")?;
-    assert!(
-        coordinator.contains(
-            "            - name: workspace\n              mountPath: /workspace\n              \
-             readOnly: true"
-        ),
-        "Hive coordinator must mount the worker workspace read-only to observe lifecycle markers"
-    );
-    let deployment_tasks = RepositoryFixture::repository_root().read("infra/tasks/hive.yml");
-    for required in [
-        "for deployment in hive hive-workbench-dispatcher hive-observer",
-        "kubectl scale \"deployment/$deployment\"",
-        "--replicas=0",
-        "HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN",
-        "hive_wait_for_graph_client_drain \"$deployment\" 60 2",
-        "hive_wait_for_ready_pool 60 2 3",
-    ] {
-        assert!(
-            deployment_tasks.contains(required),
-            "Hive graph-client rollout is missing: {required}"
-        );
-    }
-    for required in [
-        "--selector \"app.kubernetes.io/name=$1\"",
-        ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",
-        ".metadata.deletionTimestamp == null",
-        ".name == \"hive\" and .ready == true",
-        "Timed out draining active graph client deployment/$deployment",
-        "consecutive_ready=0",
-        "Hive pool did not stabilize at four ready workers",
-    ] {
-        assert!(
-            deployment_tasks.contains(required),
-            "Hive deployment convergence helper is missing: {required}"
-        );
-    }
-    let drain = deployment_tasks
-        .find("kubectl scale \"deployment/$deployment\"")
-        .context("graph-client drain must exist")?;
-    let apply = deployment_tasks
-        .find("kubectl apply -f \"$rendered\"")
-        .context("Hive manifest apply must exist")?;
-    assert!(
-        drain < apply,
-        "every old graph client must stop before the new revision is applied"
-    );
-    Ok(())
 }

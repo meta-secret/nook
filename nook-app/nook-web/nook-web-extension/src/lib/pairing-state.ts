@@ -71,10 +71,13 @@ export class ExtensionPairingStateLoader {
   }
 }
 
-export const extensionPairingStateLoader = new ExtensionPairingStateLoader({
+const extensionPairingStateLoaderArgs: ExtensionPairingStateLoaderArgs = {
   browser: globalThis,
   pairingPolicy: extensionPairingGrantPolicyReady,
-})
+}
+export const extensionPairingStateLoader = new ExtensionPairingStateLoader(
+  extensionPairingStateLoaderArgs,
+)
 
 export enum ExtensionSetupLoadKind {
   Ready = 'ready',

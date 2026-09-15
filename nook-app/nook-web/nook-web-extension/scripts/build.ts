@@ -55,6 +55,51 @@ const versionName = commit
   ? `${requestedVersion} (${deployment.channel}, ${commit.slice(0, 12)})`
   : `${requestedVersion} (${deployment.channel})`
 
+const identityJsonReplacer = (_key: string, value: unknown): unknown => value
+
+class ExtensionBuildDependencyLoader {
+  async importVite(): Promise<typeof import('vite')> {
+    return this.importDependency(
+      'vite',
+      (value): value is typeof import('vite') => {
+        if (!value || typeof value !== 'object') return false
+        return 'build' in value && typeof value.build === 'function'
+      },
+    )
+  }
+
+  async importSvelte(): Promise<typeof import('@sveltejs/vite-plugin-svelte')> {
+    return this.importDependency(
+      '@sveltejs/vite-plugin-svelte',
+      (value): value is typeof import('@sveltejs/vite-plugin-svelte') => {
+        if (!value || typeof value !== 'object') return false
+        return (
+          'svelte' in value &&
+          typeof value.svelte === 'function' &&
+          'vitePreprocess' in value &&
+          typeof value.vitePreprocess === 'function'
+        )
+      },
+    )
+  }
+
+  private async importDependency<TModule>(
+    specifier: string,
+    admits: (value: unknown) => value is TModule,
+  ): Promise<TModule> {
+    const resolved = requireFromWeb.resolve(specifier)
+    // Resolution is constrained to the installed web dependency tree.
+    // eslint-disable-next-line no-unsanitized/method
+    const imported: unknown = await import(pathToFileURL(resolved).href)
+    if (!admits(imported)) {
+      throw new Error(`Invalid web dependency: ${specifier}`)
+    }
+    return imported
+  }
+}
+
+const extensionBuildDependencyLoader = new ExtensionBuildDependencyLoader()
+
 async function ensureNodeModulesLink() {
   try {
     await symlink(
@@ -152,19 +197,10 @@ async function copyStaticFile(source: string, destination: string) {
   await copyFile(source, outputPath)
 }
 
-async function importWebDependency<TModule>(specifier: string) {
-  const resolved = requireFromWeb.resolve(specifier)
-  // Resolution is constrained to the installed web dependency tree.
-  // eslint-disable-next-line no-unsanitized/method
-  return import(pathToFileURL(resolved).href) as Promise<TModule>
-}
-
 async function buildSveltePage(page: 'popup') {
-  const { build: viteBuild } =
-    await importWebDependency<typeof import('vite')>('vite')
-  const { svelte, vitePreprocess } = await importWebDependency<
-    typeof import('@sveltejs/vite-plugin-svelte')
-  >('@sveltejs/vite-plugin-svelte')
+  const { build: viteBuild } = await extensionBuildDependencyLoader.importVite()
+  const { svelte, vitePreprocess } =
+    await extensionBuildDependencyLoader.importSvelte()
 
   await viteBuild({
     root: join(projectRoot, `src/${page}`),
@@ -308,12 +344,56 @@ type NookLocaleCatalog = {
   }
 }
 
+type ExtensionLocaleCatalogAdmissionArgs = {
+  value: unknown
+  locale: string
+}
+
+class ExtensionLocaleCatalogAdmission {
+  admit({
+    value,
+    locale,
+  }: ExtensionLocaleCatalogAdmissionArgs): NookLocaleCatalog {
+    if (!this.isNookLocaleCatalog(value)) {
+      throw new Error(`Locale catalog ${locale} has an invalid shape.`)
+    }
+    return value
+  }
+
+  private isNookLocaleCatalog(value: unknown): value is NookLocaleCatalog {
+    if (!value || typeof value !== 'object' || !('extension' in value)) {
+      return false
+    }
+    const extension = value.extension
+    if (!extension || typeof extension !== 'object') return false
+    if (!('widget' in extension) || !('passkey' in extension)) return false
+    return (
+      this.isStringRecord(extension.widget) &&
+      this.isStringRecord(extension.passkey)
+    )
+  }
+
+  private isStringRecord(value: unknown): value is Record<string, string> {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false
+    return Object.values(value).every((entry) => typeof entry === 'string')
+  }
+}
+
+const identityJsonParse: (value: string) => unknown = JSON.parse
+const extensionLocaleCatalogAdmission = new ExtensionLocaleCatalogAdmission()
+
 async function buildChromeLocales() {
   await Promise.all(
     ['en', 'ru'].map(async (locale) => {
-      const catalog = JSON.parse(
+      const catalogValue = identityJsonParse(
         await readFile(join(appCommonLocalesRoot, `${locale}.json`), 'utf8'),
-      ) as NookLocaleCatalog
+      )
+      const admissionArgs: ExtensionLocaleCatalogAdmissionArgs = {
+        value: catalogValue,
+        locale,
+      }
+      const catalog = extensionLocaleCatalogAdmission.admit(admissionArgs)
       const messages = {
         widgetOpenVault: { message: catalog.extension.widget.open_vault },
         widgetDismiss: { message: catalog.extension.widget.dismiss },
@@ -580,7 +660,7 @@ async function buildChromeLocales() {
       await mkdir(localeDir, { recursive: true })
       await writeFile(
         join(localeDir, 'messages.json'),
-        `${JSON.stringify(messages, (_key, value) => value, 2)}\n`,
+        `${JSON.stringify(messages, identityJsonReplacer, 2)}\n`,
       )
     }),
   )
@@ -616,11 +696,7 @@ const manifestArgs: CreateExtensionManifestArgs = {
 
 await writeFile(
   join(distDir, 'manifest.json'),
-  `${JSON.stringify(
-    createManifest(manifestArgs),
-    (_key, value) => value,
-    2,
-  )}\n`,
+  `${JSON.stringify(createManifest(manifestArgs), identityJsonReplacer, 2)}\n`,
 )
 
 await Promise.all([

@@ -107,7 +107,7 @@ class GenesisFinalizationFixture {
     expect(this.status.free).toHaveBeenCalledOnce()
     expect(this.currentParticipant.free).not.toHaveBeenCalled()
     expect(this.state.sentinelGenesisPhase).toBe(this.status.phase)
-    expect(this.state.sentinelGenesisParticipants).toBe(
+    expect(this.state.sentinelGenesisParticipants).toStrictEqual(
       this.status.participants,
     )
     expect(this.state.sentinelGenesisParticipantCount).toBe(

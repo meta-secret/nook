@@ -61,7 +61,10 @@ only when two materially different directions remain plausible.
 ## Svelte 5 Rules
 
 - Keep markup readable and components thin.
-- Use `undefined`; never author `null`.
+- Follow [TypeScript explicit state](typescript-explicit-state.md): authored
+  JavaScript, TypeScript, and Svelte use neither `undefined` nor `null` for
+  value absence. Normalize external absence at its narrow boundary and model
+  application state with a named enum-backed discriminated union.
 - Use typed props and generated `$app-wasm` types directly.
 - Key stable collections with their semantic identifier.
 - Prefer semantic elements to ARIA patches.

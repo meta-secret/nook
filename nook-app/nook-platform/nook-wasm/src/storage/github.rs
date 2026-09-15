@@ -900,9 +900,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn username_lookup_rejects_empty_token_before_network() -> anyhow::Result<()> {
         let Err(error) = GitHubStorageClient::new("  ").fetch_github_username().await else {
@@ -916,9 +919,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn root_empty_short_circuits_vault_lookup() -> anyhow::Result<()> {
         let result = GitHubStorageClient::new("token")

@@ -2,11 +2,10 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks. Paused Hive remains outside the manual manager
-lifecycle and must not be reactivated by this delivery change.
+feature-stage slow checks.
 
 ## Overview
 
@@ -14,8 +13,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
 not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues](../../../gizmo/workflows/issues.md),
-[agent statistics](../../../gizmo/workflows/agent-statistics.md), and
+See [issues](../../../gizmo-prime/workflows/issues.md),
+[agent statistics](../../../gizmo-prime/workflows/agent-statistics.md), and
 [main-build-statistics.md](main-build-statistics.md).
 
 ## Central CI entrypoint
@@ -25,7 +24,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 - A secret-free classifier reads changed paths without executing source.
 - Repository policy runs on PR changes and Main pushes.
-- Hive and research retain their existing changed-path selections.
 - A validation label activates product checks for subsequent PR commits.
 - The router reads current labels to avoid stale event ordering.
 - Removing the validation label disables product checks on later pushes.
@@ -39,68 +37,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Manual remote execution and release workflows remain separate.
 
 ## Workflow map
-
-- **[`remote.yml`](../../../../.github/workflows/remote.yml)**
-  - Trigger: Manual named-task dispatch
-  - Purpose: Focused command batch; no merge authorization
-  - GitHub PAT: No
-- **[`pr.yml`](../../../../.github/workflows/pr.yml)**
-  - Trigger: Reusable call from `ci.yml` after a validation label
-  - Purpose: Exact-head PR gate, including Rust ecosystem jobs
-  - GitHub PAT: No
-- **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
-  - Trigger: Reusable call from `ci.yml`
-  - Purpose: Source architecture plus conditional Loom verification
-  - GitHub PAT: No
-- **[`web-research.yml`](../../../../.github/workflows/web-research.yml)**
-  - Trigger: Reusable call from `ci.yml` for research paths
-  - Purpose: Research check, build, Cloudflare deploy, and PR preview
-  - GitHub PAT: No
-- **[`pr-validation-handoff.yml`](../../../../.github/workflows/pr-validation-handoff.yml)**
-  - Trigger: Successful same-repository CI run with PR product verification
-  - Purpose: Promote trusted PR artifacts
-  - GitHub PAT: No
-- **[`linear-ui-demo.yml`](../../../../.github/workflows/linear-ui-demo.yml)**
-  - Trigger: Successful CI run / PR close
-  - Purpose: Retain disabled publication and close previously created Linear
-    issues
-  - GitHub PAT: No
-- **[`main.yml`](../../../../.github/workflows/main.yml)**
-  - Trigger: Reusable call from `ci.yml` on Main pushes
-  - Purpose: Product + ecosystem verify, e2e, dev deploy
-  - GitHub PAT: No
-- **[`main-build-stats.yml`](../../../../.github/workflows/main-build-stats.yml)**
-  - Trigger: Completed Main-push `CI` attempt
-  - Purpose: Commit Main build stats to Workbench
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
-- **[`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml)**
-  - Trigger: Failed Main-push `CI` attempt
-  - Purpose: Create Hive Workbench incident
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
-- **[`hive.yml`](../../../../.github/workflows/hive.yml)**
-  - Trigger: Reusable call from `ci.yml` for Hive paths
-  - Purpose: Hive format/Clippy/tests
-  - GitHub PAT: No
-- **[`release.yml`](../../../../.github/workflows/release.yml)**
-  - Trigger: Semver tag `v*.*.*` or manual version + ref
-  - Purpose: Production verify, deploy, release
-  - GitHub PAT: No
-- **[`rust-dependency-updates.yml`](../../../../.github/workflows/rust-dependency-updates.yml)**
-  - Trigger: Weekly Monday 09:00 UTC + manual
-  - Purpose: Audit and AI-update Rust deps
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
-- **[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml)**
-  - Trigger: Explicit issue-path or prompt dispatch
-  - Purpose: Claim Workbench issue or run prompt → implement → PR
-  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
-- **[`ci-agent-smoke.yml`](../../../../.github/workflows/ci-agent-smoke.yml)**
-  - Trigger: Manual
-  - Purpose: ci-agent unit tests and open-handle exit smoke
-  - GitHub PAT: No
-- **[`e2e-pr.yml`](../../../../.github/workflows/e2e-pr.yml)**
-  - Trigger: Manual
-  - Purpose: Debug e2e on a PR branch
-  - GitHub PAT: Only for `sync-live`
 
 ### Workflow details
 
@@ -178,11 +114,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
-- Web verification has a ten-minute job limit.
-- Calls the shared Rust ecosystem jobs in parallel with product verification.
-- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
-- Classifies changed paths and skips the product job chain for minds-only pushes.
-- Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
+- Owns merged-head ecosystem cache seeding and statistics.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e and extension e2e consume verified WASM on separate
@@ -190,32 +122,12 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Each browser E2E solve is read-only.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
-- The retained Main UI-demo implementation remains available for later
-  re-enable.
-- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
-  the portable WASM cache publication proof.
+- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
 
 **`main-build-stats.yml`**
 
 - Collects run/job/step timing and conclusions.
 - Commits one `stats/main-build/**` record directly to Nook Workbench.
-
-**`main-failure-handoff.yml`**
-
-- Creates or refreshes one ready automated Workbench incident per failed Main revision.
-- Uses run metadata and failed job names only.
-- Includes browser E2E failures.
-
-**`hive.yml`**
-
-- Installs, checks, and browser-tests the Hive Control Center.
-- Fork and Dependabot console changes receive the same install, check, build,
-  and browser journey on a secret-free GitHub-hosted runner.
-- Runs pinned Docker format/Clippy and behavior tests against Neo4j.
-- Checks k0s manifests and the Taskfile command surface.
-- Main alone publishes the shared Hive dependency cache.
-- Console images warm observer-export dependencies from manifests and the lockfile.
-- The exporter then rebuilds from the exact Hive source before generating the console contract.
 
 **`release.yml`**
 
@@ -226,27 +138,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 **`rust-dependency-updates.yml`**
 
 - Audits every direct dependency in each Rust root.
-- The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
-- When an update exists, an AI agent updates all outdated Rust dependencies.
-- Runs the full deterministic suite and opens a PR for explicit review.
-
-**`agent-implement.yml`**
-
-- Requires exactly one explicit `issue_path` or `prompt`.
-- Resolves and atomically claims only the requested ready agent issue.
-- Requires an assigned Nook GitHub collaborator for issue mode.
-- Pins executable workflow tooling to `github.workflow_sha`; unreviewed
-  implementation source lives only in a separate bounded worktree.
-- Classifies and publishes the planning result before implementation.
-- An unauthorized major direction publishes a validated blocker and stops.
-- An authorized or ordinary bounded task continues through Cursor SDK
-  implementation → PR opened → owner assigned and mentioned → Workbench
-  progress/worklog published → workflow exits.
-
-**`ci-agent-smoke.yml`**
-
-- Runs the maintained npm-based ci-agent unit suite through Task.
-- Proves that `exitCiAgent` terminates open handles.
+- The roots are `nook-app/nook-platform/`, its fuzz workspace, and `preflight/`.
+- Uploads an artifact when outdated direct dependencies need manual triage.
 
 **`e2e-pr.yml`**
 
@@ -267,9 +160,6 @@ flowchart LR
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-  main_yml -->|any actionable failure| main_failure[Queue Workbench incident]
-  main_failure --> hive_dispatcher[Isolated Hive dispatcher]
-  hive_dispatcher --> hive_worker[One end-to-end repair task]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
@@ -298,42 +188,32 @@ Cancellation is scoped to work that a newer run actually supersedes:
 
 ### Concurrency scopes
 
-- **PR (`pr.yml`)**
-  - Scope: PR number (`pr-<number>`)
-  - Cancel active run: Yes
-  - Reason: Only the newest commit on the same PR needs validation.
-- **Main (`main.yml`)**
-  - Scope: `main`
-  - Cancel active run: No (one pending)
-  - Reason: Finish active cache publication and coalesce bursts to the newest pending revision.
-- **Main failure handoff (`main-failure-handoff.yml`)**
-  - Scope: Failed Main head SHA
-  - Cancel active run: No (one pending)
-  - Reason: Serialize retries that update the same Workbench incident.
-- **Main build stats (`main-build-stats.yml`)**
-  - Scope: Main run ID + attempt
-  - Cancel active run: No
-  - Reason: Every completed attempt is immutable evidence; separate runs never supersede it.
+- **Central CI (`ci.yml`)**
+  - Scope: `main`, `dev-pr`, `pr-<number>`, or an event-specific run group.
+  - Cancel active run: No; `cancel-in-progress: false` preserves every active
+    validation run and its evidence.
+  - Reason: Validation and cache-publication evidence remains available even
+    when a newer event targets the same logical source.
+- **Remote task (`remote.yml`)**
+  - Scope: ref, selected task, and dispatch nonce.
+  - Cancel active run: No.
+  - Reason: Selected task batches complete sequentially without interrupting
+    their prepared BuildKit state.
 - **Manual PR e2e (`e2e-pr.yml`)**
-  - Scope: PR number + suite
-  - Cancel active run: Yes
-  - Reason: A repeated run of the same suite supersedes its older debug build.
+  - Scope: PR number and suite.
+  - Cancel active run: Yes.
+  - Reason: A repeated run of the same explicitly selected suite supersedes its
+    older debug build.
 - **Web research (`web-research.yml`)**
-  - Scope: PR number or ref
-  - Cancel active run: Yes
-  - Reason: Keep only the newest build for the same preview or branch.
-- **CI agent smoke (`ci-agent-smoke.yml`)**
-  - Scope: Global smoke group
-  - Cancel active run: Yes
-  - Reason: Only the newest smoke result matters.
-- **Agent implement (`agent-implement.yml`)**
-  - Scope: Issue number (manual runs are unique)
-  - Cancel active run: No
-  - Reason: An active run may already have pushed a branch or opened a PR.
-- **Production release (`release.yml`)**
-  - Scope: Global production release group
-  - Cancel active run: No
-  - Reason: Serialize stateful publication without interrupting a deployment.
+  - Scope: workflow-triggered preview or branch execution.
+  - Cancel active run: Workflow-owned; untrusted validation remains isolated
+    from trusted ARC work.
+- **Stateful publishers (`dev-pr-manager.yml`, `release.yml`, and
+  `pr-validation-handoff.yml`)**
+  - Scope: publisher-specific group or source run identity.
+  - Cancel active run: No.
+  - Reason: Do not interrupt PR promotion, release deployment, or evidence
+    handoff state.
 
 ## Production release strategy
 
@@ -419,8 +299,6 @@ provider, those handlers read and write real event files under a temp directory.
 Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
 producers use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
-`hive:verify` uses the dedicated
-`nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
 Trusted browser runtime jobs use `nook-k0s-container`. ARC's Kubernetes
 lifecycle hooks create a regular job Pod from the exact image built by the
 general scale set. Fork and Dependabot pull requests retain GitHub-hosted
@@ -457,15 +335,11 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   explicitly isolated git-commit publisher.
 - Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
   their exact scope is absent, and cannot replace shared Main manifests.
-- Hive ARC PR jobs use the local shard and may import Main when needed. Main
-  remains the only workflow writer of the shared Hive registry seed.
 - The legacy registered `nook` runner is not used.
 
 **Focused remote jobs:**
 
 - `preflight`, `rust:ci`, and `arc:runtime` may use disposable ordinary Pods in
-  the configured general ARC scale set. Trusted `hive:verify` may use the
-  dedicated Hive ARC scale set. Each job reaches the persistent BuildKit shard
   on its selected node.
 - `arc:runtime` proves a remote BuildKit result can be exported without a
   Docker daemon, Podman, DinD, or host socket.
@@ -479,7 +353,6 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   `ci:pr`, and `ci:pr:e2e`.
 - Each runtime-backed selector must be dispatched alone. Mixed batches are
   rejected before repository commands execute.
-- Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
 - Common Rust test and web/extension check image targets remain available to
   local workflows.
@@ -600,15 +473,10 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-  - Runner: trusted jobs use general, Hive, or container ARC scale sets. Fork
     and Dependabot code alone uses GitHub-hosted isolation.
   - Purpose: Elastic delivery with persistent node-local BuildKit and private Zot recovery.
-- **`repository-policy.yml`, `hive.yml`**
   - Runner: ARC for trusted sources; GitHub-hosted only for untrusted sources.
   - Purpose: Independent architecture and package verification
-- **`agent-implement.yml`, `ci-agent-smoke.yml`**
-  - Runner: general ARC
-  - Purpose: Background implementation and bounded smoke work
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: general ARC plus container ARC for Playwright
   - Purpose: Manual and research work scales independently
@@ -634,76 +502,9 @@ Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults l
 ## Rust dependency updates
 
 [`rust-dependency-updates.yml`](../../../../.github/workflows/rust-dependency-updates.yml)
-runs weekly and can be started manually. It installs the pinned
-`cargo-outdated` orchestration tool and runs it with `--workspace
---root-deps-only` in every Rust root. Those roots are:
-
-- `nook-app/nook-platform/`;
-- `nook-app/nook-platform/fuzz/`;
-- `agentic-ai/minds/`;
-- `preflight/`.
-
-The audit covers every direct library declared in those `Cargo.toml` manifests.
-It does not audit only the current lockfile's transitive graph.
-
-On an outdated result, `task ci-agent:fix` runs on general ARC with
-`CI_AGENT_FIX_PROFILE=rust-dependency-update`. This narrow trusted Actions
-publisher is not an ordinary Team Agent: its isolated editor updates every
-outdated direct dependency and necessary compatibility code without Git,
-validation, credentials, or publication authority.
-
-Before any push, trusted workflow tooling runs the required broad validation
-remotely against that isolated update:
-
-```bash
-WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-task docker:ecosystem:fuzz FUZZ_SECONDS=20
-task hive:verify
-```
-
-The trusted host fails closed unless:
-
-- the diff contains only regular Rust dependency mission files and compatibility
-  changes;
-- trusted workflow checkout uses `persist-credentials: false`; the isolated
-  editor never receives the PAT. An existing-PR rerun may apply the token
-  only to a host Git fetch of the audited refs, then remove it before
-  isolated validation;
-- frozen HEAD, index, Git/common directories, and effective configuration remain
-  exact after editing and validation, while trusted Git disables hooks,
-  filesystem monitors, and signing;
-- validation's fresh HOME contains no publication, registry, or compiler-cache
-  credentials. The immutable Docker wrapper injects `network=none` for the
-  `docker run` form used by trusted validation and rejects unknown wrapper
-  operations. Alternate Docker CLI forms are not the trusted validation path;
-- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
-  for validation/publication; and
-- exact branch/PR identity is unambiguous and the publisher returns its verified
-  remote head SHA to Gizmo after commit, push, and PR creation.
-
-That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
-hosted review, replacement exact-head validation, readiness, and merge. The
-publisher's pre-push security validation remains required but does not replace
-those exact-head gates.
-
-`ci:pr:e2e` validates the product path:
-
-- repository preflight;
-- Rust coverage and unit tests;
-- WASM checks;
-- web checks, unit tests, and builds;
-- the complete local-provider Playwright suite;
-- extension e2e.
-
-- The additional targets validate the separate fuzz workspace.
-  - They also compile, lint, and test Hive in the Minds workspace.
-- Credentialed real-provider `sync-live` e2e remains a separate manual
-  validation.
-  - It creates disposable external-provider state.
-  - It requires provider secrets.
-- No workflow merges the harness-owned PR from a check event.
-  - The dev manager requires all slow checks and review/security verdicts.
-  - Promotion requires guarded fast-forward publication of the tested dev SHA.
+runs weekly and can be started manually. It runs pinned `cargo-outdated`
+tooling with `--workspace --root-deps-only` in every Rust root and uploads an
+artifact when direct dependencies are outdated. Updates are handled manually.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -838,8 +639,8 @@ task web:test:e2e:github            # → sync-live
 `nook-app/nook-platform/nook-core/coverage-floor.json` is the exhaustive package
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
-PR #1319 staged companion WASM at 18, authenticator-domain at 87, Hive at 60,
-and `nook-wasm` at 51 percent. The current registry raises
+PR #1319 staged companion WASM at 18, authenticator-domain at 87, and
+`nook-wasm` at 51 percent. The current registry raises
 authenticator-domain to 90 percent.
 
 **Image build:**
@@ -856,8 +657,6 @@ authenticator-domain to 90 percent.
 - The WASM lane gates companion separately, executes Chromium without cache
   credentials, and combines native and browser profiles for one `nook-wasm` report.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
-- Hive verification runs instrumented Hive binaries in the existing
-  Neo4j-enabled runtime, then imports their profiles for reporting.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;
   the portable aggregate diagnostic is not an update authority.
@@ -977,26 +776,15 @@ authenticator-domain to 90 percent.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.
-- A final coherent head may add `CODEX_REVIEW=1` to request one idempotent
-  exact-head Codex review without waiting.
-- A requested review runs concurrently with hosted checks.
 - Focused tasks are optional for that head and never replace complete
   validation.
-- When review is requested, its current findings and failed checks form one
-  coherent repair batch after both settle.
-- Three finding batches open a circuit breaker and require comprehensive
-  stabilization before another review request.
-- Codex is the sole automatic provider. No fallback reviewer is requested.
-- `task pr:ready PR=<number>` remains the feedback and exact-head readiness
-  authority.
+- Humans may run `task pr:review-local` as an advisory local Codex review. It
+  does not dispatch hosted review and never gates validation or readiness.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- When review is requested, request it immediately after dispatch. Do not defer
-  it until checks finish.
 - Claude, CodeRabbit, Cursor Bugbot, and other optional services are not
   requested or awaited.
-- The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**
 
@@ -1019,31 +807,12 @@ authenticator-domain to 90 percent.
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
 - Compiler vertices receive the bucket-scoped build identity only through stable optional BuildKit secret IDs.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
-- Same-repository PR Rust producers and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
 - SeaweedFS remains an optimization and never a correctness input.
 - Each workflow run and retry loads its sealed web and e2e results under run-scoped Docker image tags; concurrent jobs must never replace one another's runtime image between build and deploy.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
 - Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
-
-**Hive workflow cache:**
-
-- Manual e2e, research, and AI-agent jobs use isolated ARC Pods and may restore the same scoped BuildKit layers.
-- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
-- Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
-- The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
-- Each parallel Cargo branch is capped at two jobs to bound compiler-process
-  fan-out against the shared BuildKit shard. BuildKit requests 4 CPU and 8 GiB
-  of memory. It has no CPU or memory limits and may share all resources
-  available on its node for compiler and linker peaks.
-- Pull requests restore Main's scope read-only and may publish only a
-  quarantined exact-head cache. Only Main exports both shared graphs, in a
-  final step after check and behavior tests pass.
-- Hive check and test tasks use the same job-scoped Buildx builder, so the behavior image reuses the dependency graph produced earlier in the run without allowing parallel PRs or failed validation to replace the trusted cache.
-- Unlike the product delivery graph, trusted same-repository Hive runs also mount `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` into compiler steps and use SeaweedFS S3 `sccache` with the isolated `nook-hive` key prefix.
-- GitHub withholds those secrets from forked pull requests, and the shared wrapper then falls back to direct compilation.
-- The credentials are BuildKit secrets or read-only runtime mounts, never image content.
 
 **Deploy and release:**
 
@@ -1090,10 +859,8 @@ authenticator-domain to 90 percent.
 - Same-repository Remote tasks use that registry identity for git-commit
   exporters under `nook/remote-buildcache/**`.
 - General ARC pull requests remain registry-read-only and reuse Main plus
-  SeaweedFS sccache. Hive keeps its small minimal exact-SHA handoff.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
-- Hive images also publish and pull through Zot.
 - There is no host `:5000` listener and no `kubectl port-forward` for the registry.
 
 **Main deploy verification:**

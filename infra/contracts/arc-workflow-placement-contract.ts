@@ -13,8 +13,6 @@ export class ArcWorkflowPlacementContract {
   async assert(): Promise<Result<void, OperationalContractFailure>> {
     const hostedUntrustedBoundary = new Set([
       "ci.yml#scope",
-      "hive.yml#verify-fork",
-      "hive.yml#console-untrusted",
       "web-research.yml#validate-untrusted",
     ]);
     const workflowsDir = resolve(this.root, ".github/workflows");

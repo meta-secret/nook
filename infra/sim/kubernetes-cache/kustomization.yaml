@@ -24,7 +24,7 @@ patches:
   - target:
       kind: PersistentVolumeClaim
       name: nook-zot-data
-      namespace: hive-data
+      namespace: nook-infra
     patch: |-
       - op: replace
         path: /spec/resources/requests/storage
@@ -32,7 +32,7 @@ patches:
   - target:
       kind: Deployment
       name: nook-zot
-      namespace: hive-data
+      namespace: nook-infra
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources
@@ -85,9 +85,9 @@ patches:
         path: /data/buildkitd.toml
         value: |-
           [registry."docker.io"]
-            mirrors = ["nook-zot.hive-data.svc.cluster.local:5000"]
+            mirrors = ["nook-zot.nook-infra.svc.cluster.local:5000"]
 
-          [registry."nook-zot.hive-data.svc.cluster.local:5000"]
+          [registry."nook-zot.nook-infra.svc.cluster.local:5000"]
             http = true
             insecure = true
   - target:

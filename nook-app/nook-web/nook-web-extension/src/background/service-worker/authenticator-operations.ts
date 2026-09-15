@@ -609,7 +609,13 @@ class AuthenticatorEnrollmentOperations {
         )
       if (sessionResponse.isErr()) return sessionResponse.error.response
       const response = sessionResponse.value
-      const firstGrant = grants[0]!
+      const firstGrant = grants[0]
+      if (!firstGrant) {
+        return {
+          ok: false,
+          reason: 'authenticator-grant-unavailable',
+        }
+      }
       return {
         ok: true,
         status: WebsiteAuthenticatorResponseStatus.Ready,

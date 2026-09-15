@@ -151,7 +151,7 @@ export class SkillOwnerDirectory {
       return path.join(args.cortexRoot, 'shared', 'dynamic-skills');
     }
     if (args.skillOwner === SkillOwner.Gizmo) {
-      return path.join(args.cortexRoot, SkillOwner.Gizmo, 'dynamic-skills');
+      return path.join(args.cortexRoot, 'gizmo-prime', 'dynamic-skills');
     }
     return path.join(
       args.cortexRoot,

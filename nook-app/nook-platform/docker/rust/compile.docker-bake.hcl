@@ -1,17 +1,45 @@
 // Compile-only graph for the hosted `build:compile` task.
 //
-// This target intentionally uses the clean rust-base/web-base dependency stages
-// as named contexts. It does not inherit product builder-core-deps or
+// This target intentionally uses the clean rust-base/web-base toolchain stages
+// as named contexts. Its source-free dependency ancestry installs the package
+// graphs itself. It does not inherit product builder-core-deps or
 // builder-wasm, whose warm-up graphs include validation-only work.
 
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-build-compile-v1:buildcache,ignore-error=true",
+// The source graph is immutable-commit-only; there is deliberately no mutable Main tag.
+// v4 is the single-export schema whose mode=max export is rooted at
+// the final compile target and therefore retains the expensive WASM compiler
+// lineage. Legacy v2 manifests are intentionally incompatible and untrusted
+// as warm-build evidence.
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${compile_source_cache_ref},ignore-error=true",
 ]
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-build-compile-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
+// Every entry point uses one solve contract. Bake applies CLI overrides after
+// inheritance, so callers also mirror overrides on each named target.
+compile_solve_args = {
+  SCCACHE_S3_MODE         = SCCACHE_S3_MODE
+  SCCACHE_ENDPOINT        = SCCACHE_ENDPOINT
+  SCCACHE_BUCKET          = SCCACHE_BUCKET
+  WASM_BUILD_MODE         = WASM_BUILD_MODE
+  VITE_BASE               = VITE_BASE
+  VITE_SITE_URL           = VITE_SITE_URL
+  VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
+  VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
+  VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
+  NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
+  NOOK_EXTENSION_CHANNEL  = NOOK_EXTENSION_CHANNEL
+  NOOK_EXTENSION_VERSION  = NOOK_EXTENSION_VERSION
+  NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
+  NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
+}
+
+compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
+  // Export the rooted immutable exact-head graph once. sccache owns cross-head
+  // compiler objects, so serializing a second sibling dependency graph is
+  // redundant. The exporter timeout applies to each registry operation; the
+  // five-minute GitHub job timeout remains the end-to-end acceptance bound.
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s,ignore-error=true",
 ] : []
 
 target "build-compile" {
@@ -20,23 +48,13 @@ target "build-compile" {
   target     = "compile"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-base = "target:rust-base-restore"
+    // Context targets must be cache-I/O-free. Their component cache scopes are
+    // owned by the normal restore/publish workflows, while this graph owns one
+    // complete compile scope below.
+    rust-base = "target:rust-base"
     web-base  = "target:web-base"
-    web-deps  = "target:web-deps"
   }
-  args = {
-    WASM_BUILD_MODE         = WASM_BUILD_MODE
-    VITE_BASE               = VITE_BASE
-    VITE_SITE_URL           = VITE_SITE_URL
-    VITE_PUBLIC_APP_URL     = VITE_PUBLIC_APP_URL
-    VITE_SIMPLE_APP_URL     = VITE_SIMPLE_APP_URL
-    VITE_SENTINEL_APP_URL   = VITE_SENTINEL_APP_URL
-    NOOK_SIMPLE_VAULT_URL   = NOOK_SIMPLE_VAULT_URL
-    NOOK_EXTENSION_CHANNEL  = NOOK_EXTENSION_CHANNEL
-    NOOK_EXTENSION_VERSION  = NOOK_EXTENSION_VERSION
-    NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
-    NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
-  }
+  args       = compile_solve_args
   cache-from = compile_cache_from
   cache-to   = compile_cache_to
   output     = ["type=cacheonly"]
