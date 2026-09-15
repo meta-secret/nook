@@ -116,6 +116,10 @@ do not create an internal security protocol.
   predict any remote invocation detail or outcome. The Delivery team
   [Circuit Breaker boundary](../AGENTS.md#prohibited-actions) requires direct
   execution and the actual terminal GitHub result.
+- Do not ask a child to reproduce Docker or BuildKit cache keys, dependency
+  invalidation, cache selection, or layer-reuse decisions. Preserve SRE's
+  required cache verdict exactly; Delivery does not reimplement or
+  independently interpret SRE's policy or evaluation.
 
 ## Parent and child reporting
 

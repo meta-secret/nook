@@ -77,9 +77,11 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - Return the actual invoked command, exit result, observed target, and local or
   external output evidence. A packet declaration, prior claimed result, or
   unexecuted acceptance item never counts as execution evidence.
-- Report compilation's terminal result as correctness evidence. If present,
-  forward `sccache --show-stats` output only as non-blocking observability; do
-  not interpret cache hits, misses, health, or publication as a Delivery gate.
+- Report compilation's terminal result as correctness evidence. SRE owns
+  `sccache` policy and evaluation. Preserve and report SRE's required verdict
+  exactly, including required cache-health and publication contracts and a
+  zero-hit build failure, without reimplementing or independently interpreting
+  it.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
 - For feature compilation, require the Prime-authored canonical branch packet.
@@ -139,6 +141,10 @@ selection, slow validation, and promotion. Each retains its own verdict.
   dispatch results. These are runner-owned execution semantics under the
   [Circuit Breaker](../../../CIRCUIT-BREAKER.md), not an internal validation
   surface.
+- PR Lifecycle Agent must not custom-reproduce Docker or BuildKit cache keys,
+  dependency invalidation, cache selection, or layer-reuse decisions. The
+  remote compile performs direct BuildKit cache import, build, and export and
+  supplies the actual terminal result and SRE-owned cache verdict.
 
 ## Completion boundary
 

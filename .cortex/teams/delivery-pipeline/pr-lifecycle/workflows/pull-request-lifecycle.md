@@ -25,8 +25,10 @@ external GitHub, Git, credential, artifact, publication, and promotion state.
 - Record the invoked command, exit result, observed target, and local or
   external output evidence. Neither an unexecuted declaration nor a stale
   claimed result is execution evidence.
-- Use the compilation result for correctness. Cache statistics and cache
-  publication or health signals are non-blocking observability owned by SRE.
+- Use the compilation result for correctness. SRE owns `sccache` policy and
+  evaluation. Preserve and report SRE's required verdict exactly, including
+  required cache-health and publication contracts and a zero-hit build
+  failure, without reimplementing or independently interpreting it.
 - Return the terminal operation handoff to Delivery Pipeline Team Gizmo.
 - Invoke local integration only under the feature Gizmo's packet.
 - Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
@@ -49,6 +51,10 @@ external GitHub, Git, credential, artifact, publication, and promotion state.
   predict remote selectors, shell arguments, environment wiring, Task
   existence, shell behavior, retries, failure paths, or expected dispatch
   results. Do not count declared, stale, or unexecuted Task results as evidence.
+- Do not custom-reproduce Docker or BuildKit cache keys, dependency
+  invalidation, cache selection, or layer-reuse decisions. The remote compile
+  performs direct BuildKit cache import, build, and export and reports its
+  actual terminal outcome; preserve the SRE-owned verdict as reported.
 
 ## Procedure
 

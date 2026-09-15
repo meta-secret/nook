@@ -74,10 +74,11 @@ existing validation and exact-snapshot safeguards.
   observed target, and local or external output evidence. A declaration,
   previously claimed result, or result from another operation is not evidence
   that the current selector ran.
-- Treat compilation success or failure as correctness evidence. The output of
-  `sccache --show-stats`, hit and miss counts, cache health, and cache
-  publication are non-blocking SRE observability; Delivery neither interprets
-  them nor makes them evidence or gates.
+- Treat compilation success or failure as correctness evidence. SRE owns
+  `sccache` policy and evaluation. Delivery preserves and reports SRE's
+  required verdict exactly, including required cache-health and publication
+  contracts and a zero-hit build failure, without reimplementing or
+  independently interpreting that verdict.
 - Require each executable acceptance item to carry `resources.read`,
   `resources.write`, and `resources.evidenceSurface` as its read, write, and
   output scopes. Run items concurrently only when those scopes are safe
@@ -146,6 +147,11 @@ existing validation and exact-snapshot safeguards.
   retries, failure path, or dispatch result. Follow the
   [Circuit Breaker](../../CIRCUIT-BREAKER.md) and report the actual terminal
   GitHub outcome.
+- Do not custom-reproduce Docker or BuildKit cache keys, dependency
+  invalidation, cache selection, or layer-reuse decisions. The remote compile
+  performs the direct BuildKit cache import, build, and export and reports its
+  actual terminal outcome. Preserve SRE's resulting required cache verdict
+  without independently interpreting it.
 - Do not accept an unexecuted Task declaration, stale claimed result, or
   successful agent handoff as Task execution evidence. Do not reject a remote
   selector before dispatch merely because its Task target is unknown or absent.
