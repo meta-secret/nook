@@ -50,6 +50,10 @@ nightly="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
 install_block="$(sed -n '/RUN --mount=type=secret,id=sccache_s3_access_key/,/cargo dylint --version/p' "$nightly")"
 grep -Fq 'id=sccache_s3_secret_key' <<<"$install_block"
 grep -Fq 'cargo install cargo-dylint dylint-link' <<<"$install_block"
+! grep -Fq 'touch nook-app-common/src/i18n.rs' "$repo_root/nook-app/nook-platform/docker/rust/product.Dockerfile"
+grep -A4 -F 'target "builder-wasm-build-publish"' "$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl" | grep -Fq 'builder-wasm-build-cache-probe'
+grep -A4 -F 'target "rust-dylint-build-publish"' "$rust_bake" | grep -Fq 'rust-dylint-self-test-build'
+grep -Fq 'nook-buildkit-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${job_key}.raw.log' "$repo_root/.github/actions/nook-docker-setup/action.yml"
 
 # Inspect the resolved Bake plans, not just HCL text. Each PR publication command
 # must expose exactly one physical exporter, and PRs deliberately use mode=min.

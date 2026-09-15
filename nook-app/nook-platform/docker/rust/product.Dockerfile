@@ -332,8 +332,7 @@ COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    cargo clippy -p nook-app-common --all-targets -- -D warnings \
     && nook-sccache-report native-app-common-clippy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -439,8 +438,7 @@ COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo nextest run -p nook-app-common --profile ci --no-run \
+    cargo nextest run -p nook-app-common --profile ci --no-run \
     && nook-sccache-report focused-native-test-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -509,8 +507,7 @@ COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    cargo clippy -p nook-app-common --all-targets -- -D warnings \
     && nook-sccache-report focused-rust-lint-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -585,8 +582,7 @@ COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common --summary-only \
+    cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common --summary-only \
     && nook-sccache-report focused-rust-coverage-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
@@ -671,8 +667,7 @@ FROM builder-wasm-source-base AS builder-nook-wasm-source
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
-    && cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
+    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-source-nook-wasm
 
 FROM builder-wasm-source-base AS builder-companion-wasm-source

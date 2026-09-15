@@ -387,7 +387,7 @@ target "rust-dylint-build" {
 // Publish the reusable checker/toolchain before repository lint execution.
 target "rust-dylint-build-publish" {
   inherits = ["rust-dylint"]
-  target   = "rust-ecosystem-nightly"
+  target   = "rust-dylint-self-test-build"
   cache-to = rust_ecosystem_dylint_cache_to
 }
 

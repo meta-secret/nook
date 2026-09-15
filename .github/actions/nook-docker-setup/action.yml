@@ -233,7 +233,8 @@ runs:
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
-        raw_log="$RUNNER_TEMP/nook-buildkit-job.raw.log"
+        job_key="$(printf '%s' "${GITHUB_JOB:-job}" | tr -cs 'A-Za-z0-9_.-' '_')"
+        raw_log="$RUNNER_TEMP/nook-buildkit-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${job_key}.raw.log"
         : > "$raw_log"
         timeout 15s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"

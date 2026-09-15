@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -508,6 +511,31 @@ void test("raw job progress is authoritative for physical cache exporters", () =
     duration_ms: 70500,
     incomplete_failures: 1,
   });
+});
+
+void test("an exact job raw log prevents shared-runner history contamination", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-job-"));
+  const rawLog = path.join(directory, "run-1-job-rust.raw.log");
+  fs.writeFileSync(rawLog, "#0 building with job-local builder\n#1 CACHED\n");
+  const original = CacheTelemetry.listBuildHistory;
+  CacheTelemetry.listBuildHistory = () => {
+    throw new Error("shared Buildx history must not be read");
+  };
+  try {
+    const record = await CacheTelemetry.collectTelemetry({
+      baselineRefs: [],
+      job: "rust",
+      runId: "1",
+      runAttempt: 1,
+      environment: { NOOK_BUILDKIT_RAW_LOG: rawLog },
+    });
+    assert.equal(record.buildkit.build_record_count, 1);
+    assert.equal(record.buildkit.cached_steps, 1);
+    assert.deepEqual(record.buildkit_records, []);
+  } finally {
+    CacheTelemetry.listBuildHistory = original;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 void test("rejects malformed nested telemetry records at the ingress", () => {

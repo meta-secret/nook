@@ -50,8 +50,7 @@ target "builder-wasm-build-cache-probe" {
 // The normal producer publishes this reusable compiler phase before clippy,
 // tests, wasm-bindgen packaging, and artifact export.
 target "builder-wasm-build-publish" {
-  inherits = ["builder-wasm"]
-  target   = "builder-wasm-source"
+  inherits = ["builder-wasm-build-cache-probe"]
   cache-to = rust_wasm_source_cache_to
 }
 

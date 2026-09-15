@@ -751,6 +751,33 @@ export class CacheTelemetry {
     };
   }
 
+  /** @param {string} text @returns {BuildkitSummary} */
+  static summarizeBuildkitFromRawText(text) {
+    let solve = 0;
+    const completed = new Set();
+    const cached = new Set();
+    for (const line of text.split(/\r?\n/)) {
+      if (/^#0 building with /.test(line)) solve += 1;
+      const match = line.match(/^(#[0-9]+) (CACHED|DONE(?: [0-9.]+s)?)\s*$/);
+      if (!match) continue;
+      const key = `${solve}:${match[1]}`;
+      completed.add(key);
+      if (match[2] === "CACHED") cached.add(key);
+    }
+    return {
+      build_record_count: solve,
+      completed_steps: completed.size,
+      cached_steps: cached.size,
+      ...CacheTelemetry.percentageField(
+        "cache_hit_rate_percent",
+        cached.size,
+        completed.size,
+      ),
+      cache_export: CacheTelemetry.cacheExportFromRawText(text),
+      measurement: "buildx_target_record_steps",
+    };
+  }
+
   /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
   static extractSccacheFallback(events) {
     let text = "";
@@ -1121,26 +1148,6 @@ export class CacheTelemetry {
       reference: "baseline",
       message: warning,
     }));
-    /** @type {BuildHistoryRecord[]} */
-    let records = [];
-    try {
-      const baseline = new Set(baselineRefs);
-      const candidates = CacheTelemetry.listBuildHistory().filter(
-        (record) => record.ref && !baseline.has(record.ref),
-      );
-      const selection = CacheTelemetry.selectBuildRecords(candidates);
-      records = selection.records;
-      warnings.push(...selection.warnings);
-    } catch (error) {
-      const message = CacheTelemetry.errorMessage(error);
-      warnings.push(`buildx_history_unavailable: ${message}`);
-      failures.push({
-        component: "buildx_history",
-        reference: "current",
-        message,
-      });
-    }
-
     /** @type {SccacheReport[]} */
     const reports = [];
     /** @type {JsonRecord[]} */
@@ -1161,6 +1168,27 @@ export class CacheTelemetry {
         warnings.push(
           `buildx_raw_log_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
+      }
+    }
+    /** @type {BuildHistoryRecord[]} */
+    let records = [];
+    if (!rawBuildLog) {
+      try {
+        const baseline = new Set(baselineRefs);
+        const candidates = CacheTelemetry.listBuildHistory().filter(
+          (record) => record.ref && !baseline.has(record.ref),
+        );
+        const selection = CacheTelemetry.selectBuildRecords(candidates);
+        records = selection.records;
+        warnings.push(...selection.warnings);
+      } catch (error) {
+        const message = CacheTelemetry.errorMessage(error);
+        warnings.push(`buildx_history_unavailable: ${message}`);
+        failures.push({
+          component: "buildx_history",
+          reference: "current",
+          message,
+        });
       }
     }
     const reportsFromRawLog = reports.length > 0;
@@ -1212,10 +1240,9 @@ export class CacheTelemetry {
       }
     }
 
-    const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
-    if (/^#[0-9]+ exporting cache to registry\s*$/im.test(rawBuildLog)) {
-      buildkit.cache_export = CacheTelemetry.cacheExportFromRawText(rawBuildLog);
-    }
+    const buildkit = rawBuildLog
+      ? CacheTelemetry.summarizeBuildkitFromRawText(rawBuildLog)
+      : CacheTelemetry.summarizeBuildkit(records, historyEvents);
     if (buildkit.cache_export.incomplete_failures > 0) {
       warnings.push(
         `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
