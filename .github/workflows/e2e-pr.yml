@@ -90,8 +90,12 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           # This workflow run belongs to the dispatch ref while the checkout is an arbitrary PR
           # head. Restore shared layers, but never replace the default-branch cache scopes.
           cache-write: "false"
@@ -111,8 +115,8 @@ jobs:
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
-        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     defaults:
       run:
         working-directory: /meta-secret/nook
