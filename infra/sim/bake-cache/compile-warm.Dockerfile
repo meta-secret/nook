@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Compile-shaped graph used by the warm-cache acceptance proof. Dependency
 # inputs stay before package source inputs. The expensive WASM compiler leaves
-# form the exported target's ancestry so mode=min retains their cache records.
+# form the single exported target's ancestry so mode=max retains their records.
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS compile-toolchain-image
 COPY inputs/compile-base.txt /tmp/toolchain.txt
 RUN cat /tmp/toolchain.txt >/opt/compile-toolchain \
@@ -18,9 +18,9 @@ ARG SIMULATED_SCCACHE_NEXT_HEAD_HITS=1
 ENV SCCACHE_S3_RW_MODE=READ_WRITE
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
-# Every dependency compiler is a direct ancestor of the exported dependency
+# Every dependency compiler is a direct ancestor of the exported compile
 # target. This models the production root contract instead of a scratch marker
-# join that can discard the reusable compiler records.
+# join that can obscure the reusable compiler records.
 FROM compile-toolchain AS compile-native-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
@@ -74,10 +74,9 @@ RUN cat /opt/compile-companion-wasm-source >/opt/compile-companion-wasm-build \
   && sleep 1 \
   && echo bake-sim-compile-companion-wasm-build
 
-# Exact source publication is mode=min, so the reusable compiler vertices must
-# be ancestors of the exported target. A scratch join of sibling leaves only
-# preserves the joined marker layers and reproduces the production miss where
-# unchanged WASM compilers rerun on every new commit.
+# Exact source publication is one rooted mode=max graph, so every reusable
+# compiler vertex must remain an ancestor of the exported target. A scratch
+# join of sibling leaves obscures that production lineage.
 FROM compile-companion-wasm-build AS compile-nook-wasm-source
 COPY inputs/compile-nook-wasm.txt /tmp/nook-wasm-source.txt
 RUN cat /tmp/nook-wasm-source.txt >/opt/compile-nook-wasm-source \
@@ -114,12 +113,6 @@ RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
   && printf '%s\n' "$SIMULATED_EXTENSION_COMMIT" >/opt/compile-extension-package \
   && sleep 1 \
   && echo bake-sim-compile-extension-package
-
-FROM compile-web-dependencies AS compile-dependency-cache
-COPY --from=compile-native-dependencies /opt/compile-native-dependencies /compile/native
-COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
-RUN install -D /opt/compile-web-app-dependencies /compile/web-app \
-  && install -D /opt/compile-web-dependencies /compile/web
 
 FROM compile-nook-wasm-build AS compile
 COPY --from=compile-web-source /opt/compile-web-source /compile/web

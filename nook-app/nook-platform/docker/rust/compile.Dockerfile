@@ -78,9 +78,8 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-dependencies
 
-# Keep the native and WASM dependency compilers in one source-free ancestry.
-# The dependency cache exporter is rooted below this stage, so both compiler
-# results remain addressable records instead of marker-only scratch inputs.
+# Keep the native and WASM dependency compilers in one source-free ancestry so
+# the single rooted compile export retains both compiler result lineages.
 FROM compile-native-dependencies AS compile-wasm-dependencies
 
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -397,22 +396,11 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
 
-# Source-free export root used only as a sibling of the ordinary product
-# target in the first publish Bake session. Its real dependency artifacts root
-# both independent compiler branches for the mode=max export; no authored
-# product source stage can reach this target.
-FROM compile-web-dependencies AS compile-dependency-cache
-
-COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
-COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
-RUN install -D /opt/nook/compile-web-app-dependencies /compile/web-app-deps \
-    && install -D /opt/nook/compile-web-dependencies /compile/web-research-deps
-
-# The exact source cache is deliberately exported with mode=min. Keep the
-# expensive, linear WASM compiler graph in the final target's ancestry so that
-# minimal export retains its source/compiler records for the next immutable
-# commit. A scratch join makes the copied marker reachable but discards those
-# intermediate cache records, forcing every new head to compile WASM again.
+# The exact source cache is a single bounded mode=max export. Keep the
+# expensive, linear WASM compiler graph in the final target's ancestry so the
+# export retains its source/compiler records for the next immutable commit.
+# A scratch join makes only the copied marker reachable and obscures the
+# compiler lineage that this cache exists to preserve.
 FROM compile-wasm-source AS compile
 
 COPY --from=compile-native-source /opt/nook/compile-native-passed /compile/native

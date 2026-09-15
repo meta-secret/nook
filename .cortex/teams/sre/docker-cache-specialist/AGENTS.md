@@ -20,10 +20,10 @@ behavior for packets issued by SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
 - Enforce a five-minute remote-build latency SLO and workflow timeout.
 - Diagnose cache telemetry before changing cache topology.
-- Preserve separate cache identities:
-  - dependency-fingerprint scopes own dependency and toolchain reuse; and
-  - optional exact-commit scopes own only `mode=min` same-head retry
-    acceleration.
+- Preserve one optional immutable exact-commit BuildKit identity for
+  `mode=max` same-head and nearest-first-parent full-graph acceleration. Dependency
+  and toolchain vertices stay rooted in that ordinary compile graph; do not
+  synchronously export a second sibling graph.
 - Make sccache the primary cross-commit compiler cache. Secret availability is
   the complete trust boundary: jobs receiving the single
   `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` pair use `READ_WRITE`;
@@ -78,10 +78,11 @@ behavior for packets issued by SRE Team Gizmo.
   compiler vertices. Never encode cache availability or export authority in
   an ARG, ENV, target context, platform, output, or command shape that
   divides their BuildKit keys.
-- Use `mode=min` for exact source-cache exports.
+- Use one rooted `mode=max` exact source-cache export so all source-free and
+  compiler vertices remain reachable; never pair it with a sibling export.
 - Bound cache exports and transport retries.
 - Preserve ordinary new-commit reuse when no optional exact source cache
-  exists through sccache and the dependency cache.
+  exists through sccache and stable source-free vertices in the rooted graph.
 - Validate cache publication with a changed-head replay.
 - Maintain the canonical simulator and proof surfaces:
   - `infra/sim/bake-cache/compile-warm.docker-bake.hcl`;

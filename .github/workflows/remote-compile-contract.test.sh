@@ -17,6 +17,7 @@ batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
+grep -Fq -- 'build:compile) timeout --kill-after=10s 240s task build:compile ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'SCCACHE_S3_RW_MODE: READ_WRITE' "$remote"
 test "$(grep -Fc -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}' "$remote")" -eq 3
 test "$(grep -Fc -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}' "$remote")" -eq 3
@@ -43,31 +44,27 @@ credential_branch_line="$(grep -nF -- 'if [ -n "$access_key_file" ]' "$compile_s
 test -n "$runtime_secret_line"
 test -n "$credential_branch_line"
 test "$runtime_secret_line" -lt "$credential_branch_line"
-for compile_target in build-compile build-compile-dependency-cache; do
-  for secret_binding in \
-    "secrets=id=sccache_runtime_mode,src=\${runtime_mode_file}" \
-    "secrets+=id=sccache_s3_access_key,src=\${access_key_file}" \
-    "secrets+=id=sccache_s3_secret_key,src=\${secret_key_file}"; do
-    grep -Fq -- "--set=${compile_target}.${secret_binding}" "$compile_script"
-  done
+for secret_binding in \
+  'secrets=id=sccache_runtime_mode,src=${runtime_mode_file}' \
+  'secrets+=id=sccache_s3_access_key,src=${access_key_file}' \
+  'secrets+=id=sccache_s3_secret_key,src=${secret_key_file}'; do
+  grep -Fq -- "--set=build-compile.${secret_binding}" "$compile_script"
 done
-for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
+for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
 done
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
   grep -Fq -- "$required" "$probe_classification_contract"
 done
-for required in 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'compile_restore_source_cache_ref' 'mode=min,compression=zstd,force-compression=true,timeout=2m' 'mode=max,compression=zstd,force-compression=true,timeout=2m' 'target "build-compile-dependency-cache"' 'target     = "compile-dependency-cache"' 'cache-to   = compile_deps_cache_to' 'NOOK_COMPILE_CACHE_MODE == "publish"'; do
+for required in 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'compile_restore_source_cache_ref' 'nook-build-compile-v4' 'mode=max,compression=zstd,timeout=20s,ignore-error=true' 'NOOK_COMPILE_CACHE_MODE == "publish"'; do
   grep -Fq -- "$required" "$compile_bake"
 done
-grep -Fq -- 'compile_targets=(build-compile-dependency-cache build-compile)' "$compile_script"
-dependency_target="$(sed -n '/^FROM compile-web-dependencies AS compile-dependency-cache$/,/^FROM compile-wasm-source AS compile$/p' "$compile_dockerfile")"
-for forbidden_source in 'compile-native-source' 'compile-wasm-source AS' 'compile-web '; do
-  if printf '%s\n' "$dependency_target" | sed '$d' | grep -Fq -- "$forbidden_source"; then
-    echo "dependency cache target reaches source stage: $forbidden_source" >&2
-    exit 1
-  fi
-done
+if rg -n 'build-compile-dependency-cache|compile_deps_cache_to|GHA_RUST_COMPILE_DEPS_SCOPE' "$compile_script" "$compile_bake"; then
+  echo 'redundant synchronous dependency export remains' >&2
+  exit 1
+fi
+grep -Fq -- 'cache-selection: ${{ (inputs.tasks || inputs.task) == '\''build:compile'\'' && '\''compile'\''' "$remote"
+grep -Fq -- 'uses: ./.github/actions/nook-cache-telemetry' "$remote"
 if grep -Eq -- '^[[:space:]]*COPY[[:space:]]+\.[[:space:]]+\.' "$compile_dockerfile"; then
   echo 'product compiler must not copy the repository root' >&2
   exit 1
@@ -94,7 +91,7 @@ for required in compile_requests requests_executed cache_hits cache_misses cache
 for required in 'SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log' 'test -z "${SCCACHE_ERROR_LOG:-}"' 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'product compilation remained available' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
   grep -Fq -- "$required" "$sccache_fallback_contract"
 done
-for required in 'Client-side cold publication: zero errors plus zero writes is pending verification' 'status=publication_pending_verification' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_WRITE runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: nearest-ancestor BuildKit reuse plus cross-commit sccache hits' 'COMPILE_RESTORE_SOURCE_SCOPE' 'require_uncached_step "$proof_log" bake-sim-compile-nook-wasm-source' 'Repeated next-head zero hits: publication verification fails' 'next_head_zero_hits' 'bake-sim-sccache-hit' 'No-BuildKit-export replay: exact reuse with trusted sccache access' 'sccache_mode=READ_WRITE registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
+for required in 'Runtime Bake+Zot cache proof' 'require_cached_step()' 'require_uncached_step()' 'fresh BuildKit builder' 'Main cold publish' 'Main fresh restore'; do
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"

@@ -10,8 +10,8 @@ inputs:
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
-      compile probes only its exact head and dependency fingerprint in one
-      bounded parallel batch;
+      compile probes its exact head and immutable first-parent candidates in
+      one bounded batch;
       web-research-deps probes only the research Bun dependency lineage;
       web-research-image probes the exact research browser graph;
       connection-only performs no registry cache probes.
@@ -397,9 +397,8 @@ runs:
         case "$cache_selection" in
           general|native|wasm|wasm-proof|compile)
           # Preserve the shared Rust dependency identity for its existing
-          # consumers. build:compile composes a distinct recipe-aware identity
-          # below because an existing manifest must never suppress publication
-          # after the compile LLB or one of its named contexts changes.
+          # consumers. build:compile uses immutable exact-head and ancestor
+          # source scopes below; sccache owns cross-head compiler objects.
           rust_deps_fingerprint="$(
             NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
               bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
@@ -410,19 +409,6 @@ runs:
           fi
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
-          compile_deps_scope=""
-          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-            compile_deps_fingerprint="$(
-              NOOK_COMPILE_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
-                bash "${{ github.action_path }}/../../scripts/compile-deps-cache-fingerprint.sh"
-            )"
-            if [[ ! "$compile_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "Could not fingerprint the hosted compile dependency graph" >&2
-              exit 1
-            fi
-            compile_deps_scope="nook-rust-compile-deps-v3-$compile_deps_fingerprint"
-            echo "GHA_RUST_COMPILE_DEPS_SCOPE=$compile_deps_scope" >> "$GITHUB_ENV"
-          fi
           ;;
         esac
 
@@ -431,45 +417,23 @@ runs:
             echo "compile cache selection requires the build:compile selector" >&2
             exit 1
           fi
-          compile_probe_dir="$(mktemp -d)"
           compile_probe_failure_class=none
           compile_exact_available=""
-          for compile_probe in \
-            "deps|$compile_deps_scope" \
-            "exact|nook-build-compile-v3$scope_suffix"; do
-            compile_probe_name="${compile_probe%%|*}"
-            compile_probe_scope="${compile_probe#*|}"
-            (
-              compile_probe_status=0
-              cache_ref_status "$registry_host/$exact_repository/$compile_probe_scope:buildcache" || compile_probe_status=$?
-              printf '%s\n' "$compile_probe_status" > "$compile_probe_dir/$compile_probe_name"
-            ) &
-          done
-          wait
-          for compile_probe_name in deps exact; do
-            compile_probe_status="$(cat "$compile_probe_dir/$compile_probe_name")"
-            case "$compile_probe_name|$compile_probe_status" in
-              deps\|0) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=1" >> "$GITHUB_ENV" ;;
-              deps\|1) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=" >> "$GITHUB_ENV" ;;
-              deps\|2)
-                echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=" >> "$GITHUB_ENV"
-                compile_probe_failure_class=transient_unavailable
-                echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"dependencies","failure_class":"transient_unavailable","action":"continue_cold"}'
-                ;;
-              exact\|0)
-                compile_exact_available=1
-                echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV"
-                ;;
-              exact\|1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
-              exact\|2)
-                echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
-                compile_probe_failure_class=transient_unavailable
-                echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
-                ;;
-              *) rm -rf "$compile_probe_dir"; exit "$compile_probe_status" ;;
-            esac
-          done
-          rm -rf "$compile_probe_dir"
+          compile_probe_status=0
+          cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4$scope_suffix:buildcache" || compile_probe_status=$?
+          case "$compile_probe_status" in
+            0)
+              compile_exact_available=1
+              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV"
+              ;;
+            1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
+            2)
+              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
+              compile_probe_failure_class=transient_unavailable
+              echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
+              ;;
+            *) exit "$compile_probe_status" ;;
+          esac
           compile_restore_scope_suffix=""
           if [ -n "$compile_exact_available" ]; then
             compile_restore_scope_suffix="$scope_suffix"
@@ -484,7 +448,7 @@ runs:
             for ancestor_sha in "${compile_ancestors[@]}"; do
               (
                 ancestor_status=0
-                cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v3-git-$ancestor_sha:buildcache" || ancestor_status=$?
+                cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4-git-$ancestor_sha:buildcache" || ancestor_status=$?
                 printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
               ) &
             done
@@ -505,17 +469,12 @@ runs:
           fi
           echo "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
           echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
-          echo "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true"
+          echo "Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6"
         fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
           # Main source also owns fresh dependency-only restores after publication.
-          if [ "$cache_selection" = "general" ] \
-            && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
-            publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v3$scope_suffix"
-          fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"

@@ -252,10 +252,11 @@ fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
     assert!(dockerfile.contains("AS compile-web-dependencies"));
     assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
     assert!(!dockerfile.contains("ci-agent"));
-    assert!(bake.contains("target \"compile-dependency-cache\""));
     assert!(bake.contains("target \"compile-warm\""));
     assert!(bake.contains("COMPILE_RESTORE_SOURCE_SCOPE"));
-    assert!(bake.contains("mode=max") && bake.contains("mode=min"));
+    assert!(bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true"));
+    assert!(!bake.contains("compile_deps_cache_to"));
+    assert!(!bake.contains("target \"compile-dependency-cache\""));
     assert!(!bake.to_ascii_lowercase().contains("seed"));
 }
 

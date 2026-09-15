@@ -10,8 +10,6 @@ import {
 void test("records ordinary compile publication boundaries", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
-      GHA_RUST_COMPILE_DEPS_SCOPE: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
-      GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE: "",
       GHA_CACHE_WRITE_ENABLED: "1",
       NOOK_COMPILE_CACHE_MODE: "publish",
       GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
@@ -19,16 +17,16 @@ void test("records ordinary compile publication boundaries", () => {
       GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
     }).record(),
     {
-      scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
+      scope: "",
       compile_dependencies: {
-        scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
+        scope: "",
         available: false,
-        write_enabled: true,
-        export_enabled: true,
+        write_enabled: false,
+        export_enabled: false,
       },
       compile_source: {
-        scope: `nook-build-compile-v3-git-${"b".repeat(40)}`,
-        restore_scope: `nook-build-compile-v3-git-${"c".repeat(40)}`,
+        scope: `nook-build-compile-v4-git-${"b".repeat(40)}`,
+        restore_scope: `nook-build-compile-v4-git-${"c".repeat(40)}`,
         available: true,
         write_enabled: false,
         export_enabled: false,
@@ -41,10 +39,6 @@ void test("records ordinary compile publication boundaries", () => {
             name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
             available: true,
           },
-          {
-            name: "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
-            available: false,
-          },
         ],
       },
     },
@@ -55,7 +49,6 @@ void test("records transient optional probe failures without marking probes inco
   const scope = new CacheScopeTelemetry({
     GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
     GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "transient_unavailable",
-    GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE: "",
     GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "",
   }).record();
 

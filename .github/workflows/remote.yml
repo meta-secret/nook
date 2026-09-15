@@ -158,7 +158,7 @@ jobs:
           printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: ${{ (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
+          cache-selection: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile' || (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
