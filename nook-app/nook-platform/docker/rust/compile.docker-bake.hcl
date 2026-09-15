@@ -43,6 +43,7 @@ compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "
 ] : []
 
 target "build-compile" {
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
   target     = "compile"
