@@ -6,7 +6,9 @@ import test from "node:test";
 
 import { PrCacheHealth } from "./pr-cache-health.mjs";
 
-/** @param {string} job @param {Record<string, any>} [overrides] */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+
+/** @param {string} job @param {Record<string, unknown>} [overrides] @returns {CacheTelemetryRecord} */
 const telemetry = (job, overrides = {}) => ({
   schema_version: 1,
   github: { run_id: "42", run_attempt: 1, job },
@@ -25,12 +27,10 @@ const telemetry = (job, overrides = {}) => ({
     },
     compile_source: {
       scope: "source",
-      available: true,
-      write_enabled: false,
-      export_enabled: false,
     },
     imports: {
       probes_complete: true,
+      failure_class: "none",
       availability: [
         { name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: true },
       ],
@@ -491,6 +491,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   }
   assert.match(
     productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n    echo "nook-wasm declared coverage tests:/,
+    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
   );
+  assert.match(productDockerfile, /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/);
 });
