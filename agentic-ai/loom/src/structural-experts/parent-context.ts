@@ -4,11 +4,9 @@ import {
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   MaterializedViewPresence,
-  StructuralExpertAuthorizationKind,
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../agent-workflow/domain.ts';
-import type { StructuralExpertAuthorization } from '../agent-workflow/domain.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../agent-workflow/agent-attempt-version.ts';
 import { VerifiedAttemptArtifacts } from '../agent-workflow/attempt-verification.ts';
 import type {
@@ -72,38 +70,6 @@ export class StructuralExpertParentContext {
         AgentAttemptAdapterKind.StructuralExpertInvocation ||
       parent.terminal.output.resultKind !==
         WorkflowResultKind.StructuralExpertPlan
-    ) {
-      StructuralExpertParentContext.failed();
-    }
-    const expected: StructuralExpertAuthorization =
-      input.request.kind === StructuralExpertKind.RepositoryEvidence
-        ? {
-            task: input.request.task,
-            expert: input.request.expert,
-            attempt: input.request.attempt,
-            depth: 2,
-            parent: input.request.parent,
-            kind: StructuralExpertAuthorizationKind.RepositoryEvidence,
-            evidencePaths: input.request.evidencePaths,
-          }
-        : {
-            task: input.request.task,
-            expert: input.request.expert,
-            attempt: input.request.attempt,
-            depth: 2,
-            parent: input.request.parent,
-            kind: StructuralExpertAuthorizationKind.VerifiedViewSynthesis,
-            childLanes: input.request.childProjections.map((projection) => ({
-              task: projection.task,
-              expert: projection.expert,
-              attempt: projection.attempt,
-            })),
-          };
-    if (
-      !parent.terminal.output.structuralExpertAuthorizations.some(
-        (authorization) =>
-          JSON.stringify(authorization) === JSON.stringify(expected),
-      )
     ) {
       StructuralExpertParentContext.failed();
     }

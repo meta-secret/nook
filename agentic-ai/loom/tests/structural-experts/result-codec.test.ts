@@ -6,7 +6,6 @@ import {
   LoomExtractionClassification,
   LoomExtractionTarget,
   StructuralAssessmentKind,
-  StructuralExpertAuthorizationKind,
   StructuralFindingCategory,
   StructuralFindingDisposition,
   StructuralFindingSeverity,
@@ -124,39 +123,6 @@ export class StructuralExpertsResultCodecScenario {
       findings: [],
       notesForParent: [],
       artifacts: [],
-      structuralExpertAuthorizations: [
-        {
-          kind: StructuralExpertAuthorizationKind.RepositoryEvidence,
-          task: 'inspect-code',
-          expert: 'code_refactoring_expert',
-          attempt: 1,
-          depth: 2,
-          parent: {
-            kind: AgentAttemptParentKind.AgentAttempt,
-            task: 'plan-refactoring',
-            agent: 'delivery-owner',
-            attempt: 1,
-          },
-          evidencePaths: ['nook-app/nook-platform/nook-core'],
-        },
-        {
-          kind: StructuralExpertAuthorizationKind.VerifiedViewSynthesis,
-          task: 'synthesize-refactoring',
-          expert: 'system_coherence_synthesizer',
-          attempt: 1,
-          depth: 2,
-          parent: {
-            kind: AgentAttemptParentKind.AgentAttempt,
-            task: 'plan-refactoring',
-            agent: 'delivery-owner',
-            attempt: 1,
-          },
-          childLanes: [
-            StructuralExpertsResultCodecScenario.childLane('inspect-code'),
-            StructuralExpertsResultCodecScenario.childLane('inspect-cortex'),
-          ],
-        },
-      ],
     };
   }
 
@@ -385,7 +351,8 @@ test('decodes dedicated structural plan and evidence unions', () => {
   const serializedPlan = JSON.stringify(
     StructuralExpertsResultCodecScenario.structuralPlan(),
   );
-  expect(serializedPlan).toContain('childLanes');
+  expect(serializedPlan).not.toContain('structuralExpertAuthorizations');
+  expect(serializedPlan).not.toContain('childLanes');
   expect(serializedPlan).not.toContain('resultSha256');
   expect(serializedPlan).not.toContain('viewSha256');
 });
@@ -407,7 +374,7 @@ test('binds schemas to role-specific continuation vocabularies', () => {
   expect(JSON.stringify(synthesisSchema)).not.toContain('architectureFindings');
 });
 
-test('rejects incomplete evidence and depth-three structural authority', () => {
+test('rejects incomplete evidence and removed structural handoff fields', () => {
   const code = StructuralExpertsResultCodecScenario.codeEvidence();
   const { parentActions: omittedParentActions, ...incompleteContinuation } =
     code.continuation;
@@ -418,15 +385,15 @@ test('rejects incomplete evidence and depth-three structural authority', () => {
   ).toThrow('missing or extra fields');
 
   const plan = StructuralExpertsResultCodecScenario.structuralPlan();
-  const depthThree = {
+  const withRemovedHandoffField = {
     ...plan,
-    structuralExpertAuthorizations: plan.structuralExpertAuthorizations.map(
-      (authorization) => ({ ...authorization, depth: 3 }),
-    ),
+    structuralExpertAuthorizations: [],
   };
   expect(() =>
-    WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(depthThree)),
-  ).toThrow('depth is invalid');
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(withRemovedHandoffField),
+    ),
+  ).toThrow('missing or extra fields');
 });
 
 test('rejects malformed, duplicate, extra, and unbounded typed structural records', () => {
@@ -512,48 +479,12 @@ test('rejects malformed, duplicate, extra, and unbounded typed structural record
   ).toThrow('missing or extra fields');
 
   const plan = StructuralExpertsResultCodecScenario.structuralPlan();
-  const synthesis = plan.structuralExpertAuthorizations.find(
-    (authorization) =>
-      authorization.kind ===
-      StructuralExpertAuthorizationKind.VerifiedViewSynthesis,
-  );
-  if (
-    !synthesis ||
-    synthesis.kind !== StructuralExpertAuthorizationKind.VerifiedViewSynthesis
-  ) {
-    throw new Error('Synthesis authorization fixture is missing.');
-  }
-  const malformedLane = {
-    ...synthesis,
-    childLanes: [
-      { ...synthesis.childLanes[0], resultSha256: 'forged' },
-      ...synthesis.childLanes.slice(1),
-    ],
-  };
-  const duplicateChildren = {
-    ...synthesis,
-    childLanes: [synthesis.childLanes[0], synthesis.childLanes[0]],
-  };
-  const unboundedChildren = {
-    ...synthesis,
-    childLanes: new Array(17).fill(synthesis.childLanes[0]),
-  };
-  for (const authorization of [
-    malformedLane,
-    duplicateChildren,
-    unboundedChildren,
-  ]) {
-    const output = {
-      ...plan,
-      structuralExpertAuthorizations: [
-        plan.structuralExpertAuthorizations[0],
-        authorization,
-      ],
-    };
-    expect(() =>
-      WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(output)),
-    ).toThrow('Invalid workflow structured result');
-  }
+  const withRemovedChildAuthority = { ...plan, childLanes: [] };
+  expect(() =>
+    WorkflowResultSchema.decodeWorkflowTaskOutput(
+      JSON.stringify(withRemovedChildAuthority),
+    ),
+  ).toThrow('missing or extra fields');
 });
 
 type CategoryMismatchCase = {

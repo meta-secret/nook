@@ -23,7 +23,6 @@ import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
-  StructuralExpertAuthorizationKind,
   StructuralFindingCategory,
   StructuralFindingDisposition,
   StructuralFindingSeverity,
@@ -34,7 +33,6 @@ import {
 import type {
   CodeRefactoringTaskOutput,
   FailedTaskTerminal,
-  StructuralExpertAuthorization,
   StructuralExpertPlanTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
 
@@ -97,15 +95,6 @@ export class StructuralExpertsInvokeScenario {
 
   private async execute(): Promise<void> {
     const request = this.request;
-    const authorization: StructuralExpertAuthorization = {
-      kind: StructuralExpertAuthorizationKind.RepositoryEvidence,
-      task: request.task,
-      expert: request.expert,
-      attempt: request.attempt,
-      depth: 2,
-      parent: request.parent,
-      evidencePaths: request.evidencePaths,
-    };
     const output: StructuralExpertPlanTaskOutput = {
       resultKind: WorkflowResultKind.StructuralExpertPlan,
       summary: 'Structural plan approved.',
@@ -113,7 +102,6 @@ export class StructuralExpertsInvokeScenario {
       findings: [],
       notesForParent: [],
       artifacts: [],
-      structuralExpertAuthorizations: [authorization],
     };
     const parentRequest = {
       repoRoot: REPO_ROOT,

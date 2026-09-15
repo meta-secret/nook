@@ -1,8 +1,5 @@
 import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
-import type {
-  ParentAgentAttempt,
-  StructuralChildProjectionAuthorization,
-} from '../agent-workflow/domain.ts';
+import type { ParentAgentAttempt } from '../agent-workflow/domain.ts';
 import {
   UntrustedYamlPropertyPresence,
   UntrustedYamlBoundary,
@@ -338,7 +335,16 @@ export class StructuralExpertRequestDecoder {
   }
 }
 
-export type StructuralChildProjection = StructuralChildProjectionAuthorization;
+/** Identifies one child result and view that a synthesis task must read. */
+export type StructuralChildProjection = Readonly<{
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: number;
+  readonly resultPath: string;
+  readonly resultSha256: string;
+  readonly viewPath: string;
+  readonly viewSha256: string;
+}>;
 
 type StructuralInvocationFields = {
   readonly runId: string;

@@ -279,10 +279,8 @@ describe('module expert invocation runtime', () => {
       );
       expect(events[0]).toMatchObject({
         kind: 'attempt-started',
-        invocationContextSha256: ModuleExpertsInvokeScenario.sha256(
-          JSON.stringify(request.selectedContextPaths),
-        ),
       });
+      expect(eventsSerialized).not.toContain('invocationContextSha256');
       expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       const replayRequest = { events };
       expect(AgentAttemptReplay.replay(replayRequest).terminalKind).toBe(

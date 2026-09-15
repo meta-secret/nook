@@ -19,7 +19,6 @@ import {
 
 import type {
   AgentAttemptParent,
-  ModuleExpertAuthorization,
   ModuleDevelopmentPlanTaskOutput,
   ModuleExpertTaskOutput,
   TaskTerminal,
@@ -46,13 +45,6 @@ export class ModuleExpertsInvokeParentFixtureScenario {
     if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
       throw new Error('Expected direct parent attempt in the test fixture.');
     }
-    const authorization: ModuleExpertAuthorization = {
-      task: request.task,
-      expert: request.expert,
-      attempt: request.attempt,
-      depth: request.depth,
-      parent: request.parent,
-    };
     const completedArgs: CreateCompletedAttemptArgs = {
       repoRoot: REPO_ROOT,
       runId: request.runId,
@@ -63,9 +55,7 @@ export class ModuleExpertsInvokeParentFixtureScenario {
       depth: 1,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },
       output:
-        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
-          authorization,
-        ]),
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput(),
     };
     await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
       completedArgs,
@@ -109,9 +99,7 @@ export class ModuleExpertsInvokeParentFixtureScenario {
     await journal.finalize(terminal);
   }
 
-  static moduleDevelopmentPlanOutput(
-    authorizations: ModuleDevelopmentPlanTaskOutput['moduleExpertAuthorizations'],
-  ): ModuleDevelopmentPlanTaskOutput {
+  static moduleDevelopmentPlanOutput(): ModuleDevelopmentPlanTaskOutput {
     return {
       resultKind: WorkflowResultKind.ModuleDevelopmentPlan,
       summary: 'Reviewed module expert plan.',
@@ -119,7 +107,6 @@ export class ModuleExpertsInvokeParentFixtureScenario {
       findings: [],
       notesForParent: [],
       artifacts: [],
-      moduleExpertAuthorizations: authorizations,
     };
   }
 
