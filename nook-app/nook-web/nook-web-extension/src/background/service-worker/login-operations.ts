@@ -14,9 +14,7 @@ import {
 import { SessionOperationFailureKind } from '../../lib/session-operation-queue'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionSessionGrantIdentity } from '../pairing-grants'
-import {
-  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-} from '../../offscreen/session-request-adapter'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
   AccountPickerSurfaceKind,
   AccountPickerPageTarget,
