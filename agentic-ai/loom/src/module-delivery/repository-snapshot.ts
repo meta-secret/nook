@@ -8,7 +8,7 @@ import type { GitCommandRequest } from './git-command.ts';
 import type {
   SourceRepositorySnapshot,
   SourceSnapshotExpectation,
-} from './integration-provenance-registry.ts';
+} from './integration-provenance.ts';
 
 type ModuleGitInvocation = {
   readonly cwd: string;

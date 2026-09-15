@@ -14,6 +14,8 @@ export type {
   ModuleDeliveryAdmissionSelection,
   RecordModuleDeliveryAttemptLeasesRequest,
   ModuleDeliveryLeaseRecording,
+  ModuleDeliveryWriterFrontier,
+  RecordModuleDeliveryAttemptDispositionRequest,
 } from './admission-contracts.ts';
 export {
   ModuleDeliveryAdmissionSelectionStatus,

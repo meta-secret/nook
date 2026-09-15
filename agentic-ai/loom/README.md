@@ -177,6 +177,15 @@ The active harness owns worker coordination. Loom documents and checks the
 mechanical boundary; it does not provide worker lifecycle or recovery
 machinery.
 
+Module delivery results are trusted typed in-process handoffs because Team
+Gizmos and Team Agents run in the same Codex harness. Admission state carries
+dependency readiness, resource claims, attempt status, current Git head, and
+provider results directly. Loom does not add signatures, encrypted receipts,
+capability registries, replay ledgers, or redundant authenticity checks between
+these cooperating agents. Git commit, baseline, path, symlink, gitlink,
+worktree, and independently supplied evidence checks remain at their actual
+external boundaries.
+
 ## Structural refactoring experts
 
 Structural refactoring roles use a sibling registry because their evidence

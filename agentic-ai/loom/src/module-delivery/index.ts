@@ -13,60 +13,57 @@ export {
 export type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
+  ModuleDeliveryAdmission,
+  ModuleDeliveryAdmissionSelection,
   ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptDisposition,
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryLeaseRecording,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
+  ModuleDeliveryLeaseRecording,
+  ModuleDeliveryWriterFrontier,
+  RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
   RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
 } from './admission.ts';
+export { ModuleSourceAuthority } from './authority.ts';
 export { TeamKey } from '../team-agents/catalog.ts';
 export { ModuleEvidenceBoundary } from './evidence.ts';
 export type {
-  ModuleDeliveryAcceptedProviderEvidenceIdentity,
-  ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
-  ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceDigestRequest,
+  ModuleDeliveryEvidenceSubmissionVerification,
+  ModuleDeliveryEvidenceSubmissionValidation,
 } from './evidence.ts';
-export {
-  LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-  ModuleDeliveryEvidenceDecodeError,
-  ModuleDeliveryEvidenceDecodeErrorCode,
-  MigrationEvidenceRequired,
-  ModuleDeliveryEvidenceVerdict,
-  ModuleDeliveryEvidenceSchema,
-  ModuleDeliveryProviderSubmissionKind,
-  ModuleIntegrationPhase,
-} from './integration-provenance.ts';
 export {
   MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
   MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
   MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
   MAX_MODULE_DELIVERY_PLAN_DEPTH,
-  MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES,
   MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
-  MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
-  MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
-  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
-  MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
-  MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
-  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
 } from './evidence-limits.ts';
+export {
+  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryProviderSubmissionKind,
+  ModuleIntegrationPhase,
+} from './integration-provenance.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
-  AcceptedModuleDeliveryWrite,
+  CleanupModuleIntegrationRequest,
+  CleanupModuleIntegrationResult,
+  FinalizeModuleDeliveryIntegrationRequest,
+  IntegrateVerifiedModuleDeliveryTaskRequest,
+  ModuleDeliveryHandoffSubmission,
+  ModuleDeliveryProviderResult,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
-  ModuleDeliveryReadOnlyEvidenceSubmissionV1,
-  ModuleDeliveryEvidenceMigrationPayload,
-  ModuleDeliveryEvidenceMigrationRequest,
-  MigrationEvidenceRequiredRequest,
-  ModuleDeliveryWriteProviderSubmission,
+  ModuleIntegrationCleanupHandle,
+  ModuleIntegrationState,
+  PrepareModuleIntegrationRequest,
+  SourceRepositorySnapshot,
+  SourceSnapshotExpectation,
 } from './integration-provenance.ts';
-export { ModuleWorktree } from './workspace.ts';
+export { ModuleWorktree, ModuleWorktreeRole } from './workspace.ts';
 export { ModuleCommitHandoff } from './handoff.ts';
 export { ModuleWaveTree } from './tree-integration.ts';
 export type {
@@ -75,32 +72,15 @@ export type {
   TreeHandoff,
 } from './tree-integration.ts';
 export { ModuleIntegrationCoordinator } from './integration.ts';
-export { ModuleIntegrationEvidence } from './integration-evidence-replay.ts';
-export type { RestoreModuleDeliveryIntegrationEvidenceRequest } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,
   CleanupModuleWorktreeResult,
   ModuleWorktreeHandle,
-  ModuleWorktreeRole,
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
 export type {
+  ModuleCommitPathRequest,
   VerifiedModuleCommitHandoff,
   VerifyModuleCommitHandoffRequest,
 } from './handoff.ts';
-export type {
-  AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-  ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration.ts';
-export type {
-  CleanupModuleIntegrationRequest,
-  CleanupModuleIntegrationResult,
-  FinalizeModuleDeliveryIntegrationRequest,
-  IntegrateVerifiedModuleDeliveryTaskRequest,
-  ModuleDeliveryHandoffSubmission,
-  ModuleIntegrationCleanupHandle,
-  ModuleIntegrationState,
-  PrepareModuleIntegrationRequest,
-  RecordModuleDeliveryAttemptDispositionRequest,
-} from './integration-provenance.ts';

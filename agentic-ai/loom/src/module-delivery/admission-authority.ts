@@ -1,987 +1,419 @@
+import { ModuleAdmissionSource } from './admission-source.ts';
+import { ModuleSourceAuthority } from './authority.ts';
+import { CortexAuthoringAdmission } from './cortex-context.ts';
+import { ModuleDeliveryTaskKind } from './domain.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
+import type { TeamTaskContext } from '../team-agents/context.ts';
 import type {
-  AuthorityState,
-  CapabilityProvenance,
-  NodeLookupRequest,
-  AuthorityTaskRequest,
-  TaskReadyRequest,
-  SynthesisReadyRequest,
-  DispositionValidationRequest,
-  StartingFrontierRequest,
-} from './admission-state-contracts.ts';
-import type {
+  ModuleDeliveryAdmission,
+  ModuleDeliveryAdmissionSelection,
+  ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptDisposition,
+  ModuleDeliveryAttemptLease,
   ModuleDeliveryExpectedLineage,
-  CreateModuleDeliveryGenerationAuthorityRequest,
+  ModuleDeliveryLeaseRecording,
+  RecordModuleDeliveryAttemptDispositionRequest,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  SelectModuleDeliveryAdmissionsRequest,
   CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
   PrepareFinalModuleDeliveryAdmissionStateRequest,
   CommitFinalModuleDeliveryAdmissionStateRequest,
   RollbackFinalModuleDeliveryAdmissionStateRequest,
   RestartModuleDeliveryGenerationRequest,
-  AttemptIdentity,
-  ModuleDeliveryAdmission,
-  ModuleDeliveryAttemptLease,
-  ModuleDeliveryAttemptDisposition,
-  ModuleDeliveryAdmissionState,
-  SelectModuleDeliveryAdmissionsRequest,
-  ModuleDeliveryAdmissionSelection,
-  RecordModuleDeliveryAttemptLeasesRequest,
-  ModuleDeliveryLeaseRecording,
 } from './admission-contracts.ts';
 import {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
 } from './admission-contracts.ts';
-import { ModuleSourceAuthority } from './authority.ts';
-import { ModuleDeliveryTaskKind } from './domain.ts';
-import { ModuleEvidenceBoundary } from './evidence.ts';
-import { ModuleAdmissionStateRegistry } from './admission-state.ts';
 import type {
-  ModuleDeliveryAcceptedProviderEvidenceIdentity,
-  ModuleDeliveryEvidenceSubmissionValidation,
-  ModuleDeliveryEvidenceSubmissionVerification,
-  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
-} from './evidence.ts';
-import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
+  ValidatedModuleDeliveryPlan,
+  ModuleDeliveryResourceClaims,
+} from './domain.ts';
 
-import { CortexAuthoringAdmission } from './cortex-context.ts';
-import type { AdmitCortexAuthoringContextRequest } from './cortex-context.ts';
-import type { TeamTaskContext } from '../team-agents/context.ts';
-import type { ValidatedModuleDeliveryPlan } from './domain.ts';
-import type {
-  AcceptedModuleDeliveryEvidence,
-  AdmissionStateAuthorityInspection,
-  AttemptLeaseAuthorityInspection,
-  GenerationAuthorityInspection,
-  ModuleDeliveryAuthorityPlanRequest,
-  ModuleDeliveryAuthorityRepositoryInspection,
-  RecordModuleDeliveryAttemptDispositionRequest,
-} from './integration-provenance.ts';
-import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration-contracts.ts';
-
-import type {
-  AcceptedModuleDeliveryEvidenceInspection,
-  AcceptedModuleDeliveryEvidenceRegistration,
-  AuthenticateModuleDeliverySourceCommitRequest,
-  ExpectedLineageMapRequest,
-  FrozenModuleDeliveryResourcesRequest,
-  ResourceConflictRequest,
-} from './authority.ts';
-import { ModuleAdmissionSource } from './admission-source.ts';
-import { ModuleAdmissionStateCapabilityAuthorities } from './admission-state-capability-authorities.ts';
-import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
-const AUTHORITY = Symbol('module-delivery-generation-authority');
-const admissionStateStoreAuthorities = {
-  assertCanonicalTransition:
-    ModuleAdmissionStateCapabilityAuthorities.assertCanonicalTransition,
-  assertWriterFrontier:
-    ModuleAdmissionStateCapabilityAuthorities.assertWriterFrontier,
+type RuntimeState = {
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  repositoryRoot: string;
+  expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
+  activeLeases: Map<string, ModuleDeliveryAttemptLease>;
+  attemptsByTask: Map<string, number>;
+  dispositions: ModuleDeliveryAttemptDisposition[];
+  currentState?: ModuleDeliveryAdmissionState;
 };
-const admissionStateStore =
-  ModuleAdmissionStateRegistry.createModuleDeliveryAdmissionStateStore(
-    admissionStateStoreAuthorities,
-  );
-export type ModuleDeliveryGenerationAuthority = Readonly<{
-  [AUTHORITY]: true;
-}>;
 
-/** Owns the module generation authority registry and its capability transitions. */
+/** Trusted in-process scheduler state. It is deliberately not a capability registry. */
 export class ModuleGenerationAuthority {
-  private constructor() {}
-  private static readonly authorityStates = new WeakMap<
-    ModuleDeliveryGenerationAuthority,
-    AuthorityState
-  >();
-
-  private static readonly admissionProvenance = new WeakMap<
-    ModuleDeliveryAdmission,
-    CapabilityProvenance
-  >();
-
-  private static readonly leaseProvenance = new WeakMap<
-    ModuleDeliveryAttemptLease,
-    CapabilityProvenance
-  >();
-
-  private static readonly consumedAdmissions =
-    new WeakSet<ModuleDeliveryAdmission>();
-
-  private static readonly disposedLeases =
-    new WeakSet<ModuleDeliveryAttemptLease>();
-
-  private static readonly acceptedEvidenceLeases =
-    new WeakSet<ModuleDeliveryAttemptLease>();
-
-  private static readonly evidenceAuthorities = new WeakMap<
-    AcceptedModuleDeliveryEvidence,
-    ModuleDeliveryGenerationAuthority
-  >();
+  private constructor(private runtime: RuntimeState) {}
 
   static createModuleDeliveryGenerationAuthority(
     request: CreateModuleDeliveryGenerationAuthorityRequest,
-  ): ModuleDeliveryGenerationAuthority {
-    const { acceptedPlan, repositoryRoot } =
-      ModuleAdmissionSource.freeze(request);
-    const lineageRequest: ExpectedLineageMapRequest = {
-      acceptedPlan,
-      entries: request.expectedLineage,
-    };
+  ): ModuleGenerationAuthority {
+    const source = ModuleAdmissionSource.freeze({
+      acceptedPlan: request.acceptedPlan,
+      repositoryRoot: request.repositoryRoot,
+    });
     const expectedLineage =
-      ModuleSourceAuthority.expectedModuleDeliveryLineageMap(lineageRequest);
-    const value: ModuleDeliveryGenerationAuthority = { [AUTHORITY]: true };
-    const authority = Object.freeze(value);
-    const authorityState: AuthorityState = {
-      repositoryRoot,
-      inputPlan: request.acceptedPlan,
-      acceptedPlan,
+      ModuleSourceAuthority.expectedModuleDeliveryLineageMap({
+        acceptedPlan: source.acceptedPlan,
+        entries: request.expectedLineage,
+      });
+    return new ModuleGenerationAuthority({
+      acceptedPlan: source.acceptedPlan,
+      repositoryRoot: source.repositoryRoot,
       expectedLineage,
       activeLeases: new Map(),
-      leaseHistory: new Map(),
       attemptsByTask: new Map(),
       dispositions: [],
-      evidenceRegistry:
-        ModuleSourceAuthority.createAcceptedModuleDeliveryEvidenceRegistry(),
-    };
-    ModuleGenerationAuthority.authorityStates.set(authority, authorityState);
-    return authority;
+    });
   }
 
   static assertModuleDeliveryGenerationAuthority(
-    inspection: GenerationAuthorityInspection,
+    authority: ModuleGenerationAuthority,
   ): void {
-    const state = ModuleGenerationAuthority.authorityStates.get(
-      inspection.authority,
-    );
-    if (
-      !state ||
-      state.acceptedPlan.plan.generation !== inspection.generation ||
-      state.acceptedPlan.planDigest !== inspection.planDigest
-    )
-      throw new Error(
-        'Module delivery generation authority is invalid or superseded.',
-      );
+    if (!(authority instanceof ModuleGenerationAuthority))
+      throw new Error('Module delivery authority must be scheduler state.');
   }
 
   static moduleDeliveryAuthorityPlan(
-    request: ModuleDeliveryAuthorityPlanRequest,
+    authority: ModuleGenerationAuthority,
   ): ValidatedModuleDeliveryPlan {
-    return ModuleSourceAuthority.trustedModuleDeliveryPlanSnapshot(
-      ModuleGenerationAuthority.authorityStateForPlan(request).acceptedPlan,
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
+      authority,
     );
+    return authority.runtime.acceptedPlan;
   }
 
   static assertModuleDeliveryAuthorityRepository(
-    inspection: ModuleDeliveryAuthorityRepositoryInspection,
+    request: Readonly<{
+      authority: ModuleGenerationAuthority;
+      repositoryRoot: string;
+      sourceCommit: string;
+      originMainSha: string;
+      pinnedLocalDevSha: string;
+    }>,
   ): void {
-    const authority = ModuleGenerationAuthority.requiredAuthority(
-      inspection.authority,
-    );
-    const authentication: AuthenticateModuleDeliverySourceCommitRequest = {
-      repositoryRoot: inspection.repositoryRoot,
-      sourceCommit: authority.acceptedPlan.plan.sourceCommit,
-    };
-    if (
-      ModuleSourceAuthority.authenticateModuleDeliverySourceCommit(
-        authentication,
-      ) !== authority.repositoryRoot
-    )
-      throw new Error('Module delivery repository authority is invalid.');
-    PinnedDevBaseEvidenceContract.assertAncestry({
-      originMainSha: authority.acceptedPlan.plan.originMainSha,
-      pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
-      sourceCommit: authority.acceptedPlan.plan.sourceCommit,
-      workingDirectory: authority.repositoryRoot,
-    });
-  }
-
-  static assertAcceptedModuleDeliveryEvidence(
-    inspection: AcceptedModuleDeliveryEvidenceInspection,
-  ): void {
-    ModuleGenerationAuthority.requiredAuthority(
-      inspection.authority,
-    ).evidenceRegistry.assert(inspection);
-  }
-
-  static moduleDeliveryAcceptedEvidenceIdentity(
-    evidence: AcceptedModuleDeliveryEvidence,
-  ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
-    const authority =
-      ModuleGenerationAuthority.authorityForAcceptedEvidence(evidence);
-    return authority.evidenceRegistry.identity(evidence);
-  }
-
-  static verifyModuleDeliveryEvidenceSubmission(
-    verification: ModuleDeliveryEvidenceSubmissionVerification,
-  ): AcceptedModuleDeliveryEvidence {
-    const authority = ModuleGenerationAuthority.requiredAuthority(
-      verification.authority,
-    );
-    const planRequest: ModuleDeliveryAuthorityPlanRequest = {
-      authority: verification.authority,
-      acceptedPlan: verification.acceptedPlan,
-    };
-    const acceptedPlan =
-      ModuleGenerationAuthority.moduleDeliveryAuthorityPlan(planRequest);
-    const generationInspection: GenerationAuthorityInspection = {
-      authority: verification.authority,
-      generation: acceptedPlan.plan.generation,
-      planDigest: acceptedPlan.planDigest,
-    };
     ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
-      generationInspection,
-    );
-    const leaseInspection: AttemptLeaseAuthorityInspection = {
-      authority: verification.authority,
-      lease: verification.lease,
-    };
-    ModuleGenerationAuthority.assertModuleDeliveryAttemptLeaseAuthority(
-      leaseInspection,
-    );
-    const stateInspection: AdmissionStateAuthorityInspection = {
-      authority: verification.authority,
-      state: verification.state,
-    };
-    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
-      stateInspection,
-    );
-    if (
-      ModuleGenerationAuthority.acceptedEvidenceLeases.has(verification.lease)
-    )
-      throw new Error(
-        `Evidence metadata is invalid for ${verification.lease.taskId}.`,
-      );
-    const seen = new Set<string>();
-    const authorized = Object.freeze(
-      verification.authorizedProviderEvidence.map((evidence) => {
-        const inspection: AcceptedModuleDeliveryEvidenceInspection = {
-          authority: verification.authority,
-          evidence,
-        };
-        authority.evidenceRegistry.assert(inspection);
-        const identity = authority.evidenceRegistry.identity(evidence);
-        if (seen.has(identity.taskId))
-          throw new Error(
-            `Duplicate accepted evidence for ${identity.taskId}.`,
-          );
-        seen.add(identity.taskId);
-        return identity;
-      }),
-    );
-    const validation: ModuleDeliveryEvidenceSubmissionValidation = {
-      verification,
-      acceptedPlan,
-      authorized,
-    };
-    const accepted =
-      ModuleEvidenceBoundary.validateModuleDeliveryEvidenceSubmission(
-        validation,
-      );
-    const [integratedTaskIds = []] = [
-      verification.state.integratedWriterFrontiers[0]?.integratedTaskIds,
-    ];
-    const registration: AcceptedModuleDeliveryEvidenceRegistration = {
-      authority: verification.authority,
-      evidence: accepted,
-      integratedTaskIds,
-    };
-    authority.evidenceRegistry.register(registration);
-    ModuleGenerationAuthority.evidenceAuthorities.set(
-      accepted,
-      verification.authority,
-    );
-    ModuleGenerationAuthority.acceptedEvidenceLeases.add(verification.lease);
-    return accepted;
-  }
-
-  static restoreModuleDeliveryCanonicalEvidenceReceipt(
-    request: RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
-  ) {
-    const authority = ModuleGenerationAuthority.authorityStateForPlan(request);
-    if (ModuleGenerationAuthority.acceptedEvidenceLeases.has(request.lease))
-      throw new Error('Canonical evidence receipt lease is already consumed.');
-    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
-      request,
-    );
-    ModuleGenerationAuthority.assertModuleDeliveryAttemptLeaseAuthority(
-      request,
-    );
-    const evidence =
-      ModuleEvidenceBoundary.restoreModuleDeliveryCanonicalEvidenceReceipt({
-        ...request,
-        registry: authority.evidenceRegistry,
-        node: ModuleSourceAuthority.moduleDeliveryNode({
-          plan: authority.acceptedPlan,
-          taskId: request.lease.taskId,
-        }),
-      });
-    ModuleGenerationAuthority.evidenceAuthorities.set(
-      evidence,
       request.authority,
     );
-    const state = ModuleGenerationAuthority.createModuleDeliveryAdmissionState({
-      ...request,
-      headCommit: request.state.headCommit,
-      integratedWriterFrontiers: request.state.integratedWriterFrontiers,
-      acceptedEvidence: [...request.acceptedEvidence, evidence],
+    if (request.repositoryRoot !== request.authority.runtime.repositoryRoot)
+      throw new Error(
+        'Module delivery repository does not match scheduler state.',
+      );
+    ModuleSourceAuthority.authenticateModuleDeliverySourceCommit({
+      repositoryRoot: request.repositoryRoot,
+      sourceCommit: request.sourceCommit,
     });
-    ModuleGenerationAuthority.acceptedEvidenceLeases.add(request.lease);
-    ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition({
-      authority: request.authority,
-      state,
-      lease: request.lease,
-      outcome: {
-        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-      },
+    PinnedDevBaseEvidenceContract.assertAncestry({
+      workingDirectory: request.repositoryRoot,
+      sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
     });
-    return Object.freeze({ evidence, state });
   }
 
   static createModuleDeliveryAdmissionState(
     request: CreateModuleDeliveryAdmissionStateRequest,
   ): ModuleDeliveryAdmissionState {
-    const authority = ModuleGenerationAuthority.authorityStateForPlan(request);
-    const materialization = {
-      store: admissionStateStore,
-      request,
-      acceptedPlan: authority.acceptedPlan,
-      evidenceRegistry: authority.evidenceRegistry,
-      evidenceHeadCommit: request.headCommit,
-    };
-    return ModuleAdmissionStateRegistry.createAdmissionState(materialization);
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
+      request.authority,
+    );
+    const plan = request.authority.runtime.acceptedPlan;
+    if (request.acceptedPlan.planDigest !== plan.planDigest)
+      throw new Error('Admission state plan does not match scheduler state.');
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: plan.plan.originMainSha,
+      pinnedLocalDevSha: plan.plan.pinnedLocalDevSha,
+    });
+    const state = Object.freeze({
+      originMainSha: plan.plan.originMainSha,
+      pinnedLocalDevSha: plan.plan.pinnedLocalDevSha,
+      generation: plan.plan.generation,
+      planDigest: plan.planDigest,
+      headCommit: request.headCommit,
+      integratedWriterFrontiers: Object.freeze(
+        request.integratedWriterFrontiers.map((frontier) =>
+          Object.freeze({
+            ...frontier,
+            integratedTaskIds: Object.freeze([...frontier.integratedTaskIds]),
+          }),
+        ),
+      ),
+      acceptedProviderEvidence: Object.freeze(
+        request.acceptedEvidence.map((result) =>
+          Object.freeze({
+            ...result,
+            result: Object.freeze([...result.result]),
+          }),
+        ),
+      ),
+    });
+    request.authority.runtime.currentState = state;
+    return state;
   }
 
   static prepareFinalModuleDeliveryAdmissionState(
     request: PrepareFinalModuleDeliveryAdmissionStateRequest,
   ): ModuleDeliveryAdmissionState {
-    const authority = ModuleGenerationAuthority.authorityStateForPlan(request);
-    const materialization = {
-      store: admissionStateStore,
+    return ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
       request,
-      acceptedPlan: authority.acceptedPlan,
-      evidenceRegistry: authority.evidenceRegistry,
-      evidenceHeadCommit: request.previousState.headCommit,
-    };
-    return ModuleAdmissionStateRegistry.prepareFinalAdmissionState(
-      materialization,
     );
   }
 
   static commitFinalModuleDeliveryAdmissionState(
     request: CommitFinalModuleDeliveryAdmissionStateRequest,
-  ): void {
-    const commitRequest = { ...request, store: admissionStateStore };
-    ModuleAdmissionStateRegistry.commitFinalAdmissionState(commitRequest);
+  ): ModuleDeliveryAdmissionState {
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
+      request.authority,
+    );
+    request.authority.runtime.currentState = request.state;
+    return request.state;
   }
 
   static rollbackFinalModuleDeliveryAdmissionState(
     request: RollbackFinalModuleDeliveryAdmissionStateRequest,
-  ): void {
-    const rollbackRequest = { ...request, store: admissionStateStore };
-    ModuleAdmissionStateRegistry.rollbackFinalAdmissionState(rollbackRequest);
+  ): ModuleDeliveryAdmissionState {
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
+      request.authority,
+    );
+    request.authority.runtime.currentState = request.previousState;
+    return request.previousState;
   }
 
   static restartModuleDeliveryGeneration(
     request: RestartModuleDeliveryGenerationRequest,
   ): ModuleDeliveryAdmissionState {
-    const stateInspection: AdmissionStateAuthorityInspection = {
-      authority: request.authority,
-      state: request.previousState,
-    };
-    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
-      stateInspection,
-    );
-    const authority = ModuleGenerationAuthority.requiredAuthority(
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
       request.authority,
     );
-    const dispositionKeys = new Set(
-      authority.dispositions.map(ModuleGenerationAuthority.attemptKey),
-    );
-    if (
-      authority.activeLeases.size > 0 ||
-      [...authority.leaseHistory.values()].some(
-        (lease) =>
-          !dispositionKeys.has(ModuleGenerationAuthority.attemptKey(lease)),
-      )
-    )
-      throw new Error(
-        'Generation restart requires authoritative terminal release evidence.',
-      );
-    const { acceptedPlan } = ModuleAdmissionSource.freeze({
+    const source = ModuleAdmissionSource.freeze({
       acceptedPlan: request.acceptedPlan,
-      repositoryRoot: authority.repositoryRoot,
+      repositoryRoot: request.authority.runtime.repositoryRoot,
     });
-    if (acceptedPlan.plan.generation <= request.previousState.generation)
-      throw new Error(
-        'A superseding module plan requires a newer immutable generation.',
-      );
-    if (
-      authority.leaseHistory.size > 0 &&
-      acceptedPlan.plan.maxAttempts !== authority.acceptedPlan.plan.maxAttempts
-    )
-      throw new Error(
-        'A superseding module plan cannot change maxAttempts after execution begins.',
-      );
-    const lineageRequest: ExpectedLineageMapRequest = {
-      acceptedPlan,
-      entries: request.expectedLineage,
-    };
-    const expectedLineage =
-      ModuleSourceAuthority.expectedModuleDeliveryLineageMap(lineageRequest);
-    const attemptsByTask = new Map(authority.attemptsByTask);
-    const frontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[] =
-      Object.freeze([]);
-    const identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] =
-      Object.freeze([]);
-    const evidence: readonly AcceptedModuleDeliveryEvidence[] = Object.freeze(
-      [],
-    );
-    const stateValue: ModuleDeliveryAdmissionState = {
-      generation: acceptedPlan.plan.generation,
-      planDigest: acceptedPlan.planDigest,
-      headCommit: acceptedPlan.plan.sourceCommit,
-      originMainSha: acceptedPlan.plan.originMainSha,
-      pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
-      integratedWriterFrontiers: frontiers,
-      acceptedProviderEvidence: identities,
-    };
-    const state = Object.freeze(stateValue);
-    const stateRegistration = {
-      store: admissionStateStore,
+    request.authority.runtime.acceptedPlan = source.acceptedPlan;
+    request.authority.runtime.expectedLineage =
+      ModuleSourceAuthority.expectedModuleDeliveryLineageMap({
+        acceptedPlan: source.acceptedPlan,
+        entries: request.expectedLineage,
+      });
+    request.authority.runtime.activeLeases.clear();
+    request.authority.runtime.dispositions = [];
+    request.authority.runtime.attemptsByTask.clear();
+    return ModuleGenerationAuthority.createModuleDeliveryAdmissionState({
       authority: request.authority,
-      state,
-      acceptedEvidence: evidence,
-    };
-    const evidenceRegistry =
-      ModuleSourceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
-    authority.inputPlan = request.acceptedPlan;
-    authority.acceptedPlan = acceptedPlan;
-    authority.expectedLineage = expectedLineage;
-    authority.activeLeases = new Map();
-    authority.leaseHistory = new Map();
-    authority.attemptsByTask = attemptsByTask;
-    authority.dispositions = [];
-    authority.evidenceRegistry = evidenceRegistry;
-    ModuleAdmissionStateRegistry.registerAdmissionState(stateRegistration);
-    return state;
+      acceptedPlan: source.acceptedPlan,
+      headCommit: request.previousState.headCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    });
   }
 
   static assertModuleDeliveryAdmissionStateAuthority(
-    inspection: AdmissionStateAuthorityInspection,
+    request: Readonly<{
+      authority: ModuleGenerationAuthority;
+      acceptedPlan: ValidatedModuleDeliveryPlan;
+      state: ModuleDeliveryAdmissionState;
+    }>,
   ): void {
-    const authority = ModuleGenerationAuthority.authorityStates.get(
-      inspection.authority,
+    ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
+      request.authority,
     );
-    if (!authority)
-      throw new Error(
-        'Module delivery admission state authority is invalid or stale.',
-      );
-    const currentInspection = {
-      store: admissionStateStore,
-      authority: inspection.authority,
-      state: inspection.state,
-      generation: authority.acceptedPlan.plan.generation,
-      planDigest: authority.acceptedPlan.planDigest,
-    };
-    ModuleAdmissionStateRegistry.assertAdmissionStateCurrent(currentInspection);
     if (
-      inspection.state.originMainSha !==
-        authority.acceptedPlan.plan.originMainSha ||
-      inspection.state.pinnedLocalDevSha !==
-        authority.acceptedPlan.plan.pinnedLocalDevSha
+      request.acceptedPlan.planDigest !==
+        request.authority.runtime.acceptedPlan.planDigest ||
+      request.state.planDigest !== request.acceptedPlan.planDigest ||
+      request.state.generation !== request.acceptedPlan.plan.generation
     )
-      throw new Error('Module delivery admission base evidence is invalid.');
+      throw new Error('Admission state is not current scheduler state.');
   }
 
   static selectModuleDeliveryAdmissions(
     request: SelectModuleDeliveryAdmissionsRequest,
   ): ModuleDeliveryAdmissionSelection {
-    const planRequest: ModuleDeliveryAuthorityPlanRequest = request;
-    const authority =
-      ModuleGenerationAuthority.authorityStateForPlan(planRequest);
     ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
       request,
     );
-    const blockedTaskIds =
-      ModuleGenerationAuthority.terminallyBlockedTaskIds(authority);
+    const runtime = request.authority.runtime;
+    const plan = request.acceptedPlan;
+    const completed = new Set([
+      ...request.state.acceptedProviderEvidence.map(({ taskId }) => taskId),
+      ...request.state.integratedWriterFrontiers.flatMap(
+        ({ integratedTaskIds }) => integratedTaskIds,
+      ),
+    ]);
+    const pendingTaskIds = plan.topologicalOrder.filter(
+      (taskId) => !completed.has(taskId),
+    );
+    const blockedTaskIds: string[] = [];
     const admissions: ModuleDeliveryAdmission[] = [];
-    const pendingTaskIds: string[] = [];
-    for (const taskId of authority.acceptedPlan.topologicalOrder) {
-      const nodeRequest: NodeLookupRequest = {
-        plan: authority.acceptedPlan,
-        taskId,
-      };
-      const node = ModuleSourceAuthority.moduleDeliveryNode(nodeRequest);
-      const taskRequest: AuthorityTaskRequest = { authority, taskId };
-      const readyRequest: TaskReadyRequest = {
-        authority,
-        state: request.state,
-        node,
-      };
-      if (
-        blockedTaskIds.includes(taskId) ||
-        !ModuleGenerationAuthority.taskPending(taskRequest) ||
-        !ModuleGenerationAuthority.taskReady(readyRequest)
-      )
+    const selectedClaims: ModuleDeliveryResourceClaims[] = [];
+    for (const taskId of pendingTaskIds) {
+      const node = ModuleSourceAuthority.moduleDeliveryNode({ plan, taskId });
+      if (node.dependencies.some((dependency) => !completed.has(dependency))) {
+        blockedTaskIds.push(taskId);
         continue;
-      const resourcesRequest: FrozenModuleDeliveryResourcesRequest = {
+      }
+      if (runtime.activeLeases.has(taskId)) continue;
+      const attempts = runtime.attemptsByTask.get(taskId) ?? 0;
+      if (attempts >= plan.plan.maxAttempts) {
+        blockedTaskIds.push(taskId);
+        continue;
+      }
+      const resources = ModuleSourceAuthority.frozenModuleDeliveryResources({
         node,
-        plan: authority.acceptedPlan,
-      };
-      const resources =
-        ModuleSourceAuthority.frozenModuleDeliveryResources(resourcesRequest);
-      const activeAdmissions = [
-        ...authority.activeLeases.values(),
-        ...admissions,
-      ];
+        plan,
+      });
       if (
-        activeAdmissions.some((active) => {
-          const conflictRequest: ResourceConflictRequest = {
+        [...runtime.activeLeases.values(), ...admissions].some((active) =>
+          ModuleSourceAuthority.moduleDeliveryResourcesConflict({
             first: resources,
             second: active.resources,
-          };
-          return ModuleSourceAuthority.moduleDeliveryResourcesConflict(
-            conflictRequest,
-          );
-        })
-      ) {
-        pendingTaskIds.push(taskId);
+          }),
+        ) ||
+        selectedClaims.some((claim) =>
+          ModuleSourceAuthority.moduleDeliveryResourcesConflict({
+            first: resources,
+            second: claim,
+          }),
+        )
+      )
         continue;
-      }
-      const attemptRequest: AuthorityTaskRequest = { authority, taskId };
-      const frontierRequest: StartingFrontierRequest = {
-        authority,
-        state: request.state,
+      const parentLineage = runtime.expectedLineage.get(taskId);
+      if (!parentLineage) throw new Error(`No expected lineage for ${taskId}.`);
+      const context = ModuleGenerationAuthority.contextFor({
         node,
-        plan: authority.acceptedPlan,
-      };
-      const authorizedProviderEvidence =
-        node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-          ? Object.freeze(
-              node.evidenceInput.expectedProducers.map((producer) => {
-                const identity = request.state.acceptedProviderEvidence.find(
-                  ({ taskId }) => taskId === producer.taskId,
-                );
-                if (!identity)
-                  throw new Error(
-                    `Accepted evidence is missing for ${producer.taskId}.`,
-                  );
-                return identity;
-              }),
-            )
-          : Object.freeze([]);
-      const contextFields: { context?: TeamTaskContext } = {};
-      if (node.kind === ModuleDeliveryTaskKind.Write && node.cortexAuthoring) {
-        const contextAdmissionRequest: AdmitCortexAuthoringContextRequest = {
-          repositoryRoot: authority.repositoryRoot,
-          startingFrontier:
-            ModuleGenerationAuthority.startingFrontier(frontierRequest),
-          node,
-          resources,
-        };
-        contextFields.context = CortexAuthoringAdmission.admit(
-          contextAdmissionRequest,
-        );
-      }
-      const admissionValue: ModuleDeliveryAdmission = {
-        taskId,
-        attempt: ModuleGenerationAuthority.nextAttempt(attemptRequest),
-        generation: request.state.generation,
-        planDigest: request.state.planDigest,
-        startingFrontier:
-          ModuleGenerationAuthority.startingFrontier(frontierRequest),
-        originMainSha: authority.acceptedPlan.plan.originMainSha,
-        pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
         resources,
-        ...contextFields,
+        runtime,
+      });
+      const admission: ModuleDeliveryAdmission = Object.freeze({
+        taskId,
+        attempt: attempts + 1,
+        generation: plan.plan.generation,
+        planDigest: plan.planDigest,
+        originMainSha: plan.plan.originMainSha,
+        pinnedLocalDevSha: plan.plan.pinnedLocalDevSha,
+        startingFrontier: request.state.headCommit,
+        resources,
+        ...(context ? { context } : {}),
         team: node.team,
         functionalOwner: node.functionalOwner,
         acceptanceOwner: node.acceptanceOwner,
-        parentLineage: ModuleGenerationAuthority.expectedParent(taskRequest),
-        acceptanceRequirements: Object.freeze([...node.acceptance.evidence]),
-        authorizedProviderEvidence,
-      };
-      const admission = Object.freeze(admissionValue);
-      const provenance: CapabilityProvenance = {
-        authority: request.authority,
-        state: request.state,
-      };
-      ModuleGenerationAuthority.admissionProvenance.set(admission, provenance);
+        parentLineage,
+        acceptanceRequirements: Object.freeze([
+          ...node.acceptance.commands,
+          ...node.acceptance.evidence,
+        ]),
+      });
       admissions.push(admission);
+      selectedClaims.push(resources);
     }
-    const selectionRequest = {
-      status:
-        admissions.length > 0 ||
-        authority.activeLeases.size > 0 ||
-        pendingTaskIds.length > 0 ||
-        blockedTaskIds.length === 0
-          ? ModuleDeliveryAdmissionSelectionStatus.Selected
-          : ModuleDeliveryAdmissionSelectionStatus.Blocked,
+    const status =
+      admissions.length > 0
+        ? ModuleDeliveryAdmissionSelectionStatus.Selected
+        : ModuleDeliveryAdmissionSelectionStatus.Blocked;
+    return ModuleSourceAuthority.freezeModuleDeliveryAdmissionSelection({
+      status,
       admissions,
       pendingTaskIds,
       blockedTaskIds,
-    };
-    return ModuleSourceAuthority.freezeModuleDeliveryAdmissionSelection(
-      selectionRequest,
-    );
+    });
+  }
+
+  private static contextFor(
+    request: Readonly<{
+      node: ValidatedModuleDeliveryPlan['plan']['nodes'][number];
+      resources: ModuleDeliveryResourceClaims;
+      runtime: RuntimeState;
+    }>,
+  ): TeamTaskContext | undefined {
+    if (
+      request.node.kind !== ModuleDeliveryTaskKind.Write ||
+      !request.node.cortexAuthoring
+    )
+      return undefined;
+    return CortexAuthoringAdmission.admit({
+      repositoryRoot: request.runtime.repositoryRoot,
+      startingFrontier:
+        request.runtime.currentState?.headCommit ??
+        request.runtime.acceptedPlan.plan.sourceCommit,
+      node: request.node,
+      resources: request.resources,
+    });
   }
 
   static recordModuleDeliveryAttemptLeases(
     request: RecordModuleDeliveryAttemptLeasesRequest,
   ): ModuleDeliveryLeaseRecording {
-    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
-      request,
-    );
-    const authority = ModuleGenerationAuthority.requiredAuthority(
-      request.authority,
-    );
-    if (request.admissions.length === 0)
-      throw new Error('Module delivery admission capability is invalid.');
-    const seenTasks = new Set(
-      [...authority.activeLeases.values()].map(({ taskId }) => taskId),
-    );
-    const compatible: ModuleDeliveryAdmission[] = [
-      ...authority.activeLeases.values(),
-    ];
-    const seenAdmissions = new Set<ModuleDeliveryAdmission>();
+    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority({
+      authority: request.authority,
+      acceptedPlan: request.authority.runtime.acceptedPlan,
+      state: request.state,
+    });
     for (const admission of request.admissions) {
-      const provenance =
-        ModuleGenerationAuthority.admissionProvenance.get(admission);
-      const key = ModuleGenerationAuthority.attemptKey(admission);
-      if (
-        !provenance ||
-        provenance.authority !== request.authority ||
-        provenance.state !== request.state ||
-        ModuleGenerationAuthority.consumedAdmissions.has(admission) ||
-        seenAdmissions.has(admission) ||
-        seenTasks.has(admission.taskId) ||
-        authority.leaseHistory.has(key)
-      )
-        throw new Error('Module delivery admission capability is invalid.');
-      if (
-        compatible.some((active) => {
-          const conflictRequest: ResourceConflictRequest = {
-            first: admission.resources,
-            second: active.resources,
-          };
-          return ModuleSourceAuthority.moduleDeliveryResourcesConflict(
-            conflictRequest,
-          );
-        })
-      )
-        throw new Error('Module delivery admission capability is invalid.');
-      seenAdmissions.add(admission);
-      seenTasks.add(admission.taskId);
-      compatible.push(admission);
-    }
-    const leases = request.admissions.map((admission) => {
-      ModuleGenerationAuthority.consumedAdmissions.add(admission);
-      const lease = Object.freeze(
+      if (request.authority.runtime.activeLeases.has(admission.taskId))
+        throw new Error(`Task ${admission.taskId} is already admitted.`);
+      request.authority.runtime.activeLeases.set(
+        admission.taskId,
         ModuleSourceAuthority.copyModuleDeliveryAdmission(admission),
       );
-      authority.activeLeases.set(
-        ModuleGenerationAuthority.attemptKey(lease),
-        lease,
+      request.authority.runtime.attemptsByTask.set(
+        admission.taskId,
+        admission.attempt,
       );
-      authority.leaseHistory.set(
-        ModuleGenerationAuthority.attemptKey(lease),
-        lease,
-      );
-      authority.attemptsByTask.set(lease.taskId, lease.attempt);
-      const provenance: CapabilityProvenance = {
-        authority: request.authority,
-        state: request.state,
-      };
-      ModuleGenerationAuthority.leaseProvenance.set(lease, provenance);
-      return lease;
-    });
-    const recording: ModuleDeliveryLeaseRecording = {
+    }
+    return Object.freeze({
       state: request.state,
-      leases: Object.freeze(leases),
-    };
-    return Object.freeze(recording);
+      leases: Object.freeze(
+        request.admissions.map(
+          ModuleSourceAuthority.copyModuleDeliveryAdmission,
+        ),
+      ),
+    });
   }
 
   static assertModuleDeliveryAttemptLeaseAuthority(
-    inspection: AttemptLeaseAuthorityInspection,
+    request: Readonly<{
+      authority: ModuleGenerationAuthority;
+      state: ModuleDeliveryAdmissionState;
+      lease: ModuleDeliveryAttemptLease;
+    }>,
   ): void {
-    const authority = ModuleGenerationAuthority.requiredAuthority(
-      inspection.authority,
-    );
-    const provenance = ModuleGenerationAuthority.leaseProvenance.get(
-      inspection.lease,
+    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority({
+      authority: request.authority,
+      acceptedPlan: request.authority.runtime.acceptedPlan,
+      state: request.state,
+    });
+    const active = request.authority.runtime.activeLeases.get(
+      request.lease.taskId,
     );
     if (
-      !provenance ||
-      provenance.authority !== inspection.authority ||
-      authority.activeLeases.get(
-        ModuleGenerationAuthority.attemptKey(inspection.lease),
-      ) !== inspection.lease ||
-      inspection.lease.generation !== authority.acceptedPlan.plan.generation ||
-      inspection.lease.planDigest !== authority.acceptedPlan.planDigest ||
-      inspection.lease.originMainSha !==
-        authority.acceptedPlan.plan.originMainSha ||
-      inspection.lease.pinnedLocalDevSha !==
-        authority.acceptedPlan.plan.pinnedLocalDevSha
+      !active ||
+      active.attempt !== request.lease.attempt ||
+      active.planDigest !== request.lease.planDigest
     )
-      throw new Error('Module delivery lease authority is invalid.');
+      throw new Error('Attempt lease is not active scheduler state.');
   }
 
   static recordModuleDeliveryAttemptDisposition(
     request: RecordModuleDeliveryAttemptDispositionRequest,
   ): ModuleDeliveryAdmissionState {
-    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
-      request,
-    );
     ModuleGenerationAuthority.assertModuleDeliveryAttemptLeaseAuthority(
       request,
     );
-    const authority = ModuleGenerationAuthority.requiredAuthority(
-      request.authority,
+    request.authority.runtime.activeLeases.delete(request.lease.taskId);
+    request.authority.runtime.dispositions.push(
+      Object.freeze({
+        taskId: request.lease.taskId,
+        attempt: request.lease.attempt,
+        generation: request.lease.generation,
+        planDigest: request.lease.planDigest,
+        kind: request.outcome.kind,
+        conclusion: request.outcome.conclusion,
+      }),
     );
-    const key = ModuleGenerationAuthority.attemptKey(request.lease);
-    const dispositionRequest: DispositionValidationRequest = {
-      authority,
-      state: request.state,
-      lease: request.lease,
-      outcome: request.outcome,
-    };
-    if (
-      ModuleGenerationAuthority.disposedLeases.has(request.lease) ||
-      authority.activeLeases.get(key) !== request.lease ||
-      !ModuleGenerationAuthority.validDisposition(dispositionRequest)
-    )
-      throw new Error('Module delivery lease capability is invalid.');
-    ModuleGenerationAuthority.disposedLeases.add(request.lease);
-    authority.activeLeases.delete(key);
-    const dispositionValue: ModuleDeliveryAttemptDisposition = {
-      taskId: request.lease.taskId,
-      attempt: request.lease.attempt,
-      generation: request.lease.generation,
-      planDigest: request.lease.planDigest,
-      ...request.outcome,
-    };
-    authority.dispositions.push(Object.freeze(dispositionValue));
     return request.state;
   }
-
-  private static requiredAuthority(
-    authority: ModuleDeliveryGenerationAuthority,
-  ): AuthorityState {
-    const state = ModuleGenerationAuthority.authorityStates.get(authority);
-    if (!state)
-      throw new Error('Module delivery generation authority is invalid.');
-    return state;
-  }
-
-  private static authorityForAcceptedEvidence(
-    evidence: AcceptedModuleDeliveryEvidence,
-  ): AuthorityState {
-    const authority =
-      ModuleGenerationAuthority.evidenceAuthorities.get(evidence);
-    if (!authority)
-      throw new Error('Accepted module delivery evidence is forged.');
-    return ModuleGenerationAuthority.requiredAuthority(authority);
-  }
-
-  private static authorityForState(
-    state: ModuleDeliveryAdmissionState,
-  ): AuthorityState {
-    const request = { store: admissionStateStore, state };
-    return ModuleGenerationAuthority.requiredAuthority(
-      ModuleAdmissionStateRegistry.admissionStateAuthority(request),
-    );
-  }
-
-  private static expectedParent(
-    request: AuthorityTaskRequest,
-  ): AgentAttemptParent {
-    const parent = request.authority.expectedLineage.get(request.taskId);
-    if (!parent) throw new Error('Expected lineage is missing.');
-    return parent;
-  }
-
-  private static acceptedAttemptKeys(
-    authority: AuthorityState,
-  ): ReadonlySet<string> {
-    return new Set(
-      authority.dispositions
-        .filter(
-          ({ kind }) => kind === ModuleDeliveryAttemptDispositionKind.Accepted,
-        )
-        .map(ModuleGenerationAuthority.attemptKey),
-    );
-  }
-
-  private static authorityStateForPlan(
-    request: ModuleDeliveryAuthorityPlanRequest,
-  ): AuthorityState {
-    const state = ModuleGenerationAuthority.requiredAuthority(
-      request.authority,
-    );
-    if (state.inputPlan !== request.acceptedPlan)
-      throw new Error(
-        'Module delivery validated plan authority is invalid or superseded.',
-      );
-    return state;
-  }
-
-  private static taskPending(request: AuthorityTaskRequest): boolean {
-    return (
-      ![...request.authority.activeLeases.values()].some(
-        (lease) => lease.taskId === request.taskId,
-      ) &&
-      !request.authority.dispositions.some(
-        (entry) =>
-          entry.taskId === request.taskId &&
-          entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
-      ) &&
-      ModuleGenerationAuthority.nextAttempt(request) <=
-        request.authority.acceptedPlan.plan.maxAttempts
-    );
-  }
-
-  private static taskReady(request: TaskReadyRequest): boolean {
-    const accepted = ModuleGenerationAuthority.acceptedAttemptKeys(
-      request.authority,
-    );
-    const synthesisRequest: SynthesisReadyRequest = {
-      state: request.state,
-      node: request.node,
-    };
-    return (
-      request.authority.acceptedPlan.executionPrecedence
-        .filter((edge) => edge.successorTaskId === request.node.taskId)
-        .every((edge) => {
-          const nodeRequest: NodeLookupRequest = {
-            plan: request.authority.acceptedPlan,
-            taskId: edge.predecessorTaskId,
-          };
-          const predecessor =
-            ModuleSourceAuthority.moduleDeliveryNode(nodeRequest);
-          if (
-            edge.requiresIntegratedWriterFrontier ||
-            predecessor.kind === ModuleDeliveryTaskKind.Write
-          )
-            return request.state.integratedWriterFrontiers.some(
-              (identity) =>
-                identity.taskId === predecessor.taskId &&
-                accepted.has(ModuleGenerationAuthority.attemptKey(identity)),
-            );
-          return request.state.acceptedProviderEvidence.some(
-            (identity) =>
-              identity.taskId === predecessor.taskId &&
-              accepted.has(ModuleGenerationAuthority.attemptKey(identity)),
-          );
-        }) && ModuleGenerationAuthority.synthesisInputsReady(synthesisRequest)
-    );
-  }
-
-  private static synthesisInputsReady(request: SynthesisReadyRequest): boolean {
-    if (request.node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis)
-      return true;
-    const expected = request.node.evidenceInput.expectedProducers;
-    const accepted = ModuleGenerationAuthority.acceptedAttemptKeys(
-      ModuleGenerationAuthority.authorityForState(request.state),
-    );
-    return (
-      expected.length > 0 &&
-      expected.every((producer) =>
-        request.state.acceptedProviderEvidence.some(
-          (identity) =>
-            identity.taskId === producer.taskId &&
-            identity.producerTeam === producer.team &&
-            identity.functionalOwner === producer.functionalOwner &&
-            identity.acceptanceOwner === producer.acceptanceOwner &&
-            accepted.has(ModuleGenerationAuthority.attemptKey(identity)),
-        ),
-      )
-    );
-  }
-
-  private static terminallyBlockedTaskIds(
-    authority: AuthorityState,
-  ): readonly string[] {
-    const failed = new Set(
-      authority.acceptedPlan.plan.nodes
-        .filter(({ taskId }) => {
-          const [attempts = 0] = [authority.attemptsByTask.get(taskId)];
-          return (
-            attempts >= authority.acceptedPlan.plan.maxAttempts &&
-            ![...authority.activeLeases.values()].some(
-              (lease) => lease.taskId === taskId,
-            ) &&
-            !authority.dispositions.some(
-              (entry) =>
-                entry.taskId === taskId &&
-                entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
-            )
-          );
-        })
-        .map(({ taskId }) => taskId),
-    );
-    for (const taskId of authority.acceptedPlan.topologicalOrder) {
-      if (
-        authority.acceptedPlan.executionPrecedence.some(
-          (edge) =>
-            edge.successorTaskId === taskId &&
-            failed.has(edge.predecessorTaskId),
-        )
-      )
-        failed.add(taskId);
-    }
-    return Object.freeze(
-      authority.acceptedPlan.topologicalOrder.filter((taskId) =>
-        failed.has(taskId),
-      ),
-    );
-  }
-
-  private static validDisposition(
-    request: DispositionValidationRequest,
-  ): boolean {
-    const nodeRequest: NodeLookupRequest = {
-      plan: request.authority.acceptedPlan,
-      taskId: request.lease.taskId,
-    };
-    const node = ModuleSourceAuthority.moduleDeliveryNode(nodeRequest);
-    const proofPresent =
-      node.kind === ModuleDeliveryTaskKind.Write
-        ? request.state.integratedWriterFrontiers
-        : request.state.acceptedProviderEvidence;
-    const exactProofPresent = proofPresent.some(
-      ({ taskId, attempt }) =>
-        taskId === request.lease.taskId && attempt === request.lease.attempt,
-    );
-    if (request.outcome.kind === ModuleDeliveryAttemptDispositionKind.Accepted)
-      return (
-        request.outcome.conclusion ===
-          ModuleDeliveryGenerationFenceKind.Accepted && exactProofPresent
-      );
-    return (
-      request.outcome.kind ===
-        ModuleDeliveryAttemptDispositionKind.FinalUnusable &&
-      !exactProofPresent &&
-      (request.outcome.conclusion ===
-        ModuleDeliveryGenerationFenceKind.Cancelled ||
-        request.outcome.conclusion ===
-          ModuleDeliveryGenerationFenceKind.Failed ||
-        request.outcome.conclusion ===
-          ModuleDeliveryGenerationFenceKind.Rejected)
-    );
-  }
-
-  private static startingFrontier(request: StartingFrontierRequest): string {
-    return request.state.headCommit;
-  }
-
-  private static nextAttempt(request: AuthorityTaskRequest): number {
-    const [defaulted2 = 0] = [
-      request.authority.attemptsByTask.get(request.taskId),
-    ];
-    return defaulted2 + 1;
-  }
-
-  private static attemptKey(identity: AttemptIdentity): string {
-    return `${identity.taskId}:${identity.attempt}`;
-  }
 }
+
+export type ModuleDeliveryGenerationAuthority = ModuleGenerationAuthority;

@@ -14,14 +14,6 @@ import { tmpdir } from 'node:os';
 
 import { join } from 'node:path';
 
-import {
-  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-  ModuleDeliveryEvidenceVerdict,
-  ModuleDeliveryProviderSubmissionKind,
-  TeamKey,
-  ModuleEvidenceBoundary,
-} from '../../src/module-delivery/index.ts';
-
 import type {
   SpawnSyncOptionsWithStringEncoding,
   SpawnSyncReturns,
@@ -29,13 +21,6 @@ import type {
 
 import type {
   ModuleWorktreeHandle,
-  ModuleDeliveryAttemptLease,
-  ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceDigestRequest,
-  ModuleDeliveryEvidenceSynthesisNodeV2,
-  ModuleDeliveryReadOnlyEvidenceSubmission,
-  ModuleDeliveryReadOnlyNodeV2,
-  ModuleIntegrationState,
   PrepareModuleWorktreeRequest,
 } from '../../src/module-delivery/index.ts';
 
@@ -59,76 +44,6 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
   private static fixtureTemplate: FixtureTemplateState = {
     kind: FixtureTemplateStateKind.Empty,
   };
-
-  static evidenceSubmission(
-    input: EvidenceFixtureInput,
-  ): ModuleDeliveryReadOnlyEvidenceSubmission {
-    const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
-      repositoryRoot: input.state.workspace.sourceRepositoryRoot,
-      sourceCommit: input.state.headCommit,
-      evidenceSurface: input.node.resources.evidenceSurface,
-    };
-    const evidence = [`${input.node.taskId} completed`];
-    const artifactIdentity = `${input.node.taskId}/report.json`;
-    const acceptedProviderEvidence = input.lease.authorizedProviderEvidence;
-    const digestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
-      artifactIdentity,
-      evidence,
-      acceptanceRequirements: input.lease.acceptanceRequirements,
-      acceptedProviderEvidence,
-    };
-    return {
-      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-      taskId: input.node.taskId,
-      attempt: input.lease.attempt,
-      generation: input.lease.generation,
-      planDigest: input.lease.planDigest,
-      sourceCommit: input.state.headCommit,
-      originMainSha: input.lease.originMainSha,
-      pinnedLocalDevSha: input.lease.pinnedLocalDevSha,
-      producerTeam: input.node.team,
-      functionalOwner: input.node.functionalOwner,
-      acceptanceOwner: input.node.acceptanceOwner,
-      acceptanceRequirements: input.lease.acceptanceRequirements,
-      acceptedProviderEvidence,
-      claimIdentities:
-        ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
-          claimRequest,
-        ),
-      artifactIdentity,
-      artifactDigest:
-        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
-          digestRequest,
-        ),
-      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
-      evidence,
-    };
-  }
-
-  static invalidEvidenceCases(
-    valid: ModuleDeliveryReadOnlyEvidenceSubmission,
-  ): readonly InvalidEvidenceCase[] {
-    const claim = valid.claimIdentities[0];
-    if (!claim) throw new Error('Evidence claim fixture is missing.');
-    return [
-      [{ ...valid, producerTeam: TeamKey.WebDevelopment }, 'metadata'],
-      [{ ...valid, generation: valid.generation + 1 }, 'obsolete'],
-      [{ ...valid, attempt: valid.attempt + 1 }, 'authoritative'],
-      [{ ...valid, sourceCommit: '0'.repeat(40) }, 'metadata'],
-      [
-        {
-          ...valid,
-          claimIdentities: [{ ...claim, contentDigest: '0'.repeat(64) }],
-        },
-        'stale',
-      ],
-      [{ ...valid, claimIdentities: [] }, 'stale'],
-      [{ ...valid, artifactIdentity: '../forged' }, 'metadata'],
-      [{ ...valid, artifactDigest: '0'.repeat(64) }, 'invalid'],
-      [{ ...valid, evidence: ['stale evidence'] }, 'invalid'],
-    ];
-  }
 
   static executeGit(command: GitExecution): string {
     const options: SpawnSyncOptionsWithStringEncoding = {
@@ -381,15 +296,3 @@ export type WorktreeFileWrite = {
   readonly relativePath: string;
   readonly contents: string;
 };
-
-export type EvidenceFixtureInput = {
-  readonly state: ModuleIntegrationState;
-  readonly node:
-    ModuleDeliveryReadOnlyNodeV2 | ModuleDeliveryEvidenceSynthesisNodeV2;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
-
-export type InvalidEvidenceCase = readonly [
-  submission: ModuleDeliveryReadOnlyEvidenceSubmission,
-  error: string,
-];
