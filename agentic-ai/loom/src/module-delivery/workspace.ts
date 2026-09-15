@@ -43,6 +43,38 @@ enum WorktreeRegistrationLookupKind {
   Missing = 'missing',
 }
 
+enum RepositoryIdentityLineStateKind {
+  AwaitingTop = 'awaiting-top',
+  AwaitingCommon = 'awaiting-common',
+  AwaitingAdmin = 'awaiting-admin',
+  Complete = 'complete',
+  Malformed = 'malformed',
+}
+
+type RepositoryIdentityLineState =
+  | { readonly kind: RepositoryIdentityLineStateKind.AwaitingTop }
+  | {
+      readonly kind: RepositoryIdentityLineStateKind.AwaitingCommon;
+      readonly top: string;
+    }
+  | {
+      readonly kind: RepositoryIdentityLineStateKind.AwaitingAdmin;
+      readonly top: string;
+      readonly common: string;
+    }
+  | {
+      readonly kind: RepositoryIdentityLineStateKind.Complete;
+      readonly top: string;
+      readonly common: string;
+      readonly admin: string;
+    }
+  | { readonly kind: RepositoryIdentityLineStateKind.Malformed };
+
+type RepositoryIdentityLineInput = {
+  readonly state: RepositoryIdentityLineState;
+  readonly line: string;
+};
+
 type WorktreeRegistrationLookup =
   | {
       readonly kind: WorktreeRegistrationLookupKind.Found;
@@ -121,22 +153,54 @@ export class ModuleWorktree {
         '--git-dir',
       ],
     }).split('\n');
-    const [top, common, admin] = lines;
+    let state: RepositoryIdentityLineState = {
+      kind: RepositoryIdentityLineStateKind.AwaitingTop,
+    };
+    for (const line of lines)
+      state = ModuleWorktree.consumeRepositoryIdentityLine({ state, line });
     if (
-      lines.length !== 3 ||
-      top === undefined ||
-      common === undefined ||
-      admin === undefined ||
-      top.length === 0 ||
-      common.length === 0 ||
-      admin.length === 0
+      state.kind !== RepositoryIdentityLineStateKind.Complete ||
+      state.top.length === 0 ||
+      state.common.length === 0 ||
+      state.admin.length === 0
     )
       throw new Error('Git repository identity is malformed.');
     return {
-      top,
-      common: realpathSync(common),
-      admin: realpathSync(admin),
+      top: state.top,
+      common: realpathSync(state.common),
+      admin: realpathSync(state.admin),
     };
+  }
+
+  private static consumeRepositoryIdentityLine(
+    input: RepositoryIdentityLineInput,
+  ): RepositoryIdentityLineState {
+    const { state, line } = input;
+    if (line.length === 0)
+      return { kind: RepositoryIdentityLineStateKind.Malformed };
+    switch (state.kind) {
+      case RepositoryIdentityLineStateKind.AwaitingTop:
+        return {
+          kind: RepositoryIdentityLineStateKind.AwaitingCommon,
+          top: line,
+        };
+      case RepositoryIdentityLineStateKind.AwaitingCommon:
+        return {
+          kind: RepositoryIdentityLineStateKind.AwaitingAdmin,
+          top: state.top,
+          common: line,
+        };
+      case RepositoryIdentityLineStateKind.AwaitingAdmin:
+        return {
+          kind: RepositoryIdentityLineStateKind.Complete,
+          top: state.top,
+          common: state.common,
+          admin: line,
+        };
+      case RepositoryIdentityLineStateKind.Complete:
+      case RepositoryIdentityLineStateKind.Malformed:
+        return { kind: RepositoryIdentityLineStateKind.Malformed };
+    }
   }
 
   private static worktreeState(cwd: string): WorktreeState {

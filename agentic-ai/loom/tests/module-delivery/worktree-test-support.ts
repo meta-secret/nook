@@ -39,10 +39,24 @@ import type {
   PrepareModuleWorktreeRequest,
 } from '../../src/module-delivery/index.ts';
 
+enum FixtureTemplateStateKind {
+  Empty = 'empty',
+  Ready = 'ready',
+}
+
+type FixtureTemplateState =
+  | { readonly kind: FixtureTemplateStateKind.Empty }
+  | {
+      readonly kind: FixtureTemplateStateKind.Ready;
+      readonly fixture: GitFixture;
+    };
+
 export class ModuleDeliveryWorktreeTestSupportScenario {
   private constructor(private readonly request: GitFixture) {}
 
-  private static fixtureTemplate: GitFixture | undefined;
+  private static fixtureTemplate: FixtureTemplateState = {
+    kind: FixtureTemplateStateKind.Empty,
+  };
 
   static evidenceSubmission(
     input: EvidenceFixtureInput,
@@ -154,7 +168,8 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
 
   private static getFixtureTemplate(): GitFixture {
     const existing = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
-    if (existing) return existing;
+    if (existing.kind === FixtureTemplateStateKind.Ready)
+      return existing.fixture;
     const createdRoot = mkdtempSync(
       join(tmpdir(), 'nook-module-worktree-template-'),
     );
@@ -212,7 +227,10 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       pinnedLocalDevSha,
       sourceCommit,
     };
-    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = template;
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Ready,
+      fixture: template,
+    };
     process.once('exit', () =>
       ModuleDeliveryWorktreeTestSupportScenario.disposeFixtureTemplate(),
     );
@@ -220,10 +238,12 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
   }
 
   private static disposeFixtureTemplate(): void {
-    const template = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
-    if (!template) return;
-    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = undefined;
-    rmSync(template.root, { recursive: true, force: true });
+    const state = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (state.kind === FixtureTemplateStateKind.Empty) return;
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Empty,
+    };
+    rmSync(state.fixture.root, { recursive: true, force: true });
   }
 
   static disposeGitFixture(fixture: GitFixture): void {
