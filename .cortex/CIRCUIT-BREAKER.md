@@ -34,6 +34,12 @@ protecting a real product trust boundary.
   - Report that the circuit breaker tripped.
   - Return to the smallest direct workflow already provided by the harness and
     Git.
+- **Review and failure handling**
+  - Treat any violation as a P1 finding.
+  - Reject the violating design even when it is already implemented or tested.
+  - Stop the prohibited work immediately.
+  - Remove prohibited machinery only within the assigned write scope.
+  - Report an out-of-scope violation to the owning Gizmo as a blocker.
 
 ## Prohibited actions
 
@@ -78,6 +84,9 @@ evidence, or validation results.
     replay/restart validation, duplicate-result rejection, adversarial
     intra-thread evidence handling, or provider-forgery rejection for trusted
     internal coordination.
+- **Preservation**
+  - Never preserve a prohibited system merely because another document or
+    existing implementation describes it.
 
 The prohibition is about invented security machinery. It does not prohibit
 ordinary semantic checks for document completeness, typed workflow inputs, or
@@ -96,13 +105,3 @@ agent-to-agent communication or routine Git and validation evidence.
 
 Nothing in this document authorizes plaintext secret persistence, sensitive
 logging, forged product capabilities, or bypasses of product authorization.
-
-## Review and failure handling
-
-- Treat any violation as a P1 finding.
-- Reject the violating design even when it is already implemented or tested.
-- Stop the prohibited work immediately.
-- Remove prohibited machinery only within the assigned write scope.
-- Report an out-of-scope violation to the owning Gizmo as a blocker.
-- Never preserve a prohibited system merely because another document or
-  existing implementation describes it.
