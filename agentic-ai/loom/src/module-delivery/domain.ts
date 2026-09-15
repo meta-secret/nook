@@ -267,8 +267,19 @@ export type ModuleDeliveryResourceClaims = {
   readonly evidenceSurface: readonly string[];
 };
 
+/**
+ * A manager-issued acceptance reference. Loom records and validates its
+ * declared scopes; the external manager resolves and executes the selector.
+ */
+export type ModuleDeliveryAcceptanceCommand = {
+  readonly selector: string;
+  readonly read: readonly string[];
+  readonly write: readonly string[];
+  readonly output: readonly string[];
+};
+
 export type ModuleDeliveryAcceptance = {
-  readonly commands: readonly string[];
+  readonly commands: readonly ModuleDeliveryAcceptanceCommand[];
   readonly evidence: readonly string[];
 };
 
@@ -411,8 +422,9 @@ export type LegacyModuleDeliveryResourceClaims = {
   readonly write: readonly string[];
 };
 
+/** Historical plans retain string commands until the compatibility decoder. */
 export type LegacyModuleDeliveryAcceptance = {
-  readonly commands: readonly string[];
+  readonly commands: readonly (string | ModuleDeliveryAcceptanceCommand)[];
   readonly evidence: readonly string[];
 };
 

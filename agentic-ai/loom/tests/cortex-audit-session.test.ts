@@ -16,8 +16,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { expect, test } from 'bun:test';
+import { ok } from 'neverthrow';
 
 import { CortexAuditCommand } from '../src/commands/cortex-audit.ts';
+import { RepositoryRoot } from '../src/lib/repo.ts';
+import { LoomFailureCode } from '../src/loom-failure.ts';
 
 import { CortexMarkdownInventory } from '../src/lib/cortex-markdown-files.ts';
 
@@ -55,6 +58,27 @@ export class CortexAuditSessionScenario {
 }
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
+
+test('returns a typed failure when a discovered repository loses its Cortex root', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-missing-root-'));
+  const originalLocate = RepositoryRoot.prototype.locate;
+  RepositoryRoot.prototype.locate = () => ok(repoRoot);
+  try {
+    const result = await CortexAuditCommand.runCortexAuditFromDirectory({
+      request: { includeDensityLint: false },
+      startDirectory: repoRoot,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error).toEqual({
+      code: LoomFailureCode.CortexAuditFailed,
+      message: '.cortex directory is missing',
+    });
+  } finally {
+    RepositoryRoot.prototype.locate = originalLocate;
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
 
 test('uses the event commit for publication stability audits', () => {
   const before = '1'.repeat(40);

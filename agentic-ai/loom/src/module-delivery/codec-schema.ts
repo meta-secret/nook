@@ -266,6 +266,13 @@ export enum ModulePlanAcceptanceField {
   Evidence = 'evidence',
 }
 
+export enum ModulePlanAcceptanceCommandField {
+  Output = 'output',
+  Read = 'read',
+  Selector = 'selector',
+  Write = 'write',
+}
+
 export enum LegacyModulePlanResourceField {
   Read = 'read',
   Write = 'write',

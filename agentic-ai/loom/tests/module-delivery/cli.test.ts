@@ -68,7 +68,14 @@ export class ModuleDeliveryCliScenario {
           },
           parentOwnedExclusions: [...REQUIRED_PARENT_OWNED_RESOURCES],
           acceptance: {
-            commands: ['task loom:module-experts:validate'],
+            commands: [
+              {
+                selector: 'task loom:module-experts:validate',
+                read: [`${CORE_ROOT}/**`],
+                write: [],
+                output: [`${CORE_ROOT}/**`],
+              },
+            ],
             evidence: ['Core expert evidence is complete.'],
           },
         },

@@ -58,7 +58,17 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       dependencies: [],
       resources: { read: [], write: [request.write], evidenceSurface: [] },
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-      acceptance: { commands: ['task test'], evidence: ['tests pass'] },
+      acceptance: {
+        commands: [
+          {
+            selector: 'task test',
+            read: [],
+            write: [request.write],
+            output: [],
+          },
+        ],
+        evidence: ['tests pass'],
+      },
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
         expectedCommitHandoff: true,

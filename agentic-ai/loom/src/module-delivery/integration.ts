@@ -73,6 +73,12 @@ export class ModuleIntegrationCoordinator {
       workspace,
       phase: ModuleIntegrationPhase.AcceptingProviders,
       cleanupHandle,
+      acceptedEvidence: [],
+      acceptedWrites: [],
+      integratedTaskIds: [],
+      integratedWriterFrontiers: [],
+      headCommit: request.state.headCommit,
+      completedWaveCount: 0,
       admissionState: request.state,
     });
   }
@@ -153,6 +159,16 @@ export class ModuleIntegrationCoordinator {
         phase: state.phase,
         cleanupHandle: state.cleanupHandle,
         acceptedEvidence,
+        acceptedWrites: state.acceptedWrites,
+        integratedTaskIds: state.integratedTaskIds,
+        integratedWriterFrontiers: state.integratedWriterFrontiers,
+        headCommit: state.headCommit,
+        completedWaveCount: ModuleIntegrationCoordinator.waveCount({
+          plan,
+          integratedTaskIds: state.integratedTaskIds,
+          evidence: acceptedEvidence,
+        }),
+        admissionState,
       });
     }
     if (node.kind !== ModuleDeliveryTaskKind.Write)
@@ -217,6 +233,13 @@ export class ModuleIntegrationCoordinator {
       integratedTaskIds,
       integratedWriterFrontiers,
       headCommit,
+      acceptedEvidence: state.acceptedEvidence,
+      completedWaveCount: ModuleIntegrationCoordinator.waveCount({
+        plan,
+        integratedTaskIds,
+        evidence: state.acceptedEvidence,
+      }),
+      admissionState,
     });
   }
 
@@ -303,7 +326,13 @@ export class ModuleIntegrationCoordinator {
       workspace: state.workspace,
       phase: ModuleIntegrationPhase.Finalized,
       cleanupHandle: state.cleanupHandle,
+      acceptedEvidence: state.acceptedEvidence,
+      acceptedWrites: state.acceptedWrites,
+      integratedTaskIds: state.integratedTaskIds,
+      integratedWriterFrontiers: state.integratedWriterFrontiers,
+      headCommit: state.headCommit,
       completedWaveCount: plan.waves.length,
+      admissionState: state.admissionState,
     });
   }
 
@@ -318,37 +347,19 @@ export class ModuleIntegrationCoordinator {
   private static state(
     request: Readonly<{
       plan: IntegrateVerifiedModuleDeliveryTaskRequest['acceptedPlan'];
-      state: ModuleIntegrationState | ModuleDeliveryStateLike;
+      state: ModuleIntegrationState | ModuleDeliveryAdmissionState;
       workspace: ModuleIntegrationState['workspace'];
       phase: ModuleIntegrationPhase;
       cleanupHandle: ModuleIntegrationState['cleanupHandle'];
-      acceptedEvidence?: readonly ModuleDeliveryProviderResult[];
-      acceptedWrites?: readonly ModuleDeliveryHandoffSubmission[];
-      integratedTaskIds?: readonly string[];
-      integratedWriterFrontiers?: ModuleIntegrationState['integratedWriterFrontiers'];
-      headCommit?: string;
-      completedWaveCount?: number;
-      admissionState?: ModuleDeliveryAdmissionState;
+      acceptedEvidence: readonly ModuleDeliveryProviderResult[];
+      acceptedWrites: readonly ModuleDeliveryHandoffSubmission[];
+      integratedTaskIds: readonly string[];
+      integratedWriterFrontiers: ModuleIntegrationState['integratedWriterFrontiers'];
+      headCommit: string;
+      completedWaveCount: number;
+      admissionState: ModuleDeliveryAdmissionState;
     }>,
   ): ModuleIntegrationState {
-    const state = request.state;
-    const acceptedEvidence =
-      request.acceptedEvidence ?? state.acceptedEvidence ?? [];
-    const acceptedWrites = request.acceptedWrites ?? state.acceptedWrites ?? [];
-    const integratedTaskIds =
-      request.integratedTaskIds ?? state.integratedTaskIds ?? [];
-    const integratedWriterFrontiers =
-      request.integratedWriterFrontiers ??
-      state.integratedWriterFrontiers ??
-      [];
-    const headCommit = request.headCommit ?? state.headCommit;
-    const completedWaveCount =
-      request.completedWaveCount ??
-      ModuleIntegrationCoordinator.waveCount({
-        plan: request.plan,
-        integratedTaskIds,
-        evidence: acceptedEvidence,
-      });
     return Object.freeze({
       originMainSha: request.plan.plan.originMainSha,
       pinnedLocalDevSha: request.plan.plan.pinnedLocalDevSha,
@@ -360,18 +371,15 @@ export class ModuleIntegrationCoordinator {
       waves: Object.freeze(
         request.plan.waves.map((wave) => Object.freeze([...wave])),
       ),
-      completedWaveCount,
-      integratedTaskIds: Object.freeze([...integratedTaskIds]),
-      acceptedWrites: Object.freeze([...acceptedWrites]),
-      acceptedEvidence: Object.freeze([...acceptedEvidence]),
-      integratedWriterFrontiers: Object.freeze([...integratedWriterFrontiers]),
-      headCommit,
-      admissionState:
-        request.admissionState ??
-        state.admissionState ??
-        (() => {
-          throw new Error('Integration state is missing its admission state.');
-        })(),
+      completedWaveCount: request.completedWaveCount,
+      integratedTaskIds: Object.freeze([...request.integratedTaskIds]),
+      acceptedWrites: Object.freeze([...request.acceptedWrites]),
+      acceptedEvidence: Object.freeze([...request.acceptedEvidence]),
+      integratedWriterFrontiers: Object.freeze([
+        ...request.integratedWriterFrontiers,
+      ]),
+      headCommit: request.headCommit,
+      admissionState: request.admissionState,
       workspace: request.workspace,
       cleanupHandle: request.cleanupHandle,
     });
@@ -394,12 +402,3 @@ export class ModuleIntegrationCoordinator {
     ).length;
   }
 }
-
-type ModuleDeliveryStateLike = {
-  readonly acceptedEvidence?: readonly ModuleDeliveryProviderResult[];
-  readonly acceptedWrites?: readonly ModuleDeliveryHandoffSubmission[];
-  readonly integratedTaskIds?: readonly string[];
-  readonly integratedWriterFrontiers?: ModuleIntegrationState['integratedWriterFrontiers'];
-  readonly headCommit: string;
-  readonly admissionState?: ModuleIntegrationState['admissionState'];
-};

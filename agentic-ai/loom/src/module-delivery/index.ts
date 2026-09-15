@@ -44,6 +44,7 @@ export {
 export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryProviderResultsKind,
   ModuleDeliveryProviderSubmissionKind,
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
@@ -55,6 +56,7 @@ export type {
   IntegrateVerifiedModuleDeliveryTaskRequest,
   ModuleDeliveryHandoffSubmission,
   ModuleDeliveryProviderResult,
+  ModuleDeliveryProviderResults,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleIntegrationCleanupHandle,

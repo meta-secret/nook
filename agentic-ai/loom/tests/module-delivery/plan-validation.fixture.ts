@@ -14,6 +14,7 @@ import {
 import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
+  ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
@@ -62,7 +63,14 @@ export class ModuleDeliveryPlanValidationScenario {
       },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
       acceptance: {
-        commands: [`task ${fixture.taskId}:test`],
+        commands: [
+          {
+            selector: `task ${fixture.taskId}:test`,
+            read: fixture.read,
+            write: fixture.write,
+            output: [],
+          },
+        ],
         evidence: [`${fixture.taskId} behavior passes`],
       },
       workspace: {
@@ -105,7 +113,14 @@ export class ModuleDeliveryPlanValidationScenario {
       },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
       acceptance: {
-        commands: [`task ${fixture.taskId}:audit`],
+        commands: [
+          {
+            selector: `task ${fixture.taskId}:audit`,
+            read: [`${fixture.moduleRoot}/**`],
+            write: [],
+            output: [`${fixture.moduleRoot}/**`],
+          },
+        ],
         evidence: [`${fixture.taskId} review is complete`],
       },
     };
@@ -186,6 +201,34 @@ export class ModuleDeliveryPlanValidationScenario {
 
   static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
+  }
+
+  static acceptanceCommand(
+    request: Readonly<{ node: ModuleDeliveryNodeV2; selector: string }>,
+  ): ModuleDeliveryAcceptanceCommand {
+    return {
+      selector: request.selector,
+      read: request.node.resources.read,
+      write: request.node.resources.write,
+      output: request.node.resources.evidenceSurface,
+    };
+  }
+
+  static emptyAcceptanceCommand(
+    selector: string,
+  ): ModuleDeliveryAcceptanceCommand {
+    return { selector, read: [], write: [], output: [] };
+  }
+
+  static acceptsNode(node: ModuleDeliveryNodeV2): boolean {
+    return (
+      ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan({
+          nodes: [node],
+          edgeContracts: [],
+        }),
+      ).status === ModuleDeliveryValidationStatus.Accepted
+    );
   }
 
   static legacyPlan(): LegacyModuleDeliveryPlan {

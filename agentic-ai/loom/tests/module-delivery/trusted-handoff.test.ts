@@ -136,8 +136,13 @@ describe('trusted in-thread module handoff boundary', () => {
           state,
           admissions: selection.admissions,
         });
-      expect(recording.leases[0]?.taskId).toBe('core-provider');
-      expect(Object.keys(recording.leases[0] ?? {})).not.toContain(
+      expect(recording.leases).toHaveLength(1);
+      const firstLease = recording.leases.find(
+        (lease) => lease.taskId === 'core-provider',
+      );
+      if (!firstLease) throw new Error('Provider lease was not recorded.');
+      expect(firstLease.taskId).toBe('core-provider');
+      expect(Object.keys(firstLease)).not.toContain(
         'authorizedProviderEvidence',
       );
     } finally {

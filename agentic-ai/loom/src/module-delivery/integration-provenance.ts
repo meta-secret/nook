@@ -25,6 +25,11 @@ export enum ModuleDeliveryEvidenceVerdict {
   TerminalFailure = 'terminal-failure',
 }
 
+export enum ModuleDeliveryProviderResultsKind {
+  None = 'none',
+  Present = 'present',
+}
+
 export enum ModuleIntegrationPhase {
   AcceptingProviders = 'accepting-providers',
   Finalized = 'finalized',
@@ -44,8 +49,15 @@ export type ModuleDeliveryProviderResult = PinnedDevBaseEvidence &
     acceptanceOwner: ModuleDeliveryOwnerIdentity;
     acceptanceRequirements: readonly string[];
     result: readonly string[];
-    providerResults?: readonly ModuleDeliveryProviderResult[];
+    providerResults: ModuleDeliveryProviderResults;
   }>;
+
+export type ModuleDeliveryProviderResults =
+  | Readonly<{ kind: ModuleDeliveryProviderResultsKind.None }>
+  | Readonly<{
+      kind: ModuleDeliveryProviderResultsKind.Present;
+      values: readonly ModuleDeliveryProviderResult[];
+    }>;
 
 export type AcceptedModuleDeliveryEvidence = ModuleDeliveryProviderResult;
 export type ModuleDeliveryReadOnlyEvidenceSubmission =

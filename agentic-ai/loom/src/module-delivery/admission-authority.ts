@@ -40,8 +40,31 @@ type RuntimeState = {
   activeLeases: Map<string, ModuleDeliveryAttemptLease>;
   attemptsByTask: Map<string, number>;
   dispositions: ModuleDeliveryAttemptDisposition[];
-  currentState?: ModuleDeliveryAdmissionState;
 };
+
+enum ModuleDeliveryAttemptStateKind {
+  NotAttempted = 'not-attempted',
+  Recorded = 'recorded',
+}
+
+type ModuleDeliveryAttemptState =
+  | { readonly kind: ModuleDeliveryAttemptStateKind.NotAttempted }
+  | {
+      readonly kind: ModuleDeliveryAttemptStateKind.Recorded;
+      readonly count: number;
+    };
+
+enum ModuleDeliveryContextStateKind {
+  NotRequired = 'not-required',
+  Admitted = 'admitted',
+}
+
+type ModuleDeliveryContextState =
+  | { readonly kind: ModuleDeliveryContextStateKind.NotRequired }
+  | {
+      readonly kind: ModuleDeliveryContextStateKind.Admitted;
+      readonly context: TeamTaskContext;
+    };
 
 /** Trusted in-process scheduler state. It is deliberately not a capability registry. */
 export class ModuleGenerationAuthority {
@@ -149,7 +172,6 @@ export class ModuleGenerationAuthority {
         ),
       ),
     });
-    request.authority.runtime.currentState = state;
     return state;
   }
 
@@ -167,7 +189,6 @@ export class ModuleGenerationAuthority {
     ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
       request.authority,
     );
-    request.authority.runtime.currentState = request.state;
     return request.state;
   }
 
@@ -177,7 +198,6 @@ export class ModuleGenerationAuthority {
     ModuleGenerationAuthority.assertModuleDeliveryGenerationAuthority(
       request.authority,
     );
-    request.authority.runtime.currentState = request.previousState;
     return request.previousState;
   }
 
@@ -255,11 +275,21 @@ export class ModuleGenerationAuthority {
         continue;
       }
       if (runtime.activeLeases.has(taskId)) continue;
-      const attempts = runtime.attemptsByTask.get(taskId) ?? 0;
-      if (attempts >= plan.plan.maxAttempts) {
+      const attemptState = ModuleGenerationAuthority.attemptState({
+        runtime,
+        taskId,
+      });
+      if (
+        attemptState.kind === ModuleDeliveryAttemptStateKind.Recorded &&
+        attemptState.count >= plan.plan.maxAttempts
+      ) {
         blockedTaskIds.push(taskId);
         continue;
       }
+      const attempt =
+        attemptState.kind === ModuleDeliveryAttemptStateKind.Recorded
+          ? attemptState.count + 1
+          : 1;
       const resources = ModuleSourceAuthority.frozenModuleDeliveryResources({
         node,
         plan,
@@ -284,24 +314,27 @@ export class ModuleGenerationAuthority {
       const context = ModuleGenerationAuthority.contextFor({
         node,
         resources,
-        runtime,
+        repositoryRoot: runtime.repositoryRoot,
+        startingFrontier: request.state.headCommit,
       });
       const admission: ModuleDeliveryAdmission = Object.freeze({
         taskId,
-        attempt: attempts + 1,
+        attempt,
         generation: plan.plan.generation,
         planDigest: plan.planDigest,
         originMainSha: plan.plan.originMainSha,
         pinnedLocalDevSha: plan.plan.pinnedLocalDevSha,
         startingFrontier: request.state.headCommit,
         resources,
-        ...(context ? { context } : {}),
+        ...(context.kind === ModuleDeliveryContextStateKind.Admitted
+          ? { context: context.context }
+          : {}),
         team: node.team,
         functionalOwner: node.functionalOwner,
         acceptanceOwner: node.acceptanceOwner,
         parentLineage,
         acceptanceRequirements: Object.freeze([
-          ...node.acceptance.commands,
+          ...node.acceptance.commands.map(({ selector }) => selector),
           ...node.acceptance.evidence,
         ]),
       });
@@ -324,22 +357,34 @@ export class ModuleGenerationAuthority {
     request: Readonly<{
       node: ValidatedModuleDeliveryPlan['plan']['nodes'][number];
       resources: ModuleDeliveryResourceClaims;
-      runtime: RuntimeState;
+      repositoryRoot: string;
+      startingFrontier: string;
     }>,
-  ): TeamTaskContext | undefined {
+  ): ModuleDeliveryContextState {
     if (
       request.node.kind !== ModuleDeliveryTaskKind.Write ||
       !request.node.cortexAuthoring
     )
-      return undefined;
-    return CortexAuthoringAdmission.admit({
-      repositoryRoot: request.runtime.repositoryRoot,
-      startingFrontier:
-        request.runtime.currentState?.headCommit ??
-        request.runtime.acceptedPlan.plan.sourceCommit,
-      node: request.node,
-      resources: request.resources,
-    });
+      return { kind: ModuleDeliveryContextStateKind.NotRequired };
+    return {
+      kind: ModuleDeliveryContextStateKind.Admitted,
+      context: CortexAuthoringAdmission.admit({
+        repositoryRoot: request.repositoryRoot,
+        startingFrontier: request.startingFrontier,
+        node: request.node,
+        resources: request.resources,
+      }),
+    };
+  }
+
+  private static attemptState(
+    request: Readonly<{ runtime: RuntimeState; taskId: string }>,
+  ): ModuleDeliveryAttemptState {
+    for (const [taskId, count] of request.runtime.attemptsByTask) {
+      if (taskId === request.taskId)
+        return { kind: ModuleDeliveryAttemptStateKind.Recorded, count };
+    }
+    return { kind: ModuleDeliveryAttemptStateKind.NotAttempted };
   }
 
   static recordModuleDeliveryAttemptLeases(

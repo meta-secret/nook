@@ -57,6 +57,9 @@ const WEB_FIXTURE: WriteNodeFixture = {
 };
 
 const WEB_NODE = ModuleDeliveryPlanValidationScenario.writeNode(WEB_FIXTURE);
+const WEB_ACCEPTANCE_COMMAND = WEB_NODE.acceptance.commands[0];
+if (!WEB_ACCEPTANCE_COMMAND)
+  throw new Error('The web fixture must declare an acceptance command.');
 
 const CORE_WASM_EDGE = ModuleDeliveryPlanValidationScenario.edgeContract({
   providerTaskId: 'core-provider',
@@ -91,6 +94,15 @@ describe('dependency edges and resource safety', () => {
       resources: {
         ...WEB_NODE.resources,
         write: [`${WEB_ROOT}/src/first/**`],
+      },
+      acceptance: {
+        ...WEB_NODE.acceptance,
+        commands: [
+          {
+            ...WEB_ACCEPTANCE_COMMAND,
+            write: [`${WEB_ROOT}/src/first/**`],
+          },
+        ],
       },
     };
     const coreWebFixture: EdgeFixture = {

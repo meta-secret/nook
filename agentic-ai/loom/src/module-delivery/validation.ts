@@ -15,27 +15,19 @@ import {
   AgentAttemptParentKind,
   TaskResourceClaim,
 } from '../agent-workflow/domain.ts';
-
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
-
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
-
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
-
 import { ModuleScope } from './module-scope-validation.ts';
-
 import { CortexContextTopology } from './cortex-context-topology.ts';
-
+import { ModuleDeliveryAcceptanceScopeValidation } from './acceptance-scope-validation.ts';
 import type { ModuleScopeValidationRequest } from './module-scope-validation.ts';
-
 import type {
   CortexAuthoringValidationRequest,
   CortexWriteAuthorizationRequest,
   ParentOwnedExclusionsRequest,
 } from './cortex-authoring-validation.ts';
-
 import { ModuleDeliveryPlanSchema } from './codec.ts';
-
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
@@ -53,7 +45,6 @@ import {
   ModuleTaskOwnership,
 } from './domain.ts';
 import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
-
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
@@ -62,7 +53,6 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
 } from './domain.ts';
-
 import * as claimContainment from './resource-claim-containment.ts';
 
 export class ModuleDeliveryPlanDecoder {
@@ -366,7 +356,6 @@ export class ModuleDeliveryPlanDecoder {
         `${request.path}.parentOwnedExclusions`,
         request.node.parentOwnedExclusions,
       ],
-      [`${request.path}.acceptance.commands`, request.node.acceptance.commands],
       [`${request.path}.acceptance.evidence`, request.node.acceptance.evidence],
       ...(request.node.kind === ModuleDeliveryTaskKind.Write &&
       request.node.cortexAuthoring
@@ -390,6 +379,11 @@ export class ModuleDeliveryPlanDecoder {
       };
       this.validateUnique(uniqueRequest);
     }
+    for (const issue of ModuleDeliveryAcceptanceScopeValidation.validate({
+      path: request.path,
+      node: request.node,
+    }))
+      this.issue({ state: request.state, ...issue });
     if (
       request.node.baseline.kind ===
       ModuleDeliveryBaselineKind.IntegratedDependencies

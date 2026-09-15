@@ -20,7 +20,9 @@ import {
 } from './evidence-limits.ts';
 import {
   ModuleDeliveryProviderSubmissionKind,
+  ModuleDeliveryProviderResultsKind,
   type ModuleDeliveryProviderResult,
+  type ModuleDeliveryProviderResults,
   type ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
 
@@ -98,16 +100,10 @@ export class ModuleEvidenceBoundary {
       ]),
       result: Object.freeze([...submission.result]),
     };
-    if (!submission.providerResults) return Object.freeze(common);
     return Object.freeze({
       ...common,
-      providerResults: Object.freeze(
-        submission.providerResults.map((result) =>
-          Object.freeze({
-            ...result,
-            result: Object.freeze([...result.result]),
-          }),
-        ),
+      providerResults: ModuleEvidenceBoundary.copyProviderResults(
+        submission.providerResults,
       ),
     });
   }
@@ -125,7 +121,7 @@ export class ModuleEvidenceBoundary {
       submission.acceptanceOwner !== node.acceptanceOwner ||
       JSON.stringify(submission.acceptanceRequirements) !==
         JSON.stringify([
-          ...node.acceptance.commands,
+          ...node.acceptance.commands.map(({ selector }) => selector),
           ...node.acceptance.evidence,
         ])
     )
@@ -160,7 +156,11 @@ export class ModuleEvidenceBoundary {
     const expected = node.evidenceInput.expectedProducers.map(
       ({ taskId }) => taskId,
     );
-    const inputs = submission.providerResults ?? [];
+    const inputs =
+      submission.providerResults.kind ===
+      ModuleDeliveryProviderResultsKind.Present
+        ? submission.providerResults.values
+        : [];
     if (inputs.length > MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES)
       throw new Error(
         'Evidence synthesis provider dependencies exceed their bound.',
@@ -183,6 +183,27 @@ export class ModuleEvidenceBoundary {
       throw new Error(
         'Evidence synthesis provider dependencies must be unique.',
       );
+  }
+
+  private static copyProviderResults(
+    providerResults: ModuleDeliveryProviderResults,
+  ): ModuleDeliveryProviderResults {
+    if (providerResults.kind === ModuleDeliveryProviderResultsKind.None)
+      return providerResults;
+    return {
+      kind: ModuleDeliveryProviderResultsKind.Present,
+      values: Object.freeze(
+        providerResults.values.map((result) =>
+          Object.freeze({
+            ...result,
+            result: Object.freeze([...result.result]),
+            providerResults: ModuleEvidenceBoundary.copyProviderResults(
+              result.providerResults,
+            ),
+          }),
+        ),
+      ),
+    };
   }
 }
 

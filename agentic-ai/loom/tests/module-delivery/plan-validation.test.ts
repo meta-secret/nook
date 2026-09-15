@@ -167,14 +167,43 @@ class ModuleDeliveryPlanTransportCollectionScenario {
 }
 
 describe('reviewed module delivery plan', () => {
+  test('requires typed external acceptance references with declared scopes', () => {
+    const plan = ModuleDeliveryPlanValidationScenario.plan({
+      nodes: [CORE_NODE],
+      edgeContracts: [],
+    });
+    const rawCommandPlan = JSON.stringify(plan).replace(
+      JSON.stringify(plan.nodes[0]?.acceptance.commands[0]),
+      JSON.stringify('task arbitrary-placeholder'),
+    );
+    const rawCommand =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        rawCommandPlan,
+      );
+    expect(rawCommand.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
+
+    const widenedCommandNode: ModuleDeliveryWriteNodeV2 = {
+      ...CORE_NODE,
+      acceptance: {
+        ...CORE_NODE.acceptance,
+        commands: CORE_NODE.acceptance.commands.map((command) => ({
+          ...command,
+          read: ['nook-app/nook-web/**'],
+        })),
+      },
+    };
+    const widened = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan({
+        nodes: [widenedCommandNode],
+        edgeContracts: [],
+      }),
+    );
+    expect(ModuleDeliveryPlanValidationScenario.codes(widened)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
+
   test('admits ordinary team tasks and rejects forged identity, profile, and scope', () => {
-    const accepted = (node: ModuleDeliveryNodeV2) =>
-      ModuleDeliveryPlanValidationScenario.validate(
-        ModuleDeliveryPlanValidationScenario.plan({
-          nodes: [node],
-          edgeContracts: [],
-        }),
-      ).status === ModuleDeliveryValidationStatus.Accepted;
     const security: ModuleDeliveryReadOnlyNodeV2 = {
       ...ModuleDeliveryPlanValidationScenario.readOnlyNode({
         taskId: 'security-review',
@@ -187,7 +216,9 @@ describe('reviewed module delivery plan', () => {
       acceptanceOwner: TeamKey.Ai,
     };
     for (const team of [TeamKey.Security, TeamKey.Sre])
-      expect(accepted({ ...security, team })).toBe(true);
+      expect(
+        ModuleDeliveryPlanValidationScenario.acceptsNode({ ...security, team }),
+      ).toBe(true);
     const sreWrite = {
       ...ModuleDeliveryPlanValidationScenario.writeNode({
         ...CORE_FIXTURE,
@@ -199,7 +230,9 @@ describe('reviewed module delivery plan', () => {
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
     };
-    expect(accepted(sreWrite)).toBe(true);
+    expect(ModuleDeliveryPlanValidationScenario.acceptsNode(sreWrite)).toBe(
+      true,
+    );
     const forgedTeam = structuredClone(security);
     Object.assign(forgedTeam, { team: 'forged-team' });
     const sharedRoot = 'nook-app/nook-web/nook-web-shared';
@@ -215,7 +248,9 @@ describe('reviewed module delivery plan', () => {
       { ...sreWrite, team: TeamKey.Security },
       generated,
     ])
-      expect(accepted(invalid)).toBe(false);
+      expect(ModuleDeliveryPlanValidationScenario.acceptsNode(invalid)).toBe(
+        false,
+      );
   });
 
   test('rejects v2-only task forms and authority fields in v1 input', () => {
@@ -352,7 +387,11 @@ describe('reviewed module delivery plan', () => {
       resources: { read: [], write: [], evidenceSurface: [] },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
       acceptance: {
-        commands: ['task synthesis:test'],
+        commands: [
+          ModuleDeliveryPlanValidationScenario.emptyAcceptanceCommand(
+            'task synthesis:test',
+          ),
+        ],
         evidence: ['Synthesis is deterministic.'],
       },
       evidenceInput: {
@@ -462,7 +501,16 @@ describe('reviewed module delivery plan', () => {
       ...CORE_NODE,
       acceptance: {
         ...CORE_NODE.acceptance,
-        commands: ['task core:first', 'task core:second'],
+        commands: [
+          ModuleDeliveryPlanValidationScenario.acceptanceCommand({
+            node: CORE_NODE,
+            selector: 'task core:first',
+          }),
+          ModuleDeliveryPlanValidationScenario.acceptanceCommand({
+            node: CORE_NODE,
+            selector: 'task core:second',
+          }),
+        ],
       },
     };
     const fixture: PlanFixture = { nodes: [orderedNode], edgeContracts: [] };
@@ -471,7 +519,16 @@ describe('reviewed module delivery plan', () => {
       ...orderedNode,
       acceptance: {
         ...orderedNode.acceptance,
-        commands: ['task core:second', 'task core:first'],
+        commands: [
+          ModuleDeliveryPlanValidationScenario.acceptanceCommand({
+            node: CORE_NODE,
+            selector: 'task core:second',
+          }),
+          ModuleDeliveryPlanValidationScenario.acceptanceCommand({
+            node: CORE_NODE,
+            selector: 'task core:first',
+          }),
+        ],
       },
     };
     const reversedNodePlan: ModuleDeliveryPlanV5 = {
@@ -767,10 +824,21 @@ describe('task execution and canonical ownership', () => {
     ];
 
     for (const node of containedCases) {
+      const acceptance = {
+        ...node.acceptance,
+        commands: node.acceptance.commands.map((command) => ({
+          ...command,
+          read: node.resources.read,
+          output: node.resources.evidenceSurface,
+        })),
+      };
       const fixture: PlanFixture = { nodes: [node], edgeContracts: [] };
       expect(
         ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(fixture),
+          ModuleDeliveryPlanValidationScenario.plan({
+            ...fixture,
+            nodes: [{ ...node, acceptance }],
+          }),
         ).status,
       ).toBe(ModuleDeliveryValidationStatus.Accepted);
     }

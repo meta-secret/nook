@@ -30,14 +30,25 @@ class WorkflowTextValue {
     });
   }
 }
-const error = (message: string) => ({
-  error: (issue: { readonly code: string }) =>
-    issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
-      ? MISSING_FIELDS
-      : message,
-});
+class WorkflowResultErrorPolicy {
+  private constructor() {}
+
+  static forMessage(message: string) {
+    return {
+      error: (issue: { readonly code: string }) =>
+        issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
+          ? MISSING_FIELDS
+          : message,
+    };
+  }
+}
+
 const exact = { error: MISSING_FIELDS };
-const string = z.string(error('workflow structured result expected a string'));
+const string = z.string(
+  WorkflowResultErrorPolicy.forMessage(
+    'workflow structured result expected a string',
+  ),
+);
 const bounded = string
   .max(4096, 'workflow structured result expected a bounded string')
   .refine(
@@ -47,7 +58,9 @@ const bounded = string
   .meta({ minLength: 1, pattern: '\\S' });
 const strings = z.array(
   string,
-  error('workflow structured result expected a string array'),
+  WorkflowResultErrorPolicy.forMessage(
+    'workflow structured result expected a string array',
+  ),
 );
 const view = string
   .max(
@@ -71,7 +84,9 @@ const BASE = {
         {
           severity: z.enum(
             WorkflowFindingSeverity,
-            error('workflow finding severity is invalid'),
+            WorkflowResultErrorPolicy.forMessage(
+              'workflow finding severity is invalid',
+            ),
           ),
           title: string,
           summary: string.meta({ maxLength: 4096 }),
@@ -91,7 +106,9 @@ const BASE = {
         },
         exact,
       ),
-      error('workflow findings must be an array'),
+      WorkflowResultErrorPolicy.forMessage(
+        'workflow findings must be an array',
+      ),
     )
     .meta({ maxItems: 100 }),
   notesForParent: strings.meta({ maxItems: 100 }),
@@ -101,14 +118,18 @@ const BASE = {
         {
           kind: z.enum(
             WorkflowArtifactKind,
-            error('workflow artifact kind is invalid'),
+            WorkflowResultErrorPolicy.forMessage(
+              'workflow artifact kind is invalid',
+            ),
           ),
           location: string,
           description: string,
         },
         exact,
       ),
-      error('workflow artifacts must be an array'),
+      WorkflowResultErrorPolicy.forMessage(
+        'workflow artifacts must be an array',
+      ),
     )
     .meta({ maxItems: 100 }),
 };
@@ -222,7 +243,12 @@ export class WorkflowResultSchema {
       .object(
         {
           resultKind: string.pipe(
-            z.enum(WorkflowResultKind, error('workflow resultKind is invalid')),
+            z.enum(
+              WorkflowResultKind,
+              WorkflowResultErrorPolicy.forMessage(
+                'workflow resultKind is invalid',
+              ),
+            ),
           ),
         },
         { error: 'workflow output must be an object' },

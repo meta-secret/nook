@@ -69,7 +69,14 @@ export class ModuleDeliveryCortexPlanValidationScenario {
         (claim) => claim !== '.cortex/**',
       ),
       acceptance: {
-        commands: ['task loom:cortex-audit'],
+        commands: [
+          {
+            selector: 'task loom:cortex-audit',
+            read: request.selectedSkillPaths,
+            write: [],
+            output: [],
+          },
+        ],
         evidence: [`${request.taskId} guidance is audited.`],
       },
       workspace: {

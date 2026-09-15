@@ -22,12 +22,15 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceInputContract,
   ModuleDeliveryExpectedProducerIdentity,
+  ModuleDeliveryAcceptanceCommand,
+  ModuleDeliveryAcceptance,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
   LegacyModuleDeliveryNode,
 } from './domain.ts';
 import {
   LegacyModulePlanAcceptanceField,
+  ModulePlanAcceptanceCommandField,
   LegacyModulePlanReadOnlyNodeField,
   LegacyModulePlanResourceField,
   LegacyModulePlanWriteNodeField,
@@ -528,14 +531,46 @@ export class ModuleDeliveryPlanNodeCodec {
 
   private static decodeAcceptance(
     request: ModulePlanAcceptanceDecodeRequest,
-  ): ModuleDeliveryNodeV2['acceptance'] {
+  ): ModuleDeliveryAcceptance {
     const fields = new ModulePlanFields(request);
     if (request.legacy)
       fields.requireExactKeys(LegacyModulePlanAcceptanceField);
     else fields.requireExactKeys(ModulePlanAcceptanceField);
     const evidence = fields.nonEmptyStringList('evidence');
+    if (request.legacy) {
+      return {
+        commands: fields
+          .nonEmptyStringList('commands')
+          .map((selector) => ({ selector, read: [], write: [], output: [] })),
+        evidence,
+      };
+    }
+    const commandValues = fields.list('commands');
+    if (commandValues.length === 0)
+      ModuleDeliveryPlanNodeCodec.fail(
+        `${request.path}.commands: expected a non-empty array.`,
+      );
+    const commands: ModuleDeliveryAcceptanceCommand[] = [];
+    for (const [index, value] of commandValues.entries()) {
+      const commandPath = `${request.path}.commands[${index}]`;
+      if (!UntrustedYamlBoundary.isRecord(value))
+        ModuleDeliveryPlanNodeCodec.fail(
+          `${commandPath}: expected a typed command reference object.`,
+        );
+      const commandFields = new ModulePlanFields({
+        record: value,
+        path: commandPath,
+      });
+      commandFields.requireExactKeys(ModulePlanAcceptanceCommandField);
+      commands.push({
+        selector: commandFields.string('selector'),
+        read: commandFields.stringList('read'),
+        write: commandFields.stringList('write'),
+        output: commandFields.stringList('output'),
+      });
+    }
     return {
-      commands: fields.nonEmptyStringList('commands'),
+      commands,
       evidence,
     };
   }

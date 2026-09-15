@@ -176,6 +176,12 @@ The active harness owns worker coordination. Loom documents and checks the
 mechanical boundary; it does not provide worker lifecycle or recovery
 machinery.
 
+Acceptance commands are typed external-manager references. Each reference
+declares its selector plus read, write, and output claims; Loom validates that
+those claims stay within the task resources, while the external manager
+resolves and executes the selector and returns ordinary evidence. Loom never
+executes acceptance commands itself.
+
 Module delivery results are trusted typed in-process handoffs because Team
 Gizmos and Team Agents run in the same Codex harness. Admission state carries
 dependency readiness, resource claims, attempt status, current Git head, and
@@ -313,7 +319,8 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
 - nested request families (`agentStats.assemble`, `prLand.validate`)
 - field-name enums for deny-unknown-key checks
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
-- runtime failures throw `LoomFailure` with `LoomFailureCode`
+- runtime failures return `neverthrow` `Result` values with concrete
+  `LoomFailure` errors
 - no generic TypeScript `Result<T>` or `Maybe<T>` utilities
 - prefer popular libraries over hand-rolled commodity helpers
   ([prefer-popular-libraries.md](../../.cortex/shared/dynamic-skills/prefer-popular-libraries.md))
