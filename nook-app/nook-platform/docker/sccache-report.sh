@@ -4,6 +4,33 @@ set -u
 stage="${1:-unknown}"
 sccache_binary="${NOOK_SCCACHE_REPORT_BINARY:-/usr/local/bin/nook-sccache}"
 runtime_mode_file="${NOOK_SCCACHE_RUNTIME_MODE_FILE:-/run/secrets/sccache_runtime_mode}"
+report_dir="${NOOK_SCCACHE_REPORT_DIR:-/opt/nook/sccache-reports}"
+
+if [ "$stage" = --replay ]; then
+  replay_stage="${2:-}"
+  case "$replay_stage" in
+    ""|*[!A-Za-z0-9._-]*)
+      printf 'nook-sccache-report: invalid replay stage: %s\n' "$replay_stage" >&2
+      exit 2
+      ;;
+  esac
+  replay_file="$report_dir/$replay_stage.json"
+  if [ ! -s "$replay_file" ]; then
+    printf 'nook-sccache-report: persisted report is unavailable for %s\n' "$replay_stage" >&2
+    exit 1
+  fi
+  printf 'NOOK_SCCACHE_STATS '
+  cat "$replay_file"
+  printf '\n'
+  exit 0
+fi
+
+case "$stage" in
+  ""|*[!A-Za-z0-9._-]*)
+    printf 'nook-sccache-report: invalid stage: %s\n' "$stage" >&2
+    exit 2
+    ;;
+esac
 baked_runtime_mode="${SCCACHE_S3_RW_MODE:-UNSET}"
 runtime_mode="$baked_runtime_mode"
 runtime_mode_source=environment
@@ -59,6 +86,8 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
     ' <<<"$stats_json"
   )" || report=""
   if [ -n "$report" ]; then
+    mkdir -p "$report_dir"
+    printf '%s\n' "$report" >"$report_dir/$stage.json"
     printf 'NOOK_SCCACHE_STATS %s\n' "$report"
     if jq -e '.cache_errors > 0 or .cache_write_errors > 0' \
       >/dev/null 2>&1 <<<"$report"; then

@@ -43,6 +43,7 @@ ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
 # Rust-based helper image just to obtain one CLI.
 ARG CARGO_CHEF_VERSION=0.1.77
 ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
 
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/nook-platform/target). The heavy
 # target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
@@ -679,6 +680,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     touch nook-app-common/src/i18n.rs \
     && cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-source-nook-wasm
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi
 
 FROM builder-wasm-source-base AS builder-companion-wasm-source
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
@@ -686,6 +689,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
     && nook-sccache-report wasm-source-companion-wasm
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-companion-wasm; fi
 
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
@@ -700,6 +705,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
     && install -D /dev/null /opt/nook/wasm-clippy-passed
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-clippy; fi
 
 FROM builder-nook-wasm-source AS builder-nook-wasm-build
 
@@ -734,6 +741,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          && mkdir -p /opt/nook/wasm-handoff \
          && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ ) \
     && nook-sccache-report wasm-build-nook-wasm
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-nook-wasm; fi
 
 FROM builder-companion-wasm-source AS builder-companion-wasm-build
 
@@ -763,6 +772,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          && cp -a ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
               /opt/nook/wasm-handoff/nook-companion-wasm/ ) \
     && nook-sccache-report wasm-build-companion-wasm
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-companion-wasm; fi
 
 FROM builder-nook-wasm-build AS builder-wasm-build
 
@@ -781,6 +792,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-release-tests; fi
 
 FROM builder-wasm-node-deps AS builder-wasm-handoff
 
@@ -803,6 +816,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-node-test-and-coverage; fi
 
 # wasm-pack's Node tests are compiler-bearing. Keep their sccache authority in
 # an isolated source-derived stage; the browser/runtime stage below consumes
@@ -825,6 +840,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
     && touch /opt/nook/wasm-coverage-passed \
     && nook-sccache-report wasm-node-compiler
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-node-compiler; fi
 
 FROM builder-wasm-handoff AS builder-wasm
 COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed

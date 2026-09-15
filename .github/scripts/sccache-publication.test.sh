@@ -19,6 +19,7 @@ EOF
 NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/zero-writes.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
 SCCACHE_CLIENT_SIDE=1 \
 SCCACHE_S3_RW_MODE=READ_WRITE \
   bash "$report" publication >"$fixture_dir/zero-writes.log" 2>&1
@@ -32,6 +33,11 @@ grep -Fq '"counter_reliability":"backend_incomplete"' "$fixture_dir/zero-writes.
 grep -Fq '"baked_runtime_mode":"READ_WRITE"' "$fixture_dir/zero-writes.log"
 grep -Fq '"runtime_mode":"READ_WRITE"' "$fixture_dir/zero-writes.log"
 grep -Fq '"runtime_mode_source":"runtime_secret"' "$fixture_dir/zero-writes.log"
+test -s "$fixture_dir/reports/publication.json"
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
+  bash "$report" --replay publication >"$fixture_dir/replayed.log"
+grep -Fq 'NOOK_SCCACHE_STATS {"stage":"publication"' "$fixture_dir/replayed.log"
+grep -Fq '"cache_misses":275' "$fixture_dir/replayed.log"
 
 cat >"$fixture_dir/completed-writes.json" <<'EOF'
 {"stats":{"compile_requests":339,"requests_executed":279,"cache_hits":{"counts":{}},"cache_misses":{"counts":{"Rust":275}},"cache_errors":{"counts":{}},"cache_write_errors":0,"cache_writes":275}}
@@ -39,6 +45,7 @@ EOF
 NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/completed-writes.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
 SCCACHE_CLIENT_SIDE=1 \
 SCCACHE_S3_RW_MODE=READ_WRITE \
   bash "$report" publication >"$fixture_dir/completed-writes.log" 2>&1
@@ -52,6 +59,7 @@ EOF
 NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/write-errors.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
 SCCACHE_CLIENT_SIDE=1 \
   bash "$report" publication >"$fixture_dir/write-errors.log" 2>&1
 grep -Fq 'NOOK_SCCACHE_HEALTH_WARNING' "$fixture_dir/write-errors.log"
@@ -63,6 +71,7 @@ EOF
 NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/cache-write-errors.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
 SCCACHE_CLIENT_SIDE=1 \
   bash "$report" publication >"$fixture_dir/cache-write-errors.log" 2>&1
 grep -Fq 'NOOK_SCCACHE_HEALTH_WARNING' "$fixture_dir/cache-write-errors.log"

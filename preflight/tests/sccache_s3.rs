@@ -514,7 +514,16 @@ fn assert_rust_build_cache_boundary() {
 
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);
-    let reports = dockerfile.matches("nook-sccache-report ").count();
+    // Replay-only terminal reads consume the persisted report from a cached
+    // compiler layer and intentionally do not receive cache credentials. Count
+    // only the report calls that query sccache and therefore require mounts.
+    let reports = dockerfile
+        .lines()
+        .filter(|line| {
+            line.contains("nook-sccache-report ")
+                && !line.contains("nook-sccache-report --replay ")
+        })
+        .count();
     assert!(
         reports > 0
             && dockerfile

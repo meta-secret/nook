@@ -359,6 +359,22 @@ class DockerizedRustContract {
     expect(nodeCompilerStage).toContain(
       "nook-sccache-report wasm-node-compiler",
     );
+    expect(nodeCompilerStage).toContain(
+      "nook-sccache-report --replay wasm-node-compiler",
+    );
+    expect(nodeCompilerStage).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
+    for (const stageName of [
+      "wasm-source-nook-wasm",
+      "wasm-source-companion-wasm",
+      "wasm-clippy",
+      "wasm-build-nook-wasm",
+      "wasm-build-companion-wasm",
+      "wasm-release-tests",
+      "wasm-node-test-and-coverage",
+      "wasm-node-compiler",
+    ]) {
+      expect(product).toContain(`nook-sccache-report --replay ${stageName}`);
+    }
     for (const descendant of [
       stage(
         "FROM builder-wasm-node-deps AS builder-wasm-handoff",
@@ -366,7 +382,7 @@ class DockerizedRustContract {
       ),
       nodeCompilerStage,
     ]) {
-      assertCompilerMounts(descendant, 1);
+      assertCompilerMounts(descendant, 2);
     }
     const browserStage = stage(
       "FROM builder-wasm-handoff AS builder-wasm",
@@ -393,6 +409,27 @@ class DockerizedRustContract {
     );
     expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
       'node-version: "24.19.0"',
+    );
+    const nightly = this.read(
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+    );
+    for (const stageName of [
+      "rust-dylint-self-test",
+      "rust-dylint-native",
+      "rust-dylint-wasm",
+    ]) {
+      expect(nightly).toContain(
+        `nook-sccache-report --replay ${stageName}`,
+      );
+    }
+    const report = this.read("nook-app/nook-platform/docker/sccache-report.sh");
+    expect(report).toContain('report_dir="${NOOK_SCCACHE_REPORT_DIR:-/opt/nook/sccache-reports}"');
+    expect(report).toContain('if [ "$stage" = --replay ]; then');
+    expect(report).toContain('printf \'%s\\n\' "$report" >"$report_dir/$stage.json"');
+    const bake = this.read("nook-app/docker-bake.hcl");
+    expect(bake).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}",
     );
   }
 
