@@ -496,10 +496,23 @@ fn dockerfile_run_instructions(source: &str) -> Vec<String> {
     instructions
 }
 
-fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
-    const ACCESS_MOUNT: &str = "--mount=type=secret,id=sccache_s3_access_key,required=false";
-    const SECRET_MOUNT: &str = "--mount=type=secret,id=sccache_s3_secret_key,required=false";
+const SCCACHE_ACCESS_MOUNT: &str = "--mount=type=secret,id=sccache_s3_access_key,required=false";
+const SCCACHE_SECRET_MOUNT: &str = "--mount=type=secret,id=sccache_s3_secret_key,required=false";
 
+fn assert_sccache_mount_pair(run: &str, run_index: usize, path: &str, purpose: &str) {
+    assert_eq!(
+        run.matches(SCCACHE_ACCESS_MOUNT).count(),
+        1,
+        "{purpose} RUN #{run_index} in {path} must mount exactly one optional sccache access key"
+    );
+    assert_eq!(
+        run.matches(SCCACHE_SECRET_MOUNT).count(),
+        1,
+        "{purpose} RUN #{run_index} in {path} must mount exactly one optional sccache secret key"
+    );
+}
+
+fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
     let mut report_runs = 0;
     let mut replay_runs = 0;
     for (run_index, run) in dockerfile_run_instructions(dockerfile).iter().enumerate() {
@@ -512,8 +525,6 @@ fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
             continue;
         }
 
-        let access_mounts = run.matches(ACCESS_MOUNT).count();
-        let secret_mounts = run.matches(SECRET_MOUNT).count();
         if has_replay_report {
             assert!(
                 !has_report,
@@ -521,24 +532,19 @@ fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
             );
             replay_runs += 1;
             assert_eq!(
-                access_mounts, 0,
+                run.matches(SCCACHE_ACCESS_MOUNT).count(),
+                0,
                 "replay report RUN #{run_index} in {path} must not mount the sccache access key"
             );
             assert_eq!(
-                secret_mounts, 0,
+                run.matches(SCCACHE_SECRET_MOUNT).count(),
+                0,
                 "replay report RUN #{run_index} in {path} must not mount the sccache secret key"
             );
         }
         if has_report {
             report_runs += 1;
-            assert_eq!(
-                access_mounts, 1,
-                "reported compiler RUN #{run_index} in {path} must mount exactly one optional sccache access key"
-            );
-            assert_eq!(
-                secret_mounts, 1,
-                "reported compiler RUN #{run_index} in {path} must mount exactly one optional sccache secret key"
-            );
+            assert_sccache_mount_pair(run, run_index, path, "reported compiler");
         }
     }
 
@@ -549,6 +555,22 @@ fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
     assert!(
         replay_runs > 0,
         "{path} must contain at least one replay-only sccache report RUN"
+    );
+}
+
+fn assert_dylint_toolchain_install_mounts(dockerfile: &str, path: &str) {
+    let runs = dockerfile_run_instructions(dockerfile);
+    let mut install_count = 0;
+    for (run_index, run) in runs.iter().enumerate() {
+        if !run.contains("cargo install cargo-dylint dylint-link") {
+            continue;
+        }
+        install_count += 1;
+        assert_sccache_mount_pair(run, run_index, path, "cargo-dylint toolchain install");
+    }
+    assert_eq!(
+        install_count, 1,
+        "{path} must contain exactly one cargo-dylint toolchain install RUN"
     );
 }
 
@@ -609,11 +631,19 @@ fn assert_rust_build_cache_boundary() {
     assert_sccache_report_mounts(&dockerfile, path);
     assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
     assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
+
+    let nightly_path = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    let nightly = RepositoryFixture::repository_root().read(nightly_path);
+    assert_sccache_report_mounts(&nightly, nightly_path);
+    assert_dylint_toolchain_install_mounts(&nightly, nightly_path);
 }
 
 #[cfg(test)]
 mod sccache_report_mount_tests {
-    use super::{assert_sccache_report_mounts, dockerfile_run_instructions};
+    use super::{
+        assert_dylint_toolchain_install_mounts, assert_sccache_report_mounts,
+        dockerfile_run_instructions,
+    };
 
     #[test]
     fn checks_report_mounts_per_run_and_ignores_unreported_compiler_runs() {
@@ -626,10 +656,14 @@ mod sccache_report_mount_tests {
             "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
             "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
             "    cargo metadata\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo install cargo-dylint dylint-link --locked\n",
             "RUN if [ \"$REPLAY\" != disabled ]; then nook-sccache-report --replay compiler; fi\n",
         );
 
-        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 3);
+        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 4);
         assert_sccache_report_mounts(dockerfile, "fixture.Dockerfile");
+        assert_dylint_toolchain_install_mounts(dockerfile, "fixture.Dockerfile");
     }
 }
