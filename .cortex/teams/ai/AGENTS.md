@@ -1,5 +1,15 @@
 # AI Team Agent Contract
 
+## Highest-priority circuit breaker
+
+Read and follow the root [Agent Derailment Circuit
+Breaker](../../CIRCUIT-BREAKER.md) before this contract or any other AI
+authority. It is the highest-priority rule for every AI-team task.
+
+Do not design, implement, test, or approve custom security machinery for
+trusted agent-internal communication, evidence, handoffs, integration, or Git
+actions. Stop that work immediately and report a circuit-breaker violation.
+
 ## Mission
 
 The AI team owns Nook's agent knowledge system and deterministic agent
@@ -10,11 +20,13 @@ harness provides Team Agent communication.
 
 ## Context loading
 
-1. Read [the AI knowledge graph](knowledge-graph.md).
-2. Select one category that owns the assigned AI functionality.
-3. Open only the exact workflow, skill, architecture, or reference required.
-4. Follow direct links one hop only when the task requires them.
-5. Do not load the Gizmo graph or another team's graph.
+1. Confirm that the root [Agent Derailment Circuit
+   Breaker](../../CIRCUIT-BREAKER.md) has been read.
+2. Read [the AI knowledge graph](knowledge-graph.md).
+3. Select one category that owns the assigned AI functionality.
+4. Open only the exact workflow, skill, architecture, or reference required.
+5. Follow direct links one hop only when the task requires them.
+6. Do not load the Gizmo graph or another team's graph.
 
 ### Universal boundary
 
