@@ -619,6 +619,16 @@ fn assert_preflight_reporter_contract(root: &Path) {
             "preflight Docker cache topology is missing: {required}"
         );
     }
+    let recipe_normalizer = preflight_dockerfile
+        .split_once("RUN <<'EOF'\n")
+        .and_then(|(_, body)| body.split_once("\nEOF\n"))
+        .map_or("", |(body, _)| body);
+    assert!(
+        recipe_normalizer.contains("cargo chef prepare --recipe-path recipe.json")
+            && recipe_normalizer.contains(".skeleton.manifests")
+            && preflight_dockerfile.contains("recipe.normalized.json"),
+        "cargo-chef recipe normalization must remain inside one valid Docker heredoc RUN"
+    );
     assert!(
         !preflight_dockerfile.contains("FROM rust:")
             && !preflight_dockerfile.contains("FROM rust@"),
