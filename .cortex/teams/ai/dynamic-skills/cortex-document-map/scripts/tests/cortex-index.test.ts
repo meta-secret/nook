@@ -374,7 +374,16 @@ test('keeps direct remote Task and BuildKit execution authoritative', () => {
     'Treat agent-authored reproductions of Docker or BuildKit cache functionality as P1 violations.',
   );
   expect(circuitBreaker).toContain(
-    'Do not implement cache-key calculation, dependency invalidation, cache selection, layer-reuse decisions, or equivalent cache-engine behavior in custom scripts, simulators, models, or contract tests.',
+    'Dockerfiles, Bake HCL, and Docker or BuildKit-backed simulations and proofs are required and allowed.',
+  );
+  expect(circuitBreaker).toContain(
+    'Run actual cold, warm, cache-import, and cache-export builds.',
+  );
+  expect(circuitBreaker).toContain(
+    'Inspect the resulting cache and build artifacts.',
+  );
+  expect(circuitBreaker).toContain(
+    'This prohibition applies only to Rust, application, or other custom code that computes cache keys, invalidates dependencies, selects caches, or decides layer reuse without invoking Docker or BuildKit.',
   );
   expect(circuitBreaker).toContain(
     'Docker and BuildKit are the sole authority for Docker layer-cache validity.',
@@ -383,7 +392,7 @@ test('keeps direct remote Task and BuildKit execution authoritative', () => {
     'Import available BuildKit cache, run the actual Docker build to validate and reuse layers, then export the updated cache.',
   );
   expect(circuitBreaker).toContain(
-    'Preserve real Dockerfiles, contexts, build arguments, cache import and export, actual build results, and structured statistics artifacts.',
+    'Preserve real build contexts, build arguments, actual build results, and structured statistics artifacts.',
   );
   expect(circuitBreaker).toContain(
     'Preserve the complete sccache health policy, including its zero-hit gate.',

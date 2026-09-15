@@ -42,8 +42,12 @@ protecting a real product trust boundary.
   - Docker and BuildKit are the sole authority for Docker layer-cache validity.
   - Import available BuildKit cache, run the actual Docker build to validate
     and reuse layers, then export the updated cache.
-  - Preserve real Dockerfiles, contexts, build arguments, cache import and
-    export, actual build results, and structured statistics artifacts.
+  - Dockerfiles, Bake HCL, and Docker or BuildKit-backed simulations and proofs
+    are required and allowed.
+  - Run actual cold, warm, cache-import, and cache-export builds.
+  - Inspect the resulting cache and build artifacts.
+  - Preserve real build contexts, build arguments, actual build results, and
+    structured statistics artifacts.
   - Preserve the complete sccache health policy, including its zero-hit gate.
 - Stop when a proposed implementation enters a prohibited category.
   - Do not write the proposed mechanism or tests.
@@ -113,9 +117,9 @@ evidence, or validation results.
 - **Docker layer-cache authority**
   - Treat agent-authored reproductions of Docker or BuildKit cache
     functionality as P1 violations.
-  - Do not implement cache-key calculation, dependency invalidation, cache
-    selection, layer-reuse decisions, or equivalent cache-engine behavior in
-    custom scripts, simulators, models, or contract tests.
+  - This prohibition applies only to Rust, application, or other custom code
+    that computes cache keys, invalidates dependencies, selects caches, or
+    decides layer reuse without invoking Docker or BuildKit.
 - **Preservation**
   - Never preserve a prohibited system merely because another document or
     existing implementation describes it.
