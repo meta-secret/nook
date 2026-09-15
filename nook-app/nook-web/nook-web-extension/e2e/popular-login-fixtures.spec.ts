@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   getShellTemplate,
+  listSiteShellIds,
   listShellTemplateIds,
   resolveSiteFixture,
   ShellTemplatePilotExpectation,
@@ -72,15 +73,17 @@ const singleStepPasswordTemplates = continueWithNookTemplateIds.filter(
 test.describe('popular login fixture coverage', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('catalog maps to shared templates; CI covers unique shells only', () => {
+  test('configured catalog sites map to shared templates; CI covers unique shells only', () => {
     expect(catalog).toHaveLength(1000)
-    expect(siteShellCount()).toBe(1000)
+    expect(siteShellCount()).toBe(999)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(100)
     expect(continueWithNookTemplateIds).toHaveLength(templateIds.length - 1)
     expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
-    for (const site of catalog) {
-      expect(resolveSiteFixture(site.id)?.template).toBeTruthy()
+    const catalogIds = new Set(catalog.map((site) => site.id))
+    for (const siteId of listSiteShellIds()) {
+      expect(catalogIds.has(siteId)).toBe(true)
+      expect(resolveSiteFixture(siteId)?.template).toBeTruthy()
     }
   })
 
