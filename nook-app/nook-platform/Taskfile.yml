@@ -168,6 +168,22 @@ tasks:
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo clippy -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings
       - cd "{{.PLATFORM_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm -- -D warnings
+
+  _rust:ci:verify-built:
+    internal: true
+    desc: Run native validation inside the exact image built by the producer job.
+    cmds:
+      - task: _rust:lint
+      - task: _rust:test
+      - task: _rust:coverage:check
+      - |-
+        set -e
+        cd "{{.PLATFORM_ROOT}}"
+        mkdir -p /ci-artifacts
+        cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /ci-artifacts/summary.txt
+        cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /ci-artifacts/summary.json
+        cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /ci-artifacts/lcov.info
+        cp nook-core/coverage-floor.json /ci-artifacts/coverage-floor.json
   sccache:ensure:
     desc: Require a healthy SeaweedFS S3 sccache backend before Rust/WASM builds.
     dir: '{{.REPO_ROOT}}'
@@ -316,6 +332,26 @@ tasks:
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}} nook-rust-test
+
+  setup:rust:pr-build:
+    desc: Build and load the exact-source native Rust image without validation.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        runtime_mode_file="$(mktemp)";
+        trap '\''rm -f -- "$runtime_mode_file"'\'' EXIT;
+        printf '\''READ_WRITE\n'\'' > "$runtime_mode_file";
+        chmod 600 "$runtime_mode_file";
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --allow="fs.read=$runtime_mode_file"
+        --set "pr-native-build.secrets+=id=sccache_runtime_mode,src=$runtime_mode_file"
+        --set "pr-native-build.tags={{.DOCKER_RUST_IMAGE}}"
+        --set "pr-native-build.output={{.PR_NATIVE_BUILD_OUTPUT}}"
+        pr-native-build'
 
   setup:rust:lint:
     desc: Build the source-sealed Rust lint image and export its compiled graph.

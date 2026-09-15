@@ -123,10 +123,10 @@ tasks:
         git -C "$metadata/repository" remote remove origin
         git -C "$metadata/repository" read-tree HEAD
         printf '{}' > "$metadata/event.json"
+        baseline="$(git -C '{{.REPO_ROOT}}' rev-parse refs/remotes/origin/main)"
+        git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$baseline:refs/remotes/origin/main"
         case '{{.POLICY_STAGE}}' in
           repository-policy|repository-policy-untrusted)
-            baseline="$(git -C '{{.REPO_ROOT}}' rev-parse refs/remotes/origin/main)"
-            git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$baseline:refs/remotes/origin/main"
             if [ -n "${GITHUB_EVENT_PATH:-}" ]; then
               jq '{pull_request: {base: {sha: .pull_request.base.sha}}, before: .before}' "$GITHUB_EVENT_PATH" > "$metadata/event.json"
               event_base="$(jq -r '.pull_request.base.sha // .before // empty' "$metadata/event.json")"
@@ -142,6 +142,7 @@ tasks:
           {{.DOCKER}} buildx bake \
           {{.PREFLIGHT_BAKE_FILES}} \
           --allow="fs.read=$metadata" \
+          --set "preflight-{{.POLICY_STAGE}}.args.LOOM_OWNERSHIP_FROM=$baseline" \
           --set "preflight-{{.POLICY_STAGE}}.contexts.repository-git=$metadata" \
           preflight-{{.POLICY_STAGE}}
 

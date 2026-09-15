@@ -53,11 +53,73 @@ jobs:
               ;;
           esac
 
+  rust-build:
+    name: Build native Rust image
+    if: inputs.validation_requested
+    needs: validation-request
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+      trusted: ${{ steps.image.outputs.trusted }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+      - name: Select exact image
+        id: image
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+        run: |
+          echo "ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}" = "true" ]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build native Rust only
+        env:
+          DOCKER_RUST_IMAGE: ${{ steps.image.outputs.ref }}
+          PR_NATIVE_BUILD_OUTPUT: ${{ steps.image.outputs.trusted == 'true' && 'type=registry' || 'type=docker' }}
+        run: task ci:pr:rust-build-image
+      - name: Pack image for untrusted consumers
+        if: steps.image.outputs.trusted != 'true'
+        env:
+          RUST_IMAGE: ${{ steps.image.outputs.ref }}
+        run: docker save "$RUST_IMAGE" | zstd -T0 -3 -o "${RUNNER_TEMP}/nook-pr-rust-image.tar.zst"
+      - name: Upload untrusted image
+        if: steps.image.outputs.trusted != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-rust-image-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-pr-rust-image.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   rust-ecosystem:
     name: Rust ecosystem
     if: >-
       inputs.validation_requested
-    needs: validation-request
+    needs: rust-build
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
     with:
@@ -70,11 +132,11 @@ jobs:
     name: Native Rust verification
     if: >-
       inputs.validation_requested
-    needs: validation-request
+    needs: rust-build
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
     outputs:
-      cache-build-expected: ${{ steps.trusted-native.outputs.found != 'true' }}
+      cache-build-expected: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -96,103 +158,31 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: "true"
 
-      - name: Derive native validation key
-        id: native-key
-        run: |
-          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
-
-      - name: Locate trusted native handoff
-        id: trusted-native
-        uses: actions/github-script@v9
-        env:
-          ARTIFACT_NAME: ${{ steps.native-key.outputs.value }}
-        with:
-          retries: 3
-          script: |
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              ...context.repo,
-              name: process.env.ARTIFACT_NAME,
-              per_page: 100,
-            })
-            for (const artifact of artifacts.sort((a, b) => b.id - a.id)) {
-              if (artifact.expired || !artifact.workflow_run?.id) continue
-              const { data: run } = await github.rest.actions.getWorkflowRun({
-                ...context.repo,
-                run_id: artifact.workflow_run.id,
-              })
-              const workflowPath = run.path?.replace(/@[^@]+$/, '')
-              if (
-                run.name === 'PR validation handoff' &&
-                workflowPath === '.github/workflows/pr-validation-handoff.yml' &&
-                run.head_branch === context.payload.repository.default_branch &&
-                run.status === 'completed' &&
-                run.conclusion === 'success' &&
-                run.event === 'workflow_run'
-              ) {
-                core.setOutput('found', 'true')
-                core.setOutput('artifact-id', String(artifact.id))
-                core.setOutput('run-id', String(run.id))
-                return
-              }
-            }
-            core.setOutput('found', 'false')
-
-      - name: Download trusted native handoff
-        if: steps.trusted-native.outputs.found == 'true'
+      - name: Repository invariant preflight
+        run: task preflight
+      - name: Download untrusted image
+        if: needs.rust-build.outputs.trusted != 'true'
         uses: actions/download-artifact@v8
         with:
-          artifact-ids: ${{ steps.trusted-native.outputs.artifact-id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/rust
-          merge-multiple: true
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.trusted-native.outputs.run-id }}
-
-      - name: Validate trusted native handoff
-        if: steps.trusted-native.outputs.found == 'true'
-        env:
-          EXPECTED_KEY: ${{ steps.native-key.outputs.value }}
-        run: |
-          set -euo pipefail
-          dir="${RUNNER_TEMP}/nook-ci-artifacts/rust"
-          jq -e --arg key "$EXPECTED_KEY" \
-            '.schema_version == 1 and
-             .kind == "native" and
-             .input_key == $key and
-             .source_workflow == ".github/workflows/ci.yml" and
-             .producer_jobs_verified == true' \
-            "$dir/nook-validation-manifest.json" >/dev/null
-          for file in summary.txt summary.json lcov.info coverage-floor.json; do
-            test -s "$dir/$file"
-          done
-          chmod +x "$dir/tools/nook-preflight"
-          test -x "$dir/tools/nook-preflight"
-
-      # A producer miss runs preflight inside task ci:pr:rust. Exact trusted handoffs still need
-      # repository invariants checked on this PR head, but must not run the same Docker build twice.
-      - name: Repository invariant preflight
-        if: steps.trusted-native.outputs.found == 'true'
-        run: task preflight
-
-      - name: Rust format, clippy, tests, and coverage
-        if: steps.trusted-native.outputs.found != 'true'
-        run: >-
-          GHA_CACHE_WRITE_ENABLED=""
-          task ci:pr:rust
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+          name: pr-rust-image-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-pr-rust-image
+      - name: Load untrusted image
+        if: needs.rust-build.outputs.trusted != 'true'
+        run: zstd -dc "${RUNNER_TEMP}/nook-pr-rust-image/nook-pr-rust-image.tar.zst" | docker load
+      - name: Rust format, clippy, tests, and coverage through BuildKit
+        if: needs.rust-build.outputs.trusted == 'true'
         env:
           CI: true
-
-      - name: Publish git-scoped native BuildKit cache
-        if: steps.trusted-native.outputs.found != 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified native graph local; Main and sccache remain reusable"
-            exit 0
-          fi
-          task ci:main:publish-native-cache
+          DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
+        run: task docker:ci:rust:verify-built-buildkit CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+      - name: Rust format, clippy, tests, and coverage in hosted Docker
+        if: needs.rust-build.outputs.trusted != 'true'
         env:
-          GHA_CACHE_WRITE_ENABLED: "1"
+          CI: true
+          DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
+        run: task docker:ci:rust:verify-built CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+      - name: Export repository policy tool
+        run: task preflight:export PREFLIGHT_OUTPUT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust/tools
 
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
@@ -213,7 +203,9 @@ jobs:
       inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
+    # Cold WASM builds may compile companion-core before handoff/publication
+    # completes; downstream consumers depend on this producer job.
+    timeout-minutes: 30
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
       cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
@@ -589,12 +581,12 @@ jobs:
 
   cache-health:
     if: always() && inputs.validation_requested
-    needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify]
+    needs: [rust-build, rust-ecosystem, rust, wasm, wasm-node-test, verify]
     uses: ./.github/workflows/pr-cache-health.yml
     with:
       source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       jobs_json: >-
-        [{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}]
+        [{"id":"rust-build","result":"${{ needs.rust-build.result }}","buildExpected":true,"readOnly":false},{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":false,"readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}]
   ui-demo:
     name: Headless UI demo
     if: >-

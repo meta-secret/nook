@@ -150,6 +150,35 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
 
+# Exact-source native build image for PR validation consumers. This stage only
+# performs the ordinary native cargo builds above; tests, Clippy, formatting,
+# coverage, audits, and repository policy run later in their own jobs.
+FROM compile-native-source AS pr-native-build
+
+WORKDIR /meta-secret/nook
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "PR native build source snapshot" >/dev/null
+
+# Trusted ARC consumers have a remote BuildKit API but no container runtime.
+# Import the producer's exact Zot image as a named context, execute validation
+# as a normal solve vertex, then expose only the small coverage handoff.
+FROM pr-native-image AS pr-native-verify
+
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task _rust:ci:verify-built
+
+FROM scratch AS pr-native-verify-export
+
+COPY --from=pr-native-verify /ci-artifacts/ /
+
 FROM compile-wasm-dependencies AS compile-wasm-source
 
 ARG WASM_BUILD_MODE=dev

@@ -27,6 +27,7 @@ test('accepts structural result schema factories with their semantic owner', () 
 });
 
 test('wires canonical state and Cortex gates into Loom check', async () => {
+  const repositoryRoot = join(import.meta.dir, '..', '..', '..');
   const packageJson = await readFile(
     join(import.meta.dir, '..', 'package.json'),
     'utf8',
@@ -36,7 +37,33 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
     '"precheck": "bun run source-policy && bun run cortex-audit"',
   );
   expect(packageJson).toContain(
-    '"source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from HEAD^"',
+    '"source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from \\\"$LOOM_OWNERSHIP_FROM\\\""',
+  );
+  const taskfile = await readFile(
+    join(repositoryRoot, '.task', 'static-checks.yml'),
+    'utf8',
+  );
+  expect(taskfile).toContain('bun run --cwd "$directory" check');
+  const workflow = await readFile(
+    join(repositoryRoot, '.github', 'workflows', 'repository-policy.yml'),
+    'utf8',
+  );
+  expect(workflow).toContain('fetch-depth: 0');
+  expect(workflow).toContain(
+    'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
+  );
+  const preflightTaskfile = await readFile(
+    join(repositoryRoot, 'preflight', 'Taskfile.yml'),
+    'utf8',
+  );
+  expect(preflightTaskfile).toContain('LOOM_OWNERSHIP_FROM=$baseline');
+  const preflightDockerfile = await readFile(
+    join(repositoryRoot, 'preflight', 'Dockerfile'),
+    'utf8',
+  );
+  expect(preflightDockerfile).toContain('ARG LOOM_OWNERSHIP_FROM');
+  expect(preflightDockerfile).toContain(
+    'LOOM_OWNERSHIP_FROM=$LOOM_OWNERSHIP_FROM',
   );
   const readme = await readFile(
     join(import.meta.dir, '..', 'README.md'),

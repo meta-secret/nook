@@ -257,7 +257,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   );
   assert.match(
     workflow,
-    /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
+    /cache-health:\n[\s\S]*needs: \[rust-build, rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
   );
   assert.match(workflow, /uses: \.\/\.github\/workflows\/pr-cache-health\.yml/);
   assert.match(

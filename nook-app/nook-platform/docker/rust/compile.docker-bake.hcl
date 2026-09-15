@@ -59,3 +59,35 @@ target "build-compile" {
   cache-to   = compile_cache_to
   output     = ["type=cacheonly"]
 }
+
+// PR-native producer: one exact-source image which downstream checks consume.
+// The workflow chooses either a Docker load (untrusted) or a direct Zot push
+// (trusted); BuildKit and the existing source cache remain the cache authority.
+target "pr-native-build" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  target     = "pr-native-build"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    rust-base = "target:rust-base"
+  }
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+  output     = ["type=docker"]
+}
+
+// Trusted ARC has only the remote BuildKit build/export API. Resolve the
+// producer's immutable registry image inside the solve and export coverage as
+// a local artifact; no Docker runtime operation is available or required.
+target "pr-native-verify" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  target     = "pr-native-verify-export"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"
+  }
+  output = ["type=cacheonly"]
+}

@@ -248,7 +248,12 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "NOOK_SCCACHE_ENDPOINT",
         "NOOK_SCCACHE_BUCKET",
     ];
-    for (job_name, start, end) in [
+    let pr_rust_producer_jobs = [
+        (
+            "Build native Rust image",
+            "\n  rust-build:\n",
+            "\n  rust-ecosystem:\n",
+        ),
         ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
         (
             "WASM build and artifact",
@@ -256,24 +261,25 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             "\n  wasm-node-test:\n",
         ),
         ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
-    ] {
+    ];
+    for &(job_name, start, end) in &pr_rust_producer_jobs {
         let job = pr
             .split_once(start)
             .and_then(|(_, tail)| tail.split_once(end))
             .map(|(job, _)| job)
             .with_context(|| format!("PR workflow must keep the {job_name} job"))?;
-        for credential in compiler_credentials {
+        for &credential in &compiler_credentials {
             assert!(
                 job.contains(credential),
                 "Rust-producing PR job {job_name} must receive {credential}"
             );
         }
     }
-    for credential in compiler_credentials {
+    for &credential in &compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            3,
-            "only the three Rust-producing PR jobs may receive {credential}"
+            pr_rust_producer_jobs.len(),
+            "only the explicitly listed Rust-producing PR jobs may receive {credential}"
         );
     }
     assert_eq!(

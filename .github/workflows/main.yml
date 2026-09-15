@@ -206,7 +206,9 @@ jobs:
     outputs:
       cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
+    # Cold WASM builds may compile companion-core before handoff/publication
+    # completes; downstream consumers depend on this producer job.
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read

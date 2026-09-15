@@ -14,7 +14,7 @@
   <a href="LICENSE">MIT License</a>
 </p>
 
-Nook is a passwordless, local-first secrets manager. Your vault is encrypted in
+Nook is a passwordless, local-first secrets manager.  Your vault is encrypted in
 the browser, replicated only through storage you choose, and opened only by
 identities you authorize.
 
