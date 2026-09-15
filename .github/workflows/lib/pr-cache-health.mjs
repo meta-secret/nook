@@ -11,12 +11,13 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {boolean} buildExpected
  * @property {boolean} readOnly
  * @property {boolean} [consumer]
+ * @property {string} [consumerIdentity]
  */
 /**
  * @typedef {object} CacheTelemetryRecord
  * @property {{job: string}} github
  * @property {{persistent: boolean}} cache_backend
- * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
+ * @property {{compiler_input?: {fingerprint: string, restore_fingerprint: string}, imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
  * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
  * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
  * @property {{complete: boolean}} collection
@@ -40,10 +41,14 @@ export class PrCacheHealth {
   }
 
   /**
-   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[], consumerStarts?: Set<string>}} request
+   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[], consumerSentinels?: {started: Set<string>, completed: Set<string>}}} request
    * @returns {PrCacheHealthModel}
    */
-  evaluate({ jobs, telemetry, consumerStarts = new Set() }) {
+  evaluate({
+    jobs,
+    telemetry,
+    consumerSentinels = { started: new Set(), completed: new Set() },
+  }) {
     const recordsByJob = new Map(
       telemetry.map((record) => [record.github.job, record]),
     );
@@ -57,9 +62,15 @@ export class PrCacheHealth {
         job.consumer &&
         (job.result === "failure" || job.result === "cancelled")
       ) {
-        if (consumerStarts.has(job.id))
-          warnings.push(`${job.id}:consumer_functional_failure`);
-        else reasons.push(`${job.id}:consumer_setup_or_timeout`);
+        const identity = job.consumerIdentity || job.id;
+        const started = consumerSentinels.started.has(identity);
+        const completed = consumerSentinels.completed.has(identity);
+        if (completed) warnings.push(`${identity}:consumer_functional_failure`);
+        else if (job.result === "failure" && started)
+          reasons.push(`${identity}:consumer_setup_or_timeout`);
+        else if (job.result === "cancelled")
+          warnings.push(`${identity}:consumer_cancelled_without_timeout_proof`);
+        else warnings.push(`${identity}:consumer_not_started`);
       } else if (!job.consumer && job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
@@ -115,9 +126,9 @@ export class PrCacheHealth {
         (candidate) => candidate.available,
       );
       const comparableCompilerRestore = Boolean(
-        record.cache_scope.compile_source?.restore_scope &&
-          record.cache_scope.compile_source.restore_scope !==
-            record.cache_scope.compile_source.scope &&
+        record.cache_scope.compiler_input?.fingerprint &&
+          record.cache_scope.compiler_input.fingerprint ===
+            record.cache_scope.compiler_input.restore_fingerprint &&
           record.sccache.requests_executed > 0,
       );
       if (
@@ -258,10 +269,10 @@ export class PrCacheHealth {
     return telemetry;
   }
 
-  /** @param {string} directory @returns {Set<string>} */
-  static readConsumerStarts(directory) {
-    const starts = new Set();
-    if (!fs.existsSync(directory)) return starts;
+  /** @param {string} directory @returns {{started: Set<string>, completed: Set<string>}} */
+  static readConsumerSentinels(directory) {
+    const sentinels = { started: new Set(), completed: new Set() };
+    if (!fs.existsSync(directory)) return sentinels;
     const pending = [directory];
     while (pending.length > 0) {
       const current = pending.pop();
@@ -269,13 +280,22 @@ export class PrCacheHealth {
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
         const entryPath = path.join(current, entry.name);
         if (entry.isDirectory()) pending.push(entryPath);
-        else if (entry.isFile() && entry.name.endsWith(".started")) {
-          const job = fs.readFileSync(entryPath, "utf8").trim();
-          if (job) starts.add(job);
+        else if (
+          entry.isFile() &&
+          (entry.name.endsWith(".started") ||
+            entry.name.endsWith(".completed"))
+        ) {
+          const identity = fs.readFileSync(entryPath, "utf8").trim();
+          if (identity) {
+            const target = entry.name.endsWith(".started")
+              ? sentinels.started
+              : sentinels.completed;
+            target.add(identity);
+          }
         }
       }
     }
-    return starts;
+    return sentinels;
   }
 
   static main() {
@@ -289,7 +309,7 @@ export class PrCacheHealth {
     const model = new PrCacheHealth().evaluate({
       jobs,
       telemetry: PrCacheHealth.readTelemetry(directory),
-      consumerStarts: PrCacheHealth.readConsumerStarts(consumerDirectory),
+      consumerSentinels: PrCacheHealth.readConsumerSentinels(consumerDirectory),
     });
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, `${JSON.stringify(model, null, 2)}\n`);

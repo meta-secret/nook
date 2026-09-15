@@ -341,6 +341,11 @@ tasks:
         test "$(grep -Fc '${pr_cache_export_error_policy}' "$rust_bake")" -eq 10
         grep -Fq 'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""' "$rust_bake"
         grep -Fq 'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"' "$repo_root/nook-app/docker-bake.hcl"
+        test "$(grep -Fc 'timeout=${cache_export_timeout}' "$repo_root/nook-app/nook-web/docker/toolchain.docker-bake.hcl")" -eq 3
+        grep -Fq 'general|native) restore_anchors=(nook-rust-native-source-v4)' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        grep -Fq 'wasm) restore_anchors=(nook-rust-wasm-source-v3 nook-rust-base-v2)' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        grep -Fq 'web-e2e|web-research-image) restore_anchors=(nook-web-deps-v1 nook-web-app-deps-v1 nook-web-research-deps-v1)' "$repo_root/.github/actions/nook-docker-setup/action.yml"
+        grep -Fq 'GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != ""' "$rust_bake"
         awk '
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
             lint_copy = NR

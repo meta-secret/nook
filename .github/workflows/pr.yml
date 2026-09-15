@@ -195,8 +195,6 @@ jobs:
       - name: Publish PR-scoped native BuildKit cache
         if: steps.trusted-native.outputs.found != 'true'
         run: task ci:main:publish-native-cache
-        env:
-          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
@@ -338,7 +336,6 @@ jobs:
         if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:main:publish-wasm-cache
         env:
-          GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
       - name: Stamp WASM handoff attempt
@@ -396,7 +393,7 @@ jobs:
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
             GHA_CACHE_WRITE_ENABLED="" task ci:wasm:node-test
           else
-            GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test
+            task ci:wasm:node-test
           fi
         env:
           CI: true
@@ -540,8 +537,6 @@ jobs:
 
       - name: Publish PR-scoped web BuildKit cache
         run: task ci:main:publish-web-cache
-        env:
-          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Publish exact-source PR browser job image
         if: >-
@@ -632,7 +627,8 @@ jobs:
               {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false},
               {"id":"ui-demo","result":"${{ needs.ui-demo.result }}","buildExpected":false,"readOnly":true,"consumer":true},
               {"id":"extension-e2e","result":"${{ needs.extension-e2e.result }}","buildExpected":false,"readOnly":true,"consumer":true},
-              {"id":"full-e2e-shard","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true,"consumer":true}
+              {"id":"full-e2e-shard-1","consumerIdentity":"full-e2e-shard-1","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true,"consumer":true},
+              {"id":"full-e2e-shard-2","consumerIdentity":"full-e2e-shard-2","result":"${{ needs.full-e2e-shard.result }}","buildExpected":false,"readOnly":true,"consumer":true}
             ]
         run: node .github/workflows/lib/pr-cache-health.mjs
 
@@ -1041,9 +1037,11 @@ jobs:
         shard: [1, 2]
     steps:
       - name: Mark browser cache consumer started
-        run: mkdir -p "$RUNNER_TEMP/nook-cache-consumer" && printf '%s\n' full-e2e-shard > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.started"
+        run: mkdir -p "$RUNNER_TEMP/nook-cache-consumer" && printf '%s\n' full-e2e-shard-${{ matrix.shard }} > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.started"
 
       - name: Local-provider web e2e from built WASM
+        id: browser-test
+        continue-on-error: true
         working-directory: /meta-secret/nook
         run: task _ci:main:web:e2e-only
         env:
@@ -1053,12 +1051,22 @@ jobs:
           VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
           VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
 
+      - name: Mark browser cache consumer completed
+        if: always()
+        run: printf '%s\n' full-e2e-shard-${{ matrix.shard }} > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.completed"
+
+      - name: Enforce browser test result
+        if: always()
+        env:
+          BROWSER_TEST_OUTCOME: ${{ steps.browser-test.outcome }}
+        run: test "$BROWSER_TEST_OUTCOME" = success
+
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-full-e2e-shard-${{ matrix.shard }}
-          path: ${{ runner.temp }}/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.started
+          path: ${{ runner.temp }}/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.*
           retention-days: 30
           if-no-files-found: warn
           overwrite: true

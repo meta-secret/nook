@@ -75,10 +75,20 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Cache health consumes deterministic JSON telemetry from all seven BuildKit
   producers and also records the terminal status of the exact-image UI demo,
   extension, and full-browser consumers. Skipped optional consumers are
-  neutral. Each selected consumer publishes a start sentinel after its exact
-  image launches. A later functional failure is diagnostic only; a missing
-  sentinel on failure/cancellation identifies cache setup or timeout and
-  activates the Docker Cache Specialist.
+  neutral. Matrix consumers preserve distinct per-shard started and completed
+  identities. A completed consumer failure is diagnostic only; a started but
+  incomplete failed consumer identifies setup or timeout and activates the
+  Docker Cache Specialist. Cancellation or absence without this deterministic
+  evidence remains diagnostic and cannot be mislabeled as a cache timeout.
+- Immutable ancestor discovery uses the complete set of scopes each producer
+  always publishes: native source for native, WASM source plus rust-base for
+  WASM, and all three web dependency lineages for regular web verification.
+  Conditional image refs and shorter shared roots cannot select an incomplete
+  ancestor. Partial publication therefore falls back to Main/cold state.
+- Any transient registry probe disables all registry imports and exports for
+  the job. Secret-free jobs likewise remain local-only even when a later task
+  invokes a publisher; Bake exporters require both cache enablement and write
+  authority.
 - Each ordinary PR publishes isolated immutable `-git-<head-sha>` cache refs. All seven
   producers, including ARC jobs, may update their own target ref after a
   successful solve, so a fresh shard and the next PR head restore the prior

@@ -15,6 +15,7 @@ const telemetry = (job, overrides = {}) => ({
     scope: "main",
     compile_dependencies: { scope: "deps", available: true, write_enabled: false, export_enabled: false },
     compile_source: { scope: "source", available: true, write_enabled: false, export_enabled: false },
+    compiler_input: { fingerprint: "same-input", restore_fingerprint: "same-input" },
     imports: { probes_complete: true, availability: [{ name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: true }] },
   },
   sccache: { report_count: 1, baked_runtime_mode: "READ_WRITE", runtime_mode: "READ_WRITE", runtime_mode_source: "runtime_secret", client_side: true, counter_reliability: "backend_incomplete", publication_status: "counters_observed", compile_requests: 10, requests_executed: 10, cache_hits: 8, cache_misses: 2, cache_errors: 0, cache_write_errors: 0, cache_writes: 2, hit_rate_percent: 80 },
@@ -121,7 +122,7 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
       { id: "extension-e2e", result: "failure", buildExpected: false, readOnly: true, consumer: true },
     ],
     telemetry: [],
-    consumerStarts: new Set(["extension-e2e"]),
+    consumerSentinels: { started: new Set(["extension-e2e"]), completed: new Set(["extension-e2e"]) },
   });
   assert.equal(failed.gate.verdict, "pass");
   assert.ok(failed.warnings.includes("extension-e2e:consumer_functional_failure"));
@@ -132,8 +133,16 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
     ],
     telemetry: [],
   });
-  assert.equal(cancelled.gate.verdict, "fail");
-  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_setup_or_timeout"));
+  assert.equal(cancelled.gate.verdict, "pass");
+  assert.ok(cancelled.warnings.includes("full-e2e-shard:consumer_cancelled_without_timeout_proof"));
+
+  const timedOut = new PrCacheHealth().evaluate({
+    jobs: [{ id: "full-e2e-shard-1", result: "failure", buildExpected: false, readOnly: true, consumer: true }],
+    telemetry: [],
+    consumerSentinels: { started: new Set(["full-e2e-shard-1"]), completed: new Set() },
+  });
+  assert.equal(timedOut.gate.verdict, "fail");
+  assert.ok(timedOut.gate.reasons.includes("full-e2e-shard-1:consumer_setup_or_timeout"));
 });
 
 void test("records a legitimate cold build without applying the warm threshold", () => {
@@ -209,6 +218,13 @@ void test("does not require sccache hits for unrelated BuildKit imports", () => 
       cache_hits: 0,
       cache_misses: 10,
     },
+    cache_scope: {
+      ...telemetry("rust").cache_scope,
+      compiler_input: {
+        fingerprint: "new-input",
+        restore_fingerprint: "old-input",
+      },
+    },
   });
   const model = new PrCacheHealth().evaluate({
     jobs: [{ id: "rust", result: "success", buildExpected: true, readOnly: false }],
@@ -237,13 +253,16 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("reads browser consumer start sentinels recursively", () => {
+void test("reads browser consumer lifecycle sentinels recursively", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-consumer-"));
   const nestedDirectory = path.join(directory, "artifact");
   fs.mkdirSync(nestedDirectory, { recursive: true });
   fs.writeFileSync(path.join(nestedDirectory, "one.started"), "ui-demo\n");
+  fs.writeFileSync(path.join(nestedDirectory, "one.completed"), "ui-demo\n");
   try {
-    assert.deepEqual([...PrCacheHealth.readConsumerStarts(directory)], ["ui-demo"]);
+    const sentinels = PrCacheHealth.readConsumerSentinels(directory);
+    assert.deepEqual([...sentinels.started], ["ui-demo"]);
+    assert.deepEqual([...sentinels.completed], ["ui-demo"]);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -262,6 +281,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
     workflow.match(/name: Mark browser cache consumer started/g)?.length,
     3,
   );
+  assert.match(workflow, /full-e2e-shard-\$\{\{ matrix\.shard \}\}\.completed/);
   assert.doesNotMatch(workflow, /cache-health:[\s\S]*docker buildx (?:build|bake)/);
   assert.doesNotMatch(workflow, /ARC keeps the verified (?:native|WASM|web) graph local/);
   assert.equal(

@@ -69,6 +69,32 @@ variable "GHA_CACHE_RESTORE_SCOPE_SUFFIX" {
   default = ""
 }
 
+// Producer lineages carry explicit restore identities. Hosted setup fills
+// these only after proving the corresponding immutable scope set complete.
+variable "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
+variable "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX" {
+  default = GHA_CACHE_RESTORE_SCOPE_SUFFIX
+}
+
 restore_cache_scope_suffix = GHA_CACHE_RESTORE_SCOPE_SUFFIX != "" ? GHA_CACHE_RESTORE_SCOPE_SUFFIX : GHA_CACHE_SCOPE_SUFFIX
 
 // Immutable feature writes use this to enable Main fallback.

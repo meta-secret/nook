@@ -322,8 +322,7 @@ class DockerizedRustContract {
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(8);
-          expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).not.toContain("nook-web-e2e-v1");
           expect(calls).toContain("nook-web-deps-v1");
           expect(calls).toContain("nook-web-app-deps-v1");
           expect(calls).toContain("nook-web-research-deps-v1");
@@ -404,6 +403,10 @@ class DockerizedRustContract {
     );
     const webBake = this.read("nook-app/nook-web/docker/web.docker-bake.hcl");
     expect(webBake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(2);
+    const webToolchainBake = this.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    expect(webToolchainBake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(3);
+    expect(workflow).not.toContain('GHA_CACHE_WRITE_ENABLED: "1"');
+    expect(workflow).toContain("BROWSER_TEST_OUTCOME: ${{ steps.browser-test.outcome }}");
   }
 
   portableGitMetadata(): void {

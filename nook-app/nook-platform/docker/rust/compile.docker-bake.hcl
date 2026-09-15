@@ -48,7 +48,7 @@ compile_solve_args = {
   NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
 }
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
+compile_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // Export the rooted immutable exact-head graph once. sccache owns cross-head
   // compiler objects, so serializing a second sibling dependency graph is
   // redundant. The exporter timeout applies to each registry operation; the

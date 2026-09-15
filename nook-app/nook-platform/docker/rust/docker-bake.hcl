@@ -51,17 +51,17 @@ variable "NOOK_RUST_DEPS_INPUT_CANDIDATE" {
 pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""
 
 rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_BASE_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX}:buildcache",
 ] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v2:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v2:buildcache",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX}:buildcache",
 ]
 
-rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_base_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -81,7 +81,7 @@ rust_ecosystem_dylint_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXAC
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_ecosystem_dylint_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_ecosystem_dylint_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -99,7 +99,7 @@ rust_ecosystem_fuzz_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_ecosystem_fuzz_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -122,7 +122,7 @@ rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACH
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v5${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_ecosystem_policy_tools_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_ecosystem_policy_tools_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -144,7 +144,7 @@ rust_ecosystem_deterministic_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CAC
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4:buildcache,ignore-error=true",
 ]
 
-rust_ecosystem_deterministic_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_ecosystem_deterministic_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -161,7 +161,7 @@ rust_ecosystem_kani_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v2${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_ecosystem_kani_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_ecosystem_kani_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -184,11 +184,11 @@ rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == 
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_deps_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
-rust_native_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
+rust_native_deps_input_cache_to = GHA_CACHE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v3:candidate-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}-${NOOK_RUST_DEPS_INPUT_CANDIDATE},mode=max,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
@@ -208,18 +208,18 @@ rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true",
 ]
 
-rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_wasm_deps_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
-rust_wasm_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
+rust_wasm_deps_input_cache_to = GHA_CACHE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:candidate-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}-${NOOK_RUST_DEPS_INPUT_CANDIDATE},mode=max,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
@@ -230,23 +230,23 @@ rust_wasm_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK
 // the same solve can select that shorter parent and orphan crate COPY+RUN
 // layers. Cold fallback keeps source-free cooks only while Main source is absent.
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX}:buildcache",
 ] : GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4:buildcache",
 ] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4:buildcache,ignore-error=true",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v4${restore_cache_scope_suffix}:buildcache,ignore-error=true",
 ]
 
-rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_native_source_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 
@@ -255,23 +255,23 @@ rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // A present exact or Main source graph is imported alone. Cold fallback keeps
 // source-free WASM cooks only while Main source is absent.
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${restore_cache_scope_suffix}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX}:buildcache",
 ] : GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3:buildcache",
 ] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-deps-v6${restore_cache_scope_suffix}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${restore_cache_scope_suffix}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
 ]
 
-rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+rust_wasm_source_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
 ] : []
 

@@ -326,6 +326,15 @@ runs:
           exact_repository="nook/remote-buildcache"
         fi
         cache_probe_failure_class=none
+        registry_cache_disabled=""
+        disable_registry_cache() {
+          registry_cache_disabled=1
+          cache_probe_failure_class=transient_unavailable
+          echo "GHA_CACHE_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+          echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+          echo "NOOK_REGISTRY_CACHE_HOST=" >> "$GITHUB_ENV"
+        }
         cache_ref_status() {
           local ref="$1"
           local probe_output
@@ -370,6 +379,10 @@ runs:
           local ref="$registry_host/$exact_repository/$scope:buildcache"
           local available=""
           local probe_status=0
+          if [ -n "$registry_cache_disabled" ]; then
+            echo "$env_name=" >> "$GITHUB_ENV"
+            return 0
+          fi
           cache_ref_status "$ref" || probe_status=$?
           case "$probe_status" in
             0)
@@ -380,7 +393,7 @@ runs:
               echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
               ;;
             2)
-              cache_probe_failure_class=transient_unavailable
+              disable_registry_cache
               echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
               ;;
             *) return "$probe_status" ;;
@@ -394,6 +407,10 @@ runs:
           local ref="$registry_host/nook/buildcache/$scope:buildcache"
           local available=""
           local probe_status=0
+          if [ -n "$registry_cache_disabled" ]; then
+            echo "$env_name=" >> "$GITHUB_ENV"
+            return 0
+          fi
           cache_ref_status "$ref" || probe_status=$?
           case "$probe_status" in
             0)
@@ -404,7 +421,7 @@ runs:
               echo "Main cache absent; source-free dependency fallback enabled: $scope"
               ;;
             2)
-              cache_probe_failure_class=transient_unavailable
+              disable_registry_cache
               echo "::warning title=Optional cache probe unavailable::NOOK_CACHE_PROBE_WARNING {\"cache\":\"$scope\",\"failure_class\":\"transient_unavailable\",\"action\":\"continue_cold\"}"
               ;;
             *) return "$probe_status" ;;
@@ -413,16 +430,24 @@ runs:
         }
 
         restore_scope_suffix="$scope_suffix"
+        restore_anchors=()
+        restore_ancestor_sha=""
         if [ -n "$scope_suffix" ] \
           && [ "$cache_selection" != "compile" ] \
           && [ "$cache_selection" != "connection-only" ] \
           && [ "$cache_selection" != "wasm-proof" ]; then
           case "$cache_selection" in
-            general|native) restore_anchor=nook-rust-base-v2 ;;
-            wasm) restore_anchor=nook-rust-wasm-source-v3 ;;
+            # An ancestor is eligible only through a scope that this producer
+            # publishes on every non-handoff execution.  Shorter/shared roots
+            # can exist while the source graph needed by this job is absent.
+            general|native) restore_anchors=(nook-rust-native-source-v4) ;;
+            wasm) restore_anchors=(nook-rust-wasm-source-v3 nook-rust-base-v2) ;;
             preflight) restore_anchor=nook-preflight-v1 ;;
-            web-e2e|web-research-image) restore_anchor=nook-web-e2e-v1 ;;
-            web-research-deps) restore_anchor=nook-web-research-deps-v1 ;;
+            # The regular web publisher always exports these three dependency
+            # lineages.  web-e2e is conditional and therefore cannot anchor a
+            # normal verification restore.
+            web-e2e|web-research-image) restore_anchors=(nook-web-deps-v1 nook-web-app-deps-v1 nook-web-research-deps-v1) ;;
+            web-research-deps) restore_anchors=(nook-web-research-deps-v1) ;;
             ecosystem-dylint) restore_anchor=nook-rust-ecosystem-dylint-v4 ;;
             ecosystem-fuzz) restore_anchor=nook-rust-ecosystem-fuzz-v4 ;;
             ecosystem-policy-tools) restore_anchor=nook-rust-ecosystem-policy-tools-v5 ;;
@@ -430,8 +455,20 @@ runs:
             ecosystem-kani|ecosystem-smoke) restore_anchor=nook-rust-ecosystem-kani-v2 ;;
             *) restore_anchor="" ;;
           esac
+          if [ "${#restore_anchors[@]}" -eq 0 ] && [ -n "${restore_anchor:-}" ]; then
+            restore_anchors=("$restore_anchor")
+          fi
+          restore_anchor_set_available() {
+            local candidate_suffix="$1"
+            local anchor
+            local status=0
+            for anchor in "${restore_anchors[@]}"; do
+              cache_ref_status "$registry_host/$exact_repository/$anchor$candidate_suffix:buildcache" || status=$?
+              [ "$status" -eq 0 ] || return "$status"
+            done
+          }
           restore_status=0
-          cache_ref_status "$registry_host/$exact_repository/$restore_anchor$scope_suffix:buildcache" || restore_status=$?
+          restore_anchor_set_available "$scope_suffix" || restore_status=$?
           if [ "$restore_status" -eq 1 ]; then
             ancestor_probe_limit=8
             ancestor_probe_dir="$(mktemp -d)"
@@ -439,7 +476,7 @@ runs:
             for ancestor_sha in "${restore_ancestors[@]}"; do
               (
                 ancestor_status=0
-                cache_ref_status "$registry_host/$exact_repository/$restore_anchor-git-$ancestor_sha:buildcache" || ancestor_status=$?
+                restore_anchor_set_available "-git-$ancestor_sha" || ancestor_status=$?
                 printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
               ) &
             done
@@ -456,22 +493,48 @@ runs:
               case "$ancestor_status" in
                 0)
                   restore_scope_suffix="-git-$ancestor_sha"
-                  echo "Nearest immutable cache candidate available: $restore_anchor at $ancestor_sha"
+                  restore_ancestor_sha="$ancestor_sha"
+                  echo "Nearest complete immutable cache candidate available: ${restore_anchors[*]} at $ancestor_sha"
                   break
                   ;;
                 1) ;;
-                2) cache_probe_failure_class=transient_unavailable ;;
+                2) disable_registry_cache ;;
                 *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
               esac
             done
             rm -rf "$ancestor_probe_dir"
           elif [ "$restore_status" -eq 2 ]; then
-            cache_probe_failure_class=transient_unavailable
-            echo "Immutable cache discovery unavailable; continuing with trusted Main/cold fallback"
+            disable_registry_cache
+            echo "Immutable cache discovery unavailable; disabling registry cache for this job"
           elif [ "$restore_status" -ne 0 ]; then
             exit "$restore_status"
           fi
           echo "GHA_CACHE_RESTORE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+          case "$cache_selection" in
+            native)
+              echo "GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              ;;
+            wasm)
+              echo "GHA_CACHE_RESTORE_RUST_WASM_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              echo "GHA_CACHE_RESTORE_RUST_BASE_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              ;;
+            web-e2e|web-research-image)
+              echo "GHA_CACHE_RESTORE_WEB_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              echo "GHA_CACHE_RESTORE_WEB_APP_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              echo "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              ;;
+            web-research-deps)
+              echo "GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX=$restore_scope_suffix" >> "$GITHUB_ENV"
+              ;;
+          esac
+          case "$cache_selection:$restore_ancestor_sha" in
+            native:?*|wasm:?*)
+              current_compiler_input="$(git rev-parse HEAD:nook-app/nook-platform)"
+              restore_compiler_input="$(git rev-parse "$restore_ancestor_sha:nook-app/nook-platform")"
+              echo "NOOK_COMPILER_INPUT_FINGERPRINT=$current_compiler_input" >> "$GITHUB_ENV"
+              echo "NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT=$restore_compiler_input" >> "$GITHUB_ENV"
+              ;;
+          esac
         fi
 
         case "$cache_selection" in
@@ -510,6 +573,7 @@ runs:
             2)
               echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
               compile_probe_failure_class=transient_unavailable
+              disable_registry_cache
               echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
               ;;
             *) exit "$compile_probe_status" ;;
@@ -538,6 +602,10 @@ runs:
               if [ "$ancestor_status" -eq 3 ]; then
                 rm -rf "$ancestor_probe_dir"
                 exit 3
+              fi
+              if [ "$ancestor_status" -eq 2 ]; then
+                compile_probe_failure_class=transient_unavailable
+                disable_registry_cache
               fi
             done
             for ancestor_sha in "${compile_ancestors[@]}"; do
@@ -636,7 +704,9 @@ runs:
         esac
 
         cache_write_enabled=""
-        if [ -n "$remote_compile_cache_write" ]; then
+        if [ -n "$registry_cache_disabled" ]; then
+          cache_write_enabled=""
+        elif [ -n "$remote_compile_cache_write" ]; then
           cache_write_enabled=1
         elif [ "$isolated_cache_write" = "true" ]; then
           cache_write_enabled=1

@@ -52,6 +52,11 @@ export class CacheScopeTelemetry {
           this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
           this.environment.NOOK_COMPILE_CACHE_MODE === "publish",
       },
+      compiler_input: {
+        fingerprint: this.environment.NOOK_COMPILER_INPUT_FINGERPRINT || "",
+        restore_fingerprint:
+          this.environment.NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT || "",
+      },
       imports: {
         probes_complete:
           this.environment.GHA_CACHE_EXACT_PROBES_COMPLETE === "1",
@@ -146,7 +151,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, restore_scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
+ * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, restore_scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compiler_input: {fingerprint: string, restore_fingerprint: string}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
