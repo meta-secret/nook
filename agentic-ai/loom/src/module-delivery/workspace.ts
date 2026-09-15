@@ -110,6 +110,61 @@ export class ModuleWorktree {
     );
   }
 
+  private static repositoryIdentity(cwd: string): RepositoryIdentity {
+    const lines = ModuleWorktree.git({
+      cwd,
+      args: [
+        'rev-parse',
+        '--path-format=absolute',
+        '--show-toplevel',
+        '--git-common-dir',
+        '--git-dir',
+      ],
+    }).split('\n');
+    const [top, common, admin] = lines;
+    if (
+      lines.length !== 3 ||
+      top === undefined ||
+      common === undefined ||
+      admin === undefined ||
+      top.length === 0 ||
+      common.length === 0 ||
+      admin.length === 0
+    )
+      throw new Error('Git repository identity is malformed.');
+    return {
+      top,
+      common: realpathSync(common),
+      admin: realpathSync(admin),
+    };
+  }
+
+  private static worktreeState(cwd: string): WorktreeState {
+    const fields = ModuleRepositoryGit.runModuleDeliveryGit({
+      cwd,
+      args: ['status', '--porcelain=v2', '--branch', '--ignored', '-z'],
+    })
+      .stdout.toString('utf8')
+      .split('\0');
+    let headCommit = '';
+    let branchName = '';
+    let clean = true;
+    for (const field of fields) {
+      if (field.startsWith('# branch.oid ')) {
+        headCommit = field.slice('# branch.oid '.length);
+      } else if (field.startsWith('# branch.head ')) {
+        branchName = field.slice('# branch.head '.length);
+      } else if (field.length > 0 && !field.startsWith('# ')) {
+        clean = false;
+      }
+    }
+    return { headCommit, branchName, clean };
+  }
+
+  private static assertValidationClean(validation: WorktreeValidation): void {
+    if (!validation.clean) throw new Error('Module worktree must be clean.');
+  }
+
   private static assertRepositoryTopLevel(repositoryRoot: string): void {
     const top = resolve(
       ModuleWorktree.git({
@@ -290,7 +345,9 @@ export class ModuleWorktree {
     return { kind: WorktreeRegistrationLookupKind.Missing };
   }
 
-  private static validateHandle(workspace: ModuleWorktreeHandle): boolean {
+  private static validateHandle(
+    workspace: ModuleWorktreeHandle,
+  ): WorktreeValidation {
     ModuleWorktree.validateHandleShape(workspace);
     const sourceRepositoryRoot = CanonicalDirectory.resolve({
       path: workspace.sourceRepositoryRoot,
@@ -305,33 +362,29 @@ export class ModuleWorktree {
       ownedWorkspaceRoot !== workspace.ownedWorkspaceRoot
     )
       throw new Error('Module workspace roots must already be canonical.');
-    ModuleWorktree.assertRepositoryTopLevel(sourceRepositoryRoot);
+    const sourceIdentity =
+      ModuleWorktree.repositoryIdentity(sourceRepositoryRoot);
+    if (sourceIdentity.top !== sourceRepositoryRoot)
+      throw new Error('Source repository root is not the Git top level.');
     DirectorySeparation.matches({
       first: sourceRepositoryRoot,
       second: ownedWorkspaceRoot,
       labels: 'Source repository and owned workspace root',
     });
-    const commonDirectory = ModuleWorktree.absoluteGitDirectory({
-      cwd: sourceRepositoryRoot,
-      option: ModuleWorktreeGitDirectoryOption.Common,
-    });
+    const commonDirectory = sourceIdentity.common;
     DirectorySeparation.matches({
       first: commonDirectory,
       second: ownedWorkspaceRoot,
       labels: 'Git common directory and owned workspace root',
     });
     if (workspace.role === ModuleWorktreeRole.IntegrationParent) {
-      const adminDirectory = ModuleWorktree.absoluteGitDirectory({
-        cwd: sourceRepositoryRoot,
-        option: ModuleWorktreeGitDirectoryOption.Admin,
-      });
+      const adminDirectory = sourceIdentity.admin;
+      const sourceState = ModuleWorktree.worktreeState(sourceRepositoryRoot);
       if (
         adminDirectory !== workspace.worktreeAdminDirectory ||
         commonDirectory !== workspace.gitCommonDirectory ||
-        ModuleWorktree.git({
-          cwd: sourceRepositoryRoot,
-          args: ['symbolic-ref', '--quiet', 'HEAD'],
-        }) !== workspace.branchName
+        sourceState.branchName.length === 0 ||
+        `refs/heads/${sourceState.branchName}` !== workspace.branchName
       )
         throw new Error(
           'Module integration workspace identity does not match the parent checkout.',
@@ -340,7 +393,7 @@ export class ModuleWorktree {
         repositoryRoot: sourceRepositoryRoot,
         baselineCommit: workspace.baselineCommit,
       });
-      return true;
+      return { clean: sourceState.clean };
     }
     const exists = FilesystemPathPresence.exists(workspace.worktreePath);
     if (!exists) {
@@ -366,25 +419,15 @@ export class ModuleWorktree {
       throw new Error(
         'Module worktree is not a direct child of its owned root.',
       );
-    const top = resolve(
-      ModuleWorktree.git({
-        cwd: canonicalWorktreePath,
-        args: ['rev-parse', '--path-format=absolute', '--show-toplevel'],
-      }),
+    const childIdentity = ModuleWorktree.repositoryIdentity(
+      canonicalWorktreePath,
     );
-    const childCommonDirectory = ModuleWorktree.absoluteGitDirectory({
-      cwd: canonicalWorktreePath,
-      option: ModuleWorktreeGitDirectoryOption.Common,
-    });
-    const childAdminDirectory = ModuleWorktree.absoluteGitDirectory({
-      cwd: canonicalWorktreePath,
-      option: ModuleWorktreeGitDirectoryOption.Admin,
-    });
+    const top = childIdentity.top;
+    const childCommonDirectory = childIdentity.common;
+    const childAdminDirectory = childIdentity.admin;
+    const childState = ModuleWorktree.worktreeState(canonicalWorktreePath);
     const registration = ModuleWorktree.registrationForPath(workspace);
-    const childHead = ModuleWorktree.git({
-      cwd: canonicalWorktreePath,
-      args: ['rev-parse', '--verify', 'HEAD^{commit}'],
-    });
+    const childHead = childState.headCommit;
     if (
       top !== canonicalWorktreePath ||
       childCommonDirectory !== commonDirectory ||
@@ -403,12 +446,7 @@ export class ModuleWorktree {
       throw new Error(
         'Module workspace identity does not match its prepared child worktree.',
       );
-    if (
-      ModuleWorktree.git({
-        cwd: canonicalWorktreePath,
-        args: ['symbolic-ref', '--quiet', 'HEAD'],
-      }) !== workspace.branchName
-    )
+    if (`refs/heads/${childState.branchName}` !== workspace.branchName)
       throw new Error('Module child worktree branch identity has drifted.');
     if (
       ModuleWorktree.git({
@@ -421,7 +459,7 @@ export class ModuleWorktree {
       repositoryRoot: sourceRepositoryRoot,
       baselineCommit: workspace.baselineCommit,
     });
-    return true;
+    return { clean: childState.clean };
   }
 
   static prepareModuleWorktree(
@@ -561,15 +599,8 @@ export class ModuleWorktree {
         attempt: request.attempt,
         baselineCommit: request.baselineCommit,
       });
-      ModuleWorktree.validateHandle(handle);
-      if (
-        ModuleWorktree.git({
-          cwd: canonicalWorktreePath,
-          args: ['rev-parse', '--verify', 'HEAD^{commit}'],
-        }) !== request.baselineCommit
-      )
-        throw new Error('Prepared module worktree has the wrong baseline.');
-      ModuleWorktree.assertClean(canonicalWorktreePath);
+      const validation = ModuleWorktree.validateHandle(handle);
+      ModuleWorktree.assertValidationClean(validation);
       return handle;
     } catch (error) {
       if (registered)
@@ -630,14 +661,14 @@ export class ModuleWorktree {
     )
       throw new Error('Locked module worktrees cannot be cleaned up.');
     if (exists) {
-      ModuleWorktree.validateHandle(workspace);
+      const validation = ModuleWorktree.validateHandle(workspace);
       if (
         FilesystemPathPresence.exists(
           join(workspace.worktreeAdminDirectory, 'locked'),
         )
       )
         throw new Error('Locked module worktrees cannot be cleaned up.');
-      ModuleWorktree.assertModuleWorktreeClean(workspace);
+      ModuleWorktree.assertValidationClean(validation);
       const childHead = ModuleWorktree.git({
         cwd: workspace.worktreePath,
         args: ['rev-parse', '--verify', 'HEAD^{commit}'],
@@ -698,6 +729,16 @@ export class ModuleWorktree {
     ModuleWorktree.validateHandle(workspace);
   }
 
+  static assertPreparedModuleWorktreeClean(
+    workspace: ModuleWorktreeHandle,
+  ): void {
+    if (workspace.role !== ModuleWorktreeRole.Child)
+      throw new Error('Provider handoffs require an isolated child worktree.');
+    ModuleWorktree.assertValidationClean(
+      ModuleWorktree.validateHandle(workspace),
+    );
+  }
+
   static assertIntegrationWorkspaceIdentity(
     workspace: ModuleWorktreeHandle,
   ): void {
@@ -706,8 +747,25 @@ export class ModuleWorktree {
     ModuleWorktree.validateHandle(workspace);
   }
 
+  static assertIntegrationWorkspaceClean(
+    workspace: ModuleWorktreeHandle,
+  ): void {
+    if (workspace.role !== ModuleWorktreeRole.IntegrationParent)
+      throw new Error('Module integration requires its parent workspace.');
+    ModuleWorktree.assertValidationClean(
+      ModuleWorktree.validateHandle(workspace),
+    );
+  }
+
   static assertModuleWorktreeClean(workspace: ModuleWorktreeHandle): void {
-    ModuleWorktree.validateHandle(workspace);
+    ModuleWorktree.assertValidationClean(
+      ModuleWorktree.validateHandle(workspace),
+    );
+  }
+
+  static assertValidatedModuleWorktreeClean(
+    workspace: ModuleWorktreeHandle,
+  ): void {
     if (
       ModuleRepositoryGit.runModuleDeliveryGit({
         cwd: workspace.worktreePath,
@@ -760,6 +818,22 @@ type RegisteredWorktree = {
 type AbsoluteGitDirectoryRequest = {
   readonly cwd: string;
   readonly option: ModuleWorktreeGitDirectoryOption;
+};
+
+type RepositoryIdentity = {
+  readonly top: string;
+  readonly common: string;
+  readonly admin: string;
+};
+
+type WorktreeState = {
+  readonly headCommit: string;
+  readonly branchName: string;
+  readonly clean: boolean;
+};
+
+type WorktreeValidation = {
+  readonly clean: boolean;
 };
 
 type BaselineCommitRequest = {

@@ -180,8 +180,7 @@ export class ModuleCommitHandoff {
       throw new Error('Commit handoff baseline does not match its workspace.');
     }
     ModuleWriteClaim.validateModuleWriteClaims(request.allowedWriteClaims);
-    ModuleWorktree.assertPreparedModuleWorktreeIdentity(request.workspace);
-    ModuleWorktree.assertModuleWorktreeClean(request.workspace);
+    ModuleWorktree.assertPreparedModuleWorktreeClean(request.workspace);
     ModuleCommitHandoff.assertBaselineClaimsSafe(request);
 
     const headInvocation: ModuleGitInvocation = {

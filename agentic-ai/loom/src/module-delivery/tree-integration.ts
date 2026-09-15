@@ -201,7 +201,7 @@ export class ModuleWaveTree {
         cwd: workspacePath,
         args: ['reset', '--hard', originalHead],
       });
-    ModuleWorktree.assertModuleWorktreeClean(workspace);
+    ModuleWorktree.assertValidatedModuleWorktreeClean(workspace);
   }
 
   static apply(request: ApplyModuleWaveTreeRequest): string {
@@ -214,9 +214,8 @@ export class ModuleWaveTree {
       !EXACT_GIT_COMMIT.test(request.appliedHead)
     )
       throw new Error('Tree integration rollback requires exact Git commits.');
-    ModuleWorktree.assertIntegrationWorkspaceIdentity(request.workspace);
+    ModuleWorktree.assertIntegrationWorkspaceClean(request.workspace);
     ModuleWaveTree.assertNoActiveGitOperation(request.workspace.worktreePath);
-    ModuleWorktree.assertModuleWorktreeClean(request.workspace);
     const actualHead = ModuleWaveTree.git({
       cwd: request.workspace.worktreePath,
       args: ['rev-parse', '--verify', 'HEAD^{commit}'],
@@ -238,15 +237,14 @@ export class ModuleWaveTree {
       throw new Error(
         'Integration parent rollback did not restore its frontier.',
       );
-    ModuleWorktree.assertModuleWorktreeClean(request.workspace);
+    ModuleWorktree.assertValidatedModuleWorktreeClean(request.workspace);
   }
 
   private execute(): string {
     const request = this.request;
     if (!EXACT_GIT_COMMIT.test(request.currentHead))
       throw new Error('Tree integration requires an exact current head.');
-    ModuleWorktree.assertIntegrationWorkspaceIdentity(request.workspace);
-    ModuleWorktree.assertModuleWorktreeClean(request.workspace);
+    ModuleWorktree.assertIntegrationWorkspaceClean(request.workspace);
     ModuleWaveTree.assertNoActiveGitOperation(request.workspace.worktreePath);
     const actualHead = ModuleWaveTree.git({
       cwd: request.workspace.worktreePath,
@@ -304,7 +302,7 @@ export class ModuleWaveTree {
           cwd: request.workspace.worktreePath,
           args: ['cherry-pick', '--no-edit', handoff.commit],
         });
-        ModuleWorktree.assertModuleWorktreeClean(request.workspace);
+        ModuleWorktree.assertValidatedModuleWorktreeClean(request.workspace);
         head = ModuleWaveTree.git({
           cwd: request.workspace.worktreePath,
           args: ['rev-parse', '--verify', 'HEAD^{commit}'],

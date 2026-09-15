@@ -844,8 +844,7 @@ export class ModuleIntegrationCoordinator {
     if (!allAccepted) {
       throw new Error('Final module join requires every accepted task result.');
     }
-    ModuleWorktree.assertIntegrationWorkspaceIdentity(request.state.workspace);
-    ModuleWorktree.assertModuleWorktreeClean(request.state.workspace);
+    ModuleWorktree.assertIntegrationWorkspaceClean(request.state.workspace);
     const parentHead = ModuleRepositoryGit.gitText(
       ModuleRepositoryGit.runModuleDeliveryGit({
         cwd: request.state.workspace.worktreePath,

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   chmodSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -40,6 +41,8 @@ import type {
 
 export class ModuleDeliveryWorktreeTestSupportScenario {
   private constructor(private readonly request: GitFixture) {}
+
+  private static fixtureTemplate: GitFixture | undefined;
 
   static evidenceSubmission(
     input: EvidenceFixtureInput,
@@ -130,7 +133,31 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
   }
 
   static createGitFixture(): GitFixture {
+    const template =
+      ModuleDeliveryWorktreeTestSupportScenario.getFixtureTemplate();
     const createdRoot = mkdtempSync(join(tmpdir(), 'nook-module-worktree-'));
+    const root = realpathSync(createdRoot);
+    const sourceRoot = join(root, 'source');
+    const workspaceRoot = join(root, 'workspaces');
+    cpSync(template.sourceRoot, sourceRoot, { recursive: true });
+    mkdirSync(workspaceRoot);
+    return {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: template.baselineCommit,
+      originMainSha: template.originMainSha,
+      pinnedLocalDevSha: template.pinnedLocalDevSha,
+      sourceCommit: template.sourceCommit,
+    };
+  }
+
+  private static getFixtureTemplate(): GitFixture {
+    const existing = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (existing) return existing;
+    const createdRoot = mkdtempSync(
+      join(tmpdir(), 'nook-module-worktree-template-'),
+    );
     const root = realpathSync(createdRoot);
     const sourceRoot = join(root, 'source');
     const workspaceRoot = join(root, 'workspaces');
@@ -176,7 +203,7 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'source']);
     const sourceCommit = git(['rev-parse', 'HEAD']);
-    return {
+    const template: GitFixture = {
       root,
       sourceRoot,
       workspaceRoot,
@@ -185,6 +212,18 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       pinnedLocalDevSha,
       sourceCommit,
     };
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = template;
+    process.once('exit', () =>
+      ModuleDeliveryWorktreeTestSupportScenario.disposeFixtureTemplate(),
+    );
+    return template;
+  }
+
+  private static disposeFixtureTemplate(): void {
+    const template = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (!template) return;
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = undefined;
+    rmSync(template.root, { recursive: true, force: true });
   }
 
   static disposeGitFixture(fixture: GitFixture): void {
