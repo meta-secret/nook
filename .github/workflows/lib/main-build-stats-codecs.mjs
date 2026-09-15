@@ -3,9 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** @typedef {Record<string, unknown>} JsonRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheSummary} SccacheSummary */
 /** @typedef {{component: string, reference: string, message: string}} CacheCollectionFailure */
 /** @typedef {{attempts: number, completed: number, bytes: number, duration_ms: number, incomplete_failures: number}} CacheExportSummary */
-/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile', persistent: boolean, reason: string}, sccache: {report_count: number, compile_requests: number, requests_executed: number, cache_hits: number, cache_misses: number, cache_errors: number, cache_write_errors: number, cache_writes: number, hit_rate_percent?: number}, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export?: CacheExportSummary, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[], failures: CacheCollectionFailure[]}}} AdmittedCacheTelemetry */
+/** @typedef {{job: string, cache_backend: {kind: 'remote' | 'direct_compile', persistent: boolean, reason: string}, sccache: SccacheSummary, buildkit: {build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number, cache_export?: CacheExportSummary, measurement: 'buildx_target_record_steps'}, collection: {complete: boolean, warnings: string[], failures: CacheCollectionFailure[]}}} AdmittedCacheTelemetry */
 
 export class MainBuildStatsCodec {
   /** @this {void} @param {string} moduleUrl @param {string | undefined} argument @returns {boolean} */
@@ -142,6 +143,12 @@ export class MainBuildStatsCodec {
           sccache.report_count,
           "sccache report count",
         ),
+        baked_runtime_mode: sccache.baked_runtime_mode,
+        runtime_mode: sccache.runtime_mode,
+        runtime_mode_source: sccache.runtime_mode_source,
+        client_side: sccache.client_side,
+        counter_reliability: sccache.counter_reliability,
+        publication_status: sccache.publication_status,
         compile_requests: this.requireInteger(
           sccache.compile_requests,
           "sccache compile requests",
@@ -170,6 +177,16 @@ export class MainBuildStatsCodec {
           sccache.cache_writes,
           "sccache cache writes",
         ),
+        compile_failures: this.requireInteger(
+          sccache.compile_failures,
+          "sccache compile failures",
+        ),
+        measurement: "sum_of_zero_based_run_snapshots",
+        fallback: {
+          state: sccache.fallback.state,
+          reason: sccache.fallback.reason,
+        },
+        snapshots: sccache.snapshots,
         ...(Number.isFinite(sccache.hit_rate_percent)
           ? { hit_rate_percent: Number(sccache.hit_rate_percent) }
           : {}),

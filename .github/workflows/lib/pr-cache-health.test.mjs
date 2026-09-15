@@ -91,6 +91,29 @@ void test("passes warm no-export Docker jobs while sccache remains writable", ()
   );
 });
 
+void test("does not require removed registry pre-probes when BuildKit telemetry is present", () => {
+  const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [
+      telemetry("rust", {
+        cache_scope: {
+          ...telemetry("rust").cache_scope,
+          imports: {
+            probes_complete: false,
+            failure_class: "none",
+            availability: [],
+          },
+        },
+      }),
+    ],
+  });
+
+  assert.equal(model.gate.verdict, "pass");
+  assert.deepEqual(model.gate.reasons, []);
+});
+
 void test("fails missing telemetry, failed jobs, broken collection, and read-only exports", () => {
   const broken = telemetry("rust", {
     collection: {

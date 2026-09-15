@@ -88,13 +88,6 @@ export class PrCacheHealth {
       CacheTelemetry.validateTelemetryRecord(record);
       if (!record.collection.complete)
         reasons.push(`${job.id}:telemetry_incomplete`);
-      if (
-        job.buildExpected &&
-        record.cache_backend.persistent &&
-        record.cache_scope.imports?.probes_complete === false
-      ) {
-        reasons.push(`${job.id}:cache_import_probes_incomplete`);
-      }
       if (record.sccache.cache_errors > 0)
         reasons.push(`${job.id}:sccache_errors:${record.sccache.cache_errors}`);
       if (record.sccache.cache_write_errors > 0)

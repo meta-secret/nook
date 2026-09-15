@@ -59,6 +59,9 @@ export class LegacyMainBuildRecord {
 
     if (normalized.cache_telemetry) {
       this.normalizeCacheCollection(normalized.cache_telemetry);
+      if (normalized.schema_version < 3) {
+        this.normalizeSccacheSummaries(normalized.cache_telemetry);
+      }
     }
 
     if (normalized.schema_version < 2 || !normalized.cache_telemetry) {
@@ -149,6 +152,45 @@ export class LegacyMainBuildRecord {
           incomplete_failures: 0,
         },
       );
+    }
+  }
+
+  /** @param {MainBuildCacheTelemetry} telemetry */
+  normalizeSccacheSummaries(telemetry) {
+    const { jobs: telemetryJobs = [] } = telemetry;
+    for (const job of telemetryJobs) {
+      const sccache = job.sccache;
+      const reportCount =
+        Number.isInteger(sccache?.report_count) && sccache.report_count >= 0
+          ? sccache.report_count
+          : 0;
+      const available = reportCount > 0;
+      job.sccache = {
+        ...{
+          report_count: reportCount,
+          baked_runtime_mode: available ? "READ_WRITE" : "UNAVAILABLE",
+          runtime_mode: available ? "READ_WRITE" : "UNAVAILABLE",
+          runtime_mode_source: available ? "environment" : "unavailable",
+          client_side: false,
+          counter_reliability: available ? "authoritative" : "unavailable",
+          publication_status: available
+            ? "counters_observed"
+            : "unavailable",
+          compile_requests: 0,
+          requests_executed: 0,
+          cache_hits: 0,
+          cache_misses: 0,
+          cache_errors: 0,
+          cache_write_errors: 0,
+          cache_writes: 0,
+          compile_failures: 0,
+          measurement: "sum_of_zero_based_run_snapshots",
+          fallback: { state: "active", reason: "none" },
+          snapshots: [],
+        },
+        ...sccache,
+        report_count: reportCount,
+      };
     }
   }
 
