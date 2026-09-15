@@ -54,14 +54,14 @@ fn directory_has_files(path: &Path) -> bool {
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let issue_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/issues.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/issues.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let ownership_skill = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
+        .read(".cortex/gizmo-prime/dynamic-skills/agent-feature-ownership.md");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_coding_workflow = coding_workflow
         .split_whitespace()
@@ -69,7 +69,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         .join(" ");
 
     assert!(
-        agent_map.contains("gizmo/dynamic-skills/agent-feature-ownership.md")
+        agent_map.contains("gizmo-prime/dynamic-skills/agent-feature-ownership.md")
             && normalized_agent_map.contains("Another active agent's work is read-only"),
         "root routing must preserve the universal ownership boundary and link its authority"
     );
@@ -84,7 +84,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         "Preserve dependency order",
         "Grant one commit turn at a time",
         "Team Agent lifecycle service, scheduler, or Git-state machinery",
-        "persistent PR Steward service, scheduler, or notification journal",
+        "persistent Delivery Pipeline or PR Lifecycle Agent service, scheduler, or notification journal",
     ] {
         assert!(
             normalized_coding_workflow.contains(required),
@@ -147,10 +147,10 @@ fn pr_workbench_suite_loads_sequential_contract_tests() {
 fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = RepositoryFixture::repository_root().read(".gitignore");
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let self_improvement = RepositoryFixture::repository_root()
         .read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
     let agent_tasks = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
@@ -193,10 +193,8 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
     assert!(self_improvement.contains("A session file is optional"));
     assert!(self_improvement.contains("No Cortex update is a valid outcome"));
     assert!(
-        agent_tasks
-            .matches("- task loom:cortex-session-clean")
-            .count()
-            == 1
+        agent_tasks.contains("loom:cortex-session-clean:")
+            && agent_tasks.contains("task loom:default FAMILY=cortexSessionClean")
             && readiness_guard
                 .contains("PR readiness requires removing temporary Cortex session memory")
             && !RepositoryFixture::repository_root()
