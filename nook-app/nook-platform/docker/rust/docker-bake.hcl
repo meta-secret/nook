@@ -37,6 +37,19 @@ variable "NOOK_RUST_DEPS_INPUT_WRITE_ENABLED" {
   default = ""
 }
 
+variable "GHA_CACHE_RESTORE_RUST_ECOSYSTEM_SMOKE_SCOPE_SUFFIX" {
+  default = ""
+}
+
+rust_ecosystem_smoke_cache_from = GHA_CACHE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-smoke-v1${GHA_CACHE_RESTORE_RUST_ECOSYSTEM_SMOKE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-smoke-v1:buildcache,ignore-error=true",
+] : []
+
+rust_ecosystem_smoke_cache_to = GHA_CACHE_ENABLED != "" && GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-smoke-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,compression=zstd,force-compression=true,timeout=${cache_export_timeout}${pr_cache_export_error_policy}",
+] : []
+
 // Unique quarantine tag written by one local formatter invocation. Pull
 // requests never import this tag. A GitHub-hosted promoter must download every
 // blob twice before atomically assigning the fingerprint tag.
@@ -346,7 +359,7 @@ target "rust-fuzz-smoke" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  cache-from = rust_ecosystem_fuzz_cache_from
+  cache-from = concat(rust_ecosystem_fuzz_cache_from, rust_ecosystem_smoke_cache_from)
   cache-to   = rust_ecosystem_fuzz_cache_to
   output     = ["type=cacheonly"]
 }
@@ -395,7 +408,7 @@ target "rust-ecosystem-deterministic" {
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-ecosystem-deterministic"
   platforms  = ["linux/amd64"]
-  cache-from = rust_ecosystem_deterministic_cache_from
+  cache-from = concat(rust_ecosystem_deterministic_cache_from, rust_ecosystem_smoke_cache_from)
   cache-to   = rust_ecosystem_deterministic_cache_to
   output     = ["type=cacheonly"]
 }
@@ -414,7 +427,25 @@ target "rust-kani" {
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-kani"
   platforms  = ["linux/amd64"]
-  cache-from = rust_ecosystem_kani_cache_from
+  cache-from = concat(rust_ecosystem_kani_cache_from, rust_ecosystem_smoke_cache_from)
   cache-to   = rust_ecosystem_kani_cache_to
+  output     = ["type=cacheonly"]
+}
+
+// One rooted mode=max export owns the deterministic/fuzz/Kani producer. The
+// named contexts make all three independently-built validation graphs part of
+// one immutable cache publication.
+target "rust-ecosystem-smoke-publish" {
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/ecosystem-smoke-cache.Dockerfile"
+  target     = "rust-ecosystem-smoke-cache"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    deterministic = "target:rust-ecosystem-deterministic"
+    fuzz          = "target:rust-fuzz-smoke"
+    kani          = "target:rust-kani"
+  }
+  cache-from = rust_ecosystem_smoke_cache_from
+  cache-to   = rust_ecosystem_smoke_cache_to
   output     = ["type=cacheonly"]
 }

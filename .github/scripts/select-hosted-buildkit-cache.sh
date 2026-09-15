@@ -328,9 +328,7 @@ if [ -n "$scope_suffix" ] \
     ecosystem-deterministic) restore_lineages=("GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX|nook-rust-ecosystem-deterministic-v2") ;;
     ecosystem-kani) restore_lineages=("GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX|nook-rust-ecosystem-kani-v2") ;;
     ecosystem-smoke) restore_lineages=(
-      "GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX|nook-rust-ecosystem-fuzz-v4"
-      "GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX|nook-rust-ecosystem-deterministic-v2"
-      "GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX|nook-rust-ecosystem-kani-v2"
+      "GHA_CACHE_RESTORE_RUST_ECOSYSTEM_SMOKE_SCOPE_SUFFIX|nook-rust-ecosystem-smoke-v1"
     ) ;;
   esac
 
@@ -344,8 +342,8 @@ if [ -n "$scope_suffix" ] \
     restore_candidate_shas+=("$ancestor_sha")
   done
   probe_index=0
-  probe_request_timeout_seconds=4
-  probe_lineage_timeout_seconds=20
+  probe_request_timeout_seconds=12
+  probe_lineage_timeout_seconds=45
   for lineage_spec in "${restore_lineages[@]}"; do
     IFS='|' read -r restore_env restore_anchor <<< "$lineage_spec"
     probe_file="$restore_probe_dir/$probe_index"
@@ -552,16 +550,16 @@ fi
 if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
   publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$GHA_CACHE_RESTORE_RUST_DYLINT_SCOPE_SUFFIX"
 fi
-if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
+if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ]; then
   publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$GHA_CACHE_RESTORE_RUST_FUZZ_SCOPE_SUFFIX"
 fi
 if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
   publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$GHA_CACHE_RESTORE_RUST_POLICY_TOOLS_SCOPE_SUFFIX"
 fi
-if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
+if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ]; then
   publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$GHA_CACHE_RESTORE_RUST_DETERMINISTIC_SCOPE_SUFFIX"
 fi
-if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
+if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ]; then
   publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$GHA_CACHE_RESTORE_RUST_KANI_SCOPE_SUFFIX"
 fi
 if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then

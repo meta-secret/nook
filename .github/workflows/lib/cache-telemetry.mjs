@@ -769,9 +769,12 @@ export class CacheTelemetry {
       let stdout = "";
       let stderr = "";
       let timedOut = false;
+      /** @type {NodeJS.Timeout | undefined} */
+      let killTimer;
       const timeout = setTimeout(() => {
         timedOut = true;
         child.kill("SIGTERM");
+        killTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
       }, timeoutMs);
       child.stdout.on("data", (chunk) => {
         stdout += chunk;
@@ -781,16 +784,12 @@ export class CacheTelemetry {
       });
       child.on("error", (error) => {
         clearTimeout(timeout);
+        if (killTimer) clearTimeout(killTimer);
         reject(error);
       });
       child.on("close", (status) => {
         clearTimeout(timeout);
-        if (timedOut) {
-          reject(
-            new Error(`buildx history logs timed out after ${timeoutMs}ms`),
-          );
-          return;
-        }
+        if (killTimer) clearTimeout(killTimer);
         const parsedStdout = CacheTelemetry.parseRawJsonProgress(stdout);
         const parsedStderr = CacheTelemetry.parseRawJsonProgress(stderr);
         const events = [...parsedStdout.objects, ...parsedStderr.objects];
@@ -798,6 +797,19 @@ export class CacheTelemetry {
           ...parsedStdout.diagnostics,
           ...parsedStderr.diagnostics,
         ];
+        if (timedOut) {
+          // Buildx can stream a complete set of useful vertex/export events and
+          // then stall while closing the history stream. Preserve those events
+          // instead of replacing all cache metrics with an unavailable record.
+          if (events.length > 0) {
+            resolve(events);
+            return;
+          }
+          reject(
+            new Error(`buildx history logs timed out after ${timeoutMs}ms`),
+          );
+          return;
+        }
         if (events.length > 0 || (status === 0 && diagnostics.length === 0)) {
           resolve(events);
         } else {

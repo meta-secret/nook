@@ -338,13 +338,23 @@ tasks:
         fi
         wasm_bake="$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl"
         rust_bake="$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl"
+        platform_tasks="$repo_root/nook-app/nook-platform/docker/Taskfile.yml"
+        web_tasks="$repo_root/nook-app/nook-web/docker/Taskfile.yml"
+        grep -Fq 'rust-ecosystem-smoke-publish' "$rust_bake"
+        grep -Fq 'mode=max,compression=zstd' "$rust_bake"
+        test "$(sed -n '/^  docker:ci:cache:publish:wasm:/,/^  [[:alnum:]_:.-]*:$/p' "$platform_tasks" | grep -Fc 'buildx bake')" -eq 1
+        if sed -n '/^  docker:ci:cache:publish:wasm:/,/^  [[:alnum:]_:.-]*:$/p' "$platform_tasks" | grep -Fq 'publish:rust-base'; then
+          echo "WASM producer has more than one rooted export" >&2
+          exit 1
+        fi
+        test "$(sed -n '/^  docker:ci:cache:publish:web:/,/^  [[:alnum:]_:.-]*:$/p' "$web_tasks" | grep -Fc 'buildx bake')" -eq 1
         awk '
           /^target "builder-wasm"/ { target = 1; next }
           /^target "/ && target { exit found ? 0 : 1 }
           target && /cache-from = rust_wasm_source_cache_from/ { found = 1 }
           END { if (target) exit found ? 0 : 1 }
         ' "$wasm_bake"
-        test "$(grep -Fc '${pr_cache_export_error_policy}' "$rust_bake")" -eq 10
+        test "$(grep -Fc '${pr_cache_export_error_policy}' "$rust_bake")" -eq 11
         grep -Fq 'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""' "$rust_bake"
         grep -Fq 'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"' "$repo_root/nook-app/docker-bake.hcl"
         test "$(grep -Fc 'timeout=${cache_export_timeout}' "$repo_root/nook-app/nook-web/docker/toolchain.docker-bake.hcl")" -eq 3

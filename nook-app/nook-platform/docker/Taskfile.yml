@@ -215,7 +215,10 @@ tasks:
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
-      - task: registry-cache:publish:native
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          task registry-cache:publish:native
+        fi
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
@@ -229,7 +232,10 @@ tasks:
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
-      - task: registry-cache:publish:wasm
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          task registry-cache:publish:wasm
+        fi
 
   docker:ci:wasm:node-test:
     desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
@@ -309,7 +315,6 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         wasm-export
-      - task: docker:ci:cache:publish:rust-base
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
@@ -369,9 +374,9 @@ tasks:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.
     cmds:
       - |
-        task docker:ecosystem:deterministic & deterministic_pid=$!
-        task docker:ecosystem:fuzz & fuzz_pid=$!
-        task docker:ecosystem:kani & kani_pid=$!
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:deterministic & deterministic_pid=$!
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:fuzz & fuzz_pid=$!
+        GHA_CACHE_WRITE_ENABLED= task docker:ecosystem:kani & kani_pid=$!
         failed=0
         if wait "$deterministic_pid"; then
           echo "Deterministic tests: success"
@@ -392,6 +397,13 @@ tasks:
           failed=1
         fi
         test "$failed" -eq 0
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-smoke-publish.output=type=cacheonly" \
+            rust-ecosystem-smoke-publish
+        fi
 
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.

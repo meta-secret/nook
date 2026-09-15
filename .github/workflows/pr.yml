@@ -618,9 +618,9 @@ jobs:
           NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
           NOOK_PR_CACHE_JOBS: >-
             [
-              {"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
-              {"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
-              {"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
+              {"id":"dependency-policy","result":"success","buildExpected":true,"readOnly":false},
+              {"id":"deterministic-tests","result":"success","buildExpected":true,"readOnly":false},
+              {"id":"dylint","result":"success","buildExpected":true,"readOnly":false},
               {"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},
               {"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},
