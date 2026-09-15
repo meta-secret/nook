@@ -361,29 +361,57 @@ class LoginSaveInteraction {
   }
 
   async loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-    const message: Parameters<
-      typeof authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
-    >[0] = {
-      type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
-      payload: { origin: location.origin },
+    const recoveryStartedAt = Date.now()
+    for (;;) {
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
+      >[0] = {
+        type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
+        payload: { origin: location.origin },
+      }
+      const delivery =
+        await authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage(
+          message,
+        )
+      if (
+        delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+        delivery.response.ok &&
+        'state' in delivery.response &&
+        delivery.response.state === 'available' &&
+        'offer' in delivery.response
+      ) {
+        const { offer } = delivery.response
+        if (saveOfferState.dismissedOfferIds.has(offer.offerId)) {
+          return { kind: PendingSaveOfferLoadKind.Absent }
+        }
+        return { kind: PendingSaveOfferLoadKind.Loaded, offer }
+      }
+      if (
+        delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+        !delivery.response.ok ||
+        !('state' in delivery.response) ||
+        delivery.response.state !== 'unavailable' ||
+        !this.pageShowsSuccessfulAuthentication() ||
+        Date.now() - recoveryStartedAt >= OUTCOME_EVIDENCE_TIMEOUT_MS
+      ) {
+        return { kind: PendingSaveOfferLoadKind.Absent }
+      }
+      await this.waitForPendingSaveOffer()
     }
-    const delivery =
-      await authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage(
-        message,
-      )
-    if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok ||
-      !('state' in delivery.response) ||
-      delivery.response.state !== 'available' ||
-      !('offer' in delivery.response)
+  }
+
+  private pageShowsSuccessfulAuthentication(): boolean {
+    return Boolean(
+      document.querySelector(
+        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+      ),
     )
-      return { kind: PendingSaveOfferLoadKind.Absent }
-    const { response } = delivery
-    if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
-      return { kind: PendingSaveOfferLoadKind.Absent }
-    }
-    return { kind: PendingSaveOfferLoadKind.Loaded, offer: response.offer }
+  }
+
+  private waitForPendingSaveOffer(): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, OUTCOME_EVIDENCE_POLL_MS)
+    })
   }
 
   renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
