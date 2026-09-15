@@ -17,8 +17,6 @@ tasks:
         secrets_dir="$remote_dir/secrets"
         access_file="$secrets_dir/sccache-access-key"
         secret_file="$secrets_dir/sccache-secret-key"
-        remote_access_file="$secrets_dir/sccache-remote-access-key"
-        remote_secret_file="$secrets_dir/sccache-remote-secret-key"
         admin_access_file="$secrets_dir/sccache-admin-access-key"
         admin_secret_file="$secrets_dir/sccache-admin-secret-key"
         s3_config="$secrets_dir/seaweedfs-s3.json"
@@ -37,14 +35,6 @@ tasks:
           umask 077
           openssl rand -hex 40 > "$secret_file"
         fi
-        if test ! -s "$remote_access_file"; then
-          umask 077
-          openssl rand -hex 20 > "$remote_access_file"
-        fi
-        if test ! -s "$remote_secret_file"; then
-          umask 077
-          openssl rand -hex 40 > "$remote_secret_file"
-        fi
         if test ! -s "$admin_access_file"; then
           umask 077
           openssl rand -hex 20 > "$admin_access_file"
@@ -55,12 +45,9 @@ tasks:
         fi
         chmod 0600 \
           "$access_file" "$secret_file" \
-          "$remote_access_file" "$remote_secret_file" \
           "$admin_access_file" "$admin_secret_file"
         access_key="$(cat "$access_file")"
         secret_key="$(cat "$secret_file")"
-        remote_access_key="$(cat "$remote_access_file")"
-        remote_secret_key="$(cat "$remote_secret_file")"
         admin_access_key="$(cat "$admin_access_file")"
         admin_secret_key="$(cat "$admin_secret_file")"
         umask 077
@@ -79,19 +66,6 @@ tasks:
                 \"Write:$bucket\",
                 \"List:$bucket\",
                 \"Tagging:$bucket\"
-              ]
-            },
-            {
-              \"name\": \"nook-sccache-remote-reader\",
-              \"credentials\": [
-                {
-                  \"accessKey\": \"$remote_access_key\",
-                  \"secretKey\": \"$remote_secret_key\"
-                }
-              ],
-              \"actions\": [
-                \"Read:$bucket\",
-                \"List:$bucket\"
               ]
             },
             {
@@ -140,13 +114,6 @@ tasks:
         gh secret set NOOK_SCCACHE_SECRET_KEY \
           --body "$(cat "$home_cache/sccache-secret-key")"
         gh secret set NOOK_SCCACHE_BUCKET --body "$bucket"
-        gh secret set NOOK_SCCACHE_REMOTE_ACCESS_KEY \
-          --body "$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-            "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-remote-access-key'")"
-        gh secret set NOOK_SCCACHE_REMOTE_SECRET_KEY \
-          --body "$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-            "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-remote-secret-key'")"
-        gh secret set NOOK_SCCACHE_REMOTE_BUCKET --body "$bucket"
         echo "SeaweedFS sccache credentials synchronized to ~/.nook/cache"
         BASH
 
@@ -199,8 +166,6 @@ tasks:
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
         access_key="$(cat "$remote_dir/secrets/sccache-access-key")"
         secret_key="$(cat "$remote_dir/secrets/sccache-secret-key")"
-        remote_access_key="$(cat "$remote_dir/secrets/sccache-remote-access-key")"
-        remote_secret_key="$(cat "$remote_dir/secrets/sccache-remote-secret-key")"
         probe_file="$(mktemp)"
         trap 'rm -f "$probe_file"' EXIT
 
@@ -256,24 +221,5 @@ tasks:
           --endpoint-url "https://$host" \
           s3api delete-object --bucket "$bucket" --key "$probe_key" >/dev/null
 
-        docker run --rm --network host \
-          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
-          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
-          -e AWS_DEFAULT_REGION=auto \
-          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-          --endpoint-url "https://$host" \
-          s3api head-bucket --bucket "$bucket" >/dev/null
-        remote_probe_key="health/remote-build-identity-write-probe-$(openssl rand -hex 12)"
-        if docker run --rm --network host \
-          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
-          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
-          -e AWS_DEFAULT_REGION=auto \
-          -v "$probe_file:/tmp/empty:ro" \
-          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-          --endpoint-url "https://$host" \
-          s3api put-object --bucket "$bucket" --key "$remote_probe_key" --body /tmp/empty >/dev/null 2>&1; then
-          echo "Remote compiler identity must not write Main's bucket" >&2
-          exit 1
-        fi
-        echo "sccache.dev.nokey.sh Main read/write and Remote read-only S3 checks passed"
+        echo "sccache.dev.nokey.sh shared read/write S3 checks passed"
         REMOTE

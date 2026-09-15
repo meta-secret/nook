@@ -1,9 +1,17 @@
 # Cortex Context Router
 
+## Highest-priority rule
+
+- [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md): mandatory first read
+  for every agent and task. It governs trusted internal coordination and does
+  not weaken genuine product security boundaries.
+
 Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Entry contract
 
+- Confirm that the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) was
+  read before using this router.
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
 - Gizmo Prime is the first actor for each new user-originated repository task.
@@ -62,8 +70,8 @@ numeric agent or subagent concurrency cap.
 
 ### Specialist routing
 
-Current specialist routing includes SRE (`teams/sre/provisioning/` and
-`teams/sre/cloud-native/`), Development Core
+Current specialist routing includes SRE (`teams/sre/provisioning/`,
+`teams/sre/cloud-native/`, and `teams/sre/docker-cache-specialist/`), Development Core
 (`teams/dev-core/rust-core-developer/` and
 `teams/dev-core/rust-auth2-developer/`), and Delivery Pipeline
 (`teams/delivery-pipeline/gizmo/`, `teams/delivery-pipeline/dev-manager/`, and

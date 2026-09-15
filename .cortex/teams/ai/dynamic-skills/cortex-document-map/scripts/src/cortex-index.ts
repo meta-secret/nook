@@ -353,8 +353,8 @@ numeric agent or subagent concurrency cap.
 
 ### Specialist routing
 
-Current specialist routing includes SRE (\`teams/sre/provisioning/\` and
-\`teams/sre/cloud-native/\`), Development Core
+Current specialist routing includes SRE (\`teams/sre/provisioning/\`,
+\`teams/sre/cloud-native/\`, and \`teams/sre/docker-cache-specialist/\`), Development Core
 (\`teams/dev-core/rust-core-developer/\` and
 \`teams/dev-core/rust-auth2-developer/\`), and Delivery Pipeline
 (\`teams/delivery-pipeline/gizmo/\`, \`teams/delivery-pipeline/dev-manager/\`, and

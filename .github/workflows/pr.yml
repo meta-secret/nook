@@ -81,6 +81,8 @@ jobs:
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
+    outputs:
+      cache-build-expected: ${{ steps.trusted-native.outputs.found != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -223,6 +225,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
+      cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -596,6 +599,58 @@ jobs:
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
+
+  cache-health:
+    name: Docker cache health
+    if: always() && inputs.validation_requested
+    needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout cache-health evaluator
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Download Docker cache telemetry
+        id: telemetry-download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/nook-pr-cache-telemetry
+          merge-multiple: false
+
+      - name: Evaluate Docker cache health
+        env:
+          NOOK_PR_CACHE_TELEMETRY_DIR: ${{ runner.temp }}/nook-pr-cache-telemetry
+          NOOK_PR_CACHE_HEALTH_JSON: ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+          NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+          NOOK_PR_CACHE_JOBS: >-
+            [
+              {"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
+              {"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
+              {"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},
+              {"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},
+              {"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},
+              {"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},
+              {"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}
+            ]
+        run: node .github/workflows/lib/pr-cache-health.mjs
+
+      - name: Upload Docker cache diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-cache-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+            ${{ runner.temp }}/nook-pr-cache-telemetry
+          retention-days: 30
+          if-no-files-found: warn
+          overwrite: true
 
   ui-demo:
     name: Headless UI demo

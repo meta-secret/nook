@@ -20,12 +20,6 @@ if (!githubEnvironmentPath) {
   process.exit(1);
 }
 
-const hostedDelivery =
-  process.env.GITHUB_ACTIONS === "true" || process.env.NOOK_ENV === "ci";
-const missingCredentialReason = hostedDelivery
-  ? "hosted_secret_free_by_design"
-  : "credentials_unavailable";
-
 fs.appendFileSync(
   githubEnvironmentPath,
   [
@@ -33,11 +27,10 @@ fs.appendFileSync(
     `NOOK_SCCACHE_BACKEND_REASON=${
       credentialsPresent
         ? "persistent_credential_available"
-        : missingCredentialReason
+        : "credentials_unavailable"
     }`,
-    // Hosted jobs without SeaweedFS credentials (forks, release, arbitrary-ref)
-    // cold-compile. Local `task sccache:ensure` fails closed without them; mark
-    // those CI paths as an explicit cold-compile exception.
+    // Secret availability is the whole boundary. A job without the pair
+    // cold-compiles and never receives remote-cache access.
     ...(credentialsPresent ? [] : ["SCCACHE_OPTIONAL=1"]),
     "",
   ].join("\n"),

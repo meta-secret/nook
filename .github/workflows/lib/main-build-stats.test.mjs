@@ -191,6 +191,7 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
         cache_hits: 72,
         cache_misses: 18,
         cache_errors: 0,
+        cache_write_errors: 0,
         cache_writes: 18,
         hit_rate_percent: 80,
       },
@@ -326,6 +327,7 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
         cache_hits: 0,
         cache_misses: 0,
         cache_errors: 0,
+        cache_write_errors: 0,
         cache_writes: 0,
       },
       buildkit: {

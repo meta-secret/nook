@@ -1,5 +1,18 @@
 # Nook Agent Routing Contract
 
+## Highest-priority circuit breaker
+
+Read the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) before any
+other Cortex document. Follow it for the entire task.
+
+It prohibits custom security and adversarial-evidence machinery for trusted
+internal agent coordination, handoffs, Git operations, integration evidence,
+and validation results. Treat a violation as a P1 finding and stop the
+prohibited work immediately.
+
+Genuine Nook product security boundaries remain governed by their owning
+authorities.
+
 This file is the repository entry point. It selects one owning context and
 states only boundaries that apply everywhere. Detailed delivery and delegation
 rules belong to Gizmo Prime's linked authorities.
@@ -27,7 +40,8 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`.
   - It requests Fast mode with `service_tier: fast`.
   - Each leaf receives a separate issued child worktree.
 - **Specialist paths**
-  - SRE uses `teams/sre/provisioning/` and `teams/sre/cloud-native/`.
+  - SRE uses `teams/sre/provisioning/`, `teams/sre/cloud-native/`, and
+    `teams/sre/docker-cache-specialist/`.
   - Development Core uses `teams/dev-core/rust-core-developer/` and
     `teams/dev-core/rust-auth2-developer/`.
   - Delivery Pipeline uses `teams/delivery-pipeline/gizmo/`,
@@ -125,8 +139,10 @@ required at their actual boundaries.
 
 ## Mandatory context selection
 
-1. Read the [root context router](knowledge-graph.md).
-2. Route every new user-originated repository task through
+1. Confirm that the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md) has
+   been read and accepted.
+2. Read the [root context router](knowledge-graph.md).
+3. Route every new user-originated repository task through
    [Gizmo Prime](gizmo-prime/AGENTS.md) first.
    - Follow-ups remain with the existing Gizmo owner.
    - Gizmo Prime interprets scope and routes bounded work through the owning
@@ -134,12 +150,12 @@ required at their actual boundaries.
    - Gizmo routes manually requested dev operations through Delivery Pipeline
      to the Dev Manager.
    - The manager retains publication, slow-validation, and promotion authority.
-3. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
+4. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
    - Assigned Team Agents load their packet's team context directly.
    - Workers do not recursively become Gizmo or restart user-task routing.
    - Trusted CI publishers retain their explicit execution contracts.
-4. Open only the documents and headings needed for the assigned work.
-5. Stop loading Cortex when the task can be executed safely.
+5. Open only the documents and headings needed for the assigned work.
+6. Stop loading Cortex when the task can be executed safely.
 
 Do not preload all graphs, a whole team corpus, or foreign-team material for
 background context. A selected team authority may link a task-relevant

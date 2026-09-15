@@ -4,7 +4,7 @@ set -euo pipefail
 task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
-    build:compile) echo 30 ;;
+    build:compile) echo 5 ;;
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci) echo 20 ;;
@@ -54,7 +54,10 @@ run_task() {
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
-    build:compile) run_with_timeout "$timeout_minutes" task build:compile ;;
+    # Keep one minute inside the five-minute job budget for BuildKit cleanup and
+    # the always-run raw-log/JSON telemetry collector. A hard job timeout cannot
+    # upload the evidence needed to diagnose the next regression.
+    build:compile) timeout --kill-after=10s 240s task build:compile ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
