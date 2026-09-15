@@ -172,8 +172,8 @@ fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -
 }
 
 #[test]
-fn compile_rust_source_stages_invalidate_stub_artifacts_after_every_crate_copy(
-) -> anyhow::Result<()> {
+fn compile_rust_source_stages_invalidate_stub_artifacts_after_every_crate_copy()
+-> anyhow::Result<()> {
     let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,

@@ -10,6 +10,8 @@ inputs:
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
+      web-research-deps probes only the research Bun dependency lineage;
+      web-research-image probes the exact research browser graph;
       connection-only performs no registry cache probes.
     required: false
     default: general
@@ -169,7 +171,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -417,11 +419,24 @@ runs:
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
           publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
         fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \
+          || [ "$cache_selection" = "web-research-image" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          if [ -n "$scope_suffix" ] \
+            && [ "$cache_selection" != "web-research-image" ]; then
+            publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
+            publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
+            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
+          fi
+        fi
+        if [ "$cache_selection" = "web-research-deps" ]; then
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
         fi
         case "$cache_selection" in
-          general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
+          general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac

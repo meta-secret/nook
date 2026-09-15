@@ -115,10 +115,11 @@ fn assert_docker_setup_contract(root: &Path) {
         "PR Docker consumers must select only the cache graph they execute"
     );
     assert!(
-        setup.contains("web-research-deps|web-research-image)")
-            && setup.contains("arc_exact_scope_required=1")
-            && setup.contains("|| [ -n \"$arc_exact_scope_required\" ]"),
-        "ARC research producers and consumers must preserve PR exact-head cache scopes without forcing Main's stable research cache through the remote-task path"
+        setup.contains("web-e2e|web-research-deps|web-research-image|connection-only")
+            && setup
+                .contains("publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE")
+            && setup.contains("[ \"$cache_selection\" = \"web-research-deps\" ]"),
+        "the closed hosted-cache profile set must admit and probe both research consumers"
     );
     assert!(
         container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
