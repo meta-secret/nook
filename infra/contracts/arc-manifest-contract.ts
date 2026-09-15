@@ -6,7 +6,6 @@ import {
 } from "./operational-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
-import { DockerCacheSelectionContract } from "./docker-cache-selection-contract";
 
 import { resolve } from "node:path";
 import {
@@ -614,7 +613,7 @@ class ArcManifestContract {
       "EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}",
       "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
       "WASM Node tests=$WASM_NODE_RESULT",
-      "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+      "needs:\n      [\n        validation-request,\n        rust,\n        wasm,\n        verify,\n        wasm-node-test,\n        ui-demo,\n        extension-e2e,\n      ]",
       "Extension e2e finished with $EXTENSION_E2E_RESULT",
       "task _extension:test:e2e:file",
     ]);
@@ -686,9 +685,7 @@ class ArcManifestContract {
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
       "Publish from the already-selected node-local rootless BuildKit shard",
-      "repair solve never imports the ref it is replacing",
-      "nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}",
-      "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
+      'cache_scope="nook-rust-wasm-deps-v6"',
       "compression=zstd,force-compression=true",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
       "verify-registry-cache-blobs.ts",
@@ -774,8 +771,6 @@ class ArcManifestContract {
     if (admittedContract53.isErr()) return err(admittedContract53.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();
     if (worker.isErr()) return err(worker.error);
-    const cache = await new DockerCacheSelectionContract(root).assert();
-    if (cache.isErr()) return err(cache.error);
     const frontend = await new DockerfileFrontendContract(root).assert();
     if (frontend.isErr()) return err(frontend.error);
     return new ArcWorkflowPlacementContract(root).assert();

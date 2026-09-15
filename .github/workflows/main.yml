@@ -77,7 +77,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: preflight
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -138,7 +137,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: native
           monitor-buildkit-storage: "true"
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
@@ -219,7 +217,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: wasm
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -306,7 +303,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: wasm-proof
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -346,7 +342,6 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -552,7 +547,6 @@ jobs:
               prNumber: pullRequest.number,
             })
             core.info(`Published Main UI demos to ${issue.identifier}: ${issue.url}`)
-
 
   deploy:
     name: Deploy development

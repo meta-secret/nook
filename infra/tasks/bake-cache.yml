@@ -297,12 +297,12 @@ tasks:
         nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
         rust_source_block="$(mktemp)"
         awk '
-          /^FROM builder-wasm-deps AS builder-wasm-source$/ { capture = 1 }
+          /^FROM builder-wasm-deps AS builder-wasm-source-base$/ { capture = 1 }
           /^FROM builder-wasm-source AS builder-wasm-clippy$/ { capture = 0 }
           capture { print }
         ' "$product_dockerfile" >"$rust_source_block"
-        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm' "$rust_source_block")" -eq 8
-        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm' "$rust_source_block")" -eq 8
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm' "$rust_source_block")" -eq 1
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm' "$rust_source_block")" -eq 1
         if grep -Fq -- '-p nook-wasm -p nook-companion-wasm' "$rust_source_block"; then
           echo "WASM source prewarm must not use a joint package feature graph" >&2
           exit 1
@@ -337,7 +337,7 @@ tasks:
           /COPY nook-app\/nook-platform\/ nook-app\/nook-platform\// && !product_copy {
             product_copy = NR
           }
-          /cargo dylint --all -- --all-targets/ { product_lint = NR }
+          /cargo dylint --all -- --locked --all-targets/ { product_lint = NR }
           END {
             exit !(lint_copy < self_test && self_test < product_copy && product_copy < product_lint)
           }

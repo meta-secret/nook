@@ -20,10 +20,18 @@ behavior for packets issued by SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
 - Enforce a five-minute remote-build latency SLO and workflow timeout.
 - Diagnose cache telemetry before changing cache topology.
+- Let BuildKit determine Docker layer validity and reuse from the actual
+  Dockerfile, build context, build arguments, and base image. Do not duplicate
+  that decision with custom dependency fingerprints, cache selectors,
+  allowlists, or mutation simulations.
 - Preserve one optional immutable exact-commit BuildKit identity for
-  `mode=max` same-head and nearest-first-parent full-graph acceleration. Dependency
-  and toolchain vertices stay rooted in that ordinary compile graph; do not
-  synchronously export a second sibling graph.
+  `mode=max` same-head full-graph acceleration. Dependency and toolchain
+  vertices stay rooted in that ordinary compile graph; do not synchronously
+  export a second sibling graph.
+- Let BuildKit own cache availability, Dockerfile/context/build-argument input
+  validation, and layer reuse. Do not precompute a parallel dependency
+  fingerprint, probe selectors to predict reuse, or simulate Docker's cache-key
+  decisions before the actual build.
 - Make sccache the primary cross-commit compiler cache. Secret availability is
   the complete trust boundary: jobs receiving the single
   `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` pair use `READ_WRITE`;
@@ -83,20 +91,17 @@ behavior for packets issued by SRE Team Gizmo.
 - Configure finite per-operation exporter and transport timeouts, but never
   describe an exporter `timeout` as a total export-duration bound. Acceptance
   is one export and completion of the whole GitHub job within five minutes.
-- Preserve ordinary new-commit reuse when no optional exact source cache
-  exists through sccache and stable source-free vertices in the rooted graph.
-- Validate cache publication with a changed-head replay.
+- Preserve ordinary new-commit compiler reuse through sccache and stable
+  source-free vertices in the rooted graph.
 - Maintain the canonical simulator and proof surfaces:
-  - `infra/sim/bake-cache/compile-warm.docker-bake.hcl`;
   - `infra/tasks/bake-cache.yml`;
   - `infra/contracts/dockerized-rust.test.ts`;
-  - `.github/workflows/remote.yml`; and
-  - `.github/workflows/remote-compile-contract.test.sh`.
+  - `.github/workflows/remote.yml`.
 - Author focused policy and regression tests for every cache defect.
-- Extend the Docker simulator and proof for policy-only cache changes and each
-  Rust, WASM, Loom, or web input-domain change. Mutating an unrelated domain
-  must leave the subject compiler domain cached, while a relevant-domain
-  mutation invalidates only the expected vertices.
+- Keep cache proofs bounded to genuine import/export wiring, structured cache
+  artifacts, registry integrity, and actual Dockerfile syntax or build
+  behavior. Do not simulate source mutations to predict BuildKit's own
+  invalidation result.
 - Extend the simulator and proof with the remote `sccache` fault matrix.
   - Prove bounded fallback after startup failure.
   - Prove DNS or object-read failure opens one shared per-`RUN` circuit.
@@ -106,10 +111,9 @@ behavior for packets issued by SRE Team Gizmo.
     without hiding telemetry.
   - Prove the healthy path starts once and serves every compiler invocation in
     the `RUN`.
-- Make the simulator and proof require `compile-wasm-dependencies` to be cached
-  on replay, a cold ordinary publish to write sccache objects, the next head to
-  report compiler hits, and no-BuildKit-export verification to perform zero
-  registry exports while retaining sccache access.
+- Require changed-head runtime evidence to report compiler hits, and keep
+  no-BuildKit-export verification at zero registry exports while retaining
+  sccache access.
 - Commit the complete bounded iteration.
 - Report the commit SHA, evidence, latency measurements, and blockers to SRE
   Team Gizmo.
@@ -141,6 +145,10 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic
   consumer.
+- Do not create or preserve custom dependency fingerprints, cache selectors,
+  allowlists, or source-mutation simulations that duplicate BuildKit layer
+  invalidation. Treat such machinery as a P1 finding and stop under the Cortex
+  circuit breaker.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
 - Do not retry remote `sccache` after its circuit opens in a Docker `RUN`.

@@ -7,14 +7,10 @@ import {
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
 
-void test("records ordinary compile publication boundaries", () => {
+void test("records the active compile scope without preselection state", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
-      GHA_CACHE_WRITE_ENABLED: "1",
-      NOOK_COMPILE_CACHE_MODE: "publish",
-      GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
-      GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
     }).record(),
     {
       scope: "",
@@ -26,20 +22,11 @@ void test("records ordinary compile publication boundaries", () => {
       },
       compile_source: {
         scope: `nook-build-compile-v4-git-${"b".repeat(40)}`,
-        restore_scope: `nook-build-compile-v4-git-${"c".repeat(40)}`,
-        available: true,
-        write_enabled: false,
-        export_enabled: false,
       },
       imports: {
         probes_complete: false,
         failure_class: "none",
-        availability: [
-          {
-            name: "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE",
-            available: true,
-          },
-        ],
+        availability: [],
       },
     },
   );
@@ -49,13 +36,12 @@ void test("records transient optional probe failures without marking probes inco
   const scope = new CacheScopeTelemetry({
     GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
     GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "transient_unavailable",
-    GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "",
   }).record();
 
   assert.equal(scope.imports.probes_complete, true);
   assert.equal(scope.imports.failure_class, "transient_unavailable");
   assert.equal(scope.compile_dependencies.available, false);
-  assert.equal(scope.compile_source.available, false);
+  assert.equal(Object.hasOwn(scope.compile_source, "available"), false);
 });
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {
@@ -362,7 +348,9 @@ void test("extracts zero-based sccache snapshots from a cancelled raw build log"
     'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"compile_failures":0}\ncancelled\n';
   const reports = CacheTelemetry.extractSccacheReportsFromText(raw);
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].cache_hits, 8);
+  const [report] = reports;
+  assert.ok(report);
+  assert.equal(report.cache_hits, 8);
 });
 
 void test("marks client-side zero-write publication counters pending verification", () => {
@@ -454,9 +442,15 @@ void test("rejects an unknown sccache fallback state", () => {
     runId: "1",
     runAttempt: "1",
   });
-  record.sccache.fallback.state = "unknown";
+  const malformed = {
+    ...record,
+    sccache: {
+      ...record.sccache,
+      fallback: { state: "unknown", reason: "fixture" },
+    },
+  };
   assert.throws(
-    () => CacheTelemetry.validateTelemetryRecord(record),
+    () => CacheTelemetry.validateTelemetryRecord(malformed),
     /telemetry sccache.fallback is invalid/,
   );
 });

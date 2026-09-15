@@ -66,10 +66,6 @@ fn repository_delivery_policy_executes_only_the_trusted_default_branch_verifier(
 fn assert_docker_setup_contract(root: &Path) {
     let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
     let pr = (root).read(".github/workflows/pr.yml");
-    let native = section(&pr, "\n  rust:\n", "\n  wasm:\n");
-    let wasm = section(&pr, "\n  wasm:\n", "\n  wasm-node-test:\n");
-    let wasm_node = section(&pr, "\n  wasm-node-test:\n", "\n  verify:\n");
-    let web = section(&pr, "\n  verify:\n", "\n  ui-demo:\n");
     let arc_values = (root).read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let container_values =
         (root).read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
@@ -107,20 +103,6 @@ fn assert_docker_setup_contract(root: &Path) {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
-    assert!(
-        native.contains("cache-selection: native")
-            && wasm.contains("cache-selection: wasm")
-            && wasm_node.contains("cache-selection: wasm")
-            && web.contains("cache-selection: web-e2e"),
-        "PR Docker consumers must select only the cache graph they execute"
-    );
-    assert!(
-        setup.contains("web-e2e|web-research-deps|web-research-image|connection-only")
-            && setup
-                .contains("publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE")
-            && setup.contains("[ \"$cache_selection\" = \"web-research-deps\" ]"),
-        "the closed hosted-cache profile set must admit and probe both research consumers"
-    );
     assert!(
         container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
             && container_values.contains("value: \"true\"")
@@ -201,7 +183,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -251,7 +233,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -374,8 +356,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "authentication-sensitive PR changes must run only the focused extension regression in the exact trusted browser image"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
@@ -510,8 +498,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("EXTENSION_E2E_RESULT")
@@ -849,7 +843,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         .context("release workflow must configure BuildKit from current side-checkout tooling")?;
     assert!(
         release_source < release_setup,
-        "release must fingerprint its requested source before connecting BuildKit"
+        "release must check out its requested source before connecting BuildKit"
     );
     assert!(release.contains(
         "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"

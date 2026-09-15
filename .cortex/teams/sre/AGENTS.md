@@ -76,3 +76,11 @@ For an assigned SRE unit, own:
 
 Use repository-owned contracts for manifests and workflow topology. Never
 weaken isolation, credential, or exact-head boundaries to make a pipeline pass.
+
+BuildKit owns Docker layer validity and reuse from the Dockerfile, build
+context, build arguments, and base image presented to the solve. Treat custom
+dependency fingerprints, cache selectors, or mutation simulations that
+duplicate BuildKit's invalidation decision as a P1 finding and stop the work.
+This prohibition does not remove cache import/export wiring, structured cache
+artifacts, actual build and syntax checks, or sccache telemetry, health,
+publication, and repeated changed-head zero-hit policy.

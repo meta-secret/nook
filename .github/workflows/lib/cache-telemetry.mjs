@@ -4,58 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
+import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
 
-export class CacheScopeTelemetry {
-  /** @param {NodeJS.ProcessEnv} environment */
-  constructor(environment) {
-    this.environment = environment;
-  }
-
-  record() {
-    const cacheAvailability = Object.entries(this.environment)
-      .filter(([name]) => /^GHA_CACHE_(?:EXACT|MAIN)_.+_AVAILABLE$/.test(name))
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([name, value]) => ({ name, available: value === "1" }));
-    return {
-      scope: "",
-      compile_dependencies: {
-        scope: "",
-        available: false,
-        write_enabled: false,
-        export_enabled: false,
-      },
-      compile_source: {
-        scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
-          ? `nook-build-compile-v4${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
-          : "",
-        restore_scope: this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX
-          ? `nook-build-compile-v4${this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX}`
-          : "",
-        available: Boolean(
-          this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE,
-        ),
-        write_enabled:
-          !this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE &&
-          this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
-          this.environment.NOOK_COMPILE_CACHE_MODE === "publish",
-        export_enabled:
-          !this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE &&
-          this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
-          this.environment.NOOK_COMPILE_CACHE_MODE === "publish",
-      },
-      imports: {
-        probes_complete:
-          this.environment.GHA_CACHE_EXACT_PROBES_COMPLETE === "1",
-        failure_class:
-          this.environment.GHA_CACHE_EXACT_PROBE_FAILURE_CLASS || "none",
-        availability: cacheAvailability,
-      },
-    };
-  }
-}
+export { CacheScopeTelemetry };
 
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
@@ -67,126 +22,22 @@ const HistoryLogCollectionKind = Object.freeze({
   Unavailable: "unavailable",
 });
 
-/** @typedef {Record<string, unknown>} JsonRecord */
-/**
- * @typedef {object} BuildHistoryRecord
- * @property {string} ref
- * @property {string} name
- * @property {string} status
- * @property {number} completed_steps
- * @property {number} total_steps
- * @property {number} cached_steps
- * @property {string} [started_at]
- * @property {string} [completed_at]
- * @property {number} [cache_hit_rate_percent]
- */
-/**
- * @typedef {object} SccacheReport
- * @property {string} stage
- * @property {'READ_WRITE'} baked_runtime_mode
- * @property {'READ_WRITE'} runtime_mode
- * @property {'environment' | 'runtime_secret'} runtime_mode_source
- * @property {boolean} client_side
- * @property {'authoritative' | 'backend_incomplete'} counter_reliability
- * @property {'pending_verification' | 'counters_observed'} publication_status
- * @property {number} compile_requests
- * @property {number} requests_executed
- * @property {number} cache_hits
- * @property {number} cache_misses
- * @property {number} cache_errors
- * @property {number} cache_write_errors
- * @property {number} cache_writes
- * @property {number} compile_failures
- */
-/**
- * @typedef {object} SccacheSummary
- * @property {number} report_count
- * @property {'READ_WRITE' | 'UNAVAILABLE'} baked_runtime_mode
- * @property {'READ_WRITE' | 'UNAVAILABLE'} runtime_mode
- * @property {'environment' | 'runtime_secret' | 'unavailable'} runtime_mode_source
- * @property {boolean} client_side
- * @property {'authoritative' | 'backend_incomplete' | 'unavailable'} counter_reliability
- * @property {'pending_verification' | 'counters_observed' | 'unavailable'} publication_status
- * @property {number} compile_requests
- * @property {number} requests_executed
- * @property {number} cache_hits
- * @property {number} cache_misses
- * @property {number} cache_errors
- * @property {number} cache_write_errors
- * @property {number} cache_writes
- * @property {number} compile_failures
- * @property {'sum_of_zero_based_run_snapshots'} measurement
- * @property {{state: 'active' | 'fallback', reason: string}} fallback
- * @property {readonly SccacheReport[]} snapshots
- * @property {number} [hit_rate_percent]
- */
-/**
- * @typedef {object} BuildkitSummary
- * @property {number} build_record_count
- * @property {number} completed_steps
- * @property {number} cached_steps
- * @property {number} [cache_hit_rate_percent]
- * @property {{attempts: number, completed: number, bytes: number, duration_ms: number, incomplete_failures: number}} cache_export
- * @property {'buildx_target_record_steps'} measurement
- */
-/**
- * @typedef {object} CacheBackend
- * @property {'remote' | 'direct_compile'} kind
- * @property {boolean} persistent
- * @property {string} reason
- */
-/**
- * @typedef {object} CacheTelemetryRecord
- * @property {1} schema_version
- * @property {{run_id: string, run_attempt: number, job: string}} github
- * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, restore_scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
- * @property {SccacheSummary} sccache
- * @property {BuildkitSummary} buildkit
- * @property {readonly BuildHistoryRecord[]} buildkit_records
- * @property {{complete: boolean, warnings: readonly string[], failures: readonly CollectionFailure[]}} collection
- */
-/**
- * @typedef {object} CollectionFailure
- * @property {'buildx_history' | 'buildx_logs' | 'buildkit_cache_export' | 'collector'} component
- * @property {string} reference
- * @property {string} message
- */
-/**
- * @typedef {object} RawJsonProgress
- * @property {readonly JsonRecord[]} objects
- * @property {readonly string[]} diagnostics
- */
-/**
- * @typedef {object} TelemetryIdentityExpectation
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- */
-/**
- * @typedef {object} CollectTelemetryRequest
- * @property {readonly string[]} baselineRefs
- * @property {readonly string[]} [baselineWarnings]
- * @property {string} [job]
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- * @property {NodeJS.ProcessEnv} [environment]
- */
-/**
- * @typedef {object} BuildHistoryBaseline
- * @property {readonly string[]} refs
- * @property {readonly string[]} warnings
- */
+/** @typedef {import("./cache-telemetry-contracts.mjs").JsonRecord} JsonRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryRecord} BuildHistoryRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheSummary} SccacheSummary */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildkitSummary} BuildkitSummary */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheBackend} CacheBackend */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CollectionFailure} CollectionFailure */
+/** @typedef {import("./cache-telemetry-contracts.mjs").RawJsonProgress} RawJsonProgress */
+/** @typedef {import("./cache-telemetry-contracts.mjs").TelemetryIdentityExpectation} TelemetryIdentityExpectation */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CollectTelemetryRequest} CollectTelemetryRequest */
+/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaseline */
 /**
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
-/**
- * @typedef {object} UnavailableTelemetryRequest
- * @property {string} warning
- * @property {string} [job]
- * @property {string | number} [runId]
- * @property {string | number} [runAttempt]
- * @property {NodeJS.ProcessEnv} [environment]
- */
+/** @typedef {import("./cache-telemetry-contracts.mjs").UnavailableTelemetryRequest} UnavailableTelemetryRequest */
 
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
@@ -361,20 +212,19 @@ export class CacheTelemetry {
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
    */
   static selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
-    const selected = [...records]
-      .sort((left, right) => {
-        const activity = CacheTelemetry.compareStrings(
-          String(right.completed_at || right.started_at || ""),
-          String(left.completed_at || left.started_at || ""),
-        );
-        if (activity !== 0) return activity;
-        const started = CacheTelemetry.compareStrings(
-          String(right.started_at || ""),
-          String(left.started_at || ""),
-        );
-        if (started !== 0) return started;
-        return CacheTelemetry.compareStrings(left.ref, right.ref);
-      });
+    const selected = [...records].sort((left, right) => {
+      const activity = CacheTelemetry.compareStrings(
+        String(right.completed_at || right.started_at || ""),
+        String(left.completed_at || left.started_at || ""),
+      );
+      if (activity !== 0) return activity;
+      const started = CacheTelemetry.compareStrings(
+        String(right.started_at || ""),
+        String(left.started_at || ""),
+      );
+      if (started !== 0) return started;
+      return CacheTelemetry.compareStrings(left.ref, right.ref);
+    });
     const warnings = [];
     const unfinishedCount = records.filter(
       (record) => !record.completed_at,
@@ -533,9 +383,13 @@ export class CacheTelemetry {
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
-      summary.publication_status = summary.client_side && summary.cache_errors === 0 && summary.cache_write_errors === 0 && summary.cache_writes === 0
-        ? "pending_verification"
-        : "counters_observed";
+      summary.publication_status =
+        summary.client_side &&
+        summary.cache_errors === 0 &&
+        summary.cache_write_errors === 0 &&
+        summary.cache_writes === 0
+          ? "pending_verification"
+          : "counters_observed";
     }
     summary.snapshots = terminalReports;
     return {
@@ -817,227 +671,7 @@ export class CacheTelemetry {
    * @returns {JsonRecord}
    */
   static validateTelemetryRecord(record, expected = {}) {
-    if (!CacheTelemetry.isJsonRecord(record))
-      throw new Error("telemetry record is required");
-    if (record.schema_version !== 1)
-      throw new Error("telemetry schema_version must be 1");
-    const github = record.github;
-    if (!CacheTelemetry.isJsonRecord(github)) {
-      throw new Error("telemetry github context is required");
-    }
-    if (typeof github.run_id !== "string") {
-      throw new Error("telemetry github.run_id must be a string");
-    }
-    if (
-      !Number.isInteger(github.run_attempt) ||
-      typeof github.run_attempt !== "number" ||
-      github.run_attempt < 1
-    ) {
-      throw new Error(
-        "telemetry github.run_attempt must be a positive integer",
-      );
-    }
-    if (typeof github.job !== "string" || !github.job) {
-      throw new Error("telemetry github.job must be a non-empty string");
-    }
-    if ("runId" in expected && github.run_id !== String(expected.runId)) {
-      throw new Error(
-        `telemetry run ${github.run_id} does not match expected run ${expected.runId}`,
-      );
-    }
-    if (
-      "runAttempt" in expected &&
-      github.run_attempt !== Number(expected.runAttempt)
-    ) {
-      throw new Error(
-        `telemetry attempt ${github.run_attempt} does not match expected attempt ${expected.runAttempt}`,
-      );
-    }
-    const cacheBackend = record.cache_backend;
-    if (
-      !CacheTelemetry.isJsonRecord(cacheBackend) ||
-      (cacheBackend.kind !== "remote" && cacheBackend.kind !== "direct_compile")
-    ) {
-      throw new Error("telemetry cache_backend.kind is invalid");
-    }
-    if (typeof cacheBackend.persistent !== "boolean") {
-      throw new Error("telemetry cache_backend.persistent must be boolean");
-    }
-    if (cacheBackend.persistent !== (cacheBackend.kind === "remote")) {
-      throw new Error("telemetry cache backend persistence is inconsistent");
-    }
-    if (typeof cacheBackend.reason !== "string" || !cacheBackend.reason) {
-      throw new Error("telemetry cache_backend.reason is required");
-    }
-    const sccache = record.sccache;
-    if (!CacheTelemetry.isJsonRecord(sccache)) {
-      throw new Error("telemetry sccache summary is required");
-    }
-    const availableAuthority =
-      typeof sccache.report_count === "number" && sccache.report_count > 0;
-    const allowedRuntimeModes = availableAuthority ? ["READ_WRITE"] : ["UNAVAILABLE"];
-    for (const field of ["baked_runtime_mode", "runtime_mode"]) {
-      const value = sccache[field];
-      if (
-        typeof value !== "string" ||
-        !allowedRuntimeModes.includes(value)
-      ) {
-        throw new Error(`telemetry sccache.${field} is invalid`);
-      }
-    }
-    const allowedRuntimeModeSources = availableAuthority
-      ? ["environment", "runtime_secret"]
-      : ["unavailable"];
-    if (
-      typeof sccache.runtime_mode_source !== "string" ||
-      !allowedRuntimeModeSources.includes(sccache.runtime_mode_source)
-    ) {
-      throw new Error("telemetry sccache.runtime_mode_source is invalid");
-    }
-    if (typeof sccache.client_side !== "boolean") {
-      throw new Error("telemetry sccache.client_side is invalid");
-    }
-    const allowedCounterReliability = availableAuthority
-      ? ["authoritative", "backend_incomplete"]
-      : ["unavailable"];
-    if (
-      typeof sccache.counter_reliability !== "string" ||
-      !allowedCounterReliability.includes(sccache.counter_reliability)
-    ) {
-      throw new Error("telemetry sccache.counter_reliability is invalid");
-    }
-    const allowedPublicationStatus = availableAuthority
-      ? ["pending_verification", "counters_observed"]
-      : ["unavailable"];
-    if (
-      typeof sccache.publication_status !== "string" ||
-      !allowedPublicationStatus.includes(sccache.publication_status)
-    ) {
-      throw new Error("telemetry sccache.publication_status is invalid");
-    }
-    for (const [field, value] of Object.entries({
-      report_count: sccache.report_count,
-      compile_requests: sccache.compile_requests,
-      requests_executed: sccache.requests_executed,
-      cache_hits: sccache.cache_hits,
-      cache_misses: sccache.cache_misses,
-      cache_errors: sccache.cache_errors,
-      cache_write_errors: sccache.cache_write_errors,
-      cache_writes: sccache.cache_writes,
-      compile_failures: sccache.compile_failures,
-    })) {
-      if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
-        throw new Error(
-          `telemetry sccache.${field} must be a non-negative integer`,
-        );
-      }
-    }
-    CacheTelemetry.validateOptionalRate(sccache, "hit_rate_percent", "sccache");
-    if (sccache.measurement !== "sum_of_zero_based_run_snapshots") {
-      throw new Error("telemetry sccache.measurement is invalid");
-    }
-    if (
-      !CacheTelemetry.isJsonRecord(sccache.fallback) ||
-      (sccache.fallback.state !== "active" &&
-        sccache.fallback.state !== "fallback") ||
-      typeof sccache.fallback.reason !== "string"
-    ) {
-      throw new Error("telemetry sccache.fallback is invalid");
-    }
-    if (!Array.isArray(sccache.snapshots)) {
-      throw new Error("telemetry sccache.snapshots must be an array");
-    }
-    const buildkit = record.buildkit;
-    if (!CacheTelemetry.isJsonRecord(buildkit)) {
-      throw new Error("telemetry buildkit summary is required");
-    }
-    for (const [field, value] of Object.entries({
-      build_record_count: buildkit.build_record_count,
-      completed_steps: buildkit.completed_steps,
-      cached_steps: buildkit.cached_steps,
-    })) {
-      if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
-        throw new Error(
-          `telemetry buildkit.${field} must be a non-negative integer`,
-        );
-      }
-    }
-    CacheTelemetry.validateOptionalRate(
-      buildkit,
-      "cache_hit_rate_percent",
-      "buildkit",
-    );
-    const cacheExport = buildkit.cache_export;
-    if ("cache_export" in buildkit) {
-      if (!CacheTelemetry.isJsonRecord(cacheExport)) {
-        throw new Error("telemetry buildkit.cache_export must be an object");
-      }
-      for (const [field, value] of Object.entries({
-        attempts: cacheExport.attempts,
-        completed: cacheExport.completed,
-        bytes: cacheExport.bytes,
-        duration_ms: cacheExport.duration_ms,
-        incomplete_failures: cacheExport.incomplete_failures,
-      })) {
-        if (
-          !Number.isInteger(value) ||
-          typeof value !== "number" ||
-          value < 0
-        ) {
-          throw new Error(
-            `telemetry buildkit.cache_export.${field} must be a non-negative integer`,
-          );
-        }
-      }
-    }
-    const collection = record.collection;
-    if (
-      !CacheTelemetry.isJsonRecord(collection) ||
-      typeof collection.complete !== "boolean"
-    ) {
-      throw new Error("telemetry collection status is required");
-    }
-    if (
-      !Array.isArray(collection.warnings) ||
-      !collection.warnings.every((warning) => typeof warning === "string")
-    ) {
-      throw new Error("telemetry collection.warnings must be an array");
-    }
-    if (
-      "failures" in collection &&
-      (!Array.isArray(collection.failures) ||
-        !collection.failures.every(
-          (failure) =>
-            CacheTelemetry.isJsonRecord(failure) &&
-            typeof failure.component === "string" &&
-            typeof failure.reference === "string" &&
-            typeof failure.message === "string",
-        ))
-    ) {
-      throw new Error("telemetry collection.failures must be an array");
-    }
-    return record;
-  }
-
-  /**
-   * @param {JsonRecord} summary
-   * @param {string} field
-   * @param {string} label
-   * @returns {void}
-   */
-  static validateOptionalRate(summary, field, label) {
-    if (!(field in summary)) return;
-    const rate = summary[field];
-    if (typeof rate !== "number" || !Number.isFinite(rate)) {
-      throw new Error(
-        `telemetry ${label} cache rate must be numeric when present`,
-      );
-    }
-    if (rate < 0 || rate > 100) {
-      throw new Error(
-        `telemetry ${label} cache rate must be 0..100 when measured`,
-      );
-    }
+    return new CacheTelemetryValidator().validate(record, expected);
   }
 
   /** @param {CollectTelemetryRequest} request @returns {Promise<CacheTelemetryRecord>} */
@@ -1140,7 +774,10 @@ export class CacheTelemetry {
           );
           if (!reportsFromRawLog) {
             reports.push(
-              ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
+              ...CacheTelemetry.extractSccacheReports(
+                result.events,
+                seenReports,
+              ),
             );
           }
           break;

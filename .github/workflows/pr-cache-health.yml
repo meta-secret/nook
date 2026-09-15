@@ -1,0 +1,56 @@
+name: PR cache health
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      jobs_json:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: Docker cache health
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 2
+    steps:
+      - name: Checkout cache-health evaluator
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download Docker cache telemetry
+        id: telemetry-download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/nook-pr-cache-telemetry
+          merge-multiple: false
+
+      - name: Evaluate Docker cache health
+        env:
+          NOOK_PR_CACHE_TELEMETRY_DIR: ${{ runner.temp }}/nook-pr-cache-telemetry
+          NOOK_PR_CACHE_HEALTH_JSON: ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+          NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+          NOOK_PR_CACHE_JOBS: ${{ inputs.jobs_json }}
+        run: node .github/workflows/lib/pr-cache-health.mjs
+
+      - name: Upload Docker cache diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-cache-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+            ${{ runner.temp }}/nook-pr-cache-telemetry
+          retention-days: 30
+          if-no-files-found: warn
+          overwrite: true

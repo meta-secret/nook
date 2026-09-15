@@ -5,46 +5,23 @@
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
 // nook-app/docker-bake.hcl and are merged via NOOK_BAKE_FILES.
 
-web_app_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" ? (
-  GHA_CACHE_FALLBACK_ENABLED != "" && GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE != "" ? [
-    "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-app-deps-v1:buildcache",
-  ] : []
-) : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+web_app_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-app-deps-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
-web_research_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" ? (
-  GHA_CACHE_FALLBACK_ENABLED != "" && GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE != "" ? [
-    "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-research-deps-v1:buildcache",
-  ] : []
-) : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+web_research_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-research-deps-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
-web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1:buildcache",
-  # Child refs are optional adjuncts here. The standalone child targets select exact-or-Main
-  # after probing; aggregate imports tolerate a first publication where one child is absent.
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-app-deps-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-research-deps-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-  # Child refs are independently published and may not exist during the first rollout.
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
 web_app_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [

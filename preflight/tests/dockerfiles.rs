@@ -74,54 +74,6 @@ impl DockerfileFixture {
     }
 }
 
-#[derive(Clone, Copy)]
-struct DockerfileSection<'a> {
-    name: &'static str,
-    source: &'a str,
-}
-
-impl<'a> DockerfileSection<'a> {
-    fn new(name: &'static str, source: &'a str) -> Self {
-        Self { name, source }
-    }
-
-    fn required_offset_after(
-        &self,
-        start: usize,
-        marker: &str,
-        description: &str,
-    ) -> anyhow::Result<usize> {
-        let tail = self
-            .source
-            .get(start..)
-            .ok_or_else(|| anyhow::anyhow!("invalid UTF-8 offset in {} stage", self.name))?;
-        let offset = tail
-            .find(marker)
-            .ok_or_else(|| anyhow::anyhow!("{description}"))?;
-        Ok(start + offset)
-    }
-
-    fn section(&self, start: usize, end: usize, description: &str) -> anyhow::Result<&'a str> {
-        self.source
-            .get(start..end)
-            .ok_or_else(|| anyhow::anyhow!("invalid UTF-8 range for {description}"))
-    }
-
-    fn last_copy_for_group(&self, prior_build: usize, crates: &[&str]) -> anyhow::Result<usize> {
-        let mut last_copy = None;
-        for crate_name in crates {
-            let marker = format!("COPY nook-app/nook-platform/{crate_name} {crate_name}");
-            let copy = self.required_offset_after(
-                prior_build,
-                &marker,
-                &format!("{} stage must copy {crate_name}", self.name),
-            )?;
-            last_copy = Some(last_copy.map_or(copy, |previous: usize| previous.max(copy)));
-        }
-        last_copy.ok_or_else(|| anyhow::anyhow!("{} stage has an empty build step", self.name))
-    }
-}
-
 #[test]
 fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyhow::Result<()> {
     let dockerfile = DockerfileFixture::compile()?;
@@ -136,8 +88,10 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
         "&& ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules",
         "compile-web must link shared dependencies",
     )?;
-    let source_copy =
-        dockerfile.required_offset("COPY . .", "compile-web must copy the repository source")?;
+    let source_copy = dockerfile.required_offset(
+        "COPY nook-app/nook-web nook-app/nook-web",
+        "compile-web must copy the web workspace source",
+    )?;
     let package_setup = dockerfile.section(
         directory_setup,
         dependency_symlinks,
@@ -151,7 +105,7 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
     );
     assert!(
         directory_setup < dependency_symlinks && dependency_symlinks < source_copy,
-        "compile-web must create package directories before linking dependencies and copying source"
+        "compile-web must create package directories before linking dependencies and copying the web workspace"
     );
     Ok(())
 }
@@ -196,11 +150,8 @@ fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> an
         "compile-web must retain the flattened companion WASM handoff"
     );
     assert!(
-        web_stage.contains(concat!(
-            "test -f ",
-            "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js"
-        )),
-        "compile-web must require nook_wasm.js at the web import destination"
+        web_stage.contains("&& rm -rf /tmp/nook-wasm-handoff"),
+        "compile-web must consume and remove the temporary WASM handoff after flattening it"
     );
     assert!(
         !web_stage.contains(
@@ -212,8 +163,7 @@ fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> an
 }
 
 #[test]
-fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -> anyhow::Result<()>
-{
+fn compile_loom_copies_imported_cortex_sources_before_compilation() -> anyhow::Result<()> {
     let dockerfile = DockerfileFixture::compile()?;
     let loom_stage = dockerfile.required_offset(
         "FROM web-base AS compile-loom",
@@ -236,124 +186,28 @@ fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -
     )?;
     let loom_section = dockerfile.section(loom_stage, compilation, "compile-loom")?;
 
-    for skill in [
-        "cortex-article-structure",
-        "cortex-consistency",
-        "cortex-document-map",
-    ] {
-        let source_copy = format!(
-            "COPY .cortex/teams/ai/dynamic-skills/{skill}/scripts/src \\\n  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/{skill}/scripts/src"
-        );
-        let source_copy_offset = dockerfile.required_offset_after(
-            loom_stage,
-            &source_copy,
-            &format!("compile-loom must copy {skill} source"),
-        )?;
-        assert!(
-            dependency_install < source_copy_offset && source_copy_offset < compilation,
-            "compile-loom must copy {skill} after dependency installation and before compilation"
-        );
-    }
+    let cortex_source = dockerfile.required_offset_after(
+        loom_stage,
+        "COPY .cortex /meta-secret/nook/.cortex",
+        "compile-loom must copy its imported Cortex sources",
+    )?;
     assert!(
-        dependency_install < loom_source && loom_source < compilation,
-        "compile-loom must install dependencies before source copies and compile afterward"
+        loom_source < dependency_install
+            && cortex_source < dependency_install
+            && dependency_install < compilation,
+        "compile-loom must copy imported sources, install dependencies, and then compile"
     );
     assert!(
-        loom_section.contains("ln -s agentic-ai/loom/node_modules /meta-secret/nook/node_modules"),
-        "compile-loom must expose Loom dependencies to imported Cortex sources"
+        loom_section.contains(concat!(
+            "ln -s /meta-secret/nook/agentic-ai/loom/node_modules \\\n",
+            "      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/",
+            "cortex-article-structure/scripts/node_modules"
+        )) && loom_section.contains(concat!(
+            "ln -s /meta-secret/nook/agentic-ai/loom/node_modules \\\n",
+            "      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/",
+            "cortex-document-map/scripts/node_modules"
+        )),
+        "compile-loom must expose Loom dependencies to each imported Cortex compiler"
     );
-    Ok(())
-}
-
-#[test]
-fn compile_rust_source_stages_invalidate_stub_artifacts_after_every_crate_copy()
--> anyhow::Result<()> {
-    let dockerfile = DockerfileFixture::compile()?;
-    let native_start = dockerfile.required_offset(
-        "FROM compile-native-dependencies AS compile-native-source",
-        "compile Dockerfile must retain the native source stage",
-    )?;
-    let wasm_start = dockerfile.required_offset(
-        "FROM compile-wasm-dependencies AS compile-wasm-source",
-        "compile Dockerfile must retain the WASM source stage",
-    )?;
-    let web_start = dockerfile.required_offset(
-        "FROM web-base AS compile-web",
-        "compile Dockerfile must retain the web stage",
-    )?;
-    let native_stage = DockerfileSection::new(
-        "native",
-        dockerfile.section(native_start, wasm_start, "native source stage")?,
-    );
-    let wasm_stage = DockerfileSection::new(
-        "WASM",
-        dockerfile.section(wasm_start, web_start, "WASM source stage")?,
-    );
-
-    for (stage_name, stage, crate_groups) in [
-        (
-            "native",
-            native_stage,
-            &[
-                &["nook-app-common"][..],
-                &["nook-authenticator-domain", "nook-auth2"],
-                &["nook-replication"],
-                &["nook-event-log"],
-                &["nook-companion-core"],
-                &["nook-core"],
-            ][..],
-        ),
-        (
-            "WASM",
-            wasm_stage,
-            &[
-                &["nook-app-common"][..],
-                &["nook-authenticator-domain", "nook-auth2"],
-                &["nook-replication"],
-                &["nook-event-log"],
-                &["nook-companion-core"],
-                &["nook-core"],
-                &["nook-companion-wasm"],
-                &["nook-wasm"],
-            ][..],
-        ),
-    ] {
-        let expected_copy_count = crate_groups
-            .iter()
-            .map(|crates| crates.len())
-            .sum::<usize>();
-        let actual_copy_count = stage
-            .source
-            .lines()
-            .filter(|line| line.starts_with("COPY nook-app/nook-platform/nook-"))
-            .count();
-        assert_eq!(
-            actual_copy_count, expected_copy_count,
-            "{stage_name} stage crate COPY inventory must stay covered by the freshness contract"
-        );
-
-        let mut prior_build = 0;
-        for crates in crate_groups {
-            let last_copy = stage.last_copy_for_group(prior_build, crates)?;
-            let build = stage.required_offset_after(
-                last_copy,
-                "cargo build --locked",
-                &format!("{stage_name} stage must build after its crate copies"),
-            )?;
-            let invalidation = stage.section(
-                last_copy,
-                build,
-                &format!("{stage_name} source invalidation"),
-            )?;
-
-            for crate_name in *crates {
-                assert!(
-                    invalidation.contains(&format!("{crate_name}/src/lib.rs")),
-                    "{stage_name} stage must touch {crate_name}/src/lib.rs after copying real sources and before building"
-                );
-            }
-            prior_build = build + "cargo build --locked".len();
-        }
-    }
     Ok(())
 }

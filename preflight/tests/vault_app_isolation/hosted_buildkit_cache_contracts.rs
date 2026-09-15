@@ -4,9 +4,6 @@ use anyhow::Context;
 #[path = "hosted_buildkit_cache_contracts/pr_producer_cache_contract.rs"]
 mod pr_producer_cache_contract;
 use pr_producer_cache_contract::PrProducerCacheContract;
-#[path = "hosted_buildkit_cache_contracts/rust_cache_lineage_contract.rs"]
-mod rust_cache_lineage_contract;
-
 #[test]
 fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
@@ -43,14 +40,14 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "nook-rust-ecosystem-policy-tools-v5",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
+        "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
         "type=registry,ref=",
-        "mode=max,compression=zstd,force-compression=true,timeout=10m",
+        "compression=zstd,force-compression=true,timeout=10m",
     ] {
         assert!(
             bake.contains(required),
@@ -256,7 +253,9 @@ fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
             "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
-        ) && !bake.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,ignore-error=true",),
+        ) && !bake.contains(
+            "nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true",
+        ),
         "Rust dependency cache exporters must not ignore upload failures"
     );
     assert!(
@@ -358,7 +357,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("Main UI demo verification section must have a valid boundary")?;
     assert!(
         preflight.contains("task preflight")
-            && preflight.contains("cache-selection: preflight")
+            && !preflight.contains("cache-selection:")
             && preflight_verify < preflight_publish_id
             && preflight_publish_id < preflight_publish
             && preflight.contains(
@@ -384,7 +383,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
                 .contains("cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}")
             && rust_publish_step.contains("continue-on-error: true")
             && rust_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && rust.contains("cache-selection: native")
+            && !rust.contains("cache-selection:")
             && rust.contains("monitor-buildkit-storage: \"true\"")
             && native_cache_publish.contains("needs: [rust]")
             && !native_cache_publish.contains("continue-on-error")
@@ -401,7 +400,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm.contains("needs: [rust, preflight]")
             && !wasm.contains("native-cache-publish")
             && !wasm.contains("preflight-cache-publish")
-            && wasm.contains("cache-selection: wasm")
+            && !wasm.contains("cache-selection:")
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
@@ -421,9 +420,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm_cache_publish.contains("actions/upload-artifact")
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
-            && wasm_cache_proof.contains("cache-selection: wasm-proof")
+            && !wasm_cache_proof.contains("cache-selection:")
             && web.contains("needs: [wasm]")
-            && web.contains("cache-selection: web-e2e")
+            && !web.contains("cache-selection:")
             && !web.contains("wasm-cache-publish")
             && web.contains("uses: actions/download-artifact@v8")
             && web.contains("name: main-wasm-${{ github.run_id }}")

@@ -2,38 +2,21 @@ name: Nook Docker setup
 description: Task, Buildx, and authenticated registry BuildKit cache setup.
 
 inputs:
-  cache-selection:
-    description: >-
-      Closed cache probe set: general probes every shared Bake lineage; native,
-      wasm, preflight, and web-e2e probe only the named consumer graph;
-      ecosystem-dylint, ecosystem-fuzz, ecosystem-policy-tools,
-      ecosystem-deterministic, and ecosystem-kani probe only their named lane;
-      ecosystem-smoke probes deterministic, fuzz, and Kani together;
-      wasm-proof computes its dependency fingerprint without probing;
-      compile probes its exact head and immutable first-parent candidates in
-      one bounded batch;
-      web-research-deps probes only the research Bun dependency lineage;
-      web-research-image probes the exact research browser graph;
-      connection-only performs no registry cache probes.
-    required: false
-    default: general
   cache-write:
     description: Allow this workflow source to update the shared hosted BuildKit cache refs.
     required: false
     default: "true"
   main-cache-only:
-    description: Restore only the trusted default-branch cache and disable cache writes.
+    description: Restore only trusted registry caches and disable cache writes.
     required: false
     default: "false"
   isolated-cache-write:
     description: >-
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
-      git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps ordinary large graphs in its node-local persistent shard. The
-      authorized remote build:compile publication handoff writes only its
-      exact-commit source ref; dependency inputs retain a separate fingerprinted
-      boundary. A read-only build:compile verification never exports a registry cache.
-      Other jobs never write Main's protected refs.
+      git commit SHA (-git-<sha>). ARC keeps ordinary large graphs in its node-local
+      persistent shard. The authorized remote build:compile publication handoff writes
+      only its exact-commit source ref. A read-only build:compile verification never
+      exports a registry cache. Other jobs never write Main's protected refs.
     required: false
     default: "false"
   publish-compile-cache:
@@ -43,10 +26,6 @@ inputs:
       the remote build:compile task.
     required: false
     default: "true"
-  require-e2e-cache:
-    description: Require the browser-image cache lineage for this job.
-    required: false
-    default: "false"
   monitor-buildkit-storage:
     description: Warn when the selected ARC BuildKit shard approaches its GC ceiling.
     required: false
@@ -163,7 +142,7 @@ runs:
         sccache-endpoint: ${{ inputs.sccache-endpoint }}
         sccache-bucket: ${{ inputs.sccache-bucket }}
 
-    - name: Select hosted BuildKit cache
+    - name: Configure hosted BuildKit cache
       shell: bash
       env:
         NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}
@@ -174,14 +153,6 @@ runs:
         pr_number="${{ github.event.pull_request.number }}"
         event_name="${{ github.event_name }}"
         git_ref="${{ github.ref }}"
-        cache_selection="${{ inputs.cache-selection }}"
-        case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
-          *)
-            echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
-            exit 1
-            ;;
-        esac
         test -n "$NOOK_SELECTED_BUILDER"
         echo "NOOK_PR_BUILDX_BUILDER=$NOOK_SELECTED_BUILDER" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
@@ -209,8 +180,7 @@ runs:
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           remote_compile_scope=1
-          # Feature source output is exact-head scoped. Dependencies use their
-          # content fingerprint below.
+          # Feature source output is exact-head scoped.
           if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
             && [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
@@ -227,11 +197,7 @@ runs:
         else
           echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
         fi
-        if [ "$isolated_cache_write" = "true" ] \
-          || { [ "$isolated_scope_requested" = "true" ] \
-            && { [ "$cache_selection" = "web-research-deps" ] \
-              || [ "$cache_selection" = "web-research-image" ]; }; } \
-          || [ -n "$remote_compile_scope" ]; then
+        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
@@ -276,12 +242,10 @@ runs:
         fi
 
         scope_suffix=""
-        fallback_enabled=""
         # Exact source identity is required for both publication and read-only
         # verification. ARC may disable write authorization above, but that must
-        # not erase the scope/probes exported to the later task step.
-        if [ "$isolated_cache_write" = "true" ] || [ -n "$remote_compile_scope" ]; then
-          fallback_enabled=1
+        # not erase the scope exported to the later task step.
+        if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then
           if [ "$event_name" = "pull_request" ]; then
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
             scope_sha="${{ github.event.pull_request.head.sha }}"
@@ -298,252 +262,12 @@ runs:
           fi
           scope_suffix="-git-$scope_sha"
           if [ "$isolated_cache_write" = "true" ]; then
-            echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
+            echo "Isolated cache writes use $scope_suffix"
           else
             echo "Remote compile read-only verification uses exact source scope $scope_suffix"
           fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
-
-        # cache-from entries are merged, not ordered. Importing exact and Main
-        # together can select Main's parent and orphan an exact source leaf.
-        # Probe each full-graph ref and use Main only while that exact ref is absent.
-        registry_host="${{ inputs.registry-host }}"
-        exact_repository="nook/buildcache"
-        if [ -n "$scope_suffix" ]; then
-          exact_repository="nook/remote-buildcache"
-        fi
-        cache_ref_status() {
-          local ref="$1"
-          local probe_output
-          local probe_status=0
-          local failure_class
-          probe_output="$(mktemp)"
-          if [ "$cache_selection" = "compile" ]; then
-            timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          else
-            docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          fi
-          failure_class="$(bash "${{ github.action_path }}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
-          case "$failure_class" in
-          available)
-            rm -f "$probe_output"
-            return 0
-            ;;
-          absent)
-            rm -f "$probe_output"
-            return 1
-            ;;
-          transient_unavailable)
-            echo "Registry cache probe was transiently unavailable: $ref" >&2
-            cat "$probe_output" >&2
-            rm -f "$probe_output"
-            return 2
-            ;;
-          fatal)
-            echo "Registry cache probe failed with a fatal authentication, permission, reference, or unclassified error: $ref" >&2
-            cat "$probe_output" >&2
-            rm -f "$probe_output"
-            return 3
-            ;;
-          *)
-            echo "Registry cache probe classifier returned an invalid class: $failure_class" >&2
-            rm -f "$probe_output"
-            return 3
-            ;;
-          esac
-        }
-        publish_exact_availability() {
-          local env_name="$1"
-          local scope="$2"
-          local ref="$registry_host/$exact_repository/$scope:buildcache"
-          local available=""
-          local probe_status=0
-          cache_ref_status "$ref" || probe_status=$?
-          case "$probe_status" in
-            0)
-              available=1
-              echo "Exact cache available: $scope"
-              ;;
-            1)
-              echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
-              ;;
-            *) return "$probe_status" ;;
-          esac
-          echo "$env_name=$available" >> "$GITHUB_ENV"
-          last_exact_available="$available"
-        }
-        publish_main_availability() {
-          local env_name="$1"
-          local scope="$2"
-          local ref="$registry_host/nook/buildcache/$scope:buildcache"
-          local available=""
-          local probe_status=0
-          cache_ref_status "$ref" || probe_status=$?
-          case "$probe_status" in
-            0)
-              available=1
-              echo "Main cache available: $scope"
-              ;;
-            1)
-              echo "Main cache absent; source-free dependency fallback enabled: $scope"
-              ;;
-            *) return "$probe_status" ;;
-          esac
-          echo "$env_name=$available" >> "$GITHUB_ENV"
-        }
-
-        case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile)
-          # Preserve the shared Rust dependency identity for its existing
-          # consumers. build:compile uses immutable exact-head and ancestor
-          # source scopes below; sccache owns cross-head compiler objects.
-          rust_deps_fingerprint="$(
-            NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
-              bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
-          )"
-          if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Could not fingerprint the hosted Rust dependency graph" >&2
-            exit 1
-          fi
-          echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
-          echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
-          ;;
-        esac
-
-        if [ "$cache_selection" = "compile" ]; then
-          if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile" ]; then
-            echo "compile cache selection requires the build:compile selector" >&2
-            exit 1
-          fi
-          compile_probe_failure_class=none
-          compile_exact_available=""
-          compile_probe_status=0
-          cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4$scope_suffix:buildcache" || compile_probe_status=$?
-          case "$compile_probe_status" in
-            0)
-              compile_exact_available=1
-              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV"
-              ;;
-            1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
-            2)
-              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
-              compile_probe_failure_class=transient_unavailable
-              echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
-              ;;
-            *) exit "$compile_probe_status" ;;
-          esac
-          compile_restore_scope_suffix=""
-          if [ -n "$compile_exact_available" ]; then
-            compile_restore_scope_suffix="$scope_suffix"
-          else
-            # Exact refs are immutable proof artifacts. Probe a small first-
-            # parent window in parallel and import only the nearest successful
-            # full graph, so a new commit can reuse unchanged source vertices
-            # without a mutable shared tag or preparatory seed job.
-            ancestor_probe_limit=8
-            ancestor_probe_dir="$(mktemp -d)"
-            mapfile -t compile_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
-            for ancestor_sha in "${compile_ancestors[@]}"; do
-              (
-                ancestor_status=0
-                cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4-git-$ancestor_sha:buildcache" || ancestor_status=$?
-                printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
-              ) &
-            done
-            wait
-            for ancestor_sha in "${compile_ancestors[@]}"; do
-              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
-              case "$ancestor_status" in
-                0)
-                  compile_restore_scope_suffix="-git-$ancestor_sha"
-                  echo "Nearest ancestor compile cache available: $ancestor_sha"
-                  break
-                  ;;
-                1|2) ;;
-                *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
-              esac
-            done
-            rm -rf "$ancestor_probe_dir"
-          fi
-          echo "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
-          echo "Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6"
-        fi
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
-          # Native consumes exact dependency scopes and the complete native source graph.
-          # Main source also owns fresh dependency-only restores after publication.
-          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
-          fi
-          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
-        fi
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then
-          # WASM consumes the base, fingerprinted dependency, and complete WASM source scopes.
-          wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
-          if [ -n "$scope_suffix" ]; then
-            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
-          fi
-          if [ "$cache_selection" != "general" ]; then
-            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-          fi
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
-          fi
-        fi
-
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-dylint" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-fuzz" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-policy-tools" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-deterministic" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "ecosystem-kani" ] || [ "$cache_selection" = "ecosystem-smoke" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
-        fi
-        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ] \
-          || [ "$cache_selection" = "web-research-image" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
-          # Keep the aggregate dependency graph and its independent lockfile
-          # children distinct from the source-bearing browser image. Each
-          # importer selects exact-or-Main rather than merging cache versions.
-          publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE "nook-web-deps-v1$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
-          if [ -n "$scope_suffix" ] \
-            && [ "$cache_selection" != "web-research-image" ]; then
-            publish_main_availability GHA_CACHE_MAIN_WEB_DEPS_AVAILABLE "nook-web-deps-v1"
-            publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
-            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
-          fi
-        fi
-        if [ "$cache_selection" = "web-research-deps" ]; then
-          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
-          if [ -n "$scope_suffix" ]; then
-            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
-          fi
-        fi
-        case "$cache_selection" in
-          general|native|wasm|compile|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
-          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
-          ;;
-        esac
 
         cache_write_enabled=""
         if [ -n "$remote_compile_cache_write" ]; then

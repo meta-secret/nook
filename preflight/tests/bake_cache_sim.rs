@@ -258,7 +258,8 @@ fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
     assert!(bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true"));
     assert!(!bake.contains("compile_deps_cache_to"));
     assert!(!bake.contains("target \"compile-dependency-cache\""));
-    assert!(!bake.to_ascii_lowercase().contains("seed"));
+    assert!(!bake.contains("target \"compile-seed"));
+    assert!(!bake.contains("SEED_SCOPE"));
 }
 
 fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {

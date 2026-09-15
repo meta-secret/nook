@@ -9,6 +9,10 @@ This card does not authorize Docker inside k8s or k0s. Cluster execution follows
 ## Problem Pattern
 
 - Adding Dockerfile `RUN --mount=type=cache` directives that introduce hidden state and serialize concurrent builds.
+- Computing custom dependency fingerprints or cache selectors to predict
+  whether a Docker layer should be reusable.
+- Simulating unrelated and related source mutations solely to duplicate
+  BuildKit's cache-invalidation decision.
 - Attempting to kill, restart, or terminate Docker Desktop, `dockerd`, or the Docker VM.
 - Using unpinned or floating semver dependency ranges in `Cargo.toml`.
 - Committing `package-lock.json` or `yarn.lock` in Bun-managed web packages.
@@ -22,6 +26,22 @@ This card does not authorize Docker inside k8s or k0s. Cluster execution follows
 - Install dependencies directly in ordinary Dockerfile `RUN` layers.
 - Let immutable Docker layers and lockfiles define the cache boundary.
 - Enforced by the standalone `preflight/` invariant suite (`task preflight`).
+
+### Keep Docker layer invalidation inside BuildKit
+
+- BuildKit alone determines Docker layer validity and reuse from the actual
+  Dockerfile, build context, build arguments, and base image.
+- Custom dependency fingerprints, cache selectors, allowlists, and mutation
+  simulations that reimplement that decision are prohibited. Treat their
+  introduction or preservation as a P1 finding and stop under the Cortex
+  circuit-breaker rule.
+- Preserve genuine `cache-from` and `cache-to` wiring, structured cache
+  artifacts, registry import/export integrity, and actual Dockerfile syntax and
+  build checks.
+- Preserve the complete sccache contract: structured telemetry, bounded
+  fallback, health reporting, publication evidence, and terminal repeated
+  changed-head zero-hit detection. Compiler-cache evidence must not become a
+  substitute Docker layer-validity algorithm.
 
 ### Never kill the Docker daemon
 
@@ -50,10 +70,14 @@ Cluster Pods are excluded from local Docker lifecycle guidance. They may use a r
 ## Application Checklist
 
 1. [ ] No `RUN --mount=type=cache` directives exist in Dockerfiles.
-2. [ ] Only individual containers are stopped (`docker stop <id>`); daemon remains untouched.
-3. [ ] Dependency requirements and lockfiles match the owning update policy.
-4. [ ] Bun lockfiles are committed for web packages.
-5. [ ] Invariant preflight passes: `task preflight`.
+2. [ ] No custom fingerprint, selector, allowlist, or mutation simulation
+       duplicates BuildKit layer invalidation.
+3. [ ] Cache import/export and the complete sccache telemetry and health
+       contract remain intact.
+4. [ ] Only individual containers are stopped (`docker stop <id>`); daemon remains untouched.
+5. [ ] Dependency requirements and lockfiles match the owning update policy.
+6. [ ] Bun lockfiles are committed for web packages.
+7. [ ] Invariant preflight passes: `task preflight`.
 
 ## Validation
 

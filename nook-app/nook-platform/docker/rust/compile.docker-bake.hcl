@@ -5,29 +5,15 @@
 // graphs itself. It does not inherit product builder-core-deps or
 // builder-wasm, whose warm-up graphs include validation-only work.
 
-variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
-  default = ""
-}
-
-// The current exact ref remains the immutable export destination. When it is
-// absent, hosted setup may select the nearest successfully published first-
-// parent ref as the single full-graph restore source.
-variable "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX" {
-  default = ""
-}
-
-// The source graph is immutable-commit-only. The setup action may select the
-// nearest first-parent scope, but there is deliberately no mutable Main tag.
+// The source graph is immutable-commit-only; there is deliberately no mutable Main tag.
 // v4 is the single-export schema whose mode=max export is rooted at
 // the final compile target and therefore retains the expensive WASM compiler
 // lineage. Legacy v2 manifests are intentionally incompatible and untrusted
 // as warm-build evidence.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
-compile_restore_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v4${GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX}:buildcache"
-
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX != "" ? [
-  "type=registry,ref=${compile_restore_source_cache_ref}",
-] : []
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${compile_source_cache_ref},ignore-error=true",
+]
 
 // Every entry point uses one solve contract. Bake applies CLI overrides after
 // inheritance, so callers also mirror overrides on each named target.
@@ -48,7 +34,7 @@ compile_solve_args = {
   NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
 }
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
+compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
   // Export the rooted immutable exact-head graph once. sccache owns cross-head
   // compiler objects, so serializing a second sibling dependency graph is
   // redundant. The exporter timeout applies to each registry operation; the

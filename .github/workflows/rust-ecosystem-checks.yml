@@ -25,7 +25,7 @@ on:
         description: Exact pull-request head SHA for source-pinned checkouts.
         type: string
         required: false
-        default: ''
+        default: ""
 
 permissions:
   contents: read
@@ -54,7 +54,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-policy-tools
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -97,7 +96,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-smoke
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.
@@ -141,7 +139,6 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         with:
-          cache-selection: ecosystem-dylint
           registry-host: registry.dev.nokey.sh
           # Main push must use the trusted writer for nook/buildcache/**.
           # PRs/schedule keep the remote identity for isolated/read-only access.

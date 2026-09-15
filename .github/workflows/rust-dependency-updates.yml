@@ -28,7 +28,6 @@ jobs:
       - name: Connect Docker Rust audit tooling
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: connection-only
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           cache-write: "false"

@@ -340,7 +340,6 @@ tasks:
         set --;
         if [ -n "$setup_output" ]; then set -- --set "$setup_target.output=$setup_output"; fi;
         WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$@" "$setup_target"'
-      - task: registry-cache:publish:local-format-deps
 
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.

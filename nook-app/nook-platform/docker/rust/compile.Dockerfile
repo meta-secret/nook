@@ -56,7 +56,7 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src/lib.rs
 # `cargo fetch` may query rustc for target metadata. It is not a compiler-cache
 # vertex, so bypass the inherited wrapper rather than requiring cache authority
-# outside the 18 explicitly secret-mounted compiler vertices below.
+# outside the 16 explicitly secret-mounted compiler vertices below.
 RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 
 # These sibling stages warm only ordinary library dependencies. No --tests,
