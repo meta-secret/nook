@@ -9,6 +9,7 @@ import {
   CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
+import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 
 void test("records the active compile scope without preselection state", () => {
   assert.deepEqual(
@@ -504,7 +505,7 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
           vertex: "sha256:wasm-node",
           timestamp: "2026-09-15T01:01:00Z",
           data: Buffer.from(
-            `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\n`,
+            `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\nNOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}\n`,
           ).toString("base64"),
         },
       ],
@@ -529,6 +530,10 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
       record.sccache.snapshots.map(({ stage }) => stage),
       ["wasm-node-test-and-coverage", "wasm-node-compiler"],
     );
+    assert.deepEqual(record.sccache.fallback, {
+      state: "active",
+      reason: "none",
+    });
   } finally {
     CacheTelemetry.listBuildHistory = originalListBuildHistory;
     CacheTelemetry.readHistoryEvents = originalReadHistoryEvents;
@@ -606,6 +611,49 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
     state: "active",
     reason: "none",
   });
+});
+
+void test("a real raw fallback remains active despite healthy terminal evidence", () => {
+  const report = {
+    stage: "dylint",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 32,
+    requests_executed: 32,
+    cache_hits: 0,
+    cache_misses: 32,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 32,
+    remote_writes: 32,
+    compile_failures: 0,
+  };
+  const fallback = {
+    state: "fallback",
+    reason: "cache_circuit_open",
+  };
+
+  assert.deepEqual(
+    resolveSccacheFallback([report], fallback, fallback),
+    fallback,
+  );
+  assert.deepEqual(
+    resolveSccacheFallback(
+      [report],
+      { state: "active", reason: "none" },
+      fallback,
+      'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_transport_unavailable","remote_writes":0}',
+    ),
+    { state: "fallback", reason: "cache_transport_unavailable" },
+  );
+  assert.deepEqual(
+    resolveSccacheFallback([], { state: "active", reason: "none" }, fallback),
+    fallback,
+  );
 });
 
 void test("rejects malformed nested telemetry records at the ingress", () => {
