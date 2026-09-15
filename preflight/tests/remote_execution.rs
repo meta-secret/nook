@@ -405,10 +405,6 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one ARC contract verifies the full named-task workflow"
-)]
 fn arc_workflow_runs_named_task_targets() -> Result<()> {
     let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
     let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");

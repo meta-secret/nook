@@ -3,10 +3,7 @@ use std::{
     env, fs,
     ops::Deref,
     path::{Path, PathBuf},
-    process::Command,
 };
-
-use anyhow::Context;
 
 #[path = "infra/kubernetes_cache_sim.rs"]
 mod kubernetes_cache_sim;
@@ -97,11 +94,6 @@ fn parallel_web_verification_invokes_the_static_container_entrypoint() {
         web_dockerfile.contains("timeout --kill-after=10s 10m task _ci:pr"),
         "the complete concurrent static, lint, and test gate must retain enough bounded runtime"
     );
-}
-
-fn read_fallible(path: &str) -> anyhow::Result<String> {
-    fs::read_to_string(RepositoryFixture::repository_root().join(path))
-        .with_context(|| format!("failed to read {path}"))
 }
 
 fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {

@@ -41,10 +41,10 @@ fn wasm_custom_dylint_suppressions_stay_in_the_dylint_driver_boundary() -> anyho
         let source_root = root.join(format!("nook-app/nook-platform/{crate_name}/src"));
         for entry in ignore::WalkBuilder::new(source_root).build() {
             let entry = entry?;
-            if !entry
+            if entry
                 .path()
                 .extension()
-                .is_some_and(|extension| extension == "rs")
+                .is_none_or(|extension| extension != "rs")
             {
                 continue;
             }

@@ -437,25 +437,32 @@ mod tests {
     fn a_declared_binding_resolves_without_searching_an_unrelated_outer_declaration() {
         let source = "let manager; { const manager = candidate; }";
         let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-            .expect("TypeScript grammar must load");
-        let tree = parser.parse(source, None).expect("fixture must parse");
+        let Ok(()) = parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+        else {
+            panic!("TypeScript grammar must load");
+        };
+        let Some(tree) = parser.parse(source, None) else {
+            panic!("fixture must parse");
+        };
         let root = tree.root_node();
-        let inner_declaration = root.named_child(1).expect("inner block");
-        let inner_declaration = inner_declaration
-            .named_child(0)
-            .expect("lexical declaration")
-            .named_child(0)
-            .expect("variable declarator");
-        let binding = inner_declaration
-            .child_by_field_name("name")
-            .expect("declared binding");
+        let Some(inner_block) = root.named_child(1) else {
+            panic!("inner block");
+        };
+        let Some(lexical_declaration) = inner_block.named_child(0) else {
+            panic!("lexical declaration");
+        };
+        let Some(variable_declarator) = lexical_declaration.named_child(0) else {
+            panic!("variable declarator");
+        };
+        let Some(binding) = variable_declarator.child_by_field_name("name") else {
+            panic!("declared binding");
+        };
 
+        let Ok(resolved) = DynamicWasmAliases::declared_binding(binding, source) else {
+            panic!("the declaration must resolve");
+        };
         assert_eq!(
-            DynamicWasmAliases::declared_binding(binding, source)
-                .expect("the declaration must resolve")
-                .id(),
+            resolved.id(),
             binding.id(),
             "a declaration-site identifier must resolve directly instead of scanning the file"
         );

@@ -113,13 +113,13 @@ fn zot_volume_migration_validates_legacy_identity_before_deletion() {
     let dual_refusal = "Refusing ambiguous Zot PVCs in both legacy and current namespaces";
     let volume_validation = "test \"$legacy_volume\" = nook-zot-data";
     let path_validation = "test \"$legacy_path\" = /var/lib/hive/zot";
-    let pvc_deletion = "kubectl delete pvc nook-zot-data --namespace hive-data --wait=true";
-    let pv_deletion = "kubectl delete pv nook-zot-data --wait=true";
+    let delete_claim_command = "kubectl delete pvc nook-zot-data --namespace hive-data --wait=true";
+    let delete_volume_command = "kubectl delete pv nook-zot-data --wait=true";
 
     MigrationContractFixture::ordered(&deploy, dual_refusal, volume_validation);
     MigrationContractFixture::ordered(&deploy, volume_validation, path_validation);
-    MigrationContractFixture::ordered(&deploy, path_validation, pvc_deletion);
-    MigrationContractFixture::ordered(&deploy, pvc_deletion, pv_deletion);
+    MigrationContractFixture::ordered(&deploy, path_validation, delete_claim_command);
+    MigrationContractFixture::ordered(&deploy, delete_claim_command, delete_volume_command);
 }
 
 #[test]
