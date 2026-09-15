@@ -107,17 +107,20 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     squash, or create an empty merge.
   - Do not publish dev.
 - **`dev:publish`**
-  - Publish the manually selected local dev snapshot to origin/dev.
+  - Publish the current committed local dev head directly to origin/dev and
+    record that exact commit SHA for validation.
   - Only the Dev Manager authorizes the Delivery Pipeline packet to PR Lifecycle
     Agent.
-  - Preserve newer local dev commits and freeze the published SHA for validation.
+  - Preserve any newer local dev commits. The recorded published SHA is
+    immutable validation evidence; it does not freeze or replace the local dev
+    branch.
 - **`dev:pr-manager`**
   - Create or update the single dev-to-main pull request from the exact
     published origin/dev SHA.
   - Only the dev manager invokes this manager operation. Feature Gizmos and
     Team Agents never invoke it or create PRs.
-  - The workflow packet must name controller `dev-manager` and carry the
-    immutable selected SHA; the manager compares that SHA with freshly fetched
+  - The workflow packet must name controller `dev-manager` and carry the exact
+    published SHA; the manager compares that SHA with freshly fetched
     `origin/dev` before any PR mutation.
 - **`dev:promote`**
   - Guarded ordinary fast-forward publication of the tested dev SHA to main.
@@ -266,8 +269,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
      feature path, publish a fresh snapshot, and repeat full validation.
 3. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle Agent's
    guarded fast-forward promotion to push the tested SHA to main.
-   - Move remote main directly to the unchanged, fully validated dev commit
-     object with the same SHA; do not manufacture a new commit from its tree.
+   - Move remote main directly to the exact validated dev commit object; remote
+     main must acquire that same SHA without manufacturing a commit from its
+     tree.
    - This is an actual fast-forward ref move preserving the tested commit SHA.
    - It preserves the complete graph, including existing feature merge commits.
    - It does not promise a linear commit graph.
