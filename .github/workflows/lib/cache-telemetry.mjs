@@ -2,7 +2,6 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
@@ -35,7 +34,6 @@ const HistoryLogCollectionKind = Object.freeze({
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
 /** @typedef {import("./cache-telemetry-contracts.mjs").UnavailableTelemetryRequest} UnavailableTelemetryRequest */
-
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
   static isJsonRecord(value) {
@@ -328,7 +326,6 @@ export class CacheTelemetry {
     };
     return normalized;
   }
-
   /** @param {readonly SccacheReport[]} reports @returns {SccacheSummary} */
   static summarizeSccache(reports) {
     const terminalReports = [
@@ -434,7 +431,6 @@ export class CacheTelemetry {
       measurement: "buildx_target_record_steps",
     };
   }
-
   /**
    * @param {readonly JsonRecord[]} events
    * @param {Set<string>} [seen]
@@ -486,7 +482,6 @@ export class CacheTelemetry {
     }
     return reports;
   }
-
   /** @param {string} text @returns {SccacheReport[]} */
   static extractSccacheReportsFromText(text) {
     /** @type {Map<string, SccacheReport>} */
