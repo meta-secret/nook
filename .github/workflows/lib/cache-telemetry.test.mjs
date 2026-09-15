@@ -170,6 +170,61 @@ void test("does not count concurrent unfinished records for a successful job", (
   );
 });
 
+void test("production selection retains every current Buildx record", () => {
+  const records = Array.from({ length: 36 }, (_, index) => ({
+    ref: `record-${index}`,
+    name: `record-${index}`,
+    status: "completed",
+    started_at: `2026-09-06T${String(index).padStart(2, "0")}:00:00Z`,
+    completed_at: `2026-09-06T${String(index).padStart(2, "0")}:01:00Z`,
+    completed_steps: 1,
+    total_steps: 1,
+    cached_steps: 1,
+  }));
+
+  const selection = CacheTelemetry.selectBuildRecords(records);
+  assert.equal(selection.records.length, records.length);
+  assert.deepEqual(selection.warnings, []);
+  assert.equal(selection.records[0]?.ref, "record-35");
+  assert.equal(selection.records.at(-1)?.ref, "record-0");
+});
+
+void test("records Docker history unavailability as an incomplete collection", async () => {
+  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
+  CacheTelemetry.listBuildHistory = () => {
+    throw new Error("Cannot connect to the Docker daemon");
+  };
+
+  try {
+    const record = await CacheTelemetry.collectTelemetry({
+      baselineRefs: [],
+      job: "cache-health",
+      runId: "35004445393",
+      runAttempt: "1",
+      environment: {
+        NOOK_SCCACHE_BACKEND: "remote",
+        NOOK_SCCACHE_BACKEND_REASON: "persistent_service",
+      },
+    });
+    assert.equal(record.collection.complete, false);
+    assert.ok(
+      record.collection.warnings.some((warning) =>
+        warning.startsWith("buildx_history_unavailable:"),
+      ),
+    );
+    assert.ok(
+      record.collection.failures.some(
+        (failure) =>
+          failure.component === "buildx_history" &&
+          failure.reference === "current",
+      ),
+    );
+    assert.equal(record.buildkit.build_record_count, 0);
+  } finally {
+    CacheTelemetry.listBuildHistory = originalListBuildHistory;
+  }
+});
+
 void test("maps history logs concurrently while preserving record order", async () => {
   let active = 0;
   let maximumActive = 0;

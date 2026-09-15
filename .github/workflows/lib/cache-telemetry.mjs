@@ -16,7 +16,6 @@ const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
 const HISTORY_LOG_TIMEOUT_MS = 12_000;
-const HISTORY_RECORD_LIMIT = 32;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
   Unavailable: "unavailable",
@@ -214,7 +213,7 @@ export class CacheTelemetry {
    */
   static selectBuildRecords(
     records,
-    limit = HISTORY_RECORD_LIMIT,
+    limit = Number.POSITIVE_INFINITY,
     { includeUnfinished = true } = {},
   ) {
     const candidates = includeUnfinished
@@ -706,7 +705,7 @@ export class CacheTelemetry {
       );
       const selection = CacheTelemetry.selectBuildRecords(
         candidates,
-        HISTORY_RECORD_LIMIT,
+        Number.POSITIVE_INFINITY,
         {
           includeUnfinished:
             environment.NOOK_CACHE_TELEMETRY_JOB_STATUS !== "success",
@@ -810,9 +809,12 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    sccache.fallback = rawBuildLog
-      ? CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog)
-      : CacheTelemetry.extractSccacheFallback(historyEvents);
+    const rawFallback =
+      CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
+    const historyFallback =
+      CacheTelemetry.extractSccacheFallback(historyEvents);
+    sccache.fallback =
+      rawFallback.state === "fallback" ? rawFallback : historyFallback;
 
     return {
       schema_version: 1,
