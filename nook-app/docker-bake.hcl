@@ -80,6 +80,12 @@ variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
+// A per-job value keys only the terminal report replay RUN. Compiler vertices
+// persist their real report in the layer and remain cacheable across jobs.
+variable "NOOK_SCCACHE_TELEMETRY_REPLAY" {
+  default = "disabled"
+}
+
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh"
 }
@@ -96,6 +102,7 @@ target "_sccache" {
     SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
     SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
     SCCACHE_BUCKET   = SCCACHE_BUCKET
+    NOOK_SCCACHE_TELEMETRY_REPLAY = NOOK_SCCACHE_TELEMETRY_REPLAY
   }
 }
 

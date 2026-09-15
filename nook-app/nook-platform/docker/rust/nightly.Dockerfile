@@ -6,6 +6,7 @@ ARG DYLINT_NIGHTLY=nightly-2026-04-16
 ARG CARGO_FUZZ_VERSION=0.13.2
 ARG CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
 ARG CARGO_DYLINT_VERSION=6.0.1
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
 
 # cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
 # CI-only driver path, so install the pinned crates once into this image layer.
@@ -78,6 +79,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       --locked --fail-under-lines "${RUST_DYLINT_COVERAGE_FLOOR:?}" \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && nook-sccache-report rust-dylint-self-test
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-self-test; fi
 
 FROM rust-dylint-build AS rust-dylint-native
 
@@ -91,6 +94,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
     && nook-sccache-report rust-dylint-native
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-native; fi
 
 FROM rust-dylint-build AS rust-dylint-wasm
 RUN rustup target add wasm32-unknown-unknown
@@ -102,6 +107,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo dylint --all -- --locked --target wasm32-unknown-unknown --all-targets \
       -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests \
     && nook-sccache-report rust-dylint-wasm
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-wasm; fi
 
 FROM rust-dylint-native AS rust-dylint
 COPY --from=rust-dylint-self-test /meta-secret/nook/nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml /tmp/dylint-self-tested.toml
