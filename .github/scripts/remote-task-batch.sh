@@ -85,6 +85,7 @@ run_batch() {
   local timeout_cleanup_status
   local -a tasks
 
+  bash .github/scripts/remote-cache-probe-route.sh --validate "$raw_tasks"
   IFS=',' read -r -a tasks <<< "$raw_tasks"
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     printf '## Remote task batch\n\n| Task | Result |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"

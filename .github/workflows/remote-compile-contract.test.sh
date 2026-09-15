@@ -13,12 +13,14 @@ sccache_fallback_contract="$workflows_dir/../../infra/contracts/sccache-wrapper-
 sccache_publication_contract="$workflows_dir/../../infra/contracts/sccache-publication.test.sh"
 probe_classification_contract="$workflows_dir/../../infra/contracts/compile-cache-probe-classification.test.sh"
 action_run_limit_contract="$workflows_dir/action-run-expression-limit.test.sh"
+cache_probe_route_contract="$workflows_dir/../scripts/remote-cache-probe-route.test.sh"
 proof="$workflows_dir/../../infra/tasks/bake-cache.yml"
 remote_taskfile="$workflows_dir/../../.task/remote-execution.yml"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 bash "$action_run_limit_contract"
-compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (startsWith(inputs.tasks || inputs.task, 'cache:probe:') && 12 || 360) }}"
+compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (contains(fromJSON('[\"cache:probe:dependency-policy\",\"cache:probe:deterministic\",\"cache:probe:dylint\",\"cache:probe:rust\",\"cache:probe:wasm\",\"cache:probe:wasm-node\",\"cache:probe:web\"]'), inputs.tasks || inputs.task) && 12 || 360) }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
+bash "$cache_probe_route_contract"
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'build:compile) timeout --kill-after=10s 240s task build:compile ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'SCCACHE_S3_RW_MODE: READ_WRITE' "$remote"
@@ -97,7 +99,11 @@ if rg -n 'build-compile-dependency-cache|compile_deps_cache_to|GHA_RUST_COMPILE_
   echo 'redundant synchronous dependency export remains' >&2
   exit 1
 fi
-grep -Fq -- 'cache-selection: ${{ env.NOOK_REMOTE_CACHE_SELECTION }}' "$remote"
+grep -Fq -- 'cache-selection: ${{ steps.cache-route.outputs.profile }}' "$remote"
+if rg -n 'startsWith\([^)]*cache:probe:' "$remote"; then
+  echo 'prefix-based cache probe routing remains in remote workflow' >&2
+  exit 1
+fi
 grep -Fq -- 'uses: ./.github/actions/nook-cache-telemetry' "$remote"
 if grep -Eq -- '^[[:space:]]*COPY[[:space:]]+\.[[:space:]]+\.' "$compile_dockerfile"; then
   echo 'product compiler must not copy the repository root' >&2

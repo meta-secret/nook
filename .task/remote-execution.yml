@@ -20,15 +20,7 @@ tasks:
 
         requested_tasks="$REQUESTED_REMOTE_TASKS"
 
-        if [[ "$requested_tasks" == cache:probe:* ]]; then
-          case "$requested_tasks" in
-            cache:probe:dependency-policy|cache:probe:deterministic|cache:probe:dylint|cache:probe:rust|cache:probe:wasm|cache:probe:wasm-node|cache:probe:web) ;;
-            *)
-              echo "Unsupported cache probe selector: $requested_tasks" >&2
-              exit 2
-              ;;
-          esac
-        fi
+        bash .github/scripts/remote-cache-probe-route.sh --validate "$requested_tasks"
 
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
