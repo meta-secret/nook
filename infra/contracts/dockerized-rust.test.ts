@@ -283,10 +283,24 @@ class DockerizedRustContract {
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    const nodeDeps = product
-      .split("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")[1]
-      ?.split("# Source overlay for bulk native leaves")[0];
-    if (!nodeDeps) throw new Error("WASM Node dependency stage is missing");
+    const requiredText = (
+      values: readonly string[],
+      index: number,
+      label: string,
+    ): string => {
+      const value = values[index];
+      if (typeof value !== "string") throw new Error(label);
+      return value;
+    };
+    const nodeDeps = requiredText(
+      requiredText(
+        product.split("FROM wasm-coverage-toolchain AS builder-wasm-node-deps"),
+        1,
+        "WASM Node dependency stage is missing",
+      ).split("# Source overlay for bulk native leaves"),
+      0,
+      "WASM Node dependency stage has no body",
+    );
     const accessMount =
       "--mount=type=secret,id=sccache_s3_access_key,required=false";
     const secretMount =
@@ -296,20 +310,39 @@ class DockerizedRustContract {
     );
     expect(compilerRuns).toHaveLength(3);
     expect(nodeDeps.match(/^RUN\b/gm)).toHaveLength(4);
-    const hostCoverage = compilerRuns[1]?.split("\nRUN --mount")[0];
-    const browserCoverage = compilerRuns[2]?.split("\n# Source overlay")[0];
-    const assertCompilerMounts = (stage: string, runCount?: number): void => {
+    const hostCoverage = requiredText(
+      requiredText(compilerRuns, 1, "WASM host coverage stage is missing").split(
+        "\nRUN --mount",
+      ),
+      0,
+      "WASM host coverage stage has no body",
+    );
+    const browserCoverage = requiredText(
+      requiredText(
+        compilerRuns,
+        2,
+        "WASM browser coverage stage is missing",
+      ).split("\n# Source overlay"),
+      0,
+      "WASM browser coverage stage has no body",
+    );
+    const assertCompilerMounts = (stage: string, runCount: number): void => {
       expect(stage).toContain(accessMount);
       expect(stage).toContain(secretMount);
       expect(stage.match(/--mount=type=secret/g)).toHaveLength(2);
-      if (runCount !== undefined) {
-        expect(stage.match(/^RUN\b/gm)).toHaveLength(runCount);
-      }
+      expect(stage.match(/^RUN\b/gm)).toHaveLength(runCount);
     };
-    assertCompilerMounts(hostCoverage ?? "");
-    assertCompilerMounts(browserCoverage ?? "");
-    const bunInstall = nodeDeps.split("RUN curl -fsSL https://bun.sh/install")[1]
-      ?.split("\n\n# Export cargo-llvm-cov")[0];
+    assertCompilerMounts(hostCoverage, 1);
+    assertCompilerMounts(browserCoverage, 1);
+    const bunInstall = requiredText(
+      requiredText(
+        nodeDeps.split("RUN curl -fsSL https://bun.sh/install"),
+        1,
+        "Bun installation stage is missing",
+      ).split("\n\n# Export cargo-llvm-cov"),
+      0,
+      "Bun installation stage has no body",
+    );
     expect(bunInstall).not.toContain("--mount=type=secret");
 
     const stage = (startMarker: string, endMarker: string): string => {
@@ -319,15 +352,19 @@ class DockerizedRustContract {
       expect(end).toBeGreaterThan(start);
       return product.slice(start, end);
     };
+    const nodeCompilerStage = stage(
+      "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
+      "FROM builder-wasm-handoff AS builder-wasm",
+    );
+    expect(nodeCompilerStage).toContain(
+      "nook-sccache-report wasm-node-compiler",
+    );
     for (const descendant of [
       stage(
         "FROM builder-wasm-node-deps AS builder-wasm-handoff",
         "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
       ),
-      stage(
-        "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
-        "FROM builder-wasm-handoff AS builder-wasm",
-      ),
+      nodeCompilerStage,
     ]) {
       assertCompilerMounts(descendant, 1);
     }

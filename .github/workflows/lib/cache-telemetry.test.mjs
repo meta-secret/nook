@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -450,6 +453,85 @@ void test("extracts zero-based sccache snapshots from a cancelled raw build log"
   const [report] = reports;
   assert.ok(report);
   assert.equal(report.cache_hits, 8);
+});
+
+void test("merges raw-log and BuildKit-history reports for distinct compiler stages", async () => {
+  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
+  const originalReadHistoryEvents = CacheTelemetry.readHistoryEvents;
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-telemetry-"));
+  const report = {
+    stage: "wasm-node-test-and-coverage",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 3,
+    requests_executed: 3,
+    cache_hits: 2,
+    cache_misses: 1,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 1,
+    remote_writes: 1,
+    compile_failures: 0,
+  };
+  const historyReport = { ...report, stage: "wasm-node-compiler" };
+  const rawLog = path.join(temporary, "build.raw.log");
+  fs.writeFileSync(
+    rawLog,
+    `step NOOK_SCCACHE_STATS ${JSON.stringify(report)}\n`,
+  );
+  CacheTelemetry.listBuildHistory = () => [
+    {
+      ref: "history-ref",
+      name: "wasm-node",
+      status: "completed",
+      started_at: "2026-09-15T01:00:00Z",
+      completed_at: "2026-09-15T01:01:00Z",
+      completed_steps: 1,
+      total_steps: 1,
+      cached_steps: 0,
+    },
+  ];
+  CacheTelemetry.readHistoryEvents = async () => [
+    {
+      logs: [
+        {
+          vertex: "sha256:wasm-node",
+          timestamp: "2026-09-15T01:01:00Z",
+          data: Buffer.from(
+            `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\n`,
+          ).toString("base64"),
+        },
+      ],
+    },
+  ];
+
+  try {
+    const record = await CacheTelemetry.collectTelemetry({
+      baselineRefs: [],
+      job: "wasm",
+      runId: "1",
+      runAttempt: "1",
+      environment: {
+        NOOK_BUILDKIT_RAW_LOG: rawLog,
+        NOOK_SCCACHE_BACKEND: "remote",
+        NOOK_SCCACHE_BACKEND_REASON: "persistent_s3_service",
+        NOOK_CACHE_TELEMETRY_JOB_STATUS: "success",
+      },
+    });
+    assert.equal(record.sccache.report_count, 2);
+    assert.deepEqual(
+      record.sccache.snapshots.map(({ stage }) => stage),
+      ["wasm-node-test-and-coverage", "wasm-node-compiler"],
+    );
+  } finally {
+    CacheTelemetry.listBuildHistory = originalListBuildHistory;
+    CacheTelemetry.readHistoryEvents = originalReadHistoryEvents;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });
 
 void test("marks client-side zero-write publication counters pending verification", () => {
