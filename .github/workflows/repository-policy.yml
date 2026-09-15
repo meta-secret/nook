@@ -75,7 +75,8 @@ jobs:
             sha256sum -c -
           chmod 0755 "$xz_decoder"
 
-          "$xz_decoder" -c "$zig_archive" > "$zig_tar"
+          export PATH="${RUNNER_TEMP}/nook-native-toolchain:$PATH"
+          unxz -c "$zig_archive" > "$zig_tar"
           mkdir -p "$zig_dir"
           tar -xf "$zig_tar" -C "$RUNNER_TEMP"
           test -x "$zig_dir/zig"

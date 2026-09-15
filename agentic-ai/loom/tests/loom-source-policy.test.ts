@@ -143,7 +143,11 @@ test('extracts Zig without delegating XZ decoding to runner tar', async () => {
   expect(extraction).toContain('"$zig_archive" |');
   expect(extraction).toContain('"$xz_decoder" |');
   expect(extraction).toContain('sha256sum -c -');
-  expect(extraction).toContain('"$xz_decoder" -c "$zig_archive"');
+  expect(extraction).toContain(
+    'export PATH="${RUNNER_TEMP}/nook-native-toolchain:$PATH"',
+  );
+  expect(extraction).toContain('unxz -c "$zig_archive"');
+  expect(extraction).not.toContain('"$xz_decoder" -c "$zig_archive"');
   expect(extraction).toContain('tar -xf "$zig_tar"');
   expect(extraction).not.toContain('tar -xJ');
   expect(extraction).not.toContain('tar --xz');
