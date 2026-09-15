@@ -123,7 +123,7 @@ describe('extension origin isolation', () => {
       script.js.includes('content/autofill.js'),
     )
     expect(autofill?.type).toBe(ExtensionManifestType.Module)
-    expect(autofill?.run_at).toBe('document_start')
+    expect(autofill?.run_at).toBe(ContentScriptRunAt.DocumentStart)
     expect(autofill).toHaveProperty('all_frames', true)
     expect(
       defaultManifest()
