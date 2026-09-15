@@ -20,6 +20,10 @@ behavior for packets issued by SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
 - Enforce a five-minute remote-build latency SLO and workflow timeout.
 - Diagnose cache telemetry before changing cache topology.
+- Let BuildKit determine Docker layer validity and reuse from the actual
+  Dockerfile, build context, build arguments, and base image. Do not duplicate
+  that decision with custom dependency fingerprints, cache selectors,
+  allowlists, or mutation simulations.
 - Preserve one optional immutable exact-commit BuildKit identity for
   `mode=max` same-head and nearest-first-parent full-graph acceleration. Dependency
   and toolchain vertices stay rooted in that ordinary compile graph; do not
@@ -93,10 +97,10 @@ behavior for packets issued by SRE Team Gizmo.
   - `.github/workflows/remote.yml`; and
   - `.github/workflows/remote-compile-contract.test.sh`.
 - Author focused policy and regression tests for every cache defect.
-- Extend the Docker simulator and proof for policy-only cache changes and each
-  Rust, WASM, Loom, or web input-domain change. Mutating an unrelated domain
-  must leave the subject compiler domain cached, while a relevant-domain
-  mutation invalidates only the expected vertices.
+- Keep cache proofs bounded to genuine import/export wiring, structured cache
+  artifacts, registry integrity, and actual Dockerfile syntax or build
+  behavior. Do not simulate source mutations to predict BuildKit's own
+  invalidation result.
 - Extend the simulator and proof with the remote `sccache` fault matrix.
   - Prove bounded fallback after startup failure.
   - Prove DNS or object-read failure opens one shared per-`RUN` circuit.
@@ -141,6 +145,10 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic
   consumer.
+- Do not create or preserve custom dependency fingerprints, cache selectors,
+  allowlists, or source-mutation simulations that duplicate BuildKit layer
+  invalidation. Treat such machinery as a P1 finding and stop under the Cortex
+  circuit breaker.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
 - Do not retry remote `sccache` after its circuit opens in a Docker `RUN`.
