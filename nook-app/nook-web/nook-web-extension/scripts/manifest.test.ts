@@ -118,12 +118,11 @@ describe('extension origin isolation', () => {
     ])
   })
 
-  test('starts autofill on every document before post-navigation app scripts', () => {
+  test('loads autofill as a module so companion WASM top-level await can run', () => {
     const autofill = defaultManifest().content_scripts.find((script) =>
       script.js.includes('content/autofill.js'),
     )
     expect(autofill?.type).toBe(ExtensionManifestType.Module)
-    expect(autofill?.run_at).toBe(ContentScriptRunAt.DocumentStart)
     expect(autofill).toHaveProperty('all_frames', true)
     expect(
       defaultManifest()

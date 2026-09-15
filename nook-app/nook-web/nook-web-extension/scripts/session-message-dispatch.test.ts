@@ -371,7 +371,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(payload.pin).toBe('')
     expect(await response).toEqual(ok({ pin: '123456' }))
   })
-  test('stages browser-owned secrets before awaiting cold WASM', async () => {
+  test('keeps a login-save plan after its submitting document navigates', async () => {
     const payload = {
       vaultStoreId: 'vault',
       deviceId: 'device',
@@ -388,6 +388,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     expect(payload.username).toBe('')
     expect(payload.password).toBe('')
+    payload.origin = 'https://navigated.example.com'
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
@@ -397,6 +398,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       expect(
         sessionMessageWireFixture.messagePayload(parsed.request).password,
       ).toBe('password')
+      expect(
+        sessionMessageWireFixture.messagePayload(parsed.request).origin,
+      ).toBe('https://example.com')
     }
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
