@@ -34,8 +34,38 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: "3.52.0"
-      - name: Install native Rust compiler and linker
-        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.15.2
+      - name: Configure rootless native compiler
+        shell: bash
+        run: |
+          toolchain_dir="$RUNNER_TEMP/nook-native-toolchain"
+          mkdir -p "$toolchain_dir"
+          cat > "$toolchain_dir/cc" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          args=("$@")
+          exec zig cc "${args[@]}"
+          EOF
+          cat > "$toolchain_dir/c++" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          args=("$@")
+          exec zig c++ "${args[@]}"
+          EOF
+          cat > "$toolchain_dir/ar" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec zig ar "$@"
+          EOF
+          chmod 0755 "$toolchain_dir/cc" "$toolchain_dir/c++" "$toolchain_dir/ar"
+          echo "$toolchain_dir" >> "$GITHUB_PATH"
+          {
+            echo "CC=$toolchain_dir/cc"
+            echo "CXX=$toolchain_dir/c++"
+            echo "AR=$toolchain_dir/ar"
+          } >> "$GITHUB_ENV"
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable

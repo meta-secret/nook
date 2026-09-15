@@ -52,19 +52,29 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain(
     'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
   );
-  const nativeToolchain =
-    '      - name: Install native Rust compiler and linker\n' +
-    '        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential';
-  expect(workflow).toContain(nativeToolchain);
+  const zigSetup =
+    '      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29\n' +
+    '        with:\n' +
+    '          version: 0.15.2';
+  expect(workflow).toContain(zigSetup);
+  expect(workflow).not.toContain('sudo -n apt-get');
+  expect(workflow).toContain('exec zig cc "${args[@]}"');
+  expect(workflow).toContain('exec zig c++ "${args[@]}"');
+  expect(workflow).toContain('exec zig ar "$@"');
+  expect(workflow).toContain('echo "$toolchain_dir" >> "$GITHUB_PATH"');
+  expect(workflow).toContain('echo "CC=$toolchain_dir/cc"');
+  expect(workflow).toContain('echo "CXX=$toolchain_dir/c++"');
+  expect(workflow).toContain('echo "AR=$toolchain_dir/ar"');
   const rustSetup =
     '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
     '        with:\n' +
     '          toolchain: stable\n' +
     '          cache: false';
   expect(workflow).toContain(rustSetup);
-  expect(workflow.indexOf(nativeToolchain)).toBeLessThan(
-    workflow.indexOf(rustSetup),
-  );
+  expect(workflow.indexOf(zigSetup)).toBeLessThan(workflow.indexOf(rustSetup));
+  expect(
+    workflow.indexOf('      - name: Configure rootless native compiler'),
+  ).toBeLessThan(workflow.indexOf('      - run: task tooling:static'));
   expect(workflow.indexOf(rustSetup)).toBeLessThan(
     workflow.indexOf('      - run: task tooling:static'),
   );
