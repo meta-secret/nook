@@ -230,6 +230,10 @@ export class MainBuildStatsCodec {
           report.cache_writes,
           `${label}[${index}].cache_writes`,
         ),
+        remote_writes: this.requireInteger(
+          report.remote_writes,
+          `${label}[${index}].remote_writes`,
+        ),
         compile_failures: this.requireInteger(
           report.compile_failures,
           `${label}[${index}].compile_failures`,
@@ -367,6 +371,10 @@ export class MainBuildStatsCodec {
         cache_writes: this.requireInteger(
           sccache.cache_writes,
           "sccache cache writes",
+        ),
+        remote_writes: this.requireInteger(
+          sccache.remote_writes,
+          "sccache remote writes",
         ),
         compile_failures: this.requireInteger(
           sccache.compile_failures,

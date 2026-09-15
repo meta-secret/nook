@@ -26,6 +26,7 @@ grep -Fq 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION' "$fixture_dir/zero-writ
 grep -Fq '"cache_errors":0' "$fixture_dir/zero-writes.log"
 grep -Fq '"cache_write_errors":0' "$fixture_dir/zero-writes.log"
 grep -Fq '"cache_writes":0' "$fixture_dir/zero-writes.log"
+grep -Fq '"remote_writes":0' "$fixture_dir/zero-writes.log"
 grep -Fq '"client_side":true' "$fixture_dir/zero-writes.log"
 grep -Fq '"counter_reliability":"backend_incomplete"' "$fixture_dir/zero-writes.log"
 grep -Fq '"baked_runtime_mode":"READ_WRITE"' "$fixture_dir/zero-writes.log"
@@ -42,6 +43,7 @@ SCCACHE_CLIENT_SIDE=1 \
 SCCACHE_S3_RW_MODE=READ_WRITE \
   bash "$report" publication >"$fixture_dir/completed-writes.log" 2>&1
 grep -Fq '"cache_writes":275' "$fixture_dir/completed-writes.log"
+grep -Fq '"remote_writes":275' "$fixture_dir/completed-writes.log"
 grep -Fq '"runtime_mode":"READ_WRITE"' "$fixture_dir/completed-writes.log"
 
 cat >"$fixture_dir/write-errors.json" <<'EOF'

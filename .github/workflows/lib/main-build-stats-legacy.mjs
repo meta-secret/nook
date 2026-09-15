@@ -183,6 +183,7 @@ export class LegacyMainBuildRecord {
           cache_errors: 0,
           cache_write_errors: 0,
           cache_writes: 0,
+          remote_writes: 0,
           compile_failures: 0,
           measurement: "sum_of_zero_based_run_snapshots",
           fallback: { state: "active", reason: "none" },
