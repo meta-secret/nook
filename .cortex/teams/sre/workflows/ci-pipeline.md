@@ -328,23 +328,26 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   retired generation.
 - Trusted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
-- Trusted ARC PR verification reuses the persistent BuildKit shard on its node.
+- Trusted ARC PR verification reuses the persistent BuildKit shard on its node
+  and publishes the completed graph to its isolated PR-number lane.
 - Exact-SHA handoffs retain commit-scoped registry identity.
-- Native ARC exports that handoff during the verified solves. A second
-  post-verification solve is prohibited because it reconstructs the same Rust
-  graphs before exporting them.
+- Native, WASM, and web ARC producers perform a post-verification cache-only
+  solve against the same persistent shard to publish their already-completed
+  graph. The solve must remain cached; it must not repeat validation commands.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
-- Once an exact PR scope exists, setup imports that scope alone.
+- Once a PR-number scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.
-- Exact-input handoffs own repeat-run acceleration without mutable branch refs.
+- Isolated PR-number lanes own cross-head and repeat-run acceleration without
+  mutable global branch refs.
 - WASM consumers read the verified dependency ref instead of competing with the larger native dependency lineage.
 - Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
 - The verified Main ARC solve owns the WASM dependency exporter.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
-- Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
-  their exact scope is absent, and cannot replace shared Main manifests.
+- Cache-publishing PR jobs write isolated PR-number refs; Remote jobs write
+  git-commit refs. Both use Main only while their isolated scope is absent and
+  cannot replace shared Main manifests.
 - The legacy registered `nook` runner is not used.
 
 **Focused remote jobs:**
@@ -464,7 +467,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Browser commands execute directly inside the exact-source image built by
     the verified PR web job.
 - **Exact-head cache policy:**
-  - PR browser consumers publish only isolated exact-head cache refs.
+  - PR browser producers publish only isolated PR-number cache refs.
   - Each consumer probes its exact browser ref.
   - An available exact ref is imported alone.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.

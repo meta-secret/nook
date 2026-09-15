@@ -192,14 +192,9 @@ jobs:
         env:
           CI: true
 
-      - name: Publish git-scoped native BuildKit cache
+      - name: Publish PR-scoped native BuildKit cache
         if: steps.trusted-native.outputs.found != 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified native graph local; Main and sccache remain reusable"
-            exit 0
-          fi
-          task ci:main:publish-native-cache
+        run: task ci:main:publish-native-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
 
@@ -339,14 +334,9 @@ jobs:
           WASM_BUILD_MODE: dev
           GHA_CACHE_WRITE_ENABLED: ""
 
-      - name: Publish git-scoped WASM BuildKit cache
+      - name: Publish PR-scoped WASM BuildKit cache
         if: steps.trusted-wasm.outputs.found != 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified WASM graph local; Main and sccache remain reusable"
-            exit 0
-          fi
-          task ci:main:publish-wasm-cache
+        run: task ci:main:publish-wasm-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
@@ -548,13 +538,8 @@ jobs:
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
           WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/pr-web-dist
 
-      - name: Publish git-scoped web BuildKit cache
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified web graph local; Main remains reusable"
-            exit 0
-          fi
-          task ci:main:publish-web-cache
+      - name: Publish PR-scoped web BuildKit cache
+        run: task ci:main:publish-web-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
 

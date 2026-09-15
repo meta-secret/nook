@@ -49,10 +49,9 @@ variable "NOOK_COMPILE_CACHE_MODE" {
   default = "publish"
 }
 
-// Main and hosted publishers retain complete mode=max graphs. ARC jobs already
-// keep the full writable graph in their private local state, so their exact-SHA
-// registry handoff may use mode=min to preserve retries without re-exporting
-// every intermediate record.
+// Main, hosted, and ARC publishers retain complete mode=max graphs. Complete
+// roots are required because a thin PR-lane export can orphan dependency and
+// compiler ancestry on a fresh shard.
 variable "GHA_CACHE_EXPORT_MODE" {
   default = "max"
 }
@@ -66,7 +65,7 @@ variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// Isolated git-scoped writes use this to enable cold-scope Main fallback.
+// Isolated PR-number and exact-git writes use this to enable Main fallback.
 // Per-scope exact probes suppress that fallback when an exact ref is present.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""

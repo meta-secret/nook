@@ -296,7 +296,7 @@ class DockerizedRustContract {
           `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
         );
         expect(values).toContain("GHA_CACHE_FALLBACK_ENABLED=1\n");
-        expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
+        expect(values).toContain("GHA_CACHE_WRITE_ENABLED=1\n");
         const calls = readFileSync(probes, "utf8");
         if (profile === "connection-only") {
           expect(calls).toBe("");
@@ -338,6 +338,21 @@ class DockerizedRustContract {
     );
     expect(target).toContain("cache-from = rust_wasm_source_cache_from");
     expect(target).not.toContain("cache-from = rust_wasm_deps_cache_from");
+  }
+
+  prCachePublication(): void {
+    const workflow = this.read(".github/workflows/pr.yml");
+    for (const lane of ["native", "WASM", "web"]) {
+      expect(workflow).toContain(`Publish PR-scoped ${lane} BuildKit cache`);
+    }
+    expect(workflow).not.toContain("ARC keeps the verified");
+    const bake = this.read(
+      "nook-app/nook-platform/docker/rust/docker-bake.hcl",
+    );
+    expect(bake).toContain(
+      'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""',
+    );
+    expect(bake.match(/\$\{pr_cache_export_error_policy\}/g)?.length).toBe(10);
   }
 
   portableGitMetadata(): void {
@@ -979,6 +994,10 @@ test(
 test(
   "WASM Node verification restores the complete source graph",
   contract.wasmNodeSourceCache.bind(contract),
+);
+test(
+  "ARC publishes complete PR lanes without making transient export fatal",
+  contract.prCachePublication.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",

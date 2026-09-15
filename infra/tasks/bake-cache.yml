@@ -330,12 +330,15 @@ tasks:
           exit 1
         fi
         wasm_bake="$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl"
+        rust_bake="$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl"
         awk '
           /^target "builder-wasm"/ { target = 1; next }
           /^target "/ && target { exit found ? 0 : 1 }
           target && /cache-from = rust_wasm_source_cache_from/ { found = 1 }
           END { if (target) exit found ? 0 : 1 }
         ' "$wasm_bake"
+        test "$(grep -Fc '${pr_cache_export_error_policy}' "$rust_bake")" -eq 10
+        grep -Fq 'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""' "$rust_bake"
         awk '
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
             lint_copy = NR

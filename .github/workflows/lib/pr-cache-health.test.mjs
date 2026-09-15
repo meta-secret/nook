@@ -200,6 +200,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   assert.match(workflow, /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify, ui-demo, extension-e2e, full-e2e-shard\]/);
   assert.match(workflow, /node \.github\/workflows\/lib\/pr-cache-health\.mjs/);
   assert.doesNotMatch(workflow, /cache-health:[\s\S]*docker buildx (?:build|bake)/);
+  assert.doesNotMatch(workflow, /ARC keeps the verified (?:native|WASM|web) graph local/);
   assert.equal(
     ecosystem.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)?.length,
     3,
