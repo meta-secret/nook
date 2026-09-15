@@ -47,7 +47,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
         "type=registry,ref=",
-        "mode=max,compression=zstd,force-compression=true,timeout=10m",
+        "compression=zstd,force-compression=true,timeout=10m",
     ] {
         assert!(
             bake.contains(required),

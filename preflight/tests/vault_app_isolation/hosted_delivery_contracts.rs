@@ -183,7 +183,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -233,7 +233,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+        "        wasm-node-test,",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -356,8 +356,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "authentication-sensitive PR changes must run only the focused extension regression in the exact trusted browser image"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
@@ -492,8 +498,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
+        preview_job.contains("needs:\n      [")
+            && preview_job.contains("        validation-request,")
+            && preview_job.contains("        rust,")
+            && preview_job.contains("        wasm,")
+            && preview_job.contains("        verify,")
+            && preview_job.contains("        wasm-node-test,")
+            && preview_job.contains("        ui-demo,")
+            && preview_job.contains("        extension-e2e,")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("EXTENSION_E2E_RESULT")
