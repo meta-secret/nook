@@ -26,7 +26,6 @@ target "builder-core-deps-publish" {
 // synthetic crate roots, and compiled dependencies. It contains no real source.
 target "builder-core-deps-input-publish" {
   inherits = ["builder-core-deps-restore"]
-  cache-to = rust_native_deps_input_cache_to
 }
 
 // Shared platform source overlay on cooked deps. Product leaves resolve this
@@ -72,7 +71,6 @@ target "builder-wasm-deps-publish" {
 
 target "builder-wasm-deps-input-publish" {
   inherits = ["builder-wasm-deps-restore"]
-  cache-to = rust_wasm_deps_input_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.

@@ -156,7 +156,6 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "arc-smoke",
         "sccache",
         "operations",
-        "bake-cache",
         "kubernetes-cache",
         "webhook-ingress",
     ];

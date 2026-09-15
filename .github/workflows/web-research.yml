@@ -68,7 +68,6 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: web-research-deps
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -109,7 +108,6 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: web-research-image
           registry-host: registry.dev.nokey.sh
           # Main is the only trusted writer for stable buildcache refs. Hosted
           # same-repository PRs retain the remote identity and write only their

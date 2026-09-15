@@ -6,8 +6,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
-
 struct RepositoryFixture {
     path: PathBuf,
 }
@@ -41,371 +39,40 @@ impl RepositoryFixture {
 }
 
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
-    let setup =
-        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
-    assert!(
-        setup.contains(
-            "\"${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs\" start"
-        )
-    );
-    assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
-    assert!(setup.contains("if [[ \"$pr_number\" =~ ^[0-9]+$ ]]"));
-    assert!(setup.contains("Pull-request jobs are forced to restore Main's cache read-only"));
-    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
-    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
-    let fingerprint =
-        RepositoryFixture::repository_root().read(".github/scripts/rust-deps-cache-fingerprint.sh");
-    for fingerprint_input in [
-        ".github/scripts/rust-deps-cache-fingerprint.sh",
-        "nook-app/nook-platform/Cargo.toml",
-        "nook-app/nook-platform/Cargo.lock",
-        "'nook-app/**/Cargo.toml'",
-        "'nook-app/nook-platform/.cargo/**'",
-        "'nook-app/nook-platform/.config/**'",
-        "nook-app/nook-platform/clippy.toml",
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
-        "nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore",
-        "nook-app/nook-platform/docker/sccache-wrapper.sh",
-        "nook-app/nook-platform/docker/sccache-report.sh",
-    ] {
-        assert!(
-            fingerprint.contains(fingerprint_input),
-            "Rust dependency scope fingerprint is missing {fingerprint_input}"
-        );
-    }
-    for non_cook_fingerprint_input in [
-        "nook-app/Taskfile.yml",
-        "nook-app/docker-bake.hcl",
-        "nook-app/**/docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/docker-bake.hcl",
-        "nook-app/nook-web/docker/*.docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/**",
-        "nook-app/nook-platform/docker/Taskfile.yml",
-        "nook-app/nook-web/docker/Taskfile.yml",
-        "nook-app/nook-web/docker/web.Dockerfile",
-        "nook-app/nook-web/docker/toolchain.Dockerfile",
-    ] {
-        assert!(
-            !fingerprint.contains(non_cook_fingerprint_input),
-            "Rust deps fingerprint must not rotate on non-cook input {non_cook_fingerprint_input}"
-        );
-    }
-    assert!(
-        setup.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
-            && setup.contains(
-                "bash \"${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh\""
-            )
-            && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
-            && setup
-                .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint")
-    );
-    assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
-    assert!(setup.contains("[ -z \"$read_only\" ]"));
-    assert!(setup.contains("main-cache-only"));
-    assert!(setup.contains("main-cache-only requires cache-write=false"));
-    assert!(
-        setup.contains("isolated-cache-write requires main-cache-only=true and cache-write=false")
-    );
-    assert!(setup.contains("isolated-cache-write requires workflow_dispatch or pull_request"));
-    assert!(setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\""));
-    assert!(setup.contains("scope_sha=\"$(git rev-parse HEAD)\""));
-    assert!(setup.contains("scope_suffix=\"-git-$scope_sha\""));
-    assert!(setup.contains("isolated-cache-write requires a 40-char lowercase git SHA"));
-    assert!(!setup.contains("scope_suffix=\"-pr-$pr_number\""));
-    assert!(!setup.contains("scope_suffix=\"-remote-$branch_hash-task-$task_hash\""));
+    let root = RepositoryFixture::repository_root();
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    assert!(setup.contains("docker/login-action@v4"));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
-    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
-    assert!(setup.contains("docker buildx imagetools inspect"));
-    assert!(!setup.contains("cache_total_count()"));
+    assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
+    assert!(!setup.contains("cache-selection"));
+    assert!(!setup.contains("publish_exact_availability"));
 
-    assert_release_cache_fingerprint_contract()?;
-
-    let app_bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
-    let rust_bake = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let web_image_bake =
-        RepositoryFixture::repository_root().read("nook-app/nook-web/docker/web.docker-bake.hcl");
-    let web_toolchain_bake = RepositoryFixture::repository_root()
-        .read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let web_app_bake =
-        RepositoryFixture::repository_root().read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
-    let bake =
-        format!("{app_bake}\n{rust_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{web_app_bake}");
-    assert!(app_bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
-    assert!(app_bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
-    assert!(app_bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
-    assert!(rust_bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
-    assert!(app_bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
-    assert!(app_bake.contains(
-        "write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook/remote-buildcache\" : \"nook/buildcache\""
-    ));
-    assert!(
-        !app_bake.contains("web_deps_cache_from =")
-            && !app_bake.contains("web_cache_from =")
-            && !app_bake.contains("web_e2e_cache_from =")
-            && web_toolchain_bake.contains("web_deps_cache_from =")
-            && web_image_bake.contains("web_cache_from =")
-            && web_image_bake.contains("web_e2e_cache_from ="),
-        "web Zot cache scope definitions must live under nook-web/docker bake files"
-    );
-    assert!(rust_bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
-    assert!(rust_bake.contains("rust_wasm_deps_write_scope"));
-    assert!(rust_bake.contains(
-        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m"
-    ));
-    let wasm_source_cache = rust_bake
-        .split_once("rust_wasm_source_cache_from =")
-        .context("platform bake must define the WASM source cache inputs")?
-        .1
-        .split_once("rust_wasm_source_cache_to =")
-        .context("platform bake must delimit the WASM source cache inputs")?
-        .0;
-    assert!(
-        wasm_source_cache
-            .matches("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache")
-            .count()
-            >= 1,
-        "every WASM source cache path must directly import the fingerprinted dependency lineage"
-    );
-    assert!(
-        !wasm_source_cache.contains("nook-rust-base-v2")
-            && !wasm_source_cache.contains("nook-rust-deps-v4"),
-        "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
-    );
-    let docker_tasks =
-        RepositoryFixture::repository_root().read("nook-app/nook-platform/docker/Taskfile.yml");
-    let platform_tasks =
-        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
-    let wasm_cache_verifier =
-        RepositoryFixture::repository_root().read(".github/scripts/verify-wasm-gha-cache.sh");
-    assert!(
-        wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
-            && wasm_cache_verifier.contains("nook/buildcache/${cache_scope}:buildcache")
-            && !docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
-        "dedicated Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while the normal ARC publisher never invokes the verifier"
-    );
-    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
-    assert!(
-        root_tasks.contains("GHA_CACHE_ENABLED:")
-            && root_tasks.contains("NOOK_REGISTRY_CACHE:-1")
-            && root_tasks.contains("registry-remote-password")
-            && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:")
-            && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:")
-            && root_tasks.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT:")
-            && root_tasks.contains("git-cache-scope.sh")
-            && root_tasks.contains("rust-deps-cache-fingerprint.sh")
-            && root_tasks.contains("git status --porcelain")
-            && !root_tasks.contains("-pr-$pr")
-            && !root_tasks.contains("-local-")
-            && docker_tasks.contains("registry-cache:ensure")
-            && docker_tasks.contains("registry-cache:publish:wasm")
-            && docker_tasks.contains("git-cache-scope-publish-guard.sh")
-            && docker_tasks.contains("rust-deps-cache-publish-guard.sh")
-            && docker_tasks.contains("unsafe cache recipe; publication skipped")
-            && docker_tasks.contains("builder-wasm-deps-input-publish")
-            && docker_tasks.contains("builder-core-deps-input-publish")
-            && docker_tasks.contains("login \"$host\"")
-            && docker_tasks.contains("task: registry-cache:publish:wasm"),
-        "Task Bake must enable clean git-commit publication plus dirty-safe formatter dependency publication"
-    );
-    let arc_sccache_health = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/sccache-health.Dockerfile");
-    assert!(
-        platform_tasks.contains("${GITHUB_ACTIONS:-}")
-            && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
-            && platform_tasks.contains("tcp://nook-buildkit.arc-runners.svc.cluster.local:1234")
-            && platform_tasks.contains("docker/sccache-health.Dockerfile")
-            && platform_tasks.contains("--output type=cacheonly")
-            && arc_sccache_health.contains("s3api head-bucket")
-            && arc_sccache_health.contains("type=secret,id=sccache_s3_access_key")
-            && arc_sccache_health.contains("type=secret,id=sccache_s3_secret_key"),
-        "ARC sccache preflight must fail closed through private BuildKit without a Docker runtime"
-    );
-    let git_scope = RepositoryFixture::repository_root().read(".github/scripts/git-cache-scope.sh");
-    let publish_guard = RepositoryFixture::repository_root()
-        .read(".github/scripts/git-cache-scope-publish-guard.sh");
-    let deps_publish_guard = RepositoryFixture::repository_root()
-        .read(".github/scripts/rust-deps-cache-publish-guard.sh");
-    assert!(
-        deps_publish_guard.contains("git -C \"$repo_root\" diff --quiet HEAD")
-            && deps_publish_guard.contains("cache recipe is dirty")
-            && deps_publish_guard.contains("fingerprint must be $expected"),
-        "dirty-safe dependency publication must reject dirty cache infrastructure"
-    );
-    assert!(
-        git_scope.contains("-git-$sha")
-            && git_scope.contains("--require-clean")
-            && publish_guard.contains("git-cache-scope.sh\" --require-clean")
-            && publish_guard.contains("GHA_CACHE_SCOPE_SUFFIX must be"),
-        "git-scoped cache helpers must emit -git-<sha> and refuse dirty local publish"
-    );
-    assert!(
-        app_bake.contains("Local Task Bake sets this from root Taskfile env"),
-        "shared bake comments must describe local registry-cache activation"
-    );
-    assert!(!bake.contains("type=gha"));
-    for fallback in [
-        "nook/buildcache/nook-rust-base-v2:buildcache",
-        "nook/buildcache/nook-rust-deps-v4:buildcache",
-        "nook/buildcache/nook-rust-native-source-v4:buildcache",
-        "nook/buildcache/nook-rust-wasm-source-v3:buildcache",
-        "nook/buildcache/nook-web-v1:buildcache",
+    let bake = [
+        root.read("nook-app/docker-bake.hcl"),
+        root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl"),
+        root.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl"),
+        root.read("nook-app/nook-web/docker/web.docker-bake.hcl"),
+        root.read("preflight/docker-bake.hcl"),
+    ]
+    .join("\n");
+    assert!(bake.contains("cache-from ="));
+    assert!(bake.contains("cache-to   ="));
+    assert!(bake.contains("type=registry,ref="));
+    assert!(bake.contains("ignore-error=true"));
+    for forbidden in [
+        "GHA_CACHE_EXACT_",
+        "GHA_CACHE_MAIN_",
+        "GHA_CACHE_FALLBACK_ENABLED",
+        "GHA_CACHE_EXACT_PROBES_COMPLETE",
+        "NOOK_RUST_DEPS_INPUT_FINGERPRINT",
     ] {
         assert!(
-            bake.contains(fallback),
-            "Main fallback cache ref is missing: {fallback}"
+            !bake.contains(forbidden),
+            "custom BuildKit selection remains: {forbidden}"
         );
     }
-    for scope in [
-        "nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
-    ] {
-        assert!(
-            bake.contains(scope),
-            "delivery cache must isolate immutable PR job generations: {scope}"
-        );
-    }
-    for write_scope in [
-        "${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-    ] {
-        assert!(
-            bake.contains(write_scope),
-            "registry BuildKit write cache ref is missing: {write_scope}"
-        );
-    }
-    for cold_isolated_import in [
-        "${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-    ] {
-        assert!(
-            bake.contains(cold_isolated_import),
-            "cold isolated cache-from must ignore missing remote-buildcache refs: {cold_isolated_import}"
-        );
-    }
-    let wasm_deps_from = rust_bake
-        .split_once("rust_wasm_deps_cache_from =")
-        .context("platform bake must define the WASM deps cache inputs")?
-        .1
-        .split_once("rust_wasm_deps_cache_to =")
-        .context("platform bake must delimit the WASM deps cache inputs")?
-        .0;
-    assert!(
-        rust_bake.contains("rust_wasm_deps_cache_from")
-            && app_bake.contains("registry.dev.nokey.sh"),
-        "WASM dependency restores must import registry.dev.nokey.sh cache refs"
-    );
-    assert!(
-        !wasm_deps_from.contains("nook-rust-base-v2")
-            && !wasm_deps_from.contains("nook-rust-deps-v4")
-            && wasm_deps_from.contains("nook-rust-wasm-source-v3"),
-        "WASM deps cache-from must not import shorter rust-base or native rust-deps parents; longer source-v2 is the empty-fingerprint bootstrap"
-    );
-    let deps_from = rust_bake
-        .split_once("rust_deps_cache_from =")
-        .context("platform bake must define the native deps cache inputs")?
-        .1
-        .split_once("rust_deps_cache_to =")
-        .context("platform bake must delimit the native deps cache inputs")?
-        .0;
-    let native_source_from = rust_bake
-        .split_once("rust_native_source_cache_from =")
-        .context("platform bake must define the native source cache inputs")?
-        .1
-        .split_once("rust_native_source_cache_to =")
-        .context("platform bake must delimit the native source cache inputs")?
-        .0;
-    assert!(
-        !deps_from.contains("nook-rust-base-v2")
-            && !native_source_from.contains("nook-rust-base-v2")
-            && deps_from.contains("nook-rust-deps-v4")
-            && native_source_from.contains("nook-rust-native-source-v4")
-            && native_source_from.contains("nook-rust-deps-v4"),
-        "native deps must be own-scope v3; native source cold fallback may import deps but never rust-base"
-    );
-    assert!(
-        rust_bake.contains(
-            "rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}\""
-        ) && wasm_deps_from.contains("GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE")
-            && wasm_deps_from.contains("${rust_wasm_deps_write_scope}:buildcache")
-            && wasm_deps_from
-                .contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true"),
-        "WASM deps must use the exact v5 scope alone when present and the fingerprinted Main scope only in cold fallback"
-    );
-
-    let wasm_bake = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    let focused_artifacts = wasm_bake
-        .split_once("target \"focused-web-artifacts\"")
-        .context("focused WASM artifact target must exist")?
-        .1
-        .split_once("\n}")
-        .context("focused WASM artifact target must terminate")?
-        .0;
-    assert!(focused_artifacts.contains("cache-to   = rust_wasm_source_cache_to"));
-
-    let focused_web = web_app_bake
-        .split_once("target \"nook-web-focused\"")
-        .context("focused web target must exist in nook-web-app bake")?
-        .1
-        .split_once("\n}")
-        .context("focused web target must terminate")?
-        .0;
-    assert!(focused_web.contains("cache-to   = web_cache_to"));
-
-    let core_bake = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let wasm_dependencies = core_bake
-        .split_once("target \"builder-wasm-deps\"")
-        .context("core bake file must define the WASM dependency target")?
-        .1
-        .split_once("target \"builder-debug\"")
-        .context("core bake file must delimit the WASM dependency target")?
-        .0;
-    assert!(
-        wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
-        "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
-    );
-    assert!(
-        wasm_dependencies
-            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/product.Dockerfile\"")
-            && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
-        "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
-    );
     Ok(())
 }
-
-fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
-    let release = RepositoryFixture::repository_root().read(".github/workflows/release.yml");
-    let release_source = release
-        .find("- name: Checkout release source")
-        .context("release workflow must check out release source")?;
-    let release_docker_setup = release
-        .find("- name: Docker setup")
-        .context("release workflow must configure BuildKit")?;
-    assert!(
-        release_source < release_docker_setup,
-        "release Docker setup must fingerprint the requested source after checkout"
-    );
-    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
-    assert!(release.contains("path: .nook/release-workflow"));
-    Ok(())
-}
-
 #[test]
 fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Result<()> {
     let reporter = RepositoryFixture::repository_root()

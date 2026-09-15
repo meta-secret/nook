@@ -349,7 +349,6 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         (".github/scripts/verify-wasm-gha-cache.sh", 4),
         (".github/scripts/with-healthy-buildkit.sh", 10),
         (".github/scripts/with-remote-buildkit.sh", 5),
-        ("infra/tasks/bake-cache.yml", 14),
     ] {
         let source = root.read(path);
         let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");

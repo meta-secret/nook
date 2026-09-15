@@ -5,17 +5,15 @@
 // graphs itself. It does not inherit product builder-core-deps or
 // builder-wasm, whose warm-up graphs include validation-only work.
 
-// The source graph is immutable-commit-only. BuildKit imports the current
-// scope directly and owns cache availability plus input/layer validation.
+// The source graph is immutable-commit-only; there is deliberately no mutable Main tag.
 // v4 is the single-export schema whose mode=max export is rooted at
 // the final compile target and therefore retains the expensive WASM compiler
 // lineage. Legacy v2 manifests are intentionally incompatible and untrusted
 // as warm-build evidence.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
-
-compile_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
-  "type=registry,ref=${compile_source_cache_ref}",
-] : []
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${compile_source_cache_ref},ignore-error=true",
+]
 
 // Every entry point uses one solve contract. Bake applies CLI overrides after
 // inheritance, so callers also mirror overrides on each named target.

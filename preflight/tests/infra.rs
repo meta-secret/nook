@@ -108,19 +108,13 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
                 entry.unwrap_or_else(|error| panic!("repository entry must be readable: {error}"));
             let path = entry.path();
             if path.is_dir() {
-                let relative = path
-                    .strip_prefix(RepositoryFixture::repository_root())
-                    .unwrap_or_else(|error| {
-                        panic!("repository entries must stay beneath the root: {error}")
-                    });
                 let directory_name = path
                     .file_name()
                     .unwrap_or_else(|| panic!("directory must have a name"));
                 if matches!(
                     directory_name.to_str(),
                     Some(".git" | "target" | "node_modules")
-                ) || relative == Path::new("infra/sim/bake-cache")
-                {
+                ) {
                     continue;
                 }
                 pending.push(path);
@@ -147,13 +141,6 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
     assert!(manifest.contains("internalTrafficPolicy: Local"));
     assert!(manifest.contains("kind: StatefulSet"));
     assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 4);
-
-    let proof = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
-    let zot = RepositoryFixture::repository_root().read("infra/sim/bake-cache/zot-config.json");
-    assert!(proof.contains("registry_ref"));
-    assert!(proof.contains("library/alpine"));
-    assert!(zot.contains("\"onDemand\": true"));
-    assert!(zot.contains("\"preserveDigest\": true"));
 }
 
 #[test]

@@ -18,18 +18,6 @@ on:
         description: Legacy single task or internal cache promotion selector
         required: false
         type: string
-      cache_fingerprint:
-        description: Rust dependency candidate fingerprint (promotion task only)
-        required: false
-        type: string
-      cache_candidate:
-        description: Rust dependency candidate nonce (promotion task only)
-        required: false
-        type: string
-      cache_source_sha:
-        description: Exact committed source for fingerprint verification (promotion task only)
-        required: false
-        type: string
       source_sha:
         description: Exact committed source to compile; required for the feature build:compile route
         required: false
@@ -80,8 +68,7 @@ jobs:
       (inputs.publish_compile_cache == false &&
       (inputs.tasks || inputs.task) != 'build:compile') ||
       (inputs.tasks != '' && inputs.task != '') ||
-      ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
-      (inputs.tasks || inputs.task) != 'web:verify' &&
+      ((inputs.tasks || inputs.task) != 'web:verify' &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
       (inputs.tasks || inputs.task) != 'web:e2e:debug' &&
@@ -158,7 +145,6 @@ jobs:
           printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile' || (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -396,42 +382,3 @@ jobs:
         env:
           SUITE_RESULT: ${{ needs.ci-pr-e2e-suite.result }}
         run: test "$SUITE_RESULT" = "success"
-
-  rust-cache-promote:
-    if: inputs.task == 'rust-cache:promote' && inputs.tasks == '' && inputs.publish_compile_cache != false
-    name: Remote / rust-cache:promote
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.cache_source_sha }}
-          path: candidate-source
-      - uses: oras-project/setup-oras@v2
-        with:
-          version: 1.3.3
-      - uses: docker/login-action@v3
-        with:
-          registry: registry.dev.nokey.sh
-          username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-      - name: Validate and promote candidate
-        env:
-          NOOK_REGISTRY_CACHE_HOST: registry.dev.nokey.sh
-          PROMOTION_FINGERPRINT: ${{ inputs.cache_fingerprint }}
-          PROMOTION_CANDIDATE: ${{ inputs.cache_candidate }}
-          PROMOTION_SOURCE_SHA: ${{ inputs.cache_source_sha }}
-        run: |
-          set -euo pipefail
-          test "$(git -C candidate-source rev-parse HEAD)" = "$PROMOTION_SOURCE_SHA"
-          committed_fingerprint="$(
-            NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE/candidate-source" \
-              bash .github/scripts/rust-deps-cache-fingerprint.sh
-          )"
-          test "$committed_fingerprint" = "$PROMOTION_FINGERPRINT"
-          bash .github/scripts/rust-deps-cache-promote.sh "$PROMOTION_FINGERPRINT" "$PROMOTION_CANDIDATE"

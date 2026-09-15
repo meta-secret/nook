@@ -1,7 +1,0 @@
-{
-  "name": "nook-web-app",
-  "private": true,
-  "dependencies": {
-    "@nook/app-runtime": "workspace:*"
-  }
-}

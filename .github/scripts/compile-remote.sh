@@ -100,7 +100,7 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
-echo "BuildKit will import the exact cache when available and validate every build input"
+echo "BuildKit will import the available exact cache, execute the solve, and export when authorized"
 NOOK_BUILDKIT_RAW_LOG="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log" \
   bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \

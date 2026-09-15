@@ -339,7 +339,6 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             );
         }
     }
-    assert!(remote.contains("if: inputs.task == 'rust-cache:promote'"));
     for credential in remote_compiler_credentials {
         assert_eq!(
             remote.matches(credential).count(),

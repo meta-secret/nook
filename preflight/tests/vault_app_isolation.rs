@@ -107,15 +107,11 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
 
 #[path = "vault_app_isolation/agent_and_local_workflow_contracts.rs"]
 mod agent_and_local_workflow_contracts;
-#[path = "vault_app_isolation/bake_cache_proofs.rs"]
-mod bake_cache_proofs;
 #[path = "vault_app_isolation/build_contracts.rs"]
 #[allow(clippy::unnecessary_wraps)]
 mod build_contracts;
 #[path = "vault_app_isolation/cloudflare_origin_contracts.rs"]
 mod cloudflare_origin_contracts;
-#[path = "vault_app_isolation/dependency_cache_bridge_proofs.rs"]
-mod dependency_cache_bridge_proofs;
 #[path = "vault_app_isolation/hosted_buildkit_cache_contracts.rs"]
 mod hosted_buildkit_cache_contracts;
 #[path = "vault_app_isolation/hosted_delivery_contracts.rs"]

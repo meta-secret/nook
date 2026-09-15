@@ -282,20 +282,6 @@ fn rust_ecosystem_jobs_keep_their_shared_execution_contract() -> anyhow::Result<
             "Shared Rust ecosystem checks are missing {marker}"
         );
     }
-    for selection in [
-        "ecosystem-policy-tools",
-        "ecosystem-smoke",
-        "ecosystem-dylint",
-    ] {
-        assert_eq!(
-            fixture
-                .checks
-                .matches(&format!("cache-selection: {selection}"))
-                .count(),
-            1,
-            "each ecosystem job must select only its owned cache probe lineage"
-        );
-    }
     assert!(
         !fixture.checks.contains("docker-bake-sccache.sh")
             && !fixture.checks.contains("NOOK_BAKE_FILES")
