@@ -614,7 +614,7 @@ class ArcManifestContract {
       "EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}",
       "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
       "WASM Node tests=$WASM_NODE_RESULT",
-      "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
+      "needs:\n      [\n        validation-request,\n        rust,\n        wasm,\n        verify,\n        wasm-node-test,\n        ui-demo,\n        extension-e2e,\n      ]",
       "Extension e2e finished with $EXTENSION_E2E_RESULT",
       "task _extension:test:e2e:file",
     ]);

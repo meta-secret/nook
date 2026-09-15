@@ -24,7 +24,7 @@ on:
         type: boolean
       source_sha:
         required: false
-        default: ''
+        default: ""
         type: string
 
 permissions:
@@ -481,7 +481,6 @@ jobs:
       - name: Test Main build statistics collector
         run: node --test .github/workflows/lib/main-build-stats.test.mjs
 
-
       - name: Test Workbench agent records
         run: node --test .github/scripts/workbench-records.test.cjs
 
@@ -604,7 +603,7 @@ jobs:
     name: Docker cache health
     if: always() && inputs.validation_requested
     needs: [rust-ecosystem, rust, wasm, wasm-node-test, verify]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 2
     steps:
       - name: Checkout cache-health evaluator
@@ -775,7 +774,16 @@ jobs:
       inputs.validation_requested
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]
+    needs:
+      [
+        validation-request,
+        rust,
+        wasm,
+        verify,
+        wasm-node-test,
+        ui-demo,
+        extension-e2e,
+      ]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
