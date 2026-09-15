@@ -80,6 +80,27 @@ test('registers the repository policy toolchain as an exact audited source', asy
   ).toThrow('Audited runtime source has drifted');
 });
 
+test('pins the writable cache connector as an exact audited source', async () => {
+  const path = '.github/actions/nook-cache-connect/main.js';
+  const source = await Bun.file(
+    resolve(import.meta.dir, '../../..', path),
+  ).text();
+  const inspection: AuditedRuntimeSourceRequest = { path, source };
+
+  expect(
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(inspection),
+  ).toBe(true);
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+      path,
+      source: source.replace(
+        'SCCACHE_S3_RW_MODE=READ_WRITE',
+        'SCCACHE_S3_RW_MODE=READ_ONLY',
+      ),
+    }),
+  ).toThrow('Audited runtime source has drifted');
+});
+
 test('fails closed for dynamic executables but permits benign maintenance args', () => {
   const [dynamic] = SkillProviderTypescriptSubprocessFixture.extract(
     "Bun.spawn(['bun', input + '/cli.ts']);",

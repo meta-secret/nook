@@ -190,7 +190,8 @@ void test("production selection retains every current Buildx record", () => {
 });
 
 void test("records Docker history unavailability as an incomplete collection", async () => {
-  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
+  const originalListBuildHistory =
+    CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
   CacheTelemetry.listBuildHistory = () => {
     throw new Error("Cannot connect to the Docker daemon");
   };

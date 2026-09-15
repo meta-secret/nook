@@ -138,7 +138,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/actions/nook-cache-connect/main.js',
-    'ae174432c2cae1dff0b990cf36f1828c8efc9227515f762c57bc6d2f877b9c0d',
+    '2a5052024b204660e51efe455bce752c603d70e8e7c36e4118a25834516ac036',
   ],
   [
     '.github/scripts/workbench-publish.cjs',
