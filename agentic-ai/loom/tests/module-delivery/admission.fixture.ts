@@ -45,8 +45,31 @@ import type {
   ModuleDeliveryEvidenceDigestRequest,
   ModuleDeliveryEvidenceSubmissionVerification,
 } from '../../src/module-delivery/evidence.ts';
+
+import type { GitFixture } from './worktree-test-support.ts';
+
+enum AdmissionSupplementStateKind {
+  Empty = 'empty',
+  Ready = 'ready',
+}
+
+type ReadyAdmissionSupplement = {
+  readonly kind: AdmissionSupplementStateKind.Ready;
+  readonly replacementSource: string;
+  readonly foreignFixture: GitFixture;
+  readonly foreignSource: string;
+};
+
+type AdmissionSupplementState =
+  | { readonly kind: AdmissionSupplementStateKind.Empty }
+  | ReadyAdmissionSupplement;
+
 export class ModuleDeliveryAdmissionScenario {
   private constructor(private readonly request: string) {}
+
+  private static supplement: AdmissionSupplementState = {
+    kind: AdmissionSupplementStateKind.Empty,
+  };
 
   static writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
     const { taskId, dependencies, path } = request;
@@ -169,6 +192,62 @@ export class ModuleDeliveryAdmissionScenario {
         stateRequest,
       );
     return { accepted: plan, authority, state };
+  }
+
+  static replacementSource(): string {
+    return ModuleDeliveryAdmissionScenario.supplementState().replacementSource;
+  }
+
+  static foreignSource(): string {
+    return ModuleDeliveryAdmissionScenario.supplementState().foreignSource;
+  }
+
+  static disposeSupplement(): void {
+    const state = ModuleDeliveryAdmissionScenario.supplement;
+    if (state.kind === AdmissionSupplementStateKind.Empty) return;
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(
+      state.foreignFixture,
+    );
+    ModuleDeliveryAdmissionScenario.supplement = {
+      kind: AdmissionSupplementStateKind.Empty,
+    };
+  }
+
+  private static supplementState(): ReadyAdmissionSupplement {
+    const existing = ModuleDeliveryAdmissionScenario.supplement;
+    if (existing.kind === AdmissionSupplementStateKind.Ready) return existing;
+    const replacementWrite = {
+      fixture,
+      relativePath: 'module/replacement.txt',
+      contents: 'replacement\n',
+    };
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(
+      replacementWrite,
+    );
+    const fixtureGit =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    fixtureGit(['add', '--all']);
+    fixtureGit(['commit', '--quiet', '-m', 'replacement']);
+    const replacementSource = fixtureGit(['rev-parse', 'HEAD']);
+    const foreignFixture =
+      ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: foreignFixture,
+      relativePath: 'module/foreign.txt',
+      contents: 'foreign\n',
+    });
+    const foreignGit =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(foreignFixture);
+    foreignGit(['add', '--all']);
+    foreignGit(['commit', '--quiet', '-m', 'foreign']);
+    const ready: ReadyAdmissionSupplement = {
+      kind: AdmissionSupplementStateKind.Ready,
+      replacementSource,
+      foreignFixture,
+      foreignSource: foreignGit(['rev-parse', 'HEAD']),
+    };
+    ModuleDeliveryAdmissionScenario.supplement = ready;
+    return ready;
   }
 
   static select(active: Runtime) {

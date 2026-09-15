@@ -28,8 +28,6 @@ import { TeamKey } from '../../src/team-agents/catalog.ts';
 
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
-import type { FixtureFileWrite } from './worktree-test-support.ts';
-
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryAdmissionSelectionStatus,
@@ -54,54 +52,6 @@ import type {
 } from '../../src/module-delivery/index.ts';
 
 import type { ModuleDeliveryEvidenceSubmissionVerification } from '../../src/module-delivery/evidence.ts';
-
-const replacementWrite: FixtureFileWrite = {
-  fixture,
-  relativePath: 'module/replacement.txt',
-  contents: 'replacement\n',
-};
-
-ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(replacementWrite);
-
-ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)(['add', '--all']);
-
-ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
-  'commit',
-  '--quiet',
-  '-m',
-  'replacement',
-]);
-
-const REPLACEMENT_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
-  fixture,
-)(['rev-parse', 'HEAD']);
-
-const foreignFixture =
-  ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
-
-const foreignWrite: FixtureFileWrite = {
-  fixture: foreignFixture,
-  relativePath: 'module/foreign.txt',
-  contents: 'foreign\n',
-};
-
-ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(foreignWrite);
-
-ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(foreignFixture)([
-  'add',
-  '--all',
-]);
-
-ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(foreignFixture)([
-  'commit',
-  '--quiet',
-  '-m',
-  'foreign',
-]);
-
-const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
-  foreignFixture,
-)(['rev-parse', 'HEAD']);
 
 describe('module delivery admission authority', () => {
   test('records the branch authority and rejects reversed ancestry', () => {
@@ -458,7 +408,7 @@ describe('module delivery admission authority', () => {
       ).toBe(true);
     };
     const replacementPlanRequest: GenerationPlanRequest = {
-      sourceCommit: REPLACEMENT_SOURCE,
+      sourceCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
       generation: 2,
       includeGamma: true,
     };
@@ -495,7 +445,11 @@ describe('module delivery admission authority', () => {
       'rev-parse',
       `${SOURCE}:module/seed.txt`,
     ]);
-    for (const sourceCommit of ['f'.repeat(40), blob, FOREIGN_SOURCE]) {
+    for (const sourceCommit of [
+      'f'.repeat(40),
+      blob,
+      ModuleDeliveryAdmissionScenario.foreignSource(),
+    ]) {
       const invalidPlanRequest: GenerationPlanRequest = {
         sourceCommit,
         generation: 2,
@@ -597,7 +551,7 @@ describe('module delivery admission authority', () => {
       }),
     );
     const replacementPlanRequest: GenerationPlanRequest = {
-      sourceCommit: REPLACEMENT_SOURCE,
+      sourceCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
       generation: 2,
       includeGamma: true,
     };
@@ -627,7 +581,7 @@ describe('module delivery admission authority', () => {
     const expectedState: ModuleDeliveryAdmissionState = {
       generation: 2,
       planDigest: replacement.planDigest,
-      headCommit: REPLACEMENT_SOURCE,
+      headCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
       originMainSha: replacement.plan.originMainSha,
       pinnedLocalDevSha: replacement.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: [],
@@ -654,17 +608,17 @@ describe('module delivery admission authority', () => {
       {
         taskId: alpha.taskId,
         attempt: 2,
-        startingFrontier: REPLACEMENT_SOURCE,
+        startingFrontier: ModuleDeliveryAdmissionScenario.replacementSource(),
       },
       {
         taskId: beta.taskId,
         attempt: 1,
-        startingFrontier: REPLACEMENT_SOURCE,
+        startingFrontier: ModuleDeliveryAdmissionScenario.replacementSource(),
       },
       {
         taskId: gamma.taskId,
         attempt: 1,
-        startingFrontier: REPLACEMENT_SOURCE,
+        startingFrontier: ModuleDeliveryAdmissionScenario.replacementSource(),
       },
     ]);
     expect(() => ModuleDeliveryAdmissionScenario.select(active)).toThrow(
@@ -732,7 +686,7 @@ describe('module delivery admission authority', () => {
     const secondPlan = structuredClone(firstPlan);
     const secondPlanUpdate = {
       generation: 2,
-      sourceCommit: REPLACEMENT_SOURCE,
+      sourceCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
     };
     Object.assign(secondPlan, secondPlanUpdate);
     const secondProvider = secondPlan.nodes.find(
@@ -774,7 +728,7 @@ describe('module delivery admission authority', () => {
     const staleStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: first.authority,
       acceptedPlan: acceptedSecondPlan,
-      headCommit: REPLACEMENT_SOURCE,
+      headCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
       integratedWriterFrontiers: [],
       acceptedEvidence: [acceptedFirst.evidence],
     };
@@ -846,7 +800,7 @@ describe('module delivery admission authority', () => {
       );
     }
     const replacementPlanRequest: GenerationPlanRequest = {
-      sourceCommit: REPLACEMENT_SOURCE,
+      sourceCommit: ModuleDeliveryAdmissionScenario.replacementSource(),
       generation: 2,
       includeGamma: true,
     };
@@ -884,6 +838,6 @@ describe('module delivery admission authority', () => {
 });
 
 afterAll(() => {
+  ModuleDeliveryAdmissionScenario.disposeSupplement();
   ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
-  ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(foreignFixture);
 });
