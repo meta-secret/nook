@@ -16,6 +16,7 @@ void test("records ordinary compile publication boundaries", () => {
       NOOK_COMPILE_CACHE_MODE: "publish",
       GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+      GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
     }).record(),
     {
       scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
@@ -27,6 +28,7 @@ void test("records ordinary compile publication boundaries", () => {
       },
       compile_source: {
         scope: `nook-build-compile-v3-git-${"b".repeat(40)}`,
+        restore_scope: `nook-build-compile-v3-git-${"c".repeat(40)}`,
         available: true,
         write_enabled: false,
         export_enabled: false,
@@ -350,6 +352,10 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 4,
+    compile_failures: 0,
+    measurement: "sum_of_per_stage_terminal_snapshots",
+    fallback: { state: "active", reason: "none" },
+    snapshots: reports,
     hit_rate_percent: 73.33,
   });
 });
@@ -379,6 +385,21 @@ void test("marks client-side zero-write publication counters pending verificatio
 });
 
 void test("reports the selected persistent or no-secret fallback backend", () => {
+  const fallbackEvents = [
+    {
+      logs: [
+        {
+          data: Buffer.from(
+            'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_transport_unavailable","remote_writes":0}\n',
+          ).toString("base64"),
+        },
+      ],
+    },
+  ];
+  assert.deepEqual(CacheTelemetry.extractSccacheFallback(fallbackEvents), {
+    state: "fallback",
+    reason: "cache_transport_unavailable",
+  });
   assert.deepEqual(
     CacheTelemetry.cacheBackendFromEnvironment({
       NOOK_SCCACHE_BACKEND: "remote",

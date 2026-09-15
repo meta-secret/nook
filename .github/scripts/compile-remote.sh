@@ -50,6 +50,7 @@ compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
 compile_deps_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-}"
 compile_deps_available="${GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE:-}"
 compile_exact_available="${GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE:-}"
+compile_restore_scope_suffix="${GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
@@ -139,6 +140,8 @@ fi
 
 if [ -n "$compile_exact_available" ]; then
   echo "Exact BuildKit cache is available; sccache remains the cross-commit compiler cache"
+elif [ -n "$compile_restore_scope_suffix" ]; then
+  echo "Nearest ancestor BuildKit cache is available; unchanged source vertices can be reused"
 elif [ -n "$compile_deps_available" ]; then
   echo "Dependency BuildKit cache is available; sccache will serve cross-commit compiler objects"
 else

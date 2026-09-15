@@ -37,6 +37,7 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
       --arg runtime_mode_source "$runtime_mode_source" \
       --arg client_side "$client_side" '
       def count_values: ([.counts[]?] | add) // 0;
+      def scalar_or_counts: if type == "object" then count_values else (. // 0) end;
       {
         stage: $stage,
         baked_runtime_mode: $baked_runtime_mode,
@@ -51,7 +52,8 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
         cache_misses: (.stats.cache_misses | count_values),
         cache_errors: (.stats.cache_errors | count_values),
         cache_write_errors: (if (.stats.cache_write_errors | type) == "object" then (.stats.cache_write_errors | count_values) else (.stats.cache_write_errors // 0) end),
-        cache_writes: (.stats.cache_writes // 0)
+        cache_writes: (.stats.cache_writes // 0),
+        compile_failures: (.stats.compile_errors | scalar_or_counts)
       }
     ' <<<"$stats_json"
   )" || report=""

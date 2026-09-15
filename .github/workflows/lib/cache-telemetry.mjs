@@ -39,6 +39,9 @@ export class CacheScopeTelemetry {
         scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
           ? `nook-build-compile-v3${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
           : "",
+        restore_scope: this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX
+          ? `nook-build-compile-v3${this.environment.GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX}`
+          : "",
         available: Boolean(
           this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE,
         ),
@@ -63,6 +66,7 @@ export class CacheScopeTelemetry {
 }
 
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
+const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
 const HISTORY_LOG_TIMEOUT_MS = 4_000;
 const HISTORY_RECORD_LIMIT = 32;
@@ -100,6 +104,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {number} cache_errors
  * @property {number} cache_write_errors
  * @property {number} cache_writes
+ * @property {number} compile_failures
  */
 /**
  * @typedef {object} SccacheSummary
@@ -117,6 +122,10 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {number} cache_errors
  * @property {number} cache_write_errors
  * @property {number} cache_writes
+ * @property {number} compile_failures
+ * @property {'sum_of_per_stage_terminal_snapshots'} measurement
+ * @property {{state: 'active' | 'fallback', reason: string}} fallback
+ * @property {readonly SccacheReport[]} snapshots
  * @property {number} [hit_rate_percent]
  */
 /**
@@ -139,7 +148,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
+ * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, restore_scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, imports: {probes_complete: boolean, failure_class: string, availability: Array<{name: string, available: boolean}>}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
@@ -466,6 +475,9 @@ export class CacheTelemetry {
         report.cache_write_errors,
       ),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
+      compile_failures: CacheTelemetry.nonNegativeInteger(
+        report.compile_failures,
+      ),
     };
     return normalized;
   }
@@ -488,6 +500,10 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_write_errors: 0,
       cache_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_per_stage_terminal_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
     };
     const first = reports[0];
     if (first) {
@@ -518,12 +534,14 @@ export class CacheTelemetry {
       summary.cache_errors += report.cache_errors;
       summary.cache_write_errors += report.cache_write_errors;
       summary.cache_writes += report.cache_writes;
+      summary.compile_failures += report.compile_failures;
     }
     if (reports.length > 0) {
       summary.publication_status = summary.client_side && summary.cache_errors === 0 && summary.cache_write_errors === 0 && summary.cache_writes === 0
         ? "pending_verification"
         : "counters_observed";
     }
+    summary.snapshots = reports;
     return {
       ...summary,
       ...CacheTelemetry.percentageField(
@@ -612,6 +630,39 @@ export class CacheTelemetry {
       inspectLine(line, { vertex: key, timestamp: "unterminated" });
     }
     return reports;
+  }
+
+  /** @param {readonly JsonRecord[]} events @returns {{state: 'active' | 'fallback', reason: string}} */
+  static extractSccacheFallback(events) {
+    let reason = "none";
+    for (const event of events) {
+      const candidates = Array.isArray(event.logs) ? event.logs : [];
+      for (const candidate of candidates) {
+        if (
+          !CacheTelemetry.isJsonRecord(candidate) ||
+          typeof candidate.data !== "string"
+        )
+          continue;
+        const decoded = Buffer.from(candidate.data, "base64").toString("utf8");
+        for (const line of decoded.split(/\r?\n/)) {
+          const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
+          if (markerAt === -1) continue;
+          try {
+            const fallback = CacheTelemetry.parseJsonRecord(
+              line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
+            );
+            if (typeof fallback.reason === "string" && fallback.reason) {
+              reason = fallback.reason;
+            }
+          } catch {
+            reason = "malformed_fallback_event";
+          }
+        }
+      }
+    }
+    return reason === "none"
+      ? { state: "active", reason }
+      : { state: "fallback", reason };
   }
 
   /** @returns {BuildHistoryRecord[]} */
@@ -823,6 +874,7 @@ export class CacheTelemetry {
       cache_errors: sccache.cache_errors,
       cache_write_errors: sccache.cache_write_errors,
       cache_writes: sccache.cache_writes,
+      compile_failures: sccache.compile_failures,
     })) {
       if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
         throw new Error(
@@ -831,6 +883,19 @@ export class CacheTelemetry {
       }
     }
     CacheTelemetry.validateOptionalRate(sccache, "hit_rate_percent", "sccache");
+    if (sccache.measurement !== "sum_of_per_stage_terminal_snapshots") {
+      throw new Error("telemetry sccache.measurement is invalid");
+    }
+    if (
+      !CacheTelemetry.isJsonRecord(sccache.fallback) ||
+      !["active", "fallback"].includes(sccache.fallback.state) ||
+      typeof sccache.fallback.reason !== "string"
+    ) {
+      throw new Error("telemetry sccache.fallback is invalid");
+    }
+    if (!Array.isArray(sccache.snapshots)) {
+      throw new Error("telemetry sccache.snapshots must be an array");
+    }
     const buildkit = record.buildkit;
     if (!CacheTelemetry.isJsonRecord(buildkit)) {
       throw new Error("telemetry buildkit summary is required");
@@ -1022,6 +1087,7 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
+    sccache.fallback = CacheTelemetry.extractSccacheFallback(historyEvents);
 
     return {
       schema_version: 1,
@@ -1113,6 +1179,9 @@ export class CacheTelemetry {
         `- sccache authority: baked=\`${record.sccache.baked_runtime_mode}\`, effective=\`${record.sccache.runtime_mode}\`, source=\`${record.sccache.runtime_mode_source}\``,
         `- sccache counters: \`${record.sccache.counter_reliability}\` (client-side=\`${record.sccache.client_side}\`)`,
         `- sccache publication: \`${record.sccache.publication_status}\``,
+        `- sccache measurement: \`${record.sccache.measurement}\`; fallback=\`${record.sccache.fallback.state}\` (${record.sccache.fallback.reason})`,
+        `- sccache requests: ${record.sccache.compile_requests} received, ${record.sccache.requests_executed} executed, ${record.sccache.compile_failures} compile failures`,
+        `- sccache cache results: ${record.sccache.cache_hits} hits, ${record.sccache.cache_misses} misses, ${record.sccache.cache_writes} writes`,
         `- sccache errors: ${record.sccache.cache_errors} cache operations, ${record.sccache.cache_write_errors} cache writes`,
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,

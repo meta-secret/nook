@@ -440,6 +440,7 @@ runs:
           fi
           compile_probe_dir="$(mktemp -d)"
           compile_probe_failure_class=none
+          compile_exact_available=""
           for compile_probe in \
             "deps|$compile_deps_scope" \
             "exact|nook-build-compile-v3$scope_suffix"; do
@@ -462,7 +463,10 @@ runs:
                 compile_probe_failure_class=transient_unavailable
                 echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"dependencies","failure_class":"transient_unavailable","action":"continue_cold"}'
                 ;;
-              exact\|0) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV" ;;
+              exact\|0)
+                compile_exact_available=1
+                echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV"
+                ;;
               exact\|1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
               exact\|2)
                 echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
@@ -473,6 +477,40 @@ runs:
             esac
           done
           rm -rf "$compile_probe_dir"
+          compile_restore_scope_suffix=""
+          if [ -n "$compile_exact_available" ]; then
+            compile_restore_scope_suffix="$scope_suffix"
+          else
+            # Exact refs are immutable proof artifacts. Probe a small first-
+            # parent window in parallel and import only the nearest successful
+            # full graph, so a new commit can reuse unchanged source vertices
+            # without a mutable shared tag or preparatory seed job.
+            ancestor_probe_limit=8
+            ancestor_probe_dir="$(mktemp -d)"
+            mapfile -t compile_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
+            for ancestor_sha in "${compile_ancestors[@]}"; do
+              (
+                ancestor_status=0
+                cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v3-git-$ancestor_sha:buildcache" || ancestor_status=$?
+                printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
+              ) &
+            done
+            wait
+            for ancestor_sha in "${compile_ancestors[@]}"; do
+              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
+              case "$ancestor_status" in
+                0)
+                  compile_restore_scope_suffix="-git-$ancestor_sha"
+                  echo "Nearest ancestor compile cache available: $ancestor_sha"
+                  break
+                  ;;
+                1|2) ;;
+                *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
+              esac
+            done
+            rm -rf "$ancestor_probe_dir"
+          fi
+          echo "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
           echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
           echo "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true"
         fi

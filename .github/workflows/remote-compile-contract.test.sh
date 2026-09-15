@@ -51,13 +51,13 @@ for compile_target in build-compile build-compile-dependency-cache; do
     grep -Fq -- "--set=${compile_target}.${secret_binding}" "$compile_script"
   done
 done
-for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
+for required in '"deps|$compile_deps_scope"' '"exact|nook-build-compile-v3$scope_suffix"' 'Compile cache probes complete: count=2 timeout_seconds=6 parallel=true' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
 done
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
   grep -Fq -- "$required" "$probe_classification_contract"
 done
-for required in 'mode=min,compression=zstd,force-compression=true,timeout=2m' 'mode=max,compression=zstd,force-compression=true,timeout=2m' 'target "build-compile-dependency-cache"' 'target     = "compile-dependency-cache"' 'cache-to   = compile_deps_cache_to' 'NOOK_COMPILE_CACHE_MODE == "publish"'; do
+for required in 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'compile_restore_source_cache_ref' 'mode=min,compression=zstd,force-compression=true,timeout=2m' 'mode=max,compression=zstd,force-compression=true,timeout=2m' 'target "build-compile-dependency-cache"' 'target     = "compile-dependency-cache"' 'cache-to   = compile_deps_cache_to' 'NOOK_COMPILE_CACHE_MODE == "publish"'; do
   grep -Fq -- "$required" "$compile_bake"
 done
 grep -Fq -- 'compile_targets=(build-compile-dependency-cache build-compile)' "$compile_script"
@@ -90,11 +90,11 @@ for required in 'compile_requests":339' 'cache_misses":{"counts":{"Rust":275' '"
 done
 grep -Fq -- 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success' "$sccache_fallback_contract"
 grep -Fq -- 'effective sccache mode: READ_WRITE' "$sccache_fallback_contract"
-for required in cache_hits cache_misses cache_write_errors cache_writes counter_reliability publication_status NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION NOOK_SCCACHE_HEALTH_WARNING; do grep -Fq -- "$required" "$sccache_report"; done
+for required in compile_requests requests_executed cache_hits cache_misses cache_write_errors cache_writes compile_failures counter_reliability publication_status NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION NOOK_SCCACHE_HEALTH_WARNING; do grep -Fq -- "$required" "$sccache_report"; done
 for required in 'SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log' 'test -z "${SCCACHE_ERROR_LOG:-}"' 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'product compilation remained available' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
   grep -Fq -- "$required" "$sccache_fallback_contract"
 done
-for required in 'Client-side cold publication: zero errors plus zero writes is pending verification' 'status=publication_pending_verification' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_WRITE runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'Repeated next-head zero hits: publication verification fails' 'next_head_zero_hits' 'bake-sim-sccache-hit' 'No-BuildKit-export replay: exact reuse with trusted sccache access' 'sccache_mode=READ_WRITE registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
+for required in 'Client-side cold publication: zero errors plus zero writes is pending verification' 'status=publication_pending_verification' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_WRITE runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: nearest-ancestor BuildKit reuse plus cross-commit sccache hits' 'COMPILE_RESTORE_SOURCE_SCOPE' 'require_uncached_step "$proof_log" bake-sim-compile-nook-wasm-source' 'Repeated next-head zero hits: publication verification fails' 'next_head_zero_hits' 'bake-sim-sccache-hit' 'No-BuildKit-export replay: exact reuse with trusted sccache access' 'sccache_mode=READ_WRITE registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"
@@ -103,7 +103,7 @@ if grep -Fq -- 'unexpected_read_only_sccache_writes' "$pr_cache_health"; then
   echo 'BuildKit no-export state incorrectly disables trusted sccache writes' >&2
   exit 1
 fi
-for required in 'baked_runtime_mode' 'runtime_mode_source' 'counter_reliability' 'publication_status' 'cache_write_errors' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'sccache counters:' 'sccache publication:' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
+for required in 'baked_runtime_mode' 'runtime_mode_source' 'counter_reliability' 'publication_status' 'cache_write_errors' 'compile_failures' 'sum_of_per_stage_terminal_snapshots' 'NOOK_SCCACHE_FALLBACK' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'sccache counters:' 'sccache publication:' 'sccache requests:' 'sccache cache results:' 'fallback=' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
   grep -Fq -- "$required" "$cache_telemetry"
 done
 echo 'remote build:compile cache contract passed'

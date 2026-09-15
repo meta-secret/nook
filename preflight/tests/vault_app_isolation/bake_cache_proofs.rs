@@ -666,6 +666,12 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
         format!("\"{compile_ref}\""),
         "build:compile must name its stable remote registry scope explicitly"
     );
+    let restore_ref_assignment =
+        assignment_body(&compile_bake, "compile_restore_source_cache_ref")?;
+    assert!(
+        restore_ref_assignment.contains("GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX"),
+        "build:compile must be able to restore one immutable nearest-ancestor source graph"
+    );
     assert!(
         !compile_bake.contains("nook-build-compile-v2"),
         "legacy shallow source manifests must not satisfy the compatible compile cache boundary"
@@ -687,7 +693,7 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
         "build:compile must export one registry cache"
     );
     assert!(
-        compile_from.contains("${compile_source_cache_ref}")
+        compile_from.contains("${compile_restore_source_cache_ref}")
             && compile_from.contains("${compile_deps_cache_ref}")
             && compile_to.contains("${compile_source_cache_ref}")
             && !compile_bake.contains("write_cache_repository")

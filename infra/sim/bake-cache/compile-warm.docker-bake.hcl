@@ -14,6 +14,10 @@ variable "COMPILE_SOURCE_CACHE_AVAILABLE" {
   default = ""
 }
 
+variable "COMPILE_RESTORE_SOURCE_SCOPE" {
+  default = ""
+}
+
 variable "COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
   default = ""
 }
@@ -50,8 +54,10 @@ compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/noo
 // v3 models the production compatibility boundary: legacy v2 mode=min
 // manifests do not prove that the final compiler lineage was retained.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_VERSION}-${COMPILE_SOURCE_SCOPE}:buildcache"
+compile_restore_source_scope = COMPILE_RESTORE_SOURCE_SCOPE != "" ? COMPILE_RESTORE_SOURCE_SCOPE : COMPILE_SOURCE_SCOPE
+compile_restore_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_VERSION}-${compile_restore_source_scope}:buildcache"
 compile_cache_from = COMPILE_SOURCE_CACHE_AVAILABLE != "" ? [
-  "type=registry,ref=${compile_source_cache_ref}",
+  "type=registry,ref=${compile_restore_source_cache_ref}",
 ] : [
   "type=registry,ref=${compile_deps_cache_ref}",
 ]

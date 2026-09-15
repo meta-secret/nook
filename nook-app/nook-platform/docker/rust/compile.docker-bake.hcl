@@ -17,6 +17,13 @@ variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
   default = ""
 }
 
+// The current exact ref remains the immutable export destination. When it is
+// absent, hosted setup may select the nearest successfully published first-
+// parent ref as the single full-graph restore source.
+variable "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX" {
+  default = ""
+}
+
 // The source-free dependency graph is fingerprinted independently. A feature
 // source graph is exact-commit-only and includes the required Hive compile
 // graph. There is deliberately no trusted Main source fallback.
@@ -26,12 +33,13 @@ compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${G
 // lineage. Legacy v2 manifests are intentionally incompatible and untrusted
 // as warm-build evidence.
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+compile_restore_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX}:buildcache"
 
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
-  "type=registry,ref=${compile_source_cache_ref}",
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX != "" ? [
+  "type=registry,ref=${compile_restore_source_cache_ref}",
 ] : []
 
-compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX == "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
   "type=registry,ref=${compile_deps_cache_ref}",
 ] : []
 

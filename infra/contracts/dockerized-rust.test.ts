@@ -984,6 +984,13 @@ tasks:
     expect(dockerSetup).toContain(
       "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true",
     );
+    expect(dockerSetup).toContain(
+      'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^',
+    );
+    expect(dockerSetup).toContain(
+      "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX",
+    );
+    expect(production).toContain("compile_restore_source_cache_ref");
     expect(dockerSetup).toContain("classify-registry-cache-probe.sh");
     expect(dockerSetup).toContain("NOOK_CACHE_PROBE_WARNING");
     expect(dockerSetup).toContain(
