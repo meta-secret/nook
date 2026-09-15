@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { CacheTelemetry } from "./cache-telemetry.mjs";
 
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+
 /**
  * @typedef {object} PrCacheJob
  * @property {string} id
@@ -12,19 +14,10 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {boolean} readOnly
  */
 /**
- * @typedef {object} CacheTelemetryRecord
- * @property {{job: string}} github
- * @property {{persistent: boolean}} cache_backend
- * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
- * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, remote_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
- * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
- * @property {{complete: boolean}} collection
- */
-/**
  * @typedef {object} PrCacheHealthModel
  * @property {1} schema_version
  * @property {{minimum_buildkit_hit_rate_percent: number, minimum_completed_steps: number}} policy
- * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
+ * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
  * @property {string[]} warnings
  * @property {{verdict: "pass" | "fail", specialist_activation_required: boolean, reasons: string[]}} gate
  */
