@@ -25,6 +25,15 @@ RUN cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 
+# Keep the wrapper and reporter in this Dockerfile's own input graph. The
+# rust-base named context may be restored from a separate cache lineage;
+# copying the current repository files here makes their content part of the
+# nightly/Dylint ancestor key and propagates the resulting image into every
+# compiler vertex below without invalidating the toolchain installs above.
+COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
+COPY nook-app/nook-platform/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
+RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
+
 FROM rust-ecosystem-nightly AS rust-dylint-deps
 
 ARG DYLINT_NIGHTLY=nightly-2026-04-16

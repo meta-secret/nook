@@ -235,6 +235,20 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
   const firstTelemetry = MainBuildStatsFixture.first(input.cacheTelemetry);
   assert.ok(typeof firstTelemetry.github === "object");
   assert.ok(typeof firstTelemetry.buildkit === "object");
+  const admitted = MainBuildStatsCodec.admitCacheTelemetry(firstTelemetry, {
+    runId: input.run.id,
+    runAttempt: input.run.run_attempt,
+  });
+  assert.equal(admitted.sccache.baked_runtime_mode, "READ_WRITE");
+  assert.equal(admitted.sccache.runtime_mode_source, "runtime_secret");
+  assert.equal(admitted.sccache.client_side, true);
+  assert.equal(admitted.sccache.counter_reliability, "backend_incomplete");
+  assert.equal(admitted.sccache.publication_status, "counters_observed");
+  assert.deepEqual(admitted.sccache.fallback, {
+    state: "active",
+    reason: "none",
+  });
+  assert.deepEqual(admitted.sccache.snapshots, []);
   input.cacheTelemetry.push({
     ...structuredClone(firstTelemetry),
     github: {
@@ -346,6 +360,12 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
       },
       sccache: {
         report_count: 0,
+        baked_runtime_mode: "UNAVAILABLE",
+        runtime_mode: "UNAVAILABLE",
+        runtime_mode_source: "unavailable",
+        client_side: false,
+        counter_reliability: "unavailable",
+        publication_status: "unavailable",
         compile_requests: 0,
         requests_executed: 0,
         cache_hits: 0,
@@ -353,6 +373,10 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
         cache_errors: 0,
         cache_write_errors: 0,
         cache_writes: 0,
+        compile_failures: 0,
+        measurement: "sum_of_zero_based_run_snapshots",
+        fallback: { state: "active", reason: "none" },
+        snapshots: [],
       },
       buildkit: {
         build_record_count: 0,

@@ -213,6 +213,72 @@ class DockerizedRustContract {
     expect(wrapper).not.toContain("SCCACHE_CLIENT_SIDE:=1");
   }
 
+  dylintWrapperContentInvalidatesBuildGraph(): void {
+    const nightlyPath =
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    const nightly = this.read(nightlyPath);
+    const bake = this.read(
+      "nook-app/nook-platform/docker/rust/docker-bake.hcl",
+    );
+    const wrapper = this.read(
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
+    );
+    const dockerignore = this.read(
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile.dockerignore",
+    );
+    const ecosystemStage = nightly.indexOf(
+      "FROM rust-base AS rust-ecosystem-nightly",
+    );
+    const ecosystemEnd = nightly.indexOf(
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      ecosystemStage,
+    );
+    const wrapperCopy = nightly.indexOf(
+      "COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache",
+      ecosystemStage,
+    );
+    const wrapperMode = wrapper.indexOf(': "${SCCACHE_CLIENT_SIDE:=0}"');
+    expect(ecosystemStage).toBeGreaterThanOrEqual(0);
+    expect(ecosystemEnd).toBeGreaterThan(ecosystemStage);
+    expect(wrapperCopy).toBeGreaterThan(ecosystemStage);
+    expect(wrapperCopy).toBeLessThan(ecosystemEnd);
+    expect(wrapperMode).toBeGreaterThanOrEqual(0);
+    expect(dockerignore).not.toContain(
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
+    );
+    expect(nightly).toContain(
+      "RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report",
+    );
+
+    const dylintTarget = bake.indexOf('target "rust-dylint"');
+    const dylintTargetEnd = bake.indexOf(
+      'target "rust-dylint-build"',
+      dylintTarget,
+    );
+    expect(dylintTarget).toBeGreaterThanOrEqual(0);
+    expect(dylintTargetEnd).toBeGreaterThan(dylintTarget);
+    expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
+      "docker/rust/nightly.Dockerfile",
+    );
+
+    const dylintBuild = nightly.indexOf(
+      "FROM rust-dylint-deps AS rust-dylint-build",
+      ecosystemEnd,
+    );
+    const dylintSelfTest = nightly.indexOf(
+      "FROM rust-dylint-build AS rust-dylint-self-test",
+      dylintBuild,
+    );
+    expect(dylintBuild).toBeGreaterThan(ecosystemEnd);
+    expect(dylintSelfTest).toBeGreaterThan(dylintBuild);
+    expect(nightly.slice(dylintBuild, dylintSelfTest)).toContain(
+      "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
+    );
+    expect(nightly.slice(dylintSelfTest)).toContain(
+      "cargo llvm-cov test -p nook_domain_api",
+    );
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -894,6 +960,10 @@ test(
 test(
   "Dylint dependencies stay source-free and sccache uses server-side mode",
   contract.dylintDependencyCacheAndSccacheMode.bind(contract),
+);
+test(
+  "Dylint compiler vertices consume the current wrapper content",
+  contract.dylintWrapperContentInvalidatesBuildGraph.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
