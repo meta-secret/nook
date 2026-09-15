@@ -1,1 +1,0 @@
-extension-locale-source-v1

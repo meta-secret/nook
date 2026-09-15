@@ -47,8 +47,6 @@ export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 compile_scope_suffix="${GHA_CACHE_SCOPE_SUFFIX:-}"
-compile_exact_available="${GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE:-}"
-compile_restore_scope_suffix="${GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX:-}"
 if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
@@ -102,13 +100,7 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
-if [ -n "$compile_exact_available" ]; then
-  echo "Exact BuildKit cache is available; sccache remains the cross-commit compiler cache"
-elif [ -n "$compile_restore_scope_suffix" ]; then
-  echo "Nearest ancestor BuildKit cache is available; unchanged source vertices can be reused"
-else
-  echo "No remote BuildKit cache is available; performing a cold solve with sccache"
-fi
+echo "BuildKit will import the exact cache when available and validate every build input"
 NOOK_BUILDKIT_RAW_LOG="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log" \
   bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
   "build:compile source" \

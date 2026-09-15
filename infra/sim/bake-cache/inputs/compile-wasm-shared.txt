@@ -1,1 +1,0 @@
-compile shared wasm source fixture

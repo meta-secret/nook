@@ -320,11 +320,7 @@ runs:
           local probe_status=0
           local failure_class
           probe_output="$(mktemp)"
-          if [ "$cache_selection" = "compile" ]; then
-            timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          else
-            docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
-          fi
+          docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output" || probe_status=$?
           failure_class="$(bash "${{ github.action_path }}/../../scripts/classify-registry-cache-probe.sh" "$probe_status" "$probe_output")"
           case "$failure_class" in
           available)
@@ -395,7 +391,7 @@ runs:
         }
 
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile)
+          general|native|wasm|wasm-proof)
           # Preserve the shared Rust dependency identity for its existing
           # consumers. build:compile uses immutable exact-head and ancestor
           # source scopes below; sccache owns cross-head compiler objects.
@@ -411,66 +407,6 @@ runs:
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
           ;;
         esac
-
-        if [ "$cache_selection" = "compile" ]; then
-          if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile" ]; then
-            echo "compile cache selection requires the build:compile selector" >&2
-            exit 1
-          fi
-          compile_probe_failure_class=none
-          compile_exact_available=""
-          compile_probe_status=0
-          cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4$scope_suffix:buildcache" || compile_probe_status=$?
-          case "$compile_probe_status" in
-            0)
-              compile_exact_available=1
-              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV"
-              ;;
-            1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
-            2)
-              echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV"
-              compile_probe_failure_class=transient_unavailable
-              echo '::warning title=Optional compile cache probe unavailable::NOOK_CACHE_PROBE_WARNING {"cache":"exact_source","failure_class":"transient_unavailable","action":"continue_cold"}'
-              ;;
-            *) exit "$compile_probe_status" ;;
-          esac
-          compile_restore_scope_suffix=""
-          if [ -n "$compile_exact_available" ]; then
-            compile_restore_scope_suffix="$scope_suffix"
-          else
-            # Exact refs are immutable proof artifacts. Probe a small first-
-            # parent window in parallel and import only the nearest successful
-            # full graph, so a new commit can reuse unchanged source vertices
-            # without a mutable shared tag or preparatory seed job.
-            ancestor_probe_limit=8
-            ancestor_probe_dir="$(mktemp -d)"
-            mapfile -t compile_ancestors < <(git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^)
-            for ancestor_sha in "${compile_ancestors[@]}"; do
-              (
-                ancestor_status=0
-                cache_ref_status "$registry_host/$exact_repository/nook-build-compile-v4-git-$ancestor_sha:buildcache" || ancestor_status=$?
-                printf '%s\n' "$ancestor_status" > "$ancestor_probe_dir/$ancestor_sha"
-              ) &
-            done
-            wait
-            for ancestor_sha in "${compile_ancestors[@]}"; do
-              ancestor_status="$(cat "$ancestor_probe_dir/$ancestor_sha")"
-              case "$ancestor_status" in
-                0)
-                  compile_restore_scope_suffix="-git-$ancestor_sha"
-                  echo "Nearest ancestor compile cache available: $ancestor_sha"
-                  break
-                  ;;
-                1|2) ;;
-                *) rm -rf "$ancestor_probe_dir"; exit "$ancestor_status" ;;
-              esac
-            done
-            rm -rf "$ancestor_probe_dir"
-          fi
-          echo "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX=$compile_restore_scope_suffix" >> "$GITHUB_ENV"
-          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=$compile_probe_failure_class" >> "$GITHUB_ENV"
-          echo "Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6"
-        fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
