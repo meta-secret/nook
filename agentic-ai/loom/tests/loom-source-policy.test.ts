@@ -54,7 +54,7 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   );
   const nativeToolchain =
     '      - name: Install native Rust compiler and linker\n' +
-    '        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential mold';
+    '        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential';
   expect(workflow).toContain(nativeToolchain);
   const rustSetup =
     '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
