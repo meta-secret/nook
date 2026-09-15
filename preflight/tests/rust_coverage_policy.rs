@@ -50,6 +50,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
     let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
+    let wasm_bake = read(&root.join("nook-app/nook-platform/nook-wasm/docker-bake.hcl"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
@@ -145,15 +146,46 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
-    let (handoff, browser) = wasm_coverage_stage
-        .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
-        .context("sealed handoff and secret-free browser validation stages")?;
+    let (handoff, compiler_and_browser) = wasm_coverage_stage
+        .split_once("\nFROM builder-wasm-handoff AS builder-wasm-node-compiler")
+        .context("sealed handoff and isolated Node compiler stage")?;
     assert!(!handoff.contains("bun.sh/install"));
-    assert!(browser.contains("wasm-pack test --node --release nook-wasm"));
-    assert!(!browser.contains("bun.sh/install") && !browser.contains("--mount=type=secret"));
+    let (compiler, browser) = compiler_and_browser
+        .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
+        .context("isolated Node compiler and secret-free browser validation stages")?;
+    assert!(compiler.contains("wasm-pack test --node --release nook-wasm"));
+    assert!(compiler.contains("wasm-pack test --node --release nook-companion-wasm"));
+    assert_eq!(
+        compiler
+            .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
+            .count(),
+        1
+    );
+    assert_eq!(
+        compiler
+            .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
+            .count(),
+        1
+    );
+    assert!(!compiler.contains("bun.sh/install"));
+    assert!(!compiler.contains("apt-get install"));
+    assert!(
+        browser.contains("COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed")
+    );
+    assert!(!browser.contains("wasm-pack test --node"));
+    assert!(!browser.contains("bun.sh/install"));
+    assert!(!browser.contains("--mount=type=secret"));
     assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
     assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
     assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
+    let node_compiler_target = wasm_bake
+        .split_once("target \"builder-wasm-node-compiler\" {")
+        .and_then(|(_, remainder)| remainder.split_once("\n}"))
+        .map(|(target, _)| target)
+        .context("WASM Bake must expose the isolated Node compiler target")?;
+    assert!(node_compiler_target.contains("target     = \"builder-wasm-node-compiler\""));
+    assert!(node_compiler_target.contains("cache-from = rust_wasm_source_cache_from"));
+    assert!(node_compiler_target.contains("output     = [\"type=cacheonly\"]"));
     assert!(
         central_ci.contains("on:\n  pull_request:")
             && central_ci.contains("push:\n    branches: [main]")
