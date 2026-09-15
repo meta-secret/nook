@@ -294,17 +294,49 @@ class DockerizedRustContract {
     const compilerRuns = nodeDeps.split(
       "RUN --mount=type=secret,id=sccache_s3_access_key,required=false",
     );
+    expect(compilerRuns).toHaveLength(3);
+    expect(nodeDeps.match(/^RUN\b/gm)).toHaveLength(4);
     const hostCoverage = compilerRuns[1]?.split("\nRUN --mount")[0];
     const browserCoverage = compilerRuns[2]?.split("\n# Source overlay")[0];
-    expect(hostCoverage).toContain(accessMount);
-    expect(hostCoverage).toContain(secretMount);
-    expect(hostCoverage?.match(/--mount=type=secret/g)).toHaveLength(2);
-    expect(browserCoverage).toContain(accessMount);
-    expect(browserCoverage).toContain(secretMount);
-    expect(browserCoverage?.match(/--mount=type=secret/g)).toHaveLength(2);
+    const assertCompilerMounts = (stage: string, runCount?: number): void => {
+      expect(stage).toContain(accessMount);
+      expect(stage).toContain(secretMount);
+      expect(stage.match(/--mount=type=secret/g)).toHaveLength(2);
+      if (runCount !== undefined) {
+        expect(stage.match(/^RUN\b/gm)).toHaveLength(runCount);
+      }
+    };
+    assertCompilerMounts(hostCoverage ?? "");
+    assertCompilerMounts(browserCoverage ?? "");
     const bunInstall = nodeDeps.split("RUN curl -fsSL https://bun.sh/install")[1]
       ?.split("\n\n# Export cargo-llvm-cov")[0];
     expect(bunInstall).not.toContain("--mount=type=secret");
+
+    const stage = (startMarker: string, endMarker: string): string => {
+      const start = product.indexOf(startMarker);
+      const end = product.indexOf(endMarker, start + startMarker.length);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      return product.slice(start, end);
+    };
+    for (const descendant of [
+      stage(
+        "FROM builder-wasm-node-deps AS builder-wasm-handoff",
+        "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
+      ),
+      stage(
+        "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
+        "FROM builder-wasm-handoff AS builder-wasm",
+      ),
+    ]) {
+      assertCompilerMounts(descendant, 1);
+    }
+    const browserStage = stage(
+      "FROM builder-wasm-handoff AS builder-wasm",
+      "FROM scratch AS wasm-export",
+    );
+    expect(browserStage).not.toContain("--mount=type=secret");
+    expect(browserStage.match(/^RUN\b/gm)).toHaveLength(0);
 
     const ecosystem = this.read(
       ".github/workflows/rust-ecosystem-checks.yml",
@@ -321,6 +353,9 @@ class DockerizedRustContract {
     expect(dylintJob).toContain('node-version: "24.19.0"');
     expect(this.read(".github/actions/nook-cache-telemetry/action.yml")).not.toContain(
       "skipping cache telemetry",
+    );
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
+      'node-version: "24.19.0"',
     );
   }
 

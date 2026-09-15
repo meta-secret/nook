@@ -798,7 +798,9 @@ COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
 COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
-RUN RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
 
@@ -813,12 +815,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
     && test -x "$runner" \
     && install -D -m 0755 "$runner" /opt/nook/wasm-bindgen-test-runner \
-    && touch /opt/nook/wasm-node-tests-passed
-
-FROM builder-wasm-handoff AS builder-wasm
-COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed
-COPY --from=builder-wasm-node-compiler /opt/nook/wasm-bindgen-test-runner /opt/nook/wasm-bindgen-test-runner
-RUN echo "nook-wasm declared coverage tests: native=82 browser=147" \
+    && touch /opt/nook/wasm-node-tests-passed \
+    && echo "nook-wasm declared coverage tests: native=82 browser=147" \
     && runner=/opt/nook/wasm-bindgen-test-runner \
     && test -x "$runner" \
     && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
@@ -826,6 +824,11 @@ RUN echo "nook-wasm declared coverage tests: native=82 browser=147" \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
     && WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
     && touch /opt/nook/wasm-coverage-passed
+
+FROM builder-wasm-handoff AS builder-wasm
+COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed
+COPY --from=builder-wasm-node-compiler /opt/nook/wasm-bindgen-test-runner /opt/nook/wasm-bindgen-test-runner
+COPY --from=builder-wasm-node-compiler /opt/nook/wasm-coverage-passed /opt/nook/wasm-coverage-passed
 
 FROM scratch AS wasm-export
 

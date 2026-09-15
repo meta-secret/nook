@@ -23,8 +23,8 @@ runs:
           node_bin=/home/runner/externals/node24/bin/node
         fi
         if [ -z "$node_bin" ]; then
-          echo "Actions Node.js runtime is unavailable; skipping cache telemetry."
-          exit 0
+          echo "Actions Node.js runtime is required for complete cache telemetry." >&2
+          exit 1
         fi
         baseline="${NOOK_CACHE_TELEMETRY_BASELINE:-$RUNNER_TEMP/nook-cache-telemetry-baseline.json}"
         suffix="${NOOK_CACHE_TELEMETRY_SUFFIX:+-$NOOK_CACHE_TELEMETRY_SUFFIX}"
