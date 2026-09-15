@@ -21,13 +21,12 @@ if [ -n "${SCCACHE_ERROR_LOG:-}" ]; then
   exit 2
 fi
 
-# sccache 0.17's client-side architecture keeps each compiler invocation alive
-# until its cache service has returned final statistics to the daemon. Without
-# it, a fast Rust compile can finish while every remote upload is still queued,
-# and the publication guard observes misses with zero writes and zero errors.
-# Keep this identical for readers and publishers so cache authority remains a
-# secret-only runtime input and cannot divide BuildKit compiler keys.
-: "${SCCACHE_CLIENT_SIDE:=1}"
+# Keep compiler requests on sccache's server-side path. Client-side mode can
+# leave concurrent remote storage requests waiting indefinitely while the
+# compiler waits for cache service work. The daemon's server-side counters are
+# authoritative for publication verification, and this default is identical for
+# readers and publishers so runtime authority cannot divide BuildKit keys.
+: "${SCCACHE_CLIENT_SIDE:=0}"
 export SCCACHE_CLIENT_SIDE
 
 # Compile-cache publishers and consumers mount this same secret ID at the same

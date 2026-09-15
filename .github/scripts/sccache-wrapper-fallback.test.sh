@@ -25,7 +25,7 @@ if [ "${1:-}" = --zero-stats ]; then
 fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
   success)
-    test "${SCCACHE_CLIENT_SIDE:-}" = 1
+    test "${SCCACHE_CLIENT_SIDE:-}" = 0
     test -z "${SCCACHE_ERROR_LOG:-}"
     printf 'effective sccache mode: %s\n' "${SCCACHE_S3_RW_MODE:-unset}" >&2
     exec "$@"

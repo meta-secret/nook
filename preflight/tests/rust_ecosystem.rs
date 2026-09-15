@@ -427,6 +427,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         "AS rust-ecosystem-dependency-policy",
         "ARG POLICY_RUN_NONCE",
         "AS rust-ecosystem-nightly",
+        "AS rust-dylint-deps",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
@@ -458,7 +459,10 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         !fixture.nightly_dockerfile.contains("rust-platform-nightly")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-ecosystem-nightly AS rust-dylint-build")
+                .contains("FROM rust-ecosystem-nightly AS rust-dylint-deps")
+            && fixture
+                .nightly_dockerfile
+                .contains("FROM rust-dylint-deps AS rust-dylint-build")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-build AS rust-dylint-self-test")
