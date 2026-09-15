@@ -145,6 +145,29 @@ describe('submitted login capture', () => {
     expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
   })
 
+  test('captures a page-world submit through an isolated-world event wrapper', () => {
+    document.body.innerHTML = `<form method="post">
+      <input autocomplete="username" value="pilot@example.test" />
+      <input type="password" autocomplete="current-password" value="secret" />
+      <button type="submit">Sign in</button>
+    </form>`
+    const form = document.querySelector('form')
+    const submitter = form?.querySelector('button')
+    if (!form || !submitter) throw new Error('expected cross-world fixture')
+    form.addEventListener(
+      'submit',
+      loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    )
+    const isolatedWorldEvent = new Event('submit', { cancelable: true })
+    Object.defineProperty(isolatedWorldEvent, 'submitter', {
+      value: submitter,
+    })
+
+    form.dispatchEvent(isolatedWorldEvent)
+
+    expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
+  })
+
   test('captures the replacement password on a password-change form', () => {
     document.body.innerHTML = `<form method="post">
       <input autocomplete="username" value="alice@nook.test" />
