@@ -155,6 +155,52 @@ fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyh
     Ok(())
 }
 
+#[test]
+fn dockerized_loom_verify_mounts_the_inherited_sccache_credentials() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    let bake = root.read("preflight/docker-bake.hcl");
+    let common = bake
+        .split_once("target \"_preflight-common\" {")
+        .and_then(|(_, tail)| tail.split_once("target \"preflight-test\""))
+        .context("preflight Bake must define the shared target")?
+        .0;
+    assert!(
+        common.contains("inherits   = [\"_sccache\"]"),
+        "preflight targets must inherit the shared sccache secret declaration"
+    );
+
+    let dockerfile = root.read("preflight/Dockerfile");
+    let loom_verify = dockerfile
+        .split_once("FROM policy-source AS loom-verify\n")
+        .and_then(|(_, tail)| tail.split_once("\nFROM loom-verify AS repository-policy"))
+        .context("preflight Dockerfile must define the loom-verify stage")?
+        .0;
+    for secret in [
+        "--mount=type=secret,id=sccache_s3_access_key,required=false",
+        "--mount=type=secret,id=sccache_s3_secret_key,required=false",
+    ] {
+        assert!(
+            loom_verify.contains(secret),
+            "loom-verify compiler RUN must mount the inherited sccache secret: {secret}"
+        );
+    }
+    assert_eq!(
+        loom_verify
+            .matches("--mount=type=secret,id=sccache_s3_access_key")
+            .count(),
+        1,
+        "loom-verify must use one shared access-key mount for its compiler RUN"
+    );
+    assert_eq!(
+        loom_verify
+            .matches("--mount=type=secret,id=sccache_s3_secret_key")
+            .count(),
+        1,
+        "loom-verify must use one shared secret-key mount for its compiler RUN"
+    );
+    Ok(())
+}
+
 fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     let action =
         RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
