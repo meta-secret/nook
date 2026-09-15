@@ -12,6 +12,7 @@ import { resolve } from "node:path";
 import { TextContract } from "./text-contract";
 
 enum DockerCacheSelection {
+  Compile = "compile",
   ConnectionOnly = "connection-only",
   EcosystemDeterministic = "ecosystem-deterministic",
   EcosystemDylint = "ecosystem-dylint",
@@ -25,6 +26,8 @@ enum DockerCacheSelection {
   Wasm = "wasm",
   WasmProof = "wasm-proof",
   WebE2e = "web-e2e",
+  WebResearchDeps = "web-research-deps",
+  WebResearchImage = "web-research-image",
 }
 
 const cacheActionSchema = z.object({
@@ -96,7 +99,7 @@ export class DockerCacheSelectionContract {
       source,
     });
     const admitted = contract.requireAll([
-      `general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
+      `general|native|wasm|wasm-proof|compile|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;`,
       "cache-selection is outside the closed consumer profile set",
     ]);
     if (admitted.isErr()) return err(admitted.error);
@@ -128,5 +131,4 @@ export class DockerCacheSelectionContract {
     }
     return ok();
   }
-
 }

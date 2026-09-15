@@ -244,6 +244,8 @@ class DockerizedRustContract {
       for (const profile of [
         "preflight",
         "web-e2e",
+        "web-research-deps",
+        "web-research-image",
         "connection-only",
         "native",
         "ecosystem-dylint",
@@ -318,8 +320,22 @@ class DockerizedRustContract {
           expect(calls).toContain("nook-preflight-v1");
         }
         if (profile === "web-e2e") {
-          expect(calls.trim().split("\n")).toHaveLength(1);
+          expect(calls.trim().split("\n")).toHaveLength(7);
           expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-deps-v1");
+          expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
+        }
+        if (profile === "web-research-deps") {
+          expect(calls.trim().split("\n")).toHaveLength(2);
+          expect(calls).toContain("nook-web-research-deps-v1");
+        }
+        if (profile === "web-research-image") {
+          expect(calls.trim().split("\n")).toHaveLength(7);
+          expect(calls).toContain("nook-web-e2e-v1");
+          expect(calls).toContain("nook-web-deps-v1");
+          expect(calls).toContain("nook-web-app-deps-v1");
+          expect(calls).toContain("nook-web-research-deps-v1");
         }
       }
     } finally {
@@ -584,7 +600,7 @@ class DockerizedRustContract {
       jobs: z.record(
         z.string(),
         z.object({
-          "timeout-minutes": z.number().optional(),
+          "timeout-minutes": z.union([z.number(), z.string()]).optional(),
           strategy: z
             .object({ "fail-fast": z.boolean().optional() })
             .optional(),
