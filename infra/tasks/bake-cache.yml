@@ -751,7 +751,7 @@ tasks:
         BAKE_SIM_CACHE_RESTORE_SCOPE_SUFFIX=
         echo "scenario Q ok"
 
-        echo "== Scenario AA: parent and leaf restore independent immutable ancestors =="
+        echo "== Scenario AA: rooted leaf publication embeds its independently restored parent =="
         printf '%s\n' "$parent_input_orig" >"$parent_input"
         printf 'independent-lineage-leaf\n' >"$leaf_input"
         parent_lineage_suffix="-git-4545454545454545454545454545454545454545"
@@ -783,6 +783,10 @@ tasks:
         BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX="$parent_lineage_suffix"
         BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX="$leaf_lineage_suffix"
         BAKE_SIM_LEAF_EXACT_AVAILABLE=1
+        # Once the complete mode=max leaf exists it is the sole restore root.
+        # Importing a shorter parent sibling as well can orphan the leaf graph
+        # nondeterministically and no longer models the one-export architecture.
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-aa-consumer-${suffix}"
         bake_plain "$proof_log" leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
@@ -790,6 +794,7 @@ tasks:
         BAKE_SIM_CACHE_RESTORE_PARENT_SCOPE_SUFFIX=
         BAKE_SIM_CACHE_RESTORE_LEAF_SCOPE_SUFFIX=
         BAKE_SIM_LEAF_EXACT_AVAILABLE=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         echo "scenario AA ok"
 
         echo "== Scenario R: exact-only replay works across linked and internal parents =="
