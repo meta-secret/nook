@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
+import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
@@ -517,10 +518,6 @@ export class CacheTelemetry {
               line.slice(reportAt + SCCACHE_MARKER.length).trim(),
             ),
           );
-          // A completed healthy READ_WRITE snapshot is the terminal effective
-          // state for that compiler stage. BuildKit's interleaved log retains
-          // fallback markers from earlier vertices, so an any-event reduction
-          // incorrectly labels a later healthy build as direct compilation.
           if (
             report.runtime_mode === "READ_WRITE" &&
             report.cache_errors === 0 &&
@@ -719,6 +716,8 @@ export class CacheTelemetry {
 
     /** @type {SccacheReport[]} */
     const reports = [];
+    /** @type {SccacheReport[]} */
+    const rawReports = [];
     /** @type {JsonRecord[]} */
     const historyEvents = [];
     let rawBuildLog = "";
@@ -730,20 +729,18 @@ export class CacheTelemetry {
     if (rawBuildLogPath && fs.existsSync(rawBuildLogPath)) {
       try {
         rawBuildLog = fs.readFileSync(rawBuildLogPath, "utf8");
-        reports.push(
+        rawReports.push(
           ...CacheTelemetry.extractSccacheReportsFromText(rawBuildLog),
         );
+        reports.push(...rawReports);
       } catch (error) {
         warnings.push(
           `buildx_raw_log_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
     }
-    // The raw build log is the reliable source when a solve is cancelled before
-    // BuildKit history is finalized, but it may contain only one of several
-    // compiler vertices. Keep collecting history for stages absent from the raw
-    // stream so WASM and Node compiler reports cannot disappear merely because a
-    // different vertex emitted a marker first.
+    // BuildKit history may contain stale fallback markers; collect reports from
+    // stages absent from the raw stream as well.
     const reportStages = new Set(reports.map((report) => report.stage));
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
@@ -811,9 +808,12 @@ export class CacheTelemetry {
     const rawFallback = CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
     const historyFallback =
       CacheTelemetry.extractSccacheFallback(historyEvents);
-    sccache.fallback =
-      rawFallback.state === "fallback" ? rawFallback : historyFallback;
-
+    sccache.fallback = resolveSccacheFallback(
+      rawReports,
+      rawFallback,
+      historyFallback,
+      rawBuildLog,
+    );
     return {
       schema_version: 1,
       github: {

@@ -70,8 +70,23 @@ impl WorkflowRuntimeContract<'_> {
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
         );
+        self.assert_native_build_envelope();
         self.assert_wasm_build_envelope();
         self.assert_untrusted_boundaries();
+    }
+
+    fn assert_native_build_envelope(&self) {
+        let root = self.root;
+        let pr = root.read(".github/workflows/pr.yml");
+        let native_job = pr
+            .split_once("  rust:\n")
+            .and_then(|(_, jobs)| jobs.split_once("\n  wasm:\n"))
+            .map(|(job, _)| job)
+            .unwrap_or_else(|| panic!("PR workflow must define a Native Rust producer job"));
+        assert!(
+            native_job.contains("timeout-minutes: 7"),
+            "PR Native Rust producer must retain its pre-existing seven-minute execution envelope"
+        );
     }
 
     fn assert_wasm_build_envelope(&self) {
