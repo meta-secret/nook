@@ -39,6 +39,16 @@ agent in the same thread.
     the packet.
   - Team Gizmo may translate packet shape but may not add authority.
 - **Allowed task authority**
+  - Each `acceptance.commands` entry is decoded through the repository's typed
+    Task-selector catalog. Only a known allowlisted selector may cross this
+    boundary; an arbitrary selector or raw command string is rejected before
+    execution.
+  - Every executable acceptance item carries `resources.read`,
+    `resources.write`, and `resources.evidenceSurface` as its read, write, and
+    output scopes. Commands may overlap only when those scopes are safe together.
+    Serialize or otherwise coordinate a writer that overlaps another
+    command's read, write, or output scope, and assign shared outputs to one
+    writer.
   - Gizmo Prime authorizes the canonical feature branch name; Delivery
     Pipeline routes that packet to PR Lifecycle, which re-fetches and resolves
     the latest committed head for the required branch push and remote
@@ -67,10 +77,14 @@ agent in the same thread.
    against the packet. A feature branch advance is followed by re-resolving its
    latest committed head; another repository or target stops the operation.
 2. Invoke only the named task or GitHub operation.
+   - Execute an allowlisted Task selector during this operation. The request,
+     a previous result, or another agent's statement that it ran does not
+     satisfy execution.
    - Shared-branch mutation is limited to the three bounded dev tasks.
    - Tooling enforces locks and revision guards.
-3. Return observed SHAs, run identifiers, result URLs, and blockers to Team
-   Gizmo in one terminal handoff.
+3. Return the invoked command, exit result, observed SHAs, run identifiers,
+   local or external output evidence, result URLs, and blockers to Team Gizmo
+   in one terminal handoff.
 4. Let the policy controller decide whether a fresh operation is authorized.
 5. For promotion, verify remote main equals the tested SHA.
 6. Read actual GitHub PR status and return it separately from the ref update.
@@ -87,11 +101,15 @@ agent in the same thread.
 - Do not squash, rebase, force-push, or create a promotion merge commit.
 - Do not manually close a PR as a substitute for merged status.
 - Do not broaden scope or create a scheduler when an operation fails.
+- Do not accept an unknown or arbitrary selector, an unexecuted declaration,
+  or a stale claimed result as execution evidence.
 
 ## Evidence
 
 The trusted packet and typed result identify the same target so the controller
-can correlate the operation without independently re-verifying the child.
+can correlate the operation without independently re-verifying the child. The
+result is execution evidence only after PR Lifecycle actually runs the current
+allowlisted selector and reports its command, exit result, and output evidence.
 Report protection
 rejections visibly. A successful push alone does not establish GitHub PR
 completion. Team Gizmo forwards the evidence. The controller owns the final

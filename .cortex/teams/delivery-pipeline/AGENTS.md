@@ -34,6 +34,13 @@ The Delivery Pipeline team reports to Gizmo Prime.
 The team executes authorized delivery mechanics. It does not create a second
 policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 
+## Universal boundary
+
+The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
+the universal execution, acceptance-scope, isolation, and repository coding
+requirements. This contract adds only Delivery Pipeline ownership and
+operational mechanics.
+
 ## Trusted in-thread handoff boundary
 
 Gizmo Prime, Delivery Pipeline Team Gizmo, Dev Manager, PR Lifecycle Agent,
@@ -63,6 +70,19 @@ existing validation and exact-snapshot safeguards.
 - Require each packet to name the operation, repository, bounded scope,
   controller, canonical branch or explicitly frozen source SHA, target
   identity, and acceptance evidence.
+- Treat each `acceptance.commands` entry as a typed Task-selector request,
+  never as execution evidence. Decode it against the repository's current
+  allowlisted Task catalog and reject arbitrary strings before invocation.
+- Route execution to PR Lifecycle, which must run the decoded selector in the
+  packet's current operation and report the invoked command, exit result,
+  observed target, and local or external output evidence. A declaration,
+  previously claimed result, or result from another operation is not evidence
+  that the current selector ran.
+- Require each executable acceptance item to carry `resources.read`,
+  `resources.write`, and `resources.evidenceSurface` as its read, write, and
+  output scopes. Run items concurrently only when those scopes are safe
+  together; serialize or otherwise coordinate items when a writer overlaps a
+  peer's read, write, or output scope. Assign each shared output to one writer.
 - Use Team Gizmo's one team worktree for Level 1 delivery-pipeline
   orchestration, commit-level handoffs, and remote-task packets.
 - Require Team Gizmo to dispatch internal execution through the active harness.
@@ -119,6 +139,9 @@ existing validation and exact-snapshot safeguards.
   explicitly freezes a dev snapshot for validation or promotion.
 - Do not create a scheduler, daemon, retry queue, journal, lease, or durable
   lifecycle service.
+- Do not accept an unknown selector, raw arbitrary command, unexecuted Task
+  declaration, stale claimed result, or successful agent handoff as Task
+  execution evidence.
 - Do not use administrator capability to skip required checks or verdicts.
 
 ## Responsibility split

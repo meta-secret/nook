@@ -18,6 +18,13 @@ GitHub, Git, credential, artifact, publication, and promotion state.
 
 - Execute only the packet's repository, branch or frozen revision, task, and
   target.
+- Decode a Task through the typed allowlisted selector catalog, honor its
+  declared read, write, and output scopes, and execute it in the current
+  operation. Reject arbitrary selector strings. Coordinate or serialize
+  overlapping writer scopes and assign shared outputs to one writer.
+- Record the invoked command, exit result, observed target, and local or
+  external output evidence. Neither an unexecuted declaration nor a stale
+  claimed result is execution evidence.
 - Return the terminal operation handoff to Delivery Pipeline Team Gizmo.
 - Invoke local integration only under the feature Gizmo's packet.
 - Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
@@ -36,12 +43,15 @@ GitHub, Git, credential, artifact, publication, and promotion state.
 - Do not close a PR manually to simulate merged status.
 - Do not use administrator capability to skip required checks.
 - Do not create a continuous manager, scheduler, or custom polling loop.
+- Do not pass through arbitrary Task strings or count declared, stale, or
+  unexecuted Task results as evidence.
 
 ## Procedure
 
 1. Confirm the packet's live target and canonical branch or explicitly frozen
    revision.
-2. Execute the named operation.
+2. Decode the known selector and execute the named operation. A typed request
+   authorizes execution; it does not prove execution.
    - Feature compilation first re-fetches and resolves the latest committed
      head of the Prime-authorized canonical branch, then pushes that ref and
      invokes the remote build-only task. A branch advance follows the latest

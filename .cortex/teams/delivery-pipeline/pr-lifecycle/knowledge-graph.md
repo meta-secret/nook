@@ -38,3 +38,12 @@ handoffs. External GitHub, Git, credential, artifact, publication, and
 promotion state is still verified; internal agent messages are not wrapped in
 cryptographic identity, signature, encryption, receipt, anti-forgery, replay,
 or duplicate-verification machinery.
+
+## Task execution boundary
+
+Trusted handoff does not mean declared work is already executed. PR Lifecycle
+decodes only known allowlisted Task selectors, honors their declared read,
+write, and output scopes, runs them in the current operation, and reports the
+observed command, exit result, and local or external evidence. Arbitrary
+selector strings, stale claimed results, and unexecuted declarations are not
+execution evidence.

@@ -67,6 +67,15 @@ selection, slow validation, and promotion. Each retains its own verdict.
   repository, workflow run, or Workbench operation. Use an exact head when the
   operation concerns a revision.
 - Confirm the packet's repository and applicable target identity before acting.
+- Decode Task requests through the repository's typed allowlisted selector
+  catalog. Reject unknown selectors and raw arbitrary command strings.
+- Execute each accepted selector during the current operation while honoring
+  its declared read, write, and output scopes. Serialize or coordinate
+  execution when a writer overlaps another command's read, write, or output
+  scope, and keep each shared output under one writer.
+- Return the actual invoked command, exit result, observed target, and local or
+  external output evidence. A packet declaration, prior claimed result, or
+  unexecuted acceptance item never counts as execution evidence.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
 - For feature compilation, require the Prime-authored canonical branch packet.
@@ -113,6 +122,9 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - PR Lifecycle Agent must not merge without the separate explicit merge packet.
 - PR Lifecycle Agent must not use `--admin` as a generic bypass or fallback.
 - PR Lifecycle Agent must not fabricate deployment evidence.
+- PR Lifecycle Agent must not execute an arbitrary selector or raw command,
+  accept a stale claimed outcome, or report an unexecuted declaration as Task
+  evidence.
 - PR Lifecycle Agent must not persist, replay, or claim durable ownership of reactive
   notifications.
 - PR Lifecycle Agent must not add fallback, compatibility, recovery, replay, or

@@ -57,6 +57,10 @@ same-thread agents.
   - Give the child an issued worktree when a bounded local-dev task requires
     one.
   - Keep dependent or shared mutations ordered.
+  - For executable acceptance items, preserve the typed selector and its
+    declared read, write, and output scopes. Dispatch only known allowlisted
+    selectors and serialize or coordinate commands whenever a writer overlaps
+    another command's read, write, or output scope.
 - Preserve the source packet's authority when creating a child packet.
   - Do not change the repository, branch, target, controller, or acceptance
     evidence. Do not turn an observed feature SHA into cross-stage authority.
@@ -92,6 +96,9 @@ same-thread agents.
   Cortex content.
 - Do not execute `gh`, direct GitHub API calls, or GitHub wrappers. Route them
   to the PR Lifecycle Agent.
+- Do not treat a selector declaration, an unexecuted acceptance item, or a
+  stale claimed outcome as execution evidence. The PR Lifecycle child must
+  execute the current operation and return its observed command and result.
 - Do not push feature or temporary branches. Do not invoke `task remote`,
   `workflow_dispatch`, or another remote task. Those mechanics belong to PR
   Lifecycle under the Prime-authorized canonical ref and its latest resolved
@@ -115,7 +122,9 @@ same-thread agents.
 - Team Gizmo sends a bounded packet to the Dev Manager or PR Lifecycle agent.
 - The child agent sends one terminal operation handoff to Team Gizmo.
 - Team Gizmo trusts that typed internal handoff; it does not re-run or
-  independently reconstruct the child's work.
+  independently reconstruct the child's work. This trust begins after the
+  assigned PR Lifecycle child executes the allowlisted selector; it never
+  turns a packet declaration or earlier claimed result into execution.
 - Team Gizmo sends synthesized evidence and blockers to Gizmo Prime.
 - Team Gizmo also forwards Dev Manager-owned evidence to the Dev Manager.
 - Child agents must not bypass Team Gizmo to create an untracked delivery path.
