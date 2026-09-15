@@ -75,8 +75,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Cache health consumes deterministic JSON telemetry from all seven BuildKit
   producers and also records the terminal status of the exact-image UI demo,
   extension, and full-browser consumers. Skipped optional consumers are
-  neutral. Matrix consumers preserve distinct per-shard started and completed
-  identities. A completed consumer failure is diagnostic only; a started but
+  neutral. Every consumer preserves started and completed lifecycle markers;
+  matrix consumers keep distinct per-shard identities. A completed consumer failure is diagnostic only; a started but
   incomplete failed consumer identifies setup or timeout and activates the
   Docker Cache Specialist. Cancellation or absence without this deterministic
   evidence remains diagnostic and cannot be mislabeled as a cache timeout.

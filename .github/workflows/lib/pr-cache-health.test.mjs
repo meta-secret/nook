@@ -282,6 +282,12 @@ void test("PR workflow covers every BuildKit-producing job without another build
     3,
   );
   assert.match(workflow, /full-e2e-shard-\$\{\{ matrix\.shard \}\}\.completed/);
+  assert.equal(
+    workflow.match(/name: Mark browser cache consumer completed/g)?.length,
+    3,
+  );
+  assert.match(workflow, /nook-cache-consumer\/ui-demo\.\*/);
+  assert.match(workflow, /nook-cache-consumer\/extension-e2e\.\*/);
   assert.doesNotMatch(workflow, /cache-health:[\s\S]*docker buildx (?:build|bake)/);
   assert.doesNotMatch(workflow, /ARC keeps the verified (?:native|WASM|web) graph local/);
   assert.equal(

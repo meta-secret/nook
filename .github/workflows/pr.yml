@@ -735,12 +735,16 @@ jobs:
               })
             }
 
+      - name: Mark browser cache consumer completed
+        if: always()
+        run: printf '%s\n' ui-demo > "$RUNNER_TEMP/nook-cache-consumer/ui-demo.completed"
+
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-ui-demo
-          path: ${{ runner.temp }}/nook-cache-consumer/ui-demo.started
+          path: ${{ runner.temp }}/nook-cache-consumer/ui-demo.*
           retention-days: 30
           if-no-files-found: warn
           overwrite: true
@@ -778,12 +782,16 @@ jobs:
           CI: true
           E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
 
+      - name: Mark browser cache consumer completed
+        if: always()
+        run: printf '%s\n' extension-e2e > "$RUNNER_TEMP/nook-cache-consumer/extension-e2e.completed"
+
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-extension-e2e
-          path: ${{ runner.temp }}/nook-cache-consumer/extension-e2e.started
+          path: ${{ runner.temp }}/nook-cache-consumer/extension-e2e.*
           retention-days: 30
           if-no-files-found: warn
           overwrite: true
