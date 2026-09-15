@@ -12,6 +12,11 @@ import {
   SkillProviderCommandBoundaryScenario,
 } from './skill-provider-command-boundary.ts';
 
+import {
+  type AuditedRuntimeSourceRequest,
+  SkillProviderSourcedSeamsScenario,
+} from './skill-provider-sourced-seams.ts';
+
 export class SkillProviderTypescriptSubprocessFixture {
   private constructor(private readonly request: string) {}
 
@@ -52,6 +57,27 @@ test('extracts finite TypeScript subprocess calls for shared classification', ()
         .launches[0]?.specifier,
     ).toBe(protectedPath);
   }
+});
+
+test('registers the repository policy toolchain as an exact audited source', async () => {
+  const path = 'agentic-ai/loom/src/commands/repository-policy-toolchain.ts';
+  const source = await Bun.file(
+    resolve(import.meta.dir, '../../..', path),
+  ).text();
+  const inspection: AuditedRuntimeSourceRequest = { path, source };
+
+  expect(
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(inspection),
+  ).toBe(true);
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+      path,
+      source: source.replace(
+        'spawnSync(request.executable, request.args',
+        'spawnSync(request.replacedExecutable, request.args',
+      ),
+    }),
+  ).toThrow('Audited runtime source has drifted');
 });
 
 test('fails closed for dynamic executables but permits benign maintenance args', () => {
