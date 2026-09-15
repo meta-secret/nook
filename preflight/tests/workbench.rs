@@ -3,7 +3,6 @@
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
 
-use anyhow::Context as _;
 use std::{
     env, fs,
     ops::Deref,
@@ -14,9 +13,6 @@ struct RepositoryFixture {
     path: PathBuf,
 }
 
-fn assigned_gizmo_id(raw: &str) -> &str {
-    if raw == "null" { "" } else { raw }
-}
 impl RepositoryFixture {
     fn repository_root() -> Self {
         Self {
