@@ -75,6 +75,21 @@ type StageSaveOfferRequest = {
   credentials: LoginCredentials
 }
 
+type CrossWorldSubmitEvent = Event & {
+  readonly submitter: EventTarget | false
+}
+
+/** Admits submit semantics without relying on page/isolated-world prototypes. */
+class AuthenticationSubmitEvent {
+  private static hasSubmitter(event: Event): event is CrossWorldSubmitEvent {
+    return 'submitter' in event
+  }
+
+  static admit(event: Event): CrossWorldSubmitEvent | false {
+    return event.type === 'submit' && this.hasSubmitter(event) ? event : false
+  }
+}
+
 export enum PendingSaveOfferLoadKind {
   Absent = 'absent',
   Loaded = 'loaded',
@@ -313,9 +328,10 @@ class LoginSaveInteraction {
   }
 
   captureSubmittedLogin(event: Event): void {
+    const submitEvent = AuthenticationSubmitEvent.admit(event)
     const target = event.target
     if (
-      !(event instanceof SubmitEvent) ||
+      !submitEvent ||
       !(target instanceof HTMLFormElement) ||
       widgetState.busy
     ) {
@@ -329,7 +345,7 @@ class LoginSaveInteraction {
         candidate.formScope.owner === target,
     )
     if (!workflow || workflow.summary.passwordFieldCount === 0) return
-    const { submitter } = event
+    const { submitter } = submitEvent
     if (submitter) {
       if (
         !(
