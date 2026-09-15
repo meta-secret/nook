@@ -130,7 +130,15 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_node_deps.contains(
         "test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run"
     ));
-    assert!(wasm_node_deps.contains("--no-run\nRUN eval"));
+    let compiler_runs = dockerfile_run_instructions(wasm_node_deps)
+        .into_iter()
+        .filter(|run| run.contains("--no-run"))
+        .collect::<Vec<_>>();
+    assert_eq!(compiler_runs.len(), 2);
+    assert!(compiler_runs[0].contains("llvm-cov show-env --sh"));
+    assert!(!compiler_runs[0].contains("--target wasm32-unknown-unknown"));
+    assert!(compiler_runs[1].contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
+    assert!(compiler_runs[1].contains("--target wasm32-unknown-unknown"));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
@@ -241,6 +249,37 @@ fn repository_root() -> anyhow::Result<PathBuf> {
 }
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
+}
+fn dockerfile_run_instructions(stage: &str) -> Vec<String> {
+    let mut runs = Vec::new();
+    let mut current = None;
+    for line in stage.lines() {
+        let trimmed = line.trim();
+        if let Some(run) = current.as_mut() {
+            run.push('\n');
+            run.push_str(trimmed);
+            if !trimmed.ends_with('\\') {
+                runs.push(current.take().expect("RUN instruction must be present"));
+            }
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("RUN") else {
+            continue;
+        };
+        if !rest.is_empty() && !rest.chars().next().is_some_and(char::is_whitespace) {
+            continue;
+        }
+        let instruction = trimmed.to_owned();
+        if trimmed.ends_with('\\') {
+            current = Some(instruction);
+        } else {
+            runs.push(instruction);
+        }
+    }
+    if let Some(run) = current {
+        runs.push(run);
+    }
+    runs
 }
 #[derive(Deserialize)]
 struct CoveragePolicy {

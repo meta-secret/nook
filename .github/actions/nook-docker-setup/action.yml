@@ -64,6 +64,11 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Provision Node.js for cache telemetry
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24.19.0"
+
     - name: Setup Task
       uses: go-task/setup-task@v2
       with:
@@ -337,8 +342,8 @@ runs:
           node_bin=/home/runner/externals/node24/bin/node
         fi
         if [ -z "$node_bin" ]; then
-          echo "Actions Node.js runtime is unavailable; skipping cache telemetry on this runner."
-          exit 0
+          echo "Actions Node.js runtime is required for complete cache telemetry." >&2
+          exit 1
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
         timeout 15s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"

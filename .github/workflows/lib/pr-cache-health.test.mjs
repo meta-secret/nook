@@ -227,6 +227,28 @@ void test("records a legitimate cold build without applying the warm threshold",
   assert.ok(model.warnings.includes("rust:publication_pending_verification"));
 });
 
+void test("fails warm samples when BuildKit does not report a hit rate", () => {
+  const source = telemetry("rust");
+  const { cache_hit_rate_percent: omittedRate, ...buildkit } = source.buildkit;
+  void omittedRate;
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [telemetry("rust", { buildkit })],
+  });
+
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(model.gate.reasons.includes("rust:buildkit_cache_rate_missing"));
+  const result = model.jobs.at(0);
+  assert.ok(result);
+  assert.ok(result.counters.buildkit);
+  assert.equal(
+    Object.hasOwn(result.counters.buildkit, "cache_hit_rate_percent"),
+    false,
+  );
+});
+
 void test("fails changed-head zero-hit verification and cache write errors", () => {
   const successor = telemetry("rust", {
     sccache: {
