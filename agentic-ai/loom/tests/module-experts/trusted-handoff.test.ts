@@ -79,3 +79,24 @@ test('keeps same-thread expert handoffs plain and boundary checks explicit', asy
     await expect(access(join(LOOM_ROOT, relativePath))).rejects.toThrow();
   }
 });
+
+test('keeps trusted-handoff documentation and failure kinds current', async () => {
+  const readme = await readFile(join(LOOM_ROOT, 'README.md'), 'utf8');
+  for (const staleReference of [
+    'moduleExpertAuthorizations',
+    'structuralExpertAuthorizations',
+    'exact authorization',
+    'exact typed child authorization',
+    'exact depth-two authorization',
+    'parent authorization freezes',
+  ]) {
+    expect(readme).not.toContain(staleReference);
+  }
+
+  const runtime = await readFile(
+    join(LOOM_ROOT, 'src/agent-workflow/runtime.ts'),
+    'utf8',
+  );
+  expect(runtime).not.toContain('IsolationReceipt');
+  expect(runtime).not.toContain('isolationReceipt');
+});

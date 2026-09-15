@@ -49,8 +49,9 @@ boundary for both WASM crates and generated bindings.
 
 Invoke one registered expert with an agent-owned JSON request:
 
-First finalize a depth-one parent attempt whose structured output uses
-`ModuleDevelopmentPlan` and includes an exact authorization such as:
+Build a typed request from the ordinary delegation run state. The request
+identifies the registered expert, its task, the attempt metadata, the parent
+attempt lineage, and the instruction to run:
 
 ```json
 {
@@ -67,9 +68,9 @@ First finalize a depth-one parent attempt whose structured output uses
 }
 ```
 
-The authorization is an entry in `moduleExpertAuthorizations`; it is not a
-standalone request or Markdown instruction. Record the completed parent through
-the ordinary Loom delegation journal before invoking the child.
+The `parent` field is ordinary typed lineage used by the delegation journal;
+there is no separate authorization object or authorization registry. Record the
+parent through the ordinary Loom delegation journal before invoking the child.
 
 ```json
 {
@@ -120,15 +121,14 @@ Loom module instead of loaded from the analyzed commit or live worktree.
 
 The command validates the complete typed catalog and selected semantic role
 before starting one isolated Codex thread. The request accepts no runtime
-permissions, tools, model, successors, or graph. It must declare the run,
-attempt, depth, and parent agent-attempt lineage. Direct named experts run only
-at depth two or three. Workflow-root, depth-one, self-parent, and invalid
-parent-attempt lineage are rejected before runtime. Loom replay-verifies the
-completed parent,
-its source commit and projections, and the exact typed child authorization
-before creating the child journal. A depth-three child must also have a
-completed immediate parent named by the depth-one plan. Expert evidence and
-`parentActions` cannot authorize descendants. The expert receives an immutable,
+permissions, tools, model, successors, or graph. It declares the run, attempt,
+depth, and parent agent-attempt lineage. Direct named experts run only at depth
+two or three. Workflow-root, depth-one, self-parent, and invalid parent-attempt
+lineage are rejected before runtime. The parent lineage is recorded in the
+ordinary attempt journal; it is not a separate authorization mechanism. A
+depth-three child must also have a completed immediate parent named by the
+depth-one plan. Expert evidence and `parentActions` cannot authorize
+descendants. The expert receives an immutable,
 catalog-scoped snapshot of the exact commit through three bounded loopback
 tools: file listing, file reading, and literal text search. Every snapshot
 contains the canonical module-expert skill and workflow authorities.
@@ -145,8 +145,7 @@ view under
 `workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
 The JSON response contains the typed terminal and content-addressed processing
 references. Before returning them, Loom rereads all three projections, verifies
-their digests and exact identity, and replays the terminal stream. The replayed
-invocation evidence binds the normalized `selectedContextPaths`. Runtime
+their file digests and identity, and replays the terminal stream. Runtime
 errors and invalid resolved completions produce a sanitized failed terminal and
 a Loom-authored failure view. The delivery owner remains responsible for
 aggregation, continuation, and lifecycle state.
@@ -196,8 +195,10 @@ definitions from the repository root:
 task loom:structural-experts:validate
 ```
 
-Invoke one role after recording a replay-verifiable depth-one
-`StructuralExpertPlan` with the exact depth-two authorization:
+Invoke one role after recording a depth-one `StructuralExpertPlan` in the
+ordinary delegation journal. The request carries typed parent lineage; a
+synthesis request additionally names the child result and view projections it
+will read:
 
 ```bash
 task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json
@@ -205,9 +206,10 @@ task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json
 
 Repository-reading requests select exact files or strict descendants of one
 reviewed scope cap. They cannot select an aggregate cap such as `.cortex` or
-`nook-app/nook-web`. Synthesis requests have no repository scope; their parent
-authorization freezes the exact ordered all-terminal child projection barrier.
-Loom accepts replay-valid completed and failed child evidence, preserves the
+`nook-app/nook-web`. Synthesis requests have no repository scope; their ordered
+child projections define the all-terminal child evidence barrier. Loom reads
+the ordinary parent and child journal projections, validates their identities
+and file digests, accepts completed or failed child evidence, preserves the
 failure view, and rejects missing, extra, reordered, rebound, or unrelated
 lanes. Every role uses the shared isolated read-only runtime, cannot delegate,
 and returns typed evidence for the delivery owner rather than write authority.

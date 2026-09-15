@@ -71,7 +71,6 @@ export enum AgentExecutionFailureKind {
   IncompleteTurn = 'incompleteTurn',
   ResultKind = 'resultKind',
   RuntimeSession = 'runtimeSession',
-  IsolationReceipt = 'isolationReceipt',
   RuntimeBoundary = 'runtimeBoundary',
 }
 export type AgentExecutionFailure =
