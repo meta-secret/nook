@@ -9,9 +9,7 @@ import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
-
 export { CacheScopeTelemetry };
-
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
@@ -409,7 +407,6 @@ export class CacheTelemetry {
       ),
     };
   }
-
   /**
    * @param {readonly BuildHistoryRecord[]} records
    * @param {readonly JsonRecord[]} [events]
