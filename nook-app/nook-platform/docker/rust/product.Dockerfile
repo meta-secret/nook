@@ -801,7 +801,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report wasm-node-test-and-coverage
 
 FROM builder-wasm-handoff AS builder-wasm
-RUN echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
     && wasm-pack test --node --release nook-companion-wasm \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
     && test -x "$runner" \
