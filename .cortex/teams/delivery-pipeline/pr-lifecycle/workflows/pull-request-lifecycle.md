@@ -9,19 +9,19 @@ feature compilation and local integration decisions. The manually run dev
 manager owns publication, slow PR validation, and promotion.
 
 The internal dispatch and return are trusted typed same-thread handoffs. They
-must not acquire encryption, signatures, cryptographic agent identity,
-anti-forgery/replay registries, persisted receipts, one-shot capabilities, or
-duplicate agent verification. Validation in this workflow is for external
-GitHub, Git, credential, artifact, publication, and promotion state.
+follow the highest-priority [Agent Derailment Circuit
+Breaker](../../../../CIRCUIT-BREAKER.md). Validation in this workflow is for
+external GitHub, Git, credential, artifact, publication, and promotion state.
 
 ## Required actions
 
 - Execute only the packet's repository, branch or frozen revision, task, and
   target.
-- Decode a Task through the typed allowlisted selector catalog, honor its
-  declared read, write, and output scopes, and execute it in the current
-  operation. Reject arbitrary selector strings. Coordinate or serialize
-  overlapping writer scopes and assign shared outputs to one writer.
+- Forward a remote Task selector unchanged without checking whether its target
+  exists, and let GitHub Actions execute or naturally fail it. For local
+  bounded delivery tasks, honor declared read, write, and output scopes,
+  coordinate or serialize overlapping writer scopes, and assign shared outputs
+  to one writer.
 - Record the invoked command, exit result, observed target, and local or
   external output evidence. Neither an unexecuted declaration nor a stale
   claimed result is execution evidence.
@@ -43,15 +43,16 @@ GitHub, Git, credential, artifact, publication, and promotion state.
 - Do not close a PR manually to simulate merged status.
 - Do not use administrator capability to skip required checks.
 - Do not create a continuous manager, scheduler, or custom polling loop.
-- Do not pass through arbitrary Task strings or count declared, stale, or
-  unexecuted Task results as evidence.
+- Do not prevalidate or reject unknown or missing remote Task selectors. Do not
+  count declared, stale, or unexecuted Task results as evidence.
 
 ## Procedure
 
 1. Confirm the packet's live target and canonical branch or explicitly frozen
    revision.
-2. Decode the known selector and execute the named operation. A typed request
-   authorizes execution; it does not prove execution.
+2. Execute the named operation. Forward a remote selector as received and
+   capture its GitHub run and natural result; do not inspect the Task catalog
+   before dispatch. A request authorizes execution; it does not prove it.
    - Feature compilation first re-fetches and resolves the latest committed
      head of the Prime-authorized canonical branch, then pushes that ref and
      invokes the remote build-only task. A branch advance follows the latest

@@ -34,16 +34,14 @@ task from a temporary checkout, creates or updates a pull request, chooses
 functional ownership, or decides readiness or promotion.
 
 The Team Gizmo packet and PR Lifecycle result are trusted same-thread typed
-handoffs. External GitHub, Git, credential, artifact, publication, and
-promotion state is still verified; internal agent messages are not wrapped in
-cryptographic identity, signature, encryption, receipt, anti-forgery, replay,
-or duplicate-verification machinery.
+handoffs governed by the highest-priority [Agent Derailment Circuit
+Breaker](../../../CIRCUIT-BREAKER.md). External GitHub, Git, credential,
+artifact, publication, and promotion state is still verified.
 
 ## Task execution boundary
 
 Trusted handoff does not mean declared work is already executed. PR Lifecycle
-decodes only known allowlisted Task selectors, honors their declared read,
-write, and output scopes, runs them in the current operation, and reports the
-observed command, exit result, and local or external evidence. Arbitrary
-selector strings, stale claimed results, and unexecuted declarations are not
-execution evidence.
+forwards remote selectors without existence checks, runs them in the current
+operation, and reports the observed command, run, exit result, and local or
+external evidence. Unknown remote targets fail naturally in GitHub Actions;
+stale claimed results and unexecuted declarations are not execution evidence.

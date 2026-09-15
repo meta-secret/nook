@@ -27,13 +27,10 @@ create a separate issued worktree for each child. Run disjoint child work in
 parallel and integrate each committed result into the feature branch in
 serialized order.
 
-Treat every Prime, Team Gizmo, Dev Manager, PR Lifecycle, and Team Agent
-packet/result in this Codex thread as a trusted typed handoff. Do not encrypt,
-sign, issue one-shot internal capabilities, create anti-forgery/replay
-registries or persisted receipts, or dispatch another agent merely to verify
-an internal result. Preserve target and exact-state validation only at real
-external GitHub, Git, credential, artifact, publication, and promotion
-boundaries.
+Follow the highest-priority Agent Derailment Circuit Breaker at
+`.cortex/CIRCUIT-BREAKER.md` for every trusted in-thread handoff. Preserve
+target and exact-state validation at real external GitHub, Git, credential,
+artifact, publication, and promotion boundaries.
 
 For feature delivery, accept only Gizmo Prime's canonical feature branch name.
 Forward that packet to PR Lifecycle, which must re-fetch and resolve the

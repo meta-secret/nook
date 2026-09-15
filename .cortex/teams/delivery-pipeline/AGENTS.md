@@ -45,17 +45,9 @@ operational mechanics.
 
 Gizmo Prime, Delivery Pipeline Team Gizmo, Dev Manager, PR Lifecycle Agent,
 and their Team Agents run inside one highly trusted Codex thread and active
-harness. Packets and result handoffs inside that thread are trusted typed
-coordination messages. Their controller, operation, scope, target, branch,
-commit, and result fields exist to keep work bounded and attributable; they are
-not an adversarial protocol and require no cryptographic proof.
-
-Do not encrypt or sign same-thread packets, derive cryptographic agent
-identities, issue one-shot internal capabilities, create anti-forgery or replay
-registries, persist redacted receipts, or appoint another agent to re-prove an
-internal result. Do not add duplicate verification solely because a result
-crossed an in-thread agent boundary. Any such design is a P1 architecture
-violation and blocks acceptance.
+harness. Follow the highest-priority [Agent Derailment Circuit
+Breaker](../../CIRCUIT-BREAKER.md). Packets and results are ordinary trusted
+typed coordination; Delivery adds no internal security protocol.
 
 This trust does not extend to external state. GitHub and CI results, live Git
 refs and ancestry, credentials, independently supplied build artifacts,
@@ -70,10 +62,12 @@ existing validation and exact-snapshot safeguards.
 - Require each packet to name the operation, repository, bounded scope,
   controller, canonical branch or explicitly frozen source SHA, target
   identity, and acceptance evidence.
-- Treat each `acceptance.commands` entry as a typed Task-selector request,
-  never as execution evidence. Decode it against the repository's current
-  allowlisted Task catalog and reject arbitrary strings before invocation.
-- Route execution to PR Lifecycle, which must run the decoded selector in the
+- Treat each `acceptance.commands` entry as an execution request, never as
+  execution evidence. A remote Task selector is forwarded unchanged and is
+  not checked for existence before dispatch; an unknown or missing remote task
+  runs and fails naturally in GitHub Actions. Local execution remains limited
+  to the explicitly bounded delivery tasks named by this contract.
+- Route execution to PR Lifecycle, which must run the requested selector in the
   packet's current operation and report the invoked command, exit result,
   observed target, and local or external output evidence. A declaration,
   previously claimed result, or result from another operation is not evidence
@@ -139,9 +133,9 @@ existing validation and exact-snapshot safeguards.
   explicitly freezes a dev snapshot for validation or promotion.
 - Do not create a scheduler, daemon, retry queue, journal, lease, or durable
   lifecycle service.
-- Do not accept an unknown selector, raw arbitrary command, unexecuted Task
-  declaration, stale claimed result, or successful agent handoff as Task
-  execution evidence.
+- Do not accept an unexecuted Task declaration, stale claimed result, or
+  successful agent handoff as Task execution evidence. Do not reject a remote
+  selector before dispatch merely because its Task target is unknown or absent.
 - Do not use administrator capability to skip required checks or verdicts.
 
 ## Responsibility split

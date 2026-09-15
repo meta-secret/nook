@@ -29,12 +29,9 @@ It is not a product-engineering functional team.
 It does not create a sixth functional ownership domain.
 
 Its packet from Team Gizmo and its result back to Team Gizmo are trusted typed
-messages inside the same Codex thread. Packet validation bounds the requested
-operation; it is not agent authentication. PR Lifecycle must not encrypt or
-sign those messages, derive cryptographic agent identities, issue one-shot
-internal capabilities, keep anti-forgery/replay registries or receipts, or ask
-another agent to verify its result. These mechanisms are a P1 violation unless
-the data crosses a real external trust boundary.
+messages inside the same Codex thread. Follow the highest-priority [Agent
+Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). Packet validation
+bounds the operation; it is not agent authentication.
 
 ### Controller verdicts
 
@@ -67,8 +64,11 @@ selection, slow validation, and promotion. Each retains its own verdict.
   repository, workflow run, or Workbench operation. Use an exact head when the
   operation concerns a revision.
 - Confirm the packet's repository and applicable target identity before acting.
-- Decode Task requests through the repository's typed allowlisted selector
-  catalog. Reject unknown selectors and raw arbitrary command strings.
+- Forward a packet's remote Task selector unchanged. Do not query or inspect
+  the Task catalog before remote dispatch and do not reject an unknown or
+  missing remote target; let GitHub Actions execute it and fail naturally.
+  Local Task execution remains restricted to the bounded delivery operations
+  explicitly authorized by this contract.
 - Execute each accepted selector during the current operation while honoring
   its declared read, write, and output scopes. Serialize or coordinate
   execution when a writer overlaps another command's read, write, or output
@@ -122,9 +122,9 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - PR Lifecycle Agent must not merge without the separate explicit merge packet.
 - PR Lifecycle Agent must not use `--admin` as a generic bypass or fallback.
 - PR Lifecycle Agent must not fabricate deployment evidence.
-- PR Lifecycle Agent must not execute an arbitrary selector or raw command,
-  accept a stale claimed outcome, or report an unexecuted declaration as Task
-  evidence.
+- PR Lifecycle Agent must not accept a stale claimed outcome or report an
+  unexecuted declaration as Task evidence. An unknown remote selector is not a
+  pre-dispatch rejection condition.
 - PR Lifecycle Agent must not persist, replay, or claim durable ownership of reactive
   notifications.
 - PR Lifecycle Agent must not add fallback, compatibility, recovery, replay, or

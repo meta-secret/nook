@@ -25,10 +25,11 @@ cycle it creates a new PR for the next snapshot. Dev remains permanent.
   an explicit manager packet.
 - Freeze origin/dev while checking and promoting the selected SHA.
 - Run the full existing slow PR checks for each published snapshot.
-- Authorize only typed, known allowlisted Task selectors for slow validation.
-  Require PR Lifecycle to execute each selector for the current snapshot and
-  return its command, exit result, and local or external output evidence;
-  declarations and stale claimed results do not satisfy validation.
+- Forward remote Task selectors for slow validation without checking whether
+  their targets exist. Require PR Lifecycle to return the GitHub command, run,
+  exit result, and output evidence for the current snapshot; unknown targets
+  fail naturally, while declarations and stale claimed results do not satisfy
+  validation.
 - Route slow validation evidence through Delivery Pipeline Team Gizmo -> active
   harness -> PR Lifecycle Agent.
 - After the validation wave is terminal, require the complete inventory of every
@@ -56,8 +57,9 @@ cycle it creates a new PR for the next snapshot. Dev remains permanent.
 - Do not create release branches, snapshot PRs, schedulers, or automations.
 - Do not treat a manual PR closure as a successful merge.
 - Do not override review or security failures.
-- Do not accept an arbitrary Task string, unexecuted declaration, or prior
-  claimed outcome as current-snapshot validation evidence.
+- Do not reject an unknown or missing remote Task selector before dispatch.
+  Do not accept an unexecuted declaration or prior claimed outcome as
+  current-snapshot validation evidence.
 - Use the authorized ADMIN identity only through guarded publication packets.
 - Report protection rejection without falling back to another merge method.
 

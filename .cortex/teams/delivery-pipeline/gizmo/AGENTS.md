@@ -19,13 +19,9 @@ second root delivery owner.
 ## Trusted in-thread handoffs
 
 Its parent and child communications are trusted typed handoffs inside the same
-Codex thread. Team Gizmo uses packet fields for bounded orchestration and
-correlates reported external observations with their targets. It must not add
-encryption, signatures, cryptographic agent identity, one-shot capabilities,
-anti-forgery or replay registries, persisted receipts, or a second agent that
-re-verifies an internal result. Those mechanisms are reserved for a real
-external trust boundary and are a P1 violation when applied only between
-same-thread agents.
+Codex thread under the highest-priority [Agent Derailment Circuit
+Breaker](../../../CIRCUIT-BREAKER.md). Packet fields bound orchestration; they
+do not create an internal security protocol.
 
 ## Context loading
 
@@ -57,10 +53,11 @@ same-thread agents.
   - Give the child an issued worktree when a bounded local-dev task requires
     one.
   - Keep dependent or shared mutations ordered.
-  - For executable acceptance items, preserve the typed selector and its
-    declared read, write, and output scopes. Dispatch only known allowlisted
-    selectors and serialize or coordinate commands whenever a writer overlaps
-    another command's read, write, or output scope.
+  - For executable acceptance items, preserve the selector and its declared
+    read, write, and output scopes. Forward remote Task selectors unchanged
+    without prevalidating whether the target exists. Serialize or coordinate
+    local commands whenever a writer overlaps another command's read, write,
+    or output scope.
 - Preserve the source packet's authority when creating a child packet.
   - Do not change the repository, branch, target, controller, or acceptance
     evidence. Do not turn an observed feature SHA into cross-stage authority.
@@ -123,7 +120,7 @@ same-thread agents.
 - The child agent sends one terminal operation handoff to Team Gizmo.
 - Team Gizmo trusts that typed internal handoff; it does not re-run or
   independently reconstruct the child's work. This trust begins after the
-  assigned PR Lifecycle child executes the allowlisted selector; it never
+  assigned PR Lifecycle child executes the requested selector; it never
   turns a packet declaration or earlier claimed result into execution.
 - Team Gizmo sends synthesized evidence and blockers to Gizmo Prime.
 - Team Gizmo also forwards Dev Manager-owned evidence to the Dev Manager.
