@@ -16,6 +16,16 @@ packet.
 ## Required actions
 
 - Accept the packet from AI Team Gizmo through the active harness.
+- If the packet authorizes TypeScript or JavaScript, load and apply the
+  [AI authored implementation routes](../AGENTS.md#authored-implementation-routing)
+  read-only, including [function ownership](../../../shared/dynamic-skills/function-ownership.md)
+  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md).
+  Record those authorities in the acceptance handoff.
+- For an authored TypeScript or JavaScript scope, require the manager's
+  authorized slow-stage acceptance evidence for `task loom:verify`, `task preflight:typescript-state`, and
+  `task preflight:source-architecture`, plus focused function-ownership
+  review. A missing authority, command, result, or review finding is a P1 and
+  fails closed.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Consume the Prime-issued canonical feature branch name and bootstrap
   evidence. `originMainSha` identifies the freshly fetched `origin/main` and

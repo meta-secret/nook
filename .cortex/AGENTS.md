@@ -233,6 +233,11 @@ Treat a new or changed unowned free function as a P1 finding. Follow
 [function ownership](shared/dynamic-skills/function-ownership.md) for owner
 selection, narrow external boundaries, and language-specific authorities.
 
+Every authored TypeScript, JavaScript, or Svelte source also follows the
+read-only [TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md)
+authority. It owns explicit absence, discriminated state, enum-backed closed
+vocabularies, and the prohibition on authored `null` or `undefined`.
+
 ### Domain APIs
 
 Every authored domain and application API follows
@@ -246,6 +251,23 @@ Treat a violation as a P1 finding.
 Every secret-bearing value follows the security-owned
 [secret lifecycle](teams/security/dynamic-skills/secret-lifecycle.md). Treat an
 unowned lifetime, plaintext persistence, or sensitive log as a P1 finding.
+
+### Universal implementation routes
+
+- [Source file size](shared/dynamic-skills/source-file-size.md) is the
+  non-bypassable source-structure gate.
+- [TypeScript and Rust automation only](shared/dynamic-skills/typescript-rust-automation-only.md)
+  owns repository automation language selection.
+- [Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)
+  owns behavior-focused test authoring and regression evidence.
+- [Prefer popular libraries](shared/dynamic-skills/prefer-popular-libraries.md)
+  applies when a new dependency or commodity helper is considered.
+- User-visible copy and localization follow the Web-owned
+  [UI design authority](teams/web-dev/dynamic-skills/ui-design-skills.md).
+
+These links route policy. They do not copy the linked rules. A task loads only
+the authorities relevant to its authored surface and reports a missing
+foreign-team authority to Gizmo Prime.
 
 Each concurrent feature has its own Gizmo delivery owner and isolated team
 worktrees. The manually run [Dev Manager](teams/delivery-pipeline/dev-manager/AGENTS.md) owns

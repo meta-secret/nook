@@ -48,6 +48,40 @@ const FRESH_BASE_BOOTSTRAP_AUTHORITIES = [
   '.cortex/gizmo-prime/workflows/team-oriented-development.md',
 ] as const;
 
+const AI_TYPESCRIPT_POLICY_ROUTES = [
+  {
+    path: '.cortex/teams/ai/AGENTS.md',
+    links: [
+      '[Function ownership](../../shared/dynamic-skills/function-ownership.md)',
+      '[TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)',
+    ],
+  },
+  {
+    path: '.cortex/teams/ai/gizmo/AGENTS.md',
+    links: [
+      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
+      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
+    ],
+  },
+  {
+    path: '.cortex/teams/ai/cortex-specialist/AGENTS.md',
+    links: [
+      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
+      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
+    ],
+  },
+  {
+    path: '.cortex/teams/ai/loom-specialist/AGENTS.md',
+    links: [
+      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
+      '[Function ownership](../../../shared/dynamic-skills/function-ownership.md)',
+      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
+    ],
+  },
+] as const;
+
 test('extracts index metadata and renders markdown', () => {
   const documents = [
     {
@@ -209,6 +243,119 @@ test('renders the complete canonical Cortex context router', () => {
   expect(markdown).toContain('Every new feature mission');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
+});
+
+test('routes every AI TypeScript leaf through the minimal policy authorities', () => {
+  for (const route of AI_TYPESCRIPT_POLICY_ROUTES) {
+    const document = readFileSync(path.join(REPOSITORY_ROOT, route.path), 'utf8');
+    for (const link of route.links) {
+      expect(document).toContain(link);
+    }
+  }
+
+  const aiIndex = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/dynamic-skills/index.md'),
+    'utf8',
+  );
+  expect(aiIndex).toContain(
+    '[AI team contract](../AGENTS.md#authored-implementation-routing)',
+  );
+  expect(aiIndex).toContain(
+    '[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
+  );
+});
+
+test('keeps root and AI universal policy routes canonical', () => {
+  const rootContract = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'),
+    'utf8',
+  );
+  for (const required of [
+    '[function ownership](shared/dynamic-skills/function-ownership.md)',
+    '[TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md)',
+    '[domain API integrity](shared/dynamic-skills/domain-api-integrity.md)',
+    '[Source file size](shared/dynamic-skills/source-file-size.md)',
+    '[TypeScript and Rust automation only](shared/dynamic-skills/typescript-rust-automation-only.md)',
+    '[Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)',
+    '[Prefer popular libraries](shared/dynamic-skills/prefer-popular-libraries.md)',
+    '[UI design authority](teams/web-dev/dynamic-skills/ui-design-skills.md)',
+  ]) {
+    expect(rootContract).toContain(required);
+  }
+
+  const aiContract = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+    'utf8',
+  );
+  for (const required of [
+    '[Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)',
+    '[TypeScript domain structure](../web-dev/dynamic-skills/typescript-domain-structure.md)',
+    '[concrete values](../web-dev/dynamic-skills/typescript-no-unknown.md)',
+    '[single parameters](../web-dev/dynamic-skills/typescript-single-parameter.md)',
+    '[named call arguments](../web-dev/dynamic-skills/typescript-named-args.md)',
+    '[Source file size](../../shared/dynamic-skills/source-file-size.md)',
+    '[TypeScript and Rust automation only](../../shared/dynamic-skills/typescript-rust-automation-only.md)',
+    '[Testing and regression coverage](../../shared/dynamic-skills/testing-pyramid-and-regression.md)',
+    '[Prefer popular libraries](../../shared/dynamic-skills/prefer-popular-libraries.md)',
+    '[Rust coding](../dev-core/dynamic-skills/rust-coding.md)',
+    '[Rust macro minimization](../dev-core/dynamic-skills/rust-macro-minimization.md)',
+    '[Rust-TypeScript separation](../dev-core/dynamic-skills/rust-typescript-code-separation.md)',
+    '[WASM name coherence](../dev-core/dynamic-skills/rust-wasm-name-coherence.md)',
+    '[TypeScript enums over booleans](../web-dev/dynamic-skills/typescript-enums-over-booleans.md)',
+    '[Svelte state modeling](../web-dev/dynamic-skills/svelte-state-modeling.md)',
+    '[serial operation queues](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)',
+  ]) {
+    expect(aiContract).toContain(required);
+  }
+});
+
+test('keeps AI acceptance claims aligned with executable enforcement', () => {
+  const aiContract = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+    'utf8',
+  );
+  for (const required of [
+    '`task loom:verify` checks Loom and every executable-skill package.',
+    '`task preflight:typescript-state` checks authored `null`, `undefined`,',
+    '`task preflight:source-architecture` checks source-language and source-size',
+    'The acceptance record must not claim that `task loom:verify` alone proves',
+  ]) {
+    expect(aiContract).toContain(required);
+  }
+
+  const taskfile = readFileSync(
+    path.join(REPOSITORY_ROOT, '.task/agentic-ai.yml'),
+    'utf8',
+  );
+  const loomStart = taskfile.indexOf('  loom:verify:\n');
+  const loomEnd = taskfile.indexOf('  loom:module-experts:validate:\n');
+  expect(loomStart).toBeGreaterThanOrEqual(0);
+  expect(loomEnd).toBeGreaterThan(loomStart);
+  const loomVerify = taskfile.slice(loomStart, loomEnd);
+  for (const required of [
+    'task: skills:verify',
+    'task: loom:format:check',
+    'task: loom:lint',
+    'task: loom:check',
+    'task: loom:test',
+  ]) {
+    expect(loomVerify).toContain(required);
+  }
+
+  const preflight = readFileSync(
+    path.join(REPOSITORY_ROOT, 'preflight/Taskfile.yml'),
+    'utf8',
+  );
+  expect(preflight).toContain('  preflight:typescript-state:\n');
+  expect(preflight).toContain('  preflight:source-architecture:\n');
+  const dockerfile = readFileSync(
+    path.join(REPOSITORY_ROOT, 'preflight/Dockerfile'),
+    'utf8',
+  );
+  expect(dockerfile).toContain('FROM policy-source AS typescript-state');
+  expect(dockerfile).toContain(
+    'cargo test --locked --manifest-path preflight/Cargo.toml --test core_ownership typescript_',
+  );
 });
 
 test('routes AI and Delivery Pipeline authorities through their owner graphs', () => {

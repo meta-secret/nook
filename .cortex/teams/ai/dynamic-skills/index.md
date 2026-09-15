@@ -11,6 +11,10 @@ consolidated.
 Team-owned Cortex cards are the sole repository-local semantic skill authority.
 Harness profile directories must not mirror or redefine these cards.
 
+AI-authored TypeScript packet requirements live in the
+[AI team contract](../AGENTS.md#authored-implementation-routing). This index
+catalogs the linked authorities without copying their policies.
+
 ## Skill catalog
 
 - **[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)**
@@ -96,7 +100,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[rust-wasm-name-coherence.md](../../dev-core/dynamic-skills/rust-wasm-name-coherence.md)**
   - Purpose: Keep exported Rust WASM functions and methods directly searchable under their authored names across generated bindings and TypeScript
 - **[svelte-state-modeling.md](../../web-dev/dynamic-skills/svelte-state-modeling.md)**
-  - Purpose: Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM
+  - Purpose: Model browser and visual lifecycle state explicitly while keeping closed portable domain states in Rust/WASM
 - **[typescript-serial-operation-queues.md](../../web-dev/dynamic-skills/typescript-serial-operation-queues.md)**
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
 - **[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)**

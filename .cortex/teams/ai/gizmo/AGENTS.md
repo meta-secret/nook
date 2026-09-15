@@ -19,6 +19,19 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 
 - Accept high-level packets from Gizmo Prime through the active harness.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
+- For every leaf packet that authorizes TypeScript or JavaScript, name the
+  read-only [AI authored implementation routes](../AGENTS.md#authored-implementation-routing).
+  The packet must include [function ownership](../../../shared/dynamic-skills/function-ownership.md)
+  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md).
+  Do not copy either policy into the packet.
+- Require the packet's acceptance evidence to include `task loom:verify`,
+  `task preflight:typescript-state`, and `task preflight:source-architecture`.
+  Also require focused semantic review against function ownership. A missing
+  command, result, or review finding is a P1 and fails acceptance closed.
+- Do not report `task loom:verify` as repository-wide authored-absence or
+  TypeScript ownership enforcement. It checks Loom and executable-skill
+  packages; preflight checks authored absence, and semantic review checks
+  TypeScript ownership.
 - Consume the canonical feature branch name and bootstrap evidence issued by
   Gizmo Prime for the team worktree and every leaf. `originMainSha` identifies
   the freshly fetched `origin/main`; `pinnedLocalDevSha` identifies the
