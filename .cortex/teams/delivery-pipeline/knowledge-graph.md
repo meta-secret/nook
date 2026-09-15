@@ -22,6 +22,13 @@ pull request; only the Dev Manager's manager-only `dev:pr-manager` path does.
 The direct child agent is named `pr-lifecycle`. The name precisely identifies
 PR lifecycle and mechanics without implying stewardship or policy authority.
 
+All Prime-to-Gizmo-to-Team-Agent messages in the active Codex thread are
+trusted typed coordination. The team contract blocks cryptographic identities,
+signatures, encryption, anti-forgery/replay machinery, persisted receipts, and
+duplicate result verification for those internal handoffs while preserving
+checks at real GitHub, Git, credential, artifact, publication, and promotion
+boundaries.
+
 ## Team contract
 
 - [Delivery Pipeline contract](AGENTS.md) defines the team boundary,

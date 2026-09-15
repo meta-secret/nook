@@ -16,6 +16,17 @@ execute the push or remote task itself.
 Team Gizmo is a child of Gizmo Prime. It does not replace Prime or create a
 second root delivery owner.
 
+## Trusted in-thread handoffs
+
+Its parent and child communications are trusted typed handoffs inside the same
+Codex thread. Team Gizmo uses packet fields for bounded orchestration and
+correlates reported external observations with their targets. It must not add
+encryption, signatures, cryptographic agent identity, one-shot capabilities,
+anti-forgery or replay registries, persisted receipts, or a second agent that
+re-verifies an internal result. Those mechanisms are reserved for a real
+external trust boundary and are a P1 violation when applied only between
+same-thread agents.
+
 ## Context loading
 
 1. Read the complete [multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md).
@@ -103,6 +114,8 @@ second root delivery owner.
 - Gizmo Prime sends the high-level packet to Team Gizmo.
 - Team Gizmo sends a bounded packet to the Dev Manager or PR Lifecycle agent.
 - The child agent sends one terminal operation handoff to Team Gizmo.
+- Team Gizmo trusts that typed internal handoff; it does not re-run or
+  independently reconstruct the child's work.
 - Team Gizmo sends synthesized evidence and blockers to Gizmo Prime.
 - Team Gizmo also forwards Dev Manager-owned evidence to the Dev Manager.
 - Child agents must not bypass Team Gizmo to create an untracked delivery path.

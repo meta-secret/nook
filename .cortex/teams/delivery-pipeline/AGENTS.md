@@ -34,6 +34,27 @@ The Delivery Pipeline team reports to Gizmo Prime.
 The team executes authorized delivery mechanics. It does not create a second
 policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 
+## Trusted in-thread handoff boundary
+
+Gizmo Prime, Delivery Pipeline Team Gizmo, Dev Manager, PR Lifecycle Agent,
+and their Team Agents run inside one highly trusted Codex thread and active
+harness. Packets and result handoffs inside that thread are trusted typed
+coordination messages. Their controller, operation, scope, target, branch,
+commit, and result fields exist to keep work bounded and attributable; they are
+not an adversarial protocol and require no cryptographic proof.
+
+Do not encrypt or sign same-thread packets, derive cryptographic agent
+identities, issue one-shot internal capabilities, create anti-forgery or replay
+registries, persist redacted receipts, or appoint another agent to re-prove an
+internal result. Do not add duplicate verification solely because a result
+crossed an in-thread agent boundary. Any such design is a P1 architecture
+violation and blocks acceptance.
+
+This trust does not extend to external state. GitHub and CI results, live Git
+refs and ancestry, credentials, independently supplied build artifacts,
+published dev snapshots, PR state, and promoted main state retain their
+existing validation and exact-snapshot safeguards.
+
 ## Required actions
 
 - Begin every delivery operation under the mandatory Gizmo harness and the
@@ -145,9 +166,10 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
    handoff.
    - The handoff names the operation, source SHA, observed target, run or PR
      identifiers, result, evidence, and unresolved blocker.
-5. Team Gizmo checks that the result still applies to the packet's current
-     target and branch head. It synthesizes only high-level child evidence and reports it to
-   Gizmo Prime.
+5. Team Gizmo trusts the child's typed result and correlates any reported
+   external observation with the packet's current target and branch head. It
+   does not re-run or independently reconstruct the child's work. It
+   synthesizes only high-level child evidence and reports it to Gizmo Prime.
    - Manager-owned evidence also returns to the Dev Manager.
    - Team Gizmo does not convert evidence into a readiness or promotion
      verdict.

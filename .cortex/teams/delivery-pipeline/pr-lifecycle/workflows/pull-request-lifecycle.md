@@ -8,6 +8,12 @@ Team Gizmo dispatches the child packet. Feature Gizmos own
 feature compilation and local integration decisions. The manually run dev
 manager owns publication, slow PR validation, and promotion.
 
+The internal dispatch and return are trusted typed same-thread handoffs. They
+must not acquire encryption, signatures, cryptographic agent identity,
+anti-forgery/replay registries, persisted receipts, one-shot capabilities, or
+duplicate agent verification. Validation in this workflow is for external
+GitHub, Git, credential, artifact, publication, and promotion state.
+
 ## Required actions
 
 - Execute only the packet's repository, branch or frozen revision, task, and

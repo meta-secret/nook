@@ -32,3 +32,9 @@ cycle. Observed feature SHAs remain run evidence only.
 The PR Lifecycle Agent never pushes a temporary leaf branch, invokes a remote
 task from a temporary checkout, creates or updates a pull request, chooses
 functional ownership, or decides readiness or promotion.
+
+The Team Gizmo packet and PR Lifecycle result are trusted same-thread typed
+handoffs. External GitHub, Git, credential, artifact, publication, and
+promotion state is still verified; internal agent messages are not wrapped in
+cryptographic identity, signature, encryption, receipt, anti-forgery, replay,
+or duplicate-verification machinery.

@@ -9,6 +9,20 @@ scheduler, journal, or retry service.
 
 Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
+## Trust boundary
+
+The active Codex thread and harness are a trusted orchestration environment.
+The packet is a typed scope and authority description, not an untrusted wire
+message. The child trusts the named parent and the parent trusts the child's
+typed result. Neither side encrypts, signs, issues a one-shot capability,
+persists a receipt, tracks anti-forgery/replay state, or introduces a second
+agent to re-prove that handoff.
+
+Checks below apply to the requested operation and real external state: the
+live repository, branch, commit, PR, run, GitHub result, credential boundary,
+artifact, publication, or promotion target. They do not authenticate another
+agent in the same thread.
+
 ## Required actions
 
 - **Packet identity**
@@ -76,7 +90,9 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## Evidence
 
-The packet and result must identify the same target. Report protection
+The trusted packet and typed result identify the same target so the controller
+can correlate the operation without independently re-verifying the child.
+Report protection
 rejections visibly. A successful push alone does not establish GitHub PR
 completion. Team Gizmo forwards the evidence. The controller owns the final
 verdict.

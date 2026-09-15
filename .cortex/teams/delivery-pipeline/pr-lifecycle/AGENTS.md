@@ -28,6 +28,14 @@ The PR Lifecycle Agent is a direct Team Agent context.
 It is not a product-engineering functional team.
 It does not create a sixth functional ownership domain.
 
+Its packet from Team Gizmo and its result back to Team Gizmo are trusted typed
+messages inside the same Codex thread. Packet validation bounds the requested
+operation; it is not agent authentication. PR Lifecycle must not encrypt or
+sign those messages, derive cryptographic agent identities, issue one-shot
+internal capabilities, keep anti-forgery/replay registries or receipts, or ask
+another agent to verify its result. These mechanisms are a P1 violation unless
+the data crosses a real external trust boundary.
+
 ### Controller verdicts
 
 Gizmo owns feature sequencing and acceptance. The dev manager owns snapshot
