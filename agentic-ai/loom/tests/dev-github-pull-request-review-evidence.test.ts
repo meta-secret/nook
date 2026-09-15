@@ -322,7 +322,7 @@ test('rejects an incomplete review pagination sequence', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('blocks current-head actionable feedback and stale actionable feedback', () => {
+test('blocks actionable feedback from current and prior heads until dispositioned', () => {
   const current = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -352,6 +352,23 @@ test('blocks current-head actionable feedback and stale actionable feedback', ()
   if (stale.result.isErr()) {
     expect(stale.result.error.kind).toBe(DevFailureKind.Reviews);
   }
+
+  const staleChangesRequested = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [
+          { state: 'APPROVED', body: '' },
+          { state: 'CHANGES_REQUESTED', body: '', commit: STALE },
+        ],
+      }),
+    ],
+  }).reviewResult();
+  expect(staleChangesRequested.result.isErr()).toBe(true);
+  if (staleChangesRequested.result.isErr()) {
+    expect(staleChangesRequested.result.error.kind).toBe(
+      DevFailureKind.Reviews,
+    );
+  }
 });
 
 test('blocks an unknown current-head review state', () => {
@@ -367,7 +384,7 @@ test('blocks an unknown current-head review state', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('fails closed for unprovable unknown review bindings including stale', () => {
+test('fails closed for unknown review states regardless of commit binding', () => {
   for (const body of ['', EXTERNAL_NULL]) {
     for (const commit of [EXTERNAL_NULL, 'not-a-sha']) {
       const { result } = new ReviewEvidenceRunner({
@@ -423,7 +440,7 @@ test('does not require an aggregate approved review when feedback is clean', () 
   expect(result.isOk()).toBe(true);
 });
 
-test('ignores stale non-actionable reviews and outdated threads but blocks current threads', () => {
+test('ignores stale non-actionable reviews but blocks every unresolved thread', () => {
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -463,7 +480,10 @@ test('ignores stale non-actionable reviews and outdated threads but blocks curre
       },
     ],
   }).reviewResult();
-  expect(outdated.result.isOk()).toBe(true);
+  expect(outdated.result.isErr()).toBe(true);
+  if (outdated.result.isErr()) {
+    expect(outdated.result.error.kind).toBe(DevFailureKind.Reviews);
+  }
 });
 
 test('reports a pull-request head race after collecting review evidence', () => {

@@ -130,7 +130,6 @@ export enum TeamInternalAgentKey {
   SecurityReviewSpecialist = 'security-review-specialist',
   Provisioning = 'provisioning',
   CloudNative = 'cloud-native',
-  DockerCacheSpecialist = 'docker-cache-specialist',
   TypeScriptSpecialist = 'typescript-specialist',
   SvelteSpecialist = 'svelte-specialist',
   DevManager = 'dev-manager',
@@ -173,32 +172,6 @@ export type TeamInternalAgentProfile = {
   readonly parent: TeamGizmoKey;
   readonly reportingBoundary: string;
   readonly capabilityBoundary: string;
-  readonly activationContract?: TeamInternalAgentActivationContract;
-};
-
-export type TeamInternalAgentActivationContract = {
-  readonly workflowScope: string;
-  readonly decisionSource: 'canonical-json';
-  readonly markdownRole: 'human-context-only';
-  readonly reasonCodes: readonly string[];
-  readonly greenPath: 'no-specialist-dispatch';
-  readonly ordinaryBuildPolicy: string;
-  readonly publishingBuildPolicy: string;
-  readonly exactSourcePolicy: string;
-  readonly readOnlyPolicy: string;
-  readonly timeoutDiagnosisPolicy: string;
-  readonly bakeSolveParityPolicy: string;
-  readonly inputDomainIsolationPolicy: string;
-  readonly perHeadBoundaryPolicy: string;
-  readonly domainIsolationProofPolicy: string;
-  readonly cacheRootReachabilityPolicy: string;
-  readonly cacheRootProofPolicy: string;
-  readonly crossCommitProofPolicy: string;
-  readonly cacheKeyNeutralModePolicy: string;
-  readonly sccacheReadOnlyPolicy: string;
-  readonly sccacheReadWritePolicy: string;
-  readonly sccacheFaultProofPolicy: string;
-  readonly repairLoop: readonly string[];
 };
 
 export type TeamRuntimeProfile = TeamGizmoProfile | TeamInternalAgentProfile;
@@ -525,7 +498,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       team: TeamKey.Sre,
       identity: 'Cloud-native specialist',
       description:
-        'Maintains bounded cloud-native deployment, cluster, and runner mechanics under SRE ownership.',
+        'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       serviceTier: 'fast',
@@ -537,87 +510,6 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       reportingBoundary:
         'Reports bounded cloud-native evidence and blockers to SRE Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
-    },
-    {
-      key: TeamInternalAgentKey.DockerCacheSpecialist,
-      team: TeamKey.Sre,
-      identity: 'Docker cache specialist',
-      description:
-        'Owns Docker and BuildKit cache correctness, cache proofs, telemetry, and latency for every Docker or BuildKit job in pr.yml under SRE ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
-      contextPaths: [
-        '.cortex/teams/sre/docker-cache-specialist/AGENTS.md',
-        '.cortex/teams/sre/docker-cache-specialist/knowledge-graph.md',
-        '.cortex/teams/ai/architecture/docker-cache-specialist-activation.md',
-      ],
-      parent: TeamGizmoKey.Sre,
-      reportingBoundary:
-        'Reports bounded Docker cache diagnoses, repair evidence, latency measurements, and blockers to SRE Team Gizmo.',
-      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
-      activationContract: {
-        workflowScope:
-          'Every Docker or BuildKit-bearing job in .github/workflows/pr.yml.',
-        decisionSource: 'canonical-json',
-        markdownRole: 'human-context-only',
-        reasonCodes: [
-          'job-timeout',
-          'job-cancelled',
-          'cache-health-gate-failed',
-          'telemetry-missing-or-incomplete',
-          'required-import-miss',
-          'effective-solve-input-mismatch',
-          'unreachable-cache-root',
-          'unrelated-input-cache-invalidation',
-          'sccache-read-only-startup-fallback',
-          'sccache-read-only-transport-fallback',
-          'sccache-read-only-circuit-open',
-          'sccache-compiler-failure',
-          'sccache-read-write-transport-failure',
-          'sccache-readiness-contract-violation',
-          'unexpected-read-only-write-or-export',
-          'severe-cache-hit-regression',
-          'diagnostic-flag',
-        ],
-        greenPath: 'no-specialist-dispatch',
-        ordinaryBuildPolicy:
-          'ordinary-build-uses-stable-docker-layers-and-remote-sccache-with-five-minute-hard-limit',
-        publishingBuildPolicy:
-          'publishing-build-uses-read-write-sccache-as-primary-cross-commit-compiler-cache',
-        exactSourcePolicy: 'optional-mode-min-same-head-retry-acceleration',
-        readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
-        timeoutDiagnosisPolicy:
-          'timeout-or-cache-health-failure-activates-specialist-from-canonical-json',
-        bakeSolveParityPolicy:
-          'compare-effective-args-contexts-platforms-and-outputs-for-cache-sharing-builds',
-        inputDomainIsolationPolicy:
-          'rust-wasm-hive-and-web-compiler-stages-copy-only-semantic-domain-inputs-never-repository-root',
-        perHeadBoundaryPolicy:
-          'introduce-per-head-args-at-latest-semantic-consumer-and-preserve-explicit-narrow-wasm-handoffs',
-        domainIsolationProofPolicy:
-          'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
-        cacheRootReachabilityPolicy:
-          'cache-to-root-retains-reusable-dependency-and-compiler-ancestry-never-scratch-marker-or-orphaning-join',
-        cacheRootProofPolicy:
-          'simulator-and-proof-require-reusable-dependency-and-compiler-ancestry-on-replay',
-        crossCommitProofPolicy:
-          'two-ordinary-unseeded-heads-prove-first-publish-populates-next-head-sccache-hits-under-five-minutes-and-read-only-zero-writes',
-        cacheKeyNeutralModePolicy:
-          'stable-id-runtime-secret-carries-read-write-authority-with-identical-publish-and-read-only-buildkit-keys',
-        sccacheReadOnlyPolicy:
-          'optional-accelerator-two-second-single-start-shared-run-circuit-structured-fallback-direct-compiler-zero-writes',
-        sccacheReadWritePolicy:
-          'publication-startup-credential-read-and-write-failures-remain-terminal',
-        sccacheFaultProofPolicy:
-          'simulator-and-proof-cover-startup-dns-read-open-circuit-compiler-read-write-and-healthy-single-start',
-        repairLoop: [
-          'diagnose-telemetry-before-editing',
-          'prove-with-docker-simulator-and-proof',
-          'route-github-mechanics-through-delivery',
-          'repeat-until-current-head-is-green',
-        ],
-      },
     },
     {
       key: TeamInternalAgentKey.TypeScriptSpecialist,

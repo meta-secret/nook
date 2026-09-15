@@ -135,7 +135,7 @@ const REMOVE_DIRECTORY_OPTIONS: {
 
 const SOURCE_COMMIT = 'a'.repeat(40);
 
-const FEATURE_BRANCH = 'codex/hive-delegation-admission-tests';
+const FEATURE_BRANCH = 'codex/delegation-admission';
 
 const RUN_ID = 'ordinary-delegation-test';
 

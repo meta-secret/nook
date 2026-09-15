@@ -289,7 +289,7 @@ mod browser_tests {
             NookWebsiteLoginSaveDecision::Invalid
         );
 
-        let mut existing = manager_with_login("alice", "old")?;
+        let existing = manager_with_login("alice", "old")?;
         let update = existing.plan_matching_login_save(&LoginSavePlanRequest {
             origin: "https://example.com",
             username: "alice",

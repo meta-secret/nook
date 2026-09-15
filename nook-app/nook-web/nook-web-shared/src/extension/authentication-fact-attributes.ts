@@ -77,21 +77,21 @@ export type AuthenticationSourceMessage = { source?: string };
 type InputValueGetter = () => string;
 type InputValueSetter = (value: string) => void;
 
-function isInputValueGetter(
-  value: PropertyDescriptor["get"],
-): value is InputValueGetter {
-  return typeof value === "function";
-}
-
-function isInputValueSetter(
-  value: PropertyDescriptor["set"],
-): value is InputValueSetter {
-  return typeof value === "function";
-}
-
 /** Owns this browser host’s resources and interaction lifecycle. */
 class AuthenticationFactObserver {
   constructor(private readonly browser: typeof globalThis) {}
+
+  private isInputValueGetter(
+    value: PropertyDescriptor["get"],
+  ): value is InputValueGetter {
+    return typeof value === "function";
+  }
+
+  private isInputValueSetter(
+    value: PropertyDescriptor["set"],
+  ): value is InputValueSetter {
+    return typeof value === "function";
+  }
 
   private elementLabelsAuthenticationControl({
     element,
@@ -244,8 +244,8 @@ class AuthenticationFactObserver {
     if (!descriptor || !descriptor.get || !descriptor.set) {
       return () => {};
     }
-    if (!isInputValueGetter(descriptor.get)) return () => {};
-    if (!isInputValueSetter(descriptor.set)) return () => {};
+    if (!this.isInputValueGetter(descriptor.get)) return () => {};
+    if (!this.isInputValueSetter(descriptor.set)) return () => {};
     const originalGet = descriptor.get;
     const originalSet = descriptor.set;
     const valueProperty: PropertyDescriptor & ThisType<HTMLInputElement> = {

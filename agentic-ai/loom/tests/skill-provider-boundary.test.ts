@@ -1,5 +1,6 @@
 import { SkillProviderBoundaryScenario } from './skill-provider-boundary.fixture.ts';
 import type { SkillProviderImportInspection } from './skill-provider-boundary.fixture.ts';
+import { SkillProviderTypeContextScenario } from './skill-provider-type-context.ts';
 export { SkillProviderBoundaryScenario } from './skill-provider-boundary.fixture.ts';
 import { join } from 'node:path';
 
@@ -11,6 +12,8 @@ type LoomSourceScanOptions = {
 };
 
 const LOOM_ROOT = join(import.meta.dir, '..');
+
+SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
 
 export const LOOM_EXECUTABLE_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 

@@ -196,6 +196,45 @@ export interface BuildProofRequest {
   readonly sha: CommitSha;
 }
 
+export interface LocalBuildEvidenceRequest {
+  /** Exact auditable one-off selection issued by Gizmo Prime. */
+  readonly path: string;
+  readonly authorization: LocalBuildEvidenceSelectionAuthorization.GizmoPrimeOneOff;
+  readonly controller: LocalBuildEvidenceController.GizmoPrime;
+  readonly sourceSha: CommitSha;
+  readonly task: LocalBuildTask;
+  readonly artifactDigest: string;
+}
+
+export enum LocalBuildEvidenceAuthorization {
+  OneOffLocal = 'one-off-local',
+}
+
+export enum LocalBuildEvidenceSelectionAuthorization {
+  GizmoPrimeOneOff = 'gizmo-prime-one-off-local-build',
+}
+
+export enum LocalBuildEvidenceController {
+  GizmoPrime = 'gizmo-prime',
+}
+
+export enum LocalBuildTask {
+  Build = 'build',
+  RustBuild = 'rust:build',
+}
+
+export enum DevLandBuildProofMode {
+  Remote = 'remote',
+  Local = 'local',
+}
+
+export type DevLandBuildProof =
+  | { readonly mode: DevLandBuildProofMode.Remote }
+  | {
+      readonly mode: DevLandBuildProofMode.Local;
+      readonly evidence: LocalBuildEvidenceRequest;
+    };
+
 export interface DevelopmentCiObservationRequest {
   readonly sha: CommitSha;
   readonly workingDirectory: string;
@@ -310,6 +349,8 @@ export interface DevSnapshot {
 export interface DevLandRequest {
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
+  /** Omitted by default; local proof is never selected implicitly. */
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
 }
 
 export interface DevPublishRequest {

@@ -47,6 +47,14 @@ if [ "${SCCACHE_S3_RW_MODE:-}" != READ_WRITE ]; then
   exit 2
 fi
 
+# Cache namespaces are non-secret build policy. Keep the policy in a neutral
+# ENV so Docker's secret scanner does not mistake it for a credential, then
+# materialize the sccache-specific variable only for this compiler invocation.
+if [ -n "${NOOK_BUILD_CACHE_NAMESPACE:-}" ]; then
+  SCCACHE_S3_KEY_PREFIX="$NOOK_BUILD_CACHE_NAMESPACE"
+  export SCCACHE_S3_KEY_PREFIX
+fi
+
 # Runtime commands and cache-missed BuildKit compiler vertices mount the same
 # stable secret IDs. BuildKit excludes secret contents from cache checksums; the
 # IDs and target paths remain constant across all builds.
@@ -75,7 +83,7 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   export SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL SCCACHE_S3_RW_MODE
   # A remote read is an optimization, not a compiler availability boundary.
   # One SDK attempt prevents transient DNS/HTTP failures from consuming the
-  # three-minute build budget before the wrapper can compile directly.
+  # five-minute build budget before the wrapper can compile directly.
   : "${AWS_MAX_ATTEMPTS:=1}"
   export AWS_MAX_ATTEMPTS
   # SeaweedFS serves path-style buckets; do not enable virtual-host style.

@@ -1,18 +1,16 @@
-import { posix } from 'node:path';
-
 import ts from 'typescript';
 
 import { itemAt } from './skill-provider-command-types.ts';
 
 import { stringMapFromHost } from './skill-provider-command-types.ts';
 
+import { SkillProviderGeneratedArtifactLoaderScenario } from './skill-provider-generated-artifact-loader.ts';
+
+import { SkillProviderLocalDataLoaderScenario } from './skill-provider-local-data-loader.ts';
+
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
 export class SkillProviderBoundedPackageLoaderScenario {
-  private constructor(
-    private readonly request: ts.VariableDeclaration | false,
-  ) {}
-
   static specializeBoundedPackageLoaders(
     inspection: BoundedPackageLoaderInspection,
   ): string {
@@ -74,423 +72,15 @@ export class SkillProviderBoundedPackageLoaderScenario {
   static specializeProvenGeneratedArtifactLoader(
     inspection: BoundedPackageLoaderInspection,
   ): string {
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
-    const declarations = new Map<string, ts.VariableDeclaration>();
-    const imports: ts.CallExpression[] = [];
-    const visit = (node: ts.Node): void => {
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-        declarations.set(node.name.text, node);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        node.expression.kind === ts.SyntaxKind.ImportKeyword
-      ) {
-        imports.push(node);
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sourceFile);
-    if (imports.length !== 1) return inspection.source;
-    const dynamicImport = imports[0];
-    const urlArgument = dynamicImport?.arguments[0];
-    if (!dynamicImport || !urlArgument || !ts.isIdentifier(urlArgument)) {
-      return inspection.source;
-    }
-    const [urlDeclaration = false] = [declarations.get(urlArgument.text)];
-    const target =
-      SkillProviderBoundedPackageLoaderScenario.generatedArtifactTarget(
-        urlDeclaration,
-      );
-    if (target === false) return inspection.source;
-    const [siteDeclaration = false] = [declarations.get(target.root.text)];
-    const output =
-      SkillProviderBoundedPackageLoaderScenario.fixedOutputDirectory(
-        siteDeclaration,
-      );
-    const useInspection: IdentifierUseInspection = {
-      name: urlArgument.text,
-      sourceFile,
-    };
-    if (
-      output === false ||
-      SkillProviderBoundedPackageLoaderScenario.identifierUseCount(
-        useInspection,
-      ) !== 2
-    ) {
-      return inspection.source;
-    }
-    const appRoot = posix.dirname(posix.dirname(inspection.path));
-    const artifactPath = posix.join(appRoot, output, target.artifact);
-    const producerInspection: GeneratedArtifactProducerInspection = {
-      artifact: target.artifact,
+    return new SkillProviderGeneratedArtifactLoaderScenario(
       inspection,
-      output,
-    };
-    const producer =
-      SkillProviderBoundedPackageLoaderScenario.generatedArtifactProducer(
-        producerInspection,
-      );
-    if (producer === false || producer.artifactPath !== artifactPath) {
-      return inspection.source;
-    }
-    const relative = posix.relative(
-      posix.dirname(inspection.path),
-      producer.sourcePath,
-    );
-    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
-    return `${inspection.source.slice(0, dynamicImport.getStart(sourceFile))}import('${specifier}')${inspection.source.slice(dynamicImport.end)}`;
-  }
-
-  static generatedArtifactTarget(
-    declaration: ts.VariableDeclaration | false,
-  ): GeneratedArtifactTarget | false {
-    const initializer = declaration === false ? false : declaration.initializer;
-    if (
-      !initializer ||
-      !ts.isTemplateExpression(initializer) ||
-      initializer.templateSpans.length !== 2
-    )
-      return false;
-    const fileUrl = initializer.templateSpans[0]?.expression;
-    const cacheBust = initializer.templateSpans[1]?.expression;
-    if (
-      !fileUrl ||
-      !ts.isPropertyAccessExpression(fileUrl) ||
-      fileUrl.name.text !== 'href' ||
-      !ts.isCallExpression(fileUrl.expression) ||
-      !ts.isIdentifier(fileUrl.expression.expression) ||
-      fileUrl.expression.expression.text !== 'pathToFileURL' ||
-      !cacheBust ||
-      !ts.isCallExpression(cacheBust) ||
-      !ts.isPropertyAccessExpression(cacheBust.expression) ||
-      !ts.isIdentifier(cacheBust.expression.expression) ||
-      cacheBust.expression.expression.text !== 'Date' ||
-      cacheBust.expression.name.text !== 'now' ||
-      cacheBust.arguments.length !== 0
-    )
-      return false;
-    const joinCall = fileUrl.expression.arguments[0];
-    if (
-      !joinCall ||
-      !ts.isCallExpression(joinCall) ||
-      !ts.isIdentifier(joinCall.expression) ||
-      joinCall.expression.text !== 'join'
-    )
-      return false;
-    const root = joinCall.arguments[0];
-    const artifact = joinCall.arguments[1];
-    if (
-      !root ||
-      !ts.isIdentifier(root) ||
-      !artifact ||
-      !ts.isStringLiteralLike(artifact)
-    ) {
-      return false;
-    }
-    return { artifact: artifact.text, root };
-  }
-
-  static fixedOutputDirectory(
-    declaration: ts.VariableDeclaration | false,
-  ): string | false {
-    const initializer = declaration === false ? false : declaration.initializer;
-    const outputArgument =
-      initializer && ts.isCallExpression(initializer)
-        ? initializer.arguments[1]
-        : false;
-    if (
-      !initializer ||
-      !ts.isCallExpression(initializer) ||
-      !ts.isIdentifier(initializer.expression) ||
-      initializer.expression.text !== 'join' ||
-      !outputArgument ||
-      !ts.isStringLiteralLike(outputArgument)
-    )
-      return false;
-    return posix.normalize(outputArgument.text.replace(/^[^/]+\//u, ''));
-  }
-
-  static identifierUseCount(inspection: IdentifierUseInspection): number {
-    let count = 0;
-    const visit = (node: ts.Node): void => {
-      if (ts.isIdentifier(node) && node.text === inspection.name) count += 1;
-      ts.forEachChild(node, visit);
-    };
-    visit(inspection.sourceFile);
-    return count;
-  }
-
-  static generatedArtifactProducer(
-    request: GeneratedArtifactProducerInspection,
-  ): GeneratedArtifactProducer | false {
-    for (const root of request.inspection.roots) {
-      const [source = ''] = [request.inspection.sources.get(root)];
-      if (
-        !source.includes('copyFileSync') ||
-        !source.includes(`'${request.artifact}'`)
-      )
-        continue;
-      const sourceMatch =
-        /copyFileSync\(\s*join\(process\.cwd\(\),\s*'([^']+)'\),\s*join\(outDir,\s*'([^']+)'\)/mu.exec(
-          source,
-        );
-      if (!sourceMatch || sourceMatch[2] !== request.artifact) continue;
-      const [, sourcePathSuffix = ''] = sourceMatch;
-      const sourcePath = posix.join(posix.dirname(root), sourcePathSuffix);
-      if (!request.inspection.sources.has(sourcePath)) continue;
-      const envProvesOutput = [...request.inspection.roots].some((path) => {
-        const [config = ''] = [request.inspection.sources.get(path)];
-        return (
-          config.includes('VITE_NOOK_APP_KIND=site') &&
-          config.includes(`VITE_NOOK_OUT_DIR=${request.output}`)
-        );
-      });
-      if (!envProvesOutput) continue;
-      return {
-        artifactPath: posix.join(
-          posix.dirname(root),
-          request.output,
-          request.artifact,
-        ),
-        sourcePath,
-      };
-    }
-    return false;
+    ).specialize();
   }
 
   static specializeBoundedLocalDataLoaders(
     inspection: BoundedPackageLoaderInspection,
   ): string {
-    const sourceFile = ts.createSourceFile(
-      inspection.path,
-      inspection.source,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
-    const declarations = new Map<string, ts.VariableDeclaration>();
-    const imports: ts.CallExpression[] = [];
-    const visit = (node: ts.Node): void => {
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-        declarations.set(node.name.text, node);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        node.expression.kind === ts.SyntaxKind.ImportKeyword
-      ) {
-        imports.push(node);
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sourceFile);
-    const replacements: SourceReplacement[] = [];
-    for (const dynamicImport of imports) {
-      const moduleArgument = dynamicImport.arguments[0];
-      if (!moduleArgument || !ts.isIdentifier(moduleArgument)) continue;
-      const moduleDeclaration = declarations.get(moduleArgument.text);
-      if (!moduleDeclaration) continue;
-      const sourceBinding =
-        SkillProviderBoundedPackageLoaderScenario.dataUrlSourceBinding(
-          moduleDeclaration,
-        );
-      if (sourceBinding === false) continue;
-      const [sourceDeclaration = false] = [
-        declarations.get(sourceBinding.text),
-      ];
-      const pathBinding =
-        SkillProviderBoundedPackageLoaderScenario.readFilePathBinding(
-          sourceDeclaration,
-        );
-      if (pathBinding === false) continue;
-      const [pathDeclaration = false] = [declarations.get(pathBinding.text)];
-      const pathInspection: TrackedResolvedPathInspection = {
-        declaration: pathDeclaration,
-        sources: inspection.sources,
-      };
-      const trackedPath =
-        SkillProviderBoundedPackageLoaderScenario.trackedResolvedPath(
-          pathInspection,
-        );
-      if (trackedPath === false) continue;
-      const closure: LocalDataLoaderClosure = {
-        dynamicImport,
-        moduleArgument,
-        moduleDeclaration,
-        pathBinding,
-        pathDeclaration,
-        sourceBinding,
-        sourceDeclaration,
-        scope:
-          SkillProviderBoundedPackageLoaderScenario.nearestFunctionScope(
-            moduleDeclaration,
-          ),
-      };
-      if (
-        closure.scope === false ||
-        !SkillProviderBoundedPackageLoaderScenario.isClosedLocalDataLoader(
-          closure,
-        )
-      )
-        continue;
-      const relativePath = posix.relative(
-        posix.dirname(inspection.path),
-        trackedPath,
-      );
-      const specifier = relativePath.startsWith('.')
-        ? relativePath
-        : `./${relativePath}`;
-      const replacement: SourceReplacement = {
-        end: dynamicImport.end,
-        replacement: `import('${specifier}')`,
-        start: dynamicImport.getStart(sourceFile),
-      };
-      replacements.push(replacement);
-    }
-    let specialized = inspection.source;
-    for (const replacement of replacements) {
-      specialized = `${specialized.slice(0, replacement.start)}${replacement.replacement}${specialized.slice(replacement.end)}`;
-    }
-    return specialized;
-  }
-
-  static dataUrlSourceBinding(
-    declaration: ts.VariableDeclaration | false,
-  ): ts.Identifier | false {
-    return new SkillProviderBoundedPackageLoaderScenario(declaration).execute();
-  }
-
-  private execute(): ts.Identifier | false {
-    const declaration = this.request;
-    const initializer = declaration === false ? false : declaration.initializer;
-    if (
-      !initializer ||
-      !ts.isTemplateExpression(initializer) ||
-      initializer.head.text !== 'data:text/javascript;base64,' ||
-      initializer.templateSpans.length !== 1
-    ) {
-      return false;
-    }
-    const expression = initializer.templateSpans[0]?.expression;
-    if (
-      !expression ||
-      !ts.isCallExpression(expression) ||
-      !ts.isPropertyAccessExpression(expression.expression) ||
-      expression.expression.name.text !== 'toString' ||
-      expression.arguments[0]?.getText() !== "'base64'" ||
-      !ts.isCallExpression(expression.expression.expression) ||
-      !ts.isPropertyAccessExpression(
-        expression.expression.expression.expression,
-      ) ||
-      expression.expression.expression.expression.name.text !== 'from' ||
-      !ts.isIdentifier(
-        expression.expression.expression.expression.expression,
-      ) ||
-      expression.expression.expression.expression.expression.text !== 'Buffer'
-    ) {
-      return false;
-    }
-    const source = expression.expression.expression.arguments[0];
-    return source && ts.isIdentifier(source) ? source : false;
-  }
-
-  static readFilePathBinding(
-    declaration: ts.VariableDeclaration | false,
-  ): ts.Identifier | false {
-    const initializer = declaration === false ? false : declaration.initializer;
-    const expression =
-      initializer && ts.isAwaitExpression(initializer)
-        ? initializer.expression
-        : initializer;
-    if (
-      !expression ||
-      !ts.isCallExpression(expression) ||
-      !ts.isIdentifier(expression.expression) ||
-      expression.expression.text !== 'readFile' ||
-      expression.arguments.length !== 2 ||
-      expression.arguments[1]?.getText() !== "'utf8'"
-    ) {
-      return false;
-    }
-    const path = expression.arguments[0];
-    return path && ts.isIdentifier(path) ? path : false;
-  }
-
-  static trackedResolvedPath(
-    inspection: TrackedResolvedPathInspection,
-  ): string | false {
-    const initializer =
-      inspection.declaration === false
-        ? false
-        : inspection.declaration.initializer;
-    if (
-      !initializer ||
-      !ts.isCallExpression(initializer) ||
-      !ts.isIdentifier(initializer.expression) ||
-      initializer.expression.text !== 'resolve'
-    ) {
-      return false;
-    }
-    const literals = initializer.arguments.filter(ts.isStringLiteralLike);
-    if (literals.length !== 1) return false;
-    const path = posix.normalize(itemAt([literals, 0]).text);
-    return inspection.sources.has(path) ? path : false;
-  }
-
-  static nearestFunctionScope(node: ts.Node): ts.Node | false {
-    let candidate = node.parent;
-    while (!ts.isSourceFile(candidate)) {
-      if (ts.isFunctionLike(candidate)) return candidate;
-      candidate = candidate.parent;
-    }
-    return false;
-  }
-
-  static isClosedLocalDataLoader(closure: LocalDataLoaderClosure): boolean {
-    if (closure.scope === false) return false;
-    const allowed = new Set<ts.Identifier>([
-      closure.moduleArgument,
-      closure.pathBinding,
-      closure.sourceBinding,
-    ]);
-    if (ts.isIdentifier(closure.moduleDeclaration.name)) {
-      allowed.add(closure.moduleDeclaration.name);
-    }
-    if (
-      closure.pathDeclaration &&
-      ts.isIdentifier(closure.pathDeclaration.name)
-    ) {
-      allowed.add(closure.pathDeclaration.name);
-    }
-    if (
-      closure.sourceDeclaration &&
-      ts.isIdentifier(closure.sourceDeclaration.name)
-    ) {
-      allowed.add(closure.sourceDeclaration.name);
-    }
-    const ownedNames = new Set([
-      closure.moduleArgument.text,
-      closure.pathBinding.text,
-      closure.sourceBinding.text,
-    ]);
-    let safe = true;
-    const visit = (node: ts.Node): void => {
-      if (
-        safe &&
-        ts.isIdentifier(node) &&
-        ownedNames.has(node.text) &&
-        !allowed.has(node)
-      ) {
-        safe = false;
-        return;
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(closure.scope);
-    return safe;
+    return new SkillProviderLocalDataLoaderScenario(inspection).specialize();
   }
 
   static boundedLoaderCandidates(
@@ -499,7 +89,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const createRequireImports = new Map<string, ts.ImportDeclaration>();
     const pathToFileUrlImports = new Set<string>();
     const variableDeclarations = new Map<string, ts.VariableDeclaration>();
-    const functionDeclarations: ts.FunctionDeclaration[] = [];
+    const functionDeclarations: BoundedLoaderDeclaration[] = [];
     const visit = (node: ts.Node): void => {
       if (
         ts.isImportDeclaration(node) &&
@@ -535,7 +125,9 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
         variableDeclarations.set(node.name.text, node);
       }
-      if (ts.isFunctionDeclaration(node)) functionDeclarations.push(node);
+      if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+        functionDeclarations.push(node);
+      }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
@@ -546,6 +138,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       const parameterDeclaration = functionDeclaration.parameters[0];
       if (
         !functionName ||
+        !ts.isIdentifier(functionName) ||
         (functionDeclaration.parameters.length !== 1 &&
           functionDeclaration.parameters.length !== 2) ||
         !parameterDeclaration ||
@@ -614,6 +207,12 @@ export class SkillProviderBoundedPackageLoaderScenario {
           dynamicImport,
           functionDeclaration,
           functionName,
+          methodOwner:
+            ts.isMethodDeclaration(functionDeclaration) &&
+            (ts.isClassDeclaration(functionDeclaration.parent) ||
+              ts.isClassExpression(functionDeclaration.parent))
+              ? functionDeclaration.parent
+              : false,
           parameter,
           validationParameter:
             validationParameterDeclaration &&
@@ -682,6 +281,115 @@ export class SkillProviderBoundedPackageLoaderScenario {
     );
   }
 
+  static candidateCallExpression(
+    inspection: CandidateCallInspection,
+  ): ts.CallExpression | false {
+    const node = inspection.node;
+    const candidate = inspection.candidate;
+    if (ts.isCallExpression(node.parent) && node.parent.expression === node) {
+      return node.parent;
+    }
+    if (candidate.methodOwner === false) return false;
+    const access = node.parent;
+    const call = access.parent;
+    if (
+      !ts.isPropertyAccessExpression(access) ||
+      access.name !== node ||
+      !ts.isCallExpression(call) ||
+      call.expression !== access ||
+      access.expression.kind !== ts.SyntaxKind.ThisKeyword ||
+      SkillProviderBoundedPackageLoaderScenario.nearestClassLike(call) !==
+        candidate.methodOwner ||
+      !SkillProviderBoundedPackageLoaderScenario.isClassMethodThisCall({
+        call,
+        owner: candidate.methodOwner,
+      })
+    ) {
+      return false;
+    }
+    return call;
+  }
+
+  static nearestClassLike(node: ts.Node): ts.ClassLikeDeclaration | false {
+    let candidate = node.parent;
+    while (!ts.isSourceFile(candidate)) {
+      if (ts.isClassDeclaration(candidate) || ts.isClassExpression(candidate)) {
+        return candidate;
+      }
+      candidate = candidate.parent;
+    }
+    return false;
+  }
+
+  static isClassMethodThisCall(
+    inspection: ClassMethodThisCallInspection,
+  ): boolean {
+    const { call, owner } = inspection;
+    let candidate = call.parent;
+    while (candidate !== owner && !ts.isSourceFile(candidate)) {
+      if (ts.isFunctionLike(candidate) && !ts.isArrowFunction(candidate)) {
+        return ts.isMethodDeclaration(candidate) && candidate.parent === owner;
+      }
+      candidate = candidate.parent;
+    }
+    return false;
+  }
+
+  static isClosedValidationFunction(expression: ts.Expression): boolean {
+    if (
+      (!ts.isArrowFunction(expression) &&
+        !ts.isFunctionExpression(expression)) ||
+      expression.parameters.length !== 1 ||
+      !expression.body ||
+      !ts.isBlock(expression.body) ||
+      !expression.type ||
+      !ts.isTypePredicateNode(expression.type)
+    ) {
+      return false;
+    }
+    let safe = true;
+    const visit = (node: ts.Node): void => {
+      if (!safe) return;
+      if (
+        ts.isCallExpression(node) ||
+        ts.isNewExpression(node) ||
+        ts.isAwaitExpression(node) ||
+        ts.isYieldExpression(node) ||
+        ts.isThrowStatement(node) ||
+        node.kind === ts.SyntaxKind.DeleteExpression ||
+        (ts.isPostfixUnaryExpression(node) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken)) ||
+        (ts.isPrefixUnaryExpression(node) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken))
+      ) {
+        safe = false;
+        return;
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      ) {
+        safe = false;
+        return;
+      }
+      if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isFunctionExpression(node) ||
+          ts.isArrowFunction(node)) &&
+        node !== expression
+      ) {
+        safe = false;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(expression.body);
+    return safe;
+  }
+
   static isClosedBoundedLoader(validation: CandidateValidation): boolean {
     const candidate = validation.candidate;
     const requireInitializer = candidate.requireDeclaration.initializer;
@@ -714,7 +422,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
     const validationParameter = candidate.validationParameter;
     const declaredFunctionNames = new Set<string>();
     const collectFunctionNames = (node: ts.Node): void => {
-      if (ts.isFunctionDeclaration(node) && node.name) {
+      if (
+        (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) &&
+        node.name &&
+        ts.isIdentifier(node.name)
+      ) {
         declaredFunctionNames.add(node.name.text);
       }
       ts.forEachChild(node, collectFunctionNames);
@@ -727,8 +439,12 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (!safe) return;
       if (ts.isIdentifier(node) && node.text === candidate.functionName.text) {
         if (node === candidate.functionName) return;
-        const parent = node.parent;
-        if (!ts.isCallExpression(parent) || parent.expression !== node) {
+        const parent =
+          SkillProviderBoundedPackageLoaderScenario.candidateCallExpression({
+            candidate,
+            node,
+          });
+        if (parent === false) {
           safe = false;
           return;
         }
@@ -746,8 +462,11 @@ export class SkillProviderBoundedPackageLoaderScenario {
             ? parent.arguments.length === 1
             : parent.arguments.length === 2 &&
               !!validationArgument &&
-              ts.isIdentifier(validationArgument) &&
-              declaredFunctionNames.has(validationArgument.text);
+              ((ts.isIdentifier(validationArgument) &&
+                declaredFunctionNames.has(validationArgument.text)) ||
+                SkillProviderBoundedPackageLoaderScenario.isClosedValidationFunction(
+                  validationArgument,
+                ));
         if (
           !hasValidValidationArgument ||
           !argument ||
@@ -901,8 +620,9 @@ type BoundedLoaderCandidate = {
   readonly createRequireBinding: ts.Identifier;
   readonly createRequireImport: ts.ImportDeclaration;
   readonly dynamicImport: ts.CallExpression;
-  readonly functionDeclaration: ts.FunctionDeclaration;
+  readonly functionDeclaration: BoundedLoaderDeclaration;
   readonly functionName: ts.Identifier;
+  readonly methodOwner: ts.ClassLikeDeclaration | false;
   readonly parameter: ts.Identifier;
   readonly validationParameter: ts.Identifier | false;
   readonly pathToFileUrlBinding: ts.Identifier;
@@ -917,6 +637,18 @@ type CandidateValidation = {
   readonly inspection: BoundedPackageLoaderInspection;
   readonly sourceFile: ts.SourceFile;
 };
+
+type CandidateCallInspection = {
+  readonly candidate: BoundedLoaderCandidate;
+  readonly node: ts.Identifier;
+};
+
+type ClassMethodThisCallInspection = {
+  readonly call: ts.CallExpression;
+  readonly owner: ts.ClassLikeDeclaration;
+};
+
+type BoundedLoaderDeclaration = ts.FunctionDeclaration | ts.MethodDeclaration;
 
 type RepositoryPackageDocument = {
   dependencies?: Readonly<Record<string, string>>;
@@ -933,43 +665,6 @@ type SourceReplacement = {
 
 const SAFE_PACKAGE_SPECIFIER =
   /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;
-
-type GeneratedArtifactTarget = {
-  readonly artifact: string;
-  readonly root: ts.Identifier;
-};
-
-type IdentifierUseInspection = {
-  readonly name: string;
-  readonly sourceFile: ts.SourceFile;
-};
-
-type GeneratedArtifactProducerInspection = {
-  readonly artifact: string;
-  readonly inspection: BoundedPackageLoaderInspection;
-  readonly output: string;
-};
-
-type GeneratedArtifactProducer = {
-  readonly artifactPath: string;
-  readonly sourcePath: string;
-};
-
-type TrackedResolvedPathInspection = {
-  readonly declaration: ts.VariableDeclaration | false;
-  readonly sources: ReadonlyMap<string, string>;
-};
-
-type LocalDataLoaderClosure = {
-  readonly dynamicImport: ts.CallExpression;
-  readonly moduleArgument: ts.Identifier;
-  readonly moduleDeclaration: ts.VariableDeclaration;
-  readonly pathBinding: ts.Identifier;
-  readonly pathDeclaration: ts.VariableDeclaration | false;
-  readonly sourceBinding: ts.Identifier;
-  readonly sourceDeclaration: ts.VariableDeclaration | false;
-  readonly scope: ts.Node | false;
-};
 
 type DynamicImportSearch = {
   readonly body: ts.Block;

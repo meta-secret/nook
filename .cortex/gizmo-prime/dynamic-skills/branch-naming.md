@@ -35,8 +35,7 @@ The child form must contain both the team and role segments.
     `rust-auth2-developer`.
   - **Security (`security`):** `gizmo`, `cryptography-specialist`, or
     `security-review-specialist`.
-  - **SRE (`sre`):** `gizmo`, `provisioning`, `cloud-native`, or
-    `docker-cache-specialist`.
+  - **SRE (`sre`):** `gizmo`, `provisioning`, or `cloud-native`.
   - **Web Development (`web-dev`):** `gizmo`, `typescript-specialist`, or
     `svelte-specialist`.
   - **Delivery Pipeline (`delivery-pipeline`):** `gizmo`, `dev-manager`, or
@@ -134,7 +133,6 @@ codex/agent-branching/ai/cortex-specialist/define-branch-naming-contract
 ```text
 codex/agent-branching/sre/gizmo/coordinate-sre-child-delivery
 codex/agent-branching/sre/provisioning/define-runner-branch-contract
-codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay
 ```
 
 ### Development Core

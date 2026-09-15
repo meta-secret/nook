@@ -62,7 +62,7 @@ for required in 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'compile_restore_source
 done
 grep -Fq -- 'compile_targets=(build-compile-dependency-cache build-compile)' "$compile_script"
 dependency_target="$(sed -n '/^FROM compile-web-dependencies AS compile-dependency-cache$/,/^FROM compile-wasm-source AS compile$/p' "$compile_dockerfile")"
-for forbidden_source in 'compile-native-source' 'compile-wasm-source AS' 'compile-minds-source' 'compile-hive-console ' 'compile-web '; do
+for forbidden_source in 'compile-native-source' 'compile-wasm-source AS' 'compile-web '; do
   if printf '%s\n' "$dependency_target" | sed '$d' | grep -Fq -- "$forbidden_source"; then
     echo "dependency cache target reaches source stage: $forbidden_source" >&2
     exit 1

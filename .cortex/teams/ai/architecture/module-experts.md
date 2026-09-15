@@ -285,7 +285,6 @@ resource claims make independent ownership useful.
 - `nook-web-research` is disposable and non-production.
 - Vendored third-party code receives no Nook module expert.
 - Experimental agent infrastructure is not part of local feature development.
-- Hive does not schedule or represent local module-development work.
 - Shared lockfiles, root registries, Workbench, Git, and PR state remain with
   the delivery owner.
 

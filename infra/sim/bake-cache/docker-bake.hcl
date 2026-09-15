@@ -20,7 +20,6 @@
 variable "GHA_CACHE_ENABLED" {
   default = "1"
 }
-
 variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
@@ -62,22 +61,6 @@ variable "NESTED_LEAF_EXACT_AVAILABLE" {
 }
 
 variable "CONSUMER_EXACT_AVAILABLE" {
-  default = ""
-}
-
-variable "HIVE_EXACT_AVAILABLE" {
-  default = ""
-}
-
-variable "HIVE_CONSOLE_EXACT_AVAILABLE" {
-  default = ""
-}
-
-variable "WEB_APP_EXACT_AVAILABLE" {
-  default = ""
-}
-
-variable "WEB_RESEARCH_EXACT_AVAILABLE" {
   default = ""
 }
 
@@ -158,56 +141,6 @@ consumer_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-consumer-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
-hive_cache_from = GHA_CACHE_ENABLED == "" ? [] : HIVE_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-hive-v2:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-hive_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
-] : []
-
-hive_console_cache_from = GHA_CACHE_ENABLED == "" ? [] : HIVE_CONSOLE_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-hive-console-v1:buildcache",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-hive_console_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
-] : []
-
-web_app_cache_from = GHA_CACHE_ENABLED == "" ? [] : WEB_APP_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-web-app-deps-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-web_app_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-app-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
-] : []
-
-web_research_cache_from = GHA_CACHE_ENABLED == "" ? [] : WEB_RESEARCH_EXACT_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-web-research-deps-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-web_research_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-web-research-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
-] : []
 
 // Broken PR FALLBACK: git-scope only (documents cold install without Main).
 parent_pr_cold_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
@@ -392,41 +325,5 @@ target "preflight-source" {
   args = {
     REPOSITORY_SOURCE = "default-repository-source"
   }
-  output = ["type=cacheonly"]
-}
-
-target "hive" {
-  context = "."
-  dockerfile = "hive.Dockerfile"
-  target = "verify"
-  cache-from = hive_cache_from
-  cache-to = hive_cache_to
-  output = ["type=cacheonly"]
-}
-
-target "hive-console" {
-  context = "."
-  dockerfile = "hive.Dockerfile"
-  target = "console-verify"
-  cache-from = hive_console_cache_from
-  cache-to = hive_console_cache_to
-  output = ["type=cacheonly"]
-}
-
-target "web-app-deps" {
-  context = "."
-  dockerfile = "research.Dockerfile"
-  target = "app-verify"
-  cache-from = web_app_cache_from
-  cache-to = web_app_cache_to
-  output = ["type=cacheonly"]
-}
-
-target "web-research-deps" {
-  context = "."
-  dockerfile = "research.Dockerfile"
-  target = "verify"
-  cache-from = web_research_cache_from
-  cache-to = web_research_cache_to
   output = ["type=cacheonly"]
 }

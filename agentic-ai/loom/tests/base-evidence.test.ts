@@ -154,14 +154,12 @@ describe('pinned dev base Git identity', () => {
 });
 
 describe('canonical feature branch identity', () => {
-  test('accepts the Hive-compatible Prime, child, and machine forms', () => {
+  test('accepts Prime and child forms', () => {
     const validBranches: readonly string[] = [
       'codex/repair-cache',
       'codex/abcdefghij',
       'codex/agentic-pipeline-delivery',
-      'codex/agent-branching/sre/provisioning/fix-hive-branch-compile',
-      'codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay',
-      'codex/hive-main-failure-abc-run-42-attempt-1',
+      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile',
     ];
 
     for (const branch of validBranches) {
@@ -171,20 +169,19 @@ describe('canonical feature branch identity', () => {
     }
   });
 
-  test('rejects Hive-invalid short, repeated-hyphen, and unregistered forms', () => {
+  test('rejects short, repeated-hyphen, and unregistered forms', () => {
     const invalidBranches: readonly string[] = [
       'main',
       'codex/',
       'codex/repair',
       'codex/agent--branching',
-      'codex/agent-branching/sre/provisioning/fix--hive-branch-compile',
-      'codex/hive-main--failure',
+      'codex/agent-branching/sre/provisioning/fix--cache-branch-compile',
+      'codex/automation-main-failure-abc-run-42-attempt-1',
       'codex/agentic-pipeline-deliveries',
       'codex/Repair-cache',
       'codex/agent-branching/sre/provisioning/short',
-      'codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile',
-      'codex/agent-branching/sre/provisioning/fix-hive-branch-compile/extra',
-      'codex/hive-',
+      'codex/agent-branching/web-dev/provisioning/fix-cache-branch-compile',
+      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile/extra',
       'codex/agentic-pipeline-delivery/tmp',
       'codex/agentic-pipeline-delivery/delivery-pipeline/pr-lifecycle/short',
     ];

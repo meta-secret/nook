@@ -10,7 +10,6 @@ Load only the category that owns the assigned operational functionality.
 
 - [Engineering harness](architecture/engineering-harness.md)
 - [ARC and Kata runner platform](design-docs/arc-kata-runner-platform.md)
-- [Hive isolated agent platform](design-docs/hive-isolated-agent-platform.md)
 - [Repository-managed JetStream](design-docs/repository-managed-jetstream.md)
 
 ## Infrastructure and validation skills
@@ -46,5 +45,5 @@ remote-execution action being performed.
 - [SRE Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded SRE-team mechanics.
 - [Provisioning specialist](provisioning/knowledge-graph.md) handles packeted provisioning work.
 - [Cloud-native specialist](cloud-native/knowledge-graph.md) handles packeted cloud-native work.
-- [Docker cache specialist](docker-cache-specialist/knowledge-graph.md) handles
-  Docker cache and fast-build packets.
+- [Docker cache specialist](docker-cache-specialist/knowledge-graph.md) handles packeted Docker,
+  BuildKit, and compiler-cache performance work.

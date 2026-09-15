@@ -77,8 +77,7 @@ export class CanonicalFeatureBranchContract {
           10,
           20,
         ) ||
-          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments) ||
-          CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
+          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(
           segments[0] || false,
@@ -157,10 +156,7 @@ export class CanonicalFeatureBranchContract {
         );
       case 'sre':
         return (
-          role === 'gizmo' ||
-          role === 'provisioning' ||
-          role === 'cloud-native' ||
-          role === 'docker-cache-specialist'
+          role === 'gizmo' || role === 'provisioning' || role === 'cloud-native'
         );
       case 'web-dev':
         return (
@@ -175,23 +171,6 @@ export class CanonicalFeatureBranchContract {
       default:
         return false;
     }
-  }
-
-  private static isCanonicalMachineBranch(
-    segments: readonly string[],
-  ): boolean {
-    if (segments.length !== 1) return false;
-    const segment = segments[0];
-    if (typeof segment !== 'string' || !segment.startsWith('hive-'))
-      return false;
-    const suffix = segment.slice('hive-'.length);
-    return (
-      suffix.length > 0 &&
-      !suffix.startsWith('-') &&
-      !suffix.endsWith('-') &&
-      !suffix.includes('--') &&
-      /^[a-z0-9-]+$/u.test(suffix)
-    );
   }
 }
 

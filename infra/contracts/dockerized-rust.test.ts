@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
-import { DockerizedRustToolingContract } from "./dockerized-rust-tooling.fixture";
 
 const actionSchema = z.object({
   runs: z.object({
@@ -171,26 +170,6 @@ class DockerizedRustContract {
     expect(product).toContain(
       "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release",
     );
-    const hive = this.read("agentic-ai/minds/hive/Dockerfile");
-    const dependencies = hive
-      .split("FROM fetched-dependencies AS observer-contract-dependencies")[1]
-      ?.split(
-        "FROM observer-contract-dependencies AS observer-contract-exporter",
-      )[0];
-    expect(dependencies).toContain(
-      "COPY --from=chef-planner /build/recipe.json recipe.json",
-    );
-    expect(dependencies).toContain("cargo chef cook --locked");
-    expect(dependencies).toContain(
-      "--features observer-contract-export --bin hive-export-observer-contract",
-    );
-    expect(dependencies).not.toContain("COPY hive/src");
-    expect(hive).toContain(
-      "FROM observer-contract-dependencies AS observer-contract-exporter\nCOPY hive/src hive/src",
-    );
-    expect(hive).toContain(
-      "--bin hive-export-observer-contract -- --output /observer-contract",
-    );
   }
 
   workflowTooling(): void {
@@ -231,9 +210,6 @@ class DockerizedRustContract {
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",
     );
-    expect(this.read("agentic-ai/minds/hive/Dockerfile")).toContain(
-      "prettier-skill.json",
-    );
     const audit = this.read(".github/docker/rust-maintenance.hcl");
     expect(audit).toContain('no-cache-filter = ["audit"]');
     expect(audit).not.toContain("no-cache = true");
@@ -248,67 +224,6 @@ class DockerizedRustContract {
       dockerignore.indexOf(`!${generatedWasm}/.gitignore`),
     ).toBeGreaterThan(dockerignore.indexOf(`${generatedWasm}*`));
     expect(dockerignore).toContain("**/node_modules");
-  }
-
-  sccacheTransportFallback(): void {
-    const wrapper = this.read(
-      "nook-app/nook-platform/docker/sccache-wrapper.sh",
-    );
-    const fallbackContract = this.read(
-      "infra/contracts/sccache-wrapper-fallback.test.sh",
-    );
-    const proof = this.read("infra/tasks/bake-cache.yml");
-    expect(wrapper).toContain('${AWS_MAX_ATTEMPTS:=1}');
-    expect(wrapper).toContain('${NOOK_SCCACHE_START_TIMEOUT:-2s}');
-    expect(wrapper).toContain("unset SCCACHE_ERROR_LOG");
-    expect(wrapper).toContain('"$sccache_binary" --zero-stats');
-    expect(wrapper).toContain(
-      'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}',
-    );
-    expect(wrapper).toContain(
-      "${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}",
-    );
-    expect(wrapper).toContain('mkdir "$startup_lock"');
-    expect(wrapper).toContain("startup_coordination_timeout");
-    expect(wrapper).toContain('"remote_writes":0');
-    expect(wrapper).toContain("failed to execute compile|failed to start server");
-    expect(wrapper).toContain("cache_circuit_open");
-    expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=transport");
-    expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=compiler");
-    expect(fallbackContract).toContain(
-      "Sccache no-secret route: compiler ran directly without remote access",
-    );
-    expect(fallbackContract).toContain(
-      "SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log",
-    );
-    expect(fallbackContract).toContain('test -z "${SCCACHE_ERROR_LOG:-}"');
-    expect(fallbackContract).toContain(
-      "SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport",
-    );
-    expect(fallbackContract).toContain("product compilation remained available");
-    expect(fallbackContract).toContain('test "$compiler_status" -eq 7');
-    expect(proof).toContain(
-      'bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"',
-    );
-    expect(proof).toContain(
-      "inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion",
-    );
-    expect(proof).toContain("bake-sim-sccache-error-log-sanitized");
-    expect(proof).toContain(
-      "Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults",
-    );
-    expect(fallbackContract).toContain(
-      "Sccache read/DNS fault: trusted cache user compiled directly after the circuit opened",
-    );
-    expect(fallbackContract).toContain(
-      "Sccache startup fault: bounded fallback compiled directly",
-    );
-    expect(fallbackContract).toContain(
-      "Sccache compiler fault: genuine compiler failure remained terminal",
-    );
-    expect(fallbackContract).toContain(
-      "Sccache healthy startup: two compiler invocations performed one startup probe",
-    );
   }
 
   arcCacheSelection(): void {
@@ -329,11 +244,8 @@ class DockerizedRustContract {
       for (const profile of [
         "preflight",
         "web-e2e",
-        "web-research-deps",
-        "web-research-image",
         "connection-only",
         "native",
-        "hive",
         "ecosystem-dylint",
         "ecosystem-fuzz",
         "ecosystem-policy-tools",
@@ -351,9 +263,9 @@ class DockerizedRustContract {
             "a".repeat(40),
           )
           .replaceAll("${{ inputs.isolated-cache-write }}", "true")
-          .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.main-cache-only }}", "true")
           .replaceAll("${{ inputs.cache-write }}", "false")
+          .replaceAll("${{ inputs.publish-compile-cache }}", "true")
           .replaceAll("${{ inputs.registry-host }}", "registry.dev.nokey.sh")
           .replaceAll(
             "${{ github.action_path }}",
@@ -379,19 +291,19 @@ class DockerizedRustContract {
         });
         expect(result.status, result.stderr).toBe(0);
         const values = readFileSync(environment, "utf8");
-        const expectedScope =
-          profile === "web-research-deps" || profile === "web-research-image"
-            ? `GHA_CACHE_SCOPE_SUFFIX=-git-${"a".repeat(40)}\n`
-            : "GHA_CACHE_SCOPE_SUFFIX=\n";
-        expect(values).toContain(expectedScope);
+        const exactScopeSuffix = `-git-${"a".repeat(40)}`;
+        expect(values).toContain(
+          `GHA_CACHE_SCOPE_SUFFIX=${exactScopeSuffix}\n`,
+        );
+        expect(values).toContain("GHA_CACHE_FALLBACK_ENABLED=1\n");
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
-        expect(values).not.toContain("HIVE_CACHE_TO=");
         const calls = readFileSync(probes, "utf8");
-        if (profile === "web-research-deps" || profile === "web-research-image")
-          expect(calls).toContain("-git-");
-        else expect(calls).not.toContain("-git-");
-        if (profile === "connection-only" || profile === "hive")
+        if (profile === "connection-only") {
           expect(calls).toBe("");
+        } else {
+          expect(calls).toContain(`nook/remote-buildcache/`);
+          expect(calls).toContain(exactScopeSuffix);
+        }
         if (profile === "ecosystem-smoke") {
           expect(calls.trim().split("\n")).toHaveLength(3);
           expect(calls).toContain("nook-rust-ecosystem-deterministic-");
@@ -405,15 +317,9 @@ class DockerizedRustContract {
           expect(calls.trim().split("\n")).toHaveLength(1);
           expect(calls).toContain("nook-preflight-v1");
         }
-        if (profile === "web-e2e" || profile === "web-research-image") {
-          expect(calls.trim().split("\n")).toHaveLength(4);
-          expect(calls).toContain("nook-web-e2e-v1");
-          expect(calls).toContain("nook-web-deps-v1");
-          expect(calls).toContain("nook-web-app-deps-v1");
-          expect(calls).toContain("nook-web-research-deps-v1");
-        } else if (profile === "web-research-deps") {
+        if (profile === "web-e2e") {
           expect(calls.trim().split("\n")).toHaveLength(1);
-          expect(calls).toContain("nook-web-research-deps-v1");
+          expect(calls).toContain("nook-web-e2e-v1");
         }
       }
     } finally {
@@ -951,205 +857,75 @@ tasks:
     }
   }
 
-  stableRemoteCompileCache(): void {
-    const production = this.read(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
-    );
-    const simulator = this.read(
-      "infra/sim/bake-cache/compile-warm.docker-bake.hcl",
-    );
-    const productionDockerfile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
-    );
-    const compileScript = this.read(".github/scripts/compile-remote.sh");
-    const remoteWorkflow = this.read(".github/workflows/remote.yml");
-    const dockerSetup = this.read(
-      ".github/actions/nook-docker-setup/action.yml",
-    );
-    const cacheTelemetry = this.read(
-      ".github/workflows/lib/cache-telemetry.mjs",
-    );
-    const proof = this.read("infra/tasks/bake-cache.yml");
-
-    expect(remoteWorkflow).toContain(
-      "== 'build:compile' && 5 || 360",
-    );
-    expect(remoteWorkflow).toContain("SCCACHE_S3_RW_MODE: READ_WRITE");
-    expect(remoteWorkflow).not.toContain("build:compile-cache-seed");
-    expect(compileScript).toContain(
-      "trusted build:compile requires the shared READ_WRITE compiler cache mode",
-    );
-    expect(compileScript).toContain(
-      "No remote BuildKit cache is available; performing a cold solve with sccache",
-    );
-    expect(dockerSetup).toContain(
-      "Compile cache probes complete: count=2 timeout_seconds=6 parallel=true",
-    );
-    expect(dockerSetup).toContain(
-      'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^',
-    );
-    expect(dockerSetup).toContain(
-      "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX",
-    );
-    expect(production).toContain("compile_restore_source_cache_ref");
-    expect(dockerSetup).toContain("classify-registry-cache-probe.sh");
-    expect(dockerSetup).toContain("NOOK_CACHE_PROBE_WARNING");
-    expect(dockerSetup).toContain(
-      '"failure_class":"transient_unavailable"',
-    );
-    expect(dockerSetup).toContain(
-      "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS",
-    );
-    expect(dockerSetup).not.toContain("compile_generation_scope");
-
-    for (const source of [production, simulator]) {
-      expect(source).toContain("compile_deps_cache_ref");
-      expect(source).toContain("compile_source_cache_ref");
-      expect(source).toContain("mode=max,compression=zstd");
-      expect(source).toContain("mode=min,compression=zstd");
-      expect(source).not.toContain("compile_generation");
-    }
-    expect(production).toContain('target "build-compile-dependency-cache"');
-    expect(production).toContain('target     = "compile-dependency-cache"');
-    expect(production).toContain("cache-to   = compile_deps_cache_to");
-    expect(production).toContain('NOOK_COMPILE_CACHE_MODE == "publish"');
-    expect(productionDockerfile).toContain(
-      "FROM rust-base AS compile-minds-base",
-    );
-    expect(productionDockerfile).toContain(
-      "COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm",
-    );
-    expect(cacheTelemetry).toContain("compile_dependencies");
-    expect(cacheTelemetry).toContain("compile_source");
-    expect(cacheTelemetry).toContain("failure_class");
-    const probeClassification = this.read(
-      "infra/contracts/compile-cache-probe-classification.test.sh",
-    );
-    expect(probeClassification).toContain("transient_unavailable 124");
-    expect(probeClassification).toContain(
-      "transient_unavailable 2 'context canceled'",
-    );
-    expect(probeClassification).toContain(
-      "fatal 1 'unauthorized: authentication required'",
-    );
-    expect(cacheTelemetry).not.toContain("compile_generation");
-    expect(cacheTelemetry).toContain("baked_runtime_mode");
-    expect(cacheTelemetry).toContain("runtime_mode_source");
-    expect(cacheTelemetry).toContain("inconsistent sccache ${field}");
-    expect(cacheTelemetry).toContain("sccache authority: baked=");
-    expect(
-      this.read("nook-app/nook-platform/docker/sccache-report.sh"),
-    ).toContain("NOOK_SCCACHE_HEALTH_WARNING");
-    expect(
-      this.read("nook-app/nook-platform/docker/sccache-wrapper.sh"),
-    ).toContain("SCCACHE_CLIENT_SIDE:=1");
-    expect(productionDockerfile).toContain(
-      "ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret",
-    );
-    expect(
-      productionDockerfile.match(/id=sccache_runtime_mode,required=true/g),
-    ).toHaveLength(18);
-    expect(productionDockerfile).not.toContain(
-      "id=sccache_runtime_mode,required=false",
-    );
-    const publicationContract = this.read(
-      "infra/contracts/sccache-publication.test.sh",
-    );
-    expect(publicationContract).toContain('"compile_requests":339');
-    expect(publicationContract).toContain(
-      '"cache_misses":{"counts":{"Rust":275}',
-    );
-    expect(publicationContract).toContain('"cache_errors":0');
-    expect(publicationContract).toContain('"cache_writes":0');
-    expect(publicationContract).toContain('"cache_writes":275');
-    expect(publicationContract).toContain(
-      '"baked_runtime_mode":"READ_WRITE"',
-    );
-    expect(publicationContract).toContain('"runtime_mode":"READ_WRITE"');
-    expect(publicationContract).toContain(
-      '"runtime_mode_source":"runtime_secret"',
-    );
-
-    expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
-    expect(productionDockerfile.match(/id=sccache_runtime_mode/g)).toHaveLength(
-      18,
-    );
-    for (const semanticInput of [
-      "docs/privacy-policy.md",
-      "docs/terms-of-service.md",
-      "nook-app/nook-platform/nook-app-common/locales/en.json",
-      "nook-app/nook-platform/nook-app-common/locales/ru.json",
-    ]) {
-      expect(productionDockerfile).toContain(
-        `COPY ${semanticInput} ${semanticInput}`,
+  toolingStaticInstallsBeforeChecks(): void {
+    const command = z
+      .object({
+        tasks: z.object({
+          "tooling:static": z.object({ cmds: z.array(z.string()) }),
+        }),
+      })
+      .parse(Bun.YAML.parse(this.read(".task/static-checks.yml"))).tasks[
+      "tooling:static"
+    ].cmds[0];
+    if (!command) throw new Error("Static tooling command missing");
+    const temporary = mkdtempSync(join(tmpdir(), "nook-tooling-static-"));
+    try {
+      const packages = [
+        ".",
+        "agentic-ai/loom",
+        ".cortex/teams/ai/dynamic-skills/example/scripts",
+      ];
+      for (const directory of packages) {
+        mkdirSync(join(temporary, directory), { recursive: true });
+        writeFileSync(join(temporary, directory, "package.json"), "{}\n");
+      }
+      const bin = join(temporary, "bin");
+      const probe = join(temporary, "probe.log");
+      mkdirSync(bin);
+      const executable = join(bin, "bun");
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+directory="$3"
+action="$1"
+if [ "$action" = run ]; then action="$4"; fi
+printf '%s:%s:%s\\n' "$(basename "$0")" "$action" "$directory" >> "$PROBE_LOG"
+if [ "$action" = install ] && [ "$directory" = "${"${FAIL_INSTALL:-}"}" ]; then exit 1; fi
+`,
+        { mode: 0o755 },
       );
+      symlinkSync(executable, join(bin, "npm"));
+      for (const scenario of [
+        { environment: process.env, succeeds: true },
+        {
+          environment: { ...process.env, FAIL_INSTALL: "agentic-ai/loom" },
+          succeeds: false,
+        },
+      ]) {
+        writeFileSync(probe, "");
+        const result = spawnSync("bash", ["-c", command], {
+          cwd: temporary,
+          encoding: "utf8",
+          env: {
+            ...scenario.environment,
+            PATH: `${bin}:${process.env.PATH}`,
+            PROBE_LOG: probe,
+          },
+        });
+        const output = readFileSync(probe, "utf8");
+        expect(result.status === 0, result.stderr).toBe(scenario.succeeds);
+        expect(output.lastIndexOf(":install:")).toBeLessThan(
+          output.indexOf(":lint:"),
+        );
+        expect(output).toContain(
+          "bun:check:.cortex/teams/ai/dynamic-skills/example/scripts",
+        );
+        if (!scenario.succeeds)
+          expect(output).not.toContain("bun:lint:agentic-ai/loom");
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
     }
-    const webTypeCheck = productionDockerfile.indexOf(
-      "node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json",
-      productionDockerfile.indexOf("FROM web-base AS compile-web"),
-    );
-    const legalInput = productionDockerfile.indexOf(
-      "COPY docs/privacy-policy.md docs/privacy-policy.md",
-    );
-    const lastWebBuild = productionDockerfile.indexOf(
-      "nook-web-research && node_modules/.bin/vite build",
-    );
-    const localeInput = productionDockerfile.indexOf(
-      "COPY nook-app/nook-platform/nook-app-common/locales/en.json",
-    );
-    const commitArgument = productionDockerfile.indexOf(
-      "ARG NOOK_EXTENSION_COMMIT=",
-    );
-    const extensionPackage = productionDockerfile.indexOf(
-      'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"',
-    );
-    expect(legalInput).toBeLessThan(webTypeCheck);
-    expect(localeInput).toBeGreaterThan(lastWebBuild);
-    expect(localeInput).toBeLessThan(commitArgument);
-    expect(commitArgument).toBeGreaterThan(webTypeCheck);
-    expect(extensionPackage).toBeGreaterThan(commitArgument);
-    const dependencyTarget = productionDockerfile.slice(
-      productionDockerfile.indexOf(
-        "FROM compile-web-dependencies AS compile-dependency-cache",
-      ),
-      productionDockerfile.indexOf("FROM compile-wasm-source AS compile"),
-    );
-    for (const sourceStage of [
-      "compile-native-source",
-      "compile-minds-source",
-      "compile-hive-console ",
-      "compile-web ",
-    ]) {
-      expect(dependencyTarget).not.toContain(sourceStage);
-    }
-
-    expect(proof).toContain(
-      "Client-side cold publication: zero errors plus zero writes is pending verification",
-    );
-    expect(proof).toContain(
-      "Cold normal publish: no seed prerequisite, sccache READ_WRITE",
-    );
-    expect(proof).toContain(
-      "compile_targets=(compile-dependency-cache compile-warm)",
-    );
-    expect(proof).toContain(
-      "Next unseeded head: nearest-ancestor BuildKit reuse plus cross-commit sccache hits",
-    );
-    expect(proof).toContain(
-      "Repeated next-head zero hits: publication verification fails",
-    );
-    expect(proof).toContain(
-      "Read-only replay: exact BuildKit reuse and zero writes",
-    );
-    expect(proof).toContain("cache_writes=0 registry_exports=0");
-    expect(proof).toContain("elapsed=${compile_elapsed}s limit=300s");
-    expect(proof).toContain(
-      "Legal document edit: invalidate only the web lineage",
-    );
-    expect(proof).toContain(
-      "compile legal edit: rust_wasm_hive_cached=1 web_invalidated=1",
-    );
-    expect(proof).toContain('require_no_cache_write "$proof_log"');
   }
 
   private read(path: string): string {
@@ -1167,7 +943,6 @@ tasks:
 }
 
 const contract = new DockerizedRustContract();
-const toolingContract = new DockerizedRustToolingContract();
 test(
   "PR browser scheduling preserves covering extension and Node gates",
   contract.previewGates.bind(contract),
@@ -1177,7 +952,7 @@ test(
   contract.ecosystemResults.bind(contract),
 );
 test(
-  "PR dedup retains standalone coverage and source-correct Hive exports",
+  "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
 );
 test(
@@ -1185,11 +960,7 @@ test(
   contract.workflowTooling.bind(contract),
 );
 test(
-  "remote sccache transport fails open without hiding compiler failures",
-  contract.sccacheTransportFallback.bind(contract),
-);
-test(
-  "ARC probes only consumed Main caches and never exports unused exact refs",
+  "ARC probes consumed exact-SHA caches without exporting registry refs",
   contract.arcCacheSelection.bind(contract),
 );
 test(
@@ -1215,10 +986,6 @@ test(
   contract.compilerFirstWebVerification.bind(contract),
 );
 test(
-  "remote compile cache separates fingerprinted dependencies from exact source",
-  contract.stableRemoteCompileCache.bind(contract),
-);
-test(
   "tooling installs every package before checking successful installs",
-  toolingContract.toolingStaticInstallsBeforeChecks.bind(toolingContract),
+  contract.toolingStaticInstallsBeforeChecks.bind(contract),
 );

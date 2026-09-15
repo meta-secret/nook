@@ -421,7 +421,7 @@ export class DevelopmentPullRequestGateway {
       if (threadIdentity.isErr()) return err(threadIdentity.error);
       unresolvedCurrentThread ||=
         page.data.repository.pullRequest.reviewThreads.nodes.some(
-          (thread) => !thread.isResolved && !thread.isOutdated,
+          (thread) => !thread.isResolved,
         );
     }
 
@@ -652,6 +652,9 @@ export class DevelopmentPullRequestGateway {
         ? ReviewRecordDisposition.Block
         : ReviewRecordDisposition.Ignore;
     }
+    // A historical binding establishes only when GitHub created the review;
+    // it does not disposition substantive feedback. Older-head findings stay
+    // blocking until GitHub records an explicit non-actionable state.
     if (!commit.value.equals(pullRequest.headSha)) {
       return substantive || blockingState || !knownNonActionableState
         ? ReviewRecordDisposition.Block

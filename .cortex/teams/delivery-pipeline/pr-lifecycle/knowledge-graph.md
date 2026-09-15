@@ -9,9 +9,8 @@ Load only the authority required by the current pull-request operation.
 
 ## Workflows
 
-- [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md) defines the current
-  stage ownership and SHA-preserving promotion contract.
-- [Dev manager](../dev-manager/AGENTS.md) owns slow-stage authorization.
+Prime supplies the current delivery authority. Dev Manager owns slow-stage
+authorization.
 - [Pull-request lifecycle](workflows/pull-request-lifecycle.md) defines
   metadata, review, validation, evidence, wait, and merge mechanics.
 - [Authorization handshake](workflows/authorization-handshake.md) defines

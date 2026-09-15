@@ -64,7 +64,7 @@ export class AgentWorkflowDelegationPlanTreeScenario {
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
-const FEATURE_BRANCH = 'codex/hive-delegation-plan-tree-tests';
+const FEATURE_BRANCH = 'codex/delegation-plan-test';
 
 const ROOT: DelegationAttemptIdentity = {
   task: 'coordinate-delivery',

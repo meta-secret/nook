@@ -8,35 +8,6 @@ type ProviderCredentialTransport =
   StorageProvider | ExtensionStorageProviderPayload
 type ProviderCredentialTransports = ProviderCredentialTransport[]
 
-function isStorageProvider(
-  value: ProviderCredentialTransport,
-): value is StorageProvider {
-  if (!value || typeof value !== 'object') return false
-  if (
-    !('id' in value) ||
-    typeof value.id !== 'string' ||
-    !('type' in value) ||
-    typeof value.type !== 'string' ||
-    !('label' in value) ||
-    typeof value.label !== 'string'
-  )
-    return false
-  return [
-    'githubPat',
-    'githubRepo',
-    'oauthFile',
-    'localFolder',
-    'storeId',
-    'createdAt',
-  ].every((key) => key in value)
-}
-
-function isStorageProviderList(
-  value: ProviderCredentialTransports,
-): value is StorageProvider[] {
-  return value.every(isStorageProvider)
-}
-
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
   InvalidTransport = 'invalid-provider-transport',
@@ -80,6 +51,36 @@ class SerializedProviderField {
 
 export class ProviderCredentialBuffer {
   constructor(private readonly providers: ProviderCredentialTransports) {}
+  private isStorageProvider(
+    value: ProviderCredentialTransport,
+  ): value is StorageProvider {
+    if (!value || typeof value !== 'object') return false
+    if (
+      !('id' in value) ||
+      typeof value.id !== 'string' ||
+      !('type' in value) ||
+      typeof value.type !== 'string' ||
+      !('label' in value) ||
+      typeof value.label !== 'string'
+    )
+      return false
+    return [
+      'githubPat',
+      'githubRepo',
+      'oauthFile',
+      'localFolder',
+      'storeId',
+      'createdAt',
+    ].every((key) => key in value)
+  }
+  private storageProviders(): Result<
+    StorageProvider[],
+    ProviderCredentialFailure
+  > {
+    return this.providers.every((provider) => this.isStorageProvider(provider))
+      ? ok(this.providers as StorageProvider[])
+      : err(ProviderCredentialFailure.InvalidTransport)
+  }
   identities(): Result<
     ExtensionStorageProviderIdentities,
     ProviderCredentialFailure
@@ -147,10 +148,11 @@ export class ProviderCredentialBuffer {
     } catch {
       return err(ProviderCredentialFailure.InvalidTransport)
     }
-    if (!isStorageProviderList(staged))
-      return err(ProviderCredentialFailure.InvalidTransport)
     try {
-      const admitted = await args.decode(staged)
+      const stagedBuffer = new ProviderCredentialBuffer(staged)
+      const storageProviders = stagedBuffer.storageProviders()
+      if (storageProviders.isErr()) return err(storageProviders.error)
+      const admitted = await args.decode(storageProviders.value)
       return ok(admitted)
     } catch {
       return err(ProviderCredentialFailure.AdmissionRejected)

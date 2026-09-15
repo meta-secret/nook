@@ -40,6 +40,39 @@ impl DynamicWasmAliases<'_> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::DynamicWasmAliases;
+
+    #[test]
+    fn a_declared_binding_resolves_without_searching_an_unrelated_outer_declaration() {
+        let source = "let manager; { const manager = candidate; }";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .expect("TypeScript grammar must load");
+        let tree = parser.parse(source, None).expect("fixture must parse");
+        let root = tree.root_node();
+        let inner_declaration = root.named_child(1).expect("inner block");
+        let inner_declaration = inner_declaration
+            .named_child(0)
+            .expect("lexical declaration")
+            .named_child(0)
+            .expect("variable declarator");
+        let binding = inner_declaration
+            .child_by_field_name("name")
+            .expect("declared binding");
+
+        assert_eq!(
+            DynamicWasmAliases::declared_binding(binding, source)
+                .expect("the declaration must resolve")
+                .id(),
+            binding.id(),
+            "a declaration-site identifier must resolve directly instead of scanning the file"
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[rustfmt::skip]
 impl DynamicWasmAliases<'_> {
@@ -70,6 +103,14 @@ impl DynamicWasmAliases<'_> {
     ) -> Result<tree_sitter::Node<'a>, AliasResolutionFailure> {
         if reference.kind() != "identifier" {
             return Err(AliasResolutionFailure::UnsupportedBinding);
+        }
+        if reference.parent().is_some_and(|parent| {
+            parent.kind() == "variable_declarator"
+                && parent
+                    .child_by_field_name("name")
+                    .is_some_and(|binding| binding.id() == reference.id())
+        }) {
+            return Ok(reference);
         }
         let name = (JavaScriptLiteral {
             node: reference,

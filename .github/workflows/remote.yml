@@ -5,7 +5,7 @@
 # requested with task pr:validate.
 
 name: Remote task
-run-name: Remote / ${{ inputs.tasks || inputs.task }} @ ${{ inputs.source_sha || github.sha }} / buildkit-cache=${{ inputs.publish_compile_cache && 'publish' || 'read-only' }} / ${{ inputs.dispatch_nonce || 'manual' }}
+run-name: Remote / ${{ inputs.tasks || inputs.task }} @ ${{ inputs.source_sha || github.sha }} / compile-cache=${{ inputs.publish_compile_cache && 'publish' || 'read-only' }} / ${{ inputs.dispatch_nonce || 'manual' }}
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       task:
-        description: Legacy single task or isolated cache-management selector
+        description: Legacy single task or internal cache promotion selector
         required: false
         type: string
       cache_fingerprint:
@@ -35,7 +35,7 @@ on:
         required: false
         type: string
       publish_compile_cache:
-        description: Publish build:compile BuildKit caches (sccache remains enabled for trusted jobs)
+        description: Publish build:compile BuildKit caches (sccache remains enabled when secrets are available)
         required: false
         type: boolean
         default: true
@@ -65,7 +65,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ format('remote-{0}-{1}-{2}', github.ref, inputs.tasks || inputs.task, inputs.dispatch_nonce || 'default') }}
+  group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}-${{ inputs.dispatch_nonce || 'default' }}
   cancel-in-progress: false
 
 env:
@@ -91,19 +91,15 @@ jobs:
       (inputs.tasks || inputs.task) != 'ci:pr:e2e')
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
-    runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
       REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
-      REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
+      REQUESTED_PUBLISH_COMPILE_CACHE: ${{ inputs.publish_compile_cache }}
       SCCACHE_S3_RW_MODE: READ_WRITE
-      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
-      HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
-      HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
-      HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
     steps:
       - name: Report Kubernetes worker node
         shell: bash
@@ -121,7 +117,6 @@ jobs:
           REQUESTED_SOURCE_INPUT: ${{ inputs.source_sha }}
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
           REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
-          REQUESTED_PUBLISH_COMPILE_CACHE: ${{ inputs.publish_compile_cache }}
         run: |
           set -euo pipefail
           if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -163,7 +158,7 @@ jobs:
           printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile' || (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
+          cache-selection: ${{ (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -173,7 +168,7 @@ jobs:
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+          isolated-cache-write: "true"
           publish-compile-cache: ${{ inputs.publish_compile_cache }}
       - name: Confirm prepared build-only environment
         if: (inputs.tasks || inputs.task) == 'build:compile'
@@ -185,9 +180,6 @@ jobs:
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
           echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
-      - name: Wait for private Neo4j sidecar
-        if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
-        run: .github/scripts/wait-hive-neo4j.sh
       - name: Run task batch
         shell: bash
         env:

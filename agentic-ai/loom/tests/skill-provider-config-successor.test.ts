@@ -450,7 +450,7 @@ test('dynamic and malformed env options fail closed', () => {
 
 test('repository explicit Taskfile selection preserves relative cwd', () => {
   const repositorySelectionRequest = {
-    commands: ['task --taskfile agentic-ai/minds/hive/Taskfile.yml format'],
+    commands: ['task --taskfile nook-app/Taskfile.yml format'],
     importer: '.task/agentic-ai.yml',
     sources: new Map<string, string>(),
     workingDirectory: '',
@@ -466,7 +466,7 @@ test('repository explicit Taskfile selection preserves relative cwd', () => {
       required: true,
       requiresExecuteMode: false,
       shellRuntime: false,
-      specifier: '../agentic-ai/minds/hive/Taskfile.yml',
+      specifier: '../nook-app/Taskfile.yml',
       taskInclude: true,
       workingDirectory: '',
     },
@@ -850,43 +850,14 @@ test('repository-backed bare package imports fail closed', () => {
   ).toThrow('Runnable repository package import is unsupported');
 });
 
-test('AGENT_EOF exemptions reject wrong provenance and content', () => {
+test('AGENT_EOF shell payloads fail closed', () => {
   const source = 'delim="AGENT_EOF_123"; payload="safe"';
-  for (const path of [
-    '.github/workflows/not-agent-implement.yml',
-    '.github/workflows/agent-implement.yml',
-  ])
-    expect(
-      () =>
-        SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
-          source,
-          path,
-        ]),
-      path,
-    ).toThrow('Unaudited AGENT_EOF shell exemption');
-});
-
-test('workspace-root normalization rejects dynamic repository suffixes', () => {
-  expect(
-    SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
-      'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit',
-      '.github/workflows/agent-implement.yml',
-    ]),
-  ).toBe("node 'agentic-ai/ci-agent/dist/main/main.js' edit");
-  const adversarial =
-    SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
-      'node "$GITHUB_WORKSPACE/$UNTRUSTED"',
-      '.github/workflows/agent-implement.yml',
-    ]);
-  expect(adversarial).toBe('node "$GITHUB_WORKSPACE/$UNTRUSTED"');
-  const inspection = {
-    positionalArguments: false,
-    source: adversarial,
-    sourcePath: '.github/workflows/agent-implement.yml',
-  } as const;
   expect(() =>
-    SkillProviderCommandBoundaryScenario.analyzeShellCommands(inspection),
-  ).toThrow('Dynamic node executable construction is forbidden');
+    SkillProviderConfigRuntimeScenario.normalizeConfigurationShellSource([
+      source,
+      '.github/workflows/example.yml',
+    ]),
+  ).toThrow('Unaudited AGENT_EOF shell exemption');
 });
 
 test('successor launches preserve package cwd through child-process cd', () => {

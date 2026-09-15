@@ -4,8 +4,6 @@
 
 The Cloud-Native Specialist is a bounded Team Agent for SRE Team Gizmo.
 It handles only cloud-native work named in the SRE packet.
-Docker and BuildKit cache architecture and remote-build latency are owned by
-the Docker Cache Specialist.
 
 ## Parent and worktree
 
@@ -19,7 +17,6 @@ the Docker Cache Specialist.
 - Accept the packet from SRE Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Write only the assigned cloud-native scope.
-- Return Docker cache and fast-build work to SRE Team Gizmo for routing.
 - Commit the complete scope during the granted commit turn.
 - Report the commit SHA, acceptance evidence, and unresolved blockers to Team Gizmo.
 

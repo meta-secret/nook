@@ -57,22 +57,48 @@ const versionName = commit
 
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 
-function isViteModule(value: unknown): value is typeof import('vite') {
-  if (!value || typeof value !== 'object') return false
-  return 'build' in value && typeof value.build === 'function'
+class ExtensionBuildDependencyLoader {
+  async importVite(): Promise<typeof import('vite')> {
+    return this.importDependency(
+      'vite',
+      (value): value is typeof import('vite') => {
+        if (!value || typeof value !== 'object') return false
+        return 'build' in value && typeof value.build === 'function'
+      },
+    )
+  }
+
+  async importSvelte(): Promise<typeof import('@sveltejs/vite-plugin-svelte')> {
+    return this.importDependency(
+      '@sveltejs/vite-plugin-svelte',
+      (value): value is typeof import('@sveltejs/vite-plugin-svelte') => {
+        if (!value || typeof value !== 'object') return false
+        return (
+          'svelte' in value &&
+          typeof value.svelte === 'function' &&
+          'vitePreprocess' in value &&
+          typeof value.vitePreprocess === 'function'
+        )
+      },
+    )
+  }
+
+  private async importDependency<TModule>(
+    specifier: string,
+    admits: (value: unknown) => value is TModule,
+  ): Promise<TModule> {
+    const resolved = requireFromWeb.resolve(specifier)
+    // Resolution is constrained to the installed web dependency tree.
+    // eslint-disable-next-line no-unsanitized/method
+    const imported: unknown = await import(pathToFileURL(resolved).href)
+    if (!admits(imported)) {
+      throw new Error(`Invalid web dependency: ${specifier}`)
+    }
+    return imported
+  }
 }
 
-function isSvelteModule(
-  value: unknown,
-): value is typeof import('@sveltejs/vite-plugin-svelte') {
-  if (!value || typeof value !== 'object') return false
-  return (
-    'svelte' in value &&
-    typeof value.svelte === 'function' &&
-    'vitePreprocess' in value &&
-    typeof value.vitePreprocess === 'function'
-  )
-}
+const extensionBuildDependencyLoader = new ExtensionBuildDependencyLoader()
 
 async function ensureNodeModulesLink() {
   try {
@@ -171,27 +197,10 @@ async function copyStaticFile(source: string, destination: string) {
   await copyFile(source, outputPath)
 }
 
-async function importWebDependency<TModule>(
-  specifier: string,
-  isModule: (value: unknown) => value is TModule,
-): Promise<TModule> {
-  const resolved = requireFromWeb.resolve(specifier)
-  // Resolution is constrained to the installed web dependency tree.
-  // eslint-disable-next-line no-unsanitized/method
-  const imported: unknown = await import(pathToFileURL(resolved).href)
-  if (!isModule(imported))
-    throw new Error(`Invalid web dependency: ${specifier}`)
-  return imported
-}
-
 async function buildSveltePage(page: 'popup') {
-  const { build: viteBuild } = await importWebDependency<typeof import('vite')>(
-    'vite',
-    isViteModule,
-  )
-  const { svelte, vitePreprocess } = await importWebDependency<
-    typeof import('@sveltejs/vite-plugin-svelte')
-  >('@sveltejs/vite-plugin-svelte', isSvelteModule)
+  const { build: viteBuild } = await extensionBuildDependencyLoader.importVite()
+  const { svelte, vitePreprocess } =
+    await extensionBuildDependencyLoader.importSvelte()
 
   await viteBuild({
     root: join(projectRoot, `src/${page}`),

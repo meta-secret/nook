@@ -45,15 +45,8 @@ resolves the latest committed branch head before each remote dispatch, review,
 or landing operation. If the branch advances, follow the latest head and rerun
 affected evidence. Team Gizmos and leaves keep temporary branches private.
 
-- [AI Team Gizmo](../teams/ai/gizmo/knowledge-graph.md)
-- [Development Core Team Gizmo](../teams/dev-core/gizmo/knowledge-graph.md)
-- [Security Team Gizmo](../teams/security/gizmo/knowledge-graph.md)
-- [SRE Team Gizmo](../teams/sre/gizmo/knowledge-graph.md)
-- [Web Development Team Gizmo](../teams/web-dev/gizmo/knowledge-graph.md)
-- [Delivery Pipeline Team Gizmo](../teams/delivery-pipeline/gizmo/knowledge-graph.md)
-  owns CI, PR lifecycle, dev publication, local landing, evidence, and guarded
-  promotion mechanics. It is not a second Prime and does not decide functional
-  ownership, readiness, promotion, or final delivery.
+Team routing begins at the root context router. Prime receives each Team
+Gizmo's high-level result without indexing the team's internal graph.
 
 ## Architecture and ownership
 
@@ -80,7 +73,7 @@ Use these skills only for the delivery action in scope.
 Open one workflow at the stage that requires it.
 
 - [Mission delivery](workflows/mission-delivery.md)
-- [PR Lifecycle Team Agent](../teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
+- PR Lifecycle Team Agent is routed through the Delivery Pipeline owner graph.
 - [Agent statistics](workflows/agent-statistics.md)
 - [Pull request workflow](workflows/pull-requests.md)
 - [Review request workflow](workflows/code-review.md)

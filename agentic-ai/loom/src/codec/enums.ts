@@ -21,8 +21,6 @@ export enum AgentStatsOperation {
 export enum PrLandOperation {
   Status = 'status',
   Validate = 'validate',
-  Ready = 'ready',
-  MergeCheck = 'mergeCheck',
 }
 
 export enum ResponsePhase {

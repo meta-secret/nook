@@ -31,7 +31,6 @@ export class DockerizedRustToolingContract {
       const packages = [
         ".",
         "agentic-ai/loom",
-        "agentic-ai/ci-agent",
         ".cortex/teams/ai/dynamic-skills/example/scripts",
       ];
       for (const directory of packages) {

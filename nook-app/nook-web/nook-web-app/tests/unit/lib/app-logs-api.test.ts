@@ -96,6 +96,18 @@ describe('AppLogsQueryString', () => {
       offset: 4,
     })
   })
+
+  test('uses the first value when a query parameter is repeated', () => {
+    expect(
+      new AppLogsQueryString(
+        '?minLevel=warn&minLevel=debug&limit=25&limit=50&offset=4&offset=8',
+      ).query,
+    ).toEqual({
+      minLevel: LogLevel.Warn,
+      limit: 25,
+      offset: 4,
+    })
+  })
 })
 
 describe('AppLogsJsonDocument', () => {

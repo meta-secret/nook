@@ -4,14 +4,12 @@ version: '3'
 tasks:
   k0s:manifests:check:
     deps: [":tooling:install"]
-    desc: Validate Hive isolation and TLS invariants in repository manifests.
+    desc: Validate Nook isolation and TLS invariants in repository manifests.
     cmds:
       - bun test infra/operator-ssh.test.ts
       - bun infra/contracts/home-ssh-contract.ts
       - bun test infra/providers/ovh-dedicated.test.ts
       - bun infra/contracts/ovh-dedicated-contract.ts
-      - ruby infra/contracts/hive-manifest-contract.rb
-      - bun test agentic-ai/minds/hive/controller/reaper.test.ts
       - bun infra/contracts/k0s-firewall-rollback-test.ts
       - bun infra/contracts/k0s-cni-migration-test.ts
       - bun infra/contracts/services-network-repair-test.ts

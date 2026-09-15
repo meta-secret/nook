@@ -201,23 +201,9 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     description:
-      'Dispatch remote build-only work and later manager-owned CI validation with final-head Codex review opted in, then require hosted checks and review collection before readiness.',
+      'Dispatch remote build-only work and later manager-owned CI validation, then return hosted check evidence to the dev manager.',
     exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
     inputSchema: PR_LAND_VALIDATE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Ready,
-    description: 'Run task pr:ready for a PR.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_PR_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.MergeCheck,
-    description: 'Summarize merge readiness without merging.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_PR_INPUT_SCHEMA,
   },
   {
     family: RequestFamily.DependencyPopularity,
@@ -297,22 +283,6 @@ export class LoomRequestExecution {
               repoRoot: discovery7.value,
               request: request.validate,
             }).execute();
-          }
-          case PrLandOperation.Ready: {
-            const discovery8 = new RepositoryRoot().locate();
-            if (discovery8.isErr()) return err(discovery8.error);
-            return new PullRequestDeliveryCommand({
-              repoRoot: discovery8.value,
-              prNumber: request.ready.prNumber,
-            }).readiness();
-          }
-          case PrLandOperation.MergeCheck: {
-            const discovery9 = new RepositoryRoot().locate();
-            if (discovery9.isErr()) return err(discovery9.error);
-            return new PullRequestDeliveryCommand({
-              repoRoot: discovery9.value,
-              prNumber: request.mergeCheck.prNumber,
-            }).mergeReadiness();
           }
         }
         break;

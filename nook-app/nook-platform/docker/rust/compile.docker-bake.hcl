@@ -25,8 +25,8 @@ variable "GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX" {
 }
 
 // The source-free dependency graph is fingerprinted independently. A feature
-// source graph is exact-commit-only and includes the required Hive compile
-// graph. There is deliberately no trusted Main source fallback.
+// source graph is exact-commit-only. There is deliberately no trusted Main
+// source fallback.
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_DEPS_SCOPE}:buildcache"
 // v3 is the first exact-source schema whose mode=min export is rooted at
 // the final compile target and therefore retains the expensive WASM compiler

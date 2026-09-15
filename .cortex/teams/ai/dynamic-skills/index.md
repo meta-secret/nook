@@ -13,10 +13,10 @@ Harness profile directories must not mirror or redefine these cards.
 
 ## Skill catalog
 
-- **[Dev publication](../../delivery-pipeline/dev-manager/dynamic-skills/dev-publish.md)**
-  - Purpose: Manually publish dev snapshots and coordinate full slow validation.
-- **[Dev promotion](../../delivery-pipeline/dev-manager/dynamic-skills/dev-promote.md)**
-  - Purpose: Fast-forward main to the tested dev SHA with verified remote state.
+- **[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)**
+  - Purpose: Name feature, Team Gizmo, and Team Agent branches consistently.
+- **[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)**
+  - Purpose: Preserve repository and generated-state hygiene before publication.
 - **[team-oriented-development.md](../../../gizmo-prime/dynamic-skills/team-oriented-development.md)**
   - Purpose: Route capabilities across the root/controller graphs plus six engineering/operational owner graphs, including Delivery Pipeline and its nested internal graphs, with optional bounded expertise providers and Gizmo-owned cross-team joins
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**

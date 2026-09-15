@@ -541,7 +541,7 @@ export class RegistryRestart {
 
     const previousResult = new JobsLabeledPodIdentity({
       kubeconfigPath,
-      namespace: "hive-data",
+      namespace: "nook-infra",
       labelSelector: "app.kubernetes.io/name=nook-zot",
       previousUid: "",
     }).execute();
@@ -550,13 +550,13 @@ export class RegistryRestart {
     const deleted = new KubectlCommand({
       kubeconfigPath,
       label: "restart Zot pod",
-      command: ["-n", "hive-data", "delete", `pod/${previous.name}`],
+      command: ["-n", "nook-infra", "delete", `pod/${previous.name}`],
       output: CommandOutputPolicy.Streamed,
     }).run();
     if (deleted.isErr()) return err(deleted.error);
     const replacementResult = new JobsLabeledPodIdentity({
       kubeconfigPath,
-      namespace: "hive-data",
+      namespace: "nook-infra",
       labelSelector: "app.kubernetes.io/name=nook-zot",
       previousUid: previous.uid,
     }).execute();
@@ -567,7 +567,7 @@ export class RegistryRestart {
       label: "wait for restarted Zot",
       command: [
         "-n",
-        "hive-data",
+        "nook-infra",
         "wait",
         `pod/${replacement.name}`,
         "--for=condition=Ready",
@@ -578,7 +578,7 @@ export class RegistryRestart {
     if (readyWait.isErr()) return err(readyWait.error);
     const readyResult = new JobsPodIdentity({
       kubeconfigPath,
-      namespace: "hive-data",
+      namespace: "nook-infra",
       podName: replacement.name,
     }).execute();
     if (readyResult.isErr()) return err(readyResult.error);

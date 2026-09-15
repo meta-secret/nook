@@ -47,7 +47,7 @@ continues to own GitHub execution mechanics.
   reuse; a CLI override on one target does not retroactively alter another.
 - Require exported cache roots to retain reusable dependency and compiler
   vertices. Reject scratch, marker-only, and synthetic joins that orphan them.
-- Isolate Rust, WASM, Hive, and web compiler inputs by semantic domain. Never
+- Isolate Rust, WASM, Loom, and web compiler inputs by semantic domain. Never
   broadly copy the repository root. Introduce per-head arguments at the latest
   consumer boundary and keep cross-domain artifact handoffs narrow.
 - Require simulator and proof coverage for cache-policy and compiler-domain

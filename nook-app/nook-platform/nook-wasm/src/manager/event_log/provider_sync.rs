@@ -575,9 +575,12 @@ mod tests {
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: test fixture constructs a signed event for provider export coverage"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: test fixture constructs a signed event for provider export coverage"
+        )
     )]
     pub(super) fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
         let signing = SigningIdentity::generate()?.0;
@@ -613,10 +616,12 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        unknown_lints,
-        non_local_effect_before_unhandled_error,
-        reason = "the contract records a typed sync issue before rejecting the remote store"
+    #[cfg_attr(
+        dylint_lib = "non_local_effect_before_unhandled_error",
+        allow(
+            non_local_effect_before_unhandled_error,
+            reason = "the contract records a typed sync issue before rejecting the remote store"
+        )
     )]
     fn rejected_event_log_classification_is_available_as_a_typed_issue() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -656,9 +661,12 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the test intentionally observes and then inspects the stored multi-store issue"
+    #[cfg_attr(
+        dylint_lib = "non_local_effect_before_unhandled_error",
+        allow(
+            non_local_effect_before_unhandled_error,
+            reason = "the test intentionally observes and then inspects the stored multi-store issue"
+        )
     )]
     fn multiple_store_classification_records_all_store_ids_in_the_issue() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -736,9 +744,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
@@ -756,13 +767,19 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
-    #[allow(
-        non_local_effect_before_unhandled_error,
-        reason = "the test intentionally observes and then inspects the stored provider issue"
+    #[cfg_attr(
+        dylint_lib = "non_local_effect_before_unhandled_error",
+        allow(
+            non_local_effect_before_unhandled_error,
+            reason = "the test intentionally observes and then inspects the stored provider issue"
+        )
     )]
     fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -798,9 +815,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn wasm_before_genesis_projection_is_a_safe_noop() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -813,9 +833,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn wasm_current_projection_persists_its_key_epoch() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -833,9 +856,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn wasm_adopting_the_active_epoch_is_idempotent_when_unlocked() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -857,9 +883,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn wasm_sentinel_epoch_adoption_fails_closed_before_key_lookup() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -886,9 +915,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
     )]
     async fn local_outbox_queue_is_noop_without_a_provider_and_persists_with_one()
     -> anyhow::Result<()> {

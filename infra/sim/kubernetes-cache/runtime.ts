@@ -146,7 +146,7 @@ export class SimulationCluster {
         "--kubeconfig-update-default=false",
         "--kubeconfig-switch-context=false",
         "--k3s-node-label",
-        "hive.nook.sh/storage=local@server:0",
+        "nook.nokey.sh/storage=local@server:0",
         "--k3s-node-label",
         "nook.nokey.sh/arc-build=true@agent:0,1,2",
         "--k3s-arg",
@@ -180,7 +180,7 @@ export class SimulationCluster {
           `k3d-${this.name}-server-0`,
           "sh",
           "-euc",
-          "mkdir -p /var/lib/hive/zot && chown 10001:10001 /var/lib/hive/zot",
+          "mkdir -p /var/lib/nook/zot && chown 10001:10001 /var/lib/nook/zot",
         ],
       },
       ...[0, 1, 2].map((index): CommandRequest => ({

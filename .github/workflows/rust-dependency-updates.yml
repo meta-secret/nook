@@ -1,6 +1,5 @@
-# Weekly direct Rust dependency audit. When Cargo manifests are behind crates.io,
-# the existing CI agent updates them on an exact fix branch and validates the
-# full deterministic suite. The later dev manager flow owns pull requests.
+# Weekly direct Rust dependency audit. Outdated dependency reports are retained
+# as workflow artifacts for manual triage.
 name: Rust dependency updates
 
 on:
@@ -14,16 +13,13 @@ permissions:
 
 concurrency:
   group: rust-dependency-updates
-  # An agent may have already pushed the exact fix branch.
+  # Preserve the in-progress read-only audit and its artifact for manual triage.
   cancel-in-progress: false
 
 jobs:
   audit:
     name: Audit direct Cargo dependencies
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    outputs:
-      outdated: ${{ steps.audit.outputs.outdated }}
-      sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,60 +44,3 @@ jobs:
         with:
           name: rust-deps-outdated
           path: ${{ runner.temp }}/rust-deps-outdated.txt
-
-  update:
-    name: AI update, full validation, and branch publication
-    needs: audit
-    if: needs.audit.outputs.outdated == 'true'
-    runs-on: ${{ vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive' }}
-    timeout-minutes: 360
-    permissions:
-      contents: write
-      checks: read
-    env:
-      FIX_BRANCH: fix/rust-dependencies-${{ github.run_id }}
-      GITHUB_REPOSITORY: ${{ github.repository }}
-      GITHUB_RUN_ID: ${{ github.run_id }}
-      CI_AGENT_FIX_PROFILE: rust-dependency-update
-      CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
-      CI_FIX_LABEL: Rust dependency update
-      CI_AGENT_TIMEOUT_MS: "10800000"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.audit.outputs.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: rust-deps-outdated
-          path: ${{ runner.temp }}
-
-      - name: Setup Task
-        uses: go-task/setup-task@v2
-        with:
-          version: 3.52.0
-
-      - name: Expose Actions Node.js runtime
-        uses: ./.github/actions/nook-node-setup
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-      - name: Build split Rust/WASM and web images
-        run: task setup WASM_BUILD_MODE=prod
-
-      - name: Run dependency-update agent directly on ARC
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
-          RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
-          VITE_BASE: /
-          WASM_BUILD_MODE: prod
-          VITE_VAULT_SYNC_INTERVAL_MS: "1000"
-        run: task ci-agent:fix

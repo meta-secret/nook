@@ -37,9 +37,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
   export a terminal result while orphaning intermediate cache records.
 - Keep dependency layers reusable across source changes and explicitly root
-  native, WASM, Minds, Hive, Node, and web dependency stages.
+  native, WASM, Node, and web dependency stages.
 - Enforce semantic input-domain isolation for every compiler stage. Rust,
-  WASM, Hive, and web stages must never broadly copy the repository root; each
+  WASM, Loom, and web stages must never broadly copy the repository root; each
   stage copies only the source, lockfiles, manifests, generated inputs, and
   configuration that can affect its own compilation result.
 - Introduce per-head arguments only at the latest consumer boundary that needs
@@ -91,7 +91,7 @@ behavior for packets issued by SRE Team Gizmo.
   - `.github/workflows/remote-compile-contract.test.sh`.
 - Author focused policy and regression tests for every cache defect.
 - Extend the Docker simulator and proof for policy-only cache changes and each
-  Rust, WASM, Hive, or web input-domain change. Mutating an unrelated domain
+  Rust, WASM, Loom, or web input-domain change. Mutating an unrelated domain
   must leave the subject compiler domain cached, while a relevant-domain
   mutation invalidates only the expected vertices.
 - Extend the simulator and proof with the remote `sccache` fault matrix.
@@ -126,14 +126,14 @@ behavior for packets issued by SRE Team Gizmo.
 
 - Do not use, modify, or depend on another person's branch or worktree.
 - Do not create or select a replacement worktree.
-- Do not weaken exact-head, credential, isolation, or zero-write boundaries to
+- Do not weaken exact-head, credential, isolation, or export boundaries to
   reduce latency.
 - Do not treat a missing per-head exact cache as a reason to run preparatory
   cache work or publish a required baseline.
 - Do not equate manifest existence or import success with reachable reusable
   ancestry, or export a scratch/marker join that can orphan intermediate cache
   records.
-- Do not omit native, WASM, Minds, Hive, Node, or web dependency roots from
+- Do not omit native, WASM, Loom, Node, or web dependency roots from
   stable Docker layers, and do not run a separate source-free population job.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic

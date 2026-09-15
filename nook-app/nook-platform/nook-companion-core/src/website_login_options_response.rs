@@ -225,6 +225,10 @@ mod tests {
             r#"{"ok":false,"status":"unavailable"}"#,
             r#"{"ok":true,"reason":"vault-locked"}"#,
             r#"{"ok":false,"reason":" "}"#,
+            r#"{"ok":false,"reason":"vault-locked","unexpected":true}"#,
+            r#"{"ok":true,"status":"locked","unexpected":true}"#,
+            r#"{"ok":true,"status":"ready","authorizationGeneration":" ","accounts":[]}"#,
+            r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":" ","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
             r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
         ] {
             assert!(WebsiteLoginOptions::from_json(malformed).is_err());

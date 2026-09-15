@@ -25,6 +25,10 @@ tasks:
 
   _ci:pr:rust:host:
     # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.
+    vars:
+      # Hosted jobs provide runner.temp explicitly. Local verification shares the
+      # native coverage root so the final reporter export never falls through to /tools.
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
       - task: preflight
       - task: docker:ci:rust:export
@@ -64,9 +68,49 @@ tasks:
 
   ci:pr:web:
     desc: Build and verify web/extension code from downloaded split-CI artifacts.
+    env:
+      CI: '{{.CI}}'
+      CI_ARTIFACT_DIR: '{{.CI_ARTIFACT_DIR}}'
+      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      DOCKER_E2E_IMAGE: '{{.DOCKER_E2E_IMAGE}}'
+      DOCKER_NOFILE_LIMIT: '{{.DOCKER_NOFILE_LIMIT}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      NOOK_ENV: '{{.NOOK_ENV}}'
+      NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
+      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
+      NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
+      NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
+      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
+      VITE_SITE_URL: '{{.VITE_SITE_URL}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:pr:web:host }
+      - |
+        artifacts="${CI_ARTIFACT_DIR:-}"
+        case "$artifacts" in
+          /*) ;;
+          *) artifacts="{{.REPO_ROOT}}/$artifacts" ;;
+        esac
+        if [ -z "${GITHUB_ACTIONS:-}" ] && {
+          [ -z "${CI_ARTIFACT_DIR:-}" ] ||
+          ! test -s "$artifacts/nook-wasm/nook_wasm.js" ||
+          ! test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        }; then
+          task --dir "{{.REPO_ROOT}}" ci:pr:web:local
+        elif test "${NOOK_BUILDKIT_REMOTE:-}" = "1"; then
+          bash "{{.REPO_ROOT}}/.github/scripts/with-remote-buildkit.sh" task --dir "{{.REPO_ROOT}}" _ci:pr:web:host
+        else
+          bash "{{.REPO_ROOT}}/.github/scripts/with-healthy-buildkit.sh" task --dir "{{.REPO_ROOT}}" _ci:pr:web:host
+        fi
+
+  ci:pr:web:local:
+    desc: Bounded local PR web verification; assemble the split WASM handoff without registry caches.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-pr-web-local.sh"
 
   _ci:pr:web:host:
     cmds:
