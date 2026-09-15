@@ -75,6 +75,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           # Main push seeds trusted ecosystem caches; PRs write isolated remote
           # refs with Main fallback. Schedule/dispatch stay read-only consumers.
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}

@@ -164,6 +164,7 @@ rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // importing the short rust-base index while nesting nightly/policy orphans their
 // expensive RUNs even after Main nightly FALLBACK restored them.
 target "rust-base" {
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-base"

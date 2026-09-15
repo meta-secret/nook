@@ -81,6 +81,7 @@ fs.appendFileSync(
   githubEnvironmentPath,
   [
     "SCCACHE_S3_MODE=external",
+    "SCCACHE_S3_RW_MODE=READ_WRITE",
     `SCCACHE_S3_ACCESS_KEY_FILE=${accessKeyFile}`,
     `SCCACHE_S3_SECRET_KEY_FILE=${secretKeyFile}`,
     `SCCACHE_ENDPOINT=${endpointUrl}`,

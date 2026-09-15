@@ -56,6 +56,10 @@ inputs:
     description: SeaweedFS S3 bucket used by this trust domain.
     required: false
     default: "nook-sccache"
+  require-sccache:
+    description: Fail closed unless the trusted job has the complete writable SCCache pair.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -149,6 +153,14 @@ runs:
         NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}
       run: |
         set -euo pipefail
+
+        if [ "${{ inputs.require-sccache }}" = "true" ]; then
+          if [ "${NOOK_SCCACHE_BACKEND:-}" != "remote" ] ||
+             [ "${SCCACHE_S3_RW_MODE:-}" != "READ_WRITE" ]; then
+            echo "trusted cache job requires a writable READ_WRITE SCCache backend" >&2
+            exit 1
+          fi
+        fi
 
         pr_number="${{ github.event.pull_request.number }}"
         event_name="${{ github.event_name }}"

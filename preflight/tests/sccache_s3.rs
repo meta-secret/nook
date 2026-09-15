@@ -106,7 +106,11 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
     assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
     assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(bake.contains("variable \"SCCACHE_S3_ACCESS_KEY_FILE\""));
+    assert!(bake.contains("variable \"SCCACHE_S3_SECRET_KEY_FILE\""));
+    assert!(bake.contains("sccache_secrets ="));
     assert!(bake.contains("target \"_sccache\""));
+    assert!(bake.contains("secret = sccache_secrets"));
     assert!(!bake.contains("extra-hosts"));
     assert!(!bake.contains("SCCACHE_REDIS"));
 
@@ -157,6 +161,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     for required in [
         "sccache-access-key",
         "sccache-secret-key",
+        "require-sccache",
         "uses: ./.github/actions/nook-cache-connect",
         "isolated-cache-write",
     ] {
@@ -185,6 +190,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
         "delete process.env[\"INPUT_SCCACHE-SECRET-KEY\"]",
         "SCCACHE_S3_ACCESS_KEY_FILE",
         "SCCACHE_S3_SECRET_KEY_FILE",
+        "SCCACHE_S3_RW_MODE=READ_WRITE",
         "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
         "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
@@ -248,6 +254,35 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "NOOK_SCCACHE_ENDPOINT",
         "NOOK_SCCACHE_BUCKET",
     ];
+    let repository_policy =
+        RepositoryFixture::repository_root().read(".github/workflows/repository-policy.yml");
+    let trusted_policy = repository_policy
+        .split_once("      - name: Connect private ARC BuildKit")
+        .and_then(|(_, tail)| tail.split_once("      - name: Setup secret-free hosted BuildKit"))
+        .map(|(trusted, _)| trusted)
+        .expect("repository policy must keep trusted and untrusted setup branches");
+    for credential in compiler_credentials {
+        assert!(
+            trusted_policy.contains(credential),
+            "trusted repository policy must receive {credential}"
+        );
+    }
+    for input in [
+        "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+        "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+        "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
+        "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
+    ] {
+        assert!(
+            trusted_policy.contains(input),
+            "trusted repository policy must pass the complete SCCache credential tuple: {input}"
+        );
+    }
+    let e2e_pr = RepositoryFixture::repository_root().read(".github/workflows/e2e-pr.yml");
+    assert!(
+        !e2e_pr.contains("NOOK_SCCACHE_") && !e2e_pr.contains("sccache-access-key:"),
+        "arbitrary-ref e2e must remain secret-free"
+    );
     for (job_name, start, end) in [
         ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
         (
@@ -356,14 +391,14 @@ fn assert_rust_build_cache_boundary() {
     let platform_tasks =
         RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
     let sccache_tasks = format!("{app_tasks}\n{platform_tasks}");
-    assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY"));
-    assert!(!bake.contains("secret =") && !bake.contains("SCCACHE_REDIS"));
+    assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY=") && !bake.contains("SCCACHE_S3_SECRET_KEY="));
+    assert!(!bake.contains("SCCACHE_REDIS"));
     assert!(
-        sccache_tasks.contains("--set '*.secrets=id=sccache_s3_access_key,src=$access_file'")
-            && sccache_tasks
-                .contains("--set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'")
+        sccache_tasks.contains("--var SCCACHE_S3_ACCESS_KEY_FILE=$access_file")
+            && sccache_tasks.contains("--var SCCACHE_S3_SECRET_KEY_FILE=$secret_file")
             && sccache_tasks.contains("--allow=fs.read=$access_file")
             && sccache_tasks.contains("--allow=fs.read=$secret_file")
+            && !sccache_tasks.contains("--set '*.secrets")
             && !sccache_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
         "Bake must receive compiler credentials through stable secret IDs and runner-local files"
     );

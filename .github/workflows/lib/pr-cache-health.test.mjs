@@ -330,4 +330,13 @@ void test("PR workflow covers every BuildKit-producing job without another build
     /dylint-result:[\s\S]*jobs\.dylint\.outputs\.cache-result/,
   );
   assert.match(telemetryAction, /NOOK_CACHE_TELEMETRY_JOB_STATUS:/);
+  assert.match(
+    telemetryAction,
+    /if timeout 15s[\s\S]*start --output "\$baseline"; then/,
+  );
+  assert.match(telemetryAction, /baseline_collection_timeout:15s/);
+  assert.match(
+    telemetryAction,
+    /cache telemetry baseline unavailable[\s\S]*unavailable[\s\S]*--output "\$output"/i,
+  );
 });
