@@ -17,14 +17,16 @@ external GitHub, Git, credential, artifact, publication, and promotion state.
 
 - Execute only the packet's repository, branch or frozen revision, task, and
   target.
-- Forward a remote Task selector unchanged without checking whether its target
-  exists, and let GitHub Actions execute or naturally fail it. For local
+- Forward the complete remote invocation unchanged and let GitHub Actions
+  execute it or naturally fail it. For local
   bounded delivery tasks, honor declared read, write, and output scopes,
   coordinate or serialize overlapping writer scopes, and assign shared outputs
   to one writer.
 - Record the invoked command, exit result, observed target, and local or
   external output evidence. Neither an unexecuted declaration nor a stale
   claimed result is execution evidence.
+- Use the compilation result for correctness. Cache statistics and cache
+  publication or health signals are non-blocking observability owned by SRE.
 - Return the terminal operation handoff to Delivery Pipeline Team Gizmo.
 - Invoke local integration only under the feature Gizmo's packet.
 - Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
@@ -43,15 +45,18 @@ external GitHub, Git, credential, artifact, publication, and promotion state.
 - Do not close a PR manually to simulate merged status.
 - Do not use administrator capability to skip required checks.
 - Do not create a continuous manager, scheduler, or custom polling loop.
-- Do not prevalidate or reject unknown or missing remote Task selectors. Do not
-  count declared, stale, or unexecuted Task results as evidence.
+- Do not preflight, mock, simulate, contract-test, dry-run, locally probe, or
+  predict remote selectors, shell arguments, environment wiring, Task
+  existence, shell behavior, retries, failure paths, or expected dispatch
+  results. Do not count declared, stale, or unexecuted Task results as evidence.
 
 ## Procedure
 
 1. Confirm the packet's live target and canonical branch or explicitly frozen
    revision.
-2. Execute the named operation. Forward a remote selector as received and
-   capture its GitHub run and natural result; do not inspect the Task catalog
+2. Execute the named operation. Forward the selector, shell arguments, and
+   environment wiring as received, then capture the GitHub run and terminal
+   result. Do not inspect, exercise, or model those runner-owned semantics
    before dispatch. A request authorizes execution; it does not prove it.
    - Feature compilation first re-fetches and resolves the latest committed
      head of the Prime-authorized canonical branch, then pushes that ref and

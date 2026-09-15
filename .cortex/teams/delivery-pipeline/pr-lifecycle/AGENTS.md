@@ -63,19 +63,23 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - Accept one explicit packet from Delivery Pipeline Team Gizmo for a PR,
   repository, workflow run, or Workbench operation. Use an exact head when the
   operation concerns a revision.
-- Confirm the packet's repository and applicable target identity before acting.
-- Forward a packet's remote Task selector unchanged. Do not query or inspect
-  the Task catalog before remote dispatch and do not reject an unknown or
-  missing remote target; let GitHub Actions execute it and fail naturally.
+- Confirm the packet's repository, operation, bounded scopes, and authorized
+  branch or frozen revision before acting.
+- Forward a packet's remote Task selector, shell invocation arguments, and
+  environment wiring unchanged. Let GitHub Actions execute the request and
+  produce its natural terminal outcome.
   Local Task execution remains restricted to the bounded delivery operations
   explicitly authorized by this contract.
-- Execute each accepted selector during the current operation while honoring
+- Execute each requested selector during the current operation while honoring
   its declared read, write, and output scopes. Serialize or coordinate
   execution when a writer overlaps another command's read, write, or output
   scope, and keep each shared output under one writer.
 - Return the actual invoked command, exit result, observed target, and local or
   external output evidence. A packet declaration, prior claimed result, or
   unexecuted acceptance item never counts as execution evidence.
+- Report compilation's terminal result as correctness evidence. If present,
+  forward `sccache --show-stats` output only as non-blocking observability; do
+  not interpret cache hits, misses, health, or publication as a Delivery gate.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
 - For feature compilation, require the Prime-authored canonical branch packet.
@@ -129,6 +133,12 @@ selection, slow validation, and promotion. Each retains its own verdict.
   notifications.
 - PR Lifecycle Agent must not add fallback, compatibility, recovery, replay, or
   reconciliation behavior when an external operation fails.
+- PR Lifecycle Agent must not preflight, mock, simulate, contract-test,
+  dry-run, locally probe, or predict remote invocation arguments, environment
+  wiring, Task existence, shell behavior, retry/failure paths, or expected
+  dispatch results. These are runner-owned execution semantics under the
+  [Circuit Breaker](../../../CIRCUIT-BREAKER.md), not an internal validation
+  surface.
 
 ## Completion boundary
 

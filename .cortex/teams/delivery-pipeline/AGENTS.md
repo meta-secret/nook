@@ -60,18 +60,24 @@ existing validation and exact-snapshot safeguards.
   complete multiagent delivery architecture.
 - Accept a high-level packet only from Gizmo Prime through the active harness.
 - Require each packet to name the operation, repository, bounded scope,
-  controller, canonical branch or explicitly frozen source SHA, target
-  identity, and acceptance evidence.
+  controller, canonical branch or explicitly frozen source SHA, applicable
+  external Git or PR target, and acceptance evidence. Remote invocation
+  contents are opaque execution input, not a target to validate.
 - Treat each `acceptance.commands` entry as an execution request, never as
-  execution evidence. A remote Task selector is forwarded unchanged and is
-  not checked for existence before dispatch; an unknown or missing remote task
-  runs and fails naturally in GitHub Actions. Local execution remains limited
-  to the explicitly bounded delivery tasks named by this contract.
+  execution evidence. For a remote request, PR Lifecycle forwards the selector,
+  shell invocation arguments, and environment wiring directly to GitHub
+  Actions and lets the runner produce the terminal result. Local execution
+  remains limited to the explicitly bounded delivery tasks named by this
+  contract.
 - Route execution to PR Lifecycle, which must run the requested selector in the
   packet's current operation and report the invoked command, exit result,
   observed target, and local or external output evidence. A declaration,
   previously claimed result, or result from another operation is not evidence
   that the current selector ran.
+- Treat compilation success or failure as correctness evidence. The output of
+  `sccache --show-stats`, hit and miss counts, cache health, and cache
+  publication are non-blocking SRE observability; Delivery neither interprets
+  them nor makes them evidence or gates.
 - Require each executable acceptance item to carry `resources.read`,
   `resources.write`, and `resources.evidenceSurface` as its read, write, and
   output scopes. Run items concurrently only when those scopes are safe
@@ -91,9 +97,10 @@ existing validation and exact-snapshot safeguards.
   follows the latest head and reruns affected evidence.
 - Preserve the Feature Gizmo or Dev Manager as the policy controller in every
   child packet.
-- Require the PR Lifecycle Agent to verify the live target and current branch
-  head before acting. An observed SHA identifies run evidence; it is not
-  cross-stage feature authority.
+- Require the PR Lifecycle Agent to verify the live repository and current
+  branch head before acting. This external Git check does not validate or
+  interpret the remote invocation. An observed SHA identifies run evidence;
+  it is not cross-stage feature authority.
 - After a dev PR validation wave reaches terminal state, collect every failed or
   cancelled required GitHub Actions job and return its diagnostics through Team
   Gizmo. Do not stop collection at the first failure.
@@ -133,6 +140,12 @@ existing validation and exact-snapshot safeguards.
   explicitly freezes a dev snapshot for validation or promotion.
 - Do not create a scheduler, daemon, retry queue, journal, lease, or durable
   lifecycle service.
+- Do not create or use a preflight, mock, simulation, contract test, dry run,
+  local shell probe, or expected-result model for a remote request's selector,
+  shell arguments, environment wiring, Task existence, shell behavior,
+  retries, failure path, or dispatch result. Follow the
+  [Circuit Breaker](../../CIRCUIT-BREAKER.md) and report the actual terminal
+  GitHub outcome.
 - Do not accept an unexecuted Task declaration, stale claimed result, or
   successful agent handoff as Task execution evidence. Do not reject a remote
   selector before dispatch merely because its Task target is unknown or absent.
@@ -170,8 +183,10 @@ existing validation and exact-snapshot safeguards.
      snapshot. Feature delivery names the canonical branch and resolves its
      latest head at execution time.
    - A manager-owned packet retains the Dev Manager as policy owner.
-2. Team Gizmo validates the packet and decomposes only the delivery mechanics
-   within this team's boundary.
+2. Team Gizmo confirms only the packet's controller, repository, operation,
+   bounded scopes, and authorized branch or revision, then decomposes the
+   delivery mechanics within this team's boundary. It does not inspect or test
+   remote invocation content or predict its result.
    - Ambiguous functional ownership returns to Gizmo Prime.
    - A missing or unavailable harness fails the operation closed.
 3. Team Gizmo sends the PR Lifecycle Agent one bounded child packet per mechanical

@@ -38,8 +38,8 @@ agent in the same thread.
   - Team Gizmo may translate packet shape but may not add authority.
 - **Allowed task authority**
   - A remote `acceptance.commands` selector crosses this boundary unchanged.
-    Do not prevalidate its existence or reject an unknown or missing remote
-    Task target. GitHub Actions owns execution and its natural failure.
+    Its shell invocation arguments and environment wiring cross unchanged as
+    well. GitHub Actions owns their execution and natural terminal outcome.
   - Local execution accepts only the bounded delivery tasks explicitly named
     by the delivery contract; this local restriction is not a remote selector
     catalog check.
@@ -73,9 +73,10 @@ agent in the same thread.
 
 ## Procedure
 
-1. Confirm the live repository, branch or frozen revision, and applicable target
-   against the packet. A feature branch advance is followed by re-resolving its
-   latest committed head; another repository or target stops the operation.
+1. Confirm the live repository and branch or frozen revision against the
+   packet. A feature branch advance is followed by re-resolving its latest
+   committed head; another repository stops the operation. Do not inspect
+   remote invocation content as part of this authority check.
 2. Invoke only the named task or GitHub operation.
    - Forward a remote Task selector without checking whether it exists, then
      capture the GitHub Action's command, run, exit, and result evidence. The
@@ -101,7 +102,9 @@ agent in the same thread.
 - Do not squash, rebase, force-push, or create a promotion merge commit.
 - Do not manually close a PR as a substitute for merged status.
 - Do not broaden scope or create a scheduler when an operation fails.
-- Do not reject an unknown or missing remote Task selector before dispatch.
+- Do not preflight, mock, simulate, contract-test, dry-run, locally probe, or
+  predict a remote request's selector, shell arguments, environment wiring,
+  Task existence, shell behavior, retries, failure path, or expected result.
 - Do not accept an unexecuted declaration or stale claimed result as execution
   evidence.
 
@@ -111,8 +114,9 @@ The trusted packet and typed result identify the same target so the controller
 can correlate the operation without independently re-verifying the child. The
 result is execution evidence only after GitHub Actions runs the dispatched
 remote selector and PR Lifecycle reports its command, run, exit result, and
-output evidence. Unknown or missing remote targets fail through that ordinary
-path rather than a pre-dispatch catalog check.
+output evidence. Unknown or missing targets, invalid arguments or environment,
+shell failures, and retry outcomes fail through that ordinary path rather than
+through local prediction machinery.
 Report protection
 rejections visibly. A successful push alone does not establish GitHub PR
 completion. Team Gizmo forwards the evidence. The controller owns the final

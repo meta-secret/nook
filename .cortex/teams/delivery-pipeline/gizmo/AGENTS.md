@@ -41,8 +41,8 @@ do not create an internal security protocol.
 - Accept high-level packets only from Gizmo Prime through the active Gizmo
   harness.
 - Confirm the packet's controller, operation, repository, bounded scope, branch
-  or explicitly frozen source revision, target identity, and acceptance
-  evidence.
+  or explicitly frozen source revision, applicable external Git or PR target,
+  and acceptance evidence. Do not inspect remote invocation contents.
 - Decompose only delivery-pipeline work.
   - Return functional ownership questions to Gizmo Prime.
   - Preserve Dev Manager authority for dev validation, readiness, promotion,
@@ -53,11 +53,11 @@ do not create an internal security protocol.
   - Give the child an issued worktree when a bounded local-dev task requires
     one.
   - Keep dependent or shared mutations ordered.
-  - For executable acceptance items, preserve the selector and its declared
-    read, write, and output scopes. Forward remote Task selectors unchanged
-    without prevalidating whether the target exists. Serialize or coordinate
-    local commands whenever a writer overlaps another command's read, write,
-    or output scope.
+  - For executable acceptance items, preserve the remote invocation and its
+    declared read, write, and output scopes. Forward the selector, shell
+    arguments, and environment wiring unchanged for direct execution by
+    GitHub Actions. Serialize or coordinate local commands whenever a writer
+    overlaps another command's read, write, or output scope.
 - Preserve the source packet's authority when creating a child packet.
   - Do not change the repository, branch, target, controller, or acceptance
     evidence. Do not turn an observed feature SHA into cross-stage authority.
@@ -112,6 +112,10 @@ do not create an internal security protocol.
 - Do not use administrator capability to skip required checks or verdicts.
 - Do not create a scheduler, daemon, retry queue, journal, lease, or durable
   lifecycle state machine.
+- Do not ask a child to preflight, mock, simulate, contract-test, dry-run, or
+  predict any remote invocation detail or outcome. The Delivery team
+  [Circuit Breaker boundary](../AGENTS.md#prohibited-actions) requires direct
+  execution and the actual terminal GitHub result.
 
 ## Parent and child reporting
 
@@ -129,8 +133,11 @@ do not create an internal security protocol.
 
 ## Failure and escalation procedure
 
-1. Validate the packet before dispatch.
-   - Missing identity, scope, target, or evidence blocks dispatch.
+1. Confirm the packet's controller, repository, operation, bounded scopes, and
+   authorized branch or frozen revision before dispatch.
+   - Missing authority or scope blocks dispatch. Remote selector, shell,
+     environment, retry, failure-path, and expected-result semantics are not
+     pre-dispatch validation targets.
 2. Stop when the child observes a changed repository, branch, PR, run, or
    target. A changed feature head instead requires re-resolving the canonical
    branch and rerunning affected evidence.
