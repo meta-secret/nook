@@ -440,7 +440,21 @@ runs:
             # An ancestor is eligible only through a scope that this producer
             # publishes on every non-handoff execution.  Shorter/shared roots
             # can exist while the source graph needed by this job is absent.
-            general|native) restore_anchors=(nook-rust-native-source-v4) ;;
+            # The general remote profile can consume every lineage below. It
+            # therefore restores one suffix only after proving that exact
+            # immutable suffix contains the complete set; a partially
+            # published arbitrary-task head can never redirect unrelated
+            # consumers to missing refs.
+            general) restore_anchors=(
+              nook-rust-base-v2 nook-rust-deps-v4
+              nook-rust-native-source-v4 nook-rust-wasm-deps-v6
+              nook-rust-wasm-source-v3 nook-rust-ecosystem-dylint-v4
+              nook-rust-ecosystem-fuzz-v4 nook-rust-ecosystem-policy-tools-v5
+              nook-rust-ecosystem-deterministic-v2 nook-rust-ecosystem-kani-v2
+              nook-preflight-v1 nook-web-e2e-v1 nook-web-deps-v1
+              nook-web-app-deps-v1 nook-web-research-deps-v1
+            ) ;;
+            native) restore_anchors=(nook-rust-native-source-v4) ;;
             wasm) restore_anchors=(nook-rust-wasm-source-v3 nook-rust-base-v2) ;;
             preflight) restore_anchor=nook-preflight-v1 ;;
             # The regular web publisher always exports these three dependency

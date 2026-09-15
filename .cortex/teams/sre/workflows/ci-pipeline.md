@@ -75,16 +75,21 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Cache health consumes deterministic JSON telemetry from all seven BuildKit
   producers and also records the terminal status of the exact-image UI demo,
   extension, and full-browser consumers. Skipped optional consumers are
-  neutral. Every consumer preserves started and completed lifecycle markers;
-  matrix consumers keep distinct per-shard identities. A completed consumer failure is diagnostic only; a started but
-  incomplete failed consumer identifies setup or timeout and activates the
-  Docker Cache Specialist. Cancellation or absence without this deterministic
-  evidence remains diagnostic and cannot be mislabeled as a cache timeout.
+  neutral. Every consumer runs behind an inner bounded timeout that reserves
+  cleanup headroom and persists an explicit `success`, `functional_failure`,
+  or `timed_out` result; matrix consumers keep distinct per-shard identities.
+  Only the per-consumer `timed_out` result activates the Docker Cache
+  Specialist. Aggregate matrix status and missing artifacts remain diagnostic
+  and are never used to infer a shard timeout.
 - Immutable ancestor discovery uses the complete set of scopes each producer
   always publishes: native source for native, WASM source plus rust-base for
   WASM, and all three web dependency lineages for regular web verification.
   Conditional image refs and shorter shared roots cannot select an incomplete
   ancestor. Partial publication therefore falls back to Main/cold state.
+- The general Remote profile proves one immutable suffix contains every Rust,
+  WASM, ecosystem, preflight, and web lineage it may consume before assigning
+  that suffix globally. Arbitrary-task partial publications cannot make
+  unrelated consumers probe a mismatched ancestor.
 - Any transient registry probe disables all registry imports and exports for
   the job. Secret-free jobs likewise remain local-only even when a later task
   invokes a publisher; Bake exporters require both cache enablement and write

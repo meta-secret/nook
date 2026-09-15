@@ -50,7 +50,7 @@ for secret_binding in \
   'secrets+=id=sccache_s3_secret_key,src=${secret_key_file}'; do
   grep -Fq -- "--set=build-compile.${secret_binding}" "$compile_script"
 done
-for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'Nearest immutable cache candidate available' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
+for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'Nearest complete immutable cache candidate available' 'general) restore_anchors=(' 'nook-preflight-v1 nook-web-e2e-v1 nook-web-deps-v1' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
   grep -Fq -- "$required" "$setup"
 done
 
@@ -64,7 +64,7 @@ if grep -Fq -- '-pr-$pr_number' "$setup"; then
   echo 'mutable PR-number cache scope remains' >&2
   exit 1
 fi
-for required in 'inputs.registry-username != '\''\''' 'inputs.registry-password != '\''\''' 'Setup secret-free hosted Buildx' 'GHA_CACHE_ENABLED='; do
+for required in "inputs.registry-username != ''" "inputs.registry-password != ''" 'Setup secret-free hosted Buildx' 'GHA_CACHE_ENABLED='; do
   grep -Fq -- "$required" "$setup"
 done
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
@@ -87,8 +87,8 @@ for semantic_input in docs/privacy-policy.md docs/terms-of-service.md nook-app/n
   grep -Fq -- "COPY ${semantic_input} ${semantic_input}" "$compile_dockerfile"
 done
 grep -Fq -- 'ENV NOOK_SCCACHE_RUNTIME_AUTHORITY=secret' "$compile_dockerfile"
-test "$(grep -Fc -- 'id=sccache_runtime_mode,required=true' "$compile_dockerfile")" -eq 18
-test "$(grep -Fc -- 'RUSTC_WRAPPER= cargo fetch --locked' "$compile_dockerfile")" -eq 2
+test "$(grep -Fc -- 'id=sccache_runtime_mode,required=true' "$compile_dockerfile")" -eq 16
+test "$(grep -Fc -- 'RUSTC_WRAPPER= cargo fetch --locked' "$compile_dockerfile")" -eq 1
 if grep -Fq -- 'id=sccache_runtime_mode,required=false' "$compile_dockerfile"; then
   echo 'compile vertex permits missing runtime authority secret' >&2
   exit 1

@@ -11,10 +11,13 @@ void test("records ordinary compile publication boundaries", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
       GHA_CACHE_WRITE_ENABLED: "1",
+      GHA_CACHE_ENABLED: "1",
       NOOK_COMPILE_CACHE_MODE: "publish",
       GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
       GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX: `-git-${"c".repeat(40)}`,
+      NOOK_COMPILER_INPUT_FINGERPRINT: "compiler-input-current",
+      NOOK_RESTORE_COMPILER_INPUT_FINGERPRINT: "compiler-input-parent",
     }).record(),
     {
       scope: `exact-git-${"b".repeat(40)}`,
@@ -30,6 +33,10 @@ void test("records ordinary compile publication boundaries", () => {
         available: true,
         write_enabled: false,
         export_enabled: false,
+      },
+      compiler_input: {
+        fingerprint: "compiler-input-current",
+        restore_fingerprint: "compiler-input-parent",
       },
       imports: {
         probes_complete: false,

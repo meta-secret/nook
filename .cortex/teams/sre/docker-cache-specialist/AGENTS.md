@@ -69,8 +69,10 @@ behavior for packets issued by SRE Team Gizmo.
   counters as backend-incomplete evidence. A cold publisher with zero cache
   errors and zero reported writes emits `publication_pending_verification`
   instead of failing solely on the write counter. Actual cache errors emit
-  health warnings. The definitive publication proof is a changed-head successor with
-  compiler hits; repeated changed-head zero-hit evidence is terminal. This
+  health warnings. A changed-head successor with compiler hits is positive
+  publication evidence. Zero-hit evidence remains nonterminal unless telemetry
+  proves parity with the exact semantic compiler-key inputs; a repository-tree
+  or BuildKit lineage fingerprint is not sufficient. This
   follows the upstream client-side statistics limitation tracked in
   `mozilla/sccache#2804`.
 - Carry sccache read/write authority through a stable-ID runtime secret (or an

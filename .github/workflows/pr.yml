@@ -663,14 +663,24 @@ jobs:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     steps:
-      - name: Mark browser cache consumer started
-        run: mkdir -p "$RUNNER_TEMP/nook-cache-consumer" && printf '%s\n' ui-demo > "$RUNNER_TEMP/nook-cache-consumer/ui-demo.started"
-
       - name: Record headless UI demo
         id: record-ui-demo
         if: needs.verify.outputs.ui-demo-required == 'true'
+        continue-on-error: true
         working-directory: /meta-secret/nook
-        run: task _web:test:ui-demo
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/nook-cache-consumer"
+          timeout --kill-after=30s 420s task _web:test:ui-demo
+          status=$?
+          case "$status" in
+            0) result=success ;;
+            124|137) result=timed_out ;;
+            *) result=functional_failure ;;
+          esac
+          printf '%s %s\n' ui-demo "$result" > "$RUNNER_TEMP/nook-cache-consumer/ui-demo.result"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           CI: true
           NOOK_UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
@@ -690,7 +700,7 @@ jobs:
         if: always() && needs.verify.outputs.ui-demo-required == 'true'
         uses: actions/github-script@v9
         env:
-          DEMO_OUTCOME: ${{ steps.record-ui-demo.outcome }}
+          DEMO_OUTCOME: ${{ steps.record-ui-demo.outputs.result }}
           DEMO_SPECS: ${{ needs.verify.outputs.ui-demo-specs }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -735,16 +745,18 @@ jobs:
               })
             }
 
-      - name: Mark browser cache consumer completed
+      - name: Enforce headless UI demo result
         if: always()
-        run: printf '%s\n' ui-demo > "$RUNNER_TEMP/nook-cache-consumer/ui-demo.completed"
+        env:
+          NOOK_CACHE_CONSUMER_STATUS: ${{ steps.record-ui-demo.outputs.result }}
+        run: test "$NOOK_CACHE_CONSUMER_STATUS" = success
 
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-ui-demo
-          path: ${{ runner.temp }}/nook-cache-consumer/ui-demo.*
+          path: ${{ runner.temp }}/nook-cache-consumer/ui-demo.result
           retention-days: 30
           if-no-files-found: warn
           overwrite: true
@@ -765,33 +777,52 @@ jobs:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     steps:
-      - name: Mark browser cache consumer started
-        run: mkdir -p "$RUNNER_TEMP/nook-cache-consumer" && printf '%s\n' extension-e2e > "$RUNNER_TEMP/nook-cache-consumer/extension-e2e.started"
-
       - name: Run full extension suite
+        id: extension-browser-test
         if: inputs.full_e2e_requested
+        continue-on-error: true
         working-directory: /meta-secret/nook
-        run: task _extension:test:e2e
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/nook-cache-consumer"
+          timeout --kill-after=30s 10200s task _extension:test:e2e
+          status=$?
+          case "$status" in 0) result=success ;; 124|137) result=timed_out ;; *) result=functional_failure ;; esac
+          printf '%s %s\n' extension-e2e "$result" > "$RUNNER_TEMP/nook-cache-consumer/extension-e2e.result"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           CI: true
       - name: Run the focused real-extension authentication regression
+        id: extension-browser-focused-test
         if: ${{ !inputs.full_e2e_requested }}
+        continue-on-error: true
         working-directory: /meta-secret/nook
-        run: task _extension:test:e2e:file
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/nook-cache-consumer"
+          timeout --kill-after=30s 10200s task _extension:test:e2e:file
+          status=$?
+          case "$status" in 0) result=success ;; 124|137) result=timed_out ;; *) result=functional_failure ;; esac
+          printf '%s %s\n' extension-e2e "$result" > "$RUNNER_TEMP/nook-cache-consumer/extension-e2e.result"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           CI: true
           E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
 
-      - name: Mark browser cache consumer completed
+      - name: Enforce extension browser result
         if: always()
-        run: printf '%s\n' extension-e2e > "$RUNNER_TEMP/nook-cache-consumer/extension-e2e.completed"
+        env:
+          NOOK_CACHE_CONSUMER_STATUS: ${{ inputs.full_e2e_requested && steps.extension-browser-test.outputs.result || steps.extension-browser-focused-test.outputs.result }}
+        run: test "$NOOK_CACHE_CONSUMER_STATUS" = success
 
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-extension-e2e
-          path: ${{ runner.temp }}/nook-cache-consumer/extension-e2e.*
+          path: ${{ runner.temp }}/nook-cache-consumer/extension-e2e.result
           retention-days: 30
           if-no-files-found: warn
           overwrite: true
@@ -1044,14 +1075,19 @@ jobs:
       matrix:
         shard: [1, 2]
     steps:
-      - name: Mark browser cache consumer started
-        run: mkdir -p "$RUNNER_TEMP/nook-cache-consumer" && printf '%s\n' full-e2e-shard-${{ matrix.shard }} > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.started"
-
       - name: Local-provider web e2e from built WASM
         id: browser-test
         continue-on-error: true
         working-directory: /meta-secret/nook
-        run: task _ci:main:web:e2e-only
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/nook-cache-consumer"
+          timeout --kill-after=30s 10200s task _ci:main:web:e2e-only
+          status=$?
+          case "$status" in 0) result=success ;; 124|137) result=timed_out ;; *) result=functional_failure ;; esac
+          printf '%s %s\n' full-e2e-shard-${{ matrix.shard }} "$result" > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.result"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           CI: true
           NOOK_E2E_SHARD: ${{ matrix.shard }}/2
@@ -1059,22 +1095,18 @@ jobs:
           VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
           VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
 
-      - name: Mark browser cache consumer completed
-        if: always()
-        run: printf '%s\n' full-e2e-shard-${{ matrix.shard }} > "$RUNNER_TEMP/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.completed"
-
       - name: Enforce browser test result
         if: always()
         env:
-          BROWSER_TEST_OUTCOME: ${{ steps.browser-test.outcome }}
-        run: test "$BROWSER_TEST_OUTCOME" = success
+          NOOK_CACHE_CONSUMER_STATUS: ${{ steps.browser-test.outputs.result }}
+        run: test "$NOOK_CACHE_CONSUMER_STATUS" = success
 
       - name: Preserve browser cache consumer sentinel
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cache-consumer-${{ github.run_id }}-${{ github.run_attempt }}-full-e2e-shard-${{ matrix.shard }}
-          path: ${{ runner.temp }}/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.*
+          path: ${{ runner.temp }}/nook-cache-consumer/full-e2e-shard-${{ matrix.shard }}.result
           retention-days: 30
           if-no-files-found: warn
           overwrite: true

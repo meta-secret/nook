@@ -26,7 +26,7 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @typedef {object} PrCacheHealthModel
  * @property {1} schema_version
  * @property {{minimum_buildkit_hit_rate_percent: number, minimum_completed_steps: number}} policy
- * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
+ * @property {Array<PrCacheJob & {consumer_result?: "success" | "functional_failure" | "timed_out", telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
  * @property {string[]} warnings
  * @property {{verdict: "pass" | "fail", specialist_activation_required: boolean, reasons: string[]}} gate
  */
@@ -41,13 +41,13 @@ export class PrCacheHealth {
   }
 
   /**
-   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[], consumerSentinels?: {started: Set<string>, completed: Set<string>}}} request
+   * @param {{jobs: PrCacheJob[], telemetry: CacheTelemetryRecord[], consumerResults?: Map<string, "success" | "functional_failure" | "timed_out">}} request
    * @returns {PrCacheHealthModel}
    */
   evaluate({
     jobs,
     telemetry,
-    consumerSentinels = { started: new Set(), completed: new Set() },
+    consumerResults = new Map(),
   }) {
     const recordsByJob = new Map(
       telemetry.map((record) => [record.github.job, record]),
@@ -58,19 +58,19 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
-      if (
-        job.consumer &&
-        (job.result === "failure" || job.result === "cancelled")
-      ) {
+      const consumerResult = job.consumer
+        ? consumerResults.get(job.consumerIdentity || job.id)
+        : undefined;
+      if (job.consumer && job.result !== "skipped") {
         const identity = job.consumerIdentity || job.id;
-        const started = consumerSentinels.started.has(identity);
-        const completed = consumerSentinels.completed.has(identity);
-        if (completed) warnings.push(`${identity}:consumer_functional_failure`);
-        else if (job.result === "failure" && started)
-          reasons.push(`${identity}:consumer_setup_or_timeout`);
-        else if (job.result === "cancelled")
-          warnings.push(`${identity}:consumer_cancelled_without_timeout_proof`);
-        else warnings.push(`${identity}:consumer_not_started`);
+        const result = consumerResult;
+        if (result === "timed_out")
+          reasons.push(`${identity}:consumer_timed_out`);
+        else if (result === "functional_failure")
+          warnings.push(`${identity}:consumer_functional_failure`);
+        else if (result === "success" && job.result !== "success")
+          warnings.push(`${identity}:consumer_success_aggregate_failure`);
+        else if (!result) warnings.push(`${identity}:consumer_result_missing`);
       } else if (!job.consumer && job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
@@ -78,6 +78,7 @@ export class PrCacheHealth {
         else warnings.push(`${job.id}:telemetry_not_expected`);
         return {
           ...job,
+          ...(consumerResult ? { consumer_result: consumerResult } : {}),
           telemetry_complete: false,
           counters: {},
           scopes: {},
@@ -125,21 +126,18 @@ export class PrCacheHealth {
       const hasAvailableImport = imports.availability.some(
         (candidate) => candidate.available,
       );
-      const comparableCompilerRestore = Boolean(
-        record.cache_scope.compiler_input?.fingerprint &&
-          record.cache_scope.compiler_input.fingerprint ===
-            record.cache_scope.compiler_input.restore_fingerprint &&
-          record.sccache.requests_executed > 0,
-      );
       if (
         job.buildExpected &&
         record.sccache.publication_status === "pending_verification"
       ) {
-        if (comparableCompilerRestore && record.sccache.cache_hits === 0) {
-          reasons.push(`${job.id}:sccache_next_head_zero_hits`);
-        } else if (!comparableCompilerRestore) {
-          warnings.push(`${job.id}:publication_pending_verification`);
-        }
+        // BuildKit restore ancestry is not an exact proxy for every semantic
+        // input hashed by rustc/sccache. Zero hits remain actionable telemetry,
+        // but cannot fail cache health without an exact compiler-key proof.
+        warnings.push(
+          record.sccache.requests_executed > 0 && record.sccache.cache_hits === 0
+            ? `${job.id}:sccache_zero_hits_diagnostic`
+            : `${job.id}:publication_pending_verification`,
+        );
       }
       if (job.buildExpected && steps > 0 && steps < this.minimumCompletedSteps) {
         warnings.push(
@@ -164,6 +162,7 @@ export class PrCacheHealth {
         );
       return {
         ...job,
+        ...(consumerResult ? { consumer_result: consumerResult } : {}),
         telemetry_complete: record.collection.complete,
         counters: {
           sccache: record.sccache,
@@ -227,7 +226,7 @@ export class PrCacheHealth {
           ? `${buildkit.cache_hit_rate_percent}%`
           : "n/a";
       lines.push(
-        `| ${job.id} | ${job.result} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed (${buildkitRate}) | ${availableImports} available | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} attempts / ${job.timing.cache_export_ms ?? "n/a"} ms |`,
+        `| ${job.id} | ${job.result}${"consumer_result" in job ? ` (consumer: ${job.consumer_result})` : ""} | ${job.telemetry_complete ? "complete" : "missing/incomplete"} | ${buildkit.cached_steps ?? "n/a"} cached / ${buildkit.completed_steps ?? "n/a"} completed (${buildkitRate}) | ${availableImports} available | ${sccache.cache_hits ?? "n/a"} hits / ${(sccache.cache_hits ?? 0) + (sccache.cache_misses ?? 0)} lookups | ${job.exports.attempts ?? "n/a"} attempts / ${job.timing.cache_export_ms ?? "n/a"} ms |`,
       );
     }
     if (model.gate.reasons.length)
@@ -269,10 +268,10 @@ export class PrCacheHealth {
     return telemetry;
   }
 
-  /** @param {string} directory @returns {{started: Set<string>, completed: Set<string>}} */
-  static readConsumerSentinels(directory) {
-    const sentinels = { started: new Set(), completed: new Set() };
-    if (!fs.existsSync(directory)) return sentinels;
+  /** @param {string} directory @returns {Map<string, "success" | "functional_failure" | "timed_out">} */
+  static readConsumerResults(directory) {
+    const results = new Map();
+    if (!fs.existsSync(directory)) return results;
     const pending = [directory];
     while (pending.length > 0) {
       const current = pending.pop();
@@ -282,20 +281,20 @@ export class PrCacheHealth {
         if (entry.isDirectory()) pending.push(entryPath);
         else if (
           entry.isFile() &&
-          (entry.name.endsWith(".started") ||
-            entry.name.endsWith(".completed"))
+          entry.name.endsWith(".result")
         ) {
-          const identity = fs.readFileSync(entryPath, "utf8").trim();
-          if (identity) {
-            const target = entry.name.endsWith(".started")
-              ? sentinels.started
-              : sentinels.completed;
-            target.add(identity);
-          }
+          const [identity, result] = fs
+            .readFileSync(entryPath, "utf8")
+            .trim()
+            .split(/\s+/, 2);
+          if (
+            identity &&
+            ["success", "functional_failure", "timed_out"].includes(result)
+          ) results.set(identity, result);
         }
       }
     }
-    return sentinels;
+    return results;
   }
 
   static main() {
@@ -309,7 +308,7 @@ export class PrCacheHealth {
     const model = new PrCacheHealth().evaluate({
       jobs,
       telemetry: PrCacheHealth.readTelemetry(directory),
-      consumerSentinels: PrCacheHealth.readConsumerSentinels(consumerDirectory),
+      consumerResults: PrCacheHealth.readConsumerResults(consumerDirectory),
     });
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, `${JSON.stringify(model, null, 2)}\n`);
