@@ -169,6 +169,56 @@ class DockerizedRustContract {
     );
   }
 
+  trustedRustConsumerUsesBuildKit(): void {
+    const workflow = z
+      .object({
+        jobs: z.record(
+          z.string(),
+          z.object({
+            steps: z
+              .array(
+                z.object({
+                  if: z.string().optional(),
+                  run: z.string().optional(),
+                }),
+              )
+              .optional(),
+          }),
+        ),
+      })
+      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
+    const rustSteps = workflow.jobs.rust?.steps ?? [];
+    expect(
+      rustSteps.filter(
+        (step) =>
+          step.if?.includes("needs.rust-build.outputs.produced == 'true'") &&
+          /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run ?? ""),
+      ),
+    ).toEqual([]);
+    expect(rustSteps).toContainEqual(
+      expect.objectContaining({
+        if: "needs.rust-build.outputs.produced == 'true'",
+        run: expect.stringContaining(
+          "task docker:ci:rust:verify-built-buildkit",
+        ),
+      }),
+    );
+
+    const dockerTasks = this.read(
+      "nook-app/nook-platform/docker/Taskfile.yml",
+    );
+    expect(dockerTasks).toMatch(
+      /docker:ci:rust:verify-built-buildkit:[\s\S]*?buildx bake[\s\S]*?pr-native-verify/,
+    );
+    const bake = this.read(
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    );
+    expect(bake).toContain('target "pr-native-verify"');
+    expect(bake).toContain(
+      'pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"',
+    );
+  }
+
   dylintDependencyCacheAndSccacheMode(): void {
     const nightly = this.read(
       "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
@@ -941,6 +991,10 @@ test(
 test(
   "PR dedup retains standalone coverage and source-correct exports",
   contract.coverageAndExporter.bind(contract),
+);
+test(
+  "trusted ARC Rust validation consumes the producer through BuildKit",
+  contract.trustedRustConsumerUsesBuildKit.bind(contract),
 );
 test(
   "Dylint dependencies stay source-free and sccache uses server-side mode",

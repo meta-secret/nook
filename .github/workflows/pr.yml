@@ -147,17 +147,12 @@ jobs:
 
       - name: Repository invariant preflight
         run: task preflight
-      - name: Pull trusted image
-        if: needs.rust-build.outputs.produced == 'true'
-        env:
-          RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
-        run: docker pull "$RUST_IMAGE"
-      - name: Rust format, clippy, tests, and coverage from the producer image
+      - name: Rust format, clippy, tests, and coverage through BuildKit
         if: needs.rust-build.outputs.produced == 'true'
         env:
           CI: true
           DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
-        run: task docker:ci:rust:verify-built CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+        run: task docker:ci:rust:verify-built-buildkit CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
       - name: Secret-free Rust format, clippy, tests, and coverage
         if: needs.rust-build.outputs.produced != 'true'
         run: >-
