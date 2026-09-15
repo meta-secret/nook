@@ -744,7 +744,12 @@ export class CacheTelemetry {
         );
       }
     }
-    const reportsFromRawLog = reports.length > 0;
+    // The raw build log is the reliable source when a solve is cancelled before
+    // BuildKit history is finalized, but it may contain only one of several
+    // compiler vertices. Keep collecting history for stages absent from the raw
+    // stream so WASM and Node compiler reports cannot disappear merely because a
+    // different vertex emitted a marker first.
+    const reportStages = new Set(reports.map((report) => report.stage));
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -784,13 +789,13 @@ export class CacheTelemetry {
               nook_history_ref: result.record.ref,
             })),
           );
-          if (!reportsFromRawLog) {
-            reports.push(
-              ...CacheTelemetry.extractSccacheReports(
-                result.events,
-                seenReports,
-              ),
-            );
+          for (const report of CacheTelemetry.extractSccacheReports(
+            result.events,
+            seenReports,
+          )) {
+            if (reportStages.has(report.stage)) continue;
+            reports.push(report);
+            reportStages.add(report.stage);
           }
           break;
       }
