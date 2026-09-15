@@ -347,6 +347,11 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "arbitrary-ref e2e must remain secret-free"
     );
     for (job_name, start, end) in [
+        (
+            "Build native Rust image",
+            "\n  rust-build:\n",
+            "\n  rust-ecosystem:\n",
+        ),
         ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
         (
             "WASM build and artifact",
@@ -375,13 +380,13 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            4,
-            "only the four trusted PR compiler jobs may receive {credential}"
+            5,
+            "only the five trusted PR compiler jobs may receive {credential}"
         );
     }
     assert_eq!(
         pr.matches("require-sccache: \"true\"").count(),
-        4,
+        5,
         "every trusted PR compiler job must require writable sccache"
     );
     assert_eq!(
