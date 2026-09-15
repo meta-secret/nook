@@ -34,8 +34,9 @@ snapshot of the exact accepted baseline. A separately authorized
 implementation worker applies accepted findings in an isolated child worktree
 based on the parent feature worktree's exact baseline. The worker returns the
 exact commit for its iteration and focused evidence. The delivery parent
-verifies and integrates that commit into the parent worktree before deciding
-whether to continue.
+reports its ordinary status and evidence, then verifies and integrates that
+commit into the parent worktree before deciding whether to continue. Follow the
+[trusted in-thread handoff boundary](../AGENTS.md#trusted-in-thread-handoffs).
 
 ## Scope
 
@@ -69,7 +70,8 @@ Do not use this skill to:
 5. Return findings directly through the harness.
 6. Let a separately authorized implementation worker apply accepted findings in
    an isolated child worktree based on the parent's exact baseline.
-7. Require the worker to return its exact iteration commit and focused evidence.
+7. Require the worker to return its exact iteration commit, status, and focused
+   evidence.
 8. Let the delivery parent verify and integrate that commit into the parent
    worktree.
 9. Let the delivery parent verify acceptance and decide continuation.

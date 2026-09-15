@@ -23,9 +23,8 @@ Choose the smallest surface that can answer the request.
 - Use `cortex_refactoring_expert` for Cortex complexity, conflict, duplication,
   legacy guidance, ownership, and deterministic extraction candidates.
 - Use both when code and durable guidance may disagree.
-- Use the legacy standalone `system_coherence_synthesizer` only when
-  `loom-structural-experts` needs an all-terminal structural diagnostic
-  aggregate.
+- Use `system_coherence_synthesizer` when the declared structural tasks need one
+  diagnostic aggregate after their dependencies complete.
 
 A topic-local Cortex correction does not require a full-tree audit.
 A single cohesive code correction does not require cross-surface synthesis.
@@ -36,15 +35,12 @@ Before dispatch, the delivery owner:
 
 1. Resolves one exact Git baseline.
 2. States the behavior or policy that must remain unchanged.
-3. Declares each task, attempt, parent, and depth. Repository-reading experts
-   receive bounded read claims and non-empty read-covered evidence surfaces;
-   the legacy synthesizer receives empty repository claims and evidence surface
-   plus verified typed `StructuralExpertPlan` child projections from its parent-
-   authorized all-terminal observation barrier.
+3. Declares each task, dependency, parent, and bounded scope. Repository-reading
+   experts receive bounded read claims and non-empty read-covered evidence
+   surfaces. The synthesizer receives the resulting typed child observations.
 4. Resolves owning module and Cortex authorities.
 5. Declares expected evidence and acceptance proof.
-6. Declares the legacy diagnostic run's all-terminal observation barrier.
-7. Freezes every task and dependency.
+6. Freezes every task and dependency.
 
 Children cannot extend this plan.
 
@@ -86,24 +82,25 @@ team.
 
 ## Synthesize system coherence
 
-This section defines the legacy `loom-structural-experts`
-`system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic
-result. It is not ordinary admitted delegation.
+This section defines the `system_coherence_synthesizer` and its
+`SystemCoherenceSynthesis` diagnostic result.
 
 ### Readiness
 
-The role waits for the `loom-structural-experts` parent-authorized structural
-all-terminal observation barrier and accepts the verified `StructuralExpertPlan`
-child projections with `Completed` or `Failed` status.
+The role starts after the delivery owner declares that its required child tasks
+have completed. It accepts their typed `Completed` or `Failed` observations.
 
 It receives no live repository access.
 
-### Observation verification
+### Handoff
 
-Before the role starts, Loom verifies every terminal observation and view
-against the declared baseline, lineage, paths, and hashes. Each observation
-preserves its task, attempt, status, artifact digest, and repository-source
-provenance. The synthesizer receives no repository read authority.
+The parent provides the task dependencies and the ordered child observations.
+Each observation reports its task, status, result, and ordinary evidence. The
+synthesizer receives no repository read authority.
+
+The trusted in-thread handoff does not require signatures, anti-forgery checks,
+replay gates, digests, one-use capabilities, or duplicate verification. Follow
+the [AI trusted in-thread handoff boundary](../AGENTS.md#trusted-in-thread-handoffs).
 
 The synthesizer then:
 
@@ -115,18 +112,8 @@ The synthesizer then:
 5. Builds independent edit groups with non-overlapping resource claims.
 6. Returns unresolved decisions to Gizmo.
 
-`SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary
-provider edge, authorize implementation, or claim ordinary accepted-evidence
-synthesis compliance.
-
-## Future ordinary synthesis boundary
-
-Future ordinary accepted-evidence synthesis must use a distinct typed role,
-profile, and result contract before implementation. This workflow does not name
-or register that contract. Its generation will freeze provider edges, expected
-producer identities, typed input schema, and acceptance criteria; Gizmo will
-bind exact accepted inputs only when authorizing a ready attempt. Universal
-ordinary dispatch remains fail-closed until runtime enforcement exists.
+`SystemCoherenceSynthesis` is diagnostic-only. It cannot authorize
+implementation or replace the delivery owner's review.
 
 ## Apply accepted corrections
 

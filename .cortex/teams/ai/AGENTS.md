@@ -22,6 +22,41 @@ The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
 universal requirements. This entry point adds only AI ownership and context
 selection.
 
+### Trusted in-thread handoffs
+
+Team Gizmos and Team Agents that operate inside the same active Codex
+thread/harness form a highly trusted orchestration domain. Their handoff is
+ordinary typed coordination data:
+
+- the task and dependency state;
+- the bounded file scope and issued worktree;
+- the committed result, status, and ordinary evidence observation; and
+- the upward report to the parent.
+
+The AI team MUST NOT model those peers as attackers. A contract or review that
+adds any of the following solely to protect one trusted Team Gizmo or Team
+Agent from another fails review as a P1 defect:
+
+- encryption or signatures for an internal task or result handoff;
+- anti-forgery checks, key registries, or authority registries;
+- replay defenses framed as hostile-agent protection;
+- cryptographic agent identity, result identity, or digest authority;
+- one-use capability issuance or consumption theatrics; or
+- redundant or double verification of the same internal task or result.
+
+Keep the simple typed handoff. Preserve dependency ordering, wave admission,
+write-scope exclusions, and minimal current-head or clean-worktree checks.
+
+This trust rule does not weaken validation at a real boundary. Strong checks
+remain mandatory for GitHub, network, and provider responses; credentials and
+secrets; user data; third-party artifacts; independently supplied build or
+promotion evidence; and data crossing process or system boundaries. Product
+cryptography, Git delivery integrity, and external evidence policy remain with
+their owning authorities. Git baseline, path, symlink, gitlink, and worktree
+checks remain required for handoff tooling. Loom's `lib/base-evidence` checks
+and independent build or promotion evidence remain required at their actual
+boundaries.
+
 ### Harness admission
 
 AI dispatch follows active-harness admission. Immediately attempt every

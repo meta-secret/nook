@@ -33,9 +33,9 @@ and boundary checks; it does not add worker lifecycle or recovery machinery.
 categories and selected documents or headings. Category IDs use `CX-<NAME>`;
 document and item IDs add a five-character random suffix. Published IDs are
 never removed or reassigned when a title or locator changes. Each entry carries
-an immutable authority key; the Cortex audit compares those assignments with
-the registry at the pull request's exact published base commit. The audit fails
-closed when an established base cannot be resolved.
+an immutable document-authority locator. The Cortex audit compares those
+assignments with the registry at the pull request's exact published base
+commit. The audit fails closed when an established base cannot be resolved.
 
 Every persisted agent-attempt event receives an action ID derived from its
 one-based event sequence, such as `a0002`. Runtime activities are live,
@@ -48,6 +48,18 @@ cannot block the lifecycle journal.
 Persisted records expose replayable lifecycle and terminal handoff evidence,
 not private reasoning. Live activity counts are diagnostic signals and are not
 an effort, quality, or billing measure.
+
+Lifecycle replay is an event-sourcing and projection concern. It is not a
+security check against a trusted Team Gizmo or Team Agent. The document-
+authority locator is a Cortex-document reference. It is not a credential,
+signature, digest, or authority token for internal agent handoffs.
+
+Team Gizmos and Team Agents use the ordinary trusted handoff described by the
+[AI team contract](../AGENTS.md#trusted-in-thread-handoffs). The handoff carries
+the typed task, bounded scope or worktree, status, committed result, ordinary
+evidence observation, and upward report. No internal receipt, cryptographic
+identity, one-use capability, or duplicate verification is added for this
+trusted path.
 
 ## Invoke a leaf tool
 
