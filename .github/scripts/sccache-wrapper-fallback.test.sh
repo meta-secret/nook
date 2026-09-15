@@ -40,7 +40,13 @@ case "${FAKE_SCCACHE_RESULT:-success}" in
     ;;
 esac
 EOF
-chmod 0755 "$fixture_dir/compiler" "$fixture_dir/sccache"
+cat >"$fixture_dir/timeout" <<'EOF'
+#!/bin/sh
+shift
+exec "$@"
+EOF
+chmod 0755 "$fixture_dir/compiler" "$fixture_dir/sccache" "$fixture_dir/timeout"
+export PATH="$fixture_dir:$PATH"
 
 runtime_publish_mode="$fixture_dir/runtime-publish-mode"
 printf '%s\n' READ_WRITE >"$runtime_publish_mode"
@@ -48,6 +54,9 @@ authority_log="$fixture_dir/runtime-authority.log"
 NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
 NOOK_SCCACHE_RUNTIME_AUTHORITY=secret \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fixture_dir/authority-remote-disabled" \
+NOOK_SCCACHE_READY_MARKER="$fixture_dir/authority-remote-ready" \
+NOOK_SCCACHE_START_LOCK="$fixture_dir/authority-start-lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
 SCCACHE_S3_RW_MODE=READ_WRITE SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log \

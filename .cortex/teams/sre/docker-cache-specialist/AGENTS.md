@@ -94,8 +94,7 @@ behavior for packets issued by SRE Team Gizmo.
   - `infra/sim/bake-cache/compile-warm.docker-bake.hcl`;
   - `infra/tasks/bake-cache.yml`;
   - `infra/contracts/dockerized-rust.test.ts`;
-  - `.github/workflows/remote.yml`; and
-  - `.github/workflows/remote-compile-contract.test.sh`.
+  - `.github/workflows/remote.yml`.
 - Author focused policy and regression tests for every cache defect.
 - Keep cache proofs bounded to genuine import/export wiring, structured cache
   artifacts, registry integrity, and actual Dockerfile syntax or build

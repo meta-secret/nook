@@ -188,7 +188,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
         "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
         "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
-        "hosted_secret_free_by_design",
+        "persistent_credential_available",
         "credentials_unavailable",
         "SCCACHE_OPTIONAL=1",
     ] {
@@ -387,7 +387,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(wrapper.contains("NOOK_SCCACHE_S3_MODE"));
     assert!(wrapper.contains("SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE"));
     assert!(wrapper.contains("exec \"$@\""));
-    assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
+    assert!(wrapper.contains("\"$sccache_binary\" \"$@\""));
     assert!(!wrapper.contains("REDIS"));
 
     let rust_base = RepositoryFixture::repository_root()

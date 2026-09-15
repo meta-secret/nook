@@ -10,6 +10,7 @@ git -C "$fixture" init -q
 
 fixture_paths=(
   .github/scripts/compile-deps-cache-fingerprint.sh
+  .github/scripts/compile-remote.sh
   .github/scripts/rust-deps-cache-fingerprint.sh
   nook-app/docker-bake.hcl
   nook-app/nook-platform/Cargo.toml
@@ -53,6 +54,7 @@ baseline="$("${fingerprint_command[@]}")"
 [[ "$baseline" =~ ^[0-9a-f]{40}$ ]]
 
 graph_inputs=(
+  .github/scripts/compile-remote.sh
   nook-app/docker-bake.hcl
   nook-app/nook-platform/Cargo.lock
   nook-app/nook-platform/docker/rust/compile.Dockerfile

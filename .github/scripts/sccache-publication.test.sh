@@ -21,7 +21,7 @@ FAKE_SCCACHE_STATS="$fixture_dir/zero-writes.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
 SCCACHE_CLIENT_SIDE=1 \
 SCCACHE_S3_RW_MODE=READ_WRITE \
-  "$report" publication >"$fixture_dir/zero-writes.log" 2>&1
+  bash "$report" publication >"$fixture_dir/zero-writes.log" 2>&1
 grep -Fq 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION' "$fixture_dir/zero-writes.log"
 grep -Fq '"cache_errors":0' "$fixture_dir/zero-writes.log"
 grep -Fq '"cache_write_errors":0' "$fixture_dir/zero-writes.log"
@@ -40,7 +40,7 @@ FAKE_SCCACHE_STATS="$fixture_dir/completed-writes.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
 SCCACHE_CLIENT_SIDE=1 \
 SCCACHE_S3_RW_MODE=READ_WRITE \
-  "$report" publication >"$fixture_dir/completed-writes.log" 2>&1
+  bash "$report" publication >"$fixture_dir/completed-writes.log" 2>&1
 grep -Fq '"cache_writes":275' "$fixture_dir/completed-writes.log"
 grep -Fq '"runtime_mode":"READ_WRITE"' "$fixture_dir/completed-writes.log"
 
@@ -51,7 +51,7 @@ NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/write-errors.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
 SCCACHE_CLIENT_SIDE=1 \
-  "$report" publication >"$fixture_dir/write-errors.log" 2>&1
+  bash "$report" publication >"$fixture_dir/write-errors.log" 2>&1
 grep -Fq 'NOOK_SCCACHE_HEALTH_WARNING' "$fixture_dir/write-errors.log"
 grep -Fq '"cache_errors":1' "$fixture_dir/write-errors.log"
 
@@ -62,7 +62,7 @@ NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/cache-write-errors.json" \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
 SCCACHE_CLIENT_SIDE=1 \
-  "$report" publication >"$fixture_dir/cache-write-errors.log" 2>&1
+  bash "$report" publication >"$fixture_dir/cache-write-errors.log" 2>&1
 grep -Fq 'NOOK_SCCACHE_HEALTH_WARNING' "$fixture_dir/cache-write-errors.log"
 grep -Fq '"cache_errors":0' "$fixture_dir/cache-write-errors.log"
 grep -Fq '"cache_write_errors":1' "$fixture_dir/cache-write-errors.log"

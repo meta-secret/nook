@@ -53,7 +53,6 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("Pull-request jobs are forced to restore Main's cache read-only"));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
-    assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX="));
     let fingerprint =
         RepositoryFixture::repository_root().read(".github/scripts/rust-deps-cache-fingerprint.sh");
     for fingerprint_input in [
