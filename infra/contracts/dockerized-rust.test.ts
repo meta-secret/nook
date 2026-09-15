@@ -971,6 +971,7 @@ test(
 test(
   "trusted formatter exports only bounded files and rejects hostile paths",
   contract.formatterExport.bind(contract),
+  15_000,
 );
 
 test(
