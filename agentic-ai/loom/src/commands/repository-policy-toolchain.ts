@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import {
   accessSync,
   chmodSync,
+  closeSync,
   constants as fsConstants,
   mkdirSync,
+  openSync,
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -85,6 +87,17 @@ type ArchiveExtraction = {
   readonly args: readonly string[];
 };
 
+export type StaticUnxzExtraction = {
+  readonly executable: string;
+  readonly args: readonly string[];
+  readonly destinationPath: string;
+  readonly label: string;
+};
+
+type StaticUnxzProcessRequest = StaticUnxzExtraction & {
+  readonly destinationDescriptor: number;
+};
+
 type ToolchainCommandRequest = {
   readonly executable: string;
   readonly args: readonly string[];
@@ -99,6 +112,8 @@ type CompilerWrapper = {
   readonly kind: CompilerKind;
   readonly fileName: string;
 };
+
+const STATIC_UNXZ_STDERR_MAX_BYTES = 1024 * 1024;
 
 /** Owns the repository-policy runner's pinned, rootless native toolchain. */
 export class RepositoryPolicyToolchain {
@@ -250,21 +265,14 @@ export class RepositoryPolicyToolchain {
       );
     }
 
-    const decoded = this.command({
+    const decoded = this.extractStaticUnxz({
       executable: decoder,
       args: ['-c', zigArchive],
+      destinationPath: zigTar,
       label: 'static unxz extraction',
-      output: ToolchainCommandOutput.Capture,
     });
     if (decoded.isErr()) return err(decoded.error);
-    if (!(decoded.value instanceof Buffer)) {
-      return err({
-        kind: ToolchainFailureKind.Command,
-        message: 'Static unxz extraction did not produce binary output.',
-      });
-    }
     try {
-      writeFileSync(zigTar, decoded.value);
       mkdirSync(zigDirectory, { recursive: true });
     } catch (error) {
       return err(
@@ -375,6 +383,62 @@ export class RepositoryPolicyToolchain {
       );
     }
     return ok(ToolchainStep.Completed);
+  }
+
+  extractStaticUnxz(
+    request: StaticUnxzExtraction,
+  ): Result<ToolchainStep, ToolchainFailure> {
+    let destinationDescriptor: number;
+    try {
+      destinationDescriptor = openSync(request.destinationPath, 'w');
+    } catch (error) {
+      return err(
+        this.filesystemFailure(error instanceof Error ? error : String(error)),
+      );
+    }
+
+    try {
+      return this.runStaticUnxz({
+        ...request,
+        destinationDescriptor,
+      });
+    } catch (error) {
+      return err(
+        this.filesystemFailure(error instanceof Error ? error : String(error)),
+      );
+    }
+  }
+
+  private runStaticUnxz(
+    request: StaticUnxzProcessRequest,
+  ): Result<ToolchainStep, ToolchainFailure> {
+    try {
+      const result = spawnSync(request.executable, request.args, {
+        stdio: ['ignore', request.destinationDescriptor, 'pipe'],
+        maxBuffer: STATIC_UNXZ_STDERR_MAX_BYTES,
+      });
+      if (result.error instanceof Error) {
+        return err({
+          kind: ToolchainFailureKind.Command,
+          message: `${request.label} failed: ${result.error.message}`,
+        });
+      }
+      if (typeof result.status !== 'number') {
+        return err({
+          kind: ToolchainFailureKind.Command,
+          message: `${request.label} did not return an exit status.`,
+        });
+      }
+      if (result.status !== 0) {
+        return err({
+          kind: ToolchainFailureKind.Command,
+          message: `${request.label} exited with a non-zero status.`,
+        });
+      }
+      return ok(ToolchainStep.Completed);
+    } finally {
+      closeSync(request.destinationDescriptor);
+    }
   }
 
   private extract(
