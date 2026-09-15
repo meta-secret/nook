@@ -32,6 +32,11 @@ product boundary.
   - Report that the circuit breaker tripped.
   - Return to the smallest direct workflow already provided by the harness and
     Git.
+- **Review and failure handling**
+  - Treat any violation as a P1 finding.
+  - Reject the violating design even when it is already implemented or tested.
+  - Remove prohibited machinery only within the assigned write scope.
+  - Report out-of-scope violations to the owning Gizmo as blockers.
 
 ## Prohibited actions
 
@@ -61,6 +66,9 @@ agent-internal communication, handoffs, Git operations, or validation results.
   - Do not add tests that enforce any mechanism prohibited by this document.
   - Do not reinterpret test coverage, reliability, or defense in depth as
     authorization to build the prohibited machinery.
+- **Review and failure handling**
+  - Never preserve a prohibited system merely because another document or
+    existing implementation describes it.
 
 The circuit breaker also prohibits implementations whose stated acceptance
 criteria include any of these outcomes:
@@ -83,12 +91,3 @@ boundaries.
 Product security work still requires an explicit product scope and its owning
 team authority. A product security requirement must not be repurposed to
 secure agent-to-agent communication or routine Git evidence.
-
-## Review and failure handling
-
-- Treat any violation as a P1 finding.
-- Reject the violating design even when it is already implemented or tested.
-- Remove prohibited machinery only within the assigned write scope.
-- Report out-of-scope violations to the owning Gizmo as blockers.
-- Never preserve a prohibited system merely because another document or
-  existing implementation describes it.
