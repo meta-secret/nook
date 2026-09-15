@@ -92,8 +92,8 @@ if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
   bake_args+=(
     "--allow=fs.read=${access_key_file}"
     "--allow=fs.read=${secret_key_file}"
-    "--set=build-compile.secrets+=id=sccache_s3_access_key,src=${access_key_file}"
-    "--set=build-compile.secrets+=id=sccache_s3_secret_key,src=${secret_key_file}"
+    "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}"
+    "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}"
   )
 elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   echo "build:compile requires readable SCCACHE_S3_ACCESS_KEY_FILE and SCCACHE_S3_SECRET_KEY_FILE in hosted CI" >&2

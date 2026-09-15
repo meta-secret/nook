@@ -42,6 +42,7 @@ export const demoInsufficientAuthenticationOutcome =
 const demoExplicitUserApproval =
   'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 export const demoDomainEnumArgs = {
+  delayedPendingSaveOfferReads: 0,
   generatePasswordMessageType:
     GeneratePasswordRequestType.NookWebsiteGeneratePassword,
   loginSaveCreateDecision: demoLoginSaveCreateDecision,
@@ -80,6 +81,7 @@ export const demoDomainEnumArgs = {
 export type ChromeMessage = { message: string }
 
 export type DemoChromeStubArgs = {
+  delayedPendingSaveOfferReads: number
   localizedMessages: Record<string, ChromeMessage>
   loginSaveCreateDecision: NookWebsiteLoginSaveDecision.Create
   sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
@@ -153,6 +155,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   }
 
   const {
+    delayedPendingSaveOfferReads,
     localizedMessages,
     loginSaveCreateDecision,
     sufficientAuthenticationOutcome,
@@ -178,10 +181,23 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     Present = 'present',
   }
 
+  const navigationRecoveryOffer: StagedSaveOffer = {
+    offerId: 'demo-navigation-recovery-offer',
+    decision: loginSaveCreateDecision,
+    vaultStoreId: 'demo-vault',
+    vaultName: 'Demo vault',
+  }
+  let pendingSaveOfferReads = 0
   let stagedOffer:
     | { kind: StagedOfferKind.Empty }
     | { kind: StagedOfferKind.Present; offer: StagedSaveOffer } = {
     kind: StagedOfferKind.Empty,
+  }
+  if (delayedPendingSaveOfferReads > 0) {
+    stagedOffer = {
+      kind: StagedOfferKind.Present,
+      offer: navigationRecoveryOffer,
+    }
   }
   let enrollStaged = false
   const demoExtensionSetup = {
@@ -443,6 +459,13 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           }
         }
         case 'nook:website-login-save-pending':
+          pendingSaveOfferReads += 1
+          if (pendingSaveOfferReads <= delayedPendingSaveOfferReads) {
+            return {
+              ok: true,
+              state: loginSaveResponses.pendingUnavailable,
+            }
+          }
           return stagedOffer.kind === StagedOfferKind.Present
             ? {
                 ok: true,

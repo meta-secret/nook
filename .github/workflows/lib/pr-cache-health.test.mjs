@@ -6,7 +6,9 @@ import test from "node:test";
 
 import { PrCacheHealth } from "./pr-cache-health.mjs";
 
-/** @param {string} job @param {Record<string, any>} [overrides] */
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+
+/** @param {string} job @param {Record<string, unknown>} [overrides] @returns {CacheTelemetryRecord} */
 const telemetry = (job, overrides = {}) => ({
   schema_version: 1,
   github: { run_id: "42", run_attempt: 1, job },
@@ -25,12 +27,10 @@ const telemetry = (job, overrides = {}) => ({
     },
     compile_source: {
       scope: "source",
-      available: true,
-      write_enabled: false,
-      export_enabled: false,
     },
     imports: {
       probes_complete: true,
+      failure_class: "none",
       availability: [
         { name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: true },
       ],
@@ -51,6 +51,7 @@ const telemetry = (job, overrides = {}) => ({
     cache_errors: 0,
     cache_write_errors: 0,
     cache_writes: 2,
+    remote_writes: 2,
     compile_failures: 0,
     measurement: "sum_of_zero_based_run_snapshots",
     fallback: { state: "active", reason: "none" },
@@ -89,6 +90,29 @@ void test("passes warm no-export Docker jobs while sccache remains writable", ()
     PrCacheHealth.renderMarkdown(model),
     /80 cached \/ 100 completed/,
   );
+});
+
+void test("does not require removed registry pre-probes when BuildKit telemetry is present", () => {
+  const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [
+      telemetry("rust", {
+        cache_scope: {
+          ...telemetry("rust").cache_scope,
+          imports: {
+            probes_complete: false,
+            failure_class: "none",
+            availability: [],
+          },
+        },
+      }),
+    ],
+  });
+
+  assert.equal(model.gate.verdict, "pass");
+  assert.deepEqual(model.gate.reasons, []);
 });
 
 void test("fails missing telemetry, failed jobs, broken collection, and read-only exports", () => {
@@ -203,6 +227,28 @@ void test("records a legitimate cold build without applying the warm threshold",
   assert.ok(model.warnings.includes("rust:publication_pending_verification"));
 });
 
+void test("fails warm samples when BuildKit does not report a hit rate", () => {
+  const source = telemetry("rust");
+  const { cache_hit_rate_percent: omittedRate, ...buildkit } = source.buildkit;
+  void omittedRate;
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [telemetry("rust", { buildkit })],
+  });
+
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(model.gate.reasons.includes("rust:buildkit_cache_rate_missing"));
+  const result = model.jobs.at(0);
+  assert.ok(result);
+  assert.ok(result.counters.buildkit);
+  assert.equal(
+    Object.hasOwn(result.counters.buildkit, "cache_hit_rate_percent"),
+    false,
+  );
+});
+
 void test("fails changed-head zero-hit verification and cache write errors", () => {
   const successor = telemetry("rust", {
     sccache: {
@@ -223,6 +269,134 @@ void test("fails changed-head zero-hit verification and cache write errors", () 
   assert.ok(model.gate.reasons.includes("rust:sccache_write_errors:1"));
   assert.ok(model.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
   assert.ok(!model.gate.reasons.includes("rust:telemetry_incomplete"));
+});
+
+void test("requires remote write evidence only when compiler misses occur", () => {
+  const missWithoutWrite = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      cache_hits: 0,
+      cache_misses: 2,
+      cache_writes: 0,
+      remote_writes: 0,
+    },
+  });
+  const missModel = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+    ],
+    telemetry: [missWithoutWrite],
+  });
+  assert.equal(missModel.gate.verdict, "fail");
+  assert.ok(
+    missModel.gate.reasons.includes("rust:sccache_remote_writes_missing"),
+  );
+
+  const fullyCached = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      cache_hits: 2,
+      cache_misses: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+    },
+  });
+  const cachedModel = new PrCacheHealth().evaluate({
+    jobs: [
+      { id: "rust", result: "success", buildExpected: true, readOnly: true },
+    ],
+    telemetry: [fullyCached],
+  });
+  assert.equal(cachedModel.gate.verdict, "pass");
+});
+
+void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fallback telemetry", () => {
+  const unavailable = telemetry("wasm-node-test", {
+    cache_backend: {
+      kind: "direct_compile",
+      persistent: false,
+      reason: "credentials_unavailable",
+    },
+    sccache: {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "fallback", reason: "credentials_unavailable" },
+      snapshots: [],
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "wasm-node-test",
+        result: "success",
+        buildExpected: true,
+        readOnly: false,
+      },
+    ],
+    telemetry: [unavailable],
+  });
+
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(
+    model.gate.reasons.includes("wasm-node-test:sccache_unavailable"),
+  );
+  assert.ok(
+    model.gate.reasons.includes(
+      "wasm-node-test:sccache_fallback:credentials_unavailable",
+    ),
+  );
+});
+
+void test("does not require sccache for the web-only verification job", () => {
+  const webOnly = telemetry("verify", {
+    cache_backend: {
+      kind: "direct_compile",
+      persistent: false,
+      reason: "credentials_unavailable",
+    },
+    sccache: {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [{ id: "verify", result: "success", buildExpected: true, readOnly: false }],
+    telemetry: [webOnly],
+  });
+
+  assert.equal(model.gate.verdict, "pass");
 });
 
 void test("reads telemetry recursively without relying on nonportable Dirent paths", () => {
@@ -255,6 +429,14 @@ void test("PR workflow covers every BuildKit-producing job without another build
     ".github/workflows/rust-ecosystem-checks.yml",
     "utf8",
   );
+  const telemetryAction = fs.readFileSync(
+    ".github/actions/nook-cache-telemetry/action.yml",
+    "utf8",
+  );
+  const productDockerfile = fs.readFileSync(
+    "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    "utf8",
+  );
   assert.match(
     workflow,
     /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
@@ -274,4 +456,64 @@ void test("PR workflow covers every BuildKit-producing job without another build
       ?.length,
     3,
   );
+  for (const result of [
+    "dependency-policy-result",
+    "deterministic-tests-result",
+    "dylint-result",
+  ]) {
+    assert.match(
+      workflow,
+      new RegExp(
+        `needs\\.rust-ecosystem\\.outputs\\.${result} \\|\\| 'cancelled'`,
+      ),
+    );
+  }
+  assert.doesNotMatch(
+    workflow,
+    /\{"id":"(?:dependency-policy|deterministic-tests|dylint)","result":"\$\{\{ needs\.rust-ecosystem\.result \}\}/,
+  );
+  assert.match(
+    ecosystem,
+    /dependency-policy-result:[\s\S]*jobs\.dependency-policy\.outputs\.cache-result/,
+  );
+  assert.match(
+    ecosystem,
+    /deterministic-tests-result:[\s\S]*jobs\.deterministic-tests\.outputs\.cache-result/,
+  );
+  assert.match(
+    ecosystem,
+    /dylint-result:[\s\S]*jobs\.dylint\.outputs\.cache-result/,
+  );
+  assert.match(telemetryAction, /NOOK_CACHE_TELEMETRY_JOB_STATUS:/);
+  assert.match(
+    telemetryAction,
+    /if timeout 15s[\s\S]*start --output "\$baseline"; then/,
+  );
+  assert.match(telemetryAction, /baseline_collection_timeout:15s/);
+  assert.match(
+    telemetryAction,
+    /cache telemetry baseline unavailable[\s\S]*unavailable[\s\S]*--output "\$output"/i,
+  );
+  assert.match(
+    workflow,
+    /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\}/,
+  );
+  const wasmNodeJob = workflow.slice(
+    workflow.indexOf("  wasm-node-test:"),
+    workflow.indexOf("  verify:", workflow.indexOf("  wasm-node-test:")),
+  );
+  for (const input of [
+    "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+    "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+    "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
+    "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
+    'require-sccache: "true"',
+  ]) {
+    assert.match(wasmNodeJob, new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(
+    productDockerfile,
+    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
+  );
+  assert.match(productDockerfile, /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/);
 });

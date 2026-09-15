@@ -84,6 +84,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
 
       - name: Repository invariant validation
         run: task preflight
@@ -145,6 +146,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
       - name: Native Rust format, tests, and coverage
         run: task ci:main:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
@@ -224,6 +226,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
       - name: WASM clippy, build, and package export
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:

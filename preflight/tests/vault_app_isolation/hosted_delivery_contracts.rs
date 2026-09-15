@@ -246,6 +246,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     }
     assert!(pr.contains("source_sha:"));
 
+    assert_pr_cache_health_runtime_contract(root);
+
     let coverage = (root).read(".github/workflows/pr-coverage.yml");
     for required in [
         "workflow_call:",
@@ -584,6 +586,29 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_preflight_reporter_contract(root);
     Ok(())
+}
+
+fn assert_pr_cache_health_runtime_contract(root: &Path) {
+    let cache_health = (root).read(".github/workflows/pr-cache-health.yml");
+    let node_setup = cache_health
+        .find("uses: actions/setup-node@v7")
+        .expect("PR cache health must install Node on self-hosted runners");
+    let node_version = cache_health
+        .find("node-version: \"24\"")
+        .expect("PR cache health must pin its Node runtime version");
+    let evaluator = cache_health
+        .find("- name: Evaluate Docker cache health")
+        .expect("PR cache health must retain its evaluator step");
+    assert!(node_setup < node_version && node_version < evaluator);
+    assert!(
+        cache_health.contains("run: node .github/workflows/lib/pr-cache-health.mjs"),
+        "PR cache health must execute the evaluator with the installed Node runtime"
+    );
+    assert!(
+        !cache_health.contains("docker buildx build")
+            && !cache_health.contains("docker buildx bake"),
+        "PR cache health must preserve telemetry-only evaluation without another Docker build"
+    );
 }
 
 fn assert_preflight_reporter_contract(root: &Path) {

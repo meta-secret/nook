@@ -70,7 +70,62 @@ impl WorkflowRuntimeContract<'_> {
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
         );
+        self.assert_wasm_build_envelope();
         self.assert_untrusted_boundaries();
+    }
+
+    fn assert_wasm_build_envelope(&self) {
+        let root = self.root;
+        for (workflow, end_marker, required_steps) in [
+            (
+                ".github/workflows/pr.yml",
+                "  wasm-node-test:\n",
+                [
+                    "name: WASM build and artifact",
+                    "Publish git-scoped WASM BuildKit cache",
+                    "Stamp WASM handoff attempt",
+                    "Upload built WASM handoff",
+                    "uses: ./.github/actions/nook-cache-telemetry",
+                ],
+            ),
+            (
+                ".github/workflows/main.yml",
+                "  wasm-cache-publish:\n",
+                [
+                    "name: WASM verification and artifact",
+                    "Publish verified WASM BuildKit cache",
+                    "Stamp WASM run attempt",
+                    "Upload WASM handoff",
+                    "uses: ./.github/actions/nook-cache-telemetry",
+                ],
+            ),
+        ] {
+            let workflow_source = root.read(workflow);
+            let wasm_job = workflow_source
+                .split_once("  wasm:\n")
+                .and_then(|(_, remainder)| remainder.split_once(end_marker).map(|(job, _)| job))
+                .unwrap_or_else(|| panic!("{workflow} must define a bounded WASM producer job"));
+            assert!(
+                wasm_job.contains("timeout-minutes: 10"),
+                "{workflow} WASM producer must retain its bounded 10-minute execution envelope"
+            );
+            for required_step in required_steps {
+                assert!(
+                    wasm_job.contains(required_step),
+                    "{workflow} WASM producer must preserve {required_step}"
+                );
+            }
+        }
+
+        let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
+        let dylint_job = ecosystem_source
+            .split_once("  dylint:\n")
+            .map(|(_, job)| job)
+            .unwrap_or_else(|| panic!("rust ecosystem workflow must define a Dylint job"));
+        assert!(
+            dylint_job.contains("timeout-minutes: 10"),
+            "Rust ecosystem Dylint job must retain its bounded 10-minute execution envelope"
+        );
     }
 
     fn assert_untrusted_boundaries(&self) {

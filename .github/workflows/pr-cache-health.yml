@@ -25,6 +25,11 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
+      - name: Set up Node for cache-health evaluator
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: Download Docker cache telemetry
         id: telemetry-download
         continue-on-error: true

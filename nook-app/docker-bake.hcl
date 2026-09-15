@@ -26,6 +26,23 @@ variable "SCCACHE_S3_RW_MODE" {
   default = "READ_WRITE"
 }
 
+// Secret values never enter Bake definitions or cache keys. Callers provide
+// runner-local file paths only when the trusted cache credential pair exists;
+// every target that can be solved as a named context then inherits the same
+// BuildKit secret declarations.
+variable "SCCACHE_S3_ACCESS_KEY_FILE" {
+  default = ""
+}
+
+variable "SCCACHE_S3_SECRET_KEY_FILE" {
+  default = ""
+}
+
+sccache_secrets = SCCACHE_S3_ACCESS_KEY_FILE != "" && SCCACHE_S3_SECRET_KEY_FILE != "" ? [
+  "id=sccache_s3_access_key,src=${SCCACHE_S3_ACCESS_KEY_FILE}",
+  "id=sccache_s3_secret_key,src=${SCCACHE_S3_SECRET_KEY_FILE}",
+] : []
+
 // Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
 // remote registry credentials exist. CI sets it from nook-docker-setup after
 // registry login. Separate refs keep sibling BuildKit lineages from overwriting
@@ -63,6 +80,12 @@ variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
+// A per-job value keys only the terminal report replay RUN. Compiler vertices
+// persist their real report in the layer and remain cacheable across jobs.
+variable "NOOK_SCCACHE_TELEMETRY_REPLAY" {
+  default = "disabled"
+}
+
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh"
 }
@@ -73,11 +96,13 @@ variable "NOOK_REGISTRY_CACHE_HOST" {
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
 
 target "_sccache" {
+  secret = sccache_secrets
   args = {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
     SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
     SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
     SCCACHE_BUCKET   = SCCACHE_BUCKET
+    NOOK_SCCACHE_TELEMETRY_REPLAY = NOOK_SCCACHE_TELEMETRY_REPLAY
   }
 }
 

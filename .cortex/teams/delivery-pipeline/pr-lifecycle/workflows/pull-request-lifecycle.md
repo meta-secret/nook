@@ -201,13 +201,14 @@ from these hints. The subscriber does not summarize or decide readiness.
   completion snapshot. Other valid routes reset inactivity without that query.
 - The process checks elapsed time against the last relevant notification.
   Only more than five minutes without one permits an idle completion query.
-- An incomplete snapshot stays silent. After an idle query, wait another five
-  minutes before another idle query. Do not create a hot loop or wake reasoning.
+- An incomplete nonempty snapshot stays silent. After an idle query for that
+  snapshot, wait another five minutes before another idle query. Do not create
+  a hot loop or wake reasoning.
 - Event activity invalidates an in-flight idle result. Check observations never
   overlap. Stop clears the timer and invalidates pending completion callbacks.
 - A nonempty rollup completes when every check has a terminal result.
   Failed conclusions complete the iteration too. They do not establish readiness.
-- Empty rollups remain pending. Unknown states or unavailable evidence fail closed.
+- Unknown states or unavailable evidence fail closed.
   One GraphQL snapshot uses complete aggregate counts instead of paginated nodes.
   The rollup commit must equal the snapshot head. Group totals must match counts.
 - Completion drains NATS, then emits one line on stderr with the outcome, PR URL,
@@ -222,9 +223,30 @@ from these hints. The subscriber does not summarize or decide readiness.
 - Use a harness wait that wakes on output when available. Otherwise use the
   longest host-bounded PTY read. Empty reads produce no messages or GitHub queries.
 
+### Validation not scheduled
+
+For an empty initial snapshot, the initial observation is bounded. After that
+snapshot and the first permitted idle completion query, an exact-head check/run
+set with no entries is terminal `validation not scheduled`. It is not
+pending-wave evidence.
+
+- Do not keep the child waiting for another check wave or schedule another idle
+  query for this terminal condition.
+- Immediately diagnose workflow trigger and event eligibility for the assigned
+  PR and exact head. Use live repository and workflow evidence to distinguish an
+  ineligible event or filter from an eligible event for which no workflow run
+  was scheduled.
+- Do not predict remote Task selectors or simulate workflow execution while
+  diagnosing eligibility.
+- Return the terminal outcome, exact head, empty check/run evidence, and the
+  eligibility diagnosis to the policy controller in one handoff. The controller
+  decides whether to authorize another operation.
+
 
 ## Completion evidence
 
 Return the operation, controller, source SHA, observed result, and relevant run
-or PR identifiers. Promotion completion includes remote main equality and
-actual GitHub PR state. The controller retains the delivery verdict.
+or PR identifiers. A `validation not scheduled` result also includes the
+empty check/run evidence and workflow trigger/event eligibility diagnosis.
+Promotion completion includes remote main equality and actual GitHub PR state.
+The controller retains the delivery verdict.
