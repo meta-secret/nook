@@ -546,11 +546,19 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     assert!(
-        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani")
+        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|web-research-deps|web-research-image|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
+            && setup.contains("general|native|wasm|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke")
             && setup.contains("[ \"$cache_selection\" = \"native\" ]")
             && setup.contains("[ \"$cache_selection\" = \"wasm\" ]")
             && setup.contains("[ \"$cache_selection\" = \"preflight\" ]")
-            && setup.contains("[ \"$cache_selection\" = \"web-e2e\" ]"),
+            && setup.contains("[ \"$cache_selection\" = \"web-e2e\" ]")
+            && setup.contains("[ \"$cache_selection\" = \"web-research-deps\" ]")
+            && setup.contains("[ \"$cache_selection\" = \"web-research-image\" ]")
+            && setup.contains("publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE")
+            && setup.contains("publish_exact_availability GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE")
+            && setup.contains("publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE")
+            && setup.contains("publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE")
+            && setup.contains("[ \"$cache_selection\" != \"web-research-image\" ]"),
         "Docker setup must retain consumer-scoped cache probe selections"
     );
     assert!(
