@@ -103,6 +103,9 @@ describe('Playwright collection imports', () => {
       loginGateVisible: true,
       overlayVisible: true,
       authorizeReady: false,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
@@ -114,6 +117,9 @@ describe('Playwright collection imports', () => {
         loginGateVisible: false,
         overlayVisible: false,
         authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
     expect(
@@ -121,6 +127,9 @@ describe('Playwright collection imports', () => {
         loginGateVisible: true,
         overlayVisible: false,
         authorizeReady: true,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
     expect(
@@ -128,6 +137,39 @@ describe('Playwright collection imports', () => {
         loginGateVisible: true,
         overlayVisible: false,
         authorizeReady: false,
+        unlockReady: true,
+        pickerVisible: false,
+        errorVisible: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: true,
+        errorVisible: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Picker)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: true,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Error)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })

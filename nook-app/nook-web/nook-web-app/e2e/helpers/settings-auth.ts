@@ -43,6 +43,7 @@ export enum DeviceProtectionAuthorizationGateState {
   LockedAccess = 'locked-access',
   Authorize = 'authorize',
   Unlocked = 'unlocked',
+  Error = 'error',
   Waiting = 'waiting',
 }
 
@@ -50,6 +51,9 @@ export type DeviceProtectionPostUnlockObservation = {
   readonly loginGateVisible: boolean
   readonly overlayVisible: boolean
   readonly authorizeReady: boolean
+  readonly unlockReady: boolean
+  readonly pickerVisible: boolean
+  readonly errorVisible: boolean
 }
 
 export class DeviceProtectionPostUnlockGate {
@@ -61,11 +65,20 @@ export class DeviceProtectionPostUnlockGate {
     if (!this.observation.loginGateVisible) {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
+    if (this.observation.errorVisible) {
+      return DeviceProtectionAuthorizationGateState.Error
+    }
     if (this.observation.overlayVisible) {
       return DeviceProtectionAuthorizationGateState.Waiting
     }
     if (this.observation.authorizeReady) {
       return DeviceProtectionAuthorizationGateState.Authorize
+    }
+    if (this.observation.pickerVisible) {
+      return DeviceProtectionAuthorizationGateState.Picker
+    }
+    if (this.observation.unlockReady) {
+      return DeviceProtectionAuthorizationGateState.Unlock
     }
     return DeviceProtectionAuthorizationGateState.Waiting
   }
@@ -524,6 +537,15 @@ export async function authorizeDeviceProtection(
     }
   }
 
+  const unlockButtonReady = async () => {
+    if (!(await unlockVaultButton.isVisible())) return false
+    try {
+      return await unlockVaultButton.isEnabled({ timeout: 0 })
+    } catch {
+      return false
+    }
+  }
+
   const authorizationGateState = async () => {
     const observation: DeviceProtectionAuthorizationObservation = {
       overlayVisible: await overlay.isVisible(),
@@ -632,18 +654,41 @@ export async function authorizeDeviceProtection(
   await expect
     .poll(
       async () => {
-        return new DeviceProtectionPostUnlockGate({
+        const state = new DeviceProtectionPostUnlockGate({
           loginGateVisible: await loginGate.isVisible(),
           overlayVisible: await overlay.isVisible(),
           authorizeReady: await authorizeButtonReady(),
+          unlockReady: await unlockButtonReady(),
+          pickerVisible: await vaultPicker.isVisible(),
+          errorVisible: await vaultError.isVisible(),
         }).state()
+        if (state === DeviceProtectionAuthorizationGateState.Error) {
+          throw new Error(
+            `Vault authorization failed after unlock: ${await vaultError.textContent()}`,
+          )
+        }
+        if (state === DeviceProtectionAuthorizationGateState.Picker) {
+          const option = opts?.storeId
+            ? page.locator(
+                `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+              )
+            : page.getByTestId('login-vault-option').first()
+          await option.click()
+          return DeviceProtectionAuthorizationGateState.Waiting
+        }
+        if (state === DeviceProtectionAuthorizationGateState.Unlock) {
+          await unlockVaultButton.click()
+          return DeviceProtectionAuthorizationGateState.Waiting
+        }
+        if (state === DeviceProtectionAuthorizationGateState.Authorize) {
+          await button.click()
+          return DeviceProtectionAuthorizationGateState.Waiting
+        }
+        return state
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
-  if (await authorizeButtonReady()) {
-    await button.click()
-  }
+    .toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   await expect(loginGate).toBeHidden({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
