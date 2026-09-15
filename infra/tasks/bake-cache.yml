@@ -298,6 +298,9 @@ tasks:
         echo "== Rust source-boundary cache proof =="
         product_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/product.Dockerfile"
         nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+        cargo_dylint_install="$(sed -n '/RUN --mount=type=secret,id=sccache_s3_access_key/,/cargo dylint --version/p' "$nightly_dockerfile")"
+        grep -Fq 'id=sccache_s3_secret_key' <<<"$cargo_dylint_install"
+        grep -Fq 'cargo install cargo-dylint dylint-link' <<<"$cargo_dylint_install"
         nook_wasm_source_block="$(mktemp)"
         companion_wasm_source_block="$(mktemp)"
         awk '

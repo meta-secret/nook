@@ -422,6 +422,11 @@ target "rust-ecosystem-deterministic-cache-probe" {
   output   = ["type=cacheonly"]
 }
 
+target "rust-ecosystem-deterministic-smoke-member" {
+  inherits = ["rust-ecosystem-deterministic"]
+  cache-to = []
+}
+
 target "rust-kani" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
@@ -430,6 +435,16 @@ target "rust-kani" {
   cache-from = concat(rust_ecosystem_kani_cache_from, rust_ecosystem_smoke_cache_from)
   cache-to   = rust_ecosystem_kani_cache_to
   output     = ["type=cacheonly"]
+}
+
+target "rust-kani-smoke-member" {
+  inherits = ["rust-kani"]
+  cache-to = []
+}
+
+target "rust-fuzz-smoke-member" {
+  inherits = ["rust-fuzz-smoke"]
+  cache-to = []
 }
 
 // One rooted mode=max export owns the deterministic/fuzz/Kani producer. The
@@ -441,9 +456,9 @@ target "rust-ecosystem-smoke-publish" {
   target     = "rust-ecosystem-smoke-cache"
   platforms  = ["linux/amd64"]
   contexts = {
-    deterministic = "target:rust-ecosystem-deterministic"
-    fuzz          = "target:rust-fuzz-smoke"
-    kani          = "target:rust-kani"
+    deterministic = "target:rust-ecosystem-deterministic-smoke-member"
+    fuzz          = "target:rust-fuzz-smoke-member"
+    kani          = "target:rust-kani-smoke-member"
   }
   cache-from = rust_ecosystem_smoke_cache_from
   cache-to   = rust_ecosystem_smoke_cache_to

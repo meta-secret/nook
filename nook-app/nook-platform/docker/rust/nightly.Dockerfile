@@ -21,7 +21,9 @@ RUN curl -fsSL \
     && rm -rf /tmp/cargo-fuzz.tgz /tmp/cargo-fuzz \
     && cargo fuzz --version
 
-RUN cargo install cargo-dylint dylint-link \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 

@@ -294,6 +294,23 @@ void test("extracts structured registry cache bytes, timings, and incomplete fai
   });
 });
 
+void test("counts one exporter vertex exposed by multiple Bake target records once", () => {
+  const vertex = {
+    digest: "sha256:shared-export",
+    name: "exporting cache to registry",
+    started: "2026-09-13T01:00:00Z",
+    completed: "2026-09-13T01:00:01Z",
+  };
+  const summary = new BuildkitCacheExportTelemetry([
+    { nook_history_ref: "target-a", vertexes: [vertex] },
+    { nook_history_ref: "target-b", vertexes: [vertex] },
+    { nook_history_ref: "target-root", vertexes: [vertex] },
+  ]).summary();
+  assert.equal(summary.attempts, 1);
+  assert.equal(summary.completed, 1);
+  assert.equal(summary.incomplete_failures, 0);
+});
+
 void test("accepts the documented Buildx JSON array and PascalCase fields", () => {
   const record = CacheTelemetry.parseJsonObjects(
     JSON.stringify([

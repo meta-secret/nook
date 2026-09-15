@@ -29,6 +29,7 @@ export class BuildkitCacheExportTelemetry {
   summary() {
     /** @type {Map<string, {started?: string, completed?: string, failed: boolean}>} */
     const exportsByVertex = new Map();
+    const exportHistoryReferences = new Set();
     /** @type {Map<string, number>} */
     const bytesByStatus = new Map();
     for (const event of this.events) {
@@ -41,7 +42,12 @@ export class BuildkitCacheExportTelemetry {
           typeof candidate.digest === "string" ? candidate.digest : "";
         const name = typeof candidate.name === "string" ? candidate.name : "";
         if (!digest || !/exporting cache to registry/i.test(name)) continue;
-        const vertexKey = `${historyReference}:${digest}`;
+        exportHistoryReferences.add(historyReference);
+        // Buildx history can expose the same exporter vertex through multiple
+        // target records from one Bake invocation. The digest is the exporter
+        // identity; including the history alias inflated one physical export
+        // into one incomplete attempt per target.
+        const vertexKey = digest;
         const previous = exportsByVertex.get(vertexKey) || { failed: false };
         exportsByVertex.set(vertexKey, {
           ...(typeof candidate.started === "string"
@@ -64,14 +70,12 @@ export class BuildkitCacheExportTelemetry {
       const historyReference =
         typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
       const statuses = Array.isArray(event.statuses) ? event.statuses : [];
-      const historyHasCacheExport = [...exportsByVertex.keys()].some((key) =>
-        key.startsWith(`${historyReference}:`),
-      );
+      const historyHasCacheExport = exportHistoryReferences.has(historyReference);
       for (const candidate of statuses) {
         if (!this.isJsonRecord(candidate)) continue;
         const vertex =
           typeof candidate.vertex === "string" ? candidate.vertex : "";
-        const vertexKey = `${historyReference}:${vertex}`;
+        const vertexKey = vertex;
         const id = typeof candidate.id === "string" ? candidate.id : "";
         const name = typeof candidate.name === "string" ? candidate.name : "";
         const belongsToCacheExport =
@@ -88,7 +92,7 @@ export class BuildkitCacheExportTelemetry {
           observedCurrent > 0
             ? observedCurrent
             : this.nonNegativeInteger(candidate.total);
-        const key = `${vertexKey}:${id}`;
+        const key = `${historyReference}:${vertexKey}:${id}`;
         bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
       }
     }

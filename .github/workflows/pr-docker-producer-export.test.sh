@@ -33,5 +33,13 @@ grep -Fq '"id":"dependency-policy","result":"success"' "$pr_workflow"
 grep -Fq 'probe_request_timeout_seconds=12' "$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
 grep -Fq 'probe_lineage_timeout_seconds=45' "$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
 grep -Fq 'GHA_CACHE_RESTORE_RUST_ECOSYSTEM_SMOKE_SCOPE_SUFFIX|nook-rust-ecosystem-smoke-v1' "$repo_root/.github/scripts/select-hosted-buildkit-cache.sh"
+grep -Fq 'target "rust-ecosystem-deterministic-smoke-member"' "$rust_bake"
+grep -Fq 'target "rust-fuzz-smoke-member"' "$rust_bake"
+grep -Fq 'target "rust-kani-smoke-member"' "$rust_bake"
+test "$(grep -Fc 'cache-to = []' "$rust_bake")" -ge 8
+nightly="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+install_block="$(sed -n '/RUN --mount=type=secret,id=sccache_s3_access_key/,/cargo dylint --version/p' "$nightly")"
+grep -Fq 'id=sccache_s3_secret_key' <<<"$install_block"
+grep -Fq 'cargo install cargo-dylint dylint-link' <<<"$install_block"
 
 echo 'PR Docker producer single-export contract passed'
