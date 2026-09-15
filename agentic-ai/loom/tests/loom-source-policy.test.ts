@@ -52,12 +52,19 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   expect(workflow).toContain(
     'LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}',
   );
+  const nativeToolchain =
+    '      - name: Install native Rust compiler and linker\n' +
+    '        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential';
+  expect(workflow).toContain(nativeToolchain);
   const rustSetup =
     '      - uses: actions-rust-lang/setup-rust-toolchain@v2\n' +
     '        with:\n' +
     '          toolchain: stable\n' +
     '          cache: false';
   expect(workflow).toContain(rustSetup);
+  expect(workflow.indexOf(nativeToolchain)).toBeLessThan(
+    workflow.indexOf(rustSetup),
+  );
   expect(workflow.indexOf(rustSetup)).toBeLessThan(
     workflow.indexOf('      - run: task tooling:static'),
   );
