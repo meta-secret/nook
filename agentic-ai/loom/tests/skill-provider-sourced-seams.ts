@@ -170,7 +170,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '4512e215bb15b1502ea8212daeb969a7d051d36c6cf8ca7a1d8b1c58ff31e087',
+    'e669b5165ad962a8f2ee157c70d5736d63266b187f984149dbd489144d619b19',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -202,7 +202,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'fce68cf9521286b606bb064a89c7b88e4f9173e09ddaa16b572e4eaac4878f59',
+    '48fe5a012b1abd144a53a1b5fd94a90d2d583d2fb6499a5630df1c6f9482b254',
   ],
   [
     'infra/operator-ssh.ts',

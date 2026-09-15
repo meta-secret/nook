@@ -34,6 +34,8 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: "3.52.0"
+      - name: Install native Rust compiler and linker
+        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential mold
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
