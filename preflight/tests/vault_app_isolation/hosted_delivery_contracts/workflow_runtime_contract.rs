@@ -116,6 +116,16 @@ impl WorkflowRuntimeContract<'_> {
                 );
             }
         }
+
+        let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
+        let dylint_job = ecosystem_source
+            .split_once("  dylint:\n")
+            .map(|(_, job)| job)
+            .unwrap_or_else(|| panic!("rust ecosystem workflow must define a Dylint job"));
+        assert!(
+            dylint_job.contains("timeout-minutes: 5"),
+            "Rust ecosystem Dylint job must retain its bounded 5-minute execution envelope"
+        );
     }
 
     fn assert_untrusted_boundaries(&self) {
