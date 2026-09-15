@@ -1,3 +1,6 @@
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+import type { UntrustedYamlNode } from '../src/lib/guards.ts';
+
 export type RunnableCommandInspection = {
   readonly path: string;
   readonly source: string;
@@ -33,50 +36,69 @@ export type ConfigurationNode =
   | readonly ConfigurationNode[]
   | { readonly [key: string]: ConfigurationNode };
 
-export function configurationNodeFromHost(
-  value: UntrustedYamlNode,
-): ConfigurationNode {
-  if (
-    typeof value === 'boolean' ||
-    typeof value === 'number' ||
-    typeof value === 'string'
-  )
-    return value;
-  if (UntrustedYamlBoundary.isList(value))
-    return value.map(configurationNodeFromHost);
-  if (UntrustedYamlBoundary.isRecord(value)) {
-    const result: Record<string, ConfigurationNode> = {};
-    for (const [key, entry] of Object.entries(value))
-      result[key] = configurationNodeFromHost(entry);
+/** Owns conversion and narrowing for a parsed configuration document. */
+export class SkillProviderConfigurationDocumentScenario {
+  static configurationNodeFromHost(
+    value: UntrustedYamlNode,
+  ): ConfigurationNode {
+    if (
+      typeof value === 'boolean' ||
+      typeof value === 'number' ||
+      typeof value === 'string'
+    )
+      return value;
+    if (UntrustedYamlBoundary.isList(value))
+      return value.map((entry) =>
+        SkillProviderConfigurationDocumentScenario.configurationNodeFromHost(
+          entry,
+        ),
+      );
+    if (UntrustedYamlBoundary.isRecord(value)) {
+      const result: Record<string, ConfigurationNode> = {};
+      for (const [key, entry] of Object.entries(value))
+        result[key] =
+          SkillProviderConfigurationDocumentScenario.configurationNodeFromHost(
+            entry,
+          );
+      return result;
+    }
+    if (!value && typeof value === 'object') return false;
+    throw new Error('Configuration contains an unsupported value.');
+  }
+
+  static isConfigurationList(
+    value: ConfigurationNode,
+  ): value is readonly ConfigurationNode[] {
+    return Array.isArray(value);
+  }
+
+  static isConfigurationMapping(
+    value: ConfigurationNode,
+  ): value is Readonly<Record<string, ConfigurationNode>> {
+    return value instanceof Object && !Array.isArray(value);
+  }
+
+  static stringMapFromHost(
+    value: UntrustedYamlNode,
+  ): Readonly<Record<string, string>> | false {
+    if (!UntrustedYamlBoundary.isRecord(value)) return false;
+    const result: Record<string, string> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (typeof entry !== 'string') return false;
+      result[key] = entry;
+    }
     return result;
   }
-  if (!value && typeof value === 'object') return false;
-  throw new Error('Configuration contains an unsupported value.');
 }
 
-export function isConfigurationList(
-  value: ConfigurationNode,
-): value is readonly ConfigurationNode[] {
-  return Array.isArray(value);
-}
-
-export function isConfigurationMapping(
-  value: ConfigurationNode,
-): value is Readonly<Record<string, ConfigurationNode>> {
-  return value instanceof Object && !Array.isArray(value);
-}
-
-export function stringMapFromHost(
-  value: UntrustedYamlNode,
-): Readonly<Record<string, string>> | false {
-  if (!UntrustedYamlBoundary.isRecord(value)) return false;
-  const result: Record<string, string> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry !== 'string') return false;
-    result[key] = entry;
-  }
-  return result;
-}
+export const configurationNodeFromHost =
+  SkillProviderConfigurationDocumentScenario.configurationNodeFromHost;
+export const isConfigurationList =
+  SkillProviderConfigurationDocumentScenario.isConfigurationList;
+export const isConfigurationMapping =
+  SkillProviderConfigurationDocumentScenario.isConfigurationMapping;
+export const stringMapFromHost =
+  SkillProviderConfigurationDocumentScenario.stringMapFromHost;
 
 export type ShellWord = {
   readonly dynamic: boolean;
@@ -98,23 +120,33 @@ export enum ShellSeparator {
 
 export type ShellToken = ShellWord | ShellSeparator;
 
-export function shellWordAt([words, index]: readonly [
-  readonly ShellWord[],
-  number,
-]): ShellWord {
-  const word = words[index];
-  if (!word) throw new Error(`Missing shell word at index ${index}.`);
-  return word;
+/** Owns required access to a parsed shell-word sequence. */
+export class SkillProviderShellTokenScenario {
+  static shellWordAt([words, index]: readonly [
+    readonly ShellWord[],
+    number,
+  ]): ShellWord {
+    const word = words[index];
+    if (!word) throw new Error(`Missing shell word at index ${index}.`);
+    return word;
+  }
 }
 
-export function itemAt<T>([items, index]: readonly [readonly T[], number]): T {
-  let currentIndex = 0;
-  for (const item of items) {
-    if (currentIndex === index) return item;
-    currentIndex += 1;
+export const shellWordAt = SkillProviderShellTokenScenario.shellWordAt;
+
+/** Owns required indexed access for bounded command-fixture sequences. */
+export class SkillProviderCommandFixtureSequenceScenario {
+  static itemAt<T>([items, index]: readonly [readonly T[], number]): T {
+    let currentIndex = 0;
+    for (const item of items) {
+      if (currentIndex === index) return item;
+      currentIndex += 1;
+    }
+    throw new Error(`Missing item at index ${index}.`);
   }
-  throw new Error(`Missing item at index ${index}.`);
 }
+
+export const itemAt = SkillProviderCommandFixtureSequenceScenario.itemAt;
 
 export type ShellEnvironment = Map<string, ShellWord>;
 export type ConfigurationMapping = Readonly<Record<string, ConfigurationNode>>;
@@ -198,5 +230,3 @@ export type RuntimeExecutableRequest = {
   readonly valueOptions: ReadonlySet<string>;
   readonly words: readonly ShellWord[];
 };
-import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
-import type { UntrustedYamlNode } from '../src/lib/guards.ts';
