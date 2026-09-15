@@ -143,3 +143,72 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
   await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await demoBeat(page)
 })
+
+test('recover a delayed save offer after authentication navigation', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = {
+    ...savePilotStubArgs(messages),
+    delayedPendingSaveOfferReads: 1,
+  }
+
+  await page.addInitScript(installDemoChromeStub, stubArgs)
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Example account signed in</title>
+        <style>
+          :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background:
+              radial-gradient(circle at 75% 12%, rgb(40 86 70 / 48%), transparent 34%),
+              linear-gradient(145deg, #11131a, #090a0f 70%);
+            color: #f7f7f8;
+          }
+          main {
+            width: min(440px, calc(100vw - 48px));
+            padding: 42px;
+            border: 1px solid rgb(255 255 255 / 10%);
+            border-radius: 22px;
+            background: rgb(24 26 35 / 92%);
+            box-shadow: 0 28px 90px rgb(0 0 0 / 45%);
+          }
+          .eyebrow { margin: 0 0 10px; color: #94d4ae; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+          h1 { margin: 0 0 10px; font-size: 32px; }
+          .intro { margin: 0; color: #aeb4c1; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <main data-nook-auth-outcome="success">
+          <p class="eyebrow">Authentication complete</p>
+          <h1>Welcome back</h1>
+          <p class="intro" data-testid="mock-auth-success">The account page loaded while Nook finished preparing the save offer.</p>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await injectPilotAutofill(page)
+
+  await expect(page.getByTestId('mock-auth-success')).toBeVisible()
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Save this login?')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-save')).toBeEnabled()
+
+  const pendingReads = await page.evaluate(() => {
+    const messageTypes = window.__nookDemoRuntimeMessageTypes
+    return Array.isArray(messageTypes)
+      ? messageTypes.filter(
+          (messageType) => messageType === 'nook:website-login-save-pending',
+        ).length
+      : 0
+  })
+  expect(pendingReads).toBe(2)
+  await demoBeat(page)
+})
