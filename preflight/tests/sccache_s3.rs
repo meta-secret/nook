@@ -520,8 +520,7 @@ fn assert_rust_build_cache_boundary() {
     let reports = dockerfile
         .lines()
         .filter(|line| {
-            line.contains("nook-sccache-report ")
-                && !line.contains("nook-sccache-report --replay ")
+            line.contains("nook-sccache-report ") && !line.contains("nook-sccache-report --replay ")
         })
         .count();
     assert!(
