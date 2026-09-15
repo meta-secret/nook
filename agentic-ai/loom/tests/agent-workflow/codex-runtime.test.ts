@@ -99,6 +99,11 @@ import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../../src/module-experts/read-
 
 import { MODULE_EXPERT_CONTEXT_MCP } from '../../src/module-experts/runtime-contract.ts';
 
+type CodexRuntimeGitCommand = Readonly<{
+  readonly workingDirectory: string;
+  readonly args: readonly string[];
+}>;
+
 export class AgentWorkflowCodexRuntimeScenario {
   private constructor(private readonly request: string) {}
 
@@ -108,6 +113,15 @@ export class AgentWorkflowCodexRuntimeScenario {
     const result = hostLaunch1.value;
     expect(result.exitCode).toBe(0);
     return result.stdout.trim();
+  }
+
+  static runGitAt(command: CodexRuntimeGitCommand): string {
+    return AgentWorkflowCodexRuntimeScenario.runGit({
+      command: RepositoryCommandExecutable.Git,
+      args: command.args,
+      rootDirectory: command.workingDirectory,
+      workingDirectory: command.workingDirectory,
+    });
   }
 
   static async *fakeThreadEventStream(
@@ -535,33 +549,44 @@ describe('Codex agent source stability', () => {
     );
     await mkdir(workingDirectory);
     try {
-      const command = (args: readonly string[]): string =>
-        AgentWorkflowCodexRuntimeScenario.runGit({
-          command: RepositoryCommandExecutable.Git,
-          args,
-          rootDirectory: workingDirectory,
-          workingDirectory,
-        });
-      command(['init']);
+      AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: ['init'],
+      });
       await writeFile(join(workingDirectory, 'tracked.txt'), 'stable\n');
-      command(['add', 'tracked.txt']);
-      command([
-        '-c',
-        'user.name=Loom Test',
-        '-c',
-        'user.email=loom@example.test',
-        'commit',
-        '-m',
-        'fixture',
-      ]);
-      const sourceCommit = command(['rev-parse', 'HEAD']);
-      command(['update-ref', 'refs/remotes/origin/main', sourceCommit]);
+      AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: ['add', 'tracked.txt'],
+      });
+      AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: [
+          '-c',
+          'user.name=Loom Test',
+          '-c',
+          'user.email=loom@example.test',
+          'commit',
+          '-m',
+          'fixture',
+        ],
+      });
+      const sourceCommit = AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: ['rev-parse', 'HEAD'],
+      });
+      AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: ['update-ref', 'refs/remotes/origin/main', sourceCommit],
+      });
       await writeFile(
         monitor,
         `#!/bin/sh\nprintf touched > '${marker}'\nexit 1\n`,
         { mode: 0o700 },
       );
-      command(['config', '--local', 'core.fsmonitor', monitor]);
+      AgentWorkflowCodexRuntimeScenario.runGitAt({
+        workingDirectory,
+        args: ['config', '--local', 'core.fsmonitor', monitor],
+      });
       await writeFile(globalConfig, `[core]\nfsmonitor = ${monitor}\n`);
       await writeFile(systemConfig, `[core]\nfsmonitor = ${monitor}\n`);
       await rm(marker, { force: true });

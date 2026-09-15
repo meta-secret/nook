@@ -17,6 +17,33 @@ import {
 import type { DiscoverableRequest } from '../src/tools/registry.ts';
 
 import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
+
+class DiscoverableRequestHostInput {
+  constructor(private readonly value: UntrustedYamlNode) {}
+
+  toView(): DiscoverableRequestView {
+    const value = this.value;
+    if (!UntrustedYamlBoundary.isRecord(value))
+      throw new Error('Expected toolsList request.');
+    const family = Object.values(RequestFamily).find(
+      (candidate) => candidate === value.family,
+    );
+    if (
+      !family ||
+      typeof value.exampleRequest !== 'string' ||
+      typeof value.exampleYaml !== 'string' ||
+      typeof value.resolvedExampleYaml !== 'string'
+    )
+      throw new Error('Expected toolsList request.');
+    return {
+      family,
+      exampleRequest: value.exampleRequest,
+      exampleYaml: value.exampleYaml,
+      resolvedExampleYaml: value.resolvedExampleYaml,
+    };
+  }
+}
+
 describe('loom domain request codec', () => {
   test('decodes a valid prePush request', () => {
     const decodedArgs6 = {
@@ -132,7 +159,9 @@ describe('loom dispatch protocol', () => {
       const requests = resultNode.requests;
       if (!UntrustedYamlBoundary.isList(requests))
         throw new Error('Expected toolsList requests.');
-      const result = requests.map(discoverableRequestView);
+      const result = requests.map((value) =>
+        new DiscoverableRequestHostInput(value).toView(),
+      );
       expect(
         result.some((entry) => entry.family === RequestFamily.PrePush),
       ).toBe(false);
@@ -212,29 +241,6 @@ type DiscoverableRequestView = Pick<
   DiscoverableRequest,
   'family' | 'exampleRequest' | 'exampleYaml' | 'resolvedExampleYaml'
 >;
-
-function discoverableRequestView(
-  value: UntrustedYamlNode,
-): DiscoverableRequestView {
-  if (!UntrustedYamlBoundary.isRecord(value))
-    throw new Error('Expected toolsList request.');
-  const family = Object.values(RequestFamily).find(
-    (candidate) => candidate === value.family,
-  );
-  if (
-    !family ||
-    typeof value.exampleRequest !== 'string' ||
-    typeof value.exampleYaml !== 'string' ||
-    typeof value.resolvedExampleYaml !== 'string'
-  )
-    throw new Error('Expected toolsList request.');
-  return {
-    family,
-    exampleRequest: value.exampleRequest,
-    exampleYaml: value.exampleYaml,
-    resolvedExampleYaml: value.resolvedExampleYaml,
-  };
-}
 
 describe('typed example documents', () => {
   test('every catalog example decodes as a domain request', () => {

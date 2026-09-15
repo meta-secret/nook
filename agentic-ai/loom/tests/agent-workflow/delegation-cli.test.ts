@@ -49,6 +49,11 @@ type DelegationCliResult = {
   readonly stderr: string;
 };
 
+type DelegationCliRecordRequest = Readonly<{
+  readonly requestPath: string;
+  readonly workingDirectory: string;
+}>;
+
 export class AgentWorkflowDelegationCliScenario {
   private constructor(private readonly request: string) {}
 
@@ -105,6 +110,18 @@ export class AgentWorkflowDelegationCliScenario {
       process.stdout.write = originalStdoutWrite;
       process.stderr.write = originalStderrWrite;
     }
+  }
+
+  static runRecord(
+    request: DelegationCliRecordRequest,
+  ): Promise<DelegationCliResult> {
+    return AgentWorkflowDelegationCliScenario.runDelegationCli(
+      'record',
+      '--request',
+      request.requestPath,
+      '--working-directory',
+      request.workingDirectory,
+    );
   }
 
   static commitFixture(workingDirectory: string): string {
@@ -274,15 +291,6 @@ describe('delegated agent journal CLI', () => {
           workingDirectory,
         );
       expect(admissionResult.exitCode, admissionResult.stderr).toBe(0);
-      const runRecord = () =>
-        AgentWorkflowDelegationCliScenario.runDelegationCli(
-          'record',
-          '--request',
-          requestPath,
-          '--working-directory',
-          workingDirectory,
-        );
-
       const legacyActivityRequest = {
         ...request,
         activities: [
@@ -297,7 +305,11 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(legacyActivityRequest),
         'utf8',
       );
-      const legacyActivityResult = await runRecord();
+      const legacyActivityResult =
+        await AgentWorkflowDelegationCliScenario.runRecord({
+          requestPath,
+          workingDirectory,
+        });
       expect(legacyActivityResult.exitCode).not.toBe(0);
       const attemptDirectory = join(
         workingDirectory,
@@ -323,7 +335,11 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(extraTerminalFieldRequest),
         'utf8',
       );
-      const extraTerminalResult = await runRecord();
+      const extraTerminalResult =
+        await AgentWorkflowDelegationCliScenario.runRecord({
+          requestPath,
+          workingDirectory,
+        });
       expect(extraTerminalResult.exitCode).not.toBe(0);
       await expect(stat(attemptDirectory)).rejects.toThrow();
 
@@ -336,12 +352,19 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(mismatchedSourceRequest),
         'utf8',
       );
-      const mismatchedSourceResult = await runRecord();
+      const mismatchedSourceResult =
+        await AgentWorkflowDelegationCliScenario.runRecord({
+          requestPath,
+          workingDirectory,
+        });
       expect(mismatchedSourceResult.exitCode).not.toBe(0);
       await expect(stat(attemptDirectory)).rejects.toThrow();
 
       await writeFile(requestPath, JSON.stringify(request), 'utf8');
-      const recordResult = await runRecord();
+      const recordResult = await AgentWorkflowDelegationCliScenario.runRecord({
+        requestPath,
+        workingDirectory,
+      });
       expect(recordResult.exitCode).toBe(0);
       expect(recordResult.stdout).toContain('events.jsonl');
       expect(recordResult.stderr).not.toContain('runtime-activity');
@@ -444,7 +467,10 @@ describe('delegated agent journal CLI', () => {
         runId: '../../../../escaped-delegation-run',
       };
       await writeFile(requestPath, JSON.stringify(unsafeRequest), 'utf8');
-      const unsafeResult = await runRecord();
+      const unsafeResult = await AgentWorkflowDelegationCliScenario.runRecord({
+        requestPath,
+        workingDirectory,
+      });
       expect(unsafeResult.exitCode).not.toBe(0);
 
       const malformedOutputRequest = {
@@ -462,7 +488,11 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(malformedOutputRequest),
         'utf8',
       );
-      const malformedResult = await runRecord();
+      const malformedResult =
+        await AgentWorkflowDelegationCliScenario.runRecord({
+          requestPath,
+          workingDirectory,
+        });
       expect(malformedResult.exitCode).not.toBe(0);
       const malformedRunDirectory = join(
         workingDirectory,
@@ -479,7 +509,11 @@ describe('delegated agent journal CLI', () => {
         depth: 4,
       };
       await writeFile(requestPath, JSON.stringify(depthFourRequest), 'utf8');
-      const depthFourResult = await runRecord();
+      const depthFourResult =
+        await AgentWorkflowDelegationCliScenario.runRecord({
+          requestPath,
+          workingDirectory,
+        });
       expect(depthFourResult.exitCode).not.toBe(0);
       const depthFourRunDirectory = join(
         workingDirectory,
@@ -520,7 +554,10 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(forgedModuleExpertRequest),
         'utf8',
       );
-      const forgedResult = await runRecord();
+      const forgedResult = await AgentWorkflowDelegationCliScenario.runRecord({
+        requestPath,
+        workingDirectory,
+      });
       expect(forgedResult.exitCode).not.toBe(0);
       const forgedRunDirectory = join(
         workingDirectory,
