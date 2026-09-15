@@ -400,6 +400,15 @@ target "rust-ecosystem-deterministic" {
   output     = ["type=cacheonly"]
 }
 
+// Cache diagnostics restore the deterministic lineage while stopping before
+// the product-test stage. The normal producer remains the only writer.
+target "rust-ecosystem-deterministic-cache-probe" {
+  inherits = ["rust-ecosystem-deterministic"]
+  target   = "rust-platform"
+  cache-to = []
+  output   = ["type=cacheonly"]
+}
+
 target "rust-kani" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"

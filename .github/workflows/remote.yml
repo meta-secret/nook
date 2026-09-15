@@ -92,7 +92,7 @@ jobs:
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}
+    timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (startsWith(inputs.tasks || inputs.task, 'cache:probe:') && 12 || 360) }}
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
@@ -156,9 +156,28 @@ jobs:
         run: |
           set -euo pipefail
           printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
+      - name: Select focused cache probe profile
+        shell: bash
+        run: |
+          case "$REQUESTED_REMOTE_TASKS" in
+            cache:probe:dependency-policy) profile=ecosystem-policy-tools ;;
+            cache:probe:deterministic) profile=ecosystem-deterministic ;;
+            cache:probe:dylint) profile=ecosystem-dylint ;;
+            cache:probe:rust) profile=native ;;
+            cache:probe:wasm|cache:probe:wasm-node) profile=wasm ;;
+            cache:probe:web) profile=web-e2e ;;
+            cache:probe:*)
+              echo "Unsupported cache probe selector: $REQUESTED_REMOTE_TASKS" >&2
+              exit 2
+              ;;
+            build:compile) profile=compile ;;
+            loom:verify) profile=preflight ;;
+            *) profile=general ;;
+          esac
+          echo "NOOK_REMOTE_CACHE_SELECTION=$profile" >> "$GITHUB_ENV"
       - uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile' || (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
+          cache-selection: ${{ env.NOOK_REMOTE_CACHE_SELECTION }}
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -181,15 +200,35 @@ jobs:
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
           echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
       - name: Run task batch
+        id: task-batch
         shell: bash
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
       - name: Preserve compile cache telemetry
-        if: always() && (inputs.tasks || inputs.task) == 'build:compile'
+        if: always() && ((inputs.tasks || inputs.task) == 'build:compile' || startsWith(inputs.tasks || inputs.task, 'cache:probe:'))
         uses: ./.github/actions/nook-cache-telemetry
         with:
-          artifact-suffix: ${{ inputs.publish_compile_cache && 'compile-publish' || 'compile-no-buildkit-export' }}
+          artifact-suffix: ${{ startsWith(inputs.tasks || inputs.task, 'cache:probe:') && 'cache-probe' || (inputs.publish_compile_cache && 'compile-publish' || 'compile-no-buildkit-export') }}
+      - name: Analyze focused cache probe
+        if: always() && startsWith(inputs.tasks || inputs.task, 'cache:probe:')
+        env:
+          NOOK_PR_CACHE_TELEMETRY_DIR: ${{ runner.temp }}/nook-cache-telemetry
+          NOOK_PR_CACHE_HEALTH_JSON: ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+          NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+          NOOK_PR_CACHE_JOBS: '[{"id":"batch","result":"${{ steps.task-batch.outcome }}","buildExpected":true,"readOnly":false}]'
+        run: node .github/workflows/lib/pr-cache-health.mjs
+      - name: Preserve focused cache-health analysis
+        if: always() && startsWith(inputs.tasks || inputs.task, 'cache:probe:')
+        uses: actions/upload-artifact@v7
+        with:
+          name: remote-cache-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+            ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true
       - name: Preserve Playwright diagnostics
         if: always() && (contains(inputs.tasks, 'e2e') || contains(inputs.task, 'e2e'))
         uses: actions/upload-artifact@v7

@@ -35,6 +35,20 @@ committed branch head; the returned exact SHA is observational evidence only.
 - Do not substitute `rust:ci`, `web:verify`, or `loom:verify`.
 - Return positive compilation evidence for local integration.
 
+## Focused PR cache probes
+
+Delivery may dispatch one of seven closed build-only selectors when a PR cache
+producer needs isolated remote evidence: `cache:probe:dependency-policy`,
+`cache:probe:deterministic`, `cache:probe:dylint`, `cache:probe:rust`,
+`cache:probe:wasm`, `cache:probe:wasm-node`, or `cache:probe:web`. Each selector
+builds only the producer's reusable Docker ancestry; it does not run product
+tests, browser suites, repository preflight, or the full PR workflow.
+
+Every focused probe preserves raw cache telemetry and evaluates the same
+canonical JSON/Markdown cache-health model used by `pr.yml`. Unknown
+`cache:probe:*` selectors fail closed. These diagnostics are evidence for the
+Docker Cache Specialist and do not replace normal PR validation.
+
 ## Slow dev PR validation
 
 The manually started dev manager authorizes publication of the selected

@@ -3,6 +3,7 @@ set -euo pipefail
 workflows_dir="$(cd "$(dirname "$0")" && pwd)"
 remote="$workflows_dir/remote.yml"
 setup="$workflows_dir/../actions/nook-docker-setup/action.yml"
+setup_policy="$workflows_dir/../scripts/select-hosted-buildkit-cache.sh"
 compile_script="$workflows_dir/../scripts/compile-remote.sh"
 compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
 compile_dockerfile="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.Dockerfile"
@@ -11,22 +12,40 @@ sccache_wrapper="$workflows_dir/../../nook-app/nook-platform/docker/sccache-wrap
 sccache_fallback_contract="$workflows_dir/../../infra/contracts/sccache-wrapper-fallback.test.sh"
 sccache_publication_contract="$workflows_dir/../../infra/contracts/sccache-publication.test.sh"
 probe_classification_contract="$workflows_dir/../../infra/contracts/compile-cache-probe-classification.test.sh"
+action_run_limit_contract="$workflows_dir/action-run-expression-limit.test.sh"
 proof="$workflows_dir/../../infra/tasks/bake-cache.yml"
 remote_taskfile="$workflows_dir/../../.task/remote-execution.yml"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
-compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}"
+bash "$action_run_limit_contract"
+compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || (startsWith(inputs.tasks || inputs.task, 'cache:probe:') && 12 || 360) }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'build:compile) timeout --kill-after=10s 240s task build:compile ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
 grep -Fq -- 'SCCACHE_S3_RW_MODE: READ_WRITE' "$remote"
 test "$(grep -Fc -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}' "$remote")" -eq 3
 test "$(grep -Fc -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}' "$remote")" -eq 3
+for selector in dependency-policy deterministic dylint rust wasm wasm-node web; do
+  grep -Fq -- "cache:probe:$selector" "$remote"
+  grep -Fq -- "cache:probe:$selector" "$workflows_dir/../scripts/remote-task-batch.sh"
+  grep -Fq -- "cache:probe:$selector:" "$workflows_dir/../../nook-app/ci/Taskfile.yml"
+done
+for required in 'Analyze focused cache probe' 'pr-cache-health.mjs' 'remote-cache-health-' 'cache-probe'; do
+  grep -Fq -- "$required" "$remote"
+done
+for forbidden in 'task ci:pr:' 'task preflight' 'task web:test:e2e' 'task extension:test:e2e'; do
+  if sed -n '/^  cache:probe:dependency-policy:/,/^  ci:pr:/p' "$workflows_dir/../../nook-app/ci/Taskfile.yml" | grep -Fq -- "$forbidden"; then
+    echo "focused cache probe executes a forbidden validation surface: $forbidden" >&2
+    exit 1
+  fi
+done
+grep -Fq -- 'target "builder-wasm-build-cache-probe"' "$workflows_dir/../../nook-app/nook-platform/nook-wasm/docker-bake.hcl"
+grep -Fq -- 'target "rust-ecosystem-deterministic-cache-probe"' "$workflows_dir/../../nook-app/nook-platform/docker/rust/docker-bake.hcl"
 if rg -n --fixed-strings 'NOOK_SCCACHE_REMOTE_' "$remote" "$workflows_dir/../../infra/tasks/sccache.yml"; then
   echo 'retired secondary sccache identity remains' >&2
   exit 1
 fi
 for forbidden in build:compile-cache-seed compile-generation COMPILE_GENERATION GHA_RUST_COMPILE_GENERATION; do
-  if rg -n --fixed-strings "$forbidden" "$remote" "$setup" "$compile_script" "$compile_bake" "$proof" "$remote_taskfile"; then
+  if rg -n --fixed-strings "$forbidden" "$remote" "$setup" "$setup_policy" "$compile_script" "$compile_bake" "$proof" "$remote_taskfile"; then
     echo "retired seed/generation surface remains: $forbidden" >&2
     exit 1
   fi
@@ -51,22 +70,23 @@ for secret_binding in \
   grep -Fq -- "--set=build-compile.${secret_binding}" "$compile_script"
 done
 for required in 'nook-build-compile-v4$scope_suffix' 'Compile cache probes complete: exact=1 ancestor_limit=8 timeout_seconds=6' 'git rev-list --first-parent --max-count="$ancestor_probe_limit" HEAD^' 'GHA_BUILD_COMPILE_RESTORE_SCOPE_SUFFIX' 'GHA_CACHE_RESTORE_SCOPE_SUFFIX' 'Nearest ancestor compile cache available' 'general) restore_lineages=(' 'GHA_CACHE_RESTORE_RUST_NATIVE_SCOPE_SUFFIX|nook-rust-native-source-v4' 'GHA_CACHE_RESTORE_WEB_E2E_SCOPE_SUFFIX|nook-web-e2e-v1' 'GHA_CACHE_RESTORE_WEB_RESEARCH_DEPS_SCOPE_SUFFIX|nook-web-research-deps-v1' 'Immutable lineage probes complete:' 'concurrent=true' 'Private registry credentials are unavailable; using local cold BuildKit without Zot login, pull, probe, import, or export' 'classify-registry-cache-probe.sh' 'return 2' 'return 3' 'NOOK_CACHE_PROBE_WARNING' '"failure_class":"transient_unavailable"' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS'; do
-  grep -Fq -- "$required" "$setup"
+  grep -Fq -- "$required" "$setup_policy"
 done
 
 # Restore selection and export authority are separate. ARC deliberately avoids
 # registry export for ordinary PR jobs, but must retain the requested exact
 # commit scope so a cache published by another runner remains consumable.
-grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup"
-grep -Fq 'timeout 6s docker buildx imagetools inspect "$ref"' "$setup"
-grep -Fq 'wait || true' "$setup"
-if grep -Fq -- '-pr-$pr_number' "$setup"; then
+grep -Fq 'if [ "$isolated_scope_requested" = "true" ] || [ -n "$remote_compile_scope" ]; then' "$setup_policy"
+grep -Fq 'timeout 6s docker buildx imagetools inspect "$ref"' "$setup_policy"
+grep -Fq 'wait || true' "$setup_policy"
+if grep -Fq -- '-pr-$pr_number' "$setup_policy"; then
   echo 'mutable PR-number cache scope remains' >&2
   exit 1
 fi
-for required in "inputs.registry-username != ''" "inputs.registry-password != ''" 'Setup secret-free hosted Buildx' 'GHA_CACHE_ENABLED='; do
+for required in "inputs.registry-username != ''" "inputs.registry-password != ''" 'Setup secret-free hosted Buildx'; do
   grep -Fq -- "$required" "$setup"
 done
+grep -Fq -- 'GHA_CACHE_ENABLED=' "$setup_policy"
 for required in 'transient_unavailable 124' "transient_unavailable 2 'context canceled'" "fatal 1 'unauthorized: authentication required'" "fatal 1 'invalid reference format'" 'echo cold_solve' "simulate_compile_probe 124 ''" "simulate_compile_probe 1 'unauthorized: authentication required'"; do
   grep -Fq -- "$required" "$probe_classification_contract"
 done
@@ -77,7 +97,7 @@ if rg -n 'build-compile-dependency-cache|compile_deps_cache_to|GHA_RUST_COMPILE_
   echo 'redundant synchronous dependency export remains' >&2
   exit 1
 fi
-grep -Fq -- 'cache-selection: ${{ (inputs.tasks || inputs.task) == '\''build:compile'\'' && '\''compile'\''' "$remote"
+grep -Fq -- 'cache-selection: ${{ env.NOOK_REMOTE_CACHE_SELECTION }}' "$remote"
 grep -Fq -- 'uses: ./.github/actions/nook-cache-telemetry' "$remote"
 if grep -Eq -- '^[[:space:]]*COPY[[:space:]]+\.[[:space:]]+\.' "$compile_dockerfile"; then
   echo 'product compiler must not copy the repository root' >&2

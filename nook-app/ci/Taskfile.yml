@@ -1,6 +1,41 @@
 version: "3"
 
 tasks:
+  cache:probe:dependency-policy:
+    desc: Build only the dependency-policy toolchain graph for remote cache diagnostics.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" rust-ecosystem-policy-tools
+
+  cache:probe:deterministic:
+    desc: Build only the deterministic gate's reusable Rust platform ancestry.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" rust-ecosystem-deterministic-cache-probe
+
+  cache:probe:dylint:
+    desc: Build only the Dylint compiler/toolchain graph without executing repository lints.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" rust-dylint-build
+
+  cache:probe:rust:
+    desc: Build only the native Rust producer graph without coverage or product tests.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" builder-debug
+
+  cache:probe:wasm:
+    desc: Build only the WASM compilation graph without clippy or Node tests.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" builder-wasm-build-cache-probe
+
+  cache:probe:wasm-node:
+    desc: Build only the WASM Node dependency graph without executing Node tests.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" builder-wasm-deps-cache-proof
+
+  cache:probe:web:
+    desc: Build only the web dependency graph without verification or browser tests.
+    cmds:
+      - docker buildx bake {{.NOOK_BAKE_FILES}} --set "*.output=type=cacheonly" web-deps
+
   ci:pr:
     desc: PR CI on job-scoped or daemon BuildKit — Rust/WASM validation, then one slim web container for format/verify/build.
     cmds:

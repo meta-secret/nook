@@ -38,6 +38,15 @@ target "builder-wasm" {
   cache-from = rust_wasm_source_cache_from
 }
 
+// Focused remote cache diagnostics compile the package graph without crossing
+// into clippy, Rust tests, or Node-test execution stages.
+target "builder-wasm-build-cache-probe" {
+  inherits = ["builder-wasm"]
+  target   = "builder-wasm-build"
+  cache-to = []
+  output   = ["type=cacheonly"]
+}
+
 target "_nook-rust-fast-common" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
