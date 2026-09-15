@@ -53,10 +53,11 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
-      if (job.consumer && job.result === "cancelled")
-        reasons.push(`${job.id}:consumer_timeout_or_cancelled`);
-      else if (job.consumer && job.result === "failure")
-        warnings.push(`${job.id}:consumer_failure_requires_log_classification`);
+      if (
+        job.consumer &&
+        (job.result === "failure" || job.result === "cancelled")
+      )
+        reasons.push(`${job.id}:consumer_failure_or_timeout`);
       else if (
         !job.consumer &&
         job.result !== "success"

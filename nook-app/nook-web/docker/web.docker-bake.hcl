@@ -14,7 +14,7 @@ web_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != ""
 ]
 
 web_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=${cache_export_timeout}",
 ] : []
 
 web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_WEB_E2E_AVAILABLE != "" ? [
@@ -33,7 +33,7 @@ web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_WEB_E2E_AVAI
 ]
 
 web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=${cache_export_timeout}",
 ] : []
 
 target "web-base" {

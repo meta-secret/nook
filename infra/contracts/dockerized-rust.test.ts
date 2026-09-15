@@ -353,6 +353,13 @@ class DockerizedRustContract {
       'pr_cache_export_error_policy = GHA_CACHE_SCOPE_SUFFIX != "" ? ",ignore-error=true" : ""',
     );
     expect(bake.match(/\$\{pr_cache_export_error_policy\}/g)?.length).toBe(10);
+    expect(bake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(10);
+    const sharedBake = this.read("nook-app/docker-bake.hcl");
+    expect(sharedBake).toContain(
+      'cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"',
+    );
+    const webBake = this.read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    expect(webBake.match(/timeout=\$\{cache_export_timeout\}/g)?.length).toBe(2);
   }
 
   portableGitMetadata(): void {

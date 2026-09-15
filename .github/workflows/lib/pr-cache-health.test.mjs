@@ -103,8 +103,8 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
     ],
     telemetry: [],
   });
-  assert.equal(failed.gate.verdict, "pass");
-  assert.ok(failed.warnings.includes("extension-e2e:consumer_failure_requires_log_classification"));
+  assert.equal(failed.gate.verdict, "fail");
+  assert.ok(failed.gate.reasons.includes("extension-e2e:consumer_failure_or_timeout"));
 
   const cancelled = new PrCacheHealth().evaluate({
     jobs: [
@@ -113,7 +113,7 @@ void test("tracks image consumers without requiring BuildKit telemetry", () => {
     telemetry: [],
   });
   assert.equal(cancelled.gate.verdict, "fail");
-  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_timeout_or_cancelled"));
+  assert.ok(cancelled.gate.reasons.includes("full-e2e-shard:consumer_failure_or_timeout"));
 });
 
 void test("records a legitimate cold build without applying the warm threshold", () => {

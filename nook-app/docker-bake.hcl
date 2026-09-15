@@ -169,6 +169,11 @@ variable "NOOK_REGISTRY_CACHE_HOST" {
 // while it can only read the trusted nook/buildcache/** lineage published by Main.
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
 
+// A PR cache is optional acceleration and must not consume the validation
+// deadline during a degraded registry event. Main publication owns the longer
+// strict window used to refresh the shared fallback.
+cache_export_timeout = GHA_CACHE_SCOPE_SUFFIX != "" ? "60s" : "10m"
+
 target "_sccache" {
   args = {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE

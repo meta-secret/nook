@@ -75,8 +75,10 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Cache health consumes deterministic JSON telemetry from all seven BuildKit
   producers and also records the terminal status of the exact-image UI demo,
   extension, and full-browser consumers. Skipped optional consumers are
-  neutral; a selected consumer failure or timeout activates the Docker Cache
-  Specialist even when its producer completed successfully.
+  neutral; a selected consumer `failure` or `cancelled` result activates the
+  Docker Cache Specialist because GitHub may report a job timeout as either
+  conclusion and the downstream result alone cannot distinguish it from a
+  functional failure.
 - Each ordinary PR uses one isolated `-pr-<number>` cache lane. All seven
   producers, including ARC jobs, may update their own target ref after a
   successful solve, so a fresh shard and the next PR head restore the prior
@@ -466,12 +468,12 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Extension e2e runs independently in a third Kubernetes job Pod.
   - Browser commands execute directly inside the exact-source image built by
     the verified PR web job.
-- **Exact-head cache policy:**
+- **Isolated PR cache policy:**
   - PR browser producers publish only isolated PR-number cache refs.
-  - Each consumer probes its exact browser ref.
-  - An available exact ref is imported alone.
-  - A missing exact ref falls back to the browser-image seed owned by trusted Main.
-  - Neither web shard nor its join writes a low-reuse exact-head browser cache.
+  - Each consumer uses its PR-number browser ref.
+  - An available PR ref is imported alone.
+  - A missing PR ref falls back to the browser-image seed owned by trusted Main.
+  - Neither web shard nor its join writes a competing browser cache.
   - Trusted Main remains the reusable browser-image seed.
   - The disabled UI-demo publisher retains its exact-run image implementation
     for later re-enable.
@@ -566,8 +568,8 @@ verification.
 
 - The demo job starts after the WASM handoff is ready.
 - Its browser-image solve is read-only.
-- After Playwright succeeds, a cache-only publisher exports the warm graph to
-  the isolated exact-head scope.
+- The verified web producer publishes the browser graph to the isolated
+  PR-number scope before Playwright consumers start.
 - Demo-only waits may hold meaningful before and after states for review.
   - Ordinary regression specs remain full-speed.
 - CI retains the Actions result for 90 days.
@@ -808,9 +810,9 @@ authenticator-domain to 90 percent.
 - Protected default-branch Zot refs remain available to every node and hosted
   job. ARC jobs reuse a warm local shard before registry transfer.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
-- PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
-- Docker setup probes each full-graph exact ref separately.
-- Existing exact refs are imported alone. Missing refs use dependency
+- PR Bake exporters write only PR-number refs under `nook/remote-buildcache/**`.
+- Docker setup probes each full-graph PR ref separately.
+- Existing PR refs are imported alone. Missing refs use dependency
   fingerprints and trusted Main.
 - Fork pull requests receive no registry credentials.
 - Native coverage and WASM source-sensitive layers have separate Zot refs in addition to the manifest-only dependency refs, so non-Rust pushes do not repeat unchanged Cargo compilation.
