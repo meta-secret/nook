@@ -255,6 +255,10 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
     return new ModuleDeliveryWorktreeTestSupportScenario(fixture).execute();
   }
 
+  static disposeGitFixtureWithoutWorktrees(fixture: GitFixture): void {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+
   private execute(): void {
     const fixture = this.request;
     const git = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);

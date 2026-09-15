@@ -151,7 +151,9 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
       ),
     ).toThrow('evidence authority is invalid');
   } finally {
-    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixtureWithoutWorktrees(
+      active.fixture,
+    );
   }
 });
 
@@ -210,7 +212,9 @@ test('canonical redacted receipt replay rejects inconsistent lifecycle fields wi
       ).toThrow();
     }
   } finally {
-    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixtureWithoutWorktrees(
+      active.fixture,
+    );
   }
 });
 
@@ -257,7 +261,9 @@ test('canonical receipt replay rejects write leases before consuming state', () 
         ),
       ).toThrow('cannot restore write tasks');
   } finally {
-    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixtureWithoutWorktrees(
+      fixture,
+    );
   }
 });
 
@@ -564,6 +570,8 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       'Accepted evidence is invalid',
     );
   } finally {
-    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixtureWithoutWorktrees(
+      active.fixture,
+    );
   }
 });

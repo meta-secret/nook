@@ -364,9 +364,11 @@ export class ModuleEvidenceBoundary {
         sourceRequest,
       );
     const current =
-      ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
-        currentRequest,
-      );
+      sourceRequest.sourceCommit === currentRequest.sourceCommit
+        ? source
+        : ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
+            currentRequest,
+          );
     if (
       JSON.stringify(source) !== JSON.stringify(current) ||
       JSON.stringify(source) !==
