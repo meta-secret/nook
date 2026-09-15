@@ -88,8 +88,10 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
         "&& ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules",
         "compile-web must link shared dependencies",
     )?;
-    let source_copy =
-        dockerfile.required_offset("COPY . .", "compile-web must copy the repository source")?;
+    let source_copy = dockerfile.required_offset(
+        "COPY nook-app/nook-web nook-app/nook-web",
+        "compile-web must copy the web workspace source",
+    )?;
     let package_setup = dockerfile.section(
         directory_setup,
         dependency_symlinks,
@@ -103,7 +105,7 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
     );
     assert!(
         directory_setup < dependency_symlinks && dependency_symlinks < source_copy,
-        "compile-web must create package directories before linking dependencies and copying source"
+        "compile-web must create package directories before linking dependencies and copying the web workspace"
     );
     Ok(())
 }
@@ -148,11 +150,8 @@ fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> an
         "compile-web must retain the flattened companion WASM handoff"
     );
     assert!(
-        web_stage.contains(concat!(
-            "test -f ",
-            "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js"
-        )),
-        "compile-web must require nook_wasm.js at the web import destination"
+        web_stage.contains("&& rm -rf /tmp/nook-wasm-handoff"),
+        "compile-web must consume and remove the temporary WASM handoff after flattening it"
     );
     assert!(
         !web_stage.contains(
@@ -164,8 +163,7 @@ fn compile_web_flattens_generated_wasm_packages_into_import_destinations() -> an
 }
 
 #[test]
-fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -> anyhow::Result<()>
-{
+fn compile_loom_copies_imported_cortex_sources_before_compilation() -> anyhow::Result<()> {
     let dockerfile = DockerfileFixture::compile()?;
     let loom_stage = dockerfile.required_offset(
         "FROM web-base AS compile-loom",
@@ -188,31 +186,28 @@ fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -
     )?;
     let loom_section = dockerfile.section(loom_stage, compilation, "compile-loom")?;
 
-    for skill in [
-        "cortex-article-structure",
-        "cortex-consistency",
-        "cortex-document-map",
-    ] {
-        let source_copy = format!(
-            "COPY .cortex/teams/ai/dynamic-skills/{skill}/scripts/src \\\n  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/{skill}/scripts/src"
-        );
-        let source_copy_offset = dockerfile.required_offset_after(
-            loom_stage,
-            &source_copy,
-            &format!("compile-loom must copy {skill} source"),
-        )?;
-        assert!(
-            dependency_install < source_copy_offset && source_copy_offset < compilation,
-            "compile-loom must copy {skill} after dependency installation and before compilation"
-        );
-    }
+    let cortex_source = dockerfile.required_offset_after(
+        loom_stage,
+        "COPY .cortex /meta-secret/nook/.cortex",
+        "compile-loom must copy its imported Cortex sources",
+    )?;
     assert!(
-        dependency_install < loom_source && loom_source < compilation,
-        "compile-loom must install dependencies before source copies and compile afterward"
+        loom_source < dependency_install
+            && cortex_source < dependency_install
+            && dependency_install < compilation,
+        "compile-loom must copy imported sources, install dependencies, and then compile"
     );
     assert!(
-        loom_section.contains("ln -s agentic-ai/loom/node_modules /meta-secret/nook/node_modules"),
-        "compile-loom must expose Loom dependencies to imported Cortex sources"
+        loom_section.contains(concat!(
+            "ln -s /meta-secret/nook/agentic-ai/loom/node_modules \\\n",
+            "      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/",
+            "cortex-article-structure/scripts/node_modules"
+        )) && loom_section.contains(concat!(
+            "ln -s /meta-secret/nook/agentic-ai/loom/node_modules \\\n",
+            "      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/",
+            "cortex-document-map/scripts/node_modules"
+        )),
+        "compile-loom must expose Loom dependencies to each imported Cortex compiler"
     );
     Ok(())
 }
