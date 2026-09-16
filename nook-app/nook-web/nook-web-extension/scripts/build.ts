@@ -19,6 +19,7 @@ import {
   ExtensionManifestBuildKind,
 } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
+import { extensionEntrypointBuildPolicy } from './build-contract'
 
 await companionWasmReady
 
@@ -150,7 +151,7 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     entrypoints: [join(projectRoot, entrypoint)],
     outdir: join(distDir, outdir),
     target: 'browser',
-    format: 'esm',
+    format: extensionEntrypointBuildPolicy.format({ entrypoint }),
     sourcemap: 'external',
     minify: false,
     splitting: false,
@@ -180,7 +181,8 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
   const classicSafe = stripClassicContentScriptForbiddenSyntax(bundled)
   if (
     classicSafe.includes('import.meta') ||
-    /^\s*import\s/m.test(classicSafe)
+    /^\s*import\s/m.test(classicSafe) ||
+    /^\s*export\s/m.test(classicSafe)
   ) {
     throw new Error(
       `Content bundle ${entryName} still contains classic-script-forbidden ESM syntax.`,
