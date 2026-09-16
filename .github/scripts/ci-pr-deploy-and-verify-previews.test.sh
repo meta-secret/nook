@@ -44,8 +44,7 @@ for required in \
   'DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && inputs.deployment_tag || '\'''\'' }}' \
   'HEAD_SHA: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && (inputs.source_sha || github.sha) || '\'''\'' }}' \
   'CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && secrets.CLOUD_FLARE_PAGES_TOKEN || '\'''\'' }}' \
-  'CLOUDFLARE_ACCOUNT_ID: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && secrets.CLOUD_FLARE_ACCOUNT_ID || '\'''\'' }}' \
-  'NOOK_HOST_PAGES_DEPLOY: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && '\''1'\'' || '\'''\'' }}'; do
+  'CLOUDFLARE_ACCOUNT_ID: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && secrets.CLOUD_FLARE_ACCOUNT_ID || '\'''\'' }}'; do
   grep -Fq "$required" "$remote_workflow" \
     || { echo "preview deploy input test: remote preview scope is missing: $required" >&2; exit 1; }
 done
