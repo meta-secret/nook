@@ -22,6 +22,10 @@ on:
         description: Exact committed source to compile; required for the feature build:compile route
         required: false
         type: string
+      deployment_tag:
+        description: Safe Cloudflare Pages preview deployment tag (only for ci:pr:deploy-and-verify-previews)
+        required: false
+        type: string
       publish_compile_cache:
         description: Publish build:compile BuildKit caches (sccache remains enabled when secrets are available)
         required: false
@@ -171,6 +175,11 @@ jobs:
         shell: bash
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
+          DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && inputs.deployment_tag || '' }}
+          HEAD_SHA: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && (inputs.source_sha || github.sha) || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_PAGES_TOKEN || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_ACCOUNT_ID || '' }}
+          NOOK_HOST_PAGES_DEPLOY: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && '1' || '' }}
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
       - name: Preserve compile cache telemetry
         if: always() && (inputs.tasks || inputs.task) == 'build:compile'

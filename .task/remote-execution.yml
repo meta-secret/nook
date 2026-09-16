@@ -9,6 +9,7 @@ tasks:
       REQUESTED_E2E_PROJECT: '{{.E2E_PROJECT}}'
       REQUESTED_E2E_SPECS: '{{.E2E_SPECS}}'
       REQUESTED_E2E_GREP: '{{.E2E_GREP}}'
+      REQUESTED_DEPLOYMENT_TAG: '{{.DEPLOYMENT_TAG}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -19,6 +20,16 @@ tasks:
         set -euo pipefail
 
         requested_tasks="$REQUESTED_REMOTE_TASKS"
+        preview_task='ci:pr:deploy-and-verify-previews'
+
+        if [[ "$requested_tasks" == *"$preview_task"* ]] && [ "$requested_tasks" != "$preview_task" ]; then
+          echo "$preview_task must be dispatched as one exact remote task." >&2
+          exit 2
+        fi
+        if [ -n "${REQUESTED_DEPLOYMENT_TAG:-}" ] && [ "$requested_tasks" != "$preview_task" ]; then
+          echo "DEPLOYMENT_TAG is valid only with TASK_NAME=$preview_task." >&2
+          exit 2
+        fi
 
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
@@ -73,6 +84,9 @@ tasks:
         workflow_args+=(--raw-field "tasks=$requested_tasks")
         if [ "$requested_tasks" = "build:compile" ]; then
           workflow_args+=(--raw-field "publish_compile_cache=$publish_compile_cache")
+        fi
+        if [ "$requested_tasks" = "$preview_task" ]; then
+          workflow_args+=(--raw-field "deployment_tag=$REQUESTED_DEPLOYMENT_TAG")
         fi
         if [ "$requested_tasks" = "web:e2e:debug" ]; then
           workflow_args+=(
