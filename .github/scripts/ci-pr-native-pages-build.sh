@@ -149,6 +149,7 @@ extension_root="$ROOT/nook-app/nook-web/nook-web-extension"
     VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL:-}" \
     bun run build
 )
+(cd "$extension_root" && bun install --frozen-lockfile)
 (
   cd "$extension_root"
   NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL:-}" \
