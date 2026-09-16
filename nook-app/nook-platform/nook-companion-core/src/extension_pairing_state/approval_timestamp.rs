@@ -2,10 +2,10 @@ use super::ExtensionPairingStateError;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "number", into_wasm_abi, from_wasm_abi)]
-pub struct ExtensionPairingApprovalEpochMilliseconds(f64);
+pub struct ExtensionPairingApprovalEpochMilliseconds(u64);
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -17,20 +17,21 @@ enum ExtensionPairingApprovalTimestampWire {
 struct LegacyDateToIsoStringTimestamp<'a>(&'a str);
 
 impl ExtensionPairingApprovalEpochMilliseconds {
-    pub const MINIMUM: Self = Self(1.0);
+    pub const MINIMUM: Self = Self(1);
 
     pub fn parse(value: f64) -> Result<Self, ExtensionPairingStateError> {
-        let timestamp = Self(value);
-        timestamp.validate()?;
-        Ok(timestamp)
+        if !value.is_finite()
+            || value <= 0.0
+            || value.fract() != 0.0
+            || value > 9_007_199_254_740_991.0
+        {
+            return Err(ExtensionPairingStateError::InvalidGrant);
+        }
+        Ok(Self(value as u64))
     }
 
     pub fn validate(self) -> Result<(), ExtensionPairingStateError> {
-        if !self.0.is_finite()
-            || self.0 <= 0.0
-            || self.0.fract() != 0.0
-            || self.0 > 9_007_199_254_740_991.0
-        {
+        if self.0 == 0 || self.0 > 9_007_199_254_740_991 {
             return Err(ExtensionPairingStateError::InvalidGrant);
         }
         Ok(())
@@ -44,7 +45,7 @@ impl ExtensionPairingApprovalEpochMilliseconds {
 
     #[must_use]
     pub fn value(self) -> f64 {
-        self.0
+        self.0 as f64
     }
 }
 
@@ -143,6 +144,32 @@ impl<'de> Deserialize<'de> for ExtensionPairingApprovalEpochMilliseconds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cmp::Ordering;
+
+    #[test]
+    fn approval_timestamp_has_total_equality_and_ordering() -> anyhow::Result<()> {
+        let earlier = ExtensionPairingApprovalEpochMilliseconds::parse(1_784_937_600_000.0)?;
+        let same = ExtensionPairingApprovalEpochMilliseconds::parse(1_784_937_600_000.0)?;
+        let later = ExtensionPairingApprovalEpochMilliseconds::parse(1_784_937_600_001.0)?;
+
+        assert_eq!(earlier, same);
+        assert_eq!(earlier.cmp(&same), Ordering::Equal);
+        assert_eq!(earlier.cmp(&later), Ordering::Less);
+        assert_eq!(later.cmp(&earlier), Ordering::Greater);
+        Ok(())
+    }
+
+    #[test]
+    fn approval_timestamp_preserves_numeric_wire_and_number_projection() -> anyhow::Result<()> {
+        let timestamp = ExtensionPairingApprovalEpochMilliseconds::parse(9_007_199_254_740_991.0)?;
+
+        assert_eq!(serde_json::to_string(&timestamp)?, "9007199254740991");
+        let decoded: ExtensionPairingApprovalEpochMilliseconds =
+            serde_json::from_str("9007199254740991")?;
+        assert_eq!(decoded, timestamp);
+        assert_eq!(decoded.value(), 9_007_199_254_740_991.0);
+        Ok(())
+    }
 
     #[test]
     fn exact_legacy_date_to_iso_string_value_converts_to_unix_milliseconds() -> anyhow::Result<()> {
