@@ -308,6 +308,15 @@ RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
     && rm -rf /tmp/nook-wasm-handoff
 
+RUN cd nook-app/nook-web \
+    && node_modules/.bin/eslint --config eslint.config.js \
+      "nook-web-extension/src/**/*.{ts,svelte}" \
+      "nook-web-shared/src/**/*.{ts,svelte}" \
+      "nook-web-app/src/**/*.{ts,svelte}" \
+      "nook-web-research/src/**/*.{ts,svelte}" \
+      "nook-vault-simple/**/*.{ts,svelte}" \
+      "nook-vault-sentinel/**/*.{ts,svelte}"
+
 RUN cd nook-app/nook-web/nook-web-app \
     && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json
