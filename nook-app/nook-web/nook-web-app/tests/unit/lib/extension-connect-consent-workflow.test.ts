@@ -173,68 +173,111 @@ describe('extension consent web workflow', () => {
   })
 
   test.each([
-    [
-      'messaging unavailable',
-      { kind: ExtensionPairingDeliveryKind.MessagingUnavailable },
-      ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable,
-      I18N_KEYS.ExtensionConsentMessagingUnavailable,
-    ],
-    [
-      'plaintext provider migration required',
-      { kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired },
-      ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired,
-      I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
-    ],
-  ])('keeps %s as a translated post-authorization outcome', async (_name, delivery, outcome, key) => {
-    const harness = createHarness()
-    approvalPort.deliver.mockResolvedValue(ok(delivery))
-
-    const state = await approve(harness)
-    const notice = new ExtensionConsentWorkflowPresentation().notice(
-      state,
-      harness.workflow.approvalAvailability(state),
-    )
-
-    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
-    expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(state.outcome.kind).toBe(outcome)
-    expect(notice).toEqual({
-      kind: ExtensionConsentWorkflowNoticeKind.Message,
-      translationKey: key,
-    })
-    harness.workflow.dispose()
-  })
-
-  test('stores a typed rejection reason and projects translated copy at the UI edge', async () => {
-    const harness = createHarness()
-    approvalPort.deliver.mockResolvedValue(
-      ok({
+    {
+      name: 'messaging unavailable',
+      delivery: { kind: ExtensionPairingDeliveryKind.MessagingUnavailable },
+      outcome: {
+        kind: ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable,
+      },
+      notice: {
+        kind: ExtensionConsentWorkflowNoticeKind.Message,
+        translationKey: I18N_KEYS.ExtensionConsentMessagingUnavailable,
+      },
+    },
+    {
+      name: 'plaintext provider migration required',
+      delivery: {
+        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+      },
+      outcome: {
+        kind: ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired,
+      },
+      notice: {
+        kind: ExtensionConsentWorkflowNoticeKind.Message,
+        translationKey:
+          I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
+      },
+    },
+    {
+      name: 'rejected with its typed reason',
+      delivery: {
         kind: ExtensionPairingDeliveryKind.Rejected,
         reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
-      }),
-    )
-
-    const state = await approve(harness)
-    const notice = new ExtensionConsentWorkflowPresentation().notice(
-      state,
-      harness.workflow.approvalAvailability(state),
-    )
-
-    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
-    expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(state.outcome).toEqual({
-      kind: ExtensionConsentDeliveryOutcomeKind.Rejected,
-      rejection: {
-        kind: ExtensionConsentRejectionKind.WithReason,
-        reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
       },
-    })
-    expect(notice).toMatchObject({
-      kind: ExtensionConsentWorkflowNoticeKind.Rejected,
-      translationKey: I18N_KEYS.ExtensionConsentGrantRejected,
-    })
-    harness.workflow.dispose()
-  })
+      outcome: {
+        kind: ExtensionConsentDeliveryOutcomeKind.Rejected,
+        rejection: {
+          kind: ExtensionConsentRejectionKind.WithReason,
+          reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        },
+      },
+      notice: {
+        kind: ExtensionConsentWorkflowNoticeKind.Rejected,
+        translationKey: I18N_KEYS.ExtensionConsentGrantRejected,
+        rejection: {
+          kind: ExtensionConsentRejectionKind.WithReason,
+          reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        },
+      },
+    },
+  ])(
+    'keeps $name retryable after Rust approval',
+    async ({ delivery, outcome, notice: expectedNotice }) => {
+      const harness = createHarness()
+      approvalPort.deliver.mockResolvedValueOnce(ok(delivery))
+
+      const retryableState = await approve(harness)
+      const notice = new ExtensionConsentWorkflowPresentation().notice(
+        retryableState,
+        harness.workflow.approvalAvailability(retryableState),
+      )
+
+      expect(retryableState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+      if (retryableState.kind === ExtensionConsentWorkflowKind.Failed) {
+        expect(retryableState.phase.state).toBe(
+          NookExtensionConsentPhaseState.Approved,
+        )
+        expect(retryableState.failure.kind).toBe(
+          ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
+        )
+        if (
+          retryableState.failure.kind ===
+          ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome
+        ) {
+          expect(retryableState.failure.outcome).toEqual(outcome)
+        }
+      }
+      expect(harness.workflow.canContinue(retryableState)).toBe(true)
+      expect(
+        new ExtensionConsentWorkflowPresentation().actionTranslationKey(
+          retryableState,
+        ),
+      ).toBe(I18N_KEYS.DevicesAccessTryAgain)
+      expect(harness.workflow.closeOutcome(retryableState)).toBe(
+        ExtensionConsentCloseOutcome.Approved,
+      )
+      expect(notice).toEqual(expectedNotice)
+      expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
+      expect(approvalPort.admitCompletion).not.toHaveBeenCalled()
+
+      let state = retryableState
+      await harness.workflow.approve(state, (next) => {
+        state = next
+      })
+
+      expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
+      if (state.kind === ExtensionConsentWorkflowKind.Completed) {
+        expect(state.outcome.kind).toBe(
+          ExtensionConsentDeliveryOutcomeKind.Delivered,
+        )
+      }
+      expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
+      expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
+      expect(approvalPort.deliver).toHaveBeenCalledTimes(2)
+      expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(1)
+      harness.workflow.dispose()
+    },
+  )
 
   test('preserves rejection without inventing a free-form reason', async () => {
     const harness = createHarness()
@@ -244,11 +287,21 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
-    expect(state.outcome).toEqual({
-      kind: ExtensionConsentDeliveryOutcomeKind.Rejected,
-      rejection: { kind: ExtensionConsentRejectionKind.WithoutReason },
-    })
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind === ExtensionConsentWorkflowKind.Failed) {
+      expect(state.failure.kind).toBe(
+        ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
+      )
+      if (
+        state.failure.kind ===
+        ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome
+      ) {
+        expect(state.failure.outcome).toEqual({
+          kind: ExtensionConsentDeliveryOutcomeKind.Rejected,
+          rejection: { kind: ExtensionConsentRejectionKind.WithoutReason },
+        })
+      }
+    }
     harness.workflow.dispose()
   })
 

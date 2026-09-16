@@ -36,6 +36,7 @@ export enum ExtensionConsentWorkflowFailureKind {
   Authorization = "authorization",
   GrantPreparation = "grant-preparation",
   DeliveryAdmission = "delivery-admission",
+  NonDeliveryOutcome = "non-delivery-outcome",
   BrowserHandoff = "browser-handoff",
   DeviceRefresh = "device-refresh",
   CompletionAdmission = "completion-admission",
@@ -92,6 +93,10 @@ export type ExtensionConsentWorkflowFailure =
       readonly kind: ExtensionConsentWorkflowFailureKind.DeliveryAdmission;
       readonly failure: VaultStorageFailure;
     }
+  | {
+      readonly kind: ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome;
+      readonly outcome: ExtensionConsentDeliveryOutcome;
+    }
   | { readonly kind: ExtensionConsentWorkflowFailureKind.BrowserHandoff }
   | {
       readonly kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh;
@@ -145,8 +150,7 @@ export enum ExtensionConsentWorkflowNoticeKind {
   Rejected = "rejected",
 }
 
-export type ExtensionConsentWorkflowNotice =
-  | { readonly kind: ExtensionConsentWorkflowNoticeKind.Hidden }
+type ExtensionConsentVisibleNotice =
   | {
       readonly kind: ExtensionConsentWorkflowNoticeKind.Message;
       readonly translationKey: I18nKey;
@@ -155,7 +159,11 @@ export type ExtensionConsentWorkflowNotice =
       readonly kind: ExtensionConsentWorkflowNoticeKind.Rejected;
       readonly translationKey: I18nKey;
       readonly rejection: ExtensionConsentRejection;
-  };
+    };
+
+export type ExtensionConsentWorkflowNotice =
+  | { readonly kind: ExtensionConsentWorkflowNoticeKind.Hidden }
+  | ExtensionConsentVisibleNotice;
 
 enum ExtensionConsentWorkflowLifecycleKind {
   NotStarted = "not-started",
@@ -581,6 +589,21 @@ export class ExtensionConnectConsentWorkflow {
       return;
     }
 
+    if (outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) {
+      this.publish(
+        {
+          kind: ExtensionConsentWorkflowKind.Failed,
+          phase: approvedPhase,
+          failure: {
+            kind: ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
+            outcome,
+          },
+        },
+        publish,
+      );
+      return;
+    }
+
     const completion = approval.admitCompletion();
     if (completion.isErr()) {
       this.publish(
@@ -722,6 +745,12 @@ export class ExtensionConsentWorkflowPresentation {
       case ExtensionConsentWorkflowKind.RefreshingDevices:
         return { kind: ExtensionConsentWorkflowNoticeKind.Hidden };
       case ExtensionConsentWorkflowKind.Failed:
+        if (
+          state.failure.kind ===
+          ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome
+        ) {
+          return this.outcomeNotice(state.failure.outcome);
+        }
         return {
           kind: ExtensionConsentWorkflowNoticeKind.Message,
           translationKey: this.failureTranslationKey(state.failure),
@@ -739,6 +768,8 @@ export class ExtensionConsentWorkflowPresentation {
       case ExtensionConsentWorkflowFailureKind.DeviceRefresh:
       case ExtensionConsentWorkflowFailureKind.CompletionAdmission:
         return failure.failure.translationKey;
+      case ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome:
+        return this.outcomeNotice(failure.outcome).translationKey;
       case ExtensionConsentWorkflowFailureKind.BrowserHandoff:
         return I18N_KEYS.ExtensionConnectIdentityHandoffFailed;
       case ExtensionConsentWorkflowFailureKind.ProviderTransition:
@@ -748,7 +779,7 @@ export class ExtensionConsentWorkflowPresentation {
 
   private outcomeNotice(
     outcome: ExtensionConsentDeliveryOutcome,
-  ): ExtensionConsentWorkflowNotice {
+  ): ExtensionConsentVisibleNotice {
     switch (outcome.kind) {
       case ExtensionConsentDeliveryOutcomeKind.Delivered:
         return {
