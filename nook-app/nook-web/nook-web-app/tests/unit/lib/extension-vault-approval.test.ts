@@ -19,17 +19,25 @@ vi.mock('$app-wasm', async (importOriginal) => ({
   VaultRecoveryErrorKind: { Other: 'other' },
 }))
 
-vi.mock('$lib/auth/providers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/auth/providers')>()),
-  activeVaultScope: vi.fn(),
-  providerBelongsToVault: vi.fn(),
-  seal_auth_providers_for_device_public_key: vi.fn(),
-}))
+vi.mock('$lib/auth/providers', async (importOriginal) => {
+  const original = await importOriginal<typeof import('$lib/auth/providers')>()
+  return {
+    ...original,
+    activeVaultScope: vi.fn(original.activeVaultScope),
+    providerBelongsToVault: vi.fn(),
+    seal_auth_providers_for_device_public_key: vi.fn(),
+  }
+})
 
 import {
   NookVaultManager,
   type NookEventLogRecords,
 } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  activeVaultScope,
+  seal_auth_providers_for_device_public_key,
+  type AuthProvidersSnapshot,
+} from '$lib/auth/providers'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -150,19 +158,38 @@ describe('extension vault approval', () => {
     expect(authorized.value.free).toHaveBeenCalledOnce()
   })
 
-  test('uses the generated approval store ID as the grant authority', async () => {
+  test('projects the generated approval store ID at provider and browser boundaries', async () => {
     const fixture = ExtensionApprovalTestFixture.create()
     const authorizationStoreId = 'approval-store-1'
     const storeIdFree = vi.fn()
+    const authorizationFree = vi.fn()
+    const providerSnapshot: AuthProvidersSnapshot = {
+      providers: [],
+      activeVaultStoreId: activeVaultScope('store-1'),
+    }
+    fixture.manager.load_auth_providers_snapshot = vi.fn(
+      async () => providerSnapshot,
+    )
+    vi.mocked(activeVaultScope).mockClear()
+    vi.mocked(seal_auth_providers_for_device_public_key).mockImplementation(
+      (_devicePublicKey, snapshot) => snapshot,
+    )
     wasm.approveExtensionDevice.mockImplementationOnce(async () => ({
       get storeId() {
         return { value: authorizationStoreId, free: storeIdFree }
       },
       approvedAt: 1_783_373_640_000,
       vaultType: simplePairingVaultType,
-      free: vi.fn(),
+      free: authorizationFree,
     }))
-    const approval = new ExtensionVaultApproval(fixture.vault, request)
+    const syncRequest: ExtensionConnectRequest = {
+      ...request,
+      scopes: [
+        ...request.scopes,
+        ExtensionConnectScope.SyncProviderCredentials,
+      ],
+    }
+    const approval = new ExtensionVaultApproval(fixture.vault, syncRequest)
 
     const authorized = await approval.authorize()
     expect(authorized.isOk()).toBe(true)
@@ -173,8 +200,15 @@ describe('extension vault approval', () => {
     expect(fixture.vault.activeVault).toMatchObject({ storeId: 'store-1' })
     expect(fixture.manager.vaultStoreId).toBe('store-1')
     expect(prepared.value.payload.vaultStoreId).toBe(authorizationStoreId)
+    expect(activeVaultScope).toHaveBeenCalledWith(authorizationStoreId)
+    expect(seal_auth_providers_for_device_public_key).toHaveBeenCalledWith(
+      syncRequest.devicePublicKey,
+      expect.objectContaining({ providers: [] }),
+    )
+    expect(wasm.approveExtensionDevice).toHaveBeenCalledOnce()
     expect(storeIdFree).toHaveBeenCalledTimes(2)
     approval.releaseAuthorization()
+    expect(authorizationFree).toHaveBeenCalledOnce()
   })
 
   test('keeps approval valid when the same vault gets a new active-vault record', async () => {

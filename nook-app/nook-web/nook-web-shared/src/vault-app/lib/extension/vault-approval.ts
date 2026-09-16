@@ -38,10 +38,42 @@ export type ExtensionVaultCompletion = {
   readonly manager: NookVaultManager;
 };
 
-type ExtensionVaultAuthorizationCapability = {
+type ExtensionVaultAuthorizationCapabilityRequest = {
   readonly manager: NookVaultManager;
   readonly authorization: ExtensionVaultAuthorization;
 };
+
+/** Holds the live manager and generated approval that authorize one grant. */
+class ExtensionVaultAuthorizationCapability {
+  readonly manager: NookVaultManager;
+  readonly authorization: ExtensionVaultAuthorization;
+
+  constructor(request: ExtensionVaultAuthorizationCapabilityRequest) {
+    this.manager = request.manager;
+    this.authorization = request.authorization;
+  }
+
+  projectStoreIdAtProviderBoundary(): Result<string, VaultStorageFailure> {
+    return this.projectApprovedStoreId();
+  }
+
+  projectStoreIdAtBrowserBoundary(): Result<string, VaultStorageFailure> {
+    return this.projectApprovedStoreId();
+  }
+
+  private projectApprovedStoreId(): Result<string, VaultStorageFailure> {
+    try {
+      const storeId = this.authorization.storeId;
+      try {
+        return ok(storeId.value);
+      } finally {
+        storeId.free();
+      }
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+  }
+}
 
 enum ExtensionVaultManagerContextKind {
   Unavailable = "unavailable",
@@ -145,36 +177,6 @@ type ExtensionVaultApprovalState =
     }
   | { readonly kind: ExtensionVaultApprovalStateKind.Released };
 
-function approvedStoreIdAtProviderBoundary(
-  authorization: ExtensionVaultAuthorization,
-): Result<string, VaultStorageFailure> {
-  try {
-    const storeId = authorization.storeId;
-    try {
-      return ok(storeId.value);
-    } finally {
-      storeId.free();
-    }
-  } catch (failure) {
-    return err(new NativeVaultStorageFailure(failure));
-  }
-}
-
-function approvedStoreIdAtBrowserBoundary(
-  authorization: ExtensionVaultAuthorization,
-): Result<string, VaultStorageFailure> {
-  try {
-    const storeId = authorization.storeId;
-    try {
-      return ok(storeId.value);
-    } finally {
-      storeId.free();
-    }
-  } catch (failure) {
-    return err(new NativeVaultStorageFailure(failure));
-  }
-}
-
 /** Admits one extension grant against the same live vault throughout preparation. */
 export class ExtensionVaultApproval {
   private readonly managerContext: ExtensionVaultManagerContext;
@@ -230,9 +232,7 @@ export class ExtensionVaultApproval {
     const providerStoreId = await this.vault.enqueueStorage(() => {
       const capability = this.admitAuthorization();
       if (capability.isErr()) return err(capability.error);
-      return approvedStoreIdAtProviderBoundary(
-        capability.value.authorization,
-      );
+      return capability.value.projectStoreIdAtProviderBoundary();
     });
     if (providerStoreId.isErr()) return err(providerStoreId.error);
 
@@ -304,7 +304,7 @@ export class ExtensionVaultApproval {
         return err(new NativeVaultStorageFailure(failure));
       }
       const browserVaultStoreId =
-        approvedStoreIdAtBrowserBoundary(authorization);
+        capability.value.projectStoreIdAtBrowserBoundary();
       if (browserVaultStoreId.isErr()) return err(browserVaultStoreId.error);
       return ok({
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
@@ -380,10 +380,13 @@ export class ExtensionVaultApproval {
         );
       case ExtensionVaultApprovalStateKind.Authorized: {
         const { authorization } = this.authorizationState;
-        return this.managerContext.admit().map((manager) => ({
-          manager,
-          authorization,
-        }));
+        return this.managerContext.admit().map(
+          (manager) =>
+            new ExtensionVaultAuthorizationCapability({
+              manager,
+              authorization,
+            }),
+        );
       }
     }
   }
