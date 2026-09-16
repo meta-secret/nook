@@ -229,7 +229,6 @@ mod vault_api;
 mod vault_api_local;
 
 pub use public_api::*;
-pub use secret_api::NookSecretRecord;
 pub use secret_api::*;
 pub use vault_api::*;
 pub use vault_api_local::*;
