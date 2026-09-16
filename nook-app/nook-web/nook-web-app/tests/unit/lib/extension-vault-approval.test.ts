@@ -27,6 +27,7 @@ import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
   ExtensionPairingDeliveryKind,
+  ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
   type ExtensionConnectRequest,
 } from '$lib/extension/connect'
@@ -111,6 +112,51 @@ describe('extension vault approval', () => {
       message: prepared.value,
     })
     expect(delivered.isOk()).toBe(true)
+  })
+
+  test('keeps approval valid when the same vault gets a new active-vault record', async () => {
+    const fixture = ExtensionApprovalTestFixture.create()
+    const deliver = vi
+      .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
+      .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
+    const approval = new ExtensionVaultApproval(fixture.vault, request)
+    const prepared = await approval.prepare()
+    expect(prepared.isOk()).toBe(true)
+    if (prepared.isErr()) return
+
+    fixture.vault.openActiveVault('store-1')
+
+    const delivered = await approval.deliver(prepared.value)
+
+    expect(delivered.isOk()).toBe(true)
+    expect(deliver).toHaveBeenCalledOnce()
+  })
+
+  test('preserves a concrete extension rejection across same-vault state replacement', async () => {
+    const fixture = ExtensionApprovalTestFixture.create()
+    const deliver = vi
+      .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
+      .mockImplementation(async () => {
+        fixture.vault.openActiveVault('store-1')
+        return {
+          kind: ExtensionPairingDeliveryKind.Rejected,
+          reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        }
+      })
+    const approval = new ExtensionVaultApproval(fixture.vault, request)
+    const prepared = await approval.prepare()
+    expect(prepared.isOk()).toBe(true)
+    if (prepared.isErr()) return
+
+    const delivered = await approval.deliver(prepared.value)
+
+    expect(delivered.isOk()).toBe(true)
+    if (delivered.isErr()) return
+    expect(delivered.value).toEqual({
+      kind: ExtensionPairingDeliveryKind.Rejected,
+      reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+    })
+    expect(deliver).toHaveBeenCalledOnce()
   })
 
   test('returns native authorization failures before exporting records', async () => {

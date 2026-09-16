@@ -30,14 +30,16 @@ export class ExtensionVaultApproval {
     NookVaultManager,
     VaultStorageFailure
   >;
-  private readonly activeVault: VaultState["activeVault"];
+  private readonly activeVaultStoreId: string;
   // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     private readonly vault: VaultState,
     private readonly request: ExtensionConnectRequest,
   ) {
     this.managerAtStart = vault.admitManager();
-    this.activeVault = vault.activeVault;
+    const activeVault = vault.activeVault;
+    this.activeVaultStoreId =
+      activeVault.kind === ActiveVaultKind.Open ? activeVault.storeId : "";
   }
 
   async prepare(): Promise<
@@ -47,7 +49,6 @@ export class ExtensionVaultApproval {
     const request = this.request;
     const manager = this.managerAtStart;
     if (manager.isErr()) return err(manager.error);
-    const activeVault = this.activeVault;
     const authorized = await vault.enqueueStorage(async () => {
       const current = this.admitManager();
       if (current.isErr()) return err(current.error);
@@ -68,8 +69,8 @@ export class ExtensionVaultApproval {
     const storeId = await vault.enqueueStorage(() => {
       const current = this.admitManager();
       if (current.isErr()) return err(current.error);
-      if (activeVault.kind === ActiveVaultKind.Open)
-        return ok(activeVault.storeId);
+      if (this.activeVaultStoreId !== "")
+        return ok(this.activeVaultStoreId);
       try {
         return ok(current.value.vaultStoreId);
       } catch (failure) {
@@ -159,9 +160,14 @@ export class ExtensionVaultApproval {
     if (this.managerAtStart.isErr()) return err(this.managerAtStart.error);
     const current = this.vault.admitManager();
     if (current.isErr()) return err(current.error);
+    const activeVault = this.vault.activeVault;
+    const activeVaultMatches =
+      activeVault.kind === ActiveVaultKind.Open
+        ? activeVault.storeId === this.activeVaultStoreId
+        : this.activeVaultStoreId === "";
     if (
       current.value !== this.managerAtStart.value ||
-      this.vault.activeVault !== this.activeVault
+      !activeVaultMatches
     ) {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
