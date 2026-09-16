@@ -1,4 +1,4 @@
-use super::{NookSecretRecord, NookVaultManager, wasm_bindgen};
+use super::{NookVaultManager, wasm_bindgen};
 use crate::AuthProviderDatabase;
 #[cfg(all(test, target_arch = "wasm32"))]
 use crate::ConfiguredVaultApplication;
