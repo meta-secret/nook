@@ -289,9 +289,13 @@ legacy registered `nook` runner is not used.
 ### Rust Compiler Cache (`sccache`)
 
 - Wrapped by pinned `sccache` backed by SeaweedFS S3 at `https://sccache.dev.nokey.sh`.
-- Local builds and Main write compiler objects.
-- Explicit Remote tasks use read-only credentials.
-- Fork and untrusted jobs receive no S3 credentials and fall back to clean compilation.
+- Credentialed trusted Rust/WASM jobs require the healthy remote compiler cache
+  before compilation and fail closed when credentials or sccache are
+  unavailable. A first cold publisher may miss while recording authoritative
+  compiler writes; a changed-head successor must report compiler hits, and
+  repeated changed-head zero-hit evidence is terminal cache failure.
+- Fork and Dependabot jobs receive no S3 credentials and retain the direct
+  compiler fallback because they are secret-free and never trusted publishers.
 
 ### Main Cache Visibility
 

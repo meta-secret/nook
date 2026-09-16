@@ -27,9 +27,9 @@ variable "SCCACHE_S3_RW_MODE" {
 }
 
 // Secret values never enter Bake definitions or cache keys. Callers provide
-// runner-local file paths only when the trusted cache credential pair exists;
-// every target that can be solved as a named context then inherits the same
-// BuildKit secret declarations.
+// runner-local file paths; credential paths are populated only when the
+// trusted cache credential pair exists. Every target that can be solved as a
+// named context then inherits the same BuildKit secret declarations.
 variable "SCCACHE_S3_ACCESS_KEY_FILE" {
   default = ""
 }
@@ -38,10 +38,20 @@ variable "SCCACHE_S3_SECRET_KEY_FILE" {
   default = ""
 }
 
-sccache_secrets = SCCACHE_S3_ACCESS_KEY_FILE != "" && SCCACHE_S3_SECRET_KEY_FILE != "" ? [
+variable "SCCACHE_RUNTIME_MODE_FILE" {
+  default = ""
+}
+
+sccache_runtime_secrets = SCCACHE_RUNTIME_MODE_FILE != "" ? [
+  "id=sccache_runtime_mode,src=${SCCACHE_RUNTIME_MODE_FILE}",
+] : []
+
+sccache_credentials = SCCACHE_S3_ACCESS_KEY_FILE != "" && SCCACHE_S3_SECRET_KEY_FILE != "" ? [
   "id=sccache_s3_access_key,src=${SCCACHE_S3_ACCESS_KEY_FILE}",
   "id=sccache_s3_secret_key,src=${SCCACHE_S3_SECRET_KEY_FILE}",
 ] : []
+
+sccache_secrets = concat(sccache_credentials, sccache_runtime_secrets)
 
 // Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
 // remote registry credentials exist. CI sets it from nook-docker-setup after

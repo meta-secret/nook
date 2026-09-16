@@ -215,6 +215,30 @@ class DockerizedRustContract {
     expect(wrapper).not.toContain("SCCACHE_CLIENT_SIDE:=1");
   }
 
+  remoteCompilePreservesCompilerCacheSecrets(): void {
+    const bake = this.read("nook-app/docker-bake.hcl");
+    const compile = this.read(".github/scripts/compile-remote.sh");
+    expect(bake).toContain('variable "SCCACHE_RUNTIME_MODE_FILE"');
+    expect(bake).toContain(
+      "id=sccache_runtime_mode,src=${SCCACHE_RUNTIME_MODE_FILE}",
+    );
+    expect(bake).toContain(
+      "sccache_secrets = concat(sccache_credentials, sccache_runtime_secrets)",
+    );
+    expect(compile).toContain(
+      "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}",
+    );
+    expect(compile).toContain(
+      "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}",
+    );
+    expect(compile).toContain(
+      "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}",
+    );
+    expect(compile).not.toContain(
+      "--set=build-compile.secrets=id=sccache_runtime_mode",
+    );
+  }
+
   dylintWrapperContentInvalidatesBuildGraph(): void {
     const nightlyPath =
       "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
@@ -834,6 +858,10 @@ test(
 test(
   "Dylint dependencies stay source-free and sccache uses server-side mode",
   contract.dylintDependencyCacheAndSccacheMode.bind(contract),
+);
+test(
+  "remote compile keeps runtime and compiler cache secrets together",
+  contract.remoteCompilePreservesCompilerCacheSecrets.bind(contract),
 );
 test(
   "Dylint compiler vertices consume the current wrapper content",

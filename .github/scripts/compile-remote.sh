@@ -85,7 +85,7 @@ access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
 secret_key_file="${SCCACHE_S3_SECRET_KEY_FILE:-}"
 bake_args+=(
   "--allow=fs.read=${runtime_mode_file}"
-  "--set=build-compile.secrets=id=sccache_runtime_mode,src=${runtime_mode_file}"
+  "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}"
 )
 if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
   && [ -n "$secret_key_file" ] && [ -r "$secret_key_file" ]; then
