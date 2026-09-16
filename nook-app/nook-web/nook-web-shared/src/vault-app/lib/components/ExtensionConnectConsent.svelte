@@ -246,7 +246,7 @@
     </Button>
     <Button
       type="button"
-      disabled={!workflow.canContinue(workflowState)}
+      disabled={!session.workflow.canContinue(workflowState)}
       data-testid="approve-extension-device-btn"
       onclick={() => void approveExtension()}
     >
