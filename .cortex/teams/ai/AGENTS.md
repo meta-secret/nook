@@ -110,6 +110,16 @@ load [Svelte state modeling](../web-dev/dynamic-skills/svelte-state-modeling.md)
 for authored Svelte; and load [serial operation queues](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)
 when authoring a serial async queue.
 
+For authored Svelte TypeScript, the packet and focused review apply
+the authorities above together for failure outcomes, workflow transitions,
+event handlers, and eligibility decisions. Require one semantically owned
+exhaustive workflow state with closed typed failure kinds and outcomes. The
+semantic owner must model workflow phase exhaustively and classify eligibility
+as an exhaustive outcome. Reject free-form application error state or text,
+parallel error slots, and coupled eligibility or phase booleans as P1 findings.
+Localized presentation copy derived from a typed outcome at the presentation
+edge is allowed.
+
 These links are the AI packet's minimal policy set. The AI team does not copy
 or edit foreign-team policy. A missing required authority or an unprovable
 policy load fails the packet closed.
