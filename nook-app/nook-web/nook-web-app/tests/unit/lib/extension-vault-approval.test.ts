@@ -10,6 +10,7 @@ const simplePairingVaultType = admit_extension_pairing_vault_type('simple')
 const wasm = vi.hoisted(() => ({
   approveExtensionDevice: vi.fn(),
 }))
+const defaultStoreIdFree = vi.fn()
 
 vi.mock('$app-wasm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$app-wasm')>()),
@@ -88,8 +89,11 @@ class ExtensionApprovalTestFixture {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  defaultStoreIdFree.mockReset()
   wasm.approveExtensionDevice.mockImplementation(async () => ({
-    storeId: { value: 'store-1', free: vi.fn() },
+    get storeId() {
+      return { value: 'store-1', free: defaultStoreIdFree }
+    },
     approvedAt: 1_783_373_640_000,
     vaultType: simplePairingVaultType,
     free: vi.fn(),
@@ -141,9 +145,36 @@ describe('extension vault approval', () => {
       message: prepared.value,
     })
     expect(delivered.isOk()).toBe(true)
-    expect(authorized.value.storeId.free).toHaveBeenCalledOnce()
+    expect(defaultStoreIdFree).toHaveBeenCalledTimes(2)
     approval.releaseAuthorization()
     expect(authorized.value.free).toHaveBeenCalledOnce()
+  })
+
+  test('uses the generated approval store ID as the grant authority', async () => {
+    const fixture = ExtensionApprovalTestFixture.create()
+    const authorizationStoreId = 'approval-store-1'
+    const storeIdFree = vi.fn()
+    wasm.approveExtensionDevice.mockImplementationOnce(async () => ({
+      get storeId() {
+        return { value: authorizationStoreId, free: storeIdFree }
+      },
+      approvedAt: 1_783_373_640_000,
+      vaultType: simplePairingVaultType,
+      free: vi.fn(),
+    }))
+    const approval = new ExtensionVaultApproval(fixture.vault, request)
+
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+    const prepared = await approval.prepareAuthorizedGrant()
+
+    expect(prepared.isOk()).toBe(true)
+    if (prepared.isErr()) return
+    expect(fixture.vault.activeVault).toMatchObject({ storeId: 'store-1' })
+    expect(fixture.manager.vaultStoreId).toBe('store-1')
+    expect(prepared.value.payload.vaultStoreId).toBe(authorizationStoreId)
+    expect(storeIdFree).toHaveBeenCalledTimes(2)
+    approval.releaseAuthorization()
   })
 
   test('keeps approval valid when the same vault gets a new active-vault record', async () => {

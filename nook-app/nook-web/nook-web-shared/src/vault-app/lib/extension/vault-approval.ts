@@ -38,6 +38,11 @@ export type ExtensionVaultCompletion = {
   readonly manager: NookVaultManager;
 };
 
+type ExtensionVaultAuthorizationCapability = {
+  readonly manager: NookVaultManager;
+  readonly authorization: ExtensionVaultAuthorization;
+};
+
 enum ExtensionVaultManagerContextKind {
   Unavailable = "unavailable",
   Captured = "captured",
@@ -80,26 +85,6 @@ class ExtensionVaultManagerContext {
         return this.vault.admitManager().andThen((manager) =>
           this.admitCapturedManager(manager),
         );
-    }
-  }
-
-  providerStoreId(
-    manager: NookVaultManager,
-  ): Result<string, VaultStorageFailure> {
-    switch (this.state.kind) {
-      case ExtensionVaultManagerContextKind.Unavailable:
-        return err(this.state.failure);
-      case ExtensionVaultManagerContextKind.Captured:
-        switch (this.state.activeVault.kind) {
-          case ActiveVaultKind.Open:
-            return ok(this.state.activeVault.storeId);
-          case ActiveVaultKind.Closed:
-            try {
-              return ok(manager.vaultStoreId);
-            } catch (failure) {
-              return err(new NativeVaultStorageFailure(failure));
-            }
-        }
     }
   }
 
@@ -160,6 +145,36 @@ type ExtensionVaultApprovalState =
     }
   | { readonly kind: ExtensionVaultApprovalStateKind.Released };
 
+function approvedStoreIdAtProviderBoundary(
+  authorization: ExtensionVaultAuthorization,
+): Result<string, VaultStorageFailure> {
+  try {
+    const storeId = authorization.storeId;
+    try {
+      return ok(storeId.value);
+    } finally {
+      storeId.free();
+    }
+  } catch (failure) {
+    return err(new NativeVaultStorageFailure(failure));
+  }
+}
+
+function approvedStoreIdAtBrowserBoundary(
+  authorization: ExtensionVaultAuthorization,
+): Result<string, VaultStorageFailure> {
+  try {
+    const storeId = authorization.storeId;
+    try {
+      return ok(storeId.value);
+    } finally {
+      storeId.free();
+    }
+  } catch (failure) {
+    return err(new NativeVaultStorageFailure(failure));
+  }
+}
+
 /** Admits one extension grant against the same live vault throughout preparation. */
 export class ExtensionVaultApproval {
   private readonly managerContext: ExtensionVaultManagerContext;
@@ -213,9 +228,11 @@ export class ExtensionVaultApproval {
     Result<ExtensionPairingApprovedMessage, VaultStorageFailure>
   > {
     const providerStoreId = await this.vault.enqueueStorage(() => {
-      const manager = this.admitAuthorization();
-      if (manager.isErr()) return err(manager.error);
-      return this.managerContext.providerStoreId(manager.value);
+      const capability = this.admitAuthorization();
+      if (capability.isErr()) return err(capability.error);
+      return approvedStoreIdAtProviderBoundary(
+        capability.value.authorization,
+      );
     });
     if (providerStoreId.isErr()) return err(providerStoreId.error);
 
@@ -224,10 +241,12 @@ export class ExtensionVaultApproval {
       this.request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
     ) {
       const snapshot = await this.vault.enqueueStorage(async () => {
-        const manager = this.admitAuthorization();
-        if (manager.isErr()) return err(manager.error);
+        const capability = this.admitAuthorization();
+        if (capability.isErr()) return err(capability.error);
         try {
-          return ok(await manager.value.load_auth_providers_snapshot());
+          return ok(
+            await capability.value.manager.load_auth_providers_snapshot(),
+          );
         } catch (failure) {
           return err(new NativeVaultStorageFailure(failure));
         }
@@ -257,18 +276,21 @@ export class ExtensionVaultApproval {
     }
 
     const records = await this.vault.enqueueStorage(async () => {
-      const manager = this.admitAuthorization();
-      if (manager.isErr()) return err(manager.error);
+      const capability = this.admitAuthorization();
+      if (capability.isErr()) return err(capability.error);
       try {
-        return ok(await manager.value.export_event_log_records_js());
+        return ok(
+          await capability.value.manager.export_event_log_records_js(),
+        );
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
     });
     if (records.isErr()) return err(records.error);
     try {
-      const manager = this.admitAuthorization();
-      if (manager.isErr()) return err(manager.error);
+      const capability = this.admitAuthorization();
+      if (capability.isErr()) return err(capability.error);
+      const { authorization } = capability.value;
       const unnamed = this.vault.t(I18N_KEYS.LoginVaultPickerUnnamed);
       let vaultName = unnamed;
       let eventLogRecords: ExtensionPairingApprovedMessage["eventLogRecords"];
@@ -281,17 +303,9 @@ export class ExtensionVaultApproval {
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
-      let browserVaultStoreId: string;
-      try {
-        const browserStoreId = authorization.storeId;
-        try {
-          browserVaultStoreId = browserStoreId.value;
-        } finally {
-          browserStoreId.free();
-        }
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
+      const browserVaultStoreId =
+        approvedStoreIdAtBrowserBoundary(authorization);
+      if (browserVaultStoreId.isErr()) return err(browserVaultStoreId.error);
       return ok({
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
@@ -300,7 +314,7 @@ export class ExtensionVaultApproval {
           devicePublicKey: this.request.devicePublicKey,
           deviceSigningPublicKey: this.request.deviceSigningPublicKey,
           deviceLabel: this.request.deviceLabel,
-          vaultStoreId: browserVaultStoreId,
+          vaultStoreId: browserVaultStoreId.value,
           vaultName,
           approvedAt: authorization.approvedAt,
           scopes: this.request.scopes,
@@ -314,14 +328,14 @@ export class ExtensionVaultApproval {
   }
 
   admitCompletion(): Result<ExtensionVaultCompletion, VaultStorageFailure> {
-    return this.admitAuthorization().map((manager) => ({ manager }));
+    return this.admitAuthorization().map(({ manager }) => ({ manager }));
   }
 
   async deliver(
     message: ExtensionPairingApprovedMessage,
   ) {
-    const manager = this.admitAuthorization();
-    if (manager.isErr()) return err(manager.error);
+    const capability = this.admitAuthorization();
+    if (capability.isErr()) return err(capability.error);
     const deliveryArgs: Parameters<
       typeof extensionConnectionBrowser.deliverExtensionPairingApproval
     >[0] = {
@@ -354,15 +368,23 @@ export class ExtensionVaultApproval {
     }
   }
 
-  private admitAuthorization(): Result<NookVaultManager, VaultStorageFailure> {
+  private admitAuthorization(): Result<
+    ExtensionVaultAuthorizationCapability,
+    VaultStorageFailure
+  > {
     switch (this.authorizationState.kind) {
       case ExtensionVaultApprovalStateKind.AwaitingAuthorization:
       case ExtensionVaultApprovalStateKind.Released:
         return err(
           new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
         );
-      case ExtensionVaultApprovalStateKind.Authorized:
-        return this.managerContext.admit();
+      case ExtensionVaultApprovalStateKind.Authorized: {
+        const { authorization } = this.authorizationState;
+        return this.managerContext.admit().map((manager) => ({
+          manager,
+          authorization,
+        }));
+      }
     }
   }
 }
