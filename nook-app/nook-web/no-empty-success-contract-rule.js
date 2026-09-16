@@ -7,6 +7,9 @@ import { namedSuccessContractBaseline } from './named-success-contract-baseline.
 
 /** @typedef {import('@typescript-eslint/types').TSESTree.Node} AstNode */
 /** @typedef {import('@typescript-eslint/types').TSESTree.CallExpression} AstCallExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Program} AstProgram */
+/** @typedef {import('@typescript-eslint/types').TSESTree.TSTypeReference} AstTypeReference */
+/** @typedef {'emptySuccessCall' | 'emptySuccessType' | 'staleBaselineEntry'} MessageId */
 /** @typedef {import('@typescript-eslint/utils').TSESLint.RuleContext<'emptySuccessCall' | 'emptySuccessType' | 'staleBaselineEntry', readonly []>} RuleContext */
 /** @typedef {import('typescript').Type} TypeScriptType */
 /** @typedef {import('typescript').Symbol} TypeScriptSymbol */
@@ -53,6 +56,15 @@ function isNeverthrowSymbol(symbol, expectedName, checker) {
   })
 }
 
+/** @param {TypeScriptType} type @returns {type is import('typescript').TypeReference} */
+function isTypeReference(type) {
+  return (
+    (type.flags & typescript.TypeFlags.Object) !== 0 &&
+    'objectFlags' in type &&
+    (type.objectFlags & typescript.ObjectFlags.Reference) !== 0
+  )
+}
+
 /** @param {TypeScriptType} type @param {Set<TypeScriptType>} seen @param {import('typescript').TypeChecker} checker */
 function containsEmptyNeverthrowSuccess(type, seen, checker) {
   if (seen.has(type)) return false
@@ -69,11 +81,8 @@ function containsEmptyNeverthrowSuccess(type, seen, checker) {
   if (type.aliasSymbol) candidateSymbols.add(type.aliasSymbol)
   const resolvedSymbol = type.getSymbol()
   if (resolvedSymbol) candidateSymbols.add(resolvedSymbol)
-  if (
-    (type.flags & typescript.TypeFlags.Object) !== 0 &&
-    (type.objectFlags & typescript.ObjectFlags.Reference) !== 0
-  ) {
-    const referenceSymbol = /** @type {import('typescript').TypeReference} */ (type).target.symbol
+  if (isTypeReference(type)) {
+    const referenceSymbol = type.target.symbol
     if (referenceSymbol) candidateSymbols.add(referenceSymbol)
   }
 
@@ -117,21 +126,16 @@ function hasTypeScriptPromiseSymbol(symbols) {
   })
 }
 
-/** @param {TypeScriptType} type @param {import('typescript').TypeChecker} checker @returns {TypeScriptType[]} */
+/** @param {TypeScriptType} type @param {import('typescript').TypeChecker} checker @returns {readonly TypeScriptType[]} */
 function typeArguments(type, checker) {
-  if (
-    (type.flags & typescript.TypeFlags.Object) !== 0 &&
-    (type.objectFlags & typescript.ObjectFlags.Reference) !== 0
-  ) {
-    return checker.getTypeArguments(
-      /** @type {import('typescript').TypeReference} */ (type),
-    )
+  if (isTypeReference(type)) {
+    return checker.getTypeArguments(type)
   }
   const aliasArguments = type.aliasTypeArguments
   return aliasArguments ? [...aliasArguments] : []
 }
 
-/** @param {TypeScriptType} type */
+/** @param {TypeScriptType} type @returns {boolean} */
 function hasEmptySuccessValue(type) {
   if (
     (type.flags & typescript.TypeFlags.Void) !== 0 ||
@@ -145,7 +149,7 @@ function hasEmptySuccessValue(type) {
   )
 }
 
-/** @param {AstNode} node */
+/** @param {AstNode} node @param {import('typescript').TypeChecker} checker @param {import('@typescript-eslint/typescript-estree').ParserServices} services */
 function outermostEmptyTypeReference(node, checker, services) {
   let current = node.parent
   while (current) {
@@ -181,6 +185,7 @@ function isNeverthrowOkCall(node, checker, services) {
   return symbol ? isNeverthrowSymbol(symbol, 'ok', checker) : false
 }
 
+/** @type {import('@typescript-eslint/utils').TSESLint.RuleModule<MessageId, readonly []>} */
 export const noEmptySuccessContractRule = {
   meta: {
     type: 'problem',
@@ -207,6 +212,7 @@ export const noEmptySuccessContractRule = {
     const violations = []
 
     return {
+      /** @param {AstTypeReference} node */
       TSTypeReference(node) {
         const tsNode = services.esTreeNodeToTSNodeMap.get(node)
         if (
@@ -222,6 +228,7 @@ export const noEmptySuccessContractRule = {
         }
         violations.push({ node, messageId: 'emptySuccessType' })
       },
+      /** @param {AstCallExpression} node */
       CallExpression(node) {
         if (!isNeverthrowOkCall(node, checker, services)) return
         const tsNode = services.esTreeNodeToTSNodeMap.get(node)
@@ -233,6 +240,7 @@ export const noEmptySuccessContractRule = {
           violations.push({ node, messageId: 'emptySuccessCall' })
         }
       },
+      /** @param {AstProgram} node */
       'Program:exit'(node) {
         const currentBlobSha1 = gitBlobSha1(sourceCode.text)
         const exactSourceBaseline = fileEntries.find(
