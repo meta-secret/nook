@@ -22,15 +22,6 @@ tasks:
         requested_tasks="$REQUESTED_REMOTE_TASKS"
         preview_task='ci:pr:deploy-and-verify-previews'
 
-        if [[ "$requested_tasks" == *"$preview_task"* ]] && [ "$requested_tasks" != "$preview_task" ]; then
-          echo "$preview_task must be dispatched as one exact remote task." >&2
-          exit 2
-        fi
-        if [ -n "${REQUESTED_DEPLOYMENT_TAG:-}" ] && [ "$requested_tasks" != "$preview_task" ]; then
-          echo "DEPLOYMENT_TAG is valid only with TASK_NAME=$preview_task." >&2
-          exit 2
-        fi
-
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
           echo "Remote execution requires a pushed non-main branch." >&2

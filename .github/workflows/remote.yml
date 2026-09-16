@@ -108,18 +108,8 @@ jobs:
           REQUESTED_SOURCE_INPUT: ${{ inputs.source_sha }}
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
           REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
-          REQUESTED_DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
         run: |
           set -euo pipefail
-          preview_task='ci:pr:deploy-and-verify-previews'
-          if [[ "$REQUESTED_REMOTE_TASKS" == *"$preview_task"* ]] && [ "$REQUESTED_REMOTE_TASKS" != "$preview_task" ]; then
-            echo "$preview_task must be dispatched as one exact remote task." >&2
-            exit 2
-          fi
-          if [ -n "${REQUESTED_DEPLOYMENT_TAG:-}" ] && [ "$REQUESTED_REMOTE_TASKS" != "$preview_task" ]; then
-            echo "DEPLOYMENT_TAG is valid only with TASK_NAME=$preview_task." >&2
-            exit 2
-          fi
           if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Remote execution requires a 40-character exact source SHA." >&2
             exit 2
