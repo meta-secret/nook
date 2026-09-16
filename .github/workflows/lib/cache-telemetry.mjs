@@ -2,21 +2,18 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
+import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 
 export { BuildkitCacheExportTelemetry };
-
 export { CacheScopeTelemetry };
-
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
 const HISTORY_LOG_TIMEOUT_MS = 12_000;
-const HISTORY_RECORD_LIMIT = 32;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
   Unavailable: "unavailable",
@@ -38,7 +35,6 @@ const HistoryLogCollectionKind = Object.freeze({
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
 /** @typedef {import("./cache-telemetry-contracts.mjs").UnavailableTelemetryRequest} UnavailableTelemetryRequest */
-
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
   static isJsonRecord(value) {
@@ -206,13 +202,20 @@ export class CacheTelemetry {
     return left < right ? -1 : left > right ? 1 : 0;
   }
 
-  /**
-   * @param {readonly BuildHistoryRecord[]} records
+  /** @param {readonly BuildHistoryRecord[]} records
    * @param {number} [limit]
+   * @param {{includeUnfinished?: boolean}} [options]
    * @returns {{records: BuildHistoryRecord[], warnings: string[]}}
    */
-  static selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
-    const selected = [...records].sort((left, right) => {
+  static selectBuildRecords(
+    records,
+    limit = Number.POSITIVE_INFINITY,
+    { includeUnfinished = true } = {},
+  ) {
+    const candidates = includeUnfinished
+      ? [...records]
+      : records.filter((record) => record.completed_at);
+    const selected = candidates.sort((left, right) => {
       const activity = CacheTelemetry.compareStrings(
         String(right.completed_at || right.started_at || ""),
         String(left.completed_at || left.started_at || ""),
@@ -229,7 +232,7 @@ export class CacheTelemetry {
     const unfinishedCount = records.filter(
       (record) => !record.completed_at,
     ).length;
-    if (unfinishedCount > 0) {
+    if (includeUnfinished && unfinishedCount > 0) {
       warnings.push(`buildx_records_unfinished_included:${unfinishedCount}`);
     }
     if (selected.length > limit) {
@@ -237,7 +240,6 @@ export class CacheTelemetry {
     }
     return { records: selected.slice(0, limit), warnings };
   }
-
   /**
    * @template Input, Output
    * @param {readonly Input[]} items
@@ -318,13 +320,13 @@ export class CacheTelemetry {
         report.cache_write_errors,
       ),
       cache_writes: CacheTelemetry.nonNegativeInteger(report.cache_writes),
+      remote_writes: CacheTelemetry.nonNegativeInteger(report.remote_writes),
       compile_failures: CacheTelemetry.nonNegativeInteger(
         report.compile_failures,
       ),
     };
     return normalized;
   }
-
   /** @param {readonly SccacheReport[]} reports @returns {SccacheSummary} */
   static summarizeSccache(reports) {
     const terminalReports = [
@@ -346,6 +348,7 @@ export class CacheTelemetry {
       cache_errors: 0,
       cache_write_errors: 0,
       cache_writes: 0,
+      remote_writes: 0,
       compile_failures: 0,
       measurement: "sum_of_zero_based_run_snapshots",
       fallback: { state: "active", reason: "none" },
@@ -380,6 +383,7 @@ export class CacheTelemetry {
       summary.cache_errors += report.cache_errors;
       summary.cache_write_errors += report.cache_write_errors;
       summary.cache_writes += report.cache_writes;
+      summary.remote_writes += report.remote_writes;
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
@@ -401,7 +405,6 @@ export class CacheTelemetry {
       ),
     };
   }
-
   /**
    * @param {readonly BuildHistoryRecord[]} records
    * @param {readonly JsonRecord[]} [events]
@@ -429,7 +432,6 @@ export class CacheTelemetry {
       measurement: "buildx_target_record_steps",
     };
   }
-
   /**
    * @param {readonly JsonRecord[]} events
    * @param {Set<string>} [seen]
@@ -481,7 +483,6 @@ export class CacheTelemetry {
     }
     return reports;
   }
-
   /** @param {string} text @returns {SccacheReport[]} */
   static extractSccacheReportsFromText(text) {
     /** @type {Map<string, SccacheReport>} */
@@ -517,10 +518,6 @@ export class CacheTelemetry {
               line.slice(reportAt + SCCACHE_MARKER.length).trim(),
             ),
           );
-          // A completed healthy READ_WRITE snapshot is the terminal effective
-          // state for that compiler stage. BuildKit's interleaved log retains
-          // fallback markers from earlier vertices, so an any-event reduction
-          // incorrectly labels a later healthy build as direct compilation.
           if (
             report.runtime_mode === "READ_WRITE" &&
             report.cache_errors === 0 &&
@@ -697,7 +694,14 @@ export class CacheTelemetry {
       const candidates = CacheTelemetry.listBuildHistory().filter(
         (record) => record.ref && !baseline.has(record.ref),
       );
-      const selection = CacheTelemetry.selectBuildRecords(candidates);
+      const selection = CacheTelemetry.selectBuildRecords(
+        candidates,
+        Number.POSITIVE_INFINITY,
+        {
+          includeUnfinished:
+            environment.NOOK_CACHE_TELEMETRY_JOB_STATUS !== "success",
+        },
+      );
       records = selection.records;
       warnings.push(...selection.warnings);
     } catch (error) {
@@ -712,6 +716,8 @@ export class CacheTelemetry {
 
     /** @type {SccacheReport[]} */
     const reports = [];
+    /** @type {SccacheReport[]} */
+    const rawReports = [];
     /** @type {JsonRecord[]} */
     const historyEvents = [];
     let rawBuildLog = "";
@@ -723,16 +729,19 @@ export class CacheTelemetry {
     if (rawBuildLogPath && fs.existsSync(rawBuildLogPath)) {
       try {
         rawBuildLog = fs.readFileSync(rawBuildLogPath, "utf8");
-        reports.push(
+        rawReports.push(
           ...CacheTelemetry.extractSccacheReportsFromText(rawBuildLog),
         );
+        reports.push(...rawReports);
       } catch (error) {
         warnings.push(
           `buildx_raw_log_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
     }
-    const reportsFromRawLog = reports.length > 0;
+    // BuildKit history may contain stale fallback markers; collect reports from
+    // stages absent from the raw stream as well.
+    const reportStages = new Set(reports.map((report) => report.stage));
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -772,13 +781,13 @@ export class CacheTelemetry {
               nook_history_ref: result.record.ref,
             })),
           );
-          if (!reportsFromRawLog) {
-            reports.push(
-              ...CacheTelemetry.extractSccacheReports(
-                result.events,
-                seenReports,
-              ),
-            );
+          for (const report of CacheTelemetry.extractSccacheReports(
+            result.events,
+            seenReports,
+          )) {
+            if (reportStages.has(report.stage)) continue;
+            reports.push(report);
+            reportStages.add(report.stage);
           }
           break;
       }
@@ -796,10 +805,15 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    sccache.fallback = rawBuildLog
-      ? CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog)
-      : CacheTelemetry.extractSccacheFallback(historyEvents);
-
+    const rawFallback = CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
+    const historyFallback =
+      CacheTelemetry.extractSccacheFallback(historyEvents);
+    sccache.fallback = resolveSccacheFallback(
+      rawReports,
+      rawFallback,
+      historyFallback,
+      rawBuildLog,
+    );
     return {
       schema_version: 1,
       github: {

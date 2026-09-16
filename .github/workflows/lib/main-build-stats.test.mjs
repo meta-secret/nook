@@ -186,6 +186,12 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
       },
       sccache: {
         report_count: 3,
+        baked_runtime_mode: "READ_WRITE",
+        runtime_mode: "READ_WRITE",
+        runtime_mode_source: "runtime_secret",
+        client_side: true,
+        counter_reliability: "backend_incomplete",
+        publication_status: "counters_observed",
         compile_requests: 100,
         requests_executed: 90,
         cache_hits: 72,
@@ -193,6 +199,11 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
         cache_errors: 0,
         cache_write_errors: 0,
         cache_writes: 18,
+        remote_writes: 18,
+        compile_failures: 0,
+        measurement: "sum_of_zero_based_run_snapshots",
+        fallback: { state: "active", reason: "none" },
+        snapshots: [],
         hit_rate_percent: 80,
       },
       buildkit: {
@@ -225,6 +236,20 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
   const firstTelemetry = MainBuildStatsFixture.first(input.cacheTelemetry);
   assert.ok(typeof firstTelemetry.github === "object");
   assert.ok(typeof firstTelemetry.buildkit === "object");
+  const admitted = MainBuildStatsCodec.admitCacheTelemetry(firstTelemetry, {
+    runId: input.run.id,
+    runAttempt: input.run.run_attempt,
+  });
+  assert.equal(admitted.sccache.baked_runtime_mode, "READ_WRITE");
+  assert.equal(admitted.sccache.runtime_mode_source, "runtime_secret");
+  assert.equal(admitted.sccache.client_side, true);
+  assert.equal(admitted.sccache.counter_reliability, "backend_incomplete");
+  assert.equal(admitted.sccache.publication_status, "counters_observed");
+  assert.deepEqual(admitted.sccache.fallback, {
+    state: "active",
+    reason: "none",
+  });
+  assert.deepEqual(admitted.sccache.snapshots, []);
   input.cacheTelemetry.push({
     ...structuredClone(firstTelemetry),
     github: {
@@ -250,6 +275,20 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
   assert.equal(
     MainBuildStatsFixture.first(record.cache_telemetry.jobs).cache_backend.kind,
     "remote",
+  );
+  assert.equal(
+    MainBuildStatsFixture.first(record.cache_telemetry.jobs).sccache
+      .baked_runtime_mode,
+    "READ_WRITE",
+  );
+  assert.equal(
+    MainBuildStatsFixture.first(record.cache_telemetry.jobs).sccache
+      .runtime_mode_source,
+    "runtime_secret",
+  );
+  assert.deepEqual(
+    MainBuildStatsFixture.first(record.cache_telemetry.jobs).sccache.fallback,
+    { state: "active", reason: "none" },
   );
   assert.equal(record.cache_telemetry.totals.sccache_hit_rate_percent, 80);
   assert.equal(
@@ -322,6 +361,12 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
       },
       sccache: {
         report_count: 0,
+        baked_runtime_mode: "UNAVAILABLE",
+        runtime_mode: "UNAVAILABLE",
+        runtime_mode_source: "unavailable",
+        client_side: false,
+        counter_reliability: "unavailable",
+        publication_status: "unavailable",
         compile_requests: 0,
         requests_executed: 0,
         cache_hits: 0,
@@ -329,6 +374,11 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
         cache_errors: 0,
         cache_write_errors: 0,
         cache_writes: 0,
+        remote_writes: 0,
+        compile_failures: 0,
+        measurement: "sum_of_zero_based_run_snapshots",
+        fallback: { state: "active", reason: "none" },
+        snapshots: [],
       },
       buildkit: {
         build_record_count: 0,
@@ -356,6 +406,30 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
     MainBuildStatsFixture.first(normalized.cache_telemetry.jobs).cache_backend
       .kind,
     "direct_compile",
+  );
+  assert.deepEqual(
+    MainBuildStatsFixture.first(normalized.cache_telemetry.jobs).sccache,
+    {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
+    },
   );
   MainBuildStats.validate(normalized);
 });

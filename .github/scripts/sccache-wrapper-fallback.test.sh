@@ -25,7 +25,7 @@ if [ "${1:-}" = --zero-stats ]; then
 fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
   success)
-    test "${SCCACHE_CLIENT_SIDE:-}" = 1
+    test "${SCCACHE_CLIENT_SIDE:-}" = 0
     test -z "${SCCACHE_ERROR_LOG:-}"
     printf 'effective sccache mode: %s\n' "${SCCACHE_S3_RW_MODE:-unset}" >&2
     exec "$@"
@@ -42,7 +42,11 @@ esac
 EOF
 cat >"$fixture_dir/timeout" <<'EOF'
 #!/bin/sh
+duration="${1:-}"
 shift
+if [ "${FAKE_START_DELAY:-0}" -gt "${duration%s}" ]; then
+  exit 124
+fi
 exec "$@"
 EOF
 chmod 0755 "$fixture_dir/compiler" "$fixture_dir/sccache" "$fixture_dir/timeout"
@@ -116,6 +120,24 @@ SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_STATUS=9 \
 grep -Fq '"reason":"server_start_unavailable"' "$startup_log"
 grep -Fq 'direct compiler invoked' "$startup_log"
 echo 'Sccache startup fault: bounded fallback compiled directly'
+
+slow_start_log="$fixture_dir/slow-start.log"
+rm -f "$fallback_marker" "$ready_marker"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=3 FAKE_SCCACHE_RESULT=success \
+  "$wrapper" "$fixture_dir/compiler" 2>"$slow_start_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$slow_start_log"
+if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$slow_start_log"; then
+  echo 'sccache wrapper contract: slow startup incorrectly opened the circuit' >&2
+  exit 1
+fi
+test ! -e "$fallback_marker"
+echo 'Sccache startup grace: a three-second warm-up remained on the remote path'
 
 compiler_log="$fixture_dir/compiler-failure.log"
 rm -f "$fallback_marker" "$ready_marker"

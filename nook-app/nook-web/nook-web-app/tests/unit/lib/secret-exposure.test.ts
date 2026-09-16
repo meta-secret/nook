@@ -108,6 +108,25 @@ describe('secret exposure lifecycle', () => {
     expect(record.free).toHaveBeenCalledOnce()
   })
 
+  test('transient copy never reuses a revealed presentation record', async () => {
+    const revealed = fakeRecord('revealed credential')
+    const transient = fakeRecord('transient credential')
+    const copied = vi.fn()
+
+    await new SecretExposure({ 'secret-1': revealed }).withTransientRecord({
+      id: 'secret-1',
+      load: async () => ok(transient),
+      action: (secret) => {
+        copied(secret.primaryCredential)
+        return ok()
+      },
+    })
+
+    expect(copied).toHaveBeenCalledWith('transient credential')
+    expect(transient.free).toHaveBeenCalledOnce()
+    expect(revealed.free).not.toHaveBeenCalled()
+  })
+
   test('copy reuses an already revealed record without freeing it', async () => {
     const record = fakeRecord('credential')
     const load = vi.fn()

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { CacheTelemetry } from "./cache-telemetry.mjs";
 
+/** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
+
 /**
  * @typedef {object} PrCacheJob
  * @property {string} id
@@ -12,19 +14,10 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
  * @property {boolean} readOnly
  */
 /**
- * @typedef {object} CacheTelemetryRecord
- * @property {{job: string}} github
- * @property {{persistent: boolean}} cache_backend
- * @property {{imports?: {probes_complete: boolean, failure_class?: string, availability: Array<{available: boolean}>}}} cache_scope
- * @property {{cache_errors: number, cache_write_errors: number, cache_writes: number, cache_hits: number, cache_misses: number, publication_status: string}} sccache
- * @property {{build_record_count: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number, cache_export: {attempts: number, duration_ms: number, incomplete_failures: number}}} buildkit
- * @property {{complete: boolean}} collection
- */
-/**
  * @typedef {object} PrCacheHealthModel
  * @property {1} schema_version
  * @property {{minimum_buildkit_hit_rate_percent: number, minimum_completed_steps: number}} policy
- * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
+ * @property {Array<PrCacheJob & {telemetry_complete: boolean, counters: {sccache?: CacheTelemetryRecord["sccache"], buildkit?: {records: number, completed_steps: number, cached_steps: number, cache_hit_rate_percent?: number}}, scopes: object, timing: object, imports: object, exports: {attempts?: number}, collection?: CacheTelemetryRecord["collection"]}>} jobs
  * @property {string[]} warnings
  * @property {{verdict: "pass" | "fail", specialist_activation_required: boolean, reasons: string[]}} gate
  */
@@ -70,6 +63,11 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
+      // Web verification produces BuildKit telemetry but no Rust compiler
+      // requests. Keep its intentionally unavailable sccache summary a
+      // warning-free non-applicable state while compiler-bearing jobs fail
+      // closed when their cache authority disappears.
+      const compilerExpected = job.buildExpected && job.id !== "verify";
       if (job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
@@ -88,19 +86,24 @@ export class PrCacheHealth {
       CacheTelemetry.validateTelemetryRecord(record);
       if (!record.collection.complete)
         reasons.push(`${job.id}:telemetry_incomplete`);
-      if (
-        job.buildExpected &&
-        record.cache_backend.persistent &&
-        record.cache_scope.imports?.probes_complete === false
-      ) {
-        reasons.push(`${job.id}:cache_import_probes_incomplete`);
-      }
+      if (compilerExpected && record.sccache.runtime_mode === "UNAVAILABLE")
+        reasons.push(`${job.id}:sccache_unavailable`);
+      if (compilerExpected && record.sccache.fallback.state === "fallback")
+        reasons.push(
+          `${job.id}:sccache_fallback:${record.sccache.fallback.reason}`,
+        );
       if (record.sccache.cache_errors > 0)
         reasons.push(`${job.id}:sccache_errors:${record.sccache.cache_errors}`);
       if (record.sccache.cache_write_errors > 0)
         reasons.push(
           `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
         );
+      if (
+        job.buildExpected &&
+        record.sccache.cache_misses > 0 &&
+        record.sccache.remote_writes === 0
+      )
+        reasons.push(`${job.id}:sccache_remote_writes_missing`);
       if (record.buildkit.cache_export.incomplete_failures > 0)
         reasons.push(`${job.id}:cache_export_incomplete`);
       if (job.readOnly && record.buildkit.cache_export.attempts > 0)
@@ -109,6 +112,7 @@ export class PrCacheHealth {
         reasons.push(`${job.id}:buildkit_telemetry_missing`);
       if (!job.buildExpected) warnings.push(`${job.id}:build_not_expected`);
       const steps = record.buildkit.completed_steps;
+      const buildkitHitRate = record.buildkit.cache_hit_rate_percent;
       const imports = record.cache_scope.imports || {
         probes_complete: false,
         availability: [],
@@ -145,12 +149,16 @@ export class PrCacheHealth {
       if (
         job.buildExpected &&
         steps >= this.minimumCompletedSteps &&
-        hasAvailableImport &&
-        record.buildkit.cache_hit_rate_percent < this.minimumBuildkitHitRate
-      )
-        reasons.push(
-          `${job.id}:buildkit_cache_regression:${record.buildkit.cache_hit_rate_percent}<${this.minimumBuildkitHitRate}`,
-        );
+        hasAvailableImport
+      ) {
+        if (typeof buildkitHitRate !== "number") {
+          reasons.push(`${job.id}:buildkit_cache_rate_missing`);
+        } else if (buildkitHitRate < this.minimumBuildkitHitRate) {
+          reasons.push(
+            `${job.id}:buildkit_cache_regression:${buildkitHitRate}<${this.minimumBuildkitHitRate}`,
+          );
+        }
+      }
       return {
         ...job,
         telemetry_complete: record.collection.complete,
@@ -160,7 +168,9 @@ export class PrCacheHealth {
             records: record.buildkit.build_record_count,
             completed_steps: steps,
             cached_steps: record.buildkit.cached_steps,
-            cache_hit_rate_percent: record.buildkit.cache_hit_rate_percent,
+            ...(typeof buildkitHitRate === "number"
+              ? { cache_hit_rate_percent: buildkitHitRate }
+              : {}),
           },
         },
         scopes: record.cache_scope,

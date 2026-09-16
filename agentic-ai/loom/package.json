@@ -20,7 +20,7 @@
     "precheck": "bun run source-policy && bun run cortex-audit",
     "check": "tsc --noEmit",
     "lint": "eslint .",
-    "source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from HEAD^",
+    "source-policy": "bun run src/commands/loom-source-policy.ts . --ownership-from \"$LOOM_OWNERSHIP_FROM\"",
     "cortex-audit": "bun run src/cli.ts --default cortexAudit",
     "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
     "format:check": "prettier --config .prettierrc --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",

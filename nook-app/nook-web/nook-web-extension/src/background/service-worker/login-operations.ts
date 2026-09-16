@@ -11,12 +11,10 @@ import {
   type WebsiteLoginAccountOption,
   type WebsiteLoginFillResponse,
 } from '../../lib/login-fill-messages'
+import { SessionOperationFailureKind } from '../../lib/session-operation-queue'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionSessionGrantIdentity } from '../pairing-grants'
-import {
-  extensionSessionInteractiveDeadline,
-  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-} from '../../offscreen/session-request-adapter'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import {
   AccountPickerSurfaceKind,
   AccountPickerPageTarget,
@@ -28,10 +26,7 @@ import {
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
 import { LOGIN_PICKER_TTL_MS } from './account-pickers'
-import {
-  SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
-  extensionSessionLifecycle,
-} from './session-lifecycle'
+import { extensionSessionLifecycle } from './session-lifecycle'
 import {
   decodeLoginOperationResponse,
   decodeLoginSaveActionResponse,
@@ -392,32 +387,9 @@ export async function websiteLoginSaveOffer({
       return { kind: 'unavailable' }
     }
 
-    const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-    const nookTypedArgs0_6: Parameters<
-      typeof extensionPairingIdentity.sendSessionMessage
-    >[0] = {
-      type: 'nook:extension-session-status',
-      payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
-    }
-    const delivery0_6 =
-      await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_6)
-    if (delivery0_6.isErr()) {
-      pendingPassword.value = ''
-      return { kind: 'rejected', reason: delivery0_6.error.kind }
-    }
-    const status = delivery0_6.value
-    if (
-      !status ||
-      typeof status !== 'object' ||
-      !extensionSessionLifecycle.isUnlockedSessionStatus(status)
-    ) {
-      pendingPassword.value = ''
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
-      )
-      return { kind: 'locked' }
-    }
-
+    // Dispatch the sensitive operation first. Offscreen ingress copies and
+    // clears its credentials synchronously, so a document navigation cannot
+    // strand the request behind a disposable sender-bound status round-trip.
     // Prefer the selected/ready vault, then the first password-filling grant.
     const nookTypedArgs0_7 = {
       type: 'nook:extension-session-plan-login-save',
@@ -442,6 +414,19 @@ export async function websiteLoginSaveOffer({
     }
     const response = delivery0_7.value
     pendingPassword.value = ''
+    if (
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === false &&
+      'error' in response &&
+      response.error === SessionOperationFailureKind.Locked
+    ) {
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(
+        OpenCompanionLauncherIntent.Default,
+      )
+      return { kind: 'locked' }
+    }
     if (
       !response ||
       typeof response !== 'object' ||
@@ -521,29 +506,45 @@ export async function websiteLoginSavePending({
   if (delivery0_9.isErr()) {
     return delivery0_9.error.response
   }
-  const response = decode_website_login_save_pending_response(delivery0_9.value)
-  if (response.ok !== true || !('state' in response)) {
-    return response
+  const pending = delivery0_9.value
+  if (
+    !pending ||
+    typeof pending !== 'object' ||
+    !('state' in pending) ||
+    pending.state !== 'available' ||
+    !('offer' in pending) ||
+    !pending.offer ||
+    typeof pending.offer !== 'object' ||
+    !('vaultStoreId' in pending.offer) ||
+    typeof pending.offer.vaultStoreId !== 'string'
+  ) {
+    return decode_website_login_save_pending_response(pending)
   }
-  if (response.state !== 'available') return response
-  const staged = response.offer
+  const staged = pending.offer
   const grant = grants.find(
     (candidate) => candidate.vaultStoreId === staged.vaultStoreId,
   )
   if (
     !grant ||
+    !('offerId' in staged) ||
+    typeof staged.offerId !== 'string' ||
+    !('decision' in staged) ||
     (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
       staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
     return { ok: true, state: 'unavailable' }
   }
-  const offer: WebsiteLoginSaveOfferView = {
-    offerId: staged.offerId,
-    decision: staged.decision,
-    vaultStoreId: grant.vaultStoreId,
-    vaultName: grant.vaultName,
+  const response: WebsiteLoginSavePendingResponse = {
+    ok: true,
+    state: 'available',
+    offer: {
+      offerId: staged.offerId,
+      decision: staged.decision,
+      vaultStoreId: grant.vaultStoreId,
+      vaultName: grant.vaultName,
+    },
   }
-  return { ok: true, state: 'available', offer }
+  return decode_website_login_save_pending_response(response)
 }
 
 type WebsiteLoginSaveCommitArgs = {

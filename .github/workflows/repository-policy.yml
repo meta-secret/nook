@@ -17,10 +17,13 @@ jobs:
     name: Tooling and AI type safety
     runs-on: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 15
+    env:
+      LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
@@ -31,6 +34,34 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: "3.52.0"
+      - run: task loom:repository-policy:setup-native-toolchain
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+      - name: Connect trusted host compiler cache
+        if: >-
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        uses: ./.github/actions/nook-cache-connect
+        with:
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+      - name: Require writable trusted host compiler cache
+        if: >-
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        run: >-
+          test "${NOOK_SCCACHE_BACKEND:-}" = remote &&
+          test "${SCCACHE_S3_RW_MODE:-}" = READ_WRITE &&
+          test -s "${SCCACHE_S3_ACCESS_KEY_FILE:-}" &&
+          test -s "${SCCACHE_S3_SECRET_KEY_FILE:-}"
       - run: task tooling:static
 
   verify:
@@ -61,6 +92,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}

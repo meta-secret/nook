@@ -103,8 +103,8 @@ if [ -r "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ] \
   bake_args+=(
     --allow="fs.read=${SCCACHE_S3_ACCESS_KEY_FILE}"
     --allow="fs.read=${SCCACHE_S3_SECRET_KEY_FILE}"
-    --set "*.secrets=id=sccache_s3_access_key,src=${SCCACHE_S3_ACCESS_KEY_FILE}"
-    --set "*.secrets+=id=sccache_s3_secret_key,src=${SCCACHE_S3_SECRET_KEY_FILE}"
+    --var "SCCACHE_S3_ACCESS_KEY_FILE=${SCCACHE_S3_ACCESS_KEY_FILE}"
+    --var "SCCACHE_S3_SECRET_KEY_FILE=${SCCACHE_S3_SECRET_KEY_FILE}"
   )
 fi
 

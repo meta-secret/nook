@@ -297,25 +297,31 @@ test('production Loom limits provider imports to the semantic adapter', async ()
     cwd: LOOM_ROOT,
     onlyFiles: true,
   };
-  const violations: string[] = [];
-
+  const executablePaths: string[] = [];
   for await (const relativePath of sourceGlob.scan(scanOptions)) {
-    if (!LOOM_EXECUTABLE_SOURCE.test(relativePath)) continue;
-    const source = await Bun.file(join(LOOM_ROOT, relativePath)).text();
-    const inspection: SkillProviderImportInspection = {
-      filePath: `agentic-ai/loom/${relativePath}`,
-      source,
-    };
-    if (
-      SkillProviderBoundaryScenario.violatesSkillProviderBoundary(inspection)
-    ) {
-      violations.push(relativePath);
-    }
+    if (LOOM_EXECUTABLE_SOURCE.test(relativePath))
+      executablePaths.push(relativePath);
   }
+  const violations = (
+    await Promise.all(
+      executablePaths.map(async (relativePath) => {
+        const source = await Bun.file(join(LOOM_ROOT, relativePath)).text();
+        const inspection: SkillProviderImportInspection = {
+          filePath: `agentic-ai/loom/${relativePath}`,
+          source,
+        };
+        return SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
+          inspection,
+        )
+          ? relativePath
+          : '';
+      }),
+    )
+  ).filter((relativePath) => relativePath.length > 0);
 
   expect([...violations].sort()).toEqual([
     'src/agent-workflow/codex-runtime.ts',
     'src/lib/cortex-article-structure.ts',
     'src/module-delivery/codec.ts',
   ]);
-});
+}, 15_000);

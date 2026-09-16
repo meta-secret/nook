@@ -75,6 +75,67 @@ type StageSaveOfferRequest = {
   credentials: LoginCredentials
 }
 
+type CrossWorldSubmitEvent = Event & {
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Browser-world input is narrowed immediately by AuthenticationSubmitEvent.
+  readonly submitter: unknown
+}
+
+enum AuthenticationSubmitterKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type AuthenticationSubmitter =
+  | { kind: AuthenticationSubmitterKind.Absent }
+  | {
+      kind: AuthenticationSubmitterKind.Present
+      control: HTMLButtonElement | HTMLInputElement
+    }
+
+enum AuthenticationSubmitEventAdmissionKind {
+  Rejected = 'rejected',
+  Admitted = 'admitted',
+}
+
+type AuthenticationSubmitEventAdmission =
+  | { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+  | {
+      kind: AuthenticationSubmitEventAdmissionKind.Admitted
+      submitter: AuthenticationSubmitter
+    }
+
+/** Admits submit semantics without relying on page/isolated-world prototypes. */
+class AuthenticationSubmitEvent {
+  private static hasSubmitter(event: Event): event is CrossWorldSubmitEvent {
+    return 'submitter' in event
+  }
+
+  static admit(event: Event): AuthenticationSubmitEventAdmission {
+    if (event.type !== 'submit' || !this.hasSubmitter(event)) {
+      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+    }
+    if (!event.submitter) {
+      return {
+        kind: AuthenticationSubmitEventAdmissionKind.Admitted,
+        submitter: { kind: AuthenticationSubmitterKind.Absent },
+      }
+    }
+    if (!(
+      event.submitter instanceof HTMLButtonElement ||
+      event.submitter instanceof HTMLInputElement
+    )) {
+      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
+    }
+    return {
+      kind: AuthenticationSubmitEventAdmissionKind.Admitted,
+      submitter: {
+        kind: AuthenticationSubmitterKind.Present,
+        control: event.submitter,
+      },
+    }
+  }
+}
+
 export enum PendingSaveOfferLoadKind {
   Absent = 'absent',
   Loaded = 'loaded',
@@ -313,9 +374,10 @@ class LoginSaveInteraction {
   }
 
   captureSubmittedLogin(event: Event): void {
+    const submitEvent = AuthenticationSubmitEvent.admit(event)
     const target = event.target
     if (
-      !(event instanceof SubmitEvent) ||
+      submitEvent.kind === AuthenticationSubmitEventAdmissionKind.Rejected ||
       !(target instanceof HTMLFormElement) ||
       widgetState.busy
     ) {
@@ -329,16 +391,13 @@ class LoginSaveInteraction {
         candidate.formScope.owner === target,
     )
     if (!workflow || workflow.summary.passwordFieldCount === 0) return
-    const { submitter } = event
-    if (submitter) {
+    const { submitter } = submitEvent
+    if (submitter.kind === AuthenticationSubmitterKind.Present) {
+      const { control } = submitter
       if (
-        !(
-          submitter instanceof HTMLButtonElement ||
-          submitter instanceof HTMLInputElement
-        ) ||
-        submitter.form !== target ||
+        control.form !== target ||
         (passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow) &&
-          !workflow.root.contains(submitter))
+          !workflow.root.contains(control))
       ) {
         return
       }
@@ -361,29 +420,57 @@ class LoginSaveInteraction {
   }
 
   async loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-    const message: Parameters<
-      typeof authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
-    >[0] = {
-      type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
-      payload: { origin: location.origin },
+    const recoveryStartedAt = Date.now()
+    for (;;) {
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
+      >[0] = {
+        type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
+        payload: { origin: location.origin },
+      }
+      const delivery =
+        await authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage(
+          message,
+        )
+      if (
+        delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+        delivery.response.ok &&
+        'state' in delivery.response &&
+        delivery.response.state === 'available' &&
+        'offer' in delivery.response
+      ) {
+        const { offer } = delivery.response
+        if (saveOfferState.dismissedOfferIds.has(offer.offerId)) {
+          return { kind: PendingSaveOfferLoadKind.Absent }
+        }
+        return { kind: PendingSaveOfferLoadKind.Loaded, offer }
+      }
+      if (
+        delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+        !delivery.response.ok ||
+        !('state' in delivery.response) ||
+        delivery.response.state !== 'unavailable' ||
+        !this.pageShowsSuccessfulAuthentication() ||
+        Date.now() - recoveryStartedAt >= OUTCOME_EVIDENCE_TIMEOUT_MS
+      ) {
+        return { kind: PendingSaveOfferLoadKind.Absent }
+      }
+      await this.waitForPendingSaveOffer()
     }
-    const delivery =
-      await authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage(
-        message,
-      )
-    if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok ||
-      !('state' in delivery.response) ||
-      delivery.response.state !== 'available' ||
-      !('offer' in delivery.response)
+  }
+
+  private pageShowsSuccessfulAuthentication(): boolean {
+    return Boolean(
+      document.querySelector(
+        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+      ),
     )
-      return { kind: PendingSaveOfferLoadKind.Absent }
-    const { response } = delivery
-    if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
-      return { kind: PendingSaveOfferLoadKind.Absent }
-    }
-    return { kind: PendingSaveOfferLoadKind.Loaded, offer: response.offer }
+  }
+
+  private waitForPendingSaveOffer(): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, OUTCOME_EVIDENCE_POLL_MS)
+    })
   }
 
   renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {

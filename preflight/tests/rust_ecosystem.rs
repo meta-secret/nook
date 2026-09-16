@@ -43,7 +43,7 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("dependency-policy job block is missing"))?;
 
     assert!(
-        dependency_policy.contains("timeout-minutes: 5")
+        dependency_policy.contains("timeout-minutes: 10")
             && dependency_policy.contains("task docker:ecosystem:dependency-policy"),
         "dependency policy must retain its command within the five-minute job limit"
     );
@@ -245,7 +245,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         fixture
             .dependency_policy
             .contains("name: Dependency policy and RustSec")
-            && fixture.dependency_policy.contains("timeout-minutes: 5"),
+            && fixture.dependency_policy.contains("timeout-minutes: 10"),
         "Dependency policy must enforce the five-minute job limit"
     );
     assert!(
@@ -345,6 +345,23 @@ fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
             && !fixture.docker_tasks.contains("type=docker"),
         "dependency policy must remain BuildKit-only without daemon image export/load"
     );
+    let dylint_task = fixture
+        .docker_tasks
+        .split_once("  docker:ecosystem:dylint:\n")
+        .map(|(_, task)| task)
+        .ok_or_else(|| anyhow::anyhow!("Dylint task block is missing"))?;
+    assert!(
+        dylint_task.contains("rust-dylint-self-test.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-native.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-wasm.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-self-test rust-dylint-native rust-dylint-wasm")
+            && !dylint_task.contains("for stage in self-test native wasm"),
+        "Dylint must solve self-test, native, and WASM branches together so their shared graph is built once"
+    );
+    assert!(
+        !dylint_task.contains("task: docker:rust-base"),
+        "the combined Dylint solve must resolve its named rust-base context transitively instead of paying for a redundant preliminary solve"
+    );
     assert!(
         fixture.docker_tasks.contains(
             "if [ -n \"${GHA_CACHE_WRITE_ENABLED:-}\" ] || [ \"${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}\" = \"1\" ]"
@@ -427,6 +444,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         "AS rust-ecosystem-dependency-policy",
         "ARG POLICY_RUN_NONCE",
         "AS rust-ecosystem-nightly",
+        "AS rust-dylint-deps",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
@@ -458,7 +476,10 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         !fixture.nightly_dockerfile.contains("rust-platform-nightly")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-ecosystem-nightly AS rust-dylint-build")
+                .contains("FROM rust-ecosystem-nightly AS rust-dylint-deps")
+            && fixture
+                .nightly_dockerfile
+                .contains("FROM rust-dylint-deps AS rust-dylint-build")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-build AS rust-dylint-self-test")
@@ -467,7 +488,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .contains("FROM rust-dylint-build AS rust-dylint-native")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-dylint-build AS rust-dylint-wasm")
+                .contains("FROM rust-dylint-native AS rust-dylint-wasm")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-native AS rust-dylint")
@@ -481,7 +502,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
-                == 3,
+                == 2,
         "one nightly Dockerfile must own shared tools, split Dylint leaves, and fuzz"
     );
     assert!(

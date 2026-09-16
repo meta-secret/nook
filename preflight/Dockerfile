@@ -116,13 +116,17 @@ COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock ./agentic-ai/loom/
 RUN bun install --cwd agentic-ai/loom --frozen-lockfile
 
 FROM policy-tools AS policy-source
+ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
 COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json
-ENV GITHUB_EVENT_PATH=/tmp/policy-event.json
+ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
+    LOOM_OWNERSHIP_FROM=$LOOM_OWNERSHIP_FROM
 
 FROM policy-source AS loom-verify
-RUN task loom:verify
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task loom:verify
 
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \

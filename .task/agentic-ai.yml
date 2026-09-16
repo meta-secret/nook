@@ -115,6 +115,12 @@ tasks:
       - task: loom:module-experts:validate
       - task: loom:structural-experts:validate
 
+  loom:repository-policy:setup-native-toolchain:
+    desc: Install pinned rootless Zig, BusyBox unxz, Vale, and compiler wrappers.
+    dir: "{{.REPO_ROOT}}"
+    cmds:
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/commands/repository-policy-toolchain.ts" setup
+
   loom:module-experts:validate:
     desc: Validate named read-only module experts and complete production-module routing.
     deps: [loom:install]

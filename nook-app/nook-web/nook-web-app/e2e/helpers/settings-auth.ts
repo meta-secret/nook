@@ -50,6 +50,9 @@ export type DeviceProtectionPostUnlockObservation = {
   readonly loginGateVisible: boolean
   readonly overlayVisible: boolean
   readonly authorizeReady: boolean
+  readonly unlockReady: boolean
+  readonly pickerVisible: boolean
+  readonly errorVisible: boolean
 }
 
 export class DeviceProtectionPostUnlockGate {
@@ -62,10 +65,22 @@ export class DeviceProtectionPostUnlockGate {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
     if (this.observation.overlayVisible) {
-      return DeviceProtectionAuthorizationGateState.Overlay
+      return DeviceProtectionAuthorizationGateState.Waiting
     }
     if (this.observation.authorizeReady) {
       return DeviceProtectionAuthorizationGateState.Authorize
+    }
+    if (this.observation.pickerVisible) {
+      return DeviceProtectionAuthorizationGateState.Picker
+    }
+    if (this.observation.unlockReady) {
+      return DeviceProtectionAuthorizationGateState.Unlock
+    }
+    // The shared vault error surface also reports transient engine and sync
+    // diagnostics while the login gate is still advancing. It is evidence for
+    // a stalled timeout, not a terminal authorization state.
+    if (this.observation.errorVisible) {
+      return DeviceProtectionAuthorizationGateState.Waiting
     }
     return DeviceProtectionAuthorizationGateState.Waiting
   }
@@ -524,6 +539,15 @@ export async function authorizeDeviceProtection(
     }
   }
 
+  const unlockButtonReady = async () => {
+    if (!(await unlockVaultButton.isVisible())) return false
+    try {
+      return await unlockVaultButton.isEnabled({ timeout: 0 })
+    } catch {
+      return false
+    }
+  }
+
   const authorizationGateState = async () => {
     const observation: DeviceProtectionAuthorizationObservation = {
       overlayVisible: await overlay.isVisible(),
@@ -629,26 +653,53 @@ export async function authorizeDeviceProtection(
   // does not race a reactive field snapshot while Svelte is remounting the
   // authenticated shell. Keep the device action as a fallback for flows that
   // expose the explicit authorization card after the login action.
-  await expect
-    .poll(
-      async () => {
-        return new DeviceProtectionPostUnlockGate({
-          loginGateVisible: await loginGate.isVisible(),
-          overlayVisible: await overlay.isVisible(),
-          authorizeReady: await authorizeButtonReady(),
-        }).state()
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+  let lastVaultAuthorizationError = ''
+  try {
+    await expect
+      .poll(
+        async () => {
+          const errorVisible = await vaultError.isVisible()
+          if (errorVisible) {
+            lastVaultAuthorizationError = await vaultError.innerText()
+          }
+          const state = new DeviceProtectionPostUnlockGate({
+            loginGateVisible: await loginGate.isVisible(),
+            overlayVisible: await overlay.isVisible(),
+            authorizeReady: await authorizeButtonReady(),
+            unlockReady: await unlockButtonReady(),
+            pickerVisible: await vaultPicker.isVisible(),
+            errorVisible,
+          }).state()
+          if (state === DeviceProtectionAuthorizationGateState.Picker) {
+            const option = opts?.storeId
+              ? page.locator(
+                  `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+                )
+              : page.getByTestId('login-vault-option').first()
+            await option.click()
+            return DeviceProtectionAuthorizationGateState.Waiting
+          }
+          if (state === DeviceProtectionAuthorizationGateState.Unlock) {
+            await unlockVaultButton.click()
+            return DeviceProtectionAuthorizationGateState.Waiting
+          }
+          if (state === DeviceProtectionAuthorizationGateState.Authorize) {
+            await button.click()
+            return DeviceProtectionAuthorizationGateState.Waiting
+          }
+          return state
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  } catch (failure) {
+    const diagnostic = lastVaultAuthorizationError.trim()
+    throw new Error(
+      diagnostic
+        ? `Vault authorization did not settle. Last visible vault error: ${diagnostic}`
+        : 'Vault authorization did not settle without a visible vault error.',
+      { cause: failure },
     )
-    .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
-  if (await loginGate.isVisible()) {
-    await expect(button).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(button).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await button.click()
   }
   await expect(loginGate).toBeHidden({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

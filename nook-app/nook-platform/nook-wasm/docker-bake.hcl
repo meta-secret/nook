@@ -34,6 +34,20 @@ target "builder-wasm" {
   cache-from = rust_wasm_deps_cache_from
 }
 
+// The Node test compiler has its own source-derived stage. It is intentionally
+// cache-read-only here: the runtime target below pulls its stamp and runner
+// artifact through the Dockerfile graph while sccache credentials remain
+// confined to the compiler RUN.
+target "builder-wasm-node-compiler" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  target     = "builder-wasm-node-compiler"
+  platforms  = ["linux/amd64"]
+  cache-from = rust_wasm_source_cache_from
+  output     = ["type=cacheonly"]
+}
+
 target "_nook-rust-fast-common" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
@@ -43,6 +57,7 @@ target "_nook-rust-fast-common" {
 }
 
 target "rust-format-check" {
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-format-check"

@@ -138,7 +138,7 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/actions/nook-cache-connect/main.js',
-    'ae174432c2cae1dff0b990cf36f1828c8efc9227515f762c57bc6d2f877b9c0d',
+    '2a5052024b204660e51efe455bce752c603d70e8e7c36e4118a25834516ac036',
   ],
   [
     '.github/scripts/workbench-publish.cjs',
@@ -169,8 +169,12 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'c72e41342aa7fe2ae312e90a9f28e3baad62600c24d8744ac6b26962b1d55376',
   ],
   [
+    'agentic-ai/loom/src/commands/repository-policy-toolchain.ts',
+    '139ed953c7929e00f9c68afa4784ec6a934d01f608c94c88bac3d5935b3f3216',
+  ],
+  [
     'infra/contracts/dockerized-rust.test.ts',
-    '4512e215bb15b1502ea8212daeb969a7d051d36c6cf8ca7a1d8b1c58ff31e087',
+    'df702e54a1f1aafd0e76b16ae982b89a8ef034164e78b962967d55add9b0b425',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -202,7 +206,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'fce68cf9521286b606bb064a89c7b88e4f9173e09ddaa16b572e4eaac4878f59',
+    '48fe5a012b1abd144a53a1b5fd94a90d2d583d2fb6499a5630df1c6f9482b254',
   ],
   [
     'infra/operator-ssh.ts',

@@ -106,7 +106,11 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
     assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
     assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(bake.contains("variable \"SCCACHE_S3_ACCESS_KEY_FILE\""));
+    assert!(bake.contains("variable \"SCCACHE_S3_SECRET_KEY_FILE\""));
+    assert!(bake.contains("sccache_secrets ="));
     assert!(bake.contains("target \"_sccache\""));
+    assert!(bake.contains("secret = sccache_secrets"));
     assert!(!bake.contains("extra-hosts"));
     assert!(!bake.contains("SCCACHE_REDIS"));
 
@@ -151,12 +155,59 @@ fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyh
     Ok(())
 }
 
+#[test]
+fn dockerized_loom_verify_mounts_the_inherited_sccache_credentials() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    let bake = root.read("preflight/docker-bake.hcl");
+    let common = bake
+        .split_once("target \"_preflight-common\" {")
+        .and_then(|(_, tail)| tail.split_once("target \"preflight-test\""))
+        .context("preflight Bake must define the shared target")?
+        .0;
+    assert!(
+        common.contains("inherits   = [\"_sccache\"]"),
+        "preflight targets must inherit the shared sccache secret declaration"
+    );
+
+    let dockerfile = root.read("preflight/Dockerfile");
+    let loom_verify = dockerfile
+        .split_once("FROM policy-source AS loom-verify\n")
+        .and_then(|(_, tail)| tail.split_once("\nFROM loom-verify AS repository-policy"))
+        .context("preflight Dockerfile must define the loom-verify stage")?
+        .0;
+    for secret in [
+        "--mount=type=secret,id=sccache_s3_access_key,required=false",
+        "--mount=type=secret,id=sccache_s3_secret_key,required=false",
+    ] {
+        assert!(
+            loom_verify.contains(secret),
+            "loom-verify compiler RUN must mount the inherited sccache secret: {secret}"
+        );
+    }
+    assert_eq!(
+        loom_verify
+            .matches("--mount=type=secret,id=sccache_s3_access_key")
+            .count(),
+        1,
+        "loom-verify must use one shared access-key mount for its compiler RUN"
+    );
+    assert_eq!(
+        loom_verify
+            .matches("--mount=type=secret,id=sccache_s3_secret_key")
+            .count(),
+        1,
+        "loom-verify must use one shared secret-key mount for its compiler RUN"
+    );
+    Ok(())
+}
+
 fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     let action =
         RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     for required in [
         "sccache-access-key",
         "sccache-secret-key",
+        "require-sccache",
         "uses: ./.github/actions/nook-cache-connect",
         "isolated-cache-write",
     ] {
@@ -185,6 +236,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
         "delete process.env[\"INPUT_SCCACHE-SECRET-KEY\"]",
         "SCCACHE_S3_ACCESS_KEY_FILE",
         "SCCACHE_S3_SECRET_KEY_FILE",
+        "SCCACHE_S3_RW_MODE=READ_WRITE",
         "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
         "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
@@ -248,6 +300,52 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "NOOK_SCCACHE_ENDPOINT",
         "NOOK_SCCACHE_BUCKET",
     ];
+    let repository_policy =
+        RepositoryFixture::repository_root().read(".github/workflows/repository-policy.yml");
+    let trusted_host = repository_policy
+        .split_once("      - name: Connect trusted host compiler cache")
+        .and_then(|(_, tail)| tail.split_once("      - run: task tooling:static"))
+        .map(|(trusted, _)| trusted)
+        .expect("repository policy host tooling must configure its compiler cache");
+    for required in [
+        "uses: ./.github/actions/nook-cache-connect",
+        "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+        "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+        "test \"${NOOK_SCCACHE_BACKEND:-}\" = remote",
+        "test \"${SCCACHE_S3_RW_MODE:-}\" = READ_WRITE",
+    ] {
+        assert!(
+            trusted_host.contains(required),
+            "trusted host compiler cache must enforce {required}"
+        );
+    }
+    let trusted_policy = repository_policy
+        .split_once("      - name: Connect private ARC BuildKit")
+        .and_then(|(_, tail)| tail.split_once("      - name: Setup secret-free hosted BuildKit"))
+        .map(|(trusted, _)| trusted)
+        .expect("repository policy must keep trusted and untrusted setup branches");
+    for credential in compiler_credentials {
+        assert!(
+            trusted_policy.contains(credential),
+            "trusted repository policy must receive {credential}"
+        );
+    }
+    for input in [
+        "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+        "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
+        "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
+        "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
+    ] {
+        assert!(
+            trusted_policy.contains(input),
+            "trusted repository policy must pass the complete SCCache credential tuple: {input}"
+        );
+    }
+    let e2e_pr = RepositoryFixture::repository_root().read(".github/workflows/e2e-pr.yml");
+    assert!(
+        !e2e_pr.contains("NOOK_SCCACHE_") && !e2e_pr.contains("sccache-access-key:"),
+        "arbitrary-ref e2e must remain secret-free"
+    );
     for (job_name, start, end) in [
         ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
         (
@@ -256,6 +354,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             "\n  wasm-node-test:\n",
         ),
         ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
+        ("Web verification", "\n  verify:\n", "\n  cache-health:\n"),
     ] {
         let job = pr
             .split_once(start)
@@ -268,20 +367,35 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
                 "Rust-producing PR job {job_name} must receive {credential}"
             );
         }
+        assert!(
+            job.contains("require-sccache: \"true\""),
+            "trusted compiler job {job_name} must fail closed without writable sccache"
+        );
     }
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            3,
-            "only the three Rust-producing PR jobs may receive {credential}"
+            4,
+            "only the four trusted PR compiler jobs may receive {credential}"
         );
     }
+    assert_eq!(
+        pr.matches("require-sccache: \"true\"").count(),
+        4,
+        "every trusted PR compiler job must require writable sccache"
+    );
     assert_eq!(
         pr.matches("isolated-cache-write: \"true\"").count(),
         pr_docker_setups,
         "PR Docker jobs must write only isolated remote-buildcache scopes"
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
+
+    let coverage = RepositoryFixture::repository_root().read(".github/workflows/pr-coverage.yml");
+    assert!(
+        !coverage.contains("nook-cache-telemetry"),
+        "artifact-only coverage must not publish compiler-cache telemetry"
+    );
 
     let ecosystem =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml");
@@ -350,20 +464,130 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn dockerfile_run_instructions(source: &str) -> Vec<String> {
+    let mut instructions = Vec::new();
+    let mut continued: Option<String> = None;
+
+    for line in source.lines() {
+        if let Some(instruction) = continued.as_mut() {
+            instruction.push('\n');
+            instruction.push_str(line);
+            if !line.trim_end().ends_with('\\')
+                && let Some(instruction) = continued.take()
+            {
+                instructions.push(instruction);
+            }
+            continue;
+        }
+
+        let trimmed = line.trim_start();
+        if trimmed == "RUN" || trimmed.starts_with("RUN ") {
+            if line.trim_end().ends_with('\\') {
+                continued = Some(trimmed.to_owned());
+            } else {
+                instructions.push(trimmed.to_owned());
+            }
+        }
+    }
+
+    if let Some(instruction) = continued {
+        instructions.push(instruction);
+    }
+    instructions
+}
+
+const SCCACHE_ACCESS_MOUNT: &str = "--mount=type=secret,id=sccache_s3_access_key,required=false";
+const SCCACHE_SECRET_MOUNT: &str = "--mount=type=secret,id=sccache_s3_secret_key,required=false";
+
+fn assert_sccache_mount_pair(run: &str, run_index: usize, path: &str, purpose: &str) {
+    assert_eq!(
+        run.matches(SCCACHE_ACCESS_MOUNT).count(),
+        1,
+        "{purpose} RUN #{run_index} in {path} must mount exactly one optional sccache access key"
+    );
+    assert_eq!(
+        run.matches(SCCACHE_SECRET_MOUNT).count(),
+        1,
+        "{purpose} RUN #{run_index} in {path} must mount exactly one optional sccache secret key"
+    );
+}
+
+fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
+    let mut report_runs = 0;
+    let mut replay_runs = 0;
+    for (run_index, run) in dockerfile_run_instructions(dockerfile).iter().enumerate() {
+        let has_replay_report = run.contains("nook-sccache-report --replay ");
+        let has_report = run
+            .split("nook-sccache-report ")
+            .skip(1)
+            .any(|suffix| !suffix.starts_with("--replay "));
+        if !has_replay_report && !has_report {
+            continue;
+        }
+
+        if has_replay_report {
+            assert!(
+                !has_report,
+                "replay report RUN #{run_index} in {path} must not also query sccache"
+            );
+            replay_runs += 1;
+            assert_eq!(
+                run.matches(SCCACHE_ACCESS_MOUNT).count(),
+                0,
+                "replay report RUN #{run_index} in {path} must not mount the sccache access key"
+            );
+            assert_eq!(
+                run.matches(SCCACHE_SECRET_MOUNT).count(),
+                0,
+                "replay report RUN #{run_index} in {path} must not mount the sccache secret key"
+            );
+        }
+        if has_report {
+            report_runs += 1;
+            assert_sccache_mount_pair(run, run_index, path, "reported compiler");
+        }
+    }
+
+    assert!(
+        report_runs > 0,
+        "{path} must contain at least one non-replay sccache report RUN"
+    );
+    assert!(
+        replay_runs > 0,
+        "{path} must contain at least one replay-only sccache report RUN"
+    );
+}
+
+fn assert_dylint_toolchain_install_mounts(dockerfile: &str, path: &str) {
+    let runs = dockerfile_run_instructions(dockerfile);
+    let mut install_count = 0;
+    for (run_index, run) in runs.iter().enumerate() {
+        if !run.contains("cargo install cargo-dylint dylint-link") {
+            continue;
+        }
+        install_count += 1;
+        assert_sccache_mount_pair(run, run_index, path, "cargo-dylint toolchain install");
+    }
+    assert_eq!(
+        install_count, 1,
+        "{path} must contain exactly one cargo-dylint toolchain install RUN"
+    );
+}
+
 fn assert_rust_build_cache_boundary() {
     let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
     let platform_tasks =
         RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
     let sccache_tasks = format!("{app_tasks}\n{platform_tasks}");
-    assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY"));
-    assert!(!bake.contains("secret =") && !bake.contains("SCCACHE_REDIS"));
+    assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY=") && !bake.contains("SCCACHE_S3_SECRET_KEY="));
+    assert!(!bake.contains("SCCACHE_REDIS"));
     assert!(
-        sccache_tasks.contains("--set '*.secrets=id=sccache_s3_access_key,src=$access_file'")
-            && sccache_tasks
-                .contains("--set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'")
+        sccache_tasks.contains("--var SCCACHE_S3_ACCESS_KEY_FILE=$access_file")
+            && sccache_tasks.contains("--var SCCACHE_S3_SECRET_KEY_FILE=$secret_file")
             && sccache_tasks.contains("--allow=fs.read=$access_file")
             && sccache_tasks.contains("--allow=fs.read=$secret_file")
+            && !sccache_tasks.contains("--set '*.secrets")
             && !sccache_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
         "Bake must receive compiler credentials through stable secret IDs and runner-local files"
     );
@@ -400,19 +624,46 @@ fn assert_rust_build_cache_boundary() {
 
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);
-    let reports = dockerfile.matches("nook-sccache-report ").count();
-    assert!(
-        reports > 0
-            && dockerfile
-                .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
-                .count()
-                == reports
-            && dockerfile
-                .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
-                .count()
-                == reports,
-        "every reported compiler vertex in {path} must use the same two optional secret mounts"
-    );
+    // Replay-only terminal reads consume the persisted report from a cached
+    // compiler layer and intentionally do not receive cache credentials. The
+    // mount contract is therefore checked per Dockerfile RUN, not by comparing
+    // global counts (mounted compiler RUNs may legitimately omit a report).
+    assert_sccache_report_mounts(&dockerfile, path);
     assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
     assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
+
+    let nightly_path = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    let nightly = RepositoryFixture::repository_root().read(nightly_path);
+    assert_sccache_report_mounts(&nightly, nightly_path);
+    assert_dylint_toolchain_install_mounts(&nightly, nightly_path);
+}
+
+#[cfg(test)]
+mod sccache_report_mount_tests {
+    use super::{
+        assert_dylint_toolchain_install_mounts, assert_sccache_report_mounts,
+        dockerfile_run_instructions,
+    };
+
+    #[test]
+    fn checks_report_mounts_per_run_and_ignores_unreported_compiler_runs() {
+        let dockerfile = concat!(
+            "FROM base\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo check \\\n",
+            "    && nook-sccache-report compiler\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo metadata\n",
+            "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
+            "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
+            "    cargo install cargo-dylint dylint-link --locked\n",
+            "RUN if [ \"$REPLAY\" != disabled ]; then nook-sccache-report --replay compiler; fi\n",
+        );
+
+        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 4);
+        assert_sccache_report_mounts(dockerfile, "fixture.Dockerfile");
+        assert_dylint_toolchain_install_mounts(dockerfile, "fixture.Dockerfile");
+    }
 }

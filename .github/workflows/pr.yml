@@ -92,6 +92,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -235,6 +236,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -385,6 +387,7 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -496,6 +499,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -570,7 +578,6 @@ jobs:
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
-
       - name: Upload preview dist handoff
         uses: actions/upload-artifact@v7
         with:
@@ -582,7 +589,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           overwrite: true
-
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
@@ -594,7 +600,7 @@ jobs:
     with:
       source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       jobs_json: >-
-        [{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.result }}","buildExpected":true,"readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests || 'false' }},"readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}]
+        [{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.outputs.dependency-policy-result || 'cancelled' }}","buildExpected":true,"readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.outputs.deterministic-tests-result || 'cancelled' }}","buildExpected":true,"readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.outputs.dylint-result || 'cancelled' }}","buildExpected":true,"readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests == 'true' }},"readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"readOnly":false}]
   ui-demo:
     name: Headless UI demo
     if: >-
@@ -773,14 +779,12 @@ jobs:
             failed=1
           fi
           test "$failed" -eq 0
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-
       - name: Setup Node for host Pages deploy
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: actions/setup-node@v7

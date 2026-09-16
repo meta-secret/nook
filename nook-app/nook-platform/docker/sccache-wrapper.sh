@@ -21,13 +21,12 @@ if [ -n "${SCCACHE_ERROR_LOG:-}" ]; then
   exit 2
 fi
 
-# sccache 0.17's client-side architecture keeps each compiler invocation alive
-# until its cache service has returned final statistics to the daemon. Without
-# it, a fast Rust compile can finish while every remote upload is still queued,
-# and the publication guard observes misses with zero writes and zero errors.
-# Keep this identical for readers and publishers so cache authority remains a
-# secret-only runtime input and cannot divide BuildKit compiler keys.
-: "${SCCACHE_CLIENT_SIDE:=1}"
+# Keep compiler requests on sccache's server-side path. Client-side mode can
+# leave concurrent remote storage requests waiting indefinitely while the
+# compiler waits for cache service work. The daemon's server-side counters are
+# authoritative for publication verification, and this default is identical for
+# readers and publishers so runtime authority cannot divide BuildKit keys.
+: "${SCCACHE_CLIENT_SIDE:=0}"
 export SCCACHE_CLIENT_SIDE
 
 # Compile-cache publishers and consumers mount this same secret ID at the same
@@ -98,7 +97,10 @@ if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
   if [ ! -e "$ready_marker" ] && mkdir "$startup_lock" 2>/dev/null; then
     startup_diagnostics="$(mktemp /tmp/nook-sccache-start.XXXXXX)"
     set +e
-    timeout "${NOOK_SCCACHE_START_TIMEOUT:-2s}" \
+    # Allow a bounded daemon warm-up window. A slow first start must not open
+    # the shared circuit for every later compiler vertex, while one failed
+    # probe still fails closed to the direct compiler path.
+    timeout "${NOOK_SCCACHE_START_TIMEOUT:-5s}" \
       "$sccache_binary" --start-server > /dev/null 2>"$startup_diagnostics"
     startup_status=$?
     set -e

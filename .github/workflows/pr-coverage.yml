@@ -242,7 +242,3 @@ jobs:
                 }
               `, { subjectId: pullRequest.id, body }))
             }
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry

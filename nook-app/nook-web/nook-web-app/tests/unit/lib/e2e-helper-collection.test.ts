@@ -98,14 +98,17 @@ describe('Playwright collection imports', () => {
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
-  test('recognizes the passkey overlay while login unlock hands off device authorization', () => {
+  test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
       overlayVisible: true,
       authorizeReady: false,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: false,
     })
 
-    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Overlay)
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })
 
   test('recognizes the terminal post-unlock states around device authorization', () => {
@@ -114,6 +117,9 @@ describe('Playwright collection imports', () => {
         loginGateVisible: false,
         overlayVisible: false,
         authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
     expect(
@@ -121,6 +127,9 @@ describe('Playwright collection imports', () => {
         loginGateVisible: true,
         overlayVisible: false,
         authorizeReady: true,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
     expect(
@@ -128,6 +137,49 @@ describe('Playwright collection imports', () => {
         loginGateVisible: true,
         overlayVisible: false,
         authorizeReady: false,
+        unlockReady: true,
+        pickerVisible: false,
+        errorVisible: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: true,
+        errorVisible: false,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Picker)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: true,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: true,
+        pickerVisible: false,
+        errorVisible: true,
+      }).state(),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    expect(
+      new DeviceProtectionPostUnlockGate({
+        loginGateVisible: true,
+        overlayVisible: false,
+        authorizeReady: false,
+        unlockReady: false,
+        pickerVisible: false,
+        errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })

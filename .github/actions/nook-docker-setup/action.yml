@@ -56,10 +56,19 @@ inputs:
     description: SeaweedFS S3 bucket used by this trust domain.
     required: false
     default: "nook-sccache"
+  require-sccache:
+    description: Fail closed unless the trusted job has the complete writable SCCache pair.
+    required: false
+    default: "false"
 
 runs:
   using: composite
   steps:
+    - name: Provision Node.js for cache telemetry
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24.19.0"
+
     - name: Setup Task
       uses: go-task/setup-task@v2
       with:
@@ -149,6 +158,14 @@ runs:
         NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}
       run: |
         set -euo pipefail
+
+        if [ "${{ inputs.require-sccache }}" = "true" ]; then
+          if [ "${NOOK_SCCACHE_BACKEND:-}" != "remote" ] ||
+             [ "${SCCACHE_S3_RW_MODE:-}" != "READ_WRITE" ]; then
+            echo "trusted cache job requires a writable READ_WRITE SCCache backend" >&2
+            exit 1
+          fi
+        fi
 
         pr_number="${{ github.event.pull_request.number }}"
         event_name="${{ github.event_name }}"
@@ -268,6 +285,10 @@ runs:
           fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
+        # BuildKit does not replay cached RUN stdout. Compiler stages persist
+        # their reports in-layer; this per-job value reruns only the terminal
+        # read that emits the persisted, authoritative JSON marker.
+        echo "NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${GITHUB_JOB:-local}" >> "$GITHUB_ENV"
 
         cache_write_enabled=""
         if [ -n "$remote_compile_cache_write" ]; then
@@ -325,8 +346,8 @@ runs:
           node_bin=/home/runner/externals/node24/bin/node
         fi
         if [ -z "$node_bin" ]; then
-          echo "Actions Node.js runtime is unavailable; skipping cache telemetry on this runner."
-          exit 0
+          echo "Actions Node.js runtime is required for complete cache telemetry." >&2
+          exit 1
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
         timeout 15s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"

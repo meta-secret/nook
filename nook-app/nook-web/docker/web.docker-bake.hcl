@@ -26,6 +26,7 @@ web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 target "web-base" {
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-web/docker/web.Dockerfile"
   target     = "web-base"
