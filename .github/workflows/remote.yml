@@ -225,6 +225,8 @@ jobs:
           persist-credentials: false
       - name: Trust exact Actions workspace for Git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Expose Actions Node.js runtime
+        uses: ./.github/actions/nook-node-setup
       - name: Validate exact remote source
         env:
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
