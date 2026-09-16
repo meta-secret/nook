@@ -1,4 +1,12 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,7 +14,8 @@ import { describe, expect, test } from 'bun:test'
 import { Linter } from 'eslint'
 import typescript from 'typescript'
 import typescriptEslint from 'typescript-eslint'
-import webEslintConfig from '../../eslint.config.js'
+import namedSuccessEslintConfig from '../../eslint.named-success.config.js'
+import { namedSuccessContractBaseline } from '../../named-success-contract-baseline.js'
 import { noEmptySuccessContractRule } from '../../no-empty-success-contract-rule.js'
 
 /** @typedef {import('eslint').Linter.LintMessage} LintMessage */
@@ -73,6 +82,14 @@ class NamedSuccessContractTestHarness {
 class SvelteNamedSuccessContractTestHarness {
   /** @param {string} source */
   static lint(source) {
+    return this.lintAll(source).filter(
+      (message) =>
+        message.ruleId === 'nook-typed-api/no-empty-success-contract',
+    )
+  }
+
+  /** @param {string} source */
+  static lintAll(source) {
     const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url))
     const fixtureDirectory = mkdtempSync(
       join(sourceDirectory, '__named-success-contract-'),
@@ -80,11 +97,12 @@ class SvelteNamedSuccessContractTestHarness {
     const filePath = join(fixtureDirectory, 'contract.svelte')
     try {
       writeFileSync(filePath, source)
-      const messages = new Linter().verify(source, webEslintConfig, filePath)
-      return messages.filter(
-        (message) =>
-          message.ruleId === 'nook-typed-api/no-empty-success-contract',
+      const messages = new Linter().verify(
+        source,
+        namedSuccessEslintConfig,
+        filePath,
       )
+      return messages
     } finally {
       rmSync(fixtureDirectory, { recursive: true, force: true })
     }
@@ -94,6 +112,14 @@ class SvelteNamedSuccessContractTestHarness {
 /** @param {LintMessage[]} messages @param {string} messageId */
 function expectMessage(messages, messageId) {
   expect(messages.map((message) => message.messageId)).toContain(messageId)
+}
+
+/** @param {string} source */
+function gitBlobSha1(source) {
+  return createHash('sha1')
+    .update(`blob ${Buffer.byteLength(source, 'utf8')}\0`, 'utf8')
+    .update(source, 'utf8')
+    .digest('hex')
 }
 
 describe('nook-typed-api/no-empty-success-contract', () => {
@@ -231,5 +257,33 @@ describe('nook-typed-api/no-empty-success-contract', () => {
 
     expectMessage(messages, 'emptySuccessCall')
     expectMessage(messages, 'emptySuccessType')
+  })
+
+  test('dedicated config enables only the named-success gate', () => {
+    const messages = SvelteNamedSuccessContractTestHarness.lintAll(`
+      <script lang="ts">
+        import { ok } from 'neverthrow'
+        function tooManyParameters(first: string, second: string): void {
+          void first
+          void second
+        }
+        tooManyParameters('first', 'second')
+        ok()
+      </script>
+    `)
+
+    expect(messages.map((message) => message.ruleId)).toEqual([
+      'nook-typed-api/no-empty-success-contract',
+    ])
+  })
+
+  test('legacy baseline contains only exact current source snapshots', () => {
+    const webRoot = fileURLToPath(new URL('../../', import.meta.url))
+    const staleEntries = namedSuccessContractBaseline.filter((entry) => {
+      const source = readFileSync(join(webRoot, entry.file), 'utf8')
+      return gitBlobSha1(source) !== entry.gitBlobSha1
+    })
+
+    expect(staleEntries).toEqual([])
   })
 })
