@@ -31,7 +31,7 @@ if [ ! -d "$deploy_dir" ]; then
 fi
 
 wrangler() {
-  npx --yes "wrangler@${wrangler_version}" "$@"
+  bunx "wrangler@${wrangler_version}" "$@"
 }
 
 wrangler pages project create "$CF_PAGES_PROJECT_NAME" \

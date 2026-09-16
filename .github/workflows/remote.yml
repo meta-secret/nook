@@ -238,10 +238,6 @@ jobs:
             echo "Remote checkout drifted from the requested source SHA." >&2
             exit 2
           fi
-      - name: Setup Node for host Pages deploy
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
       - name: Setup Bun for host Pages build
         uses: oven-sh/setup-bun@v2
         with:
