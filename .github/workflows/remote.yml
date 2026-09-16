@@ -212,6 +212,9 @@ jobs:
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+    defaults:
+      run:
+        shell: bash
     env:
       CI: true
     steps:
@@ -220,6 +223,8 @@ jobs:
           ref: ${{ inputs.source_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Trust exact Actions workspace for Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Validate exact remote source
         env:
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
