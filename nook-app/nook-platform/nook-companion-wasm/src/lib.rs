@@ -24,7 +24,7 @@ use nook_companion_core::BackupCodePageText;
 use nook_companion_core::{
     ExtensionPairingState, ExtensionReadySetup, StoredExtensionPairingGrant,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod account_picker_authorization;
 mod authentication_observation_binding;
