@@ -65,6 +65,11 @@ mutable flags create the same problem.
   create a repository-wide `StateKind`, `MessageType`, or other generic enum
   that merely centralizes unrelated strings.
 - Put state-specific values on the variant that owns them.
+- Model application failures with a closed, typed failure kind or outcome.
+  - Derive localized user-facing text from that typed failure only at the
+    presentation edge.
+  - Do not store free-form error strings or parallel error-message slots in
+    application state.
 - Group values that transition together; expose operations such as `start`,
   `cancel`, `succeed`, and `reset` instead of exposing mutable handles.
 - Put portable domain state and policy in Rust and export typed enums through
@@ -144,6 +149,9 @@ Applies to every authored `.js`, `.mjs`, `.cjs`, `.ts`, and `.svelte` file,
 including production source, tests, fixtures, demos, build configuration,
 `.agents`, `.github`, and `agentic-ai`.
 
+In `.svelte` files, these rules apply equally inside authored `<script>` and
+`<script lang="ts">` blocks.
+
 Generated declarations, dependency/build directories, and generated WASM
 bindings are excluded because they mirror contracts Nook does not author.
 
@@ -174,11 +182,16 @@ let loading = $state(false);
 After:
 
 ```ts
+enum ImportFailureKind {
+  InvalidFile = "invalidFile",
+  UnsupportedVersion = "unsupportedVersion",
+}
+
 type ImportState =
   | { kind: ImportKind.Idle }
   | { kind: ImportKind.Loading }
   | { kind: ImportKind.Complete; result: NookImportResult }
-  | { kind: ImportKind.Failed; message: string };
+  | { kind: ImportKind.Failed; failure: ImportFailureKind };
 ```
 
 ## Application Checklist
