@@ -39,6 +39,8 @@ grep -Fq 'workflow_args+=(--raw-field "deployment_tag=$REQUESTED_DEPLOYMENT_TAG"
 grep -Fq 'deployment_tag:' "$remote_workflow" \
   || { echo 'preview deploy input test: remote Actions workflow lacks deployment_tag input' >&2; exit 1; }
 for required in \
+  'REQUESTED_DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}' \
+  'DEPLOYMENT_TAG is valid only with TASK_NAME=ci:pr:deploy-and-verify-previews.' \
   'DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && inputs.deployment_tag || '\'''\'' }}' \
   'HEAD_SHA: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && (inputs.source_sha || github.sha) || '\'''\'' }}' \
   'CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == '\''ci:pr:deploy-and-verify-previews'\'' && secrets.CLOUD_FLARE_PAGES_TOKEN || '\'''\'' }}' \
