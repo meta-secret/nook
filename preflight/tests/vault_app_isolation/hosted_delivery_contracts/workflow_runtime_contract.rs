@@ -84,8 +84,8 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(job, _)| job)
             .unwrap_or_else(|| panic!("PR workflow must define a Native Rust producer job"));
         assert!(
-            native_job.contains("timeout-minutes: 7"),
-            "PR Native Rust producer must retain its pre-existing seven-minute execution envelope"
+            native_job.contains("timeout-minutes: 15"),
+            "PR Native Rust producer must retain its bounded 15-minute execution envelope"
         );
     }
 
@@ -138,8 +138,8 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(_, job)| job)
             .unwrap_or_else(|| panic!("rust ecosystem workflow must define a Dylint job"));
         assert!(
-            dylint_job.contains("timeout-minutes: 10"),
-            "Rust ecosystem Dylint job must retain its bounded 10-minute execution envelope"
+            dylint_job.contains("timeout-minutes: 5"),
+            "Rust ecosystem Dylint job must retain its bounded five-minute execution envelope"
         );
     }
 
