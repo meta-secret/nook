@@ -61,6 +61,7 @@ function isTypeReference(type) {
   return (
     (type.flags & typescript.TypeFlags.Object) !== 0 &&
     'objectFlags' in type &&
+    typeof type.objectFlags === 'number' &&
     (type.objectFlags & typescript.ObjectFlags.Reference) !== 0
   )
 }
