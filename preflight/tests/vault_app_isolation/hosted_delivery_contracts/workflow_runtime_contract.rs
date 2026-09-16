@@ -84,8 +84,8 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(job, _)| job)
             .unwrap_or_else(|| panic!("PR workflow must define a Native Rust producer job"));
         assert!(
-            native_job.contains("timeout-minutes: 15"),
-            "PR Native Rust producer must retain its bounded 15-minute execution envelope"
+            native_job.contains("timeout-minutes: 10"),
+            "PR Native Rust producer must retain its bounded 10-minute execution envelope"
         );
     }
 
@@ -133,6 +133,14 @@ impl WorkflowRuntimeContract<'_> {
         }
 
         let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
+        let deterministic_job = ecosystem_source
+            .split_once("  deterministic-tests:\n")
+            .and_then(|(_, jobs)| jobs.split_once("\n  dylint:\n").map(|(job, _)| job))
+            .unwrap_or_else(|| panic!("rust ecosystem workflow must define deterministic tests"));
+        assert!(
+            deterministic_job.contains("timeout-minutes: 10"),
+            "deterministic, fuzz, and Kani checks must retain their bounded ten-minute envelope"
+        );
         let dylint_job = ecosystem_source
             .split_once("  dylint:\n")
             .map(|(_, job)| job)

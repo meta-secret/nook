@@ -488,7 +488,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .contains("FROM rust-dylint-build AS rust-dylint-native")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-dylint-build AS rust-dylint-wasm")
+                .contains("FROM rust-dylint-native AS rust-dylint-wasm")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-native AS rust-dylint")
@@ -502,7 +502,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
-                == 3,
+                == 2,
         "one nightly Dockerfile must own shared tools, split Dylint leaves, and fuzz"
     );
     assert!(

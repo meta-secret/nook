@@ -72,7 +72,7 @@ jobs:
       inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     outputs:
       cache-build-expected: ${{ steps.trusted-native.outputs.found != 'true' }}
     steps:

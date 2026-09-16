@@ -33,7 +33,9 @@ concurrency:
     github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e' ||
     github.event.changes.base.ref.from != '') && format('pr-{0}', github.event.pull_request.number)) ||
     format('ci-{0}', github.run_id) }}
-  cancel-in-progress: false
+  # A newer PR event supersedes its queued/running validation wave; push and
+  # scheduled delivery retain serialized completion semantics.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:

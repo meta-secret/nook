@@ -447,11 +447,12 @@
   async function copySecret(id: string) {
     const revealed = decryptedSecrets[id];
     if (revealed) {
-      const copied = await copyToClipboard({
+      const copyRequest: Parameters<typeof copyToClipboard>[0] = {
         text: revealed.primaryCredential,
         id,
         field: "secret",
-      });
+      };
+      const copied = await copyToClipboard(copyRequest);
       if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
       return;
     }

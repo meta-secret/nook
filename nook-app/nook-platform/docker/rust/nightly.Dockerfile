@@ -99,10 +99,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 ARG NOOK_SCCACHE_TELEMETRY_REPLAY
 RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-native; fi
 
-FROM rust-dylint-build AS rust-dylint-wasm
+FROM rust-dylint-native AS rust-dylint-wasm
 RUN rustup target add wasm32-unknown-unknown
-WORKDIR /meta-secret/nook
-COPY nook-app/nook-platform/ nook-app/nook-platform/
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
