@@ -250,8 +250,16 @@ jobs:
           fallback: none
       - name: Install host WASM target
         run: rustup target add wasm32-unknown-unknown
+      - name: Install pinned host LLVM and Clang toolchain
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "20.1.1"
+          directory: ${{ runner.temp }}/llvm
+          env: true
       - name: Prepare native Pages preview artifacts
         env:
+          CC: clang
+          AR: llvm-ar
           DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
           HEAD_SHA: ${{ inputs.source_sha || github.sha }}
         run: |
