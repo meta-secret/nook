@@ -9,6 +9,7 @@ import {
 import { err, type Result } from "neverthrow";
 import type { I18nKey } from "../../../generated/i18n-keys";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
+import type { OAuthFailure } from "../auth/oauth-failure";
 import type { ExtensionConnectRequest } from "../extension/connect";
 import {
   ExtensionPairingDeliveryKind,
@@ -100,7 +101,7 @@ export type ExtensionConsentWorkflowFailure =
   | { readonly kind: ExtensionConsentWorkflowFailureKind.BrowserHandoff }
   | {
       readonly kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh;
-      readonly failure: VaultStorageFailure;
+      readonly failure: ExtensionConsentDeviceRefreshFailure;
     }
   | {
       readonly kind: ExtensionConsentWorkflowFailureKind.CompletionAdmission;
@@ -110,6 +111,8 @@ export type ExtensionConsentWorkflowFailure =
       readonly kind: ExtensionConsentWorkflowFailureKind.ProviderTransition;
       readonly state: NookExtensionConsentTransitionState;
     };
+
+type ExtensionConsentDeviceRefreshFailure = VaultStorageFailure | OAuthFailure;
 
 export type ExtensionConsentWorkflowState =
   | {

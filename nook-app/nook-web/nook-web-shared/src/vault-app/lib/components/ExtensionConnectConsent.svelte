@@ -19,7 +19,15 @@
     ExtensionConsentWorkflowNoticeKind,
     ExtensionConnectConsentWorkflow,
     ExtensionConsentWorkflowPresentation,
+    type ExtensionConsentWorkflowState,
   } from './extension-connect-consent-workflow'
+
+  type ExtensionConsentWorkflowSession = {
+    readonly workflow: ExtensionConnectConsentWorkflow
+    readonly state: ExtensionConsentWorkflowState
+    approve(): Promise<void>
+    dispose(): void
+  }
 
   let {
     vault,
@@ -31,17 +39,49 @@
     onClose: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
-  const workflow = new ExtensionConnectConsentWorkflow(vault, request)
+  function createWorkflowSession(
+    sessionVault: VaultState,
+    sessionRequest: ExtensionConnectRequest,
+  ): ExtensionConsentWorkflowSession {
+    const workflow = new ExtensionConnectConsentWorkflow(
+      sessionVault,
+      sessionRequest,
+    )
+    let state = $state.raw(workflow.initialState())
+
+    return {
+      workflow,
+      get state() {
+        return state
+      },
+      async approve() {
+        await workflow.approve(state, (next) => (state = next))
+      },
+      dispose() {
+        workflow.dispose()
+      },
+    }
+  }
+
+  let session = $derived(createWorkflowSession(vault, request))
   const presentation = new ExtensionConsentWorkflowPresentation()
-  let workflowState = $state.raw(workflow.initialState())
-  const availability = $derived(workflow.approvalAvailability(workflowState))
+  const workflowState = $derived(session.state)
+  const availability = $derived(
+    session.workflow.approvalAvailability(workflowState),
+  )
   const notice = $derived(presentation.notice(workflowState, availability))
   const actionTranslationKey = $derived(
     presentation.actionTranslationKey(workflowState),
   )
-  const closeOutcome = $derived(workflow.closeOutcome(workflowState))
+  const closeOutcome = $derived(
+    session.workflow.closeOutcome(workflowState),
+  )
 
-  onDestroy(() => workflow.dispose())
+  $effect.pre(() => {
+    const activeSession = session
+    return () => activeSession.dispose()
+  })
+  onDestroy(() => session.dispose())
 
   const identityTextLayout: ExtensionConsentIdentityTextLayout = {
     head: 14,
@@ -59,7 +99,7 @@
   )
 
   async function approveExtension() {
-    await workflow.approve(workflowState, (next) => (workflowState = next))
+    await session.approve()
   }
 
   function closeConsent() {
