@@ -11,7 +11,10 @@ import {
   seal_auth_providers_for_device_public_key,
   type StorageProvider,
 } from "$lib/auth/providers";
-import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import {
+  ActiveVaultKind,
+  type ActiveVault,
+} from "$lib/vault/state/provider.svelte";
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
@@ -30,26 +33,22 @@ export class ExtensionVaultApproval {
     NookVaultManager,
     VaultStorageFailure
   >;
-  private readonly activeVaultStoreId: string;
+  private readonly activeVaultAtStart: ActiveVault;
   // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     private readonly vault: VaultState,
     private readonly request: ExtensionConnectRequest,
   ) {
     this.managerAtStart = vault.admitManager();
-    const activeVault = vault.activeVault;
-    this.activeVaultStoreId =
-      activeVault.kind === ActiveVaultKind.Open ? activeVault.storeId : "";
+    this.activeVaultAtStart = vault.activeVault;
   }
 
-  async prepare(): Promise<
-    Result<ExtensionPairingApprovedMessage, VaultStorageFailure>
-  > {
+  async authorize(): Promise<Result<void, VaultStorageFailure>> {
     const vault = this.vault;
     const request = this.request;
     const manager = this.managerAtStart;
     if (manager.isErr()) return err(manager.error);
-    const authorized = await vault.enqueueStorage(async () => {
+    return vault.enqueueStorage(async () => {
       const current = this.admitManager();
       if (current.isErr()) return err(current.error);
       try {
@@ -65,12 +64,18 @@ export class ExtensionVaultApproval {
         return err(new NativeVaultStorageFailure(failure));
       }
     });
-    if (authorized.isErr()) return err(authorized.error);
+  }
+
+  async prepareAuthorizedGrant(): Promise<
+    Result<ExtensionPairingApprovedMessage, VaultStorageFailure>
+  > {
+    const vault = this.vault;
+    const request = this.request;
     const storeId = await vault.enqueueStorage(() => {
       const current = this.admitManager();
       if (current.isErr()) return err(current.error);
-      if (this.activeVaultStoreId !== "")
-        return ok(this.activeVaultStoreId);
+      if (this.activeVaultAtStart.kind === ActiveVaultKind.Open)
+        return ok(this.activeVaultAtStart.storeId);
       try {
         return ok(current.value.vaultStoreId);
       } catch (failure) {
@@ -161,10 +166,10 @@ export class ExtensionVaultApproval {
     const current = this.vault.admitManager();
     if (current.isErr()) return err(current.error);
     const activeVault = this.vault.activeVault;
-    const activeVaultMatches =
-      activeVault.kind === ActiveVaultKind.Open
-        ? activeVault.storeId === this.activeVaultStoreId
-        : this.activeVaultStoreId === "";
+    const activeVaultMatches = this.activeVaultAtStart.kind === ActiveVaultKind.Open
+      ? activeVault.kind === ActiveVaultKind.Open &&
+        activeVault.storeId === this.activeVaultAtStart.storeId
+      : activeVault.kind === ActiveVaultKind.Closed;
     if (
       current.value !== this.managerAtStart.value ||
       !activeVaultMatches

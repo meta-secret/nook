@@ -31,6 +31,7 @@
     VaultCreationQueueKind,
   } from '$lib/vault/creation-queue'
   import AppSurface from '$lib/components/app/AppSurface.svelte'
+  import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-workflow'
   import type {
     EnrollmentCodeUseRequest,
     PairedExtensionDiscoveryRetry,
@@ -258,8 +259,8 @@
       kind: ExtensionConnectIntentKind.Absent,
     }
   }
-  function finishExtensionConnect(approved = false) {
-    if (!approved) {
+  function finishExtensionConnect(outcome: ExtensionConsentCloseOutcome) {
+    if (outcome === ExtensionConsentCloseOutcome.Cancelled) {
       extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Absent,
       }

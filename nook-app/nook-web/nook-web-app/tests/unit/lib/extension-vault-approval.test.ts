@@ -93,7 +93,10 @@ describe('extension vault approval', () => {
       .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
 
-    const prepared = await approval.prepare()
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+    expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
+    const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
     if (prepared.isErr()) return
     const delivered = await approval.deliver(prepared.value)
@@ -120,7 +123,9 @@ describe('extension vault approval', () => {
       .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
       .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
-    const prepared = await approval.prepare()
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+    const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
     if (prepared.isErr()) return
 
@@ -142,9 +147,11 @@ describe('extension vault approval', () => {
           kind: ExtensionPairingDeliveryKind.Rejected,
           reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
         }
-      })
+    })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
-    const prepared = await approval.prepare()
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+    const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
     if (prepared.isErr()) return
 
@@ -165,13 +172,29 @@ describe('extension vault approval', () => {
       new Error('authorization rejected'),
     )
 
-    const prepared = await new ExtensionVaultApproval(
+    const authorized = await new ExtensionVaultApproval(
       fixture.vault,
       request,
-    ).prepare()
+    ).authorize()
+
+    expect(authorized.isErr()).toBe(true)
+    expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
+  })
+
+  test('keeps authorization success separate from a later event-log export failure', async () => {
+    const fixture = ExtensionApprovalTestFixture.create()
+    fixture.records.to_array.mockImplementation(() => {
+      throw new Error('event-log export failed')
+    })
+    const approval = new ExtensionVaultApproval(fixture.vault, request)
+
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+
+    const prepared = await approval.prepareAuthorizedGrant()
 
     expect(prepared.isErr()).toBe(true)
-    expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
+    expect(wasm.approveExtensionDevice).toHaveBeenCalledOnce()
   })
 
   test('rejects a manager generation change between authorization and export', async () => {
@@ -181,11 +204,11 @@ describe('extension vault approval', () => {
       .mockReturnValueOnce(ok(fixture.manager))
       .mockReturnValueOnce(ok(fixture.manager))
       .mockReturnValueOnce(ok(replacement))
+    const approval = new ExtensionVaultApproval(fixture.vault, request)
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
 
-    const prepared = await new ExtensionVaultApproval(
-      fixture.vault,
-      request,
-    ).prepare()
+    const prepared = await approval.prepareAuthorizedGrant()
 
     expect(prepared.isErr() ? prepared.error.kind : prepared.value).toBe(
       VaultStorageFailureKind.GenerationChanged,
@@ -200,7 +223,9 @@ describe('extension vault approval', () => {
       'deliverExtensionPairingApproval',
     )
     const approval = new ExtensionVaultApproval(fixture.vault, request)
-    const prepared = await approval.prepare()
+    const authorized = await approval.authorize()
+    expect(authorized.isOk()).toBe(true)
+    const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
     if (prepared.isErr()) return
     fixture.admitManager.mockReturnValue(
