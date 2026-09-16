@@ -97,7 +97,10 @@ if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
   if [ ! -e "$ready_marker" ] && mkdir "$startup_lock" 2>/dev/null; then
     startup_diagnostics="$(mktemp /tmp/nook-sccache-start.XXXXXX)"
     set +e
-    timeout "${NOOK_SCCACHE_START_TIMEOUT:-2s}" \
+    # Allow a bounded daemon warm-up window. A slow first start must not open
+    # the shared circuit for every later compiler vertex, while one failed
+    # probe still fails closed to the direct compiler path.
+    timeout "${NOOK_SCCACHE_START_TIMEOUT:-5s}" \
       "$sccache_binary" --start-server > /dev/null 2>"$startup_diagnostics"
     startup_status=$?
     set -e
