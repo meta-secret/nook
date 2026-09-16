@@ -59,7 +59,12 @@ behavior for packets issued by SRE Team Gizmo.
 - Never add a separate preparatory cache task or baseline prerequisite.
 - Keep BuildKit export authority task-controlled and independent from sccache
   authority. A no-export task may still populate sccache when secrets exist.
-- Treat remote `sccache` as an optional accelerator.
+- Treat remote `sccache` as an authoritative requirement for credentialed
+  trusted CI Rust compiles, not an optional accelerator. Those jobs must fail
+  when sccache is unavailable, opens its fallback circuit, or produces neither
+  useful hits nor authoritative cold-publisher writes. Secret-free fork and
+  Dependabot lanes retain their direct-compiler fallback because they are not
+  trusted cache publishers or consumers.
   - Allow one startup attempt per Docker `RUN` with a two-second bound.
   - Share readiness and open-circuit state across compiler invocations in the
     same `RUN`.

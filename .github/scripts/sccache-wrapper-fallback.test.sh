@@ -78,6 +78,27 @@ grep -Fq 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"credential
 grep -Fq 'direct compiler invoked' "$no_secret_log"
 echo 'Sccache no-secret route: compiler ran directly without remote access'
 
+access_file="$fixture_dir/access-key"
+secret_file="$fixture_dir/secret-key"
+printf '%s\n' access-key >"$access_file"
+printf '%s\n' secret-key >"$secret_file"
+file_authority_log="$fixture_dir/file-authority.log"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_S3_MODE=external \
+NOOK_SCCACHE_FALLBACK_MARKER="$fixture_dir/file-authority-remote-disabled" \
+NOOK_SCCACHE_READY_MARKER="$fixture_dir/file-authority-remote-ready" \
+NOOK_SCCACHE_START_LOCK="$fixture_dir/file-authority-start-lock" \
+SCCACHE_S3_ACCESS_KEY_FILE="$access_file" \
+SCCACHE_S3_SECRET_KEY_FILE="$secret_file" \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
+  "$wrapper" "$fixture_dir/compiler" 2>"$file_authority_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$file_authority_log"
+if grep -Fq 'credentials_unavailable' "$file_authority_log"; then
+  echo 'sccache wrapper ignored runner-local credential files' >&2
+  exit 1
+fi
+echo 'Sccache runner credential-file route: remote access remained enabled'
+
 fallback_log="$fixture_dir/fallback.log"
 fallback_marker="$fixture_dir/remote-disabled"
 ready_marker="$fixture_dir/remote-ready"

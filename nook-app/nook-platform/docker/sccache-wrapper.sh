@@ -2,8 +2,8 @@
 
 set -eu
 
-access_file=/run/secrets/sccache_s3_access_key
-secret_file=/run/secrets/sccache_s3_secret_key
+access_file="${SCCACHE_S3_ACCESS_KEY_FILE:-/run/secrets/sccache_s3_access_key}"
+secret_file="${SCCACHE_S3_SECRET_KEY_FILE:-/run/secrets/sccache_s3_secret_key}"
 runtime_mode_file="${NOOK_SCCACHE_RUNTIME_MODE_FILE:-/run/secrets/sccache_runtime_mode}"
 sccache_binary="${NOOK_SCCACHE_BINARY:-/usr/local/bin/sccache}"
 fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-disabled}"

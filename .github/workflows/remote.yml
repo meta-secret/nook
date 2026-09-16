@@ -240,6 +240,13 @@ jobs:
             echo "Remote checkout drifted from the requested source SHA." >&2
             exit 2
           fi
+      - name: Connect host sccache
+        uses: ./.github/actions/nook-cache-connect
+        with:
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
       - name: Setup Bun for host Pages build
         uses: oven-sh/setup-bun@v2
         with:
@@ -256,6 +263,8 @@ jobs:
             printf 'CARGO_TARGET_DIR=%s\n' "$cargo_target_dir"
             printf 'NOOK_WASM_PACK_ROOT=%s\n' "$wasm_pack_root"
           } >> "$GITHUB_ENV"
+      - name: Prepare host sccache before Rust tooling install
+        run: bash .github/scripts/ci-pr-native-pages-build.sh --prepare
       - name: Install pinned host WASM tooling
         run: |
           set -euo pipefail
@@ -301,6 +310,15 @@ jobs:
           NOOK_HOST_PAGES_DEPLOY: "1"
           NOOK_WRANGLER_VERSION: "4.114.0"
         run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
+      - name: Preserve preview sccache telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-preview-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-sccache-reports
+          retention-days: 30
+          if-no-files-found: warn
+          overwrite: true
 
   web-verify:
     if: >-

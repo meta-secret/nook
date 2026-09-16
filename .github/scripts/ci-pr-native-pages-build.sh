@@ -19,6 +19,88 @@ case "$wasm_mode" in
     ;;
 esac
 
+# The Pages preview job is intentionally host-native, but its Rust/WASM
+# compiler path must retain the repository's real SeaweedFS sccache contract.
+# The --prepare mode is called before cargo installs wasm-pack so that the
+# tooling bootstrap itself cannot bypass the compiler cache.
+sccache_version="0.17.0"
+sccache_sha256="67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006"
+sccache_root="${RUNNER_TEMP:-/tmp}/nook-sccache"
+sccache_report_dir="${RUNNER_TEMP:-/tmp}/nook-sccache-reports"
+sccache_binary="$sccache_root/sccache"
+sccache_wrapper="$sccache_root/nook-sccache"
+sccache_report="$sccache_root/nook-sccache-report"
+sccache_fallback_marker="$sccache_root/remote-disabled"
+sccache_ready_marker="$sccache_root/remote-ready"
+sccache_start_lock="$sccache_root/start-lock"
+
+if [ "${1:-}" = --prepare ]; then
+  if [ "${NOOK_SCCACHE_BACKEND:-}" != remote ] \
+    || [ "${SCCACHE_S3_RW_MODE:-}" != READ_WRITE ] \
+    || [ -z "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ] \
+    || [ -z "${SCCACHE_S3_SECRET_KEY_FILE:-}" ] \
+    || [ ! -r "$SCCACHE_S3_ACCESS_KEY_FILE" ] \
+    || [ ! -r "$SCCACHE_S3_SECRET_KEY_FILE" ]; then
+    echo "Pages preview requires the writable remote sccache backend and both credential files" >&2
+    exit 2
+  fi
+  command -v bun >/dev/null 2>&1 || {
+    echo "Pages preview requires the pinned repository Bun runtime to fetch sccache" >&2
+    exit 2
+  }
+  test -n "${GITHUB_ENV:-}"
+  mkdir -p "$sccache_root" "$sccache_report_dir"
+  archive="$sccache_root/sccache.tar.gz"
+  if [ ! -x "$sccache_binary" ]; then
+    NOOK_SCCACHE_DOWNLOAD_URL="https://github.com/mozilla/sccache/releases/download/v${sccache_version}/sccache-v${sccache_version}-x86_64-unknown-linux-musl.tar.gz" \
+    NOOK_SCCACHE_DOWNLOAD_PATH="$archive" \
+      bun -e '
+      const url = process.env.NOOK_SCCACHE_DOWNLOAD_URL;
+      const output = process.env.NOOK_SCCACHE_DOWNLOAD_PATH;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`sccache download failed: ${response.status}`);
+      await Bun.write(output, response);
+    '
+    echo "$sccache_sha256  $archive" | sha256sum -c -
+    tar -xzf "$archive" -C "$sccache_root"
+    install -m 0755 \
+      "$sccache_root/sccache-v${sccache_version}-x86_64-unknown-linux-musl/sccache" \
+      "$sccache_binary"
+    rm -rf "$archive" "$sccache_root/sccache-v${sccache_version}-x86_64-unknown-linux-musl"
+  fi
+  install -m 0755 "$ROOT/nook-app/nook-platform/docker/sccache-wrapper.sh" "$sccache_wrapper"
+  install -m 0755 "$ROOT/nook-app/nook-platform/docker/sccache-report.sh" "$sccache_report"
+  {
+    printf 'NOOK_SCCACHE_BINARY=%s\n' "$sccache_binary"
+    printf 'NOOK_SCCACHE_REPORT_BINARY=%s\n' "$sccache_binary"
+    printf 'NOOK_SCCACHE_REPORT_SCRIPT=%s\n' "$sccache_report"
+    printf 'NOOK_SCCACHE_REPORT_DIR=%s\n' "$sccache_report_dir"
+    printf 'NOOK_SCCACHE_S3_MODE=external\n'
+    printf 'NOOK_SCCACHE_RUNTIME_AUTHORITY=legacy\n'
+    printf 'NOOK_SCCACHE_FALLBACK_MARKER=%s\n' "$sccache_fallback_marker"
+    printf 'NOOK_SCCACHE_READY_MARKER=%s\n' "$sccache_ready_marker"
+    printf 'NOOK_SCCACHE_START_LOCK=%s\n' "$sccache_start_lock"
+    printf 'SCCACHE_CLIENT_SIDE=0\n'
+    printf 'SCCACHE_SERVER_UDS=%s/server.sock\n' "$sccache_root"
+    printf 'RUSTC_WRAPPER=%s\n' "$sccache_wrapper"
+  } >> "$GITHUB_ENV"
+  exit 0
+fi
+
+if [ "${NOOK_SCCACHE_BACKEND:-}" != remote ] \
+  || [ "${SCCACHE_S3_RW_MODE:-}" != READ_WRITE ] \
+  || [ ! -x "${NOOK_SCCACHE_BINARY:-}" ] \
+  || [ ! -x "${RUSTC_WRAPPER:-}" ]; then
+  echo "Pages preview must be prepared with remote sccache before Rust tooling installation" >&2
+  exit 2
+fi
+sccache_binary="$NOOK_SCCACHE_BINARY"
+sccache_report="${NOOK_SCCACHE_REPORT_SCRIPT:-$sccache_root/nook-sccache-report}"
+cleanup_sccache() {
+  "$sccache_binary" --stop-server >/dev/null 2>&1 || true
+}
+trap cleanup_sccache EXIT
+
 vault_root="$shared_root/src/vault-app/lib/nook-wasm"
 companion_root="$shared_root/src/extension/nook-companion-wasm"
 vault_build_mode="$vault_root/nook-wasm-build-mode"
@@ -33,6 +115,20 @@ mkdir -p "$vault_root" "$companion_root"
     --out-dir "../../nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
     --out-name nook_companion_wasm $wasm_opt_flag
 )
+
+# This is an executable health gate, not advisory telemetry. A cold publisher
+# may pass with authoritative remote writes; an existing cache must contribute
+# at least one useful hit. Fallback, unavailable stats, transport errors, and
+# zero-hit/no-write runs fail the preview before any Pages publication.
+report_status=0
+bash "$sccache_report" --require pages-preview-wasm || report_status=$?
+if [ -e "$sccache_fallback_marker" ]; then
+  echo "Pages preview sccache circuit opened; refusing direct-compiler success" >&2
+  exit 1
+fi
+if [ "$report_status" -ne 0 ]; then
+  exit "$report_status"
+fi
 echo "$build_mode" > "$vault_build_mode"
 
 web_root="$ROOT/nook-app/nook-web/nook-web-app"
