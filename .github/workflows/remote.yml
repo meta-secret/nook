@@ -189,7 +189,6 @@ jobs:
           HEAD_SHA: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && (inputs.source_sha || github.sha) || '' }}
           CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_PAGES_TOKEN || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_ACCOUNT_ID || '' }}
-          NOOK_HOST_PAGES_DEPLOY: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && '1' || '' }}
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
       - name: Preserve compile cache telemetry
         if: always() && (inputs.tasks || inputs.task) == 'build:compile'
