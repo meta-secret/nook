@@ -300,7 +300,7 @@ jobs:
           export CI=1
           export GIT_COMMIT_ID="$HEAD_SHA"
           export NOOK_EXTENSION_COMMIT="$HEAD_SHA"
-          export NOOK_EXTENSION_CHANNEL="pr-$DEPLOYMENT_TAG"
+          export NOOK_EXTENSION_CHANNEL="development"
           export NOOK_EXTENSION_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev/"
           export NOOK_SIMPLE_VAULT_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
           export VITE_BASE=/
