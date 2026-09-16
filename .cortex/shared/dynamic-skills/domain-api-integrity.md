@@ -34,6 +34,9 @@ placing domain decisions on these types.
 - Keep advanced capability construction private to the legal transition.
 - Expose an operation only on the state or capability where it is legal.
 - Return a named next state or exhaustive outcome from a state transition.
+- Preserve a meaningful success state or capability in the transition result.
+- Use unit or void success (`Result<(), E>` or `Result<void, E>`) only for a
+  genuinely effect-only operation with no meaningful success state.
 - Return semantic outcomes for eligibility, classification, and selection decisions.
 - Put each decision on the owner of the data it interprets.
 - Choose the [precise receiver](function-ownership.md#precise-receivers).
@@ -78,6 +81,10 @@ placing domain decisions on these types.
 - Validate TypeScript transport fields before constructing the concrete type.
 - Keep raw JSON trees only inside decoding or genuinely dynamic protocol edges.
 - Encode domain values only when crossing a required external boundary.
+- When a domain event time is owned by a Unix-millisecond newtype, preserve
+  that newtype through application layers.
+- Convert that value to an ISO string only at a required external presentation
+  or serialization boundary.
 - Give every persisted or wire schema version a named domain type.
 - Keep one explicit current writer version and an explicit supported-reader
   set.
@@ -103,6 +110,11 @@ placing domain decisions on these types.
 - Do not serialize a typed value merely to pass it between internal operations.
 - Do not use an unchecked cast, non-null assertion, panic shortcut, or
   equivalent escape hatch to manufacture a valid state.
+- Do not use a file-, module-, or crate-wide lint suppression to avoid
+  repairing an API, domain-state, newtype, or ownership violation in a migrated
+  scope.
+- Retain a narrow lint exception only when its owning language or boundary
+  policy permits it and identifies the exact external contract.
 - Do not use multiple positional parameters, tuples, arrays, or collections to
   hide independent request values.
 - Do not throw to propagate authored TypeScript domain or application failures.
