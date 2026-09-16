@@ -13,8 +13,9 @@ continues to own GitHub execution mechanics.
   acceptance. This includes native, WASM, reusable-workflow, remote-task,
   Dockerfile, and BuildKit paths.
 - Route repeated crate compilation, cache misses, cold downloads, inactive,
-  misconfigured, or unreachable sccache, and any zero-hit evidence to the
-  specialist before Docker or BuildKit diagnosis or repair.
+  misconfigured, or unreachable sccache, and any zero-hit policy violation or
+  repeated changed-head zero-hit evidence to the specialist before Docker or
+  BuildKit diagnosis or repair.
 - Require every CI Rust/WASM compilation path to execute the SRE-owned sccache
   gate. Fail the path when sccache is inactive, misconfigured, unreachable, or
   violates the repository zero-hit policy. Keep the gate and verdict in the
@@ -39,7 +40,8 @@ continues to own GitHub execution mechanics.
     change outside its semantic input domain;
   - `sccache-compiler-failure` for a terminal compiler failure;
   - `sccache-transport-fallback` for startup, credential, read, or write
-    failure that opens the direct-compiler circuit and requires telemetry;
+    failure reported by actual sccache tooling; treat it as a terminal gate
+    failure and require health telemetry;
   - `sccache-readiness-contract-violation` when a Docker `RUN` repeats startup,
     exceeds the startup budget, or does not share circuit state;
   - `unexpected-buildkit-export`, `severe-cache-hit-regression`, or
@@ -74,11 +76,13 @@ continues to own GitHub execution mechanics.
   within five minutes; an appropriate same-head no-BuildKit-export replay
   performs zero registry exports while retaining sccache access.
 - Require the SRE-owned sccache gate to emit sanitized health telemetry and a
-  zero-hit verdict. Leave startup, readiness, circuit, credential, DNS,
-  object-read, and write mechanics to the actual sccache tooling.
+  zero-hit policy verdict. A first cold publisher's zero-hit evidence is valid;
+  repeated changed-head zero-hit evidence is a terminal policy violation.
+  Leave startup, readiness, credential, DNS, object-read, and write mechanics
+  to the actual sccache tooling.
 - Keep genuine compiler failures terminal after the sccache gate verdict.
-- Preserve simulator/proof coverage for startup failure, DNS/read/write
-  failure, shared open circuit, compiler failure, and healthy single startup.
+- Preserve simulator/proof coverage for terminal startup, DNS/read/write, and
+  compiler failures at the sccache gate, plus healthy single-startup telemetry.
 - Require the canonical Docker simulator and proof for every repair. Route all
   workflow dispatch, status, rerun, and GitHub mechanics through Delivery.
 - Repeat the bounded diagnosis, repair, and evidence loop for the latest
@@ -99,8 +103,8 @@ continues to own GitHub execution mechanics.
 - Do not use repository-root compiler copies, leak compiler domains, or apply
   per-head arguments above their latest semantic consumer.
 - Do not execute GitHub, PR, publication, landing, or promotion mechanics.
-- Do not retry sccache after its circuit opens or expose sensitive transport
-  or credential data.
+- Do not retry a failed sccache gate or continue compilation after a terminal
+  sccache failure. Do not expose sensitive transport or credential data.
 - Do not run local tests, Docker, preflight, or product compilation during the
   feature stage.
 
