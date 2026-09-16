@@ -143,12 +143,19 @@ describe('locale', () => {
   })
 
   test('explains how to recover from changed local browser data', () => {
-    expect(
-      lookup_translation(
-        get_translation_catalog('en'),
-        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
-      ),
-    ).toBe('Local browser data changed. Reload the page to continue.')
+    const expectedByLocale = {
+      en: 'Local browser data changed. Reload the page to continue.',
+      ru: 'Локальные данные браузера изменились. Перезагрузите страницу, чтобы продолжить.',
+    } as const
+
+    for (const locale of ['en', 'ru'] as const) {
+      expect(
+        lookup_translation(
+          get_translation_catalog(locale),
+          I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+        ),
+      ).toBe(expectedByLocale[locale])
+    }
   })
 
   test('catalogs include architecture mode strings', () => {

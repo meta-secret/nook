@@ -1452,7 +1452,7 @@
   },
   "errors": {
     "validation": {
-      "local_data_changed_in_another_tab": "Локальные данные браузера изменились в другой вкладке Nook.",
+      "local_data_changed_in_another_tab": "Локальные данные браузера изменились. Перезагрузите страницу, чтобы продолжить.",
       "github_pat_empty": "Введите персональный токен доступа GitHub для подключения.",
       "shared_joiner_identity_required": "Введите идентификатор провайдера участника перед выдачей кода регистрации.",
       "shared_joiner_identity_invalid": "Введите корректный email участника.",
