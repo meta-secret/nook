@@ -2,7 +2,7 @@
 use super::{NookVaultManager, VaultCryptoState};
 use nook_companion_core::{
     ActiveExtensionVault, ExtensionActiveVaultScope, ExtensionGrantAuthority,
-    ExtensionGrantAuthorityRequest, PairingStorageJson, PairingVaultId,
+    ExtensionGrantAuthorityRequest, PairingStorageJson,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -26,11 +26,11 @@ impl NookVaultManager {
     pub fn classify_extension_grant_authority(
         &self,
         stored_json: PairingStorageJson,
-        vault_store_id: PairingVaultId,
+        vault_store_id: &crate::NookStoreId,
     ) -> Result<ExtensionGrantAuthority, JsError> {
         Ok(ExtensionGrantAuthorityRequest {
             stored_json,
-            vault_store_id,
+            vault_store_id: vault_store_id.as_core().clone(),
             active_vault: self.active_extension_vault_scope()?,
         }
         .classify())
@@ -41,6 +41,18 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn authority_classification_accepts_the_wasm_store_id_wrapper() -> Result<(), JsError> {
+        let manager = NookVaultManager::new();
+        let requested = crate::NookStoreId::from(nook_core::StoreId::before_genesis_placeholder());
+
+        assert_eq!(
+            manager.classify_extension_grant_authority("{}".to_owned().into(), &requested,)?,
+            ExtensionGrantAuthority::NoMatchingAuthority,
+        );
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     fn scope_tracks_decrypted_manager_state_and_reset() -> Result<(), JsError> {

@@ -64,8 +64,9 @@ mod verified_access;
 pub use companion_pairing::{
     NookCompanionPairingApprovalAuthority, NookCompanionPairingCandidateFailure,
     NookCompanionPairingCandidateOutcome, NookCompanionPairingCandidateOutcomeState,
-    NookCompanionPairingExtensionEndpoint, NookPreparedCompanionPairingActivation,
-    NookPrevalidatedCompanionPairingApproval, NookStoredCompanionPairingActivationCandidate,
+    NookCompanionPairingExtensionEndpoint, NookExtensionDeviceApproval,
+    NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
+    NookStoredCompanionPairingActivationCandidate,
 };
 pub use companion_protocol::{
     NookCompanionExtensionEndpoint, NookDiscoveredCompanionExtensionEndpoint,

@@ -80,11 +80,12 @@ pub use types::{
     NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
-    NookSyncConflictReview, NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport,
-    NookVaultArchitecture, NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic,
-    NookVaultEventAccessDiagnostic, NookVaultLastSync, NookVaultLastSyncState, NookVaultMember,
-    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
-    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
+    NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
+    NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
+    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
+    NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
+    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSaveDecision,
+    NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -175,6 +176,17 @@ mod browser_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn typed_vault_identity_exports_are_available_at_the_crate_boundary() -> Result<(), JsError> {
+        let store_id = NookStoreId::from(nook_core::StoreId::before_genesis_placeholder());
+        assert_eq!(store_id.value(), "store_abcdefghijk");
+        assert_eq!(
+            NookStoreIdPresence::from_raw("")?.state(),
+            NookStoreIdPresenceState::Absent,
+        );
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     fn extension_scopes_and_sentinel_translation_are_typed() {
