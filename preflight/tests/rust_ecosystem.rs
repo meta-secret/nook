@@ -345,6 +345,19 @@ fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
             && !fixture.docker_tasks.contains("type=docker"),
         "dependency policy must remain BuildKit-only without daemon image export/load"
     );
+    let dylint_task = fixture
+        .docker_tasks
+        .split_once("  docker:ecosystem:dylint:\n")
+        .map(|(_, task)| task)
+        .ok_or_else(|| anyhow::anyhow!("Dylint task block is missing"))?;
+    assert!(
+        dylint_task.contains("rust-dylint-self-test.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-native.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-wasm.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint-self-test rust-dylint-native rust-dylint-wasm")
+            && !dylint_task.contains("for stage in self-test native wasm"),
+        "Dylint must solve self-test, native, and WASM branches together so their shared graph is built once"
+    );
     assert!(
         fixture.docker_tasks.contains(
             "if [ -n \"${GHA_CACHE_WRITE_ENABLED:-}\" ] || [ \"${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}\" = \"1\" ]"
