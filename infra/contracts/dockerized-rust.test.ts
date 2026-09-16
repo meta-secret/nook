@@ -506,6 +506,41 @@ class DockerizedRustContract {
     expect(dockerignore).toContain("**/node_modules");
   }
 
+  compileExtensionUsesOwnFrozenDependencies(): void {
+    const compile = this.read(
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+    );
+    const extensionDependencyStage = compile.indexOf(
+      "FROM compile-web-dependencies AS compile-web-extension-dependencies",
+    );
+    const webStage = compile.indexOf("FROM web-base AS compile-web");
+    const extensionTypecheck = compile.indexOf(
+      "RUN cd nook-app/nook-web/nook-web-extension",
+    );
+    const extensionBuild = compile.indexOf(
+      "bun scripts/build.ts",
+      extensionTypecheck,
+    );
+    expect(extensionDependencyStage).toBeGreaterThanOrEqual(0);
+    expect(webStage).toBeGreaterThan(extensionDependencyStage);
+    expect(extensionTypecheck).toBeGreaterThan(webStage);
+    expect(extensionBuild).toBeGreaterThan(extensionTypecheck);
+
+    const dependencyStage = compile.slice(extensionDependencyStage, webStage);
+    expect(dependencyStage).toContain(
+      "COPY nook-app/nook-web/nook-web-extension/package.json nook-app/nook-web/nook-web-extension/bun.lock",
+    );
+    expect(dependencyStage).toContain("bun install --frozen-lockfile");
+
+    const webBuildStage = compile.slice(webStage, extensionTypecheck);
+    expect(webBuildStage).toContain(
+      "COPY --from=compile-web-extension-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules",
+    );
+    expect(webBuildStage).not.toContain(
+      "ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules",
+    );
+  }
+
   portableGitMetadata(): void {
     const temporary = mkdtempSync(join(tmpdir(), "nook-policy-git-"));
     try {
@@ -874,6 +909,10 @@ test(
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
+);
+test(
+  "sealed web compile installs extension dependencies from its own lockfile",
+  contract.compileExtensionUsesOwnFrozenDependencies.bind(contract),
 );
 test(
   "policy Git metadata retains exact head and real baseline without credentials",

@@ -267,6 +267,14 @@ RUN cd nook-app/nook-web/nook-web-research \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-web-dependencies
 
+FROM compile-web-dependencies AS compile-web-extension-dependencies
+
+COPY nook-app/nook-web/nook-web-extension/package.json nook-app/nook-web/nook-web-extension/bun.lock ./nook-app/nook-web/nook-web-extension/
+RUN cd nook-app/nook-web/nook-web-extension \
+    && bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-web-extension-dependencies
+
 FROM web-base AS compile-web
 
 WORKDIR /meta-secret/nook
@@ -274,14 +282,15 @@ COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-we
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
+COPY --from=compile-web-extension-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules \
+  /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
 RUN mkdir -p \
       /meta-secret/nook/nook-app/nook-web/nook-vault-simple \
       /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel \
       /meta-secret/nook/nook-app/nook-web/nook-web-extension \
     && ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-simple/node_modules \
-    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
-    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
+    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules
 # Keep policy, workflow, Cortex, and unrelated product changes out of every web
 # compiler key. The web workspace and its two imported legal documents are the
 # only repository sources consumed before compilation; generated WASM crosses
