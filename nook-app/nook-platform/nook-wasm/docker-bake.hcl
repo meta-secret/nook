@@ -57,6 +57,7 @@ target "_nook-rust-fast-common" {
 }
 
 target "rust-format-check" {
+  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-format-check"

@@ -175,6 +175,13 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
 
 #[test]
 fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> {
+    let shared = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
+    for secret_id in ["id=sccache_s3_access_key", "id=sccache_s3_secret_key"] {
+        assert!(
+            shared.contains(secret_id),
+            "shared _sccache target must pass the stable secret ID: {secret_id}"
+        );
+    }
     for (path, targets) in [
         (
             "nook-app/nook-platform/nook-core/docker-bake.hcl",
@@ -190,6 +197,7 @@ fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> 
             "nook-app/nook-platform/nook-wasm/docker-bake.hcl",
             [
                 "builder-wasm",
+                "rust-format-check",
                 "web-artifacts",
                 "_nook-rust-common",
                 "_nook-rust-browser-common",
