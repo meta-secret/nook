@@ -167,6 +167,7 @@ pub use extension_pairing_state::{
     GrantAuthorityResponseError, GrantAuthorityResponseJson, ImportedExtensionEventLog,
     PairingStorageJson, PairingVaultId, RefreshExtensionPairingGrantInput,
     SelectedExtensionPairingGrant, StoredExtensionPairingGrant, UnknownExtensionConnectScope,
+    UnknownExtensionPairingVaultType,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,

@@ -44,6 +44,19 @@ pub enum ExtensionPairingVaultType {
     Simple,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unsupported extension pairing vault type")]
+pub struct UnknownExtensionPairingVaultType;
+
+impl ExtensionPairingVaultType {
+    pub fn parse(value: &str) -> Result<Self, UnknownExtensionPairingVaultType> {
+        match value {
+            "simple" => Ok(Self::Simple),
+            _ => Err(UnknownExtensionPairingVaultType),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,6 +75,22 @@ mod tests {
         assert_eq!(
             ExtensionConnectScope::parse("external-value"),
             Err(UnknownExtensionConnectScope)
+        );
+    }
+
+    #[test]
+    fn pairing_vault_type_parser_admits_only_the_extension_vocabulary() {
+        assert_eq!(
+            ExtensionPairingVaultType::parse("simple"),
+            Ok(ExtensionPairingVaultType::Simple)
+        );
+        assert_eq!(
+            ExtensionPairingVaultType::parse("sentinel"),
+            Err(UnknownExtensionPairingVaultType)
+        );
+        assert_eq!(
+            ExtensionPairingVaultType::parse("external-value"),
+            Err(UnknownExtensionPairingVaultType)
         );
     }
 }

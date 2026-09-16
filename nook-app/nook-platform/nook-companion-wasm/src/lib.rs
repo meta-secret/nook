@@ -223,6 +223,40 @@ pub fn is_extension_connect_scope(value: &str) -> bool {
 }
 
 #[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_extension_pairing_vault_type(
+    value: &str,
+) -> Result<nook_companion_core::ExtensionPairingVaultType, wasm_bindgen::JsError> {
+    nook_companion_core::ExtensionPairingVaultType::parse(value)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[cfg(test)]
+mod extension_pairing_vault_type_admission_tests {
+    use super::*;
+
+    #[test]
+    fn admission_returns_the_typed_companion_vault_type() -> Result<(), wasm_bindgen::JsError> {
+        assert_eq!(
+            admit_extension_pairing_vault_type("simple")?,
+            nook_companion_core::ExtensionPairingVaultType::Simple
+        );
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn admission_rejects_vault_types_outside_the_companion_vocabulary() {
+        assert!(admit_extension_pairing_vault_type("sentinel").is_err());
+        assert!(admit_extension_pairing_vault_type("external-value").is_err());
+    }
+}
+
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
