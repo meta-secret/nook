@@ -7,33 +7,23 @@ use tsify::Tsify;
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ExtensionConsentVaultReadiness {
+    ManagerUnavailable,
     Locked,
     Verifying,
     Saving,
     Ready,
 }
 
-/// The portable approval attempt stage. A failed attempt remains retryable once
-/// the vault is ready; the browser owns the displayed explanation.
+/// Durable authorization state. Browser delivery, export, refresh, and
+/// presentation status are deliberately orthogonal to this phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ExtensionConsentPhase {
-    AwaitingApproval,
-    Approving,
+    AwaitingAuthorization,
+    Authorizing,
     Approved,
-    Failed { failure: ExtensionConsentFailure },
-}
-
-/// Stable failure stages for portable consent progression. Concrete browser
-/// transport failures and localized presentation remain outside this type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum ExtensionConsentFailure {
-    Preparation,
-    Delivery,
-    Completion,
+    AuthorizationFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -41,13 +31,12 @@ pub enum ExtensionConsentFailure {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ExtensionConsentApprovalAvailability {
     Available,
+    ManagerUnavailable,
     VaultLocked,
     VaultBusy,
-    ApprovalInProgress,
+    AuthorizationInProgress,
     AlreadyApproved,
-    RetryAvailable {
-        previous_failure: ExtensionConsentFailure,
-    },
+    RetryAvailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -62,27 +51,33 @@ impl ExtensionConsentObservation {
     #[must_use]
     pub fn approval_availability(self) -> ExtensionConsentApprovalAvailability {
         match (self.phase, self.vault) {
-            (ExtensionConsentPhase::Approving, _) => {
-                ExtensionConsentApprovalAvailability::ApprovalInProgress
+            (ExtensionConsentPhase::Authorizing, _) => {
+                ExtensionConsentApprovalAvailability::AuthorizationInProgress
             }
             (ExtensionConsentPhase::Approved, _) => {
                 ExtensionConsentApprovalAvailability::AlreadyApproved
             }
             (
-                ExtensionConsentPhase::AwaitingApproval | ExtensionConsentPhase::Failed { .. },
+                ExtensionConsentPhase::AwaitingAuthorization
+                | ExtensionConsentPhase::AuthorizationFailed,
+                ExtensionConsentVaultReadiness::ManagerUnavailable,
+            ) => ExtensionConsentApprovalAvailability::ManagerUnavailable,
+            (
+                ExtensionConsentPhase::AwaitingAuthorization
+                | ExtensionConsentPhase::AuthorizationFailed,
                 ExtensionConsentVaultReadiness::Locked,
             ) => ExtensionConsentApprovalAvailability::VaultLocked,
             (
-                ExtensionConsentPhase::AwaitingApproval | ExtensionConsentPhase::Failed { .. },
+                ExtensionConsentPhase::AwaitingAuthorization
+                | ExtensionConsentPhase::AuthorizationFailed,
                 ExtensionConsentVaultReadiness::Verifying | ExtensionConsentVaultReadiness::Saving,
             ) => ExtensionConsentApprovalAvailability::VaultBusy,
-            (ExtensionConsentPhase::AwaitingApproval, ExtensionConsentVaultReadiness::Ready) => {
-                ExtensionConsentApprovalAvailability::Available
-            }
-            (ExtensionConsentPhase::Failed { failure }, ExtensionConsentVaultReadiness::Ready) => {
-                ExtensionConsentApprovalAvailability::RetryAvailable {
-                    previous_failure: failure,
-                }
+            (
+                ExtensionConsentPhase::AwaitingAuthorization,
+                ExtensionConsentVaultReadiness::Ready,
+            ) => ExtensionConsentApprovalAvailability::Available,
+            (ExtensionConsentPhase::AuthorizationFailed, ExtensionConsentVaultReadiness::Ready) => {
+                ExtensionConsentApprovalAvailability::RetryAvailable
             }
         }
     }
@@ -92,9 +87,9 @@ impl ExtensionConsentObservation {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ExtensionConsentEvent {
-    ApprovalStarted,
-    ApprovalFailed { failure: ExtensionConsentFailure },
-    ApprovalCompleted,
+    AuthorizationStarted,
+    AuthorizationFailed,
+    AuthorizationSucceeded,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -129,16 +124,17 @@ impl ExtensionConsentTransitionRequest {
     pub fn transition(self) -> ExtensionConsentTransitionOutcome {
         let phase = match (self.phase, self.event) {
             (
-                ExtensionConsentPhase::AwaitingApproval | ExtensionConsentPhase::Failed { .. },
-                ExtensionConsentEvent::ApprovalStarted,
-            ) => ExtensionConsentPhase::Approving,
-            (
-                ExtensionConsentPhase::Approving,
-                ExtensionConsentEvent::ApprovalFailed { failure },
-            ) => ExtensionConsentPhase::Failed { failure },
-            (ExtensionConsentPhase::Approving, ExtensionConsentEvent::ApprovalCompleted) => {
-                ExtensionConsentPhase::Approved
+                ExtensionConsentPhase::AwaitingAuthorization
+                | ExtensionConsentPhase::AuthorizationFailed,
+                ExtensionConsentEvent::AuthorizationStarted,
+            ) => ExtensionConsentPhase::Authorizing,
+            (ExtensionConsentPhase::Authorizing, ExtensionConsentEvent::AuthorizationFailed) => {
+                ExtensionConsentPhase::AuthorizationFailed
             }
+            (
+                ExtensionConsentPhase::Authorizing | ExtensionConsentPhase::Approved,
+                ExtensionConsentEvent::AuthorizationSucceeded,
+            ) => ExtensionConsentPhase::Approved,
             _ => {
                 return ExtensionConsentTransitionOutcome::Rejected {
                     failure: ExtensionConsentTransitionFailure::InvalidTransition,
@@ -168,37 +164,44 @@ mod tests {
                 (
                     Self::observation(
                         ExtensionConsentVaultReadiness::Ready,
-                        ExtensionConsentPhase::AwaitingApproval,
+                        ExtensionConsentPhase::AwaitingAuthorization,
                     ),
                     ExtensionConsentApprovalAvailability::Available,
                 ),
                 (
                     Self::observation(
+                        ExtensionConsentVaultReadiness::ManagerUnavailable,
+                        ExtensionConsentPhase::AwaitingAuthorization,
+                    ),
+                    ExtensionConsentApprovalAvailability::ManagerUnavailable,
+                ),
+                (
+                    Self::observation(
                         ExtensionConsentVaultReadiness::Locked,
-                        ExtensionConsentPhase::AwaitingApproval,
+                        ExtensionConsentPhase::AwaitingAuthorization,
                     ),
                     ExtensionConsentApprovalAvailability::VaultLocked,
                 ),
                 (
                     Self::observation(
                         ExtensionConsentVaultReadiness::Verifying,
-                        ExtensionConsentPhase::AwaitingApproval,
+                        ExtensionConsentPhase::AwaitingAuthorization,
                     ),
                     ExtensionConsentApprovalAvailability::VaultBusy,
                 ),
                 (
                     Self::observation(
                         ExtensionConsentVaultReadiness::Saving,
-                        ExtensionConsentPhase::AwaitingApproval,
+                        ExtensionConsentPhase::AwaitingAuthorization,
                     ),
                     ExtensionConsentApprovalAvailability::VaultBusy,
                 ),
                 (
                     Self::observation(
                         ExtensionConsentVaultReadiness::Ready,
-                        ExtensionConsentPhase::Approving,
+                        ExtensionConsentPhase::Authorizing,
                     ),
-                    ExtensionConsentApprovalAvailability::ApprovalInProgress,
+                    ExtensionConsentApprovalAvailability::AuthorizationInProgress,
                 ),
                 (
                     Self::observation(
@@ -210,13 +213,9 @@ mod tests {
                 (
                     Self::observation(
                         ExtensionConsentVaultReadiness::Ready,
-                        ExtensionConsentPhase::Failed {
-                            failure: ExtensionConsentFailure::Delivery,
-                        },
+                        ExtensionConsentPhase::AuthorizationFailed,
                     ),
-                    ExtensionConsentApprovalAvailability::RetryAvailable {
-                        previous_failure: ExtensionConsentFailure::Delivery,
-                    },
+                    ExtensionConsentApprovalAvailability::RetryAvailable,
                 ),
             ];
 
@@ -227,54 +226,60 @@ mod tests {
 
         fn assert_legal_transitions() {
             let approving = ExtensionConsentTransitionRequest {
-                phase: ExtensionConsentPhase::AwaitingApproval,
-                event: ExtensionConsentEvent::ApprovalStarted,
+                phase: ExtensionConsentPhase::AwaitingAuthorization,
+                event: ExtensionConsentEvent::AuthorizationStarted,
             }
             .transition();
             assert_eq!(
                 approving,
                 ExtensionConsentTransitionOutcome::Transitioned {
-                    phase: ExtensionConsentPhase::Approving,
+                    phase: ExtensionConsentPhase::Authorizing,
                 }
             );
 
             let failed = ExtensionConsentTransitionRequest {
-                phase: ExtensionConsentPhase::Approving,
-                event: ExtensionConsentEvent::ApprovalFailed {
-                    failure: ExtensionConsentFailure::Completion,
-                },
+                phase: ExtensionConsentPhase::Authorizing,
+                event: ExtensionConsentEvent::AuthorizationFailed,
             }
             .transition();
             assert_eq!(
                 failed,
                 ExtensionConsentTransitionOutcome::Transitioned {
-                    phase: ExtensionConsentPhase::Failed {
-                        failure: ExtensionConsentFailure::Completion,
-                    },
+                    phase: ExtensionConsentPhase::AuthorizationFailed,
                 }
             );
 
             let retrying = ExtensionConsentTransitionRequest {
-                phase: ExtensionConsentPhase::Failed {
-                    failure: ExtensionConsentFailure::Completion,
-                },
-                event: ExtensionConsentEvent::ApprovalStarted,
+                phase: ExtensionConsentPhase::AuthorizationFailed,
+                event: ExtensionConsentEvent::AuthorizationStarted,
             }
             .transition();
             assert_eq!(
                 retrying,
                 ExtensionConsentTransitionOutcome::Transitioned {
-                    phase: ExtensionConsentPhase::Approving,
+                    phase: ExtensionConsentPhase::Authorizing,
                 }
             );
 
             let approved = ExtensionConsentTransitionRequest {
-                phase: ExtensionConsentPhase::Approving,
-                event: ExtensionConsentEvent::ApprovalCompleted,
+                phase: ExtensionConsentPhase::Authorizing,
+                event: ExtensionConsentEvent::AuthorizationSucceeded,
             }
             .transition();
             assert_eq!(
                 approved,
+                ExtensionConsentTransitionOutcome::Transitioned {
+                    phase: ExtensionConsentPhase::Approved,
+                }
+            );
+
+            let remains_approved = ExtensionConsentTransitionRequest {
+                phase: ExtensionConsentPhase::Approved,
+                event: ExtensionConsentEvent::AuthorizationSucceeded,
+            }
+            .transition();
+            assert_eq!(
+                remains_approved,
                 ExtensionConsentTransitionOutcome::Transitioned {
                     phase: ExtensionConsentPhase::Approved,
                 }
@@ -284,20 +289,20 @@ mod tests {
         fn assert_illegal_transitions_are_rejected() {
             let cases = [
                 ExtensionConsentTransitionRequest {
-                    phase: ExtensionConsentPhase::AwaitingApproval,
-                    event: ExtensionConsentEvent::ApprovalCompleted,
+                    phase: ExtensionConsentPhase::AwaitingAuthorization,
+                    event: ExtensionConsentEvent::AuthorizationSucceeded,
                 },
                 ExtensionConsentTransitionRequest {
                     phase: ExtensionConsentPhase::Approved,
-                    event: ExtensionConsentEvent::ApprovalStarted,
+                    event: ExtensionConsentEvent::AuthorizationStarted,
                 },
                 ExtensionConsentTransitionRequest {
-                    phase: ExtensionConsentPhase::Failed {
-                        failure: ExtensionConsentFailure::Preparation,
-                    },
-                    event: ExtensionConsentEvent::ApprovalFailed {
-                        failure: ExtensionConsentFailure::Delivery,
-                    },
+                    phase: ExtensionConsentPhase::Approved,
+                    event: ExtensionConsentEvent::AuthorizationFailed,
+                },
+                ExtensionConsentTransitionRequest {
+                    phase: ExtensionConsentPhase::AuthorizationFailed,
+                    event: ExtensionConsentEvent::AuthorizationFailed,
                 },
             ];
 

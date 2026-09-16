@@ -151,10 +151,9 @@ pub use domain_numbers::{
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
 pub use extension_consent::{
-    ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentFailure,
-    ExtensionConsentObservation, ExtensionConsentPhase, ExtensionConsentTransitionFailure,
-    ExtensionConsentTransitionOutcome, ExtensionConsentTransitionRequest,
-    ExtensionConsentVaultReadiness,
+    ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentObservation,
+    ExtensionConsentPhase, ExtensionConsentTransitionFailure, ExtensionConsentTransitionOutcome,
+    ExtensionConsentTransitionRequest, ExtensionConsentVaultReadiness,
 };
 pub use extension_pairing_state::{
     ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
