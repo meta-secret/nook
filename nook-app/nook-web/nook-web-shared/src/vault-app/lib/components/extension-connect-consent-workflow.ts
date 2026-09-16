@@ -543,6 +543,21 @@ export class ExtensionConnectConsentWorkflow {
     }
 
     const outcome = deliveryOutcome(delivered.value);
+    if (outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) {
+      this.publish(
+        {
+          kind: ExtensionConsentWorkflowKind.Failed,
+          phase: approvedPhase,
+          failure: {
+            kind: ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
+            outcome,
+          },
+        },
+        publish,
+      );
+      return;
+    }
+
     if (
       !this.publish(
         {
@@ -582,21 +597,6 @@ export class ExtensionConnectConsentWorkflow {
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh,
             failure: devices.error,
-          },
-        },
-        publish,
-      );
-      return;
-    }
-
-    if (outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) {
-      this.publish(
-        {
-          kind: ExtensionConsentWorkflowKind.Failed,
-          phase: approvedPhase,
-          failure: {
-            kind: ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
-            outcome,
           },
         },
         publish,

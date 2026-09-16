@@ -224,6 +224,10 @@ describe('extension consent web workflow', () => {
     'keeps $name retryable after Rust approval',
     async ({ delivery, outcome, notice: expectedNotice }) => {
       const harness = createHarness()
+      const refreshDeviceState = vi.fn(
+        async (): Promise<Result<void, VaultStorageFailure>> => ok(),
+      )
+      harness.vault.refreshDeviceState = refreshDeviceState
       approvalPort.deliver.mockResolvedValueOnce(ok(delivery))
 
       const retryableState = await approve(harness)
@@ -258,6 +262,7 @@ describe('extension consent web workflow', () => {
       )
       expect(notice).toEqual(expectedNotice)
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
+      expect(refreshDeviceState).not.toHaveBeenCalled()
       expect(approvalPort.admitCompletion).not.toHaveBeenCalled()
 
       let state = retryableState
@@ -274,6 +279,7 @@ describe('extension consent web workflow', () => {
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
       expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
       expect(approvalPort.deliver).toHaveBeenCalledTimes(2)
+      expect(refreshDeviceState).toHaveBeenCalledTimes(1)
       expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(1)
       harness.workflow.dispose()
     },
