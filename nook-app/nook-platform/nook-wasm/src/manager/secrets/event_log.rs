@@ -43,7 +43,8 @@ impl NookExtensionEventLogImportStatus {
     #[wasm_bindgen]
     pub fn to_object(&self) -> Result<nook_core::ImportedExtensionEventLog, JsError> {
         let evidence = nook_core::ImportedExtensionEventLog {
-            vault_store_id: self.0.vault_store_id.clone(),
+            vault_store_id: nook_core::StoreId::parse(&self.0.vault_store_id)
+                .map_err(|error| JsError::new(&error.to_string()))?,
             event_count: u32::try_from(self.0.event_count)
                 .map_err(|_| JsError::new("imported event count exceeds the browser contract"))?
                 .into(),

@@ -260,7 +260,7 @@ impl CurrentActivationBinding<'_> {
         if self.manager.application != VaultApplication::Extension
             || self.manager.vault.architecture.vault_type != VaultType::Simple
             || self.manager.vault.store_id != self.store_id.as_str()
-            || self.store_id != self.approval.vault_store_id
+            || self.store_id != &self.approval.vault_store_id
             || vault_name != &self.approval.vault_name
         {
             return Err(CompanionPairingCandidateFailure::ManagerBinding);

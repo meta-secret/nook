@@ -1,6 +1,6 @@
 //! Typed values exported across the wasm-bindgen boundary (no untyped JavaScript bags).
 
-use crate::{NookError, NookSecretListItem, NookSecretRecord, NookVaultManager};
+use crate::{NookError, NookSecretListItem, NookVaultManager};
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
