@@ -62,7 +62,7 @@ if [ "${1:-}" = --prepare ]; then
       await Bun.write(output, response);
     '
     echo "$sccache_sha256  $archive" | sha256sum -c -
-    tar -xzf "$archive" -C "$sccache_root"
+    tar -xzf "$archive" -C "$sccache_root" --no-same-owner
     install -m 0755 \
       "$sccache_root/sccache-v${sccache_version}-x86_64-unknown-linux-musl/sccache" \
       "$sccache_binary"
