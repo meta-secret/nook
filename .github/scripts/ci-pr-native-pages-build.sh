@@ -41,6 +41,11 @@ extension_root="$ROOT/nook-app/nook-web/nook-web-extension"
 (cd "$web_root" && bun install --frozen-lockfile)
 (
   cd "$web_root"
+  # The host runner may carry Vite app-selection variables from its base image.
+  # Let the package's mode files select the same unified/site output layout as
+  # the sealed PR web build; otherwise site mode can inherit the unified app
+  # shell and overwrite the site's dedicated static 404.html.
+  unset VITE_NOOK_APP_KIND VITE_NOOK_OUT_DIR
   VITE_BASE="${VITE_BASE:-/}" \
     VITE_SITE_URL="${VITE_SITE_URL:-}" \
     VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL:-}" \
