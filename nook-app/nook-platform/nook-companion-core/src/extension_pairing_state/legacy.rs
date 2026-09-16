@@ -3,10 +3,12 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    EXTENSION_SETUP_KEY, ExtensionConnectScope, ExtensionPairingEntry, ExtensionPairingRecord,
-    ExtensionPairingState, ExtensionPairingStateError, ExtensionPairingVaultType,
-    ExtensionReadySetup, ExtensionReadySetupStatus, StoredExtensionPairingGrant,
+    EXTENSION_SETUP_KEY, ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds,
+    ExtensionPairingEntry, ExtensionPairingRecord, ExtensionPairingState,
+    ExtensionPairingStateError, ExtensionPairingVaultType, ExtensionReadySetup,
+    ExtensionReadySetupStatus, StoredExtensionPairingGrant,
 };
+use nook_auth2::StoreId;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,9 +111,14 @@ impl ExtensionPairingState {
                         device_public_key: grant.device_public_key,
                         device_signing_public_key: grant.device_signing_public_key,
                         device_label: grant.device_label,
-                        vault_store_id: grant.vault_store_id,
+                        vault_store_id: StoreId::parse(&grant.vault_store_id)
+                            .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
                         vault_name: grant.vault_name,
-                        approved_at: grant.approved_at,
+                        approved_at:
+                            ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
+                                &grant.approved_at,
+                            )
+                            .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
                         scopes: grant.scopes,
                         sync_provider_count: grant.sync_provider_count.into(),
                         event_count: setup.event_count.into(),
@@ -173,7 +180,7 @@ mod tests {
     #[test]
     fn migrates_a_valid_legacy_pairing_state_into_typed_domain_records() -> anyhow::Result<()> {
         let records = Fixture::legacy_pairing_state(
-            Fixture::legacy_grant("store-test"),
+            Fixture::legacy_grant(Fixture::STORE),
             Fixture::legacy_setup(),
         );
         let serialized = serde_json::to_string(&records)?;
@@ -184,7 +191,7 @@ mod tests {
             anyhow::bail!("migrated state must select its grant");
         };
 
-        assert_eq!(selected.vault_store_id, "store-test");
+        assert_eq!(selected.vault_store_id.as_str(), Fixture::STORE);
         assert_eq!(selected.event_count, crate::ExtensionEventCount::from(2));
         assert_eq!(selected.event_log_heads, vec!["event-2"]);
         assert_eq!(selected.last_local_sync_at, "2026-07-25T00:00:01.000Z");
@@ -196,9 +203,10 @@ mod tests {
     fn migration_preserves_complete_non_selected_pairing_grants() -> anyhow::Result<()> {
         let mut setup = Fixture::legacy_setup();
         setup.paired_vaults.push("Team".to_owned());
-        let mut records = Fixture::legacy_pairing_state(Fixture::legacy_grant("store-test"), setup);
+        let mut records =
+            Fixture::legacy_pairing_state(Fixture::legacy_grant(Fixture::STORE), setup);
         let mut team = Fixture::grant();
-        team.vault_store_id = "store-team".to_owned();
+        team.vault_store_id = StoreId::parse(Fixture::OTHER_STORE)?;
         team.vault_name = "Team".to_owned();
         team.event_count = 7.into();
         team.event_log_heads = vec!["event-team-7".to_owned()];
@@ -212,7 +220,7 @@ mod tests {
 
         assert_eq!(migrated.ordered_grants().len(), 2);
         assert_eq!(
-            migrated.grant("store-team"),
+            migrated.grant(&StoreId::parse(Fixture::OTHER_STORE)?),
             PairingGrantObservation::Stored(&team)
         );
         assert_eq!(
@@ -228,7 +236,7 @@ mod tests {
                 SelectedExtensionPairingGrant::NotSelected =>
                     anyhow::bail!("expected selected grant"),
             },
-            "store-test".to_owned()
+            StoreId::parse(Fixture::STORE)?
         );
         Ok(())
     }
@@ -237,8 +245,9 @@ mod tests {
     fn migration_quarantines_incomplete_non_selected_pairing_grants() -> anyhow::Result<()> {
         let mut setup = Fixture::legacy_setup();
         setup.paired_vaults.push("Team".to_owned());
-        let mut records = Fixture::legacy_pairing_state(Fixture::legacy_grant("store-test"), setup);
-        let mut incomplete_team = Fixture::legacy_grant("store-team");
+        let mut records =
+            Fixture::legacy_pairing_state(Fixture::legacy_grant(Fixture::STORE), setup);
+        let mut incomplete_team = Fixture::legacy_grant(Fixture::OTHER_STORE);
         incomplete_team.vault_name = "Team".to_owned();
         records.insert(
             StoredExtensionPairingGrant::storage_key_for(&incomplete_team.vault_store_id),
@@ -250,7 +259,7 @@ mod tests {
 
         assert_eq!(migrated.ordered_grants().len(), 1);
         assert_eq!(
-            migrated.grant("store-team"),
+            migrated.grant(&StoreId::parse(Fixture::OTHER_STORE)?),
             PairingGrantObservation::NotStored
         );
         assert_eq!(
@@ -275,12 +284,16 @@ mod tests {
     #[test]
     fn rejects_ambiguous_legacy_pairing_grants_for_the_selected_vault() -> anyhow::Result<()> {
         let mut records = Fixture::legacy_pairing_state(
-            Fixture::legacy_grant("store-one"),
+            Fixture::legacy_grant(Fixture::STORE),
             Fixture::legacy_setup(),
         );
         records.insert(
-            StoredExtensionPairingGrant::storage_key_for("store-two"),
-            LegacyExtensionPairingRecord::Grant(Fixture::legacy_grant("store-two")),
+            format!(
+                "{}{}",
+                super::EXTENSION_GRANT_KEY_PREFIX,
+                Fixture::OTHER_STORE
+            ),
+            LegacyExtensionPairingRecord::Grant(Fixture::legacy_grant(Fixture::OTHER_STORE)),
         );
         let serialized = serde_json::to_string(&records)?;
 
@@ -295,7 +308,7 @@ mod tests {
     fn rejects_inconsistent_legacy_pairing_metadata() -> anyhow::Result<()> {
         let mut setup = Fixture::legacy_setup();
         setup.sync_provider_count = 2;
-        let records = Fixture::legacy_pairing_state(Fixture::legacy_grant("store-test"), setup);
+        let records = Fixture::legacy_pairing_state(Fixture::legacy_grant(Fixture::STORE), setup);
         let serialized = serde_json::to_string(&records)?;
 
         assert_eq!(
@@ -307,6 +320,9 @@ mod tests {
     struct Fixture;
 
     impl Fixture {
+        const STORE: &'static str = "store_abcdefghijk";
+        const OTHER_STORE: &'static str = "store_lmnopqrst";
+
         fn grant() -> StoredExtensionPairingGrant {
             StoredExtensionPairingGrant {
                 vault_type: ExtensionPairingVaultType::Simple,
@@ -314,9 +330,9 @@ mod tests {
                 device_public_key: "age1test".to_owned(),
                 device_signing_public_key: "signing-test".to_owned(),
                 device_label: "Nook Extension".to_owned(),
-                vault_store_id: "store-test".to_owned(),
+                vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
                 event_count: 2.into(),
@@ -359,7 +375,11 @@ mod tests {
         ) -> HashMap<String, LegacyExtensionPairingRecord> {
             let mut records = HashMap::new();
             records.insert(
-                StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id),
+                format!(
+                    "{}{}",
+                    super::EXTENSION_GRANT_KEY_PREFIX,
+                    grant.vault_store_id
+                ),
                 LegacyExtensionPairingRecord::Grant(grant),
             );
             records.insert(

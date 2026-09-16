@@ -20,7 +20,7 @@ mod tests {
     fn generated_decoder_preserves_missing_active_authority() -> Result<(), wasm_bindgen::JsValue> {
         let result = decode_extension_grant_authority_response(
             r#"{"kind":"MissingActiveAuthority"}"#.to_owned().into(),
-            "store-test".to_owned().into(),
+            nook_companion_core::PairingVaultId::before_genesis_placeholder(),
         )?;
         assert_eq!(result, ExtensionGrantAuthority::MissingActiveAuthority);
         Ok(())
@@ -31,7 +31,7 @@ mod tests {
         assert!(
             decode_extension_grant_authority_response(
                 r#"{"kind":"Unknown"}"#.to_owned().into(),
-                "store-test".to_owned().into(),
+                nook_companion_core::PairingVaultId::before_genesis_placeholder(),
             )
             .is_err()
         );

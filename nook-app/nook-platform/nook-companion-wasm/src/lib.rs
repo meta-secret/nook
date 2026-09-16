@@ -156,8 +156,10 @@ pub fn validate_companion_authentication_outcome_decision(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
-    StoredExtensionPairingGrant::storage_key_for(vault_store_id)
+pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> Result<String, JsError> {
+    let store_id = nook_companion_core::PairingVaultId::parse(vault_store_id)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    Ok(StoredExtensionPairingGrant::storage_key_for(&store_id))
 }
 
 #[wasm_bindgen]
@@ -534,16 +536,16 @@ mod tests {
             device_public_key: "age1test".to_owned(),
             device_signing_public_key: "signing-test".to_owned(),
             device_label: "Nook Extension".to_owned(),
-            vault_store_id: "store-test".to_owned(),
+            vault_store_id: nook_companion_core::PairingVaultId::before_genesis_placeholder(),
             vault_name: "Personal".to_owned(),
-            approved_at: "2026-09-05T00:00:00.000Z".to_owned(),
+            approved_at: nook_companion_core::ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
             scopes: vec![nook_companion_core::ExtensionConnectScope::PasswordFilling],
             sync_provider_count: 1.into(),
         }
     }
     fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensionEventLog {
         nook_companion_core::ImportedExtensionEventLog {
-            vault_store_id: "store-test".to_owned(),
+            vault_store_id: nook_companion_core::PairingVaultId::before_genesis_placeholder(),
             event_count: event_count.into(),
             heads: vec![format!("event-{event_count}")],
             access_granted: true,
@@ -568,12 +570,12 @@ mod tests {
         assert!(matches!(
             first_extension_pairing_grant(created.clone()),
             nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
-                if grant.vault_store_id == "store-test"
+                if grant.vault_store_id.as_str() == "store_abcdefghijk"
         ));
         assert!(matches!(
             selected_extension_pairing_grant(created.clone()),
             nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
-                if grant.vault_store_id == "store-test"
+                if grant.vault_store_id.as_str() == "store_abcdefghijk"
         ));
         assert!(is_stored_extension_pairing_grant_json(
             &serde_json::to_string(&grant).map_err(|error| error.to_string())?
@@ -600,7 +602,8 @@ mod tests {
             extension_setup_after_pairing_grant_removal(
                 nook_companion_core::ExtensionPairingGrantRemovalInput {
                     state: refreshed,
-                    removed_vault_store_id: "store-test".to_owned(),
+                    removed_vault_store_id:
+                        nook_companion_core::PairingVaultId::before_genesis_placeholder(),
                 }
             ),
             nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault
@@ -639,8 +642,9 @@ mod tests {
             nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
         );
         assert_eq!(
-            extension_pairing_grant_storage_key("store-test"),
-            "nook:extension-pairing-grant:store-test"
+            extension_pairing_grant_storage_key("store_abcdefghijk")
+                .map_err(|error| format!("{error:?}"))?,
+            "nook:extension-pairing-grant:store_abcdefghijk"
         );
         assert!(extension_pairing_setup_storage_key().ends_with("setup"));
         for scope in [

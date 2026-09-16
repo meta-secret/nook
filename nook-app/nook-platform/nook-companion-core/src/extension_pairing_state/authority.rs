@@ -29,17 +29,8 @@ impl From<String> for PairingStorageJson {
     }
 }
 
-/// An exact pairing identifier, before stored authority is validated.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
-#[serde(transparent)]
-#[tsify(from_wasm_abi)]
-pub struct PairingVaultId(String);
-
-impl From<String> for PairingVaultId {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
+/// The canonical vault identifier, re-exported under the pairing vocabulary.
+pub use nook_auth2::StoreId as PairingVaultId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields)]
@@ -88,7 +79,7 @@ impl ExtensionGrantAuthorityRequest {
         else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
-        let key = StoredExtensionPairingGrant::storage_key_for(&self.vault_store_id.0);
+        let key = StoredExtensionPairingGrant::storage_key_for(&self.vault_store_id);
         let Some(value) = entries.remove(&key) else {
             return match self.active_vault {
                 ExtensionActiveVaultScope::Active(active)
@@ -142,7 +133,7 @@ mod tests {
         fn request(stored_json: String) -> ExtensionGrantAuthorityRequest {
             ExtensionGrantAuthorityRequest {
                 stored_json: stored_json.into(),
-                vault_store_id: "store-test".to_owned().into(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 active_vault: ExtensionActiveVaultScope::NoActiveVault,
             }
         }
@@ -154,9 +145,9 @@ mod tests {
                 device_public_key: "age1test".to_owned(),
                 device_signing_public_key: "signing-test".to_owned(),
                 device_label: "Nook Extension".to_owned(),
-                vault_store_id: "store-test".to_owned(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+                approved_at: super::super::ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
                 event_count: 2.into(),
@@ -177,20 +168,24 @@ mod tests {
     }
 
     #[test]
-    fn absent_grant_closes_only_the_exact_active_vault() {
+    fn absent_grant_closes_only_the_exact_active_vault() -> anyhow::Result<()> {
         for (vault, expected) in [
             (
-                "store-test",
+                PairingVaultId::before_genesis_placeholder(),
                 ExtensionGrantAuthority::MissingActiveAuthority,
             ),
-            ("other-store", ExtensionGrantAuthority::NoMatchingAuthority),
+            (
+                PairingVaultId::parse("store_lmnopqrst")?,
+                ExtensionGrantAuthority::NoMatchingAuthority,
+            ),
         ] {
             let mut request = Fixture::request("{}".to_owned());
             request.active_vault = ExtensionActiveVaultScope::Active(ActiveExtensionVault {
-                vault_store_id: vault.to_owned().into(),
+                vault_store_id: vault,
             });
             assert_eq!(request.classify(), expected);
         }
+        Ok(())
     }
 
     #[test]
@@ -200,8 +195,8 @@ mod tests {
             "null",
             "[]",
             "42",
-            r#"{"nook:extension-pairing-grant:store-test":null}"#,
-            r#"{"nook:extension-pairing-grant:store-test":{}}"#,
+            r#"{"nook:extension-pairing-grant:store_abcdefghijk":null}"#,
+            r#"{"nook:extension-pairing-grant:store_abcdefghijk":{}}"#,
         ] {
             assert_eq!(
                 Fixture::request(json.to_owned()).classify(),
@@ -215,7 +210,9 @@ mod tests {
         let grant = Fixture::grant();
         let mut entries = Map::new();
         entries.insert(
-            StoredExtensionPairingGrant::storage_key_for("store-test"),
+            StoredExtensionPairingGrant::storage_key_for(
+                &PairingVaultId::before_genesis_placeholder(),
+            ),
             serde_json::to_value(&grant)?,
         );
         entries.insert("unrelated".to_owned(), Value::Null);
@@ -229,12 +226,14 @@ mod tests {
     #[test]
     fn rejects_mismatched_key_and_incomplete_grant() -> anyhow::Result<()> {
         let mut mismatched = Fixture::grant();
-        mismatched.vault_store_id = "another-store".to_owned();
+        mismatched.vault_store_id = PairingVaultId::parse("store_lmnopqrst")?;
         let mut incomplete = Fixture::grant();
         incomplete.scopes.clear();
         for grant in [mismatched, incomplete] {
             let entries = HashMap::from([(
-                StoredExtensionPairingGrant::storage_key_for("store-test"),
+                StoredExtensionPairingGrant::storage_key_for(
+                    &PairingVaultId::before_genesis_placeholder(),
+                ),
                 grant,
             )]);
             assert_eq!(
@@ -266,12 +265,12 @@ mod tests {
         let response = serde_json::to_string(&outcome)?;
         assert_eq!(
             GrantAuthorityResponseJson::from(response.clone())
-                .decode("store-test".to_owned().into())?,
+                .decode(PairingVaultId::before_genesis_placeholder())?,
             outcome
         );
         assert!(
             GrantAuthorityResponseJson::from(response)
-                .decode("another-store".to_owned().into())
+                .decode(PairingVaultId::parse("store_lmnopqrst")?)
                 .is_err()
         );
         Ok(())

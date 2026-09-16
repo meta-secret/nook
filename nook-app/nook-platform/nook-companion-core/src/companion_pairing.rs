@@ -4,7 +4,10 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
+use crate::{
+    ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingVaultType,
+};
+use nook_auth2::StoreId;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -270,9 +273,9 @@ impl CompanionPairingRequestObservation {
 pub struct CompanionPairingWebsiteAuthorization {
     pub request: CompanionPairingRequest,
     pub observed_at: CompanionPairingEpochMilliseconds,
-    pub vault_store_id: String,
+    pub vault_store_id: StoreId,
     pub vault_name: String,
-    pub approved_at: String,
+    pub approved_at: ExtensionPairingApprovalEpochMilliseconds,
 }
 
 impl CompanionPairingWebsiteAuthorization {
@@ -282,10 +285,7 @@ impl CompanionPairingWebsiteAuthorization {
     ) -> Result<(), CompanionPairingError> {
         self.request.validate_at(self.observed_at)?;
         expected.validate_binding(&self.request)?;
-        if self.vault_store_id.trim().is_empty()
-            || self.vault_name.trim().is_empty()
-            || self.approved_at.trim().is_empty()
-        {
+        if self.vault_name.trim().is_empty() || self.approved_at.validate().is_err() {
             return Err(CompanionPairingError::InvalidValue);
         }
         Ok(())
@@ -297,9 +297,9 @@ impl CompanionPairingWebsiteAuthorization {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionPairingApproval {
     pub request: CompanionPairingRequest,
-    pub vault_store_id: String,
+    pub vault_store_id: StoreId,
     pub vault_name: String,
-    pub approved_at: String,
+    pub approved_at: ExtensionPairingApprovalEpochMilliseconds,
     pub provider_manifest_digest: CompanionPairingProviderManifestDigest,
 }
 
@@ -322,10 +322,7 @@ impl CompanionPairingApproval {
     ) -> Result<(), CompanionPairingError> {
         self.request.validate_at(observed_at)?;
         Self::validate_manifest_digest(&self.provider_manifest_digest)?;
-        if self.vault_store_id.trim().is_empty()
-            || self.vault_name.trim().is_empty()
-            || self.approved_at.trim().is_empty()
-        {
+        if self.vault_name.trim().is_empty() || self.approved_at.validate().is_err() {
             return Err(CompanionPairingError::InvalidValue);
         }
         Ok(())
@@ -398,7 +395,7 @@ impl AuthorizedCompanionWebsitePairing {
     }
 
     #[must_use]
-    pub fn vault_store_id(&self) -> &str {
+    pub fn vault_store_id(&self) -> &StoreId {
         &self.0.vault_store_id
     }
 
@@ -536,18 +533,18 @@ mod tests {
             Ok(CompanionPairingWebsiteAuthorization {
                 request: Self::request()?,
                 observed_at: Self::epoch("150")?,
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)?,
             })
         }
 
         fn approval() -> anyhow::Result<CompanionPairingApproval> {
             Ok(CompanionPairingApproval {
                 request: Self::request()?,
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)?,
                 provider_manifest_digest: Self::provider_manifest_digest()?,
             })
         }

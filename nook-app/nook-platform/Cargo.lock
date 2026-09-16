@@ -1913,6 +1913,7 @@ name = "nook-companion-core"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "nook-auth2",
  "nook-authenticator-domain",
  "nook-event-log",
  "percent-encoding",

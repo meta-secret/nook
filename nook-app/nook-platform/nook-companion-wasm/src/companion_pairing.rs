@@ -120,7 +120,8 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        ExtensionConnectScope, ExtensionPairingVaultType,
+        ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds,
+        ExtensionPairingVaultType, PairingVaultId,
     };
 
     struct PairingProtocolFixture;
@@ -151,9 +152,10 @@ mod tests {
         fn approval() -> Result<CompanionPairingApproval, wasm_bindgen::JsValue> {
             Ok(CompanionPairingApproval {
                 request: Self::request()?,
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)
+                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     &"a".repeat(64),
                 )
@@ -202,9 +204,10 @@ mod tests {
             CompanionPairingWebsiteAuthorization {
                 request,
                 observed_at: PairingProtocolFixture::epoch("175")?,
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(175.0)
+                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
             },
             CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
                 .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
@@ -233,9 +236,10 @@ mod tests {
             CompanionPairingWebsiteAuthorization {
                 request: PairingProtocolFixture::request()?,
                 observed_at: PairingProtocolFixture::epoch("149")?,
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(149.0)
+                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
             },
             CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
                 .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,

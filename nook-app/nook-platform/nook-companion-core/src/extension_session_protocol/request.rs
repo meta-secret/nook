@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn grant_authority_request_rejects_caller_supplied_active_scope() -> anyhow::Result<()> {
-        let request = r#"{"type":"nook:extension-session-classify-grant-authority","payload":{"stored_json":"{}","vault_store_id":"store-test","queue":{"kind":"message-default"}}}"#;
+        let request = r#"{"type":"nook:extension-session-classify-grant-authority","payload":{"stored_json":"{}","vault_store_id":"store_abcdefghijk","queue":{"kind":"message-default"}}}"#;
         assert!(
             ExtensionSessionRequest::DECL
                 .contains("nook:extension-session-classify-grant-authority")

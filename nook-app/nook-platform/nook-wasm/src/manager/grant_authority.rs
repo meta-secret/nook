@@ -18,7 +18,8 @@ impl NookVaultManager {
             ));
         }
         Ok(ExtensionActiveVaultScope::Active(ActiveExtensionVault {
-            vault_store_id: self.vault.store_id.clone().into(),
+            vault_store_id: nook_core::StoreId::parse(&self.vault.store_id)
+                .map_err(|error| JsError::new(&error.to_string()))?,
         }))
     }
 
@@ -44,7 +45,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn scope_tracks_decrypted_manager_state_and_reset() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = "store-test".to_owned();
+        manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
         assert_eq!(
             manager.active_extension_vault_scope()?,
             ExtensionActiveVaultScope::NoActiveVault
@@ -53,7 +54,7 @@ mod tests {
         assert_eq!(
             manager.active_extension_vault_scope()?,
             ExtensionActiveVaultScope::Active(ActiveExtensionVault {
-                vault_store_id: "store-test".to_owned().into()
+                vault_store_id: nook_core::StoreId::before_genesis_placeholder()
             })
         );
         manager.reset_vault_session();

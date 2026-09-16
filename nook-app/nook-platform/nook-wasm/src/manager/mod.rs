@@ -120,6 +120,11 @@ impl NookVaultManager {
         self.vault.store_id.clone()
     }
 
+    #[wasm_bindgen(getter, js_name = vaultStoreIdPresence)]
+    pub fn vault_store_id_presence(&self) -> Result<crate::NookStoreIdPresence, JsError> {
+        crate::NookStoreIdPresence::from_raw(&self.vault.store_id)
+    }
+
     #[wasm_bindgen(getter, js_name = vaultVersion)]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",

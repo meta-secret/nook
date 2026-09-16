@@ -33,7 +33,6 @@ impl GrantAuthorityResponseJson {
         self,
         requested: PairingVaultId,
     ) -> Result<ExtensionGrantAuthority, GrantAuthorityResponseError> {
-        let PairingVaultId(requested) = requested;
         let requested_key = StoredExtensionPairingGrant::storage_key_for(&requested);
         let wire: GrantAuthorityResponseWire =
             serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?;
@@ -74,7 +73,7 @@ mod tests {
         ] {
             assert!(
                 GrantAuthorityResponseJson::from(json.to_owned())
-                    .decode(PairingVaultId::from("store-test".to_owned()))
+                    .decode(PairingVaultId::before_genesis_placeholder())
                     .is_err()
             );
         }
@@ -98,7 +97,7 @@ mod tests {
         ] {
             assert_eq!(
                 GrantAuthorityResponseJson::from(json.to_owned())
-                    .decode(PairingVaultId::from("store-test".to_owned()))?,
+                    .decode(PairingVaultId::before_genesis_placeholder())?,
                 expected
             );
         }
