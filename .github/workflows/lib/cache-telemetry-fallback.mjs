@@ -1,20 +1,40 @@
 /** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
 /** @typedef {{state: 'active' | 'fallback', reason: string}} FallbackState */
+/** @typedef {{reason?: unknown}} FallbackRecord */
 const FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
+
+/** @param {unknown} value @returns {value is FallbackRecord} */
+function isFallbackRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/** @param {string} text @returns {unknown} */
+function parseJson(text) {
+  return JSON.parse(text);
+}
+
+/** @param {string} text @returns {FallbackRecord} */
+function parseFallbackRecord(text) {
+  const parsed = parseJson(text);
+  if (!isFallbackRecord(parsed)) throw new Error("expected a JSON object");
+  return parsed;
+}
 
 /** @param {string} text @returns {string | undefined} */
 function rawFallbackReason(text) {
+  /** @type {string | undefined} */
   let reason;
   for (const line of text.split(/\r?\n/)) {
     const markerAt = line.indexOf(FALLBACK_MARKER);
     if (markerAt === -1) continue;
     try {
-      const fallback = JSON.parse(
+      const fallback = parseFallbackRecord(
         line.slice(markerAt + FALLBACK_MARKER.length).trim(),
       );
+      const fallbackReason = fallback.reason;
       reason =
-        fallback && typeof fallback.reason === "string" && fallback.reason
-          ? fallback.reason
+        typeof fallbackReason === "string" && fallbackReason
+          ? fallbackReason
           : "malformed_fallback_event";
     } catch {
       reason = "malformed_fallback_event";

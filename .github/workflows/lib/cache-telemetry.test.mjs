@@ -11,6 +11,9 @@ import {
 } from "./cache-telemetry.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 
+/** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
+/** @typedef {{state: 'active' | 'fallback', reason: string}} FallbackState */
+
 void test("records the active compile scope without preselection state", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
@@ -614,6 +617,7 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
 });
 
 void test("a real raw fallback remains active despite healthy terminal evidence", () => {
+  /** @type {SccacheReport} */
   const report = {
     stage: "dylint",
     baked_runtime_mode: "READ_WRITE",
@@ -632,10 +636,13 @@ void test("a real raw fallback remains active despite healthy terminal evidence"
     remote_writes: 32,
     compile_failures: 0,
   };
+  /** @type {FallbackState} */
   const fallback = {
     state: "fallback",
     reason: "cache_circuit_open",
   };
+  /** @type {FallbackState} */
+  const active = { state: "active", reason: "none" };
 
   assert.deepEqual(
     resolveSccacheFallback([report], fallback, fallback),
@@ -644,14 +651,18 @@ void test("a real raw fallback remains active despite healthy terminal evidence"
   assert.deepEqual(
     resolveSccacheFallback(
       [report],
-      { state: "active", reason: "none" },
+      active,
       fallback,
       'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_transport_unavailable","remote_writes":0}',
     ),
     { state: "fallback", reason: "cache_transport_unavailable" },
   );
   assert.deepEqual(
-    resolveSccacheFallback([], { state: "active", reason: "none" }, fallback),
+    resolveSccacheFallback(
+      [],
+      active,
+      fallback,
+    ),
     fallback,
   );
 });
