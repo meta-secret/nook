@@ -255,7 +255,6 @@ jobs:
         with:
           version: "20.1.1"
           directory: ${{ runner.temp }}/llvm
-          env: true
       - name: Prepare native Pages preview artifacts
         env:
           CC: clang
