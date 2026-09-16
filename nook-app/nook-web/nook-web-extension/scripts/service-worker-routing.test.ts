@@ -867,14 +867,14 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
   })
 
-  test('reports an external pairing refresh failure', async () => {
+  test('preserves a committed external pairing import when surface refresh fails', async () => {
+    const refresh = mock(() => Promise.reject(new Error('refresh unavailable')))
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
       hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady: () =>
         Promise.resolve({ ok: true as const, eventCount: 1 }),
-      refreshAuthenticationSurfaces: () =>
-        Promise.reject(new Error('refresh unavailable')),
+      refreshAuthenticationSurfaces: refresh,
     }
     const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
@@ -894,10 +894,46 @@ describe('service worker routing', () => {
     await flushResponses()
     await flushResponses()
 
-    expect(sendResponse).toHaveBeenCalledWith({
-      ok: false,
-      reason: 'authentication-surface-refresh-failed',
-    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
+  })
+
+  test('preserves an external pairing rejection without refreshing surfaces', async () => {
+    const refresh = mock(() => Promise.resolve())
+    const rejection = {
+      ok: false as const,
+      reason: 'event-log-access-not-granted',
+    }
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve(rejection),
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
+      importPairingAfterCompanionReady,
+      refreshAuthenticationSurfaces: refresh,
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      await new ExternalCompanionRouter({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }).route(),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(importPairingAfterCompanionReady).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith(rejection)
   })
 
   test('normalizes pair intent before internal launcher routing', async () => {

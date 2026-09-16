@@ -59,11 +59,6 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
-const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
-  ok: false,
-  reason: 'authentication-surface-refresh-failed',
-}
-
 export class ExternalCompanionRouter {
   constructor(private readonly request: ExternalCompanionRoutingRequest) {}
 
@@ -153,12 +148,11 @@ export class ExternalCompanionRouter {
     }
     void importPairingAfterCompanionReady(message)
       .then(async (response) => {
-        if (response.ok) {
-          try {
-            await refreshAuthenticationSurfaces()
-          } catch {
-            return authenticationSurfaceRefreshFailureResponse
-          }
+        if (!response.ok) return response
+        try {
+          await refreshAuthenticationSurfaces()
+        } catch {
+          // The pairing import has already committed; keep its success response.
         }
         return response
       })

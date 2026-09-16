@@ -1146,7 +1146,7 @@
   },
   "errors": {
     "validation": {
-      "local_data_changed_in_another_tab": "Local browser data changed in another Nook tab.",
+      "local_data_changed_in_another_tab": "Local browser data changed. Reload the page to continue.",
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
       "oauth_access_token_empty": "Sign in with Google to connect Google Drive.",
       "shared_joiner_identity_required": "Enter the joiner provider identity before issuing an onboarding code.",

@@ -142,6 +142,15 @@ describe('locale', () => {
     }
   })
 
+  test('explains how to recover from changed local browser data', () => {
+    expect(
+      lookup_translation(
+        get_translation_catalog('en'),
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      ),
+    ).toBe('Local browser data changed. Reload the page to continue.')
+  })
+
   test('catalogs include architecture mode strings', () => {
     const modeKeys = [
       I18N_KEYS.DeviceProtectionModeGroupLabel,
