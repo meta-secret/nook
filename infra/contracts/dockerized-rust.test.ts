@@ -506,6 +506,22 @@ class DockerizedRustContract {
     expect(dockerignore).toContain("**/node_modules");
   }
 
+  remoteCompileTimeoutPreservesExportBudget(): void {
+    const batch = this.read(".github/scripts/remote-task-batch.sh");
+    expect(batch).toContain(
+      'if [ "${REQUESTED_PUBLISH_COMPILE_CACHE:-true}" = "false" ]; then',
+    );
+    expect(batch).toContain(
+      "timeout --kill-after=10s 240s task build:compile",
+    );
+    expect(batch).toContain(
+      "timeout --kill-after=10s 280s task build:compile",
+    );
+    expect(batch).toContain(
+      "five-minute job boundary",
+    );
+  }
+
   compileExtensionUsesOwnFrozenDependencies(): void {
     const compile = this.read(
       "nook-app/nook-platform/docker/rust/compile.Dockerfile",
@@ -909,6 +925,10 @@ test(
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
+);
+test(
+  "remote compile reserves export time only for publishing",
+  contract.remoteCompileTimeoutPreservesExportBudget.bind(contract),
 );
 test(
   "sealed web compile installs extension dependencies from its own lockfile",

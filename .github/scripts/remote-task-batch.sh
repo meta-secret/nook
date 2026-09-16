@@ -54,10 +54,17 @@ run_task() {
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
-    # Keep one minute inside the five-minute job budget for BuildKit cleanup and
-    # the always-run raw-log/JSON telemetry collector. A hard job timeout cannot
-    # upload the evidence needed to diagnose the next regression.
-    build:compile) timeout --kill-after=10s 240s task build:compile ;;
+    # Keep the explicit no-export contract on the shorter budget. A publish
+    # solve owns one rooted mode=max BuildKit export, so give that exporter the
+    # measured headroom it needs while retaining the five-minute job boundary
+    # for cleanup and always-run raw-log/JSON telemetry collection.
+    build:compile)
+      if [ "${REQUESTED_PUBLISH_COMPILE_CACHE:-true}" = "false" ]; then
+        timeout --kill-after=10s 240s task build:compile
+      else
+        timeout --kill-after=10s 280s task build:compile
+      fi
+      ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
