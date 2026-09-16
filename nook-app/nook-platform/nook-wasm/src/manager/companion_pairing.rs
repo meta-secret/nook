@@ -2,7 +2,7 @@ use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
     AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
-    ConsumedCompanionPairingAuthority, ExtensionConnectScope,
+    ConsumedCompanionPairingAuthority, ExtensionConnectScope, ExtensionPairingVaultType,
 };
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
@@ -25,7 +25,7 @@ pub struct NookCompanionPairingExtensionEndpoint {
 pub struct NookExtensionDeviceApproval {
     store_id: nook_core::StoreId,
     approved_at: nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
-    vault_type: VaultType,
+    vault_type: ExtensionPairingVaultType,
 }
 
 impl NookExtensionDeviceApproval {
@@ -37,7 +37,14 @@ impl NookExtensionDeviceApproval {
                 js_sys::Date::now(),
             )
             .map_err(|error| JsError::new(&error.to_string()))?,
-            vault_type: manager.vault.architecture.vault_type,
+            vault_type: match manager.vault.architecture.vault_type {
+                VaultType::Simple => ExtensionPairingVaultType::Simple,
+                VaultType::Sentinel => {
+                    return Err(JsError::new(
+                        "Sentinel vaults cannot approve extension devices",
+                    ));
+                }
+            },
         })
     }
 }
@@ -55,7 +62,7 @@ impl NookExtensionDeviceApproval {
     }
 
     #[wasm_bindgen(getter, js_name = vaultType)]
-    pub fn vault_type(&self) -> VaultType {
+    pub fn vault_type(&self) -> ExtensionPairingVaultType {
         self.vault_type
     }
 }
@@ -188,7 +195,7 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
+        CompanionPairingProviderManifestDigest,
     };
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -346,7 +353,8 @@ mod tests {
         let approval = NookExtensionDeviceApproval::for_manager(&manager)?;
 
         assert_eq!(approval.store_id().value(), manager.vault.store_id);
-        assert_eq!(approval.vault_type(), VaultType::Simple);
+        let vault_type: ExtensionPairingVaultType = approval.vault_type();
+        assert_eq!(vault_type, ExtensionPairingVaultType::Simple);
         assert!(approval.approved_at().value() > 0.0);
         Ok(())
     }
