@@ -34,6 +34,7 @@ mod companion_pairing;
 mod companion_protocol;
 pub mod credential_fill;
 mod domain_numbers;
+mod extension_consent;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
@@ -148,6 +149,12 @@ pub use domain_numbers::{
     AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
     AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
+};
+pub use extension_consent::{
+    ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentFailure,
+    ExtensionConsentObservation, ExtensionConsentPhase, ExtensionConsentTransitionFailure,
+    ExtensionConsentTransitionOutcome, ExtensionConsentTransitionRequest,
+    ExtensionConsentVaultReadiness,
 };
 pub use extension_pairing_state::{
     ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,

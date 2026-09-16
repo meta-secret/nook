@@ -24,7 +24,10 @@
     clippy::items_after_statements
 )]
 
-use nook_companion_core::ExtensionConnectScope;
+use nook_companion_core::{
+    ExtensionConnectScope, ExtensionConsentApprovalAvailability, ExtensionConsentObservation,
+    ExtensionConsentTransitionOutcome, ExtensionConsentTransitionRequest,
+};
 mod application;
 mod conversion;
 mod device_access;
@@ -113,6 +116,24 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_extension_connect_scope(value: &str) -> bool {
     ExtensionConnectScope::parse(value).is_ok()
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_consent_approval_availability(
+    observation: ExtensionConsentObservation,
+) -> ExtensionConsentApprovalAvailability {
+    observation.approval_availability()
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn transition_extension_consent_phase(
+    request: ExtensionConsentTransitionRequest,
+) -> ExtensionConsentTransitionOutcome {
+    request.transition()
 }
 
 #[wasm_bindgen]
