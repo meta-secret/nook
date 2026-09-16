@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const approvalPort = vi.hoisted(() => ({
@@ -43,6 +43,7 @@ import {
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
+import type { NookExtensionConsentPhase } from '$app-wasm'
 
 function createHarness() {
   const vault = VaultStateTestFixture.create()
@@ -60,6 +61,24 @@ function createHarness() {
   }
   const workflow = new ExtensionConnectConsentWorkflow(vault, request)
   return { vault, workflow }
+}
+
+class DeferredWorkflowStage<T> {
+  private complete: (value: T) => void = () => {
+    throw new Error('Deferred value was not initialized.')
+  }
+
+  readonly promise: Promise<T>
+
+  constructor() {
+    this.promise = new Promise<T>((resolve) => {
+      this.complete = resolve
+    })
+  }
+
+  resume(value: T): void {
+    this.complete(value)
+  }
 }
 
 async function approve(harness: ReturnType<typeof createHarness>) {
@@ -124,7 +143,7 @@ describe('extension consent web workflow', () => {
         scenario.availability,
       )
       expect(state.phase.state).toBe(NookExtensionConsentPhaseState.AwaitingAuthorization)
-      harness.workflow.dispose(state)
+      harness.workflow.dispose()
     }
   })
 
@@ -136,7 +155,7 @@ describe('extension consent web workflow', () => {
     await harness.workflow.approve(initial, vi.fn())
 
     expect(approvalPort.authorize).not.toHaveBeenCalled()
-    harness.workflow.dispose(initial)
+    harness.workflow.dispose()
   })
 
   test('transitions durable approval before grant delivery and completes delivered outcome', async () => {
@@ -150,7 +169,7 @@ describe('extension consent web workflow', () => {
     expect(harness.workflow.closeOutcome(state)).toBe(
       ExtensionConsentCloseOutcome.Approved,
     )
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test.each([
@@ -183,7 +202,7 @@ describe('extension consent web workflow', () => {
       kind: ExtensionConsentWorkflowNoticeKind.Message,
       translationKey: key,
     })
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('stores a typed rejection reason and projects translated copy at the UI edge', async () => {
@@ -214,7 +233,7 @@ describe('extension consent web workflow', () => {
       kind: ExtensionConsentWorkflowNoticeKind.Rejected,
       translationKey: I18N_KEYS.ExtensionConsentGrantRejected,
     })
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('preserves rejection without inventing a free-form reason', async () => {
@@ -230,7 +249,7 @@ describe('extension consent web workflow', () => {
       kind: ExtensionConsentDeliveryOutcomeKind.Rejected,
       rejection: { kind: ExtensionConsentRejectionKind.WithoutReason },
     })
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('keeps authorization failure retryable and cancellation-owned', async () => {
@@ -257,7 +276,7 @@ describe('extension consent web workflow', () => {
     expect(harness.workflow.approvalAvailability(state)).toBe(
       NookExtensionConsentApprovalAvailabilityState.RetryAvailable,
     )
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('retains approved phase after grant preparation failure', async () => {
@@ -273,7 +292,7 @@ describe('extension consent web workflow', () => {
     expect(harness.workflow.closeOutcome(state)).toBe(
       ExtensionConsentCloseOutcome.Approved,
     )
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('retains approved phase after delivery admission failure', async () => {
@@ -289,7 +308,7 @@ describe('extension consent web workflow', () => {
     expect(harness.workflow.closeOutcome(state)).toBe(
       ExtensionConsentCloseOutcome.Approved,
     )
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('retains approved phase when browser handoff throws', async () => {
@@ -309,7 +328,7 @@ describe('extension consent web workflow', () => {
       kind: ExtensionConsentWorkflowNoticeKind.Message,
       translationKey: I18N_KEYS.ExtensionConnectIdentityHandoffFailed,
     })
-    harness.workflow.dispose(state)
+    harness.workflow.dispose()
   })
 
   test('retains approved phase for refresh and completion failures', async () => {
@@ -330,7 +349,169 @@ describe('extension consent web workflow', () => {
     expect(completionState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
     expect(completionState.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
     expect(completionState.failure.kind).toBe(ExtensionConsentWorkflowFailureKind.CompletionAdmission)
-    harness.workflow.dispose(state)
-    completionHarness.workflow.dispose(completionState)
+    harness.workflow.dispose()
+    completionHarness.workflow.dispose()
+  })
+
+  test.each([
+    {
+      name: 'grant preparation',
+      kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
+      deliveryCalls: 1,
+      refreshCalls: 1,
+      completionCalls: 1,
+    },
+    {
+      name: 'browser handoff',
+      kind: ExtensionConsentWorkflowFailureKind.BrowserHandoff,
+      deliveryCalls: 2,
+      refreshCalls: 1,
+      completionCalls: 1,
+    },
+    {
+      name: 'delivery admission',
+      kind: ExtensionConsentWorkflowFailureKind.DeliveryAdmission,
+      deliveryCalls: 2,
+      refreshCalls: 1,
+      completionCalls: 1,
+    },
+    {
+      name: 'device refresh',
+      kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh,
+      deliveryCalls: 2,
+      refreshCalls: 2,
+      completionCalls: 1,
+    },
+    {
+      name: 'completion admission',
+      kind: ExtensionConsentWorkflowFailureKind.CompletionAdmission,
+      deliveryCalls: 2,
+      refreshCalls: 2,
+      completionCalls: 2,
+    },
+  ])(
+    'retries $name using the existing approval',
+    async ({ kind, deliveryCalls, refreshCalls, completionCalls }) => {
+      const harness = createHarness()
+      const failure = new VaultStorageFailure(
+        VaultStorageFailureKind.OperationFailed,
+      )
+      const refreshDeviceState = vi.fn(
+        async (): Promise<Result<void, VaultStorageFailure>> => ok(),
+      )
+      harness.vault.refreshDeviceState = refreshDeviceState
+
+      switch (kind) {
+        case ExtensionConsentWorkflowFailureKind.GrantPreparation:
+          approvalPort.prepareAuthorizedGrant.mockResolvedValueOnce(
+            err(failure),
+          )
+          break
+        case ExtensionConsentWorkflowFailureKind.BrowserHandoff:
+          approvalPort.deliver.mockRejectedValueOnce(
+            new Error('browser handoff failed'),
+          )
+          break
+        case ExtensionConsentWorkflowFailureKind.DeliveryAdmission:
+          approvalPort.deliver.mockResolvedValueOnce(err(failure))
+          break
+        case ExtensionConsentWorkflowFailureKind.DeviceRefresh:
+          refreshDeviceState.mockResolvedValueOnce(err(failure))
+          break
+        case ExtensionConsentWorkflowFailureKind.CompletionAdmission:
+          approvalPort.admitCompletion.mockReturnValueOnce(err(failure))
+          break
+        case ExtensionConsentWorkflowFailureKind.Authorization:
+        case ExtensionConsentWorkflowFailureKind.ProviderTransition:
+          throw new Error('Scenario must fail after durable approval.')
+      }
+
+      let state: ExtensionConsentWorkflowState = harness.workflow.initialState()
+      await harness.workflow.approve(state, (next) => {
+        state = next
+      })
+
+      expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+      expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
+      if (state.kind === ExtensionConsentWorkflowKind.Failed) {
+        expect(state.failure.kind).toBe(kind)
+      }
+      expect(harness.workflow.approvalAvailability(state)).toBe(
+        NookExtensionConsentApprovalAvailabilityState.AlreadyApproved,
+      )
+      expect(harness.workflow.closeOutcome(state)).toBe(
+        ExtensionConsentCloseOutcome.Approved,
+      )
+      expect(harness.workflow.canContinue(state)).toBe(true)
+      expect(
+        new ExtensionConsentWorkflowPresentation().actionTranslationKey(state),
+      ).toBe(I18N_KEYS.DevicesAccessTryAgain)
+
+      await harness.workflow.approve(state, (next) => {
+        state = next
+      })
+
+      expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
+      expect(harness.workflow.canContinue(state)).toBe(false)
+      expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
+      expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
+      expect(approvalPort.deliver).toHaveBeenCalledTimes(deliveryCalls)
+      expect(refreshDeviceState).toHaveBeenCalledTimes(refreshCalls)
+      expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(
+        completionCalls,
+      )
+      harness.workflow.dispose()
+    },
+  )
+
+  test('defers phase disposal until an in-flight approval stops and suppresses later publication', async () => {
+    const harness = createHarness()
+    const preparationStarted = new DeferredWorkflowStage<boolean>()
+    const releasePreparation = new DeferredWorkflowStage<boolean>()
+    approvalPort.prepareAuthorizedGrant.mockImplementationOnce(async () => {
+      preparationStarted.resume(true)
+      await releasePreparation.promise
+      return ok({} as ExtensionPairingApprovedMessage)
+    })
+
+    const trackedPhases = new Set<NookExtensionConsentPhase>()
+    const phaseFreeCounts: Array<{ value: number }> = []
+    const trackPhase = (phase: NookExtensionConsentPhase) => {
+      if (trackedPhases.has(phase)) return
+      trackedPhases.add(phase)
+      const count = { value: 0 }
+      phaseFreeCounts.push(count)
+      const free = phase.free.bind(phase)
+      vi.spyOn(phase, 'free').mockImplementation(() => {
+        count.value += 1
+        free()
+      })
+    }
+
+    let state: ExtensionConsentWorkflowState = harness.workflow.initialState()
+    trackPhase(state.phase)
+    let publicationCount = 0
+    const operation = harness.workflow.approve(state, (next) => {
+      publicationCount += 1
+      trackPhase(next.phase)
+      state = next
+    })
+
+    await preparationStarted.promise
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.PreparingGrant)
+    expect(phaseFreeCounts.map(({ value }) => value)).toEqual([1, 1, 0])
+    const publicationsBeforeDispose = publicationCount
+
+    harness.workflow.dispose()
+
+    expect(phaseFreeCounts.map(({ value }) => value)).toEqual([1, 1, 0])
+    releasePreparation.resume(true)
+    await operation
+
+    expect(publicationCount).toBe(publicationsBeforeDispose)
+    expect(approvalPort.deliver).not.toHaveBeenCalled()
+    expect(phaseFreeCounts.map(({ value }) => value)).toEqual([1, 1, 1])
+    harness.workflow.dispose()
+    expect(phaseFreeCounts.map(({ value }) => value)).toEqual([1, 1, 1])
   })
 })

@@ -155,7 +155,31 @@ export type ExtensionConsentWorkflowNotice =
       readonly kind: ExtensionConsentWorkflowNoticeKind.Rejected;
       readonly translationKey: I18nKey;
       readonly rejection: ExtensionConsentRejection;
-    };
+  };
+
+enum ExtensionConsentWorkflowLifecycleKind {
+  NotStarted = "not-started",
+  Ready = "ready",
+  Approving = "approving",
+  DisposedDuringApproval = "disposed-during-approval",
+  Disposed = "disposed",
+}
+
+type ExtensionConsentWorkflowLifecycle =
+  | { readonly kind: ExtensionConsentWorkflowLifecycleKind.NotStarted }
+  | {
+      readonly kind: ExtensionConsentWorkflowLifecycleKind.Ready;
+      readonly phase: NookExtensionConsentPhase;
+    }
+  | {
+      readonly kind: ExtensionConsentWorkflowLifecycleKind.Approving;
+      readonly phase: NookExtensionConsentPhase;
+    }
+  | {
+      readonly kind: ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval;
+      readonly phase: NookExtensionConsentPhase;
+    }
+  | { readonly kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
 
 function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliveryOutcome {
   switch (value.kind) {
@@ -185,15 +209,29 @@ function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliv
 
 /** Owns browser consent orchestration while Rust owns durable phase and readiness decisions. */
 export class ExtensionConnectConsentWorkflow {
+  private lifecycle: ExtensionConsentWorkflowLifecycle = {
+    kind: ExtensionConsentWorkflowLifecycleKind.NotStarted,
+  };
+
   constructor(
     private readonly vault: VaultState,
     private readonly request: ExtensionConnectRequest,
   ) {}
 
   initialState(): ExtensionConsentWorkflowState {
+    if (
+      this.lifecycle.kind !== ExtensionConsentWorkflowLifecycleKind.NotStarted
+    ) {
+      throw new Error("Extension consent workflow has already been initialized.");
+    }
+    const phase = NookExtensionConsentPhase.awaiting_authorization();
+    this.lifecycle = {
+      kind: ExtensionConsentWorkflowLifecycleKind.Ready,
+      phase,
+    };
     return {
       kind: ExtensionConsentWorkflowKind.Resting,
-      phase: NookExtensionConsentPhase.awaiting_authorization(),
+      phase,
     };
   }
 
@@ -211,6 +249,7 @@ export class ExtensionConnectConsentWorkflow {
   }
 
   canAuthorize(state: ExtensionConsentWorkflowState): boolean {
+    if (!this.isReadyOwner(state.phase)) return false;
     const availability = state.phase.approval_availability(
       this.vaultReadiness(),
     );
@@ -221,6 +260,19 @@ export class ExtensionConnectConsentWorkflow {
     }
   }
 
+  canContinue(state: ExtensionConsentWorkflowState): boolean {
+    if (!this.isReadyOwner(state.phase)) return false;
+    if (
+      state.kind === ExtensionConsentWorkflowKind.Failed &&
+      state.phase.state === NookExtensionConsentPhaseState.Approved
+    ) {
+      return (
+        this.vaultReadiness() === NookExtensionConsentVaultReadiness.Ready
+      );
+    }
+    return this.canAuthorize(state);
+  }
+
   closeOutcome(
     state: ExtensionConsentWorkflowState,
   ): ExtensionConsentCloseOutcome {
@@ -229,228 +281,388 @@ export class ExtensionConnectConsentWorkflow {
       : ExtensionConsentCloseOutcome.Cancelled;
   }
 
-  dispose(state: ExtensionConsentWorkflowState): void {
-    state.phase.free();
+  dispose(): void {
+    switch (this.lifecycle.kind) {
+      case ExtensionConsentWorkflowLifecycleKind.NotStarted:
+        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        return;
+      case ExtensionConsentWorkflowLifecycleKind.Ready:
+        this.lifecycle.phase.free();
+        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        return;
+      case ExtensionConsentWorkflowLifecycleKind.Approving:
+        this.lifecycle = {
+          kind: ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval,
+          phase: this.lifecycle.phase,
+        };
+        return;
+      case ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval:
+      case ExtensionConsentWorkflowLifecycleKind.Disposed:
+        return;
+    }
   }
 
   async approve(
     state: ExtensionConsentWorkflowState,
     publish: (state: ExtensionConsentWorkflowState) => void,
   ): Promise<void> {
-    let startingState: Extract<
-      ExtensionConsentWorkflowState,
-      { kind: ExtensionConsentWorkflowKind.Resting }
-    >;
-    if (state.kind === ExtensionConsentWorkflowKind.Resting) {
-      startingState = state;
-    } else if (
+    const retriesAuthorization =
       state.kind === ExtensionConsentWorkflowKind.Failed &&
       state.phase.state ===
-        NookExtensionConsentPhaseState.AuthorizationFailed
+        NookExtensionConsentPhaseState.AuthorizationFailed;
+    const resumesDelivery =
+      state.kind === ExtensionConsentWorkflowKind.Failed &&
+      state.phase.state === NookExtensionConsentPhaseState.Approved;
+    if (
+      state.kind !== ExtensionConsentWorkflowKind.Resting &&
+      !retriesAuthorization &&
+      !resumesDelivery
     ) {
-      startingState = {
-        kind: ExtensionConsentWorkflowKind.Resting,
-        phase: state.phase,
-      };
-    } else {
       return;
     }
-    if (!this.canAuthorize(startingState)) return;
+    if (!this.canContinue(state)) return;
 
-    const started = startingState.phase.transition(
-      NookExtensionConsentEvent.AuthorizationStarted,
-    );
-    if (started.state === NookExtensionConsentTransitionState.Rejected) {
-      started.free();
-      publish({
-        kind: ExtensionConsentWorkflowKind.Failed,
-        phase: startingState.phase,
-        failure: {
-          kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
-          state: NookExtensionConsentTransitionState.Rejected,
-        },
-      });
-      return;
-    }
-    const authorizingPhase = started.phase();
-    started.free();
-    startingState.phase.free();
-
+    this.lifecycle = {
+      kind: ExtensionConsentWorkflowLifecycleKind.Approving,
+      phase: state.phase,
+    };
     this.vault.dismissError();
     this.vault.isSaving = true;
     try {
-      publish({
-        kind: ExtensionConsentWorkflowKind.SubmittingAuthorization,
-        phase: authorizingPhase,
-      });
       const approval = new ExtensionVaultApproval(this.vault, this.request);
-      let authorization: Result<void, VaultStorageFailure>;
-      try {
-        authorization = await approval.authorize();
-      } catch (failure) {
-        authorization = err(new NativeVaultStorageFailure(failure));
-      }
-      if (authorization.isErr()) {
-        const failed = authorizingPhase.transition(
-          NookExtensionConsentEvent.AuthorizationFailed,
+      if (!resumesDelivery) {
+        const started = state.phase.transition(
+          NookExtensionConsentEvent.AuthorizationStarted,
         );
-        if (failed.state === NookExtensionConsentTransitionState.Transitioned) {
-          const failedPhase = failed.phase();
-          failed.free();
-          authorizingPhase.free();
-          publish({
-            kind: ExtensionConsentWorkflowKind.Failed,
-            phase: failedPhase,
-            failure: {
-              kind: ExtensionConsentWorkflowFailureKind.Authorization,
-              failure: authorization.error,
+        if (started.state === NookExtensionConsentTransitionState.Rejected) {
+          started.free();
+          this.publish(
+            {
+              kind: ExtensionConsentWorkflowKind.Failed,
+              phase: state.phase,
+              failure: {
+                kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
+                state: NookExtensionConsentTransitionState.Rejected,
+              },
             },
-          });
-        } else {
-          failed.free();
-          publish({
-            kind: ExtensionConsentWorkflowKind.Failed,
-            phase: authorizingPhase,
-            failure: {
-              kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
-              state: NookExtensionConsentTransitionState.Rejected,
-            },
-          });
+            publish,
+          );
+          return;
         }
-        return;
-      }
+        const authorizingPhase = started.phase();
+        started.free();
+        this.replacePhase(state.phase, authorizingPhase);
+        if (
+          !this.publish(
+            {
+              kind: ExtensionConsentWorkflowKind.SubmittingAuthorization,
+              phase: authorizingPhase,
+            },
+            publish,
+          )
+        ) {
+          return;
+        }
 
-      const authorizationSucceeded = authorizingPhase.transition(
-        NookExtensionConsentEvent.AuthorizationSucceeded,
-      );
-      if (
-        authorizationSucceeded.state ===
-        NookExtensionConsentTransitionState.Rejected
-      ) {
+        let authorization: Result<void, VaultStorageFailure>;
+        try {
+          authorization = await approval.authorize();
+        } catch (failure) {
+          authorization = err(new NativeVaultStorageFailure(failure));
+        }
+        if (!this.isApproving()) return;
+        if (authorization.isErr()) {
+          const failed = authorizingPhase.transition(
+            NookExtensionConsentEvent.AuthorizationFailed,
+          );
+          if (failed.state === NookExtensionConsentTransitionState.Transitioned) {
+            const failedPhase = failed.phase();
+            failed.free();
+            this.replacePhase(authorizingPhase, failedPhase);
+            this.publish(
+              {
+                kind: ExtensionConsentWorkflowKind.Failed,
+                phase: failedPhase,
+                failure: {
+                  kind: ExtensionConsentWorkflowFailureKind.Authorization,
+                  failure: authorization.error,
+                },
+              },
+              publish,
+            );
+          } else {
+            failed.free();
+            this.publish(
+              {
+                kind: ExtensionConsentWorkflowKind.Failed,
+                phase: authorizingPhase,
+                failure: {
+                  kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
+                  state: NookExtensionConsentTransitionState.Rejected,
+                },
+              },
+              publish,
+            );
+          }
+          return;
+        }
+
+        const authorizationSucceeded = authorizingPhase.transition(
+          NookExtensionConsentEvent.AuthorizationSucceeded,
+        );
+        if (
+          authorizationSucceeded.state ===
+          NookExtensionConsentTransitionState.Rejected
+        ) {
+          authorizationSucceeded.free();
+          this.publish(
+            {
+              kind: ExtensionConsentWorkflowKind.Failed,
+              phase: authorizingPhase,
+              failure: {
+                kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
+                state: NookExtensionConsentTransitionState.Rejected,
+              },
+            },
+            publish,
+          );
+          return;
+        }
+        const approvedPhase = authorizationSucceeded.phase();
         authorizationSucceeded.free();
-        publish({
-          kind: ExtensionConsentWorkflowKind.Failed,
-          phase: authorizingPhase,
-          failure: {
-            kind: ExtensionConsentWorkflowFailureKind.ProviderTransition,
-            state: NookExtensionConsentTransitionState.Rejected,
-          },
-        });
+        this.replacePhase(authorizingPhase, approvedPhase);
+        await this.deliverApprovedGrant(approval, approvedPhase, publish);
         return;
       }
-      const approvedPhase = authorizationSucceeded.phase();
-      authorizationSucceeded.free();
-      authorizingPhase.free();
 
-      publish({
-        kind: ExtensionConsentWorkflowKind.PreparingGrant,
-        phase: approvedPhase,
-      });
-      let prepared: Awaited<ReturnType<typeof approval.prepareAuthorizedGrant>>;
-      try {
-        prepared = await approval.prepareAuthorizedGrant();
-      } catch (failure) {
-        publish({
+      await this.deliverApprovedGrant(approval, state.phase, publish);
+    } finally {
+      this.finishApproval();
+      this.vault.isSaving = false;
+    }
+  }
+
+  private async deliverApprovedGrant(
+    approval: ExtensionVaultApproval,
+    approvedPhase: NookExtensionConsentPhase,
+    publish: (state: ExtensionConsentWorkflowState) => void,
+  ): Promise<void> {
+    if (
+      !this.publish(
+        {
+          kind: ExtensionConsentWorkflowKind.PreparingGrant,
+          phase: approvedPhase,
+        },
+        publish,
+      )
+    ) {
+      return;
+    }
+    let prepared: Awaited<ReturnType<typeof approval.prepareAuthorizedGrant>>;
+    try {
+      prepared = await approval.prepareAuthorizedGrant();
+    } catch (failure) {
+      if (!this.isApproving()) return;
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
             failure: new NativeVaultStorageFailure(failure),
           },
-        });
-        return;
-      }
-      if (prepared.isErr()) {
-        publish({
+        },
+        publish,
+      );
+      return;
+    }
+    if (!this.isApproving()) return;
+    if (prepared.isErr()) {
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
             failure: prepared.error,
           },
-        });
-        return;
-      }
+        },
+        publish,
+      );
+      return;
+    }
 
-      publish({
-        kind: ExtensionConsentWorkflowKind.DeliveringGrant,
-        phase: approvedPhase,
-      });
-      let delivered: Awaited<ReturnType<typeof approval.deliver>>;
-      try {
-        delivered = await approval.deliver(prepared.value);
-      } catch {
-        publish({
+    if (
+      !this.publish(
+        {
+          kind: ExtensionConsentWorkflowKind.DeliveringGrant,
+          phase: approvedPhase,
+        },
+        publish,
+      )
+    ) {
+      return;
+    }
+    let delivered: Awaited<ReturnType<typeof approval.deliver>>;
+    try {
+      delivered = await approval.deliver(prepared.value);
+    } catch {
+      if (!this.isApproving()) return;
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: { kind: ExtensionConsentWorkflowFailureKind.BrowserHandoff },
-        });
-        return;
-      }
-      if (delivered.isErr()) {
-        publish({
+        },
+        publish,
+      );
+      return;
+    }
+    if (!this.isApproving()) return;
+    if (delivered.isErr()) {
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.DeliveryAdmission,
             failure: delivered.error,
           },
-        });
-        return;
-      }
+        },
+        publish,
+      );
+      return;
+    }
 
-      const outcome = deliveryOutcome(delivered.value);
-      publish({
-        kind: ExtensionConsentWorkflowKind.RefreshingDevices,
-        phase: approvedPhase,
-        outcome,
-      });
-      let devices: Awaited<ReturnType<VaultState["refreshDeviceState"]>>;
-      try {
-        devices = await this.vault.refreshDeviceState();
-      } catch (failure) {
-        publish({
+    const outcome = deliveryOutcome(delivered.value);
+    if (
+      !this.publish(
+        {
+          kind: ExtensionConsentWorkflowKind.RefreshingDevices,
+          phase: approvedPhase,
+          outcome,
+        },
+        publish,
+      )
+    ) {
+      return;
+    }
+    let devices: Awaited<ReturnType<VaultState["refreshDeviceState"]>>;
+    try {
+      devices = await this.vault.refreshDeviceState();
+    } catch (failure) {
+      if (!this.isApproving()) return;
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh,
             failure: new NativeVaultStorageFailure(failure),
           },
-        });
-        return;
-      }
-      if (devices.isErr()) {
-        publish({
+        },
+        publish,
+      );
+      return;
+    }
+    if (!this.isApproving()) return;
+    if (devices.isErr()) {
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.DeviceRefresh,
             failure: devices.error,
           },
-        });
-        return;
-      }
+        },
+        publish,
+      );
+      return;
+    }
 
-      const completion = approval.admitCompletion();
-      if (completion.isErr()) {
-        publish({
+    const completion = approval.admitCompletion();
+    if (completion.isErr()) {
+      this.publish(
+        {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
             kind: ExtensionConsentWorkflowFailureKind.CompletionAdmission,
             failure: completion.error,
           },
-        });
-        return;
-      }
+        },
+        publish,
+      );
+      return;
+    }
 
-      publish({
+    this.publish(
+      {
         kind: ExtensionConsentWorkflowKind.Completed,
         phase: approvedPhase,
         outcome,
-      });
-    } finally {
-      this.vault.isSaving = false;
+      },
+      publish,
+    );
+  }
+
+  private isReadyOwner(phase: NookExtensionConsentPhase): boolean {
+    return (
+      this.lifecycle.kind === ExtensionConsentWorkflowLifecycleKind.Ready &&
+      this.lifecycle.phase === phase
+    );
+  }
+
+  private isApproving(): boolean {
+    return (
+      this.lifecycle.kind === ExtensionConsentWorkflowLifecycleKind.Approving
+    );
+  }
+
+  private replacePhase(
+    previousPhase: NookExtensionConsentPhase,
+    nextPhase: NookExtensionConsentPhase,
+  ): void {
+    if (
+      this.lifecycle.kind !== ExtensionConsentWorkflowLifecycleKind.Approving ||
+      this.lifecycle.phase !== previousPhase
+    ) {
+      nextPhase.free();
+      return;
+    }
+    this.lifecycle = {
+      kind: ExtensionConsentWorkflowLifecycleKind.Approving,
+      phase: nextPhase,
+    };
+    previousPhase.free();
+  }
+
+  private publish(
+    state: ExtensionConsentWorkflowState,
+    publish: (state: ExtensionConsentWorkflowState) => void,
+  ): boolean {
+    if (!this.isApproving()) return false;
+    publish(state);
+    return this.isApproving();
+  }
+
+  private finishApproval(): void {
+    switch (this.lifecycle.kind) {
+      case ExtensionConsentWorkflowLifecycleKind.Approving:
+        this.lifecycle = {
+          kind: ExtensionConsentWorkflowLifecycleKind.Ready,
+          phase: this.lifecycle.phase,
+        };
+        return;
+      case ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval:
+        this.lifecycle.phase.free();
+        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        return;
+      case ExtensionConsentWorkflowLifecycleKind.NotStarted:
+      case ExtensionConsentWorkflowLifecycleKind.Ready:
+      case ExtensionConsentWorkflowLifecycleKind.Disposed:
+        return;
     }
   }
 
@@ -468,6 +680,18 @@ export class ExtensionConnectConsentWorkflow {
 }
 
 export class ExtensionConsentWorkflowPresentation {
+  actionTranslationKey(state: ExtensionConsentWorkflowState): I18nKey {
+    if (
+      state.kind === ExtensionConsentWorkflowKind.Failed &&
+      (state.phase.state ===
+        NookExtensionConsentPhaseState.AuthorizationFailed ||
+        state.phase.state === NookExtensionConsentPhaseState.Approved)
+    ) {
+      return I18N_KEYS.DevicesAccessTryAgain;
+    }
+    return I18N_KEYS.ExtensionConsentApprove;
+  }
+
   notice(
     state: ExtensionConsentWorkflowState,
     availability: NookExtensionConsentApprovalAvailabilityState,

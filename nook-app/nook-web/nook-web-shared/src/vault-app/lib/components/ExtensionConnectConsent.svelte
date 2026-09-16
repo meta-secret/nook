@@ -36,9 +36,12 @@
   let workflowState = $state.raw(workflow.initialState())
   const availability = $derived(workflow.approvalAvailability(workflowState))
   const notice = $derived(presentation.notice(workflowState, availability))
+  const actionTranslationKey = $derived(
+    presentation.actionTranslationKey(workflowState),
+  )
   const closeOutcome = $derived(workflow.closeOutcome(workflowState))
 
-  onDestroy(() => workflow.dispose(workflowState))
+  onDestroy(() => workflow.dispose())
 
   const identityTextLayout: ExtensionConsentIdentityTextLayout = {
     head: 14,
@@ -203,7 +206,7 @@
     </Button>
     <Button
       type="button"
-      disabled={!workflow.canAuthorize(workflowState)}
+      disabled={!workflow.canContinue(workflowState)}
       data-testid="approve-extension-device-btn"
       onclick={() => void approveExtension()}
     >
@@ -212,7 +215,7 @@
       workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
       workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
         ? vault.t(I18N_KEYS.ExtensionConsentApproving)
-        : vault.t(I18N_KEYS.ExtensionConsentApprove)}
+        : vault.t(actionTranslationKey)}
     </Button>
   </div>
 </section>
