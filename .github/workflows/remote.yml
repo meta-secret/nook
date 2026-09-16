@@ -79,7 +79,8 @@ jobs:
       (inputs.tasks || inputs.task) != 'extension:e2e' &&
       (inputs.tasks || inputs.task) != 'check' &&
       (inputs.tasks || inputs.task) != 'ci:pr' &&
-      (inputs.tasks || inputs.task) != 'ci:pr:e2e')
+      (inputs.tasks || inputs.task) != 'ci:pr:e2e' &&
+      (inputs.tasks || inputs.task) != 'ci:pr:deploy-and-verify-previews')
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -193,6 +194,102 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
+
+  pages-preview:
+    if: >-
+      inputs.publish_compile_cache != false &&
+      (inputs.tasks == '' || inputs.task == '') &&
+      (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews'
+    name: Remote / Pages preview
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 45
+    env:
+      CI: true
+    steps:
+      - name: Report Kubernetes worker node
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"
+          printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact remote source
+        env:
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Remote execution requires a 40-character exact source SHA." >&2
+            exit 2
+          fi
+          if [ "$(git rev-parse HEAD)" != "$REQUESTED_SOURCE_SHA" ]; then
+            echo "Remote checkout drifted from the requested source SHA." >&2
+            exit 2
+          fi
+      - name: Setup Node for host Pages deploy
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Setup Bun for host Pages build
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Setup Rust for host WASM build
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: "1.97.0"
+          cache: false
+      - name: Install pinned host WASM tooling
+        env:
+          WASM_PACK_VERSION: "0.15.0"
+        run: |
+          set -euo pipefail
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked --root "$RUNNER_TEMP/nook-native-tools"
+          echo "$RUNNER_TEMP/nook-native-tools/bin" >> "$GITHUB_PATH"
+      - name: Prepare native Pages preview artifacts
+        env:
+          DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
+          HEAD_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          export CI=1
+          export GIT_COMMIT_ID="$HEAD_SHA"
+          export NOOK_EXTENSION_COMMIT="$HEAD_SHA"
+          export NOOK_EXTENSION_CHANNEL="pr-$DEPLOYMENT_TAG"
+          export NOOK_EXTENSION_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev/"
+          export NOOK_SIMPLE_VAULT_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
+          export VITE_BASE=/
+          export VITE_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev"
+          export VITE_PUBLIC_APP_URL="https://pr-$DEPLOYMENT_TAG.nook-1n8.pages.dev"
+          export VITE_SIMPLE_APP_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev"
+          export VITE_SENTINEL_APP_URL="https://pr-$DEPLOYMENT_TAG.nokey-sentinel.pages.dev"
+          export WASM_BUILD_MODE=dev
+
+          bash .github/scripts/ci-pr-native-pages-build.sh
+
+          for required in \
+            "nook-app/nook-web/nook-web-app/dist" \
+            "nook-app/nook-web/nook-web-app/dist/site" \
+            "nook-app/nook-web/nook-vault-simple/dist" \
+            "nook-app/nook-web/nook-vault-sentinel/dist"; do
+            test -d "$required"
+          done
+      - name: Deploy and verify Pages previews
+        id: deploy-all
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
+          HEAD_SHA: ${{ inputs.source_sha || github.sha }}
+          NOOK_HOST_PAGES_DEPLOY: "1"
+          NOOK_WRANGLER_VERSION: "4.114.0"
+        run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
+
   web-verify:
     if: >-
       inputs.publish_compile_cache != false &&
