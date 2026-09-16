@@ -226,7 +226,16 @@ jobs:
       - name: Trust exact Actions workspace for Git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Expose Actions Node.js runtime
-        uses: ./.github/actions/nook-node-setup
+        run: |
+          set -euo pipefail
+          if command -v node >/dev/null 2>&1; then
+            node --version
+            exit 0
+          fi
+          node_bin=/home/runner/externals/node24/bin/node
+          test -x "$node_bin"
+          echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"
+          "$node_bin" --version
       - name: Validate exact remote source
         env:
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
@@ -241,12 +250,12 @@ jobs:
             exit 2
           fi
       - name: Connect host sccache
-        uses: ./.github/actions/nook-cache-connect
-        with:
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+        env:
+          INPUT_SCCACHE-ACCESS-KEY: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          INPUT_SCCACHE-SECRET-KEY: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          INPUT_SCCACHE-ENDPOINT: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          INPUT_SCCACHE-BUCKET: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+        run: node .github/actions/nook-cache-connect/main.js
       - name: Setup Bun for host Pages build
         uses: oven-sh/setup-bun@v2
         with:
