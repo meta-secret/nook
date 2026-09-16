@@ -1,27 +1,37 @@
 #!/usr/bin/env bash
-# Deploy and verify Cloudflare Pages preview aliases for a pull request.
+# Deploy and verify Cloudflare Pages preview aliases for a deployment tag.
 #
 # Required env:
-#   PR_NUMBER, HEAD_SHA
+#   DEPLOYMENT_TAG, HEAD_SHA
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 # Optional env:
-#   CF_PAGES_BRANCH (defaults to pr-$PR_NUMBER)
+#   CF_PAGES_BRANCH (defaults to pr-$DEPLOYMENT_TAG)
 #   GITHUB_OUTPUT — when set, writes preview_url/site_url/simple_url/sentinel_url/extension_url
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-: "${PR_NUMBER:?PR_NUMBER is required}"
+: "${DEPLOYMENT_TAG:?DEPLOYMENT_TAG is required}"
 : "${HEAD_SHA:?HEAD_SHA is required}"
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
 
-pr="$PR_NUMBER"
-export CF_PAGES_BRANCH="${CF_PAGES_BRANCH:-pr-$pr}"
-site_url="https://pr-$pr.nokey-sh.pages.dev"
-simple_url="https://pr-$pr.nokey-simple.pages.dev"
-sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
+deployment_tag="$DEPLOYMENT_TAG"
+if [[ ! "$deployment_tag" =~ ^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$ ]]; then
+  echo "::error::DEPLOYMENT_TAG must be a safe Cloudflare preview identifier (lowercase letters, numbers, and hyphens; 1-60 characters)" >&2
+  exit 1
+fi
+
+preview_branch="${CF_PAGES_BRANCH:-pr-$deployment_tag}"
+if [[ ! "$preview_branch" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+  echo "::error::CF_PAGES_BRANCH must be a safe Cloudflare preview identifier (lowercase letters, numbers, and hyphens; 1-63 characters)" >&2
+  exit 1
+fi
+export CF_PAGES_BRANCH="$preview_branch"
+site_url="https://$preview_branch.nokey-sh.pages.dev"
+simple_url="https://$preview_branch.nokey-simple.pages.dev"
+sentinel_url="https://$preview_branch.nokey-sentinel.pages.dev"
 
 deploy_dir="$(mktemp -d)"
 trap 'rm -rf "$deploy_dir"' EXIT
@@ -147,7 +157,7 @@ for attempt in $(seq 1 30); do
   last_extension_output="$(
     EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
     EXTENSION_CACHE_BUST="$HEAD_SHA-$attempt" \
-    EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
+    EXPECTED_EXTENSION_CHANNEL="pr-$deployment_tag" \
     EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
     EXPECTED_EXTENSION_SITE_URL="$site_url/" \
     EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
@@ -175,6 +185,6 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "site_url=$site_url"
     echo "simple_url=$simple_url"
     echo "sentinel_url=$sentinel_url"
-    echo "extension_url=$site_url/downloads/nook-passwords-pr-$pr.zip"
+    echo "extension_url=$site_url/downloads/nook-passwords-pr-$deployment_tag.zip"
   } >> "$GITHUB_OUTPUT"
 fi
