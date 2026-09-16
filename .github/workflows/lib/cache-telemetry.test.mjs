@@ -665,6 +665,15 @@ void test("a real raw fallback remains active despite healthy terminal evidence"
     ),
     fallback,
   );
+  assert.deepEqual(
+    resolveSccacheFallback(
+      [],
+      active,
+      active,
+      'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}',
+    ),
+    fallback,
+  );
 });
 
 void test("rejects malformed nested telemetry records at the ingress", () => {
