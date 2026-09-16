@@ -1,15 +1,14 @@
 import { createHash } from 'node:crypto'
 import {
-  chmod,
   mkdir,
   readFile,
   readdir,
   rm,
   stat,
-  utimes,
   writeFile,
 } from 'node:fs/promises'
-import { basename, join, relative, resolve } from 'node:path'
+import { basename, join, relative, resolve, sep } from 'node:path'
+import { zipSync, type ZipOptions, type Zippable } from 'fflate'
 import type { ExtensionManifest } from '../src/manifest'
 import {
   extensionIdFromManifestKey,
@@ -41,6 +40,11 @@ export enum ExtensionInstallMethod {
 const FIXED_ARCHIVE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z')
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 const safeJson: { parse: (value: string) => unknown } = JSON
+
+export type DeterministicZipRequest = {
+  readonly sourceDirectory: string
+  readonly archivePath: string
+}
 
 class ExtensionManifestAdmission {
   parse(value: unknown): ExtensionManifest {
@@ -119,42 +123,39 @@ async function filesBelow(root: string, directory = root): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
   const files = await Promise.all(
     entries.map(async (entry) => {
+      if (entry.isSymbolicLink()) {
+        throw new Error(
+          `Extension archive cannot contain a symbolic link: ${entry.name}`,
+        )
+      }
       const path = join(directory, entry.name)
       return entry.isDirectory()
         ? filesBelow(root, path)
-        : [relative(root, path)]
+        : [relative(root, path).split(sep).join('/')]
     }),
   )
   return files.flat().sort()
 }
 
-async function makeDeterministicZip(
-  sourceDirectory: string,
-  archivePath: string,
+export async function makeDeterministicZip(
+  request: DeterministicZipRequest,
 ): Promise<void> {
+  const { sourceDirectory, archivePath } = request
   const files = await filesBelow(sourceDirectory)
   if (!files.includes('manifest.json')) {
     throw new Error('Extension archive must contain manifest.json at its root.')
   }
-  await Promise.all(
-    files.map(async (file) => {
-      const path = join(sourceDirectory, file)
-      await chmod(path, 0o644)
-      await utimes(path, FIXED_ARCHIVE_TIMESTAMP, FIXED_ARCHIVE_TIMESTAMP)
-    }),
-  )
-  await rm(archivePath, { force: true })
-  const process = Bun.spawn(['zip', '-X', '-q', archivePath, ...files], {
-    cwd: sourceDirectory,
-    stderr: 'pipe',
-    stdout: 'pipe',
-  })
-  const status = await process.exited
-  if (status !== 0) {
-    throw new Error(
-      `Failed to create extension archive: ${await new Response(process.stderr).text()}`,
-    )
+  const archiveEntries: Zippable = {}
+  for (const file of files) {
+    archiveEntries[file] = await readFile(join(sourceDirectory, file))
   }
+  const archiveOptions: ZipOptions = {
+    attrs: 0o644 << 16,
+    mtime: FIXED_ARCHIVE_TIMESTAMP,
+    os: 3,
+  }
+  await rm(archivePath, { force: true })
+  await writeFile(archivePath, zipSync(archiveEntries, archiveOptions))
 }
 
 export async function packageExtensionDeployment(): Promise<ExtensionDeploymentMetadata> {
@@ -191,7 +192,11 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   await mkdir(downloads, { recursive: true })
   const archive = extensionArchiveName(channel, version)
   const archivePath = join(downloads, archive)
-  await makeDeterministicZip(extensionDist, archivePath)
+  const archiveRequest: DeterministicZipRequest = {
+    sourceDirectory: extensionDist,
+    archivePath,
+  }
+  await makeDeterministicZip(archiveRequest)
   const digest = createHash('sha256')
     .update(await readFile(archivePath))
     .digest('hex')
