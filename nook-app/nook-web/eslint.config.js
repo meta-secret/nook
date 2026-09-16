@@ -4,19 +4,21 @@ import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 import { typedApiRules } from './typed-api-rules.js'
+import { noEmptySuccessContractRule } from './no-empty-success-contract-rule.js'
 import {
   concreteObjectTypeRules,
   typedApiSourceFiles,
   untrustedInputAdapterFiles,
   untrustedInputAdapterRules,
 } from './typed-api-rules.js'
-import { noRawObjectArgumentsRule } from "./no-raw-object-arguments-rule.js"
+import { noRawObjectArgumentsRule } from './no-raw-object-arguments-rule.js'
 
-export { noRawObjectArgumentsRule }
+export { noEmptySuccessContractRule, noRawObjectArgumentsRule }
 
 const nookTypedApiPlugin = {
   rules: {
     'no-raw-object-arguments': noRawObjectArgumentsRule,
+    'no-empty-success-contract': noEmptySuccessContractRule,
   },
 }
 

@@ -119,6 +119,7 @@ export const typedApiRules = {
     "error",
     { enforceNamedParameterContracts: true },
   ],
+  "nook-typed-api/no-empty-success-contract": "error",
 };
 
 export const untrustedInputAdapterRules = {
