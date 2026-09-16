@@ -157,7 +157,7 @@ for attempt in $(seq 1 30); do
   last_extension_output="$(
     EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
     EXTENSION_CACHE_BUST="$HEAD_SHA-$attempt" \
-    EXPECTED_EXTENSION_CHANNEL="pr-$deployment_tag" \
+    EXPECTED_EXTENSION_CHANNEL="development" \
     EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
     EXPECTED_EXTENSION_SITE_URL="$site_url/" \
     EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
@@ -185,6 +185,6 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "site_url=$site_url"
     echo "simple_url=$simple_url"
     echo "sentinel_url=$sentinel_url"
-    echo "extension_url=$site_url/downloads/nook-passwords-pr-$deployment_tag.zip"
+    echo "extension_url=$site_url/downloads/nook-passwords-dev.zip"
   } >> "$GITHUB_OUTPUT"
 fi
