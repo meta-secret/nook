@@ -8,6 +8,21 @@ continues to own GitHub execution mechanics.
 
 ## Required actions
 
+- Route every CI change that introduces or modifies Rust or WASM compilation to
+  SRE's Docker Cache Specialist before implementation begins and before review
+  acceptance. This includes native, WASM, reusable-workflow, remote-task,
+  Dockerfile, and BuildKit paths.
+- Route repeated crate compilation, cache misses, cold downloads, inactive,
+  misconfigured, or unreachable sccache, and any zero-hit evidence to the
+  specialist before Docker or BuildKit diagnosis or repair.
+- Require every CI Rust/WASM compilation path to execute the SRE-owned sccache
+  gate. Fail the path when sccache is inactive, misconfigured, unreachable, or
+  violates the repository zero-hit policy. Keep the gate and verdict in the
+  actual sccache tooling; do not specify an emulation here.
+- Diagnose and repair in this order: sccache configuration; remote read/write;
+  health and telemetry; zero-hit verdict; Docker/BuildKit layer caching. Do not
+  begin Docker/BuildKit cache work until the sccache checks have a green
+  verdict.
 - Cover every Docker or BuildKit-bearing job in `.github/workflows/pr.yml`.
 - Enforce a five-minute hard timeout for ordinary `build:compile` executions.
 - Produce canonical JSON and human-readable Markdown from the same telemetry
@@ -32,9 +47,10 @@ continues to own GitHub execution mechanics.
 - Give the specialist canonical JSON, the Markdown report, BuildKit logs, job
   and run identity, and the captured source commit. Diagnose before editing.
 - Use ordinary stable Docker layers for reusable dependency and toolchain
-  ancestry. Secret availability is the sole remote-cache boundary: a job with
-  the shared cache credential pair uses remote sccache `READ_WRITE`; a job
-  without it performs direct compilation and has no remote-cache access.
+  ancestry after the sccache gate passes. Keep secret availability and remote
+  read/write under SRE's actual sccache authority. A missing or failed sccache
+  gate blocks the compilation path instead of silently permitting a cold direct
+  compile.
 - Carry stable sccache authority through a stable-ID runtime secret, or an
   equivalently cache-key-neutral runtime input, mounted identically by all
   compiler vertices. Never encode cache availability in an argument,
@@ -57,11 +73,10 @@ continues to own GitHub execution mechanics.
   compiler entries; a subsequent changed head obtains sccache hits and finishes
   within five minutes; an appropriate same-head no-BuildKit-export replay
   performs zero registry exports while retaining sccache access.
-- Allow one two-second startup attempt per Docker `RUN`, share readiness and
-  circuit state, and fall back after missing credentials, startup, DNS,
-  object-read, or write failure. Emit sanitized `NOOK_SCCACHE_FALLBACK` and
-  health telemetry without exposing transport or credential details.
-- Keep genuine compiler failures terminal after fallback.
+- Require the SRE-owned sccache gate to emit sanitized health telemetry and a
+  zero-hit verdict. Leave startup, readiness, circuit, credential, DNS,
+  object-read, and write mechanics to the actual sccache tooling.
+- Keep genuine compiler failures terminal after the sccache gate verdict.
 - Preserve simulator/proof coverage for startup failure, DNS/read/write
   failure, shared open circuit, compiler failure, and healthy single startup.
 - Require the canonical Docker simulator and proof for every repair. Route all
@@ -75,6 +90,8 @@ continues to own GitHub execution mechanics.
 
 - Do not dispatch for a green verdict, parse Markdown for routing, run analysis
   unconditionally, or silently pass absent telemetry.
+- Do not add cache emulation, cache selectors, receipts, or security machinery.
+  Use actual sccache and Docker/BuildKit authorities.
 - Do not add a separate cache-population workflow or require preparatory work
   before an ordinary build can populate and consume compiler cache entries.
 - Do not infer solve parity from Bake inheritance or manifest import, or treat
@@ -89,8 +106,8 @@ continues to own GitHub execution mechanics.
 
 ## Fast path
 
-A green deterministic cache-health verdict ends analysis without specialist
-dispatch.
+A green deterministic cache-health verdict ends repair analysis without further
+specialist dispatch.
 
 ## Repair evidence
 
