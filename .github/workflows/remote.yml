@@ -228,11 +228,21 @@ jobs:
       - name: Expose Actions Node.js runtime
         run: |
           set -euo pipefail
-          if command -v node >/dev/null 2>&1; then
-            node --version
-            exit 0
-          fi
-          node_bin=/home/runner/externals/node24/bin/node
+          node_version=24.19.0
+          node_sha256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
+          node_root="$RUNNER_TEMP/nook-node-v${node_version}"
+          node_archive="$RUNNER_TEMP/nook-node-v${node_version}.tar.gz"
+          node_url="https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-x64.tar.gz"
+
+          # The ARC job container cannot see the runner-owned Actions runtime.
+          # Keep the container boundary intact by extracting only the pinned
+          # Node binary under RUNNER_TEMP instead of mutating the image.
+          install -d -m 0755 "$node_root"
+          curl --fail --location --show-error --silent "$node_url" -o "$node_archive"
+          printf '%s  %s\n' "$node_sha256" "$node_archive" | sha256sum -c -
+          tar -xzf "$node_archive" -C "$node_root" --strip-components=1
+          rm -f "$node_archive"
+          node_bin="$node_root/bin/node"
           test -x "$node_bin"
           echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"
           "$node_bin" --version
