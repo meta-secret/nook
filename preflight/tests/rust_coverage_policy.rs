@@ -86,7 +86,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(docker_tasks.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
     assert_eq!(
         docker_tasks.matches("RUST_DYLINT_COVERAGE_FLOOR=").count(),
-        2
+        4
     );
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));

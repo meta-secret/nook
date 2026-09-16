@@ -406,7 +406,6 @@ tasks:
     desc: Independently verify the custom checker and scan native and WASM product crates.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      - task: docker:rust-base
       - |
         failed=0
         floor="$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" || exit 1

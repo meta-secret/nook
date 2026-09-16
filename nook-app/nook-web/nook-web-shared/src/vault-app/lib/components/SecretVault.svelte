@@ -445,7 +445,19 @@
   }
 
   async function copySecret(id: string) {
-    const exposureRequest: Parameters<SecretExposure["withRecord"]>[0] = {
+    const revealed = decryptedSecrets[id];
+    if (revealed) {
+      const copied = await copyToClipboard({
+        text: revealed.primaryCredential,
+        id,
+        field: "secret",
+      });
+      if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+      return;
+    }
+    const exposureRequest: Parameters<
+      SecretExposure["withTransientRecord"]
+    >[0] = {
       id,
       load: (secretId) => vault.decryptSecret(secretId),
       action: (record) =>
@@ -458,7 +470,7 @@
           return copyToClipboard(copyToClipboardArgs);
         })(),
     };
-    const copied = await secretExposure.withRecord(exposureRequest);
+    const copied = await secretExposure.withTransientRecord(exposureRequest);
     if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
   }
 

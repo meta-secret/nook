@@ -359,6 +359,10 @@ fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
         "Dylint must solve self-test, native, and WASM branches together so their shared graph is built once"
     );
     assert!(
+        !dylint_task.contains("task: docker:rust-base"),
+        "the combined Dylint solve must resolve its named rust-base context transitively instead of paying for a redundant preliminary solve"
+    );
+    assert!(
         fixture.docker_tasks.contains(
             "if [ -n \"${GHA_CACHE_WRITE_ENABLED:-}\" ] || [ \"${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}\" = \"1\" ]"
         ) && fixture

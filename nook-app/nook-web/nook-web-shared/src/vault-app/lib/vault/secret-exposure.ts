@@ -99,6 +99,27 @@ export class SecretExposure {
       record.free();
     }
   }
+  async withTransientRecord<T>({
+    id,
+    load,
+    action,
+  }: DecryptedSecretOperation<T>): Promise<Result<T, VaultStorageFailure>> {
+    const admitted = this.active();
+    if (admitted.isErr()) return err(admitted.error);
+    const active = admitted.value;
+    const result = await load(id);
+    if (result.isErr()) return err(result.error);
+    const record = result.value;
+    try {
+      if (this.state !== active)
+        return err(
+          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        );
+      return await action(record);
+    } finally {
+      record.free();
+    }
+  }
   free(): ReleasedSecretExposure {
     const prior = this.state;
     this.state = { kind: SecretExposureKind.Released };
