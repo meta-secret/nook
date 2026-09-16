@@ -341,6 +341,27 @@ describe('extension pairing approved message', () => {
     })
   })
 
+  test('preserves event-log rejection returned in the error field', async () => {
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({
+          ok: false,
+          error: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
+    ).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Rejected,
+      reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+    })
+  })
+
   test('accepts complete approved grants', () => {
     expect(
       ExtensionPairingApprovedMessageSchema.is({

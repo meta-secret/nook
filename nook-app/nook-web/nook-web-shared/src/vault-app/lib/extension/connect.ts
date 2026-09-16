@@ -435,11 +435,12 @@ class ExtensionConnectionBrowser {
         ("error" in response &&
           response.error === "auth-provider-plaintext-migration-required"));
     const responseReason =
-      response &&
-      typeof response === "object" &&
-      "reason" in response &&
-      typeof response.reason === "string"
-        ? response.reason
+      response && typeof response === "object"
+        ? "reason" in response && typeof response.reason === "string"
+          ? response.reason
+          : "error" in response && typeof response.error === "string"
+            ? response.error
+            : ""
         : "";
     const admittedReason = Object.values(ExtensionPairingRejectionReason).find(
       (reason) => reason === responseReason,
