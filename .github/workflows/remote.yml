@@ -319,6 +319,26 @@ jobs:
             "nook-app/nook-web/nook-vault-sentinel/dist"; do
             test -d "$required"
           done
+      - name: Expose pinned jq for deployment verification
+        run: |
+          set -euo pipefail
+          jq_version=1.8.1
+          jq_sha256=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
+          jq_root="$RUNNER_TEMP/nook-jq-v${jq_version}"
+          jq_archive="$RUNNER_TEMP/nook-jq-v${jq_version}.bin"
+          jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-linux-amd64"
+
+          # The minimal ARC job container does not provide jq. Keep the
+          # verifier's real jq semantics without mutating the image or host.
+          install -d -m 0755 "$jq_root"
+          curl --fail --location --show-error --silent \
+            --proto '=https' --proto-redir '=https' \
+            "$jq_url" -o "$jq_archive"
+          printf '%s  %s\n' "$jq_sha256" "$jq_archive" | sha256sum -c -
+          install -m 0755 "$jq_archive" "$jq_root/jq"
+          rm -f "$jq_archive"
+          echo "$jq_root" >> "$GITHUB_PATH"
+          "$jq_root/jq" --version
       - name: Deploy and verify Pages previews
         id: deploy-all
         env:
