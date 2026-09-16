@@ -244,13 +244,12 @@ jobs:
           toolchain: "1.97.0"
           cache: false
       - name: Install pinned host WASM tooling
-        env:
-          WASM_PACK_VERSION: "0.15.0"
-        run: |
-          set -euo pipefail
-          rustup target add wasm32-unknown-unknown
-          cargo install wasm-pack --version "$WASM_PACK_VERSION" --locked --root "$RUNNER_TEMP/nook-native-tools"
-          echo "$RUNNER_TEMP/nook-native-tools/bin" >> "$GITHUB_PATH"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.0
+          fallback: none
+      - name: Install host WASM target
+        run: rustup target add wasm32-unknown-unknown
       - name: Prepare native Pages preview artifacts
         env:
           DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
