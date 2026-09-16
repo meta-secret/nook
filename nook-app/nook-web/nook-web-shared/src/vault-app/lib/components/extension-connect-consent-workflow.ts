@@ -18,10 +18,14 @@ import {
 } from "../extension/extension-pairing-delivery";
 import {
   NativeVaultStorageFailure,
-  type VaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
 } from "../runtime/storage-failure";
 import type { VaultState } from "../vault.svelte";
-import { ExtensionVaultApproval } from "../extension/vault-approval";
+import {
+  ExtensionVaultApproval,
+  type ExtensionVaultAuthorization,
+} from "../extension/vault-approval";
 
 export enum ExtensionConsentWorkflowKind {
   Resting = "resting",
@@ -192,6 +196,18 @@ type ExtensionConsentWorkflowLifecycle =
     }
   | { readonly kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
 
+enum ExtensionConsentAuthorizationOwnerKind {
+  Empty = "empty",
+  Authorized = "authorized",
+}
+
+type ExtensionConsentAuthorizationOwner =
+  | { readonly kind: ExtensionConsentAuthorizationOwnerKind.Empty }
+  | {
+      readonly kind: ExtensionConsentAuthorizationOwnerKind.Authorized;
+      readonly approval: ExtensionVaultApproval;
+    };
+
 function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliveryOutcome {
   switch (value.kind) {
     case ExtensionPairingDeliveryKind.Delivered:
@@ -222,6 +238,9 @@ function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliv
 export class ExtensionConnectConsentWorkflow {
   private lifecycle: ExtensionConsentWorkflowLifecycle = {
     kind: ExtensionConsentWorkflowLifecycleKind.NotStarted,
+  };
+  private authorizationOwner: ExtensionConsentAuthorizationOwner = {
+    kind: ExtensionConsentAuthorizationOwnerKind.Empty,
   };
 
   constructor(
@@ -298,6 +317,7 @@ export class ExtensionConnectConsentWorkflow {
         this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
         return;
       case ExtensionConsentWorkflowLifecycleKind.Ready:
+        this.releaseAuthorization();
         this.lifecycle.phase.free();
         this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
         return;
@@ -340,8 +360,35 @@ export class ExtensionConnectConsentWorkflow {
     this.vault.dismissError();
     this.vault.isSaving = true;
     try {
+      if (resumesDelivery) {
+        switch (this.authorizationOwner.kind) {
+          case ExtensionConsentAuthorizationOwnerKind.Empty:
+            this.publish(
+              {
+                kind: ExtensionConsentWorkflowKind.Failed,
+                phase: state.phase,
+                failure: {
+                  kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
+                  failure: new VaultStorageFailure(
+                    VaultStorageFailureKind.GenerationChanged,
+                  ),
+                },
+              },
+              publish,
+            );
+            return;
+          case ExtensionConsentAuthorizationOwnerKind.Authorized:
+            await this.deliverApprovedGrant(
+              this.authorizationOwner.approval,
+              state.phase,
+              publish,
+            );
+            return;
+        }
+      }
+
       const approval = new ExtensionVaultApproval(this.vault, this.request);
-      if (!resumesDelivery) {
+      {
         const started = state.phase.transition(
           NookExtensionConsentEvent.AuthorizationStarted,
         );
@@ -375,13 +422,19 @@ export class ExtensionConnectConsentWorkflow {
           return;
         }
 
-        let authorization: Result<void, VaultStorageFailure>;
+        let authorization: Result<
+          ExtensionVaultAuthorization,
+          VaultStorageFailure
+        >;
         try {
           authorization = await approval.authorize();
         } catch (failure) {
           authorization = err(new NativeVaultStorageFailure(failure));
         }
-        if (!this.isApproving()) return;
+        if (!this.isApproving()) {
+          if (authorization.isOk()) approval.releaseAuthorization();
+          return;
+        }
         if (authorization.isErr()) {
           const failed = authorizingPhase.transition(
             NookExtensionConsentEvent.AuthorizationFailed,
@@ -418,6 +471,11 @@ export class ExtensionConnectConsentWorkflow {
           return;
         }
 
+        this.authorizationOwner = {
+          kind: ExtensionConsentAuthorizationOwnerKind.Authorized,
+          approval,
+        };
+
         const authorizationSucceeded = authorizingPhase.transition(
           NookExtensionConsentEvent.AuthorizationSucceeded,
         );
@@ -442,11 +500,13 @@ export class ExtensionConnectConsentWorkflow {
         const approvedPhase = authorizationSucceeded.phase();
         authorizationSucceeded.free();
         this.replacePhase(authorizingPhase, approvedPhase);
-        await this.deliverApprovedGrant(approval, approvedPhase, publish);
+        await this.deliverApprovedGrant(
+          approval,
+          approvedPhase,
+          publish,
+        );
         return;
       }
-
-      await this.deliverApprovedGrant(approval, state.phase, publish);
     } finally {
       this.finishApproval();
       this.vault.isSaving = false;
@@ -631,6 +691,7 @@ export class ExtensionConnectConsentWorkflow {
       },
       publish,
     );
+    this.releaseAuthorization();
   }
 
   private isReadyOwner(phase: NookExtensionConsentPhase): boolean {
@@ -682,12 +743,26 @@ export class ExtensionConnectConsentWorkflow {
         };
         return;
       case ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval:
+        this.releaseAuthorization();
         this.lifecycle.phase.free();
         this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
         return;
       case ExtensionConsentWorkflowLifecycleKind.NotStarted:
       case ExtensionConsentWorkflowLifecycleKind.Ready:
       case ExtensionConsentWorkflowLifecycleKind.Disposed:
+        return;
+    }
+  }
+
+  private releaseAuthorization(): void {
+    switch (this.authorizationOwner.kind) {
+      case ExtensionConsentAuthorizationOwnerKind.Empty:
+        return;
+      case ExtensionConsentAuthorizationOwnerKind.Authorized:
+        this.authorizationOwner.approval.releaseAuthorization();
+        this.authorizationOwner = {
+          kind: ExtensionConsentAuthorizationOwnerKind.Empty,
+        };
         return;
     }
   }

@@ -6,6 +6,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
+import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
@@ -66,9 +67,8 @@ export type GeneratePasswordRequest = {
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export type ExtensionPairingApprovedGrant = Omit<
   ExtensionPairingGrantApproval,
-  "syncProviderCount" | "vaultType"
+  "syncProviderCount"
 > & {
-  vaultType: "simple";
   providers: ExtensionPairingStorageProviderPayload[];
 };
 export type ExtensionPairingStorageProviderPayload = StorageProvider;
@@ -85,7 +85,8 @@ export class ExtensionPairingApprovedGrantAdmission {
     const payload = value;
     if (!("vaultType" in payload))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
-    if (payload.vaultType !== "simple")
+    const vaultType = extensionPairingVaultType.admit(payload.vaultType);
+    if (vaultType.isErr())
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
     if (!("deviceId" in payload) || typeof payload.deviceId !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceId);
@@ -112,7 +113,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId);
     if (!("vaultName" in payload) || typeof payload.vaultName !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultName);
-    if (!("approvedAt" in payload) || typeof payload.approvedAt !== "string")
+    if (!("approvedAt" in payload) || typeof payload.approvedAt !== "number")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
     if (
       !("scopes" in payload) ||
@@ -136,7 +137,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       providers.push(provider.value);
     }
     const grant: ExtensionPairingApprovedGrant = {
-      vaultType: payload.vaultType,
+      vaultType: vaultType.value,
       deviceId: payload.deviceId,
       devicePublicKey: payload.devicePublicKey,
       deviceSigningPublicKey: payload.deviceSigningPublicKey,

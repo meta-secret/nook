@@ -24,7 +24,7 @@ function pairingGrant(id: string): StoredExtensionPairingGrant {
     devicePublicKey: `public-${id}`,
     deviceSigningPublicKey: `signing-${id}`,
     deviceLabel: `device-${id}`,
-    approvedAt: '2026-08-10T00:00:00Z',
+    approvedAt: 1_786_320_000_000,
     scopes: [],
     syncProviderCount: 0,
     eventCount: 0,

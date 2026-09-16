@@ -6,6 +6,7 @@ const approvalPort = vi.hoisted(() => ({
   prepareAuthorizedGrant: vi.fn(),
   deliver: vi.fn(),
   admitCompletion: vi.fn(),
+  releaseAuthorization: vi.fn(),
 }))
 
 vi.mock('$lib/extension/vault-approval', () => ({
@@ -23,6 +24,7 @@ import {
   ExtensionConsentWorkflowPresentation,
   type ExtensionConsentWorkflowState,
 } from '$lib/components/extension-connect-consent-workflow'
+import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -91,6 +93,7 @@ async function approve(harness: ReturnType<typeof createHarness>) {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.clearAllMocks()
   approvalPort.authorize.mockResolvedValue(ok())
   approvalPort.prepareAuthorizedGrant.mockResolvedValue(
     ok({} as ExtensionPairingApprovedMessage),
@@ -99,6 +102,7 @@ beforeEach(() => {
     ok({ kind: ExtensionPairingDeliveryKind.Delivered }),
   )
   approvalPort.admitCompletion.mockReturnValue(ok())
+  approvalPort.releaseAuthorization.mockImplementation(() => {})
 })
 
 describe('extension consent web workflow', () => {
@@ -514,6 +518,7 @@ describe('extension consent web workflow', () => {
       expect(harness.workflow.canContinue(state)).toBe(false)
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
       expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
+      expect(ExtensionVaultApproval).toHaveBeenCalledOnce()
       expect(approvalPort.deliver).toHaveBeenCalledTimes(deliveryCalls)
       expect(refreshDeviceState).toHaveBeenCalledTimes(refreshCalls)
       expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(

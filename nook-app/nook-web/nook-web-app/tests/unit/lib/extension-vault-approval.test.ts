@@ -1,5 +1,11 @@
 import { err, ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { admit_extension_pairing_vault_type } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+
+await companionWasmReady
+
+const simplePairingVaultType = admit_extension_pairing_vault_type('simple')
 
 const wasm = vi.hoisted(() => ({
   approveExtensionDevice: vi.fn(),
@@ -82,7 +88,12 @@ class ExtensionApprovalTestFixture {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  wasm.approveExtensionDevice.mockImplementation(async () => {})
+  wasm.approveExtensionDevice.mockImplementation(async () => ({
+    storeId: { value: 'store-1', free: vi.fn() },
+    approvedAt: 1_783_373_640_000,
+    vaultType: simplePairingVaultType,
+    free: vi.fn(),
+  }))
 })
 
 describe('extension vault approval', () => {
@@ -95,10 +106,25 @@ describe('extension vault approval', () => {
 
     const authorized = await approval.authorize()
     expect(authorized.isOk()).toBe(true)
+    if (authorized.isErr()) return
+    expect(authorized.value.approvedAt).toBe(1_783_373_640_000)
+    expect(authorized.value.vaultType).toBe(
+      simplePairingVaultType,
+    )
     expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
     const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
     if (prepared.isErr()) return
+    expect(prepared.value.payload).toMatchObject({
+      vaultType: simplePairingVaultType,
+      vaultStoreId: 'store-1',
+      approvedAt: 1_783_373_640_000,
+    })
+    expect(typeof prepared.value.payload.approvedAt).toBe('number')
+    const completion = approval.admitCompletion()
+    expect(completion.isOk()).toBe(true)
+    if (completion.isErr()) return
+    expect(completion.value.manager).toBe(fixture.manager)
     const delivered = await approval.deliver(prepared.value)
 
     expect(wasm.approveExtensionDevice).toHaveBeenCalledWith(
@@ -115,6 +141,9 @@ describe('extension vault approval', () => {
       message: prepared.value,
     })
     expect(delivered.isOk()).toBe(true)
+    expect(authorized.value.storeId.free).toHaveBeenCalledOnce()
+    approval.releaseAuthorization()
+    expect(authorized.value.free).toHaveBeenCalledOnce()
   })
 
   test('keeps approval valid when the same vault gets a new active-vault record', async () => {

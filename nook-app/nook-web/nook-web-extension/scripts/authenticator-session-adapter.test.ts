@@ -16,7 +16,7 @@ function pairingGrant(): Parameters<
     deviceLabel: 'Test browser',
     vaultStoreId: 'vault-1',
     vaultName: 'Test vault',
-    approvedAt: '2026-08-11T00:00:00.000Z',
+    approvedAt: 1_786_406_400_000,
     scopes: [],
     syncProviderCount: 0,
     eventCount: 0,

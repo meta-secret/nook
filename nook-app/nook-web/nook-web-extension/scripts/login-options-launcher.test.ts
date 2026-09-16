@@ -197,7 +197,7 @@ describe('websiteLoginOptions', () => {
           devicePublicKey: 'device-public-key',
           deviceSigningPublicKey: 'device-signing-key',
           deviceLabel: 'Laptop',
-          approvedAt: '2026-08-10T00:00:00Z',
+          approvedAt: 1_786_320_000_000,
           scopes: ['password-filling'],
           syncProviderCount: 0,
           eventCount: 1,

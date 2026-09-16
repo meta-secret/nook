@@ -3,6 +3,7 @@ import {
   ExtensionConnectIntentKind,
   ExtensionConnectionIntentProjection,
 } from '$lib/app/route-state'
+import { admit_extension_pairing_vault_type } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -37,6 +38,8 @@ const {
   selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
 } = await extensionPairingGrantPolicyReady
+
+const simplePairingVaultType = admit_extension_pairing_vault_type('simple')
 
 function locationFromUrl(url: string): Location {
   const parsed = new URL(url)
@@ -210,14 +213,14 @@ describe('extension pairing approved message', () => {
       message: {
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
-          vaultType: 'simple',
+          vaultType: simplePairingVaultType,
           deviceId: 'device-1',
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
           vaultStoreId: 'store-1',
           vaultName: 'Personal',
-          approvedAt: '2026-07-07T00:00:00.000Z',
+          approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
         },
@@ -367,20 +370,35 @@ describe('extension pairing approved message', () => {
       ExtensionPairingApprovedMessageSchema.is({
         type: 'nook:extension-pairing-approved',
         payload: {
-          vaultType: 'simple',
+          vaultType: simplePairingVaultType,
           deviceId: 'device-1',
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
           vaultStoreId: 'store-1',
           vaultName: 'Personal',
-          approvedAt: '2026-07-07T00:00:00.000Z',
+          approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
         },
         eventLogRecords,
       }),
     ).toBe(true)
+  })
+
+  test('rejects ISO approval timestamps at the new-grant browser boundary', () => {
+    const message = approvalDeliveryArgs().message
+    const admission = ExtensionPairingApprovedMessageSchema.parse({
+      ...message,
+      payload: {
+        ...message.payload,
+        approvedAt: '2026-07-07T00:00:00.000Z',
+      },
+    })
+
+    expect(admission.isErr() ? admission.error : 'admitted').toBe(
+      ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
+    )
   })
 
   test('preserves complete provider payloads for extension import', () => {
@@ -480,7 +498,7 @@ describe('extension pairing approved message', () => {
           deviceLabel: 'Forged Sentinel device',
           vaultStoreId: 'store-1',
           vaultName: 'Sentinel',
-          approvedAt: '2026-07-07T00:00:00.000Z',
+          approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
         },
@@ -515,14 +533,14 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: 'simple',
+        vaultType: simplePairingVaultType,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
-        approvedAt: '2026-07-07T00:00:00.000Z',
+        approvedAt: 1_783_373_640_000,
         scopes: [
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.SyncProviderCredentials,
@@ -595,14 +613,14 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: 'simple',
+        vaultType: simplePairingVaultType,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
-        approvedAt: '2026-07-25T00:00:00.000Z',
+        approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
@@ -647,14 +665,14 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: 'simple',
+        vaultType: simplePairingVaultType,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
-        approvedAt: '2026-07-24T00:00:00.000Z',
+        approvedAt: 1_783_843_200_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
@@ -670,14 +688,14 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: 'simple',
+        vaultType: simplePairingVaultType,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
         vaultStoreId: 'store-2',
         vaultName: 'Work',
-        approvedAt: '2026-07-25T00:00:00.000Z',
+        approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
@@ -715,14 +733,14 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: 'simple',
+        vaultType: simplePairingVaultType,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
-        approvedAt: '2026-07-25T00:00:00.000Z',
+        approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
@@ -748,8 +766,12 @@ describe('extension pairing approved message', () => {
     const { selectedVaultStoreId: _selectedVaultStoreId, ...legacySetup } =
       currentSetup
     void _selectedVaultStoreId
+    const legacyStoredGrant: Record<string, unknown> = {
+      ...legacyGrant,
+      approvedAt: '2026-07-25T00:00:00.000Z',
+    }
     const migrated = migratedLegacyPairingStorageItems({
-      [key]: legacyGrant,
+      [key]: legacyStoredGrant,
       [setupStorageKey]: legacySetup,
     })
 

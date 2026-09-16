@@ -66,7 +66,7 @@ const routedGrant: StoredExtensionPairingGrant = {
   deviceSigningPublicKey: 'device-signing-public-key',
   vaultName: 'Private vault',
   deviceLabel: 'Test browser',
-  approvedAt: '2026-09-11T00:00:00.000Z',
+  approvedAt: 1_789_084_800_000,
   scopes: ['password-filling'],
   syncProviderCount: 0,
   eventCount: 1,

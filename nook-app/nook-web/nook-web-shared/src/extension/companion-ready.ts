@@ -1,4 +1,5 @@
 import initCompanionWasm, {
+  admit_extension_pairing_vault_type,
   extension_passkey_management_scope,
   extension_password_filling_scope,
   extension_sync_provider_credentials_scope,
@@ -9,6 +10,10 @@ import {
   type ExtensionConnectScopeRuntime,
   ExtensionConnectScope,
 } from "./extension-connect-scope";
+import {
+  type ExtensionPairingVaultTypeRuntime,
+  extensionPairingVaultType,
+} from "./extension-pairing-vault-type";
 
 type BunFileApi = {
   file: (path: string) => {
@@ -216,5 +221,9 @@ export const companionWasmReady: Promise<void> = startCompanionWasm().then(
       is_extension_connect_scope,
     };
     ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
+    const vaultTypeRuntime: ExtensionPairingVaultTypeRuntime = {
+      admit_extension_pairing_vault_type,
+    };
+    extensionPairingVaultType.configure(vaultTypeRuntime);
   },
 );

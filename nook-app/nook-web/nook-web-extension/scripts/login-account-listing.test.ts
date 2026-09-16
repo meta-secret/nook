@@ -16,7 +16,7 @@ function grant(vaultStoreId: string): StoredExtensionPairingGrant {
     devicePublicKey: `${vaultStoreId}-public`,
     deviceSigningPublicKey: `${vaultStoreId}-signing`,
     deviceLabel: `${vaultStoreId}-device`,
-    approvedAt: '2026-08-10T00:00:00Z',
+    approvedAt: 1_786_320_000_000,
     scopes: [],
     syncProviderCount: 0,
     eventCount: 0,
