@@ -123,13 +123,15 @@ class ExtensionVaultManagerContext {
   private admitCapturedManager(
     current: NookVaultManager,
   ): Result<NookVaultManager, VaultStorageFailure> {
-    switch (this.state.kind) {
+    const state = this.state;
+    switch (state.kind) {
       case ExtensionVaultManagerContextKind.Unavailable:
-        return err(this.state.failure);
-      case ExtensionVaultManagerContextKind.Captured:
-        return this.vaultSelectionMatches(this.state.activeVault).andThen(
+        return err(state.failure);
+      case ExtensionVaultManagerContextKind.Captured: {
+        const capturedManager = state.manager;
+        return this.vaultSelectionMatches(state.activeVault).andThen(
           (matches) =>
-            current === this.state.manager && matches
+            current === capturedManager && matches
               ? ok(current)
               : err(
                   new VaultStorageFailure(
@@ -137,6 +139,7 @@ class ExtensionVaultManagerContext {
                   ),
                 ),
         );
+      }
     }
   }
 
