@@ -1,5 +1,9 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
-import { decode_extension_grant_authority_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  decode_extension_grant_authority_response,
+  NookPairingVaultId,
+  type ExtensionGrantAuthority,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   type ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
@@ -396,10 +400,16 @@ export async function importLocalEventLogUpdateWithDependencies({
         reason: LocalEventLogUpdateFailure.EventLogImportFailed,
       }
     }
-    const authority = decode_extension_grant_authority_response(
-      JSON.stringify(authorityDelivery.value),
-      vaultStoreId,
-    )
+    const requestedVaultId = new NookPairingVaultId(vaultStoreId)
+    let authority: ExtensionGrantAuthority
+    try {
+      authority = decode_extension_grant_authority_response(
+        JSON.stringify(authorityDelivery.value),
+        requestedVaultId,
+      )
+    } finally {
+      requestedVaultId.free()
+    }
     switch (authority.kind) {
       case 'Authorized':
         break

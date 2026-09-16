@@ -1,7 +1,8 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { err, ok } from 'neverthrow'
 import {
   decode_extension_grant_authority_response,
+  NookPairingVaultId,
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -36,7 +37,7 @@ type ImportDependencies = Parameters<
 
 const storedGrant: StoredExtensionPairingGrant = {
   vaultType: 'simple',
-  vaultStoreId: 'vault',
+  vaultStoreId: 'store_abcdefghijk',
   deviceId: 'device',
   devicePublicKey: 'public',
   deviceSigningPublicKey: 'signing',
@@ -117,6 +118,7 @@ describe('extension pairing grant transport', () => {
       const policy = await extensionPairingGrantPolicyReady
       const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
       const events: string[] = []
+      const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
       const response = await importLocalEventLogUpdateWithDependencies({
         vaultStoreId: storedGrant.vaultStoreId,
         eventLogRecords: [],
@@ -168,31 +170,108 @@ describe('extension pairing grant transport', () => {
               reason: LocalEventLogUpdateFailure.EventLogImportFailed,
             },
       )
+      expect(freePairingVaultId).toHaveBeenCalledTimes(
+        receiver === 'created' ? 1 : 0,
+      )
+      freePairingVaultId.mockRestore()
     },
   )
-  test('reports a failed local session update transport', async () => {
+  test.each(['result-error', 'promise-rejection'] as const)(
+    'reports a failed local session update transport: %s',
+    async (scenario) => {
+      const policy = await extensionPairingGrantPolicyReady
+      const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+      const sendSession = mock(
+        async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+          if (!message || typeof message !== 'object' || !('type' in message)) {
+            throw new Error('expected a typed session request')
+          }
+          if (
+            message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
+          ) {
+            return ok({ kind: 'Authorized' as const, grant: storedGrant })
+          }
+          expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
+          if (scenario === 'promise-rejection') {
+            throw new Error('session update rejected')
+          }
+          return err(
+            new ExtensionSessionTransportFailure(
+              ExtensionSessionTransportFailureKind.DeliveryFailed,
+            ),
+          )
+        },
+      )
+      const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
+      const response = await importLocalEventLogUpdateWithDependencies({
+        vaultStoreId: storedGrant.vaultStoreId,
+        eventLogRecords: [],
+        loadPairingStorage: async () => ({ [key]: storedGrant }),
+        pairingPolicyReady: extensionPairingGrantPolicyReady,
+        ensureSession: async () => ok(),
+        importEventLog: async () => ({
+          vaultStoreId: storedGrant.vaultStoreId,
+          accessGranted: true,
+          eventCount: 1,
+          heads: ['event-1'],
+        }),
+        persistPairingStorage: async () => {},
+        sendSession,
+      })
+
+      expect(response).toEqual({
+        ok: false,
+        reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+      })
+      expect(sendSession).toHaveBeenCalledTimes(2)
+      expect(freePairingVaultId).toHaveBeenCalledTimes(1)
+      freePairingVaultId.mockRestore()
+    },
+  )
+  test('frees the validated wrapper when generated decoding throws', async () => {
     const policy = await extensionPairingGrantPolicyReady
     const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
-    const sendSession = mock(
-      async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+    const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
+    const response = await importLocalEventLogUpdateWithDependencies({
+      vaultStoreId: storedGrant.vaultStoreId,
+      eventLogRecords: [],
+      loadPairingStorage: async () => ({ [key]: storedGrant }),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      ensureSession: async () => ok(),
+      importEventLog: async () => {
+        throw new Error('decoder must reject before import')
+      },
+      persistPairingStorage: async () => {},
+      sendSession: async (message) => {
         if (!message || typeof message !== 'object' || !('type' in message)) {
           throw new Error('expected a typed session request')
         }
-        if (
-          message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
-        ) {
-          return ok({ kind: 'Authorized' as const, grant: storedGrant })
-        }
-        expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
-        return err(
-          new ExtensionSessionTransportFailure(
-            ExtensionSessionTransportFailureKind.DeliveryFailed,
-          ),
+        expect(message.type).toBe(
+          ExtensionSessionMessageType.ClassifyGrantAuthority,
         )
+        return ok({
+          kind: 'Authorized',
+          grant: {
+            ...storedGrant,
+            vaultStoreId: 'store_otherabcdefghijk',
+          },
+        })
       },
-    )
+    })
+
+    expect(response).toEqual({
+      ok: false,
+      reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+    })
+    expect(freePairingVaultId).toHaveBeenCalledTimes(1)
+    freePairingVaultId.mockRestore()
+  })
+  test('rejects an invalid wire vault ID before allocating a wrapper', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const key = policy.pairingGrantStorageKey('vault')
+    const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
     const response = await importLocalEventLogUpdateWithDependencies({
-      vaultStoreId: storedGrant.vaultStoreId,
+      vaultStoreId: 'vault',
       eventLogRecords: [],
       loadPairingStorage: async () => ({ [key]: storedGrant }),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
@@ -204,27 +283,44 @@ describe('extension pairing grant transport', () => {
         heads: ['event-1'],
       }),
       persistPairingStorage: async () => {},
-      sendSession,
+      sendSession: async (message) => {
+        if (!message || typeof message !== 'object' || !('type' in message)) {
+          throw new Error('expected a typed session request')
+        }
+        expect(message.type).toBe(
+          ExtensionSessionMessageType.ClassifyGrantAuthority,
+        )
+        return ok({ kind: 'Authorized', grant: storedGrant })
+      },
     })
 
     expect(response).toEqual({
       ok: false,
       reason: LocalEventLogUpdateFailure.EventLogImportFailed,
     })
-    expect(sendSession).toHaveBeenCalledTimes(2)
+    expect(freePairingVaultId).not.toHaveBeenCalled()
+    freePairingVaultId.mockRestore()
   })
   test('rejects malformed and wrong-target manager responses', async () => {
     await extensionPairingGrantPolicyReady
     for (const response of [
       {},
-      { kind: 'Authorized', grant: { ...storedGrant, vaultStoreId: 'other' } },
+      {
+        kind: 'Authorized',
+        grant: { ...storedGrant, vaultStoreId: 'store_otherabcdefghijk' },
+      },
     ]) {
-      expect(() =>
-        decode_extension_grant_authority_response(
-          JSON.stringify(response),
-          'vault',
-        ),
-      ).toThrow()
+      const requested = new NookPairingVaultId(storedGrant.vaultStoreId)
+      try {
+        expect(() =>
+          decode_extension_grant_authority_response(
+            JSON.stringify(response),
+            requested,
+          ),
+        ).toThrow()
+      } finally {
+        requested.free()
+      }
     }
   })
 
@@ -239,7 +335,7 @@ describe('extension pairing grant transport', () => {
         manager,
         payload: {
           stored_json: '{}',
-          vault_store_id: 'vault',
+          vault_store_id: storedGrant.vaultStoreId,
           queue: { kind: 'message-default' },
         },
       }),
@@ -262,17 +358,22 @@ describe('extension pairing grant transport', () => {
         manager,
         payload: {
           stored_json: '{}',
-          vault_store_id: 'vault',
+          vault_store_id: storedGrant.vaultStoreId,
           queue: { kind: 'message-default' },
         },
       })
-      expect(classify).toHaveBeenCalledWith('{}', 'vault')
-      expect(
-        decode_extension_grant_authority_response(
-          JSON.stringify(result),
-          'vault',
-        ),
-      ).toEqual(authority)
+      expect(classify).toHaveBeenCalledWith('{}', storedGrant.vaultStoreId)
+      const requested = new NookPairingVaultId(storedGrant.vaultStoreId)
+      try {
+        expect(
+          decode_extension_grant_authority_response(
+            JSON.stringify(result),
+            requested,
+          ),
+        ).toEqual(authority)
+      } finally {
+        requested.free()
+      }
     },
   )
   test.each([
@@ -379,7 +480,7 @@ describe('extension pairing grant transport', () => {
 
   test('projects only session identity fields from stored grants', () => {
     expect(extensionSessionGrantIdentity(storedGrant)).toEqual({
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
