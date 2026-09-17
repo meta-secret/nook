@@ -12,26 +12,6 @@ type ExtensionMessageRequest = {
   readonly responseWait: ExtensionMessageResponseWait;
 };
 
-type ChromeExtensionRuntimeResponse =
-  | CompanionIdentityDiscoveryTransportResponse
-  | CompanionIdentityHandoffTransportResponse
-  | { readonly ok: true }
-  | {
-      readonly ok: false;
-      readonly reason?: string;
-      readonly error?: string;
-    }
-  | {
-      readonly ok: true;
-      readonly requestId: string;
-      readonly vaultStoreId: string;
-    }
-  | {
-      readonly ok: true;
-      readonly envelope: string;
-      readonly nextNonce: string;
-    };
-
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -138,8 +118,6 @@ import {
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
   type RuntimeMessage,
-  type CompanionIdentityDiscoveryTransportResponse,
-  type CompanionIdentityHandoffTransportResponse,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
@@ -155,7 +133,10 @@ import {
   companionResponseDecoder,
   identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
+  type ExtensionRuntimeResponseObject,
 } from "./extension-response-decoders";
+
+type ChromeExtensionRuntimeResponse = ExtensionRuntimeResponseObject;
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
