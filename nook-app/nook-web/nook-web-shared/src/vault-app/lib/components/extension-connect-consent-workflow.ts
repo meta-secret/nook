@@ -419,7 +419,7 @@ export class ExtensionConnectConsentWorkflow {
               this.publish(publication);
             }
             return;
-          case ExtensionConsentAuthorizationOwnerKind.Authorized:
+          case ExtensionConsentAuthorizationOwnerKind.Authorized: {
             const deliveryRequest: ExtensionConsentGrantDeliveryRequest = {
               approval: this.authorizationOwner.approval,
               approvedPhase: state.phase,
@@ -427,6 +427,7 @@ export class ExtensionConnectConsentWorkflow {
             };
             await this.deliverApprovedGrant(deliveryRequest);
             return;
+          }
         }
       }
 
