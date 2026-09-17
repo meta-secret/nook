@@ -1,4 +1,3 @@
-import type { CompanionIdentityHandoffRequestPayload } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -19,8 +18,16 @@ type WebsiteLoginRevealSessionRequest = Extract<
   { type: `${ExtensionSessionMessageType.RevealLogin}` }
 >
 
+export type IdentityHandoffSessionProjection = {
+  readonly recipientPublicKey: string
+  readonly nonce: string
+  readonly expectedDeviceId: string
+  readonly expectedDevicePublicKey: string
+  readonly expectedDeviceSigningPublicKey: string
+}
+
 export function identityHandoffSessionRequest(
-  request: CompanionIdentityHandoffRequestPayload,
+  request: IdentityHandoffSessionProjection,
 ): IdentityHandoffSessionRequest {
   return {
     type: ExtensionSessionMessageType.SealIdentityHandoff,

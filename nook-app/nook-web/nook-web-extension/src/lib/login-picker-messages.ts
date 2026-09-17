@@ -160,6 +160,7 @@ const loginPickerQueryResponseSchema = Schema.Struct({
         secretId: loginPickerNonEmptyStringSchema,
         username: Schema.String,
         websiteHost: Schema.String,
+        websiteUrl: Schema.String,
         vaultName: Schema.String,
       }),
     ),

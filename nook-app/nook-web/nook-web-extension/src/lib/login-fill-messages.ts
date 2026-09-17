@@ -47,7 +47,7 @@ export class WebsiteLoginRevealMessage {
     origin: string
     vaultStoreId: string
     secretId: string
-    authorizationGeneration?: string
+    authorizationGeneration: string
   }
   static decode(message: unknown) {
     return Schema.decodeUnknown(websiteLoginRevealMessageSchema)(message)

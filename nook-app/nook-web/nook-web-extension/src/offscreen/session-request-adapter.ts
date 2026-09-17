@@ -669,11 +669,19 @@ function decodeExtensionSessionIngress(
   envelope: ExtensionSessionRawEnvelope,
 ): Effect.Effect<ExtensionSessionRequest, ExtensionSessionRequestDecodeFailure> {
   if (envelope.type !== ExtensionSessionMessageType.ImportVault) {
-    return Effect.try({
-      try: () => decode_extension_session_request(envelope),
-      catch: (): ExtensionSessionRequestDecodeFailure => ({
-        kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
-      }),
+    return Effect.gen(function* () {
+      const decoded = yield* Effect.try({
+        try: () => decode_extension_session_request(envelope),
+        catch: (): ExtensionSessionRequestDecodeFailure => ({
+          kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
+        }),
+      })
+      if (decoded.type === ExtensionSessionMessageType.ImportVault) {
+        return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
+          kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
+        })
+      }
+      return decoded
     })
   }
   return Effect.gen(function* () {

@@ -56,6 +56,7 @@ describe('login picker runtime messages', () => {
             secretId: 'secret-1',
             username: 'alice',
             websiteHost: 'login.example.test',
+            websiteUrl: 'https://login.example.test',
             vaultName: 'Personal',
           },
         ],

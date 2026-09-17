@@ -2,6 +2,7 @@ import { Schema } from 'effect'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import { ExtensionSessionLifecycleMessageType } from '../../lib/extension-session-lifecycle-message-type'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
+import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
 export type ExtensionSessionEnsureMessage = {
   type: ExtensionRuntimeRequestType.EnsureRuntime
@@ -24,6 +25,7 @@ export type ExtensionSessionRuntimeMessageInput = {
 }
 
 export type ExtensionSessionRuntimeMessageValue =
+  | BrowserRuntimeMessage
   | string
   | number
   | boolean

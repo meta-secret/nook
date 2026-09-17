@@ -192,7 +192,7 @@ type WebsiteAuthenticatorBackupAttachArgs = {
       origin: string
       vaultStoreId: string
       secretId: string
-      codes: readonly string[]
+      codes: string[]
       mode:
         | WebsiteAuthenticatorBackupAttachMessageMode.Replace
         | WebsiteAuthenticatorBackupAttachMessageMode.Merge

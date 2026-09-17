@@ -28,7 +28,6 @@ import {
   type CompanionExtensionPresence,
   type CompanionIdentityHandoffStatusAdmission,
   type CompanionIdentityHandoffRequest,
-  type CompanionIdentityHandoffRequestPayload,
   type CompanionUnlockedAppKey,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -407,9 +406,12 @@ class ExtensionPairingIdentity {
     if (decodedRequest.kind === ConcreteDecoderResultKind.Rejected) {
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
-    const handoffRequest: CompanionIdentityHandoffRequestPayload =
-      decodedRequest.value
-    const nonce = handoffRequest.nonce
+    const handoffRequest: CompanionIdentityHandoffRequest = decodedRequest.value
+    if (handoffRequest.transaction.status.status !== 'unlocked') {
+      return { ok: false, reason: 'extension-identity-handoff-not-issued' }
+    }
+    const admittedIdentity = handoffRequest.transaction.status.app_key
+    const nonce = admittedIdentity.nonce
     if (this.pendingIdentityHandoffConsumptions.has(nonce)) {
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
@@ -426,16 +428,25 @@ class ExtensionPairingIdentity {
       }
       const pending = pendingAdmission.value
       if (
-        pending.deviceId !== handoffRequest.expectedDeviceId ||
-        pending.devicePublicKey !== handoffRequest.expectedDevicePublicKey ||
+        pending.deviceId !== admittedIdentity.appKey.appId ||
+        pending.devicePublicKey !== admittedIdentity.appKey.encryptionPublicKey ||
         pending.deviceSigningPublicKey !==
-          handoffRequest.expectedDeviceSigningPublicKey
+          admittedIdentity.appKey.signingPublicKey
       ) {
         return { ok: false, reason: 'extension-identity-handoff-not-issued' }
       }
       await this.removeSessionStorage(key)
 
-      const nookTypedArgs0_3 = identityHandoffSessionRequest(handoffRequest)
+      const handoffProjection: Parameters<
+        typeof identityHandoffSessionRequest
+      >[0] = {
+        recipientPublicKey: handoffRequest.recipientPublicKey,
+        nonce,
+        expectedDeviceId: admittedIdentity.appKey.appId,
+        expectedDevicePublicKey: admittedIdentity.appKey.encryptionPublicKey,
+        expectedDeviceSigningPublicKey: admittedIdentity.appKey.signingPublicKey,
+      }
+      const nookTypedArgs0_3 = identityHandoffSessionRequest(handoffProjection)
       const delivery = await this.sendSessionMessage(nookTypedArgs0_3)
       if (delivery.isErr()) return delivery.error.response
       const response = delivery.value
