@@ -26,6 +26,7 @@ import {
   ExtensionPairingApprovedMessageType,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
+  type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantPolicyReady,
@@ -59,13 +60,12 @@ describe('extension identity handoff response decoding', () => {
       ),
     )
 
-    expect(decoded).toEqual({
-      _tag: 'Right',
-      right: {
-        ok: true,
-        envelope: 'encrypted-handoff',
-        nextNonce: 'nonce-next',
-      },
+    expect(decoded._tag).toBe('Right')
+    if (decoded._tag === 'Left') expect.fail('handoff response must decode')
+    expect(decoded.right).toEqual({
+      ok: true,
+      envelope: 'encrypted-handoff',
+      nextNonce: 'nonce-next',
     })
   })
 
@@ -128,18 +128,17 @@ describe('extension runtime response decoding', () => {
         companionResponseDecoder.decodeUnlock({
           ok: true,
           requestId: 'request-1',
-          vaultStoreId: 'store-1',
+          vaultStoreId: 'store_abcdefghijk',
         }),
       ),
     )
 
-    expect(decoded).toEqual({
-      _tag: 'Right',
-      right: {
-        ok: true,
-        requestId: 'request-1',
-        vaultStoreId: 'store-1',
-      },
+    expect(decoded._tag).toBe('Right')
+    if (decoded._tag === 'Left') expect.fail('unlock response must decode')
+    expect(decoded.right).toEqual({
+      ok: true,
+      requestId: 'request-1',
+      vaultStoreId: 'store_abcdefghijk',
     })
   })
 })
@@ -287,13 +286,13 @@ describe('installed extension launcher', () => {
 })
 
 describe('extension pairing approved message', () => {
-  const eventLogRecords = [
+  const eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords'] = [
     {
       eventId: 'event-1',
       path: 'events/event-1.yaml',
       event: {
         schema_version: 2,
-        store_id: 'store-1',
+        store_id: 'store_abcdefghijk',
         actor_id: `key_${'0'.repeat(64)}`,
         actor_signing_public_key: '0'.repeat(64),
         parents: [],
@@ -327,7 +326,7 @@ describe('extension pairing approved message', () => {
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
-          vaultStoreId: 'store-1',
+          vaultStoreId: 'store_abcdefghijk',
           vaultName: 'Personal',
           approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
@@ -530,7 +529,7 @@ describe('extension pairing approved message', () => {
               devicePublicKey: 'age1device',
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Nook Extension',
-              vaultStoreId: 'store-1',
+              vaultStoreId: 'store_abcdefghijk',
               vaultName: 'Personal',
               approvedAt: 1_783_373_640_000,
               scopes: [ExtensionConnectScope.VaultAccess],
@@ -667,7 +666,7 @@ describe('extension pairing approved message', () => {
               devicePublicKey: 'age1device',
               deviceSigningPublicKey: 'signing-key',
               deviceLabel: 'Forged Sentinel device',
-              vaultStoreId: 'store-1',
+              vaultStoreId: 'store_abcdefghijk',
               vaultName: 'Sentinel',
               approvedAt: 1_783_373_640_000,
               scopes: [ExtensionConnectScope.VaultAccess],
@@ -687,7 +686,7 @@ describe('extension pairing approved message', () => {
           ExtensionLocalEventLogUpdatedMessageGuard.decode({
             type: 'nook:extension-local-event-log-updated',
             payload: {
-              vaultStoreId: 'store-1',
+              vaultStoreId: 'store_abcdefghijk',
               eventLogRecords,
             },
           }),
@@ -700,7 +699,7 @@ describe('extension pairing approved message', () => {
           ExtensionLocalEventLogUpdatedMessageGuard.decode({
             type: 'nook:extension-local-event-log-updated',
             payload: {
-              vaultStoreId: 'store-1',
+              vaultStoreId: 'store_abcdefghijk',
               eventLogRecords: [],
             },
           }),
@@ -719,7 +718,7 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         vaultName: 'Personal',
         approvedAt: 1_783_373_640_000,
         scopes: [
@@ -729,7 +728,7 @@ describe('extension pairing approved message', () => {
         syncProviderCount: 2,
       },
       imported: {
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
@@ -737,14 +736,14 @@ describe('extension pairing approved message', () => {
     }
     const items = extensionPairingGrantStorageItems(storageItemsArgs)
 
-    expect(items[pairingGrantStorageKey('store-1')]).toMatchObject({
+    expect(items[pairingGrantStorageKey('store_abcdefghijk')]).toMatchObject({
       deviceId: 'device-1',
-      vaultStoreId: 'store-1',
+      vaultStoreId: 'store_abcdefghijk',
       syncProviderCount: 2,
     })
-    expect(items[pairingGrantStorageKey('store-1')]).not.toHaveProperty(
-      'providers',
-    )
+    expect(
+      items[pairingGrantStorageKey('store_abcdefghijk')],
+    ).not.toHaveProperty('providers')
     const setup = items[setupStorageKey]
     const admittedSetup = Effect.runSync(
       Effect.either(decodeExtensionReadySetupState(setup)),
@@ -755,7 +754,7 @@ describe('extension pairing approved message', () => {
     const readySetup = admittedSetup.right
     expect(readySetup.deviceLabel).toBe('Nook Extension')
     expect(readySetup.pairedVaults).toEqual(['Personal'])
-    expect(readySetup.selectedVaultStoreId).toBe('store-1')
+    expect(readySetup.selectedVaultStoreId).toBe('store_abcdefghijk')
     expect(readySetup.selectedVaultName).toBe('Personal')
     expect(readySetup.syncProviderCount).toBe(2)
     expect(readySetup.eventCount).toBe(3)
@@ -791,7 +790,7 @@ describe('extension pairing approved message', () => {
             status: 'revoked',
             deviceLabel: 'Nook Extension',
             pairedVaults: ['Personal'],
-            selectedVaultStoreId: 'store-1',
+            selectedVaultStoreId: 'store_abcdefghijk',
             selectedVaultName: 'Personal',
             syncProviderCount: 0,
             eventCount: 1,
@@ -813,14 +812,14 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         vaultName: 'Personal',
         approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
       imported: {
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         eventCount: 2,
         heads: ['event-2'],
         accessGranted: true,
@@ -830,7 +829,7 @@ describe('extension pairing approved message', () => {
     const decodedGrant = Effect.runSync(
       Effect.either(
         decodeStoredExtensionPairingGrant(
-          approved[pairingGrantStorageKey('store-1')],
+          approved[pairingGrantStorageKey('store_abcdefghijk')],
         ),
       ),
     )
@@ -844,7 +843,7 @@ describe('extension pairing approved message', () => {
     >[0] = {
       grant,
       imported: {
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
@@ -855,7 +854,7 @@ describe('extension pairing approved message', () => {
       passiveStorageItemsArgs,
     )
 
-    expect(passive[pairingGrantStorageKey('store-1')]).toMatchObject({
+    expect(passive[pairingGrantStorageKey('store_abcdefghijk')]).toMatchObject({
       eventCount: 3,
       eventLogHeads: ['event-3'],
     })
@@ -872,14 +871,14 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         vaultName: 'Personal',
         approvedAt: 1_783_843_200_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
       imported: {
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         eventCount: 2,
         heads: ['event-2'],
         accessGranted: true,
@@ -895,14 +894,14 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store-2',
+        vaultStoreId: 'store_otherabcdefghijk',
         vaultName: 'Work',
         approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
       imported: {
-        vaultStoreId: 'store-2',
+        vaultStoreId: 'store_otherabcdefghijk',
         eventCount: 4,
         heads: ['event-4'],
         accessGranted: true,
@@ -913,21 +912,23 @@ describe('extension pairing approved message', () => {
 
     const removalArgs: Parameters<typeof setupAfterPairingGrantRemoval>[0] = {
       stored,
-      removedVaultStoreId: 'store-2',
+      removedVaultStoreId: 'store_otherabcdefghijk',
     }
     const restored = setupAfterPairingGrantRemoval(removalArgs)
     if (restored.kind !== 'ready') {
       throw new Error('expected a surviving paired vault')
     }
-    expect(restored.setup.selectedVaultStoreId).toBe('store-1')
+    expect(restored.setup.selectedVaultStoreId).toBe('store_abcdefghijk')
     expect(restored.setup.selectedVaultName).toBe('Personal')
     expect(restored.setup.eventCount).toBe(2)
-    expect(selectedPairingGrantFirst(stored)[0]?.vaultStoreId).toBe('store-2')
+    expect(selectedPairingGrantFirst(stored)[0]?.vaultStoreId).toBe(
+      'store_otherabcdefghijk',
+    )
     const selected = selectedPairingGrant(stored)
     if (selected.kind !== 'selected') {
       throw new Error('expected the newest paired vault to be selected')
     }
-    expect(selected.grant.vaultStoreId).toBe('store-2')
+    expect(selected.grant.vaultStoreId).toBe('store_otherabcdefghijk')
   })
 
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
@@ -940,21 +941,21 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         vaultName: 'Personal',
         approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
       imported: {
-        vaultStoreId: 'store-1',
+        vaultStoreId: 'store_abcdefghijk',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
       },
     }
     const current = extensionPairingGrantStorageItems(currentStorageItemsArgs)
-    const key = pairingGrantStorageKey('store-1')
+    const key = pairingGrantStorageKey('store_abcdefghijk')
     const decodedCurrentGrant = Effect.runSync(
       Effect.either(decodeStoredExtensionPairingGrant(current[key])),
     )
@@ -995,9 +996,9 @@ describe('extension pairing approved message', () => {
     expect(
       migratedLegacyPairingStorageItems({
         [key]: legacyGrant,
-        [pairingGrantStorageKey('store-2')]: {
+        [pairingGrantStorageKey('store_otherabcdefghijk')]: {
           ...legacyGrant,
-          vaultStoreId: 'store-2',
+          vaultStoreId: 'store_otherabcdefghijk',
         },
         [setupStorageKey]: legacySetup,
       }),
@@ -1096,7 +1097,9 @@ describe('paired extension unlock request', () => {
     })
 
     await expect(
-      extensionConnectionBrowser.requestPairedExtensionUnlock('store-1'),
+      extensionConnectionBrowser.requestPairedExtensionUnlock(
+        'store_abcdefghijk',
+      ),
     ).resolves.toBe(true)
   })
 
@@ -1113,7 +1116,9 @@ describe('paired extension unlock request', () => {
     })
 
     const result =
-      extensionConnectionBrowser.requestPairedExtensionUnlock('store-1')
+      extensionConnectionBrowser.requestPairedExtensionUnlock(
+        'store_abcdefghijk',
+      )
     await vi.advanceTimersByTimeAsync(5_000)
     await expect(result).resolves.toBe(false)
   })

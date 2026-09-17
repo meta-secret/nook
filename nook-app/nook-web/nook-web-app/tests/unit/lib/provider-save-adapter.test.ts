@@ -223,8 +223,8 @@ describe('provider save web adapter', () => {
 
     expect(saved).toEqual(
       ok({
-        providers: [],
-        activeVaultStoreId: unselectedVaultScope(),
+        providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],
+        activeVaultStoreId: activeVaultScope('vault-1'),
       }),
     )
     expect(state.persistProviders).toHaveBeenCalledWith(
