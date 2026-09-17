@@ -23,6 +23,7 @@ import {
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
+  LocalOwnedLoginObservationRootsRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
   PasswordFormScope,
@@ -689,21 +690,24 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           )
       );
     });
-    const observations: PasswordFormObservation[] = forms.map((form) => {
+    const observations: PasswordFormObservation[] = forms.flatMap((form) => {
       const formScope: PasswordFormScope = {
         kind: PasswordFormScopeKind.Owned,
         owner: form,
       };
 
-      const observationRoot =
-        passwordFieldDiscovery.localOwnedLoginObservationRoot({
-          owner: form,
-          passwordFields: allPasswordFields,
-          usernameFields: authUsernameFields,
-          oneTimeCodeFields: allOneTimeCodeFields,
-        });
+      const observationRootsRequest: LocalOwnedLoginObservationRootsRequest = {
+        owner: form,
+        passwordFields: allPasswordFields,
+        usernameFields: authUsernameFields,
+        oneTimeCodeFields: allOneTimeCodeFields,
+      };
+      const observationRoots =
+        passwordFieldDiscovery.localOwnedLoginObservationRoots(
+          observationRootsRequest,
+        );
 
-      return {
+      return observationRoots.map((observationRoot) => ({
         root: observationRoot,
         formScope,
         summary: this.summarizeRoot({
@@ -711,7 +715,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           root: observationRoot,
           formScope,
         }),
-      };
+      }));
     });
     const unownedFields = [
       ...allPasswordFields,
