@@ -319,51 +319,46 @@ describe('PR Lifecycle Agent credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
-  test(
-    'drains four buffered subscription messages while a check hint is in flight',
-    async () => {
-      const reader = new TwoHintsThenPendingPrReader();
-      const notificationBatch: CheckRunNotificationBatchRequest = {
-        notificationCount: 7,
-        firstCheckRunId: 44,
-      };
-      const data = PrStewardEventFixture.checkRunNotifications(
-        notificationBatch,
-      );
-      const connection = new BufferedNatsConnection();
-      const lines: string[] = [];
-      let checkHints = 0;
-      const observation = new PrStewardEventObserver({
-        reader,
-      }).observeSubscription({
-        connection,
-        subject: PR_STEWARD_SUBJECT,
-        activity: (event) => {
-          if (event.checkEvent) checkHints += 1;
-        },
-        pullRequest: ASSIGNED_PR,
-        write: (line) => lines.push(line),
-      });
-      for (const message of data.slice(0, 3))
-        connection.subscription.publish(message);
-      await Bun.sleep(0);
-      expect(checkHints).toBe(2);
-      expect(reader.reads).toBe(3);
-      for (const message of data.slice(3))
-        connection.subscription.publish(message);
-      connection.subscription.close();
-      reader.pending.resolve({
-        headSha: ASSIGNED_HEAD,
-        url: assignedUrl,
-        state: PrStewardPullRequestState.Open,
-      });
-      await observation;
-      expect(checkHints).toBe(7);
-      expect(lines).toHaveLength(7);
-      expect(connection.subjects).toEqual([PR_STEWARD_SUBJECT]);
-      expect(connection.subscription.unsubscribeCount).toBe(0);
-    },
-  );
+  test('drains four buffered subscription messages while a check hint is in flight', async () => {
+    const reader = new TwoHintsThenPendingPrReader();
+    const notificationBatch: CheckRunNotificationBatchRequest = {
+      notificationCount: 7,
+      firstCheckRunId: 44,
+    };
+    const data = PrStewardEventFixture.checkRunNotifications(notificationBatch);
+    const connection = new BufferedNatsConnection();
+    const lines: string[] = [];
+    let checkHints = 0;
+    const observation = new PrStewardEventObserver({
+      reader,
+    }).observeSubscription({
+      connection,
+      subject: PR_STEWARD_SUBJECT,
+      activity: (event) => {
+        if (event.checkEvent) checkHints += 1;
+      },
+      pullRequest: ASSIGNED_PR,
+      write: (line) => lines.push(line),
+    });
+    for (const message of data.slice(0, 3))
+      connection.subscription.publish(message);
+    await Bun.sleep(0);
+    expect(checkHints).toBe(2);
+    expect(reader.reads).toBe(3);
+    for (const message of data.slice(3))
+      connection.subscription.publish(message);
+    connection.subscription.close();
+    reader.pending.resolve({
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    });
+    await observation;
+    expect(checkHints).toBe(7);
+    expect(lines).toHaveLength(7);
+    expect(connection.subjects).toEqual([PR_STEWARD_SUBJECT]);
+    expect(connection.subscription.unsubscribeCount).toBe(0);
+  });
 
   test.each([
     {

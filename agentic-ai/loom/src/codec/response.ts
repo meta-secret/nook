@@ -9,11 +9,7 @@ import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
 } from './blueprint-diff.ts';
-import {
-  PrLandOperation,
-  RequestFamily,
-  ResponsePhase,
-} from './enums.ts';
+import { PrLandOperation, RequestFamily, ResponsePhase } from './enums.ts';
 import {
   FieldIssue,
   type FieldError,
