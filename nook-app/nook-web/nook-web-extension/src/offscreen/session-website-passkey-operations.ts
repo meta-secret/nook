@@ -21,17 +21,17 @@ import { extensionVaultGrant } from './session-vault-grant'
 
 export type CancelPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.CancelPasskey }
+  { type: typeof ExtensionSessionMessageType.CancelPasskey }
 >
 
 export type RegisterPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.RegisterPasskey }
+  { type: typeof ExtensionSessionMessageType.RegisterPasskey }
 >
 
 export type AssertPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.AssertPasskey }
+  { type: typeof ExtensionSessionMessageType.AssertPasskey }
 >
 
 type WebsitePasskeyRequest =

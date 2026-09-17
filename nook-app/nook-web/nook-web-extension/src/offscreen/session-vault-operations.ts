@@ -35,7 +35,7 @@ export interface ExtensionVaultGrant {
 
 type ImportVaultRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.ImportVault }
+  { type: typeof ExtensionSessionMessageType.ImportVault }
 >
 
 export type ImportExtensionVaultArgs = {

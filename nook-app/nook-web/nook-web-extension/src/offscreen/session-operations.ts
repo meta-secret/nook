@@ -79,7 +79,7 @@ type ClassifySessionGrantAuthorityArgs = {
   payload: Extract<
     ExtensionSessionRequest,
     {
-      type: ExtensionSessionMessageType.ClassifyGrantAuthority
+      type: typeof ExtensionSessionMessageType.ClassifyGrantAuthority
     }
   >['payload']
 }

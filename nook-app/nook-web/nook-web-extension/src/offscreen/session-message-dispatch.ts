@@ -160,7 +160,7 @@ type ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs = {
 type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   message: Extract<
     ParsedExtensionSessionTransportRequest,
-    { type: ExtensionSessionMessageType.ImportVault }
+    { type: typeof ExtensionSessionMessageType.ImportVault }
   >
   priority: SessionOperationPriority
   requestedExpiry: RequestedQueueExpiry

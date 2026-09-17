@@ -22,10 +22,10 @@ type AuthenticatorEnrollmentMessage = Extract<
   ExtensionSessionRequest,
   {
     type:
-      | ExtensionSessionMessageType.AuthenticatorEnrollPreview
-      | ExtensionSessionMessageType.AuthenticatorEnrollCode
-      | ExtensionSessionMessageType.AuthenticatorEnrollConfirm
-      | ExtensionSessionMessageType.AuthenticatorBackupAttach
+      | typeof ExtensionSessionMessageType.AuthenticatorEnrollPreview
+      | typeof ExtensionSessionMessageType.AuthenticatorEnrollCode
+      | typeof ExtensionSessionMessageType.AuthenticatorEnrollConfirm
+      | typeof ExtensionSessionMessageType.AuthenticatorBackupAttach
   }
 >
 

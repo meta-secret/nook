@@ -10,12 +10,12 @@ import {
 
 type IdentityHandoffSessionRequest = Extract<
   ExtensionSessionTransportRequest,
-  { type: `${ExtensionSessionMessageType.SealIdentityHandoff}` }
+  { type: typeof ExtensionSessionMessageType.SealIdentityHandoff }
 >
 
 type WebsiteLoginRevealSessionRequest = Extract<
   ExtensionSessionTransportRequest,
-  { type: `${ExtensionSessionMessageType.RevealLogin}` }
+  { type: typeof ExtensionSessionMessageType.RevealLogin }
 >
 
 export type IdentityHandoffSessionProjection = {

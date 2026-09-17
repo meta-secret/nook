@@ -75,7 +75,7 @@ export function extensionSessionPasskeyCeremonyDeadline(
 
 type GeneratedExtensionSessionImportRequest = Extract<
   GeneratedExtensionSessionRequest,
-  { type: `${ExtensionSessionMessageType.ImportVault}` }
+  { type: typeof ExtensionSessionMessageType.ImportVault }
 >
 type GeneratedExtensionSessionNonImportRequest = Exclude<
   GeneratedExtensionSessionRequest,

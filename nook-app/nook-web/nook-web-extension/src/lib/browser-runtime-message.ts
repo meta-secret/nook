@@ -16,7 +16,7 @@ export type BrowserRuntimeMessageValue =
   | string
   | number
   | boolean
-  | readonly BrowserRuntimeMessageValue[]
+  | BrowserRuntimeMessageValue[]
   | { readonly [key: string]: BrowserRuntimeMessageValue }
 
 /** Concrete browser IPC envelope admitted before schema-specific routing. */
@@ -50,7 +50,7 @@ const browserRuntimeMessageValueSchema: Schema.Schema<BrowserRuntimeMessageValue
       Schema.String,
       Schema.Number,
       Schema.Boolean,
-      Schema.Array(browserRuntimeMessageValueSchema),
+      Schema.mutable(Schema.Array(browserRuntimeMessageValueSchema)),
       Schema.Record({
         key: Schema.String,
         value: browserRuntimeMessageValueSchema,
