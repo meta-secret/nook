@@ -253,7 +253,7 @@ pub enum ManagerStoreScopeRef<'a> {
 
 /// One persisted sync provider row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct StorageProvider {
     pub id: String,
