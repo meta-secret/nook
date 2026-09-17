@@ -1,4 +1,24 @@
 /** Owns the host rendering and disabled-state observations shared by authentication controls. */
+enum DisabledPropertyControlDecodeKind {
+  Unsupported = "unsupported",
+  Supported = "supported",
+}
+
+type DisabledPropertyControl =
+  | HTMLButtonElement
+  | HTMLInputElement
+  | HTMLSelectElement
+  | HTMLTextAreaElement
+  | HTMLFieldSetElement
+  | HTMLOptionElement;
+
+type DisabledPropertyControlDecode =
+  | { readonly kind: DisabledPropertyControlDecodeKind.Unsupported }
+  | {
+      readonly kind: DisabledPropertyControlDecodeKind.Supported;
+      readonly control: DisabledPropertyControl;
+    };
+
 export class AuthenticationControlSurface {
   constructor(protected readonly browser: typeof globalThis) {}
   protected isDisabledByAncestorFieldset(control: HTMLElement): boolean {
@@ -23,15 +43,9 @@ export class AuthenticationControlSurface {
     return false;
   }
 
-  protected controlHasDisabledProperty(
+  protected decodeDisabledPropertyControl(
     control: HTMLElement,
-  ): control is
-    | HTMLButtonElement
-    | HTMLInputElement
-    | HTMLSelectElement
-    | HTMLTextAreaElement
-    | HTMLFieldSetElement
-    | HTMLOptionElement {
+  ): DisabledPropertyControlDecode {
     return (
       control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement ||
@@ -39,12 +53,20 @@ export class AuthenticationControlSurface {
       control instanceof HTMLTextAreaElement ||
       control instanceof HTMLFieldSetElement ||
       control instanceof HTMLOptionElement
-    );
+    )
+      ? {
+          kind: DisabledPropertyControlDecodeKind.Supported,
+          control,
+        }
+      : { kind: DisabledPropertyControlDecodeKind.Unsupported };
   }
 
   controlIsEffectivelyDisabled(control: HTMLElement): boolean {
+    const disabledPropertyControl = this.decodeDisabledPropertyControl(control);
     return (
-      (this.controlHasDisabledProperty(control) && control.disabled) ||
+      (disabledPropertyControl.kind ===
+        DisabledPropertyControlDecodeKind.Supported &&
+        disabledPropertyControl.control.disabled) ||
       this.isDisabledByAncestorFieldset(control) ||
       control.getAttribute("aria-disabled") === "true" ||
       this.isDisabledByAncestorAria(control)
