@@ -851,13 +851,15 @@ mod tests {
     }
 
     #[test]
-    fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
-    -> anyhow::Result<()> {
-        let mut value = serde_json::to_value(Fixture::grant())?;
-        value["approvedAt"] = serde_json::Value::String("2026-07-25T00:00:00.000Z".to_owned());
-        let decoded: StoredExtensionPairingGrant = serde_json::from_value(value)?;
+    fn legacy_approval_time_canonicalizes_before_grant_persistence() -> anyhow::Result<()> {
         let expected = Fixture::approved_at("1784937600000")?;
-        assert_eq!(decoded.approved_at, expected);
+        let legacy = ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
+            "2026-07-25T00:00:00.000Z",
+        )?;
+        assert_eq!(legacy, expected);
+
+        let mut decoded = Fixture::grant();
+        decoded.approved_at = legacy;
 
         let reserialized = serde_json::to_string(&decoded)?;
         let round_trip = StoredExtensionPairingGrant::decode_json(&reserialized)?;
