@@ -24,7 +24,7 @@ export class BrowserRuntimeMessage {
   private constructor() {}
 
   declare readonly type: string
-  declare readonly [key: string]: BrowserRuntimeMessageValue
+  readonly [key: string]: BrowserRuntimeMessageValue
 
   static decode(value: unknown) {
     return Schema.decodeUnknown(browserRuntimeMessageSchema)(value)
