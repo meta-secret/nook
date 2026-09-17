@@ -41,26 +41,10 @@ async function clearAuthenticationSurface(): Promise<void> {
 type AutofillMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0]
-
-type AutofillRuntimeMessageObject = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | AutofillRuntimeMessageObject
-    | AutofillRuntimeMessageObject[]
-}
-type AutofillRuntimeMessageInput =
-  | AutofillRuntimeMessageObject
-  | AutofillRuntimeMessageObject[]
-  | string
-  | number
-  | boolean
+type AutofillMessageDelivery = Parameters<AutofillMessageListener>
 
 export const routeAutofillMessage: AutofillMessageListener = (
-  runtimeMessage: AutofillRuntimeMessageInput,
-  sender,
-  sendResponse,
+  ...[runtimeMessage, sender, sendResponse]: AutofillMessageDelivery
 ) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
