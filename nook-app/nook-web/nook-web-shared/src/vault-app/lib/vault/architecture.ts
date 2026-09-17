@@ -65,13 +65,15 @@ export class VaultArchitectureActions {
         return err(new NativeVaultStorageFailure(failure));
       }
     }
-    this.replaceVaultArchitecture({ architecture });
+    const replacement: VaultArchitectureReplacement = { architecture };
+    this.replaceVaultArchitecture(replacement);
     state.architectureSecretCreationAllowed = allowed;
-    return ok({
+    const snapshot: VaultArchitectureRefreshSnapshot = {
       deviceMode: state.draftDeviceMode,
       vaultType: state.draftVaultType,
       replicationType: state.draftReplicationType,
-    });
+    };
+    return ok(snapshot);
   }
 
   refreshVaultArchitectureFromManager(): Result<
@@ -98,7 +100,8 @@ export class VaultArchitectureActions {
       architecture.free();
       return err(new NativeVaultStorageFailure(failure));
     }
-    this.replaceVaultArchitecture({ architecture });
+    const replacement: VaultArchitectureReplacement = { architecture };
+    this.replaceVaultArchitecture(replacement);
     state.architectureSecretCreationAllowed = false;
     state.draftDeviceMode = deviceMode;
     state.draftVaultType = vaultType;
@@ -115,7 +118,12 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok({ deviceMode, vaultType, replicationType });
+    const snapshot: VaultArchitectureRefreshSnapshot = {
+      deviceMode,
+      vaultType,
+      replicationType,
+    };
+    return ok(snapshot);
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
@@ -155,10 +163,11 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok({
+    const snapshot: VaultArchitectureRefreshSnapshot = {
       deviceMode: state.draftDeviceMode,
       vaultType: state.draftVaultType,
       replicationType: state.draftReplicationType,
-    });
+    };
+    return ok(snapshot);
   }
 }

@@ -36,6 +36,15 @@ type StorageConnection =
 const log = browserLogRuntime.createLogger("connect");
 
 type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
+type VaultDiscoveryTimeoutConfiguration = ConstructorParameters<
+  typeof VaultDiscoveryTimeout
+>[0];
+type VaultDiscoveryTimeoutRequest = Parameters<
+  VaultDiscoveryTimeout["waitFor"]
+>[0];
+type SentinelCeremonyRequest = Parameters<
+  SentinelUnlockActions["surfaceSentinelCeremonyIfNeeded"]
+>[0];
 
 /** Owns browser orchestration for one connection context. */
 export class VaultConnectionActions {
@@ -236,18 +245,25 @@ export class VaultConnectionActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
+        const timeoutRequest: VaultDiscoveryTimeoutRequest = {
           operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
-        });
+        };
+        const timeoutConfiguration: VaultDiscoveryTimeoutConfiguration = {
+          timeoutMs: 30_000,
+        };
+        return new VaultDiscoveryTimeout(timeoutConfiguration).waitFor(
+          timeoutRequest,
+        );
       });
       if (rawRecords.isErr()) {
         state.isAuthenticated = false;
+        const ceremonyRequest: SentinelCeremonyRequest = {
+          recoveryKind: rawRecords.error.recoveryKind,
+        };
         const surfaced = await new SentinelUnlockActions(
           state,
-        ).surfaceSentinelCeremonyIfNeeded({
-          recoveryKind: rawRecords.error.recoveryKind,
-        });
+        ).surfaceSentinelCeremonyIfNeeded(ceremonyRequest);
         if (!surfaced)
           state.errorMsg = state.t(rawRecords.error.translationKey);
         return;

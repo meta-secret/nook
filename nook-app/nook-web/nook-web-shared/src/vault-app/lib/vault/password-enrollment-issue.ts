@@ -117,7 +117,9 @@ export class PasswordEnrollmentIssue {
         kind: StorageChainReadinessKind.Idle,
       };
       const idleResult = storageOk(storageChainReadiness);
-      const waitForStorageRequest = {
+      const waitForStorageRequest: Parameters<
+        typeof state.raceStorageTimeout
+      >[0] = {
         promise: state.waitForStorageChain().then(() => idleResult),
         releaseLateValue: () => {},
       };

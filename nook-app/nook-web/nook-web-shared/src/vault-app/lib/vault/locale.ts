@@ -56,16 +56,21 @@ export class VaultLocaleActions {
   savedAppLocale(): Result<SavedAppLocale, LocaleUpdateFailure> {
     try {
       const stored = localStorage.getItem("nook_locale");
-      if (!stored) return ok({ kind: SavedAppLocaleKind.Missing });
+      if (!stored) {
+        const missingLocale: SavedAppLocale = {
+          kind: SavedAppLocaleKind.Missing,
+        };
+        return ok(missingLocale);
+      }
       const parsed = parse_app_locale(stored);
-      return ok(
+      const savedLocale: SavedAppLocale =
         parsed === NookAppLocaleParse.Unsupported
           ? { kind: SavedAppLocaleKind.Missing }
           : {
               kind: SavedAppLocaleKind.Supported,
               locale: supported_app_locale_code(parsed),
-            },
-      );
+            };
+      return ok(savedLocale);
     } catch {
       return err(
         new LocaleUpdateFailure(LocaleUpdateFailureKind.SavedLocaleReadFailed),

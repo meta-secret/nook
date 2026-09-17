@@ -59,10 +59,13 @@ export class ExistingVaultImportLifecycle {
 
   remember(storeId: string): void {
     if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return;
-    const prepared = new ExistingVaultProviderDraft({
+    const providerRequest: ConstructorParameters<
+      typeof ExistingVaultProviderDraft
+    >[0] = {
       state: this.vault,
       setupType: this.vault.loginSetup.providerType,
-    }).prepare();
+    };
+    const prepared = new ExistingVaultProviderDraft(providerRequest).prepare();
     if (prepared.isErr()) {
       this.vault.errorMsg = this.vault.t(prepared.error.translationKey);
       return;
