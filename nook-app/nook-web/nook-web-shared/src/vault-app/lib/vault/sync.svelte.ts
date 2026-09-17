@@ -98,6 +98,10 @@ export enum StagedProviderConflictOutcome {
   Staged = "staged",
 }
 
+export enum ProviderAssessmentRestorationOutcome {
+  Restored = "restored",
+}
+
 interface StagedProviderSyncIssueAssessment {
   readonly args: NookStorageConnectArgs;
 }
@@ -591,7 +595,7 @@ export class VaultSyncActions {
           );
         try {
           await current.value.restore_local_after_provider_assessment();
-          return storageOk();
+          return storageOk(ProviderAssessmentRestorationOutcome.Restored);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }

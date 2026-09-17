@@ -5,6 +5,7 @@ import { SecretType } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
+import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
@@ -16,7 +17,7 @@ vi.spyOn(vault, 'resolveErrorMessage').mockImplementation((message) => message)
 
 describe('passkey item discovery', () => {
   test('shows the website ceremony path without a manual credential form', async () => {
-    const onAddSecret = vi.fn(async () => ok())
+    const onAddSecret = vi.fn(async () => ok(SecretMutationOutcome.Added))
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
@@ -48,7 +49,7 @@ describe('passkey item discovery', () => {
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),
-      onDeleteSecret: vi.fn(async () => ok()),
+      onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
       onCopyToClipboard: vi.fn(async () => {}),
       onCopySecret: vi.fn(async () => {}),
       vault,

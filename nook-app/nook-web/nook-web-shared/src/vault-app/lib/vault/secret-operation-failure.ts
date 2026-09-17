@@ -16,6 +16,13 @@ export class SecretEditRejection {
 export type SecretOperationFailure = VaultStorageFailure | SecretEditRejection;
 export type SecretOperationResult<T> = Result<T, SecretOperationFailure>;
 
+export enum SecretMutationOutcome {
+  Prepared = "prepared",
+  Added = "added",
+  Deleted = "deleted",
+  Replaced = "replaced",
+}
+
 export class SecretFailurePresentation {
   constructor(private readonly vault: VaultState) {}
   message(failure: SecretOperationFailure): string {

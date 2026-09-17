@@ -35,6 +35,7 @@ import {
 } from "$app-wasm";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
+  PasskeyCeremonyAction,
   setupDeviceProtection,
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
@@ -209,11 +210,16 @@ export class VaultInitializationActions {
         if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
           const authorization = await state.enqueueStorage(
             async (): Promise<
-              Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+              Result<
+                PasskeyCeremonyAction,
+                PasskeyCeremonyFailure | StorageOperationFailure
+              >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              return unlockDeviceProtection(manager.value);
+              const unlocked = await unlockDeviceProtection(manager.value);
+              if (unlocked.isErr()) return storageErr(unlocked.error);
+              return storageOk(PasskeyCeremonyAction.Unlock);
             },
           );
           if (authorization.isErr()) {
@@ -231,15 +237,21 @@ export class VaultInitializationActions {
           // key is not on the roster, and backup-password recovery would fail.
           const authorization = await state.enqueueStorage(
             async (): Promise<
-              Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+              Result<
+                PasskeyCeremonyAction,
+                PasskeyCeremonyFailure | StorageOperationFailure
+              >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              return setupDeviceProtection({
+              const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
                 manager: manager.value,
                 passkeyLabel: "",
                 deviceMode: state.draftDeviceMode,
-              });
+              };
+              const setup = await setupDeviceProtection(setupArgs);
+              if (setup.isErr()) return storageErr(setup.error);
+              return storageOk(PasskeyCeremonyAction.Create);
             },
           );
           if (authorization.isErr()) {
@@ -310,7 +322,7 @@ export class VaultInitializationActions {
   }
 
   async continueInitializationAfterDeviceUnlock(): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
+    Result<VaultDeviceIdentity, StorageOperationFailure | OAuthFailure>
   > {
     const continuation = DeviceInitializationContinuation.admit(this.state);
     if (continuation.isErr()) return storageErr(continuation.error);
@@ -607,27 +619,21 @@ class DeviceInitializationContinuation {
       new DeviceInitializationContinuation({ state, manager: manager.value }),
     );
   }
-  private requireCurrentManager(): Result<void, StorageOperationFailure> {
-    const manager = this.state.admitManager();
+  async continue(): Promise<
+    Result<VaultDeviceIdentity, StorageOperationFailure | OAuthFailure>
+  > {
+    const state = this.state;
+    const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     if (
       manager.value !== this.manager ||
-      (!this.state.deviceProtectionReady &&
-        !this.state.deviceAuthorizationInProgress)
+      (!state.deviceProtectionReady && !state.deviceAuthorizationInProgress)
     )
       return storageErr(
         new StorageOperationFailure(
           StorageOperationFailureKind.DeviceAuthorizationRequired,
         ),
       );
-    return storageOk();
-  }
-  async continue(): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
-  > {
-    const state = this.state;
-    const current = this.requireCurrentManager();
-    if (current.isErr()) return storageErr(current.error);
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
@@ -751,6 +757,6 @@ class DeviceInitializationContinuation {
       state.startVaultSync();
     }
     log.info("app init finished");
-    return storageOk();
+    return storageOk(initialized.value);
   }
 }

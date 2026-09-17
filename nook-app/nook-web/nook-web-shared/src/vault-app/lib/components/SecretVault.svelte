@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { type SecretOperationResult } from "$lib/vault/secret-operation-failure";
+  import {
+    type SecretMutationOutcome,
+    type SecretOperationResult,
+  } from "$lib/vault/secret-operation-failure";
   import { err, ok } from "neverthrow";
   import {
     VaultStorageFailure,
@@ -103,11 +106,13 @@
     secrets?: NookSecretListItem[];
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
     onReplaceSecret: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<void>>;
-    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
+    onDeleteSecret: (
+      id: string,
+    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
     onGeneratePassword: (options: PasswordGenerationOptions) => string;
     onAddModeChange?: (args: SecretAddModeChange) => void;
   } = $props();
@@ -370,7 +375,11 @@
       formSelectedType.itemType === SecretType.SecureNote,
   );
 
-  async function copyToClipboard({ text, id, field }: SecretFieldCopy) {
+  async function copyToClipboard({
+    text,
+    id,
+    field,
+  }: SecretFieldCopy): Promise<Result<ClipboardNotice, VaultStorageFailure>> {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -389,7 +398,7 @@
       )
         copiedKey = { kind: ClipboardNoticeKind.Hidden };
     }, 2000);
-    return ok();
+    return ok(copiedKey);
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {

@@ -28,8 +28,16 @@ export class VaultArchitectureActions {
     if (previous !== architecture) previous.free();
   }
 
-  applyDraftVaultArchitecture(): Result<void, VaultStorageFailure> {
+  applyDraftVaultArchitecture(): Result<
+    VaultArchitectureSelection,
+    VaultStorageFailure
+  > {
     const state = this.state;
+    const selection: VaultArchitectureSelection = {
+      device_mode: state.draftDeviceMode,
+      vault_type: state.draftVaultType,
+      replication_type: state.draftReplicationType,
+    };
     let architecture: VaultArchitecture;
     try {
       architecture = NookVaultArchitecture.draft(
@@ -62,7 +70,7 @@ export class VaultArchitectureActions {
     }
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = allowed;
-    return ok();
+    return ok(selection);
   }
 
   refreshVaultArchitectureFromManager(): Result<
@@ -115,7 +123,7 @@ export class VaultArchitectureActions {
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<ArchitectureActionsContext["editRestriction"], VaultStorageFailure>
   > {
     const state = this.state;
     const architecture = state.vaultArchitecture;
@@ -151,6 +159,6 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok();
+    return ok(state.editRestriction);
   }
 }

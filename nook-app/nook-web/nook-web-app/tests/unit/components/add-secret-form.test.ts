@@ -9,7 +9,10 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
 import { SecretEditorKind } from '$lib/components/secret-vault-state'
-import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
+import {
+  SecretMutationOutcome,
+  type SecretOperationResult,
+} from '$lib/vault/secret-operation-failure'
 import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
@@ -39,13 +42,13 @@ function renderLegacyAuthenticatorEditor() {
         readonly oldId: string
         readonly type: SecretType
         readonly data: string
-      }) => Promise<SecretOperationResult<void>>
+      }) => Promise<SecretOperationResult<SecretMutationOutcome>>
     >()
-    .mockResolvedValue(ok())
+    .mockResolvedValue(ok(SecretMutationOutcome.Replaced))
   const view = render(AddSecretForm, {
     vault,
     isSaving: false,
-    onAddSecret: vi.fn(async () => ok()),
+    onAddSecret: vi.fn(async () => ok(SecretMutationOutcome.Added)),
     onReplaceSecret,
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
@@ -66,7 +69,7 @@ describe('AddSecretForm file attachment picker', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => ok()),
+      onAddSecret: vi.fn(async () => ok(SecretMutationOutcome.Added)),
       onGeneratePassword: vi.fn(() => ''),
       onCancel: vi.fn(),
     })
@@ -86,7 +89,7 @@ describe('AddSecretForm password generation', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => ok()),
+      onAddSecret: vi.fn(async () => ok(SecretMutationOutcome.Added)),
       onGeneratePassword,
       onCancel: vi.fn(),
     })

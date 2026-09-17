@@ -1,5 +1,8 @@
 import type { PasswordOperationResult } from "$lib/vault/password-unlock";
-import type { SecretOperationResult } from "$lib/vault/secret-operation-failure";
+import type {
+  SecretMutationOutcome,
+  SecretOperationResult,
+} from "$lib/vault/secret-operation-failure";
 import { err, type Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
@@ -851,7 +854,11 @@ export class VaultState extends VaultRuntimeState {
     ).connectWithEnrollmentCode({ code, password });
   }
 
-  async handleAddSecret({ id, type, data }: SecretCreationInput) {
+  async handleAddSecret({
+    id,
+    type,
+    data,
+  }: SecretCreationInput): Promise<SecretOperationResult<SecretMutationOutcome>> {
     return this.secretsActions.handleAddSecret({
       id,
       type,
@@ -930,11 +937,19 @@ export class VaultState extends VaultRuntimeState {
     });
   }
 
-  async handleDeleteSecret(id: string) {
+  async handleDeleteSecret(
+    id: string,
+  ): Promise<SecretOperationResult<SecretMutationOutcome>> {
     return this.secretsActions.handleDeleteSecret({ id });
   }
 
-  async handleReplaceSecret({ oldId, type, data }: SecretReplacementInput) {
+  async handleReplaceSecret({
+    oldId,
+    type,
+    data,
+  }: SecretReplacementInput): Promise<
+    SecretOperationResult<SecretMutationOutcome>
+  > {
     return this.secretsActions.handleReplaceSecret({ oldId, type, data });
   }
 }

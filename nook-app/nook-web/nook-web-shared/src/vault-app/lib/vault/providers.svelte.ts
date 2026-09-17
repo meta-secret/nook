@@ -422,7 +422,7 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk();
+    return storageOk(state.providers);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<

@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     SecretFailurePresentation,
+    type SecretMutationOutcome,
     type SecretOperationResult,
   } from '$lib/vault/secret-operation-failure'
   type SecretCreationSubmission = {
@@ -51,10 +52,10 @@
     isSaving: boolean
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<void>>
+    ) => Promise<SecretOperationResult<SecretMutationOutcome>>
     onReplaceSecret?: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<void>>
+    ) => Promise<SecretOperationResult<SecretMutationOutcome>>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
     editor?: SecretEditor

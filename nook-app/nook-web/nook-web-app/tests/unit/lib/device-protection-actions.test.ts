@@ -30,7 +30,13 @@ import {
 } from '$lib/runtime/storage-failure'
 import { VaultState } from '$lib/vault.svelte'
 import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import type { VaultDeviceIdentity } from '$lib/vault/state/session.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+
+const INITIALIZED_DEVICE_IDENTITY: VaultDeviceIdentity = {
+  deviceId: 'initialized-device',
+  devicePublicKey: 'initialized-public-key',
+}
 
 class DeviceProtectionTestState extends VaultState {
   override async enqueueStorage<Value, Failure>(
@@ -40,7 +46,9 @@ class DeviceProtectionTestState extends VaultState {
   }
 
   static create(
-    initialization: Result<void, VaultStorageFailure> = ok(),
+    initialization: Result<VaultDeviceIdentity, VaultStorageFailure> = ok(
+      INITIALIZED_DEVICE_IDENTITY,
+    ),
   ): DeviceProtectionTestState {
     const state = VaultStateTestFixture.createFrom(DeviceProtectionTestState)
     state.openManager(new NookVaultManager())

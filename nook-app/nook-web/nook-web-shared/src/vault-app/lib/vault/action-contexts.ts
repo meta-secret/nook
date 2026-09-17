@@ -388,6 +388,7 @@ export type ArchitectureActionsContext = Pick<
     errorMsg: string;
     t(request: TranslationRequest): string;
     architectureSecretCreationAllowed: boolean;
+    editRestriction: VaultRuntimeState["editRestriction"];
     enqueueStorage<T, E = VaultStorageFailure>(
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>;

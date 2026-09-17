@@ -57,6 +57,10 @@ enum LocalVaultCreationState {
   Committed = "committed",
 }
 
+enum LocalVaultSessionResetOutcome {
+  Reset = "reset",
+}
+
 /** Owns browser orchestration for one local login context. */
 export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
@@ -224,7 +228,7 @@ export class VaultLoginActions {
   async selectVaultForUnlock({
     storeId,
   }: LoginVaultActionRequest): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
+    Result<VaultState["activeVault"], StorageOperationFailure | OAuthFailure>
   > {
     const state = this.state;
     state.errorMsg = "";
@@ -243,7 +247,7 @@ export class VaultLoginActions {
           if (manager.isErr()) return storageErr(manager.error);
           try {
             manager.value.reset_vault_session();
-            return storageOk();
+            return storageOk(LocalVaultSessionResetOutcome.Reset);
           } catch (failure) {
             return storageErr(new NativeVaultStorageFailure(failure));
           }
@@ -259,14 +263,14 @@ export class VaultLoginActions {
       const passwordRefresh2 = await state.refreshPasswordEntriesList();
       if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error);
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
-      return storageOk();
+      return storageOk(state.activeVault);
     } finally {
       state.isVerifying = false;
     }
   }
 
   async prepareExistingVaultImportSlot(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<LocalLoginPreparationState, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -280,7 +284,7 @@ export class VaultLoginActions {
         if (manager.isErr()) return storageErr(manager.error);
         try {
           manager.value.reset_vault_session();
-          return storageOk();
+          return storageOk(LocalVaultSessionResetOutcome.Reset);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -294,7 +298,7 @@ export class VaultLoginActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    return storageOk();
+    return storageOk(state.localLoginPreparation);
   }
 
   async createLocalVaultWithDeviceKeys({
