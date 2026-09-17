@@ -114,8 +114,8 @@ target "pr-native-verify" {
   dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
   target     = "pr-native-verify-export"
   platforms  = ["linux/amd64"]
-  contexts = {
-    pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"
+  args = {
+    PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE
   }
   output = ["type=cacheonly"]
 }
