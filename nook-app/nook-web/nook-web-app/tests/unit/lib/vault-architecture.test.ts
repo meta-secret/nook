@@ -12,8 +12,9 @@ import initNookWasm, {
 import {
   configuredOAuthFile,
   DEFAULT_DRIVE_BACKUP_NAME,
+  decodeStoredOAuthFileConfiguration,
   defaultOAuthFileConfig,
-  isConfiguredOAuthFile,
+  StoredOAuthFileConfigurationDecodeKind,
   providerPersistenceDefaults,
   storedGithubPat,
   storedGithubRepository,
@@ -364,8 +365,13 @@ describe('vault architecture adapter', () => {
   test('shared Drive provider mode overrides personal credential transfer', () => {
     const architecture = default_vault_architecture()
     const baseProvider = googleDriveProvider()
-    const baseConfiguration = baseProvider.oauthFile
-    if (!isConfiguredOAuthFile(baseConfiguration)) {
+    const baseConfiguration = decodeStoredOAuthFileConfiguration(
+      baseProvider.oauthFile,
+    )
+    if (
+      baseConfiguration.kind !==
+      StoredOAuthFileConfigurationDecodeKind.Configured
+    ) {
       throw new Error('expected configured Google Drive provider')
     }
     const provider: StorageProvider = {

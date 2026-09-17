@@ -148,16 +148,6 @@ export type SyncE2eTarget =
   | ICloudSyncE2eTarget
   | GithubSyncE2eTarget
 
-export function isOauthFileSyncTarget(
-  target: SyncE2eTarget,
-): target is LocalFileSyncE2eTarget | GoogleDriveSyncE2eTarget {
-  return (
-    target.providerId === E2eSyncProviderId.File ||
-    target.providerId === E2eSyncProviderId.Local ||
-    target.providerId === E2eSyncProviderId.GoogleDrive
-  )
-}
-
 /** One isolated remote vault per suite — provider chosen by env or override. */
 export function createSyncTarget(
   initialYaml: string,

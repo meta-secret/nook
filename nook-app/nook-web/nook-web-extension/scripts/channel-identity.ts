@@ -6,7 +6,8 @@ export enum ExtensionReleaseChannel {
   Local = 'local',
 }
 
-export type PullRequestExtensionChannel = `pr-${number}`
+/** Serialized channel accepted from CI; parseExtensionChannel validates PR syntax. */
+export type PullRequestExtensionChannel = string
 export type ExtensionChannel =
   ExtensionReleaseChannel | PullRequestExtensionChannel
 
@@ -20,17 +21,12 @@ class ExtensionChannelAdmission {
     ) {
       return channel
     }
-    if (this.isPullRequest(channel)) return channel
+    if (/^pr-[1-9][0-9]*$/.test(channel)) return channel
     throw new Error(
       'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
     )
   }
 
-  private static isPullRequest(
-    value: string,
-  ): value is PullRequestExtensionChannel {
-    return /^pr-[1-9][0-9]*$/.test(value)
-  }
 }
 
 export type ExtensionChannelIdentity = {

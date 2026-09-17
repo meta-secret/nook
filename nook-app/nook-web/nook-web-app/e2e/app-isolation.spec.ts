@@ -77,28 +77,31 @@ test('exposes only the project capability and rejects the opposite vault type', 
     if (admission.isErr()) return admission.error.translationKey
     const manager = admission.value
     const current = manager.vaultArchitecture
-    const isArchitectureFactory = (
-      candidate: unknown,
-    ): candidate is Pick<typeof NookVaultArchitecture, 'sentinel' | 'simple'> =>
-      typeof candidate === 'function' &&
-      'sentinel' in candidate &&
-      typeof candidate.sentinel === 'function' &&
-      'simple' in candidate &&
-      typeof candidate.simple === 'function'
     const Architecture = current.constructor
-    if (!isArchitectureFactory(Architecture)) {
+    if (
+      typeof Architecture !== 'function' ||
+      !('sentinel' in Architecture) ||
+      typeof Architecture.sentinel !== 'function' ||
+      !('simple' in Architecture) ||
+      typeof Architecture.simple !== 'function'
+    ) {
       current.free()
       return 'Vault architecture factory is unavailable'
     }
-    const oppositeArchitecture = simpleApp
-      ? Architecture.sentinel(
+    const sentinelFactory = Architecture.sentinel
+    const simpleFactory = Architecture.simple
+    const oppositeArchitecture: NookVaultArchitecture = simpleApp
+      ? Reflect.apply(sentinelFactory, Architecture, [
           current.device_mode,
           current.replication_type,
           2,
           3,
           0,
-        )
-      : Architecture.simple(current.device_mode, current.replication_type)
+        ])
+      : Reflect.apply(simpleFactory, Architecture, [
+          current.device_mode,
+          current.replication_type,
+        ])
     try {
       manager.set_vault_architecture(oppositeArchitecture)
       return ''

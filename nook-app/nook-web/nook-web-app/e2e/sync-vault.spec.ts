@@ -15,8 +15,8 @@ import {
 import {
   createSyncTarget,
   e2eSyncProviderDef,
+  E2eSyncProviderId,
   installSyncRemote,
-  isOauthFileSyncTarget,
   resolveE2eSyncProvider,
   type OAuthFileSyncE2eTarget,
 } from './sync-provider'
@@ -32,7 +32,11 @@ test.describe(`${providerLabel} vault`, () => {
 
   test.beforeAll(async ({ browser }) => {
     const syncTarget = createSyncTarget('', 'sync-vault', providerId)
-    if (!isOauthFileSyncTarget(syncTarget)) {
+    if (
+      syncTarget.providerId !== E2eSyncProviderId.File &&
+      syncTarget.providerId !== E2eSyncProviderId.Local &&
+      syncTarget.providerId !== E2eSyncProviderId.GoogleDrive
+    ) {
       throw new Error(
         `sync-vault requires an OAuth file provider, received ${syncTarget.providerId}`,
       )

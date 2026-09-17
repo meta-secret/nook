@@ -19,45 +19,80 @@ export type DynamicMockAuthAccountLookup =
 
 const STORAGE_KEY = 'nook-mock-auth-dynamic-accounts'
 
-function readAccounts(): DynamicMockAuthAccount[] {
-  try {
-    // localStorage so a later tab in the same browser context can sign in.
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((value: unknown): value is DynamicMockAuthAccount => {
-      if (typeof value !== 'object' || !value) return false
-      return (
-        'username' in value &&
-        typeof value.username === 'string' &&
-        'password' in value &&
-        typeof value.password === 'string'
-      )
-    })
-  } catch {
-    return []
+enum DynamicMockAuthAccountDecodeKind {
+  Rejected = 'rejected',
+  Decoded = 'decoded',
+}
+
+type DynamicMockAuthAccountDecode =
+  | { kind: DynamicMockAuthAccountDecodeKind.Rejected }
+  | {
+      kind: DynamicMockAuthAccountDecodeKind.Decoded
+      account: DynamicMockAuthAccount
+    }
+
+class DynamicMockAuthAccountStore {
+  read(): DynamicMockAuthAccount[] {
+    try {
+      // localStorage so a later tab in the same browser context can sign in.
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) return []
+      const parsed: unknown = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      const accounts: DynamicMockAuthAccount[] = []
+      for (const value of parsed) {
+        const decoded = this.decode(value)
+        if (decoded.kind === DynamicMockAuthAccountDecodeKind.Decoded) {
+          accounts.push(decoded.account)
+        }
+      }
+      return accounts
+    } catch {
+      return []
+    }
+  }
+
+  write(accounts: DynamicMockAuthAccount[]): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts))
+  }
+
+  private decode(value: unknown): DynamicMockAuthAccountDecode {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('username' in value) ||
+      typeof value.username !== 'string' ||
+      !('password' in value) ||
+      typeof value.password !== 'string'
+    ) {
+      return { kind: DynamicMockAuthAccountDecodeKind.Rejected }
+    }
+    return {
+      kind: DynamicMockAuthAccountDecodeKind.Decoded,
+      account: { username: value.username, password: value.password },
+    }
   }
 }
 
-function writeAccounts(accounts: DynamicMockAuthAccount[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts))
-}
+const dynamicMockAuthAccountStore = new DynamicMockAuthAccountStore()
 
 export function registerDynamicMockAuthAccount(
   username: string,
   password: string,
 ): void {
-  const next = readAccounts().filter((account) => account.username !== username)
+  const next = dynamicMockAuthAccountStore
+    .read()
+    .filter((account) => account.username !== username)
   next.push({ username, password })
-  writeAccounts(next)
+  dynamicMockAuthAccountStore.write(next)
 }
 
 export function findDynamicMockAuthAccount(
   username: string,
   password: string,
 ): DynamicMockAuthAccountLookup {
-  const account = readAccounts().find(
+  const account = dynamicMockAuthAccountStore.read().find(
     (account) => account.username === username && account.password === password,
   )
   return account

@@ -13,10 +13,6 @@ type ExtensionExecutionScope = Page | Worker
 type ExtensionPageFunctionWithoutArgument<Result> = () =>
   Result | Promise<Result>
 
-function isPage(scope: ExtensionExecutionScope): scope is Page {
-  return 'context' in scope
-}
-
 async function evaluateExtensionScopeWithoutArgument<Result>([
   scope,
   pageFunction,
@@ -24,9 +20,7 @@ async function evaluateExtensionScopeWithoutArgument<Result>([
   ExtensionExecutionScope,
   ExtensionPageFunctionWithoutArgument<Result>,
 ]): Promise<Result> {
-  return isPage(scope)
-    ? scope.evaluate(pageFunction)
-    : scope.evaluate(pageFunction)
+  return scope.evaluate(pageFunction)
 }
 
 export type ExtensionPersistenceSnapshot = {
@@ -76,9 +70,7 @@ async function observedStoreNames(
       database.close()
     }
   }
-  return isPage(args.scope)
-    ? args.scope.evaluate(readStoreNames, databaseName)
-    : args.scope.evaluate(readStoreNames, databaseName)
+  return args.scope.evaluate(readStoreNames, databaseName)
 }
 
 async function readDatabaseSnapshot(
@@ -137,9 +129,7 @@ async function readDatabaseSnapshot(
       database.close()
     }
   }
-  return isPage(args.scope)
-    ? args.scope.evaluate(readSnapshot, readArgs)
-    : args.scope.evaluate(readSnapshot, readArgs)
+  return args.scope.evaluate(readSnapshot, readArgs)
 }
 
 export async function readExtensionPersistenceSnapshot(
@@ -226,9 +216,7 @@ export async function writeExtensionPairingStorage(
       database.close()
     }
   }
-  await (isPage(scope)
-    ? scope.evaluate(writeStorage, entries)
-    : scope.evaluate(writeStorage, entries))
+  await scope.evaluate(writeStorage, entries)
 }
 
 export async function removeExtensionPairingStorageKeys(
@@ -255,7 +243,5 @@ export async function removeExtensionPairingStorageKeys(
       database.close()
     }
   }
-  await (isPage(scope)
-    ? scope.evaluate(removeStorageKeys, keys)
-    : scope.evaluate(removeStorageKeys, keys))
+  await scope.evaluate(removeStorageKeys, keys)
 }
