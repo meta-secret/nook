@@ -47,6 +47,7 @@ import {
   type ExtensionConnectRequest,
 } from '$lib/extension/connect'
 import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -305,8 +306,16 @@ describe('extension vault approval', () => {
     const prepared = await approval.prepareAuthorizedGrant()
 
     expect(prepared.isErr() ? prepared.error.kind : prepared.value).toBe(
-      VaultStorageFailureKind.GenerationChanged,
+      VaultStorageFailureKind.ExtensionApprovalContextChanged,
     )
+    if (prepared.isErr()) {
+      expect(prepared.error.translationKey).toBe(
+        I18N_KEYS.ExtensionConsentApprovalFailed,
+      )
+      expect(prepared.error.translationKey).not.toBe(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      )
+    }
     expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
   })
 
@@ -329,7 +338,7 @@ describe('extension vault approval', () => {
     const delivered = await approval.deliver(prepared.value)
 
     expect(delivered.isErr() ? delivered.error.kind : delivered.value).toBe(
-      VaultStorageFailureKind.GenerationChanged,
+      VaultStorageFailureKind.ExtensionApprovalContextChanged,
     )
     expect(deliver).not.toHaveBeenCalled()
   })

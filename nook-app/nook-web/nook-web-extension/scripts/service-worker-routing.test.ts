@@ -774,6 +774,36 @@ describe('service worker routing', () => {
     expect(openCompanionLauncher).not.toHaveBeenCalled()
   })
 
+  test('distinguishes an unauthorized pairing sender from a malformed grant', async () => {
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const, eventCount: 1 }),
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      importPairingAfterCompanionReady,
+    }
+
+    expect(
+      await new ExternalCompanionRouter({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'foreign-extension',
+          url: 'https://example.com/',
+        },
+        sendResponse,
+      }).route(),
+    ).toBe(false)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'forbidden-sender',
+    })
+    expect(importPairingAfterCompanionReady).not.toHaveBeenCalled()
+  })
+
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =

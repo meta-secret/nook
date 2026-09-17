@@ -162,10 +162,11 @@ export class ExternalCompanionRouter {
       decodePairingApprovedMessage,
       message,
     )
-    if (
-      pairingApproval.kind === ConcreteDecoderResultKind.Rejected ||
-      !(await ExternalSenderTrustPolicy.admits(sender))
-    ) {
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
       sendResponse(invalidPairingGrantResponse)
       return false
     }

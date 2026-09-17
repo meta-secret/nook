@@ -368,7 +368,7 @@ export class ExtensionConnectConsentWorkflow {
                 failure: {
                   kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
                   failure: new VaultStorageFailure(
-                    VaultStorageFailureKind.GenerationChanged,
+                    VaultStorageFailureKind.ExtensionApprovalContextChanged,
                   ),
                 },
               },
