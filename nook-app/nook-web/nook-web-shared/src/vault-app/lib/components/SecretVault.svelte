@@ -1,5 +1,6 @@
 <script lang="ts">
   import { type SecretOperationResult } from "$lib/vault/secret-operation-failure";
+  import type { SecretMutationOutcome } from "$lib/vault/secrets";
   import { err, ok } from "neverthrow";
   import {
     VaultStorageFailure,
@@ -103,11 +104,13 @@
     secrets?: NookSecretListItem[];
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>;
     onReplaceSecret: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<void>>;
-    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
+    onDeleteSecret: (
+      id: string,
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>;
     onGeneratePassword: (options: PasswordGenerationOptions) => string;
     onAddModeChange?: (args: SecretAddModeChange) => void;
   } = $props();

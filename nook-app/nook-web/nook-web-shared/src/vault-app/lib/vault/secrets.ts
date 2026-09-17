@@ -103,6 +103,13 @@ interface SecretReplacement {
   readonly data: string;
 }
 
+export enum SecretMutationOutcome {
+  Prepared = "prepared",
+  Added = "added",
+  Deleted = "deleted",
+  Replaced = "replaced",
+}
+
 interface SecretPageRequest {
   readonly query: string;
   readonly requestedOffset: number;
@@ -171,7 +178,9 @@ export class VaultSecretActions {
     }
   }
 
-  private async prepareSecretMutation(): Promise<SecretOperationResult<void>> {
+  private async prepareSecretMutation(): Promise<
+    SecretOperationResult<SecretMutationOutcome.Prepared>
+  > {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
@@ -183,14 +192,16 @@ export class VaultSecretActions {
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
-    return storageOk();
+    return storageOk(SecretMutationOutcome.Prepared);
   }
 
   async handleAddSecret({
     id,
     type,
     data,
-  }: SecretCreation): Promise<SecretOperationResult<void>> {
+  }: SecretCreation): Promise<
+    SecretOperationResult<SecretMutationOutcome.Added>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -224,7 +235,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Added);
     } finally {
       state.isSaving = false;
     }
@@ -443,7 +454,9 @@ export class VaultSecretActions {
 
   async handleDeleteSecret({
     id,
-  }: SecretDeletion): Promise<SecretOperationResult<void>> {
+  }: SecretDeletion): Promise<
+    SecretOperationResult<SecretMutationOutcome.Deleted>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -473,7 +486,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Deleted);
     } finally {
       if (!committed) state.secrets = previousSecrets;
       state.isSaving = false;
@@ -484,7 +497,9 @@ export class VaultSecretActions {
     oldId,
     type,
     data,
-  }: SecretReplacement): Promise<SecretOperationResult<void>> {
+  }: SecretReplacement): Promise<
+    SecretOperationResult<SecretMutationOutcome.Replaced>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -513,7 +528,7 @@ export class VaultSecretActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Replaced);
     } finally {
       state.isSaving = false;
     }

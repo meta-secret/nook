@@ -10,6 +10,7 @@ import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
 import { SecretEditorKind } from '$lib/components/secret-vault-state'
 import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
+import type { SecretMutationOutcome } from '$lib/vault/secrets'
 import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
@@ -39,7 +40,7 @@ function renderLegacyAuthenticatorEditor() {
         readonly oldId: string
         readonly type: SecretType
         readonly data: string
-      }) => Promise<SecretOperationResult<void>>
+      }) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>
     >()
     .mockResolvedValue(ok())
   const view = render(AddSecretForm, {

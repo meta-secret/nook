@@ -3,6 +3,7 @@
     SecretFailurePresentation,
     type SecretOperationResult,
   } from '$lib/vault/secret-operation-failure'
+  import type { SecretMutationOutcome } from '$lib/vault/secrets'
   type SecretCreationSubmission = {
     readonly id: string
     readonly type: SecretType
@@ -51,10 +52,10 @@
     isSaving: boolean
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<void>>
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>
     onReplaceSecret?: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<void>>
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
     editor?: SecretEditor

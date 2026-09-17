@@ -3,6 +3,7 @@
     SecretFailurePresentation,
     type SecretOperationResult,
   } from '$lib/vault/secret-operation-failure'
+  import type { SecretMutationOutcome } from '$lib/vault/secrets'
   type SecretFieldCopy = {
     readonly text: string
     readonly id: string
@@ -70,7 +71,9 @@
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => Promise<void>
     onEditItem: (item: NookSecretListItem) => Promise<void>
-    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>
+    onDeleteSecret: (
+      id: string,
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>
     onCopyToClipboard: (args: SecretFieldCopy) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState
