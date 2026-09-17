@@ -7,6 +7,7 @@ export type ExtensionStorageProviderIdentities =
 type ProviderCredentialTransport =
   StorageProvider | ExtensionStorageProviderPayload
 type ProviderCredentialTransports = ProviderCredentialTransport[]
+type StorageProviders = StorageProvider[]
 
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
@@ -15,8 +16,8 @@ export enum ProviderCredentialFailure {
 }
 
 export type ProviderCredentialDecoder = (
-  providers: StorageProvider[],
-) => Promise<StorageProvider[]>
+  providers: StorageProviders,
+) => Promise<StorageProviders>
 
 export type StageProviderCredentialsArgs = {
   decode: ProviderCredentialDecoder

@@ -1,5 +1,8 @@
 import { Schema } from 'effect'
 
+type OptionalSchemaExactOptions = { readonly exact: true }
+const optionalSchemaExactOptions: OptionalSchemaExactOptions = { exact: true }
+
 export type {
   WebsiteLoginAccountOption,
   WebsiteAuthenticatorOption,
@@ -213,9 +216,10 @@ const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFi
     origin: nonEmptyStringSchema,
     vaultStoreId: nonEmptyStringSchema,
     secretId: nonEmptyStringSchema,
-    authorizationGeneration: Schema.optionalWith(nonEmptyStringSchema, {
-      exact: true,
-    }),
+    authorizationGeneration: Schema.optionalWith(
+      nonEmptyStringSchema,
+      optionalSchemaExactOptions,
+    ),
   }
 
 type WebsiteAuthenticatorFillMessageSchemaFields = {

@@ -1,5 +1,8 @@
 import { Schema } from 'effect'
 
+type OptionalSchemaExactOptions = { readonly exact: true }
+const optionalSchemaExactOptions: OptionalSchemaExactOptions = { exact: true }
+
 import {
   decode_website_passkey_registration_request,
   decode_website_passkey_assertion_request,
@@ -187,9 +190,10 @@ const websitePasskeyPerformMessagePayloadSchemaFields: WebsitePasskeyPerformMess
   {
     ...websitePasskeyOptionsPayloadSchema.fields,
     vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-    credentialId: Schema.optionalWith(Schema.String.pipe(Schema.minLength(1)), {
-      exact: true,
-    }),
+    credentialId: Schema.optionalWith(
+      Schema.String.pipe(Schema.minLength(1)),
+      optionalSchemaExactOptions,
+    ),
   }
 
 type WebsitePasskeyPerformMessageSchemaFields = {
