@@ -12,10 +12,10 @@ import {
 /** Connect extension protocol scopes only in vault applications that support them. */
 export function configureVaultExtensionConnectScopeRuntime(): void {
   const scopeRuntime: ExtensionConnectScopeRuntime = {
-    vaultAccess: extension_vault_access_scope,
-    passwordFilling: extension_password_filling_scope,
-    passkeyManagement: extension_passkey_management_scope,
-    syncProviderCredentials: extension_sync_provider_credentials_scope,
+    extension_vault_access_scope,
+    extension_password_filling_scope,
+    extension_passkey_management_scope,
+    extension_sync_provider_credentials_scope,
   };
   ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
 }

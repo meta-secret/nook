@@ -1,10 +1,15 @@
 import initCompanionWasm, {
   admit_extension_pairing_vault_type,
+  decode_extension_event_log_record,
   extension_passkey_management_scope,
   extension_password_filling_scope,
   extension_sync_provider_credentials_scope,
   extension_vault_access_scope,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  ExtensionEventLogRecordAdmission,
+  type ExtensionEventLogRecordRuntime,
+} from "./lifecycle-runtime-messages";
 import {
   ExtensionConnectScope,
   type ExtensionConnectScopeRuntime,
@@ -214,12 +219,16 @@ async function startCompanionWasm(): Promise<void> {
 export const companionWasmReady: Promise<void> = startCompanionWasm().then(
   () => {
     const scopeRuntime: ExtensionConnectScopeRuntime = {
-      vaultAccess: extension_vault_access_scope,
-      passwordFilling: extension_password_filling_scope,
-      passkeyManagement: extension_passkey_management_scope,
-      syncProviderCredentials: extension_sync_provider_credentials_scope,
+      extension_vault_access_scope,
+      extension_password_filling_scope,
+      extension_passkey_management_scope,
+      extension_sync_provider_credentials_scope,
     };
     ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
+    const eventLogRecordRuntime: ExtensionEventLogRecordRuntime = {
+      decode_extension_event_log_record,
+    };
+    ExtensionEventLogRecordAdmission.configure(eventLogRecordRuntime);
     const vaultTypeRuntime: ExtensionPairingVaultTypeRuntime = {
       admit_extension_pairing_vault_type,
     };

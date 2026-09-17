@@ -514,8 +514,7 @@ class AuthenticatorEnrollmentOperations {
     await accountPickerSessions.removeAuthenticatorPicker(request.requestId)
     try {
       const nookTypedArgs0_5: AccountPickerPageMessage = {
-        type:
-          WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+        type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
         payload: {
           origin: request.origin,
           requestId: request.requestId,

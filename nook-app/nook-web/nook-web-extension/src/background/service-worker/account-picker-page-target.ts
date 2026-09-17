@@ -9,9 +9,7 @@ export type AccountPickerPageMessage =
   | WebsiteLoginSelectedMessage
   | WebsiteLoginCanceledMessage
 
-type AccountPickerPageResponse =
-  | { ok: true }
-  | { ok: false; reason: string }
+type AccountPickerPageResponse = { ok: true } | { ok: false; reason: string }
 
 type AccountPickerPageMessageDelivery = {
   tabId: number

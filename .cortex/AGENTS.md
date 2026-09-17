@@ -222,7 +222,7 @@ and apply the complete relevant authority set before editing.
   named domain types, concrete values, request APIs, typed failures, exhaustive
   states, and schema evolution.
 - [TypeScript domain structure](teams/web-dev/dynamic-skills/typescript-domain-structure.md),
-  [explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md),
+  [TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md),
   [concrete values](teams/web-dev/dynamic-skills/typescript-no-unknown.md),
   [single parameters](teams/web-dev/dynamic-skills/typescript-single-parameter.md),
   and [named call arguments](teams/web-dev/dynamic-skills/typescript-named-args.md)

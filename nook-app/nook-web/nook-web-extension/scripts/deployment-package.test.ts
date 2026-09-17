@@ -138,12 +138,8 @@ describe('extension deployment archive', () => {
         sourceDirectory,
         archivePath: join(sourceDirectory, 'extension.zip'),
       }
-      const archiveResult = makeDeterministicZip(
-        missingManifestArchiveRequest,
-      )
-      await expect(archiveResult).rejects.toThrow(
-        'manifest.json at its root',
-      )
+      const archiveResult = makeDeterministicZip(missingManifestArchiveRequest)
+      await expect(archiveResult).rejects.toThrow('manifest.json at its root')
     } finally {
       await rm(sourceDirectory, { recursive: true, force: true })
     }

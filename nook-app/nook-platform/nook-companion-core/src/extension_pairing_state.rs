@@ -856,11 +856,12 @@ mod tests {
         let mut value = serde_json::to_value(Fixture::grant())?;
         value["approvedAt"] = serde_json::Value::String("2026-07-25T00:00:00.000Z".to_owned());
         let decoded: StoredExtensionPairingGrant = serde_json::from_value(value)?;
-        assert_eq!(
-            serde_json::to_string(&decoded.approved_at)?,
-            "1784937600000"
-        );
-        assert!(serde_json::to_value(decoded)?["approvedAt"].is_number());
+        let expected = Fixture::approved_at("1784937600000")?;
+        assert_eq!(decoded.approved_at, expected);
+
+        let reserialized = serde_json::to_string(&decoded)?;
+        let round_trip = StoredExtensionPairingGrant::decode_json(&reserialized)?;
+        assert_eq!(round_trip.approved_at, expected);
         Ok(())
     }
 
