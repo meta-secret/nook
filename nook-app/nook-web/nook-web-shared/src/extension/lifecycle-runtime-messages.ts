@@ -8,7 +8,9 @@ export enum OpenSimpleVaultMessageType {
 export class OpenSimpleVaultMessage {
   private constructor() {}
   declare readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-  static is(message: unknown): message is OpenSimpleVaultMessage {
+  static is<Message>(
+    message: Message,
+  ): message is Message & OpenSimpleVaultMessage {
     return (
       RuntimeMessageEnvelope.hasRuntimeMessageType(message) &&
       message.type === OpenSimpleVaultMessageType.NookOpenSimpleVault
@@ -30,7 +32,9 @@ export class BeginExtensionPairingMessage {
     deviceSigningPublicKey: string;
     deviceLabel: string;
   };
-  static is(message: unknown): message is BeginExtensionPairingMessage {
+  static is<Message>(
+    message: Message,
+  ): message is Message & BeginExtensionPairingMessage {
     if (
       !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
       message.type !==
@@ -63,7 +67,9 @@ export class BeginExtensionPairingMessage {
 export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
 export class ExtensionEventLogRecordAdmission {
   private constructor() {}
-  static is(value: unknown): value is ExtensionEventLogRecord {
+  static is<TransportValue>(
+    value: TransportValue,
+  ): value is TransportValue & ExtensionEventLogRecord {
     if (!value || typeof value !== "object") return false;
     return (
       "eventId" in value &&
@@ -93,7 +99,9 @@ export class ExtensionLocalEventLogUpdatedMessage {
     vaultStoreId: string;
     eventLogRecords: ExtensionEventLogRecord[];
   };
-  static is(message: unknown): message is ExtensionLocalEventLogUpdatedMessage {
+  static is<Message>(
+    message: Message,
+  ): message is Message & ExtensionLocalEventLogUpdatedMessage {
     if (
       !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
       message.type !==
@@ -121,7 +129,9 @@ export class ExtensionLocalEventLogUpdatedMessage {
 export class RuntimeMessageEnvelope {
   private constructor() {}
   declare readonly type: string;
-  static hasRuntimeMessageType(message: unknown): message is { type: string } {
+  static hasRuntimeMessageType<Message>(
+    message: Message,
+  ): message is Message & RuntimeMessageEnvelope {
     return (
       !!message &&
       typeof message === "object" &&

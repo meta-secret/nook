@@ -44,7 +44,7 @@ interface LocalFolderProviderSync {
   readonly provider: StorageProvider;
 }
 
-type ProviderSyncExecution = ProviderSyncRequest & {};
+type ProviderSyncExecution = ProviderSyncRequest;
 
 export enum ProviderSyncOutcome {
   Synced = "synced",

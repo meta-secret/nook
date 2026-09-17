@@ -86,8 +86,9 @@ export class VaultStorageFailure {
 }
 
 /** Admits a native failure through Rust's compatibility classifier without retaining its message. */
-export class NativeVaultStorageFailure extends VaultStorageFailure {
-  constructor(cause: unknown) {
+export class NativeVaultStorageFailure<NativeCause = Error | string>
+  extends VaultStorageFailure {
+  constructor(cause: NativeCause) {
     super(
       VaultStorageFailureKind.OperationFailed,
       classify_vault_recovery_error(

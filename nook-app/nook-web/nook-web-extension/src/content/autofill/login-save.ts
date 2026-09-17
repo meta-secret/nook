@@ -76,7 +76,7 @@ type StageSaveOfferRequest = {
 }
 
 type CrossWorldSubmitEvent = Event & {
-  readonly submitter: unknown
+  readonly submitter: Pick<SubmitEvent, 'submitter'>['submitter']
 }
 
 enum AuthenticationSubmitterKind {

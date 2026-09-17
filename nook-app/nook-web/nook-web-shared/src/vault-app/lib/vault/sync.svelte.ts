@@ -104,7 +104,7 @@ interface SyncConflictStaging {
   readonly conflict: NookPendingSyncConflict;
 }
 
-type SyncFromProvidersExecution = SyncFromProvidersRequest & {};
+type SyncFromProvidersExecution = SyncFromProvidersRequest;
 
 type FanOutSyncExecution = {
   readonly visibility: ProviderSyncVisibility;

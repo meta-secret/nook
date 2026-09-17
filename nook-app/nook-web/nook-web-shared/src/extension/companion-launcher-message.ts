@@ -14,7 +14,9 @@ export class OpenCompanionLauncherMessage {
   declare readonly payload?: {
     intent: OpenCompanionLauncherIntent.Pair;
   };
-  static is(message: unknown): message is OpenCompanionLauncherMessage {
+  static is<Message>(
+    message: Message,
+  ): message is Message & OpenCompanionLauncherMessage {
     return (
       NormalizedOpenCompanionLauncherMessage.normalizeOpenCompanionLauncherMessage(
         message,
@@ -28,8 +30,8 @@ export class NormalizedOpenCompanionLauncherMessage {
   private constructor() {}
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly intent: OpenCompanionLauncherIntent;
-  static normalizeOpenCompanionLauncherMessage(
-    message: unknown,
+  static normalizeOpenCompanionLauncherMessage<Message>(
+    message: Message,
   ): OpenCompanionLauncherNormalization {
     if (
       !message ||

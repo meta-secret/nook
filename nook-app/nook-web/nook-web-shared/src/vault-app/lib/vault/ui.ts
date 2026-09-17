@@ -19,7 +19,7 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
 
-export type OpenSettingsRequest = SettingsNavigationRequest & {};
+export type OpenSettingsRequest = SettingsNavigationRequest;
 
 type SettingsViewSelection = {
   readonly section: SettingsSection;

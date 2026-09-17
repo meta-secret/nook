@@ -279,7 +279,7 @@ class BrowserLogRuntime {
     if (readiness.kind === LogRuntimeReadinessKind.Ready) return;
     await readiness.completion;
   }
-  runtimeFailure(cause: unknown): RuntimeFailure {
+  runtimeFailure<NativeCause>(cause: NativeCause): RuntimeFailure {
     return new RuntimeFailure(
       cause instanceof Error
         ?
@@ -292,7 +292,7 @@ class BrowserLogRuntime {
     );
   }
 
-  runtimeError(cause: unknown): Error {
+  runtimeError<NativeCause>(cause: NativeCause): Error {
     return cause instanceof Error ? cause : new Error(String(cause));
   }
 
@@ -473,8 +473,7 @@ class BrowserLogRuntime {
     this.persistMessage(persistMessageArgs);
   }
 
-  isIgnoredErrorSource(source: unknown): boolean {
-    if (typeof source !== "string") return false;
+  isIgnoredErrorSource(source: string): boolean {
     const value = source.trim();
     if (!value) return false;
     return (
@@ -530,6 +529,7 @@ class BrowserLogRuntime {
     window.addEventListener("unhandledrejection", (event) => {
       if (
         event.reason instanceof Error &&
+        event.reason.stack &&
         this.isIgnoredErrorSource(event.reason.stack)
       )
         return;
