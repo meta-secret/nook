@@ -278,7 +278,7 @@ export class VaultState extends VaultRuntimeState {
 
   async activateConnectedExistingVault(
     storeId: StoreId,
-  ): Promise<Result<void, VaultStorageFailure>> {
+  ): Promise<Result<VaultState["activeVault"], VaultStorageFailure>> {
     return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }
 
@@ -435,7 +435,9 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
-  async removeProvider(id: string): Promise<Result<void, VaultStorageFailure>> {
+  async removeProvider(
+    id: string,
+  ): Promise<Result<VaultState["providers"], VaultStorageFailure>> {
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,
     });
@@ -753,7 +755,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<VaultState["providers"], VaultStorageFailure>
   > {
     return new providersActions.VaultProviderActions(
       this,

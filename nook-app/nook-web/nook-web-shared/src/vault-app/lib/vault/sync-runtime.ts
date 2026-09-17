@@ -14,6 +14,25 @@ import {
   UnauthenticatedSyncDecision,
 } from "$app-wasm";
 
+export enum AutoConnectAfterApprovalKind {
+  NotRequested = "not-requested",
+  NotScheduled = "not-scheduled",
+  Scheduled = "scheduled",
+}
+
+export enum VaultSyncApplicationKind {
+  AuthenticatedRosterApplied = "authenticated-roster-applied",
+  UnauthenticatedDecisionApplied = "unauthenticated-decision-applied",
+}
+
+export type VaultSyncApplicationOutcome =
+  | { readonly kind: VaultSyncApplicationKind.AuthenticatedRosterApplied }
+  | {
+      readonly kind: VaultSyncApplicationKind.UnauthenticatedDecisionApplied;
+      readonly decision: UnauthenticatedSyncDecision;
+      readonly autoConnect: AutoConnectAfterApprovalKind;
+    };
+
 const log = browserLogRuntime.createLogger("vault-sync");
 
 interface ApplyVaultSyncResultRequest {
@@ -26,7 +45,10 @@ export class VaultSyncRuntimeActions {
 
   applyVaultSyncResult({
     result,
-  }: ApplyVaultSyncResultRequest): Result<void, VaultStorageFailure> {
+  }: ApplyVaultSyncResultRequest): Result<
+    VaultSyncApplicationOutcome,
+    VaultStorageFailure
+  > {
     try {
       const state = this.state;
       if (state.isAuthenticated) {
@@ -47,7 +69,9 @@ export class VaultSyncRuntimeActions {
         for (const member of state.vaultMembers) member.free();
         state.pendingJoins = joins;
         state.vaultMembers = members;
-        return ok();
+        return ok({
+          kind: VaultSyncApplicationKind.AuthenticatedRosterApplied,
+        });
       }
 
       let decision: UnauthenticatedSyncDecision;
@@ -67,13 +91,18 @@ export class VaultSyncRuntimeActions {
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
+      let autoConnect = AutoConnectAfterApprovalKind.NotRequested;
       switch (decision) {
         case UnauthenticatedSyncDecision.Approved:
           state.joinEnrollmentPrompt = JoinEnrollmentState.None;
           state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
-          return this.scheduleAutoConnectAfterApproval();
         case UnauthenticatedSyncDecision.AutoConnect:
-          return this.scheduleAutoConnectAfterApproval();
+          {
+            const scheduled = this.scheduleAutoConnectAfterApproval();
+            if (scheduled.isErr()) return err(scheduled.error);
+            autoConnect = scheduled.value;
+          }
+          break;
         case UnauthenticatedSyncDecision.MarkJoinPending:
           state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
           state.awaitingJoinApproval = true;
@@ -81,13 +110,20 @@ export class VaultSyncRuntimeActions {
         case UnauthenticatedSyncDecision.Ignore:
           break;
       }
-      return ok();
+      return ok({
+        kind: VaultSyncApplicationKind.UnauthenticatedDecisionApplied,
+        decision,
+        autoConnect,
+      });
     } finally {
       result.free();
     }
   }
 
-  scheduleAutoConnectAfterApproval(): Result<void, VaultStorageFailure> {
+  scheduleAutoConnectAfterApproval(): Result<
+    AutoConnectAfterApprovalKind,
+    VaultStorageFailure
+  > {
     const state = this.state;
     let shouldConnect: boolean;
     try {
@@ -101,12 +137,12 @@ export class VaultSyncRuntimeActions {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    if (!shouldConnect) return ok();
+    if (!shouldConnect) return ok(AutoConnectAfterApprovalKind.NotScheduled);
     log.info("scheduling auto-connect after join approval");
     setTimeout(() => {
       if (state.isAuthenticated || state.isVerifying) return;
       void state.loadDb();
     }, 0);
-    return ok();
+    return ok(AutoConnectAfterApprovalKind.Scheduled);
   }
 }

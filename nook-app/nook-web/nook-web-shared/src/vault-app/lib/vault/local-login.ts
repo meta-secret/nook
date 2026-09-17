@@ -24,6 +24,7 @@ import { activeVaultScope, AuthProviderPersistence } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
+  type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 
@@ -61,7 +62,7 @@ export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
 
   async reloadProvidersForActiveVault(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<VaultState["providers"], StorageOperationFailure>
   > {
     const state = this.state;
     const snapshot = await state.enqueueStorage(async () => {
@@ -81,7 +82,7 @@ export class VaultLoginActions {
       state.openActiveVault(snapshot.value.activeVaultStoreId.value);
     }
     state.applyActiveProviderCredentials();
-    return storageOk();
+    return storageOk(state.providers);
   }
 
   beginLoginVaultPicker(): void {
@@ -165,7 +166,7 @@ export class VaultLoginActions {
   }
 
   async refreshLocalVaultCatalog(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<LocalVaultCatalog, StorageOperationFailure>
   > {
     const state = this.state;
     let vaults: Awaited<ReturnType<typeof list_local_vaults>>;
@@ -183,7 +184,7 @@ export class VaultLoginActions {
       state.localVaultPresent = present;
       if (selection.state === NookActiveVaultSelectionState.Selected)
         state.openActiveVault(selection.storeId);
-      return storageOk();
+      return storageOk(state.localVaultCatalog);
     } finally {
       selection.free();
     }
@@ -587,13 +588,14 @@ export class VaultLoginActions {
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<VaultState["activeVault"], StorageOperationFailure>
   > {
     const state = this.state;
-    if (state.activeVault.kind === ActiveVaultKind.Closed) return storageOk();
+    if (state.activeVault.kind === ActiveVaultKind.Closed)
+      return storageOk(state.activeVault);
     const storeId = state.activeVault.storeId.trim();
-    if (!storeId) return storageOk();
-    return state.enqueueStorage(async () => {
+    if (!storeId) return storageOk(state.activeVault);
+    const persisted = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       return new AuthProviderPersistence({
@@ -604,11 +606,15 @@ export class VaultLoginActions {
         },
       }).save();
     });
+    if (persisted.isErr()) return storageErr(persisted.error);
+    return storageOk(state.activeVault);
   }
 
   async activateConnectedExistingVault({
     storeId,
-  }: LoginVaultActionRequest): Promise<Result<void, StorageOperationFailure>> {
+  }: LoginVaultActionRequest): Promise<
+    Result<VaultState["activeVault"], StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.isAuthenticated)
       return storageErr(

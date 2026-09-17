@@ -8,6 +8,7 @@ import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
+  type VaultArchitectureSelection,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
 
@@ -64,7 +65,10 @@ export class VaultArchitectureActions {
     return ok();
   }
 
-  refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
+  refreshVaultArchitectureFromManager(): Result<
+    VaultArchitectureSelection,
+    VaultStorageFailure
+  > {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return err(manager.error);
@@ -90,6 +94,11 @@ export class VaultArchitectureActions {
     state.draftDeviceMode = deviceMode;
     state.draftVaultType = vaultType;
     state.draftReplicationType = replicationType;
+    const selection: VaultArchitectureSelection = {
+      device_mode: deviceMode,
+      vault_type: vaultType,
+      replication_type: replicationType,
+    };
     void this.refreshArchitectureSecretCreationAllowed().then((permission) => {
       if (permission.isErr()) {
         const current = state.admitManager();
@@ -102,7 +111,7 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok();
+    return ok(selection);
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<

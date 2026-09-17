@@ -16,6 +16,11 @@ type ProjectionConflictReplacement = {
   readonly securityConflicts: NookSecurityConflict[];
 };
 
+export type VaultProjectionConflictSnapshot = {
+  readonly replacementConflicts: readonly NookReplacementConflict[];
+  readonly securityConflicts: readonly NookSecurityConflict[];
+};
+
 type SecurityConflictStaging = {
   readonly events: string[];
   readonly reasons: string[];
@@ -75,6 +80,12 @@ export class VaultSyncState {
   private securityConflictState = $state.raw<NookSecurityConflict[]>([]);
   get securityConflicts(): readonly NookSecurityConflict[] {
     return this.securityConflictState;
+  }
+  get projectionConflictSnapshot(): VaultProjectionConflictSnapshot {
+    return {
+      replacementConflicts: this.replacementConflictState,
+      securityConflicts: this.securityConflictState,
+    };
   }
   replaceProjectionConflicts({
     replacementConflicts,
