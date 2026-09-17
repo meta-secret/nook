@@ -110,7 +110,7 @@ type ClearAuthorizationStateArgs = {
   closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
-  closeSession: boolean
+  sessionDisposition: AuthorizationCleanupSessionDisposition
   cleanupStart: AuthorizationCleanupStart
 }
 
@@ -125,6 +125,11 @@ type AuthorizationCleanupStart =
       kind: AuthorizationCleanupStartKind.Existing
       cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     }
+
+enum AuthorizationCleanupSessionDisposition {
+  Close = 'close-session',
+  Preserve = 'preserve-session',
+}
 
 export enum AuthorizationCleanupFailureKind {
   MarkerUnavailable = 'authorization-cleanup-marker-unavailable',
@@ -170,7 +175,7 @@ class AuthorizationCleanupLifecycle {
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession,
+      sessionDisposition,
       cleanupStart,
     } = this.request
     return Effect.gen(function* () {
@@ -184,7 +189,7 @@ class AuthorizationCleanupLifecycle {
       const closeOperation: Effect.Effect<
         AuthorizationCleanupClose,
         AuthorizationCleanupFailure
-      > = closeSession
+      > = sessionDisposition === AuthorizationCleanupSessionDisposition.Close
         ? Effect.tryPromise({
             try: () => closeExtensionSessionDocument(),
             catch: () => AuthorizationCleanupFailureKind.Rejected,
@@ -305,7 +310,7 @@ export function recoverInterruptedAuthorizationCleanup(
     }
     const cleanupArgs: ClearAuthorizationStateArgs = {
       ...dependencies,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: {
         kind: AuthorizationCleanupStartKind.Existing,
         cleanup,
@@ -414,7 +419,7 @@ export function routeExtensionLifecycleMessage({
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void Effect.runPromise(
@@ -443,7 +448,7 @@ export function routeExtensionLifecycleMessage({
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void Effect.runPromise(
@@ -500,7 +505,7 @@ export function routeExtensionLifecycleMessage({
               closeExtensionSessionDocument,
               completeAccountPickerAuthorizationCleanup,
               releaseAccountPickerAuthorizationCleanup,
-              closeSession: true,
+              sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
               cleanupStart: {
                 kind: AuthorizationCleanupStartKind.Existing,
                 cleanup: cleanupStart,
