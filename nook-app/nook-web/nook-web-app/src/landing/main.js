@@ -21,10 +21,11 @@ import {
 } from './extension-metadata-state'
 import {
   LandingLocale as LandingLocaleEnum,
-  localizeLandingStructuredData,
+  LandingStructuredDataLocalizer,
 } from './structured-data'
 
 /** @typedef {import('./structured-data').LandingLocale} LandingLocale */
+/** @typedef {import('./structured-data').LandingStructuredDataLocalizationRequest} LandingStructuredDataLocalizationRequest */
 /** @typedef {'dark' | 'light'} LandingTheme */
 /** @typedef {{ x: number, y: number }} DiagramPosition */
 /** @typedef {DiagramPosition & { align: 'left' | 'center' | 'right' }} SignalSlot */
@@ -408,12 +409,17 @@ function applyLandingLocale(locale, persist = false) {
   if (typeof serialized !== 'string') {
     throw new Error('Incomplete landing structured data.')
   }
+  /** @type {LandingStructuredDataLocalizationRequest} */
+  const structuredDataLocalizationRequest = {
+    serialized,
+    description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
+    locale,
+  }
+  const structuredDataLocalizer = new LandingStructuredDataLocalizer(
+    structuredDataLocalizationRequest,
+  )
   structuredDataElement.textContent = Effect.runSync(
-    localizeLandingStructuredData({
-      serialized,
-      description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
-      locale,
-    }),
+    structuredDataLocalizer.localize(),
   )
 
   if (persist) {
