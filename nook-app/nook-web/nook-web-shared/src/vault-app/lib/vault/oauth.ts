@@ -90,6 +90,13 @@ export interface ICloudSharedProviderAccess {
   readonly shareReference: string;
 }
 
+export enum OAuthOperationOutcome {
+  ICloudSharedProviderCreated = "iCloudSharedProviderCreated",
+  ICloudSharedProviderConnected = "iCloudSharedProviderConnected",
+  ICloudTokensApplied = "iCloudTokensApplied",
+  GoogleTokensApplied = "googleTokensApplied",
+}
+
 export interface GoogleSharedFolderCreation {
   readonly collaboratorEmail: string;
 }
@@ -273,7 +280,9 @@ export class VaultOAuthActions {
     state.errorMsg = "";
   }
 
-  async createICloudSharedProvider(): Promise<Result<void, OAuthFailure>> {
+  async createICloudSharedProvider(): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -294,12 +303,14 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedCreated,
     );
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudSharedProviderCreated);
   }
 
   async useICloudSharedProvider({
     shareReference,
-  }: ICloudSharedProviderAccess): Promise<Result<void, OAuthFailure>> {
+  }: ICloudSharedProviderAccess): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -319,7 +330,7 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedConnected,
     );
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudSharedProviderConnected);
   }
 
   async createGoogleSharedFolder({
@@ -525,7 +536,9 @@ export class VaultOAuthActions {
 
   private async applyICloudOAuthTokens({
     tokens,
-  }: ICloudTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: ICloudTokenApplication): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     const fallbackFileName =
       state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
@@ -559,7 +572,7 @@ export class VaultOAuthActions {
       name.kind === OAuthFileNameKind.Resolved
         ? name.fileName
         : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudTokensApplied);
   }
 
   private ensureSupportedOAuthOrigin({
@@ -585,7 +598,9 @@ export class VaultOAuthActions {
 
   private async applyGoogleOAuthTokens({
     tokens,
-  }: GoogleTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: GoogleTokenApplication): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     const email = await googleOAuthSession.fetchGoogleAccountEmail(
       tokens.accessToken,
@@ -637,6 +652,6 @@ export class VaultOAuthActions {
         : name.kind === OAuthFileNameKind.Resolved
           ? name.fileName
           : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 }
