@@ -36,6 +36,73 @@ export class CacheTelemetryValidator {
   }
 
   /**
+   * @param {string} name
+   * @param {unknown} candidate
+   * @returns {import("./cache-telemetry-contracts.mjs").CompileFoundationPhase}
+   */
+  decodeCompilePhase(name, candidate) {
+    if (!this.isRecord(candidate))
+      throw new Error(`telemetry compile phase ${name} is invalid`);
+    if (typeof candidate.requested !== "boolean")
+      throw new Error(`telemetry compile phase ${name}.requested is invalid`);
+    if (typeof candidate.target !== "string" || !candidate.target)
+      throw new Error(`telemetry compile phase ${name}.target is invalid`);
+    if (!this.isCompilePhaseStatus(candidate.status))
+      throw new Error(`telemetry compile phase ${name}.status is invalid`);
+    if (!Array.isArray(candidate.cache_from))
+      throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
+    if (
+      !candidate.cache_from.every(
+        (reference) => typeof reference === "string",
+      )
+    )
+      throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
+    if (!this.isRecord(candidate.cache_to))
+      throw new Error(`telemetry compile phase ${name}.cache_to is invalid`);
+    if (typeof candidate.cache_to.enabled !== "boolean")
+      throw new Error(
+        `telemetry compile phase ${name}.cache_to.enabled is invalid`,
+      );
+    if (typeof candidate.cache_to.ref !== "string")
+      throw new Error(`telemetry compile phase ${name}.cache_to.ref is invalid`);
+    if (!this.isCompilePhaseCacheExportMode(candidate.cache_to.mode))
+      throw new Error(
+        `telemetry compile phase ${name}.cache_to.mode is invalid`,
+      );
+    if (
+      !candidate.requested &&
+      candidate.status !== CompilePhaseStatus.NotRequested
+    )
+      throw new Error(
+        `telemetry compile phase ${name} has an unrequested status`,
+      );
+    if (
+      candidate.requested &&
+      candidate.status === CompilePhaseStatus.NotRequested
+    )
+      throw new Error(
+        `telemetry compile phase ${name} has a requested status mismatch`,
+      );
+    if (
+      candidate.cache_to.enabled !==
+      (candidate.cache_to.mode === CompilePhaseCacheExportMode.Max)
+    )
+      throw new Error(
+        `telemetry compile phase ${name} cache export mode is inconsistent`,
+      );
+    if (
+      Object.hasOwn(candidate, "input_refs_access_verified") &&
+      typeof candidate.input_refs_access_verified !== "boolean"
+    )
+      throw new Error(
+        `telemetry compile phase ${name}.input_refs_access_verified is invalid`,
+      );
+    return /** @type {import("./cache-telemetry-contracts.mjs").CompileFoundationPhase} */ (
+      candidate
+    );
+  }
+
+  /**
    * @param {unknown} record
    * @param {{runId?: string | number, runAttempt?: string | number}} expected
    * @returns {Record<string, unknown>}
@@ -87,54 +154,14 @@ export class CacheTelemetryValidator {
     const phases = candidate.compile_phases;
     if (!this.isRecord(phases))
       throw new Error("telemetry cache_scope.compile_phases is invalid");
-    const foundation = phases.foundation;
-    const sourceCompile = phases.source_compile;
-    for (const [name, phase] of [
-      ["foundation", foundation],
-      ["source_compile", sourceCompile],
-    ]) {
-      if (!this.isRecord(phase))
-        throw new Error(`telemetry compile phase ${name} is invalid`);
-      if (typeof phase.requested !== "boolean")
-        throw new Error(`telemetry compile phase ${name}.requested is invalid`);
-      if (typeof phase.target !== "string" || !phase.target)
-        throw new Error(`telemetry compile phase ${name}.target is invalid`);
-      if (!this.isCompilePhaseStatus(phase.status))
-        throw new Error(`telemetry compile phase ${name}.status is invalid`);
-      if (!Array.isArray(phase.cache_from))
-        throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
-      if (!phase.cache_from.every((reference) => typeof reference === "string"))
-        throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
-      if (!this.isRecord(phase.cache_to))
-        throw new Error(`telemetry compile phase ${name}.cache_to is invalid`);
-      if (typeof phase.cache_to.enabled !== "boolean")
-        throw new Error(`telemetry compile phase ${name}.cache_to.enabled is invalid`);
-      if (typeof phase.cache_to.ref !== "string")
-        throw new Error(`telemetry compile phase ${name}.cache_to.ref is invalid`);
-      if (!this.isCompilePhaseCacheExportMode(phase.cache_to.mode))
-        throw new Error(`telemetry compile phase ${name}.cache_to.mode is invalid`);
-      if (!phase.requested && phase.status !== CompilePhaseStatus.NotRequested)
-        throw new Error(`telemetry compile phase ${name} has an unrequested status`);
-      if (phase.requested && phase.status === CompilePhaseStatus.NotRequested)
-        throw new Error(`telemetry compile phase ${name} has a requested status mismatch`);
-      if (
-        phase.cache_to.enabled !==
-        (phase.cache_to.mode === CompilePhaseCacheExportMode.Max)
-      )
-        throw new Error(`telemetry compile phase ${name} cache export mode is inconsistent`);
-    }
+    this.decodeCompilePhase("foundation", phases.foundation);
+    const sourceCompile = this.decodeCompilePhase(
+      "source_compile",
+      phases.source_compile,
+    );
     const sourceCompileCacheTo = sourceCompile.cache_to;
-    if (!this.isRecord(sourceCompileCacheTo))
-      throw new Error("telemetry source compile phase cache export is invalid");
-    if (typeof sourceCompileCacheTo.ref !== "string")
-      throw new Error("telemetry source compile phase cache ref is invalid");
     if (sourceCompileCacheTo.enabled || sourceCompileCacheTo.ref.length > 0)
       throw new Error("telemetry source compile phase must not export registry cache");
-    if (
-      Object.hasOwn(foundation, "input_refs_access_verified") &&
-      typeof foundation.input_refs_access_verified !== "boolean"
-    )
-      throw new Error("telemetry foundation input_refs_access_verified is invalid");
   }
 
   /** @param {unknown} candidate */

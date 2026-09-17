@@ -860,6 +860,47 @@ void test("rejects malformed nested telemetry records at the ingress", () => {
   );
 });
 
+void test("rejects malformed compile phase objects at the ingress", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const malformedSource = {
+    ...record,
+    cache_scope: {
+      ...record.cache_scope,
+      compile_phases: {
+        ...record.cache_scope.compile_phases,
+        source_compile: "invalid",
+      },
+    },
+  };
+  const malformedFoundation = {
+    ...record,
+    cache_scope: {
+      ...record.cache_scope,
+      compile_phases: {
+        ...record.cache_scope.compile_phases,
+        foundation: {
+          ...record.cache_scope.compile_phases.foundation,
+          input_refs_access_verified: "invalid",
+        },
+      },
+    },
+  };
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedSource),
+    /telemetry compile phase source_compile is invalid/,
+  );
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedFoundation),
+    /telemetry compile phase foundation.input_refs_access_verified is invalid/,
+  );
+});
+
 void test("rejects an unknown sccache fallback state", () => {
   const record = CacheTelemetry.buildUnavailableTelemetry({
     warning: "fixture",
