@@ -224,9 +224,7 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
   }
 
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
-  SchemaRuntimeMessageRoute.matching(
-    WebsiteLoginPickerOpenMessageSchema,
-  )
+  SchemaRuntimeMessageRoute.matching(WebsiteLoginPickerOpenMessageSchema)
     .respondWith(openWebsiteLoginPicker)
     .onRejected(() => ({ ok: false, reason: 'login-picker-open-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerQueryMessageSchema)
@@ -411,7 +409,7 @@ type BackgroundRuntimeMessageListener = Parameters<
 >[0]
 
 type BackgroundRuntimeMessageRoutingRequest = {
-  readonly runtimeMessage: unknown
+  readonly runtimeMessage: BrowserRuntimeMessage
   readonly sender: chrome.runtime.MessageSender
   readonly sendResponse: Parameters<BackgroundRuntimeMessageListener>[2]
 }
@@ -421,12 +419,10 @@ class BackgroundRuntimeMessageRouter {
     private readonly request: BackgroundRuntimeMessageRoutingRequest,
   ) {}
 
-  route(): ReturnType<BackgroundRuntimeMessageListener> {
+  /** Chrome's listener contract uses a boolean to keep sendResponse open. */
+  route(): boolean {
     const { runtimeMessage, sender, sendResponse } = this.request
-    const admission = BrowserRuntimeMessage.from(runtimeMessage)
-    if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
-      return false
-    const message = admission.message
+    const message = runtimeMessage
     const lifecycleRoutingArgs: Parameters<
       typeof routeExtensionLifecycleMessage
     >[0] = {
@@ -445,9 +441,8 @@ class BackgroundRuntimeMessageRouter {
       sender,
       sendResponse,
     }
-    const schemaOutcome = orderedSchemaRuntimeMessageRouter.route(
-      schemaRoutingRequest,
-    )
+    const schemaOutcome =
+      orderedSchemaRuntimeMessageRouter.route(schemaRoutingRequest)
     if (schemaOutcome.kind === RuntimeMessageRouteKind.Handled) {
       return (
         schemaOutcome.responseChannel === RuntimeMessageResponseChannel.Open
@@ -597,7 +592,6 @@ class BackgroundRuntimeMessageRouter {
       return true
     }
 
-
     return false
   }
 }
@@ -605,8 +599,11 @@ class BackgroundRuntimeMessageRouter {
 const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
   // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
   (runtimeMessage: unknown, sender, sendResponse) => {
+    const admission = BrowserRuntimeMessage.from(runtimeMessage)
+    if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
+      return false
     const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
-      runtimeMessage,
+      runtimeMessage: admission.message,
       sender,
       sendResponse,
     }

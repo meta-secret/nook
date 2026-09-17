@@ -47,7 +47,9 @@ export type SchemaRuntimeMessageOperationRequest<
 export type SchemaRuntimeMessageOperation<
   Message extends BrowserRuntimeMessage,
   Response,
-> = (request: SchemaRuntimeMessageOperationRequest<Message>) => Promise<Response>
+> = (
+  request: SchemaRuntimeMessageOperationRequest<Message>,
+) => Promise<Response>
 
 type SchemaRuntimeMessageRouteRequest<
   Message extends BrowserRuntimeMessage,
@@ -77,8 +79,7 @@ export class SchemaRuntimeMessageRoute<
   Message extends BrowserRuntimeMessage,
   Response,
   FailureResponse,
-> implements BackgroundRuntimeMessageRoute
-{
+> implements BackgroundRuntimeMessageRoute {
   private constructor(
     private readonly request: SchemaRuntimeMessageRouteRequest<
       Message,
@@ -177,7 +178,8 @@ export class SchemaRuntimeMessageFailureBuilder<
   }
 }
 
-export type BackgroundRuntimeMessageRoutes = readonly BackgroundRuntimeMessageRoute[]
+export type BackgroundRuntimeMessageRoutes =
+  readonly BackgroundRuntimeMessageRoute[]
 
 export class OrderedBackgroundRuntimeMessageRouter {
   constructor(private readonly routes: BackgroundRuntimeMessageRoutes) {}

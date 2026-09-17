@@ -22,9 +22,7 @@ type RecordedRouteRequest = {
 class RecordedRoute implements BackgroundRuntimeMessageRoute {
   constructor(private readonly request: RecordedRouteRequest) {}
 
-  route(
-    _request: BackgroundRuntimeMessageRoutingRequest,
-  ): RuntimeMessageRouteOutcome {
+  route(): RuntimeMessageRouteOutcome {
     this.request.calls.push(this.request.name)
     return this.request.outcome
   }
@@ -70,12 +68,12 @@ describe('ordered background runtime message router', () => {
       },
     }
 
-    expect(new OrderedBackgroundRuntimeMessageRouter(routes).route(request)).toEqual(
-      {
-        kind: RuntimeMessageRouteKind.Handled,
-        responseChannel: RuntimeMessageResponseChannel.Open,
-      },
-    )
+    expect(
+      new OrderedBackgroundRuntimeMessageRouter(routes).route(request),
+    ).toEqual({
+      kind: RuntimeMessageRouteKind.Handled,
+      responseChannel: RuntimeMessageResponseChannel.Open,
+    })
     expect(calls).toEqual(['first', 'second'])
   })
 })

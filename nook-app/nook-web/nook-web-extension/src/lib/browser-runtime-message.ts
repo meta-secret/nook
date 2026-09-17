@@ -17,18 +17,24 @@ export class BrowserRuntimeMessage {
   declare readonly type: string
 
   static from(value: unknown): BrowserRuntimeMessageAdmission {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('type' in value) ||
-      typeof value.type !== 'string' ||
-      value.type.length === 0
-    ) {
+    if (!BrowserRuntimeMessage.hasMessageType(value)) {
       return { kind: BrowserRuntimeMessageAdmissionKind.Rejected }
     }
     return {
       kind: BrowserRuntimeMessageAdmissionKind.Accepted,
       message: value,
     }
+  }
+
+  private static hasMessageType(
+    value: unknown,
+  ): value is BrowserRuntimeMessage {
+    return Boolean(
+      value &&
+      typeof value === 'object' &&
+      'type' in value &&
+      typeof value.type === 'string' &&
+      value.type.length > 0,
+    )
   }
 }

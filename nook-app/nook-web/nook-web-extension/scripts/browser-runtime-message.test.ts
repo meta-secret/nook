@@ -14,12 +14,27 @@ describe('browser runtime message ingress', () => {
     }
   })
 
-  test.each([7, [], { payload: {} }, { type: '' }])(
-    'rejects a non-message browser value: %p',
-    (value) => {
-      expect(BrowserRuntimeMessage.from(value)).toEqual({
-        kind: BrowserRuntimeMessageAdmissionKind.Rejected,
-      })
-    },
-  )
+  test('rejects primitive browser values', () => {
+    expect(BrowserRuntimeMessage.from(7)).toEqual({
+      kind: BrowserRuntimeMessageAdmissionKind.Rejected,
+    })
+  })
+
+  test('rejects browser arrays', () => {
+    expect(BrowserRuntimeMessage.from([])).toEqual({
+      kind: BrowserRuntimeMessageAdmissionKind.Rejected,
+    })
+  })
+
+  test('rejects objects without a message type', () => {
+    expect(BrowserRuntimeMessage.from({ payload: {} })).toEqual({
+      kind: BrowserRuntimeMessageAdmissionKind.Rejected,
+    })
+  })
+
+  test('rejects an empty message type', () => {
+    expect(BrowserRuntimeMessage.from({ type: '' })).toEqual({
+      kind: BrowserRuntimeMessageAdmissionKind.Rejected,
+    })
+  })
 })
