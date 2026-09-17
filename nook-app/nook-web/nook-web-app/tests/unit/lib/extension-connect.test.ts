@@ -10,7 +10,8 @@ import {
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   IdentityHandoffResponseDecodeFailureKind,
-  IdentityHandoffResponseDecoder,
+  identityHandoffResponseDecoder,
+  pairingApprovalResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
@@ -48,7 +49,7 @@ describe('extension identity handoff response decoding', () => {
   test('decodes a successful identity handoff response', () => {
     const decoded = Effect.runSync(
       Effect.either(
-        IdentityHandoffResponseDecoder.decode({
+        identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
           nextNonce: 'nonce-next',
@@ -69,7 +70,7 @@ describe('extension identity handoff response decoding', () => {
   test('returns a typed failure for a response with an empty next nonce', () => {
     const decoded = Effect.runSync(
       Effect.either(
-        IdentityHandoffResponseDecoder.decode({
+        identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
           nextNonce: '',
@@ -408,6 +409,33 @@ describe('extension pairing approved message', () => {
       kind: ExtensionPairingDeliveryKind.Rejected,
       reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
     })
+  })
+
+  test('rejects a malformed successful acknowledgement instead of trusting its ok flag', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        pairingApprovalResponseDecoder.decode({
+          ok: true,
+          reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+  })
+
+  test('rejects conflicting reason and error responses instead of choosing one field', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        pairingApprovalResponseDecoder.decode({
+          ok: false,
+          reason: ExtensionPairingRejectionReason.ExtensionRuntimeUnavailable,
+          error: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
   })
 
   test('accepts complete approved grants', () => {

@@ -1,5 +1,4 @@
-import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
+import { Effect } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -117,9 +116,12 @@ import {
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingDeliveryKind,
-  ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
+import {
+  identityHandoffResponseDecoder,
+  pairingApprovalResponseDecoder,
+} from "./extension-response-decoders";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -129,6 +131,12 @@ export {
   ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
+export {
+  AcceptedIdentityHandoffResponseSchema,
+  ExtensionResponseDecodeFailureKind as IdentityHandoffResponseDecodeFailureKind,
+  identityHandoffResponseDecoder,
+  pairingApprovalResponseDecoder,
+} from "./extension-response-decoders";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -206,44 +214,6 @@ type ExtensionMessageDelivery =
       kind: ExtensionMessageDeliveryKind.Received;
       response: ChromeExtensionRuntimeResponse;
     };
-
-export const AcceptedIdentityHandoffResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  envelope: Schema.String,
-  nextNonce: Schema.String.pipe(Schema.minLength(1)),
-});
-
-export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
-  typeof AcceptedIdentityHandoffResponseSchema
->;
-
-export enum IdentityHandoffResponseDecodeFailureKind {
-  InvalidResponse = "invalid-response",
-}
-
-export class IdentityHandoffResponseDecodeFailure {
-  readonly _tag = "IdentityHandoffResponseDecodeFailure";
-  readonly kind = IdentityHandoffResponseDecodeFailureKind.InvalidResponse;
-
-  constructor(readonly cause: ParseResult.ParseError) {}
-}
-
-export class IdentityHandoffResponseDecoder {
-  static decode(
-    value: unknown,
-  ): Effect.Effect<
-    AcceptedIdentityHandoffResponse,
-    IdentityHandoffResponseDecodeFailure
-  > {
-    return Schema.decodeUnknown(AcceptedIdentityHandoffResponseSchema)(
-      value,
-    ).pipe(
-      Effect.mapError(
-        (cause) => new IdentityHandoffResponseDecodeFailure(cause),
-      ),
-    );
-  }
-}
 
 enum ExtensionResponsePhase {
   Pending = "pending",
@@ -458,46 +428,14 @@ class ExtensionConnectionBrowser {
   }
 
   private pairingDeliveryFromResponse(
-    response: unknown,
+    response: ChromeExtensionRuntimeResponse,
   ): ExtensionPairingDelivery {
-    if (
-      response &&
-      typeof response === "object" &&
-      "ok" in response &&
-      response.ok === true
-    ) {
-      return { kind: ExtensionPairingDeliveryKind.Delivered };
-    }
-    const migrationRequired =
-      response &&
-      typeof response === "object" &&
-      (("reason" in response &&
-        response.reason === "auth-provider-plaintext-migration-required") ||
-        ("error" in response &&
-          response.error === "auth-provider-plaintext-migration-required"));
-    const responseReason =
-      response && typeof response === "object"
-        ? "reason" in response && typeof response.reason === "string"
-          ? response.reason
-          : "error" in response && typeof response.error === "string"
-            ? response.error
-            : ""
-        : "";
-    const admittedReason = Object.values(ExtensionPairingRejectionReason).find(
-      (reason) => reason === responseReason,
+    const decoded = Effect.runSync(
+      Effect.either(pairingApprovalResponseDecoder.decode(response)),
     );
-    if (!migrationRequired && admittedReason) {
-      return {
-        kind: ExtensionPairingDeliveryKind.Rejected,
-        reason: admittedReason,
-      };
-    }
-    if (migrationRequired) {
-      return {
-        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-      };
-    }
-    return { kind: ExtensionPairingDeliveryKind.Rejected };
+    return decoded._tag === "Right"
+      ? decoded.right
+      : { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
   async deliverExtensionPairingApproval({
@@ -764,7 +702,7 @@ class ExtensionConnectionBrowser {
           }
           const decodedResponse = Effect.runSync(
             Effect.either(
-              IdentityHandoffResponseDecoder.decode(response),
+              identityHandoffResponseDecoder.decode(response),
             ),
           );
           if (decodedResponse._tag === "Right") {
