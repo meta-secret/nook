@@ -44,10 +44,9 @@ export class AuthenticationInputSurface {
       if (!(ancestor instanceof HTMLFieldSetElement) || !ancestor.disabled) {
         continue;
       }
-      const firstLegend = Array.from(ancestor.children).find(
-        (child): child is HTMLLegendElement =>
-          child instanceof HTMLLegendElement,
-      );
+      const firstLegend = Array.from(ancestor.children).flatMap((child) =>
+        child instanceof HTMLLegendElement ? [child] : [],
+      )[0];
       if (!firstLegend?.contains(field)) return true;
     }
     return false;

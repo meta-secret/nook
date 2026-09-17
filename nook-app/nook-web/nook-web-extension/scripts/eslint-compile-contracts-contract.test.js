@@ -47,6 +47,54 @@ class CompileContractsConfigTestHarness {
 }
 
 describe('focused compile-contract ESLint config', () => {
+  test('rejects TypeScript type predicates in authored TypeScript', () => {
+    const messages = CompileContractsConfigTestHarness.lintTemporarySource(
+      `
+        export function isMessage(value: string): value is string {
+          return value.length > 0
+        }
+      `,
+      '.ts',
+    )
+
+    expect(CompileContractsConfigTestHarness.ruleIds(messages)).toContain(
+      'no-restricted-syntax',
+    )
+  })
+
+  test('rejects TypeScript type predicates in authored Svelte scripts', () => {
+    const messages = CompileContractsConfigTestHarness.lintTemporarySource(
+      `
+        <script lang="ts">
+          export function isMessage(value: string): value is string {
+            return value.length > 0
+          }
+        </script>
+      `,
+      '.svelte',
+    )
+
+    expect(CompileContractsConfigTestHarness.ruleIds(messages)).toContain(
+      'no-restricted-syntax',
+    )
+  })
+
+  test('accepts a concrete API without a type predicate', () => {
+    const messages = CompileContractsConfigTestHarness.lintTemporarySource(
+      `
+        type MessageDecode =
+          | { readonly kind: 'decoded'; readonly message: string }
+          | { readonly kind: 'rejected' }
+        export function decodeMessage(value: string): MessageDecode {
+          return { kind: 'decoded', message: value }
+        }
+      `,
+      '.ts',
+    )
+
+    expect(messages).toEqual([])
+  })
+
   test('enables the custom success-contract and concrete-value rules for TypeScript', () => {
     const messages = CompileContractsConfigTestHarness.lintTemporarySource(
       `

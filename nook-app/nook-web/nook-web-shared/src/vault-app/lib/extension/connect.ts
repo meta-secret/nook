@@ -1,3 +1,5 @@
+import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -44,14 +46,7 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ChromeRuntimeHost = {
-  // eslint-disable-next-line max-params -- Chrome owns this positional API.
-  sendMessage: (
-    extensionId: string,
-    message: RuntimeMessage,
-    callback: (response: ChromeExtensionRuntimeResponse | undefined) => void,
-  ) => void;
-};
+type ChromeRuntimeHost = Pick<typeof chrome.runtime, "sendMessage">;
 
 type ChromeRuntimeResponseCallback = Parameters<
   ChromeRuntimeHost["sendMessage"]
@@ -197,21 +192,42 @@ type ExtensionMessageDelivery =
       response: ChromeExtensionRuntimeResponse;
     };
 
-function isAcceptedIdentityHandoffResponse(value: unknown): value is {
-  readonly ok: true;
-  readonly envelope: string;
-  readonly nextNonce: string;
-} {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return (
-    "ok" in value &&
-    value.ok === true &&
-    "envelope" in value &&
-    typeof value.envelope === "string" &&
-    "nextNonce" in value &&
-    typeof value.nextNonce === "string" &&
-    value.nextNonce.length > 0
-  );
+export const AcceptedIdentityHandoffResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  envelope: Schema.String,
+  nextNonce: Schema.String.pipe(Schema.minLength(1)),
+});
+
+export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
+  typeof AcceptedIdentityHandoffResponseSchema
+>;
+
+export enum IdentityHandoffResponseDecodeFailureKind {
+  InvalidResponse = "invalid-response",
+}
+
+export class IdentityHandoffResponseDecodeFailure {
+  readonly _tag = "IdentityHandoffResponseDecodeFailure";
+  readonly kind = IdentityHandoffResponseDecodeFailureKind.InvalidResponse;
+
+  constructor(readonly cause: ParseResult.ParseError) {}
+}
+
+export class IdentityHandoffResponseDecoder {
+  static decode(
+    value: unknown,
+  ): Effect.Effect<
+    AcceptedIdentityHandoffResponse,
+    IdentityHandoffResponseDecodeFailure
+  > {
+    return Schema.decodeUnknown(AcceptedIdentityHandoffResponseSchema)(
+      value,
+    ).pipe(
+      Effect.mapError(
+        (cause) => new IdentityHandoffResponseDecodeFailure(cause),
+      ),
+    );
+  }
 }
 
 enum ExtensionResponsePhase {
@@ -274,15 +290,6 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
-    return (
-      typeof value === "object" &&
-      !!value &&
-      "sendMessage" in value &&
-      typeof value.sendMessage === "function"
-    );
-  }
-
   private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
     if (!("lastError" in runtime)) return false;
     const error = runtime.lastError;
@@ -307,12 +314,16 @@ class ExtensionConnectionBrowser {
     ) {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
     }
-    return this.isChromeRuntimeHost(chromeHost.runtime)
-      ? {
-          kind: ChromeRuntimeAvailabilityKind.Available,
-          runtime: chromeHost.runtime,
-        }
-      : { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    if (
+      !("sendMessage" in chromeHost.runtime) ||
+      typeof chromeHost.runtime.sendMessage !== "function"
+    ) {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    return {
+      kind: ChromeRuntimeAvailabilityKind.Available,
+      runtime: chromeHost.runtime,
+    };
   }
 
   isExtensionConnectPath(pathname: string): boolean {
@@ -748,12 +759,17 @@ class ExtensionConnectionBrowser {
             );
             return;
           }
-          if (isAcceptedIdentityHandoffResponse(response)) {
+          const decodedResponse = Effect.runSync(
+            Effect.either(
+              AcceptedIdentityHandoffResponseDecoder.decode(response),
+            ),
+          );
+          if (decodedResponse._tag === "Right") {
             resolve(
               // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               ok({
-                envelope: response.envelope,
-                nextNonce: response.nextNonce,
+                envelope: decodedResponse.right.envelope,
+                nextNonce: decodedResponse.right.nextNonce,
               }),
             );
             return;

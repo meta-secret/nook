@@ -66,6 +66,7 @@ export default [
   {
     files: ['**/*.{ts,js,mjs,cjs}'],
     rules: {
+      'no-restricted-syntax': typedApiRules['no-restricted-syntax'],
       '@typescript-eslint/no-unsafe-assignment': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
       '@typescript-eslint/no-unsafe-call': 'error',
@@ -92,6 +93,7 @@ export default [
   {
     files: ['**/*.svelte'],
     rules: {
+      'no-restricted-syntax': typedApiRules['no-restricted-syntax'],
       '@typescript-eslint/no-unsafe-assignment': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
       '@typescript-eslint/no-unsafe-call': 'error',

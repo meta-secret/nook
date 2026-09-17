@@ -22,6 +22,7 @@ export default [
   {
     files: typedApiSourceFiles,
     rules: {
+      'no-restricted-syntax': typedApiRules['no-restricted-syntax'],
       '@typescript-eslint/no-restricted-types':
         typedApiRules['@typescript-eslint/no-restricted-types'],
       'nook-typed-api/no-empty-success-contract': 'error',

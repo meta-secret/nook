@@ -193,15 +193,17 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       this.scopedControlRoot(observation).querySelectorAll<HTMLElement>(
         authenticationAdvanceControlSelector,
       ),
-    ).filter((control): control is LoginAdvanceControl => {
+    ).flatMap((control) => {
       if (!(
         control instanceof HTMLButtonElement ||
         control instanceof HTMLInputElement
       ))
-        return false;
-      return observation.formScope.kind === PasswordFormScopeKind.Owned
-        ? control.form === observation.formScope.owner
-        : !control.form;
+        return [];
+      const isInScope =
+        observation.formScope.kind === PasswordFormScopeKind.Owned
+          ? control.form === observation.formScope.owner
+          : !control.form;
+      return isInScope ? [control] : [];
     });
   }
 

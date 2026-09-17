@@ -88,7 +88,14 @@ export const concreteObjectTypeRules = {
   "@typescript-eslint/no-empty-object-type": "error",
 };
 
+const typePredicateRestriction = {
+  selector: "TSTypePredicate",
+  message:
+    "Nook web forbids TypeScript type predicates. Return a named decoder outcome or use a concrete-value API.",
+};
+
 export const typedApiRules = {
+  "no-restricted-syntax": ["error", typePredicateRestriction],
   "max-params": ["error", { max: 1 }],
   "@typescript-eslint/no-restricted-types": [
     "error",
@@ -131,6 +138,7 @@ export const untrustedInputAdapterRules = {
   // matching) so nested generic and structural payloads are covered too.
   "no-restricted-syntax": [
     "error",
+    typePredicateRestriction,
     {
       selector: "TSArrayType:has(TSUnknownKeyword)",
       message:
