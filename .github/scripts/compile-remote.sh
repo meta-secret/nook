@@ -114,7 +114,7 @@ if [ -n "${GITHUB_ENV:-}" ]; then
     'NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started' \
     'NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started' >>"$GITHUB_ENV"
 fi
-mark_compile_interruption() {
+compile_checkpoint_mark_interruption() {
   signal_status="$1"
   if [ -n "${GITHUB_ENV:-}" ]; then
     if [ "$foundation_status" = running ]; then
@@ -126,8 +126,8 @@ mark_compile_interruption() {
   fi
   exit "$signal_status"
 }
-trap 'mark_compile_interruption 143' TERM
-trap 'mark_compile_interruption 130' INT
+trap 'compile_checkpoint_mark_interruption 143' TERM
+trap 'compile_checkpoint_mark_interruption 130' INT
 
 echo "BuildKit Phase A: import current/first-parent caches, build dependency foundation, export current head when authorized"
 foundation_status=running

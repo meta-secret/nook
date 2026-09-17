@@ -266,7 +266,9 @@ class DockerizedRustContract {
     }
     expect(script).toContain("foundation_status=completed");
     expect(script).toContain("source_status=completed");
-    expect(script).toContain("trap 'mark_compile_interruption 143' TERM");
+    expect(script).toContain(
+      "trap 'compile_checkpoint_mark_interruption 143' TERM",
+    );
     expect(script).toContain("NOOK_BUILDKIT_RAW_LOG_APPEND=1");
     expect(dockerfile).not.toContain("type=cache");
   }
