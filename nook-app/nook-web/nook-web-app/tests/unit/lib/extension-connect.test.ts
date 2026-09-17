@@ -22,7 +22,7 @@ import {
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
   OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
-  ExtensionPairingApprovedMessageAdmissionFailure,
+  RuntimeMessageDecodeFailureKind,
   ExtensionPairingApprovedMessageType,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
@@ -616,29 +616,26 @@ describe('extension pairing approved message', () => {
   })
 
   test.each([
-    [
-      false,
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
-    ],
+    [false, RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage],
     [
       [{ path: 'events/one', event: { schema_version: 3 } }],
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
+      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
       [{ eventId: 'one', event: { schema_version: 3 } }],
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
+      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
       [{ eventId: 'one', path: 'events/one', event: false }],
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
+      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
     [
       [{ eventId: 'one', path: 'events/one', event: {} }],
-      ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
+      RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
     ],
   ] as const)(
     'classifies event record clause %#',
-    (eventLogRecords, failure) => {
+    (eventLogRecords, expectedFailureKind) => {
       const message = approvalDeliveryArgs().message
       const admission = Effect.runSync(
         Effect.either(
@@ -649,8 +646,10 @@ describe('extension pairing approved message', () => {
         ),
       )
 
-      expect(admission._tag).toBe('Left')
-      expect(failure).toBeDefined()
+      if (admission._tag === 'Right') {
+        expect.fail('invalid event-log records must not be admitted')
+      }
+      expect(admission.left.kind).toBe(expectedFailureKind)
     },
   )
 
