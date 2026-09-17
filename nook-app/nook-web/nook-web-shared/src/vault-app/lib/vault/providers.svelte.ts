@@ -28,8 +28,10 @@ import {
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
-  isConfiguredOAuthFile,
-  isConfiguredLocalFolder,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
+  decodeStoredLocalFolderConfiguration,
+  StoredLocalFolderConfigurationDecodeKind,
   missing_oauth_access_token,
   OAUTH_FILE_PROVIDER_TYPE,
   oauth_access_token,
@@ -736,8 +738,14 @@ export class ProviderPersistenceActions {
       if (persistence.isErr()) {
         return storageErr(persistence.error);
       }
-      if (isConfiguredOAuthFile(outcome.oauthFile)) {
-        state.configureOauthFile(outcome.oauthFile.config);
+      const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+        outcome.oauthFile,
+      );
+      if (
+        oauthFileConfiguration.kind ===
+        StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
+        state.configureOauthFile(oauthFileConfiguration.config);
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
@@ -789,13 +797,25 @@ export class ActiveProviderCredentialsActions {
     state.storageMode = draft.storageMode;
     state.githubPat = draft.githubPat;
     state.githubRepo = draft.githubRepo;
-    if (isConfiguredOAuthFile(draft.oauthFile)) {
-      state.configureOauthFile(draft.oauthFile.config);
+    const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+      draft.oauthFile,
+    );
+    if (
+      oauthFileConfiguration.kind ===
+      StoredOAuthFileConfigurationDecodeKind.Configured
+    ) {
+      state.configureOauthFile(oauthFileConfiguration.config);
     } else {
       state.clearOauthFile();
     }
-    if (isConfiguredLocalFolder(draft.localFolder)) {
-      state.configureLocalFolder(draft.localFolder.config);
+    const localFolderConfiguration = decodeStoredLocalFolderConfiguration(
+      draft.localFolder,
+    );
+    if (
+      localFolderConfiguration.kind ===
+      StoredLocalFolderConfigurationDecodeKind.Configured
+    ) {
+      state.configureLocalFolder(localFolderConfiguration.config);
     } else {
       state.clearLocalFolder();
     }

@@ -34,9 +34,7 @@ import {
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
   NookStoredOAuthFileConfigurationState,
-  stored_oauth_file_configuration_state,
   NookStoredLocalFolderConfigurationState,
-  stored_local_folder_configuration_state,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -399,30 +397,58 @@ export type LocalFolderHandle =
 
 export { NookStoredOAuthFileConfigurationState };
 
-export function isConfiguredOAuthFile(
+export enum StoredOAuthFileConfigurationDecodeKind {
+  NotConfigured = "not-configured",
+  Configured = "configured",
+}
+
+export type StoredOAuthFileConfigurationDecode =
+  | { readonly kind: StoredOAuthFileConfigurationDecodeKind.NotConfigured }
+  | {
+      readonly kind: StoredOAuthFileConfigurationDecodeKind.Configured;
+      readonly config: OAuthFileConfig;
+    };
+
+export function decodeStoredOAuthFileConfiguration(
   configuration: StoredOAuthFileConfiguration,
-): configuration is Extract<
-  StoredOAuthFileConfiguration,
-  { config: OAuthFileConfig }
-> {
-  return (
-    stored_oauth_file_configuration_state(configuration) ===
-    NookStoredOAuthFileConfigurationState.Configured
-  );
+): StoredOAuthFileConfigurationDecode {
+  switch (configuration.state) {
+    case "configured":
+      return {
+        kind: StoredOAuthFileConfigurationDecodeKind.Configured,
+        config: configuration.config,
+      };
+    case "notApplicable":
+      return { kind: StoredOAuthFileConfigurationDecodeKind.NotConfigured };
+  }
 }
 
 export { NookStoredLocalFolderConfigurationState };
 
-export function isConfiguredLocalFolder(
+export enum StoredLocalFolderConfigurationDecodeKind {
+  NotConfigured = "not-configured",
+  Configured = "configured",
+}
+
+export type StoredLocalFolderConfigurationDecode =
+  | { readonly kind: StoredLocalFolderConfigurationDecodeKind.NotConfigured }
+  | {
+      readonly kind: StoredLocalFolderConfigurationDecodeKind.Configured;
+      readonly config: LocalFolderConfig;
+    };
+
+export function decodeStoredLocalFolderConfiguration(
   configuration: StoredLocalFolderConfiguration,
-): configuration is Extract<
-  StoredLocalFolderConfiguration,
-  { config: LocalFolderConfig }
-> {
-  return (
-    stored_local_folder_configuration_state(configuration) ===
-    NookStoredLocalFolderConfigurationState.Configured
-  );
+): StoredLocalFolderConfigurationDecode {
+  switch (configuration.state) {
+    case "configured":
+      return {
+        kind: StoredLocalFolderConfigurationDecodeKind.Configured,
+        config: configuration.config,
+      };
+    case "notApplicable":
+      return { kind: StoredLocalFolderConfigurationDecodeKind.NotConfigured };
+  }
 }
 
 export enum LocalFolderProviderConfigurationKind {
@@ -674,9 +700,11 @@ export class StorageProviderPresentation {
   }
   isICloudProvider(): boolean {
     const provider = this.value;
-    const configuration = provider.oauthFile;
+    const configuration = decodeStoredOAuthFileConfiguration(
+      provider.oauthFile,
+    );
     return (
-      isConfiguredOAuthFile(configuration) &&
+      configuration.kind === StoredOAuthFileConfigurationDecodeKind.Configured &&
       configuration.config.preset === "icloud"
     );
   }

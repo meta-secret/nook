@@ -1,4 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
+import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 import {
   ICLOUD_API_TOKEN,
@@ -286,45 +288,42 @@ declare global {
   }
 }
 
-function isCloudKitUserIdentity(value: unknown): value is CloudKitUserIdentity {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  if ("userRecordName" in value && typeof value.userRecordName !== "string")
-    return false;
-  if ("nameComponents" in value) {
-    const nameComponents = value.nameComponents;
-    if (
-      !nameComponents ||
-      typeof nameComponents !== "object" ||
-      Array.isArray(nameComponents)
-    )
-      return false;
-    if (
-      "givenName" in nameComponents &&
-      typeof nameComponents.givenName !== "string"
-    )
-      return false;
-    if (
-      "familyName" in nameComponents &&
-      typeof nameComponents.familyName !== "string"
-    )
-      return false;
-  }
-  if ("lookupInfo" in value) {
-    const lookupInfo = value.lookupInfo;
-    if (
-      !lookupInfo ||
-      typeof lookupInfo !== "object" ||
-      Array.isArray(lookupInfo)
-    )
-      return false;
-    if (
-      "emailAddress" in lookupInfo &&
-      typeof lookupInfo.emailAddress !== "string"
-    )
-      return false;
-  }
-  return true;
+export enum CloudKitUserIdentityDecodeFailureKind {
+  Invalid = "invalid-cloudkit-user-identity",
 }
+
+export type CloudKitUserIdentityDecodeFailure = {
+  readonly kind: CloudKitUserIdentityDecodeFailureKind.Invalid;
+  readonly cause: ParseResult.ParseError;
+};
+
+export class CloudKitUserIdentityDecoder {
+  private constructor() {}
+
+  static decode(
+    value: unknown,
+  ): Effect.Effect<CloudKitUserIdentity, CloudKitUserIdentityDecodeFailure> {
+    return Schema.decodeUnknown(CloudKitUserIdentitySchema)(value).pipe(
+      Effect.mapError((cause) => ({
+        kind: CloudKitUserIdentityDecodeFailureKind.Invalid,
+        cause,
+      })),
+    );
+  }
+}
+
+const CloudKitUserIdentitySchema = Schema.Struct({
+  userRecordName: Schema.optional(Schema.String),
+  nameComponents: Schema.optional(
+    Schema.Struct({
+      givenName: Schema.optional(Schema.String),
+      familyName: Schema.optional(Schema.String),
+    }),
+  ),
+  lookupInfo: Schema.optional(
+    Schema.Struct({ emailAddress: Schema.optional(Schema.String) }),
+  ),
+});
 
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
@@ -349,8 +348,11 @@ class CloudKitRuntime {
     (token: Result<string, OAuthFailure>) => void
   >();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
-    return isCloudKitUserIdentity(value)
-      ? { kind: CloudKitIdentityKind.SignedIn, identity: value }
+    const decoded = Effect.runSync(
+      Effect.either(CloudKitUserIdentityDecoder.decode(value)),
+    );
+    return decoded._tag === "Right"
+      ? { kind: CloudKitIdentityKind.SignedIn, identity: decoded.right }
       : { kind: CloudKitIdentityKind.SignedOut };
   }
 

@@ -1,5 +1,6 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import { Effect, Schema } from "effect";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -33,11 +34,14 @@ import {
   configuredOAuthFile,
   defaultOAuthFileConfig,
   GITHUB_PROVIDER_TYPE,
+  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  ICLOUD_OAUTH_FILE_PRESET,
   githubPatValue,
   githubRepositoryValue,
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
-  isConfiguredOAuthFile,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
   oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
@@ -71,8 +75,28 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
-function isOAuthFilePreset(value: string): value is OAuthFilePreset {
-  return value === "google-drive" || value === "icloud";
+export enum OAuthFilePresetDecodeFailureKind {
+  Invalid = "invalid-oauth-file-preset",
+}
+
+export class OAuthFilePresetDecoder {
+  private constructor() {}
+
+  static decode(
+    value: unknown,
+  ): Effect.Effect<OAuthFilePreset, { readonly kind: OAuthFilePresetDecodeFailureKind.Invalid; readonly cause: unknown }> {
+    return Schema.decodeUnknown(
+      Schema.Literal(
+        GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+        ICLOUD_OAUTH_FILE_PRESET,
+      ),
+    )(value).pipe(
+      Effect.mapError((cause) => ({
+        kind: OAuthFilePresetDecodeFailureKind.Invalid,
+        cause,
+      })),
+    );
+  }
 }
 
 export type EnrollmentCodeConnection = {
@@ -120,7 +144,12 @@ export class PasswordEnrollmentActions {
     }
     if (provider.type === "oauth-file") {
       const configuration = provider.oauthFile;
-      if (!isConfiguredOAuthFile(configuration)) {
+      const decodedConfiguration =
+        decodeStoredOAuthFileConfiguration(configuration);
+      if (
+        decodedConfiguration.kind !==
+        StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
         return storageErr(
           new StorageOperationFailure(
             StorageOperationFailureKind.OperationFailed,
@@ -129,10 +158,10 @@ export class PasswordEnrollmentActions {
       }
       state.storageMode = provider.type;
       state.clearLoginSetup();
-      state.configureOauthFile(configuration.config);
+      state.configureOauthFile(decodedConfiguration.config);
       state.githubPat = "";
       const fileName = new OAuthFilePresentation(
-        configuration.config,
+        decodedConfiguration.config,
       ).oauthFileName();
       if (fileName.kind === OAuthFileNameKind.Resolved) {
         state.githubRepo = fileName.fileName;
@@ -249,11 +278,14 @@ export class PasswordEnrollmentActions {
             payload.onboardingType === OnboardingType.SharedProviderGrant
           ) {
             const presetValue = enrollmentProvider.oauthPreset;
-            if (!isOAuthFilePreset(presetValue)) {
+            const decodedPreset = await Effect.runPromise(
+              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+            );
+            if (decodedPreset._tag === "Left") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
-            const preset = presetValue;
+            const preset = decodedPreset.right;
             const storageTarget: SharedStorageTarget = {
               kind: SharedStorageTargetKind.Bound,
               storageTargetId: enrollmentProvider.sharedStorageTargetId,
@@ -348,11 +380,13 @@ export class PasswordEnrollmentActions {
                 SharedGrantProviderOutcomeKind.Existing
                   ? existingProvider.provider.oauthFile
                   : oauthConfigurationNotApplicable();
-              const existingConfig = isConfiguredOAuthFile(
-                existingConfiguration,
-              )
-                ? existingConfiguration.config
-                : (() => {
+              const decodedExistingConfiguration =
+                decodeStoredOAuthFileConfiguration(existingConfiguration);
+              const existingConfig =
+                decodedExistingConfiguration.kind ===
+                StoredOAuthFileConfigurationDecodeKind.Configured
+                  ? decodedExistingConfiguration.config
+                  : (() => {
                     const defaultOAuthFileConfigArgs3: Parameters<
                       typeof defaultOAuthFileConfig
                     >[0] = { preset: "icloud", fileName: "nook-events" };
@@ -458,16 +492,19 @@ export class PasswordEnrollmentActions {
             }
             let provider: StorageProvider = sharedProvider.provider;
             const providerConfiguration = provider.oauthFile;
+            const decodedProviderConfiguration =
+              decodeStoredOAuthFileConfiguration(providerConfiguration);
             if (
               storageTarget.kind === SharedStorageTargetKind.Bound &&
               preset === "google-drive" &&
-              isConfiguredOAuthFile(providerConfiguration) &&
-              providerConfiguration.config.folderId.state === "root"
+              decodedProviderConfiguration.kind ===
+                StoredOAuthFileConfigurationDecodeKind.Configured &&
+              decodedProviderConfiguration.config.folderId.state === "root"
             ) {
               const configuredOAuthFileArgs: Parameters<
                 typeof configuredOAuthFile
               >[0] = {
-                ...providerConfiguration.config,
+                ...decodedProviderConfiguration.config,
                 folderId: storedGoogleDriveFolder(
                   storageTarget.storageTargetId,
                 ),
@@ -498,14 +535,17 @@ export class PasswordEnrollmentActions {
             enrollmentStorageArgs = state.providerWasmArgs(provider);
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
             const presetValue = enrollmentProvider.oauthPreset;
-            if (!isOAuthFilePreset(presetValue)) {
+            const decodedPreset = await Effect.runPromise(
+              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+            );
+            if (decodedPreset._tag === "Left") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
             const defaultOAuthFileConfigArgs: Parameters<
               typeof defaultOAuthFileConfig
             >[0] = {
-              preset: presetValue,
+              preset: decodedPreset.right,
               fileName: DEFAULT_DRIVE_BACKUP_NAME,
             };
             const defaults = defaultOAuthFileConfig(defaultOAuthFileConfigArgs);

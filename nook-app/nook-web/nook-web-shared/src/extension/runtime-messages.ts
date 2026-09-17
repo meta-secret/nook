@@ -1,13 +1,21 @@
 import { err, ok, type Result } from "neverthrow";
+import { Effect, Schema } from "effect";
+import {
+  decode_extension_pairing_storage_provider,
+  type ExtensionPairingStorageProviderPayload as RustExtensionPairingStorageProviderPayload,
+} from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import type {
   ExtensionStorageProviderIdentity,
   ExtensionPairingGrantApproval,
   ExtensionStorageProviderType as RustExtensionStorageProviderType,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
-import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
+import {
+  RuntimeMessageDecodeFailure,
+  RuntimeMessageDecodeFailureKind,
+} from "./runtime-message-decode-failure";
 import type {
   CompanionIdentityDiscoveryObservation,
   CompanionIdentityStatus,
@@ -34,12 +42,34 @@ import {
 } from "./lifecycle-runtime-messages";
 
 import {
-  RuntimeMessageEnvelope as RuntimeMessageEnvelopeSchema,
   BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
   ExtensionEventLogRecord as ExtensionEventLogRecordSchema,
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
   OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
 } from "./lifecycle-runtime-messages";
+
+function decodeRuntimeMessage<A>(
+  schema: Schema.Schema<A>,
+  value: unknown,
+  kind: RuntimeMessageDecodeFailureKind,
+): Effect.Effect<A, RuntimeMessageDecodeFailure> {
+  return Schema.decodeUnknown(schema)(value).pipe(
+    Effect.mapError((cause) =>
+      RuntimeMessageDecodeFailure.fromParseError({ kind, cause }),
+    ),
+  );
+}
+
+function decodeAdmissionResult<A, E>(
+  result: Result<A, E>,
+  kind: RuntimeMessageDecodeFailureKind,
+): Effect.Effect<A, RuntimeMessageDecodeFailure> {
+  return result.isErr()
+    ? Effect.fail(
+        RuntimeMessageDecodeFailure.fromCause({ kind, cause: result.error }),
+      )
+    : Effect.succeed(result.value);
+}
 
 export {
   BeginExtensionPairingMessageType,
@@ -47,6 +77,7 @@ export {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   OpenSimpleVaultMessageType,
+  RuntimeMessageEnvelopeSchema as RuntimeMessageEnvelope,
   BeginExtensionPairingMessageSchema as BeginExtensionPairingMessage,
   type ExtensionEventLogRecord,
   ExtensionLocalEventLogUpdatedMessageSchema as ExtensionLocalEventLogUpdatedMessage,
@@ -56,6 +87,7 @@ export {
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
 export { ExtensionPairingApprovedMessageAdmissionFailure };
+export { RuntimeMessageDecodeFailure, RuntimeMessageDecodeFailureKind };
 
 export type { ExtensionPairingVaultType } from "./nook-companion-wasm/nook_companion_wasm.js";
 
@@ -75,7 +107,28 @@ export type ExtensionPairingApprovedGrant = Omit<
 > & {
   providers: ExtensionPairingStorageProviderPayload[];
 };
-export type ExtensionPairingStorageProviderPayload = StorageProvider;
+export type ExtensionPairingStorageProviderPayload =
+  RustExtensionPairingStorageProviderPayload;
+export class ExtensionPairingStorageProviderPayloadDecoder {
+  private constructor() {}
+
+  static decode(
+    value: unknown,
+  ): Effect.Effect<
+    ExtensionPairingStorageProviderPayload,
+    RuntimeMessageDecodeFailure
+  > {
+    return Effect.try({
+      try: () => decode_extension_pairing_storage_provider(value),
+      catch: (cause) =>
+        RuntimeMessageDecodeFailure.fromCause({
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingStorageProvider,
+          cause,
+        }),
+    });
+  }
+}
+
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
   static parse(
@@ -123,24 +176,28 @@ export class ExtensionPairingApprovedGrantAdmission {
       return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
     if (
       !("scopes" in payload) ||
-      !Array.isArray(payload.scopes) ||
-      !payload.scopes.every(
-        ExtensionConnectScope.isExtensionConnectScopeValue.bind(
-          ExtensionConnectScope,
-        ),
-      )
+      !Array.isArray(payload.scopes)
     )
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
+    const scopes: ExtensionConnectScope[] = [];
+    for (const candidate of payload.scopes) {
+      const admitted = Effect.runSync(
+        Effect.either(ExtensionConnectScope.decode(candidate)),
+      );
+      if (admitted._tag === "Left")
+        return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
+      scopes.push(admitted.right);
+    }
     if (!("providers" in payload) || !Array.isArray(payload.providers))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
     const providers: ExtensionPairingStorageProviderPayload[] = [];
     for (const candidate of payload.providers) {
-      const provider = new ExtensionPairingStorageProviderPayloadAdmission(
-        candidate,
-      ).parse();
-      if (provider.isErr())
+      const decoded = Effect.runSync(
+        Effect.either(ExtensionPairingStorageProviderPayloadDecoder.decode(candidate)),
+      );
+      if (decoded._tag === "Left")
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-      providers.push(provider.value);
+      providers.push(decoded.right);
     }
     const grant: ExtensionPairingApprovedGrant = {
       vaultType: vaultType.value,
@@ -151,13 +208,21 @@ export class ExtensionPairingApprovedGrantAdmission {
       vaultStoreId: payload.vaultStoreId,
       vaultName: payload.vaultName,
       approvedAt: payload.approvedAt,
-      scopes: payload.scopes,
+      scopes,
       providers,
     };
     return ok(grant);
   }
-  static is(value: unknown): value is ExtensionPairingApprovedGrant {
-    return ExtensionPairingApprovedGrantAdmission.parse(value).isOk();
+  static decode(
+    value: unknown,
+  ): Effect.Effect<
+    ExtensionPairingApprovedGrant,
+    RuntimeMessageDecodeFailure
+  > {
+    return decodeAdmissionResult(
+      ExtensionPairingApprovedGrantAdmission.parse(value),
+      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
+    );
   }
 }
 
@@ -203,191 +268,50 @@ export class ExtensionStorageProviderPayloadAdmission {
   }
 }
 
-/**
- * Pairing approvals carry sealed provider rows for the extension import.
- * Validate the wire shape here, then leave field-level admission (including
- * credential state) to the canonical Rust provider decoder after staging.
- */
-export class ExtensionPairingStorageProviderPayloadAdmission {
-  constructor(private readonly value: unknown) {}
-  private isComplete(
-    value: unknown,
-  ): value is ExtensionPairingStorageProviderPayload {
-    if (!value || typeof value !== "object") return false;
-    if (
-      !("label" in value) ||
-      typeof value.label !== "string" ||
-      !("createdAt" in value) ||
-      typeof value.createdAt !== "string"
-    )
-      return false;
-    return [
-      "githubPat",
-      "githubRepo",
-      "oauthFile",
-      "localFolder",
-      "storeId",
-    ].every((key) => key in value);
-  }
-  parse(): Result<
-    ExtensionPairingStorageProviderPayload,
-    ExtensionStorageProviderIdentityFailure
-  > {
-    const value = this.value;
-    if (
-      !value ||
-      typeof value !== "object" ||
-      Object.getPrototypeOf(value) !== Object.prototype
-    )
-      return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    const provider = value;
-    const identity = new ExtensionStorageProviderPayloadAdmission(
-      provider,
-    ).parse();
-    if (identity.isErr()) return err(identity.error);
-    for (const key of [
-      "label",
-      "githubPat",
-      "githubRepo",
-      "oauthFile",
-      "localFolder",
-      "storeId",
-      "createdAt",
-    ]) {
-      if (!(key in provider))
-        return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    }
-    if (!this.isComplete(provider))
-      return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    try {
-      structuredClone(provider);
-    } catch {
-      return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    }
-    return ok(provider);
-  }
-}
-
 export enum ExtensionPairingApprovedMessageType {
   NookExtensionPairingApproved = "nook:extension-pairing-approved",
 }
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairingApprovedMessage {
-  static parseExtensionEventLogRecord(
-    value: unknown,
-  ): Result<
-    ExtensionEventLogRecord,
-    ExtensionPairingApprovedMessageAdmissionFailure
-  > {
-    if (!value || typeof value !== "object")
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
-      );
-    if (
-      !("eventId" in value) ||
-      typeof value.eventId !== "string" ||
-      value.eventId.length === 0
-    )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
-      );
-    if (
-      !("path" in value) ||
-      typeof value.path !== "string" ||
-      value.path.length === 0
-    )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
-      );
-    if (
-      !("event" in value) ||
-      !ExtensionPairingApprovedMessage.isExtensionEventObject(value.event)
-    )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
-      );
-    if (
-      !("schema_version" in value.event) ||
-      typeof value.event.schema_version !== "number" ||
-      !ExtensionEventLogRecordSchema.is(value)
-    )
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
-      );
-    return ok(value);
-  }
-  static isExtensionEventObject(
-    value: unknown,
-  ): value is { readonly schema_version: number } {
-    if (!value || typeof value !== "object") return false;
-    return "schema_version" in value && typeof value.schema_version === "number";
-  }
-  static parseExtensionEventLogRecords(
-    value: unknown,
-  ): Result<
-    ExtensionEventLogRecord[],
-    ExtensionPairingApprovedMessageAdmissionFailure
-  > {
-    if (!Array.isArray(value))
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsNotArray,
-      );
-    if (value.length === 0)
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordsEmpty,
-      );
-    for (const record of value) {
-      const admitted =
-        ExtensionPairingApprovedMessage.parseExtensionEventLogRecord(record);
-      if (admitted.isErr()) return err(admitted.error);
-    }
-    return ok(value);
-  }
   private constructor() {}
   declare readonly type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved;
   declare readonly payload: ExtensionPairingApprovedGrant;
   declare readonly eventLogRecords: ExtensionEventLogRecord[];
-  static parse(
+  static decode(
     message: unknown,
-  ): Result<
+  ): Effect.Effect<
     ExtensionPairingApprovedMessage,
-    ExtensionPairingApprovedMessageAdmissionFailure
+    RuntimeMessageDecodeFailure
   > {
-    if (
-      !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
-      message.type !==
-        ExtensionPairingApprovedMessageType.NookExtensionPairingApproved
-    ) {
-      return err(
-        ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
-      );
-    }
-    if (
-      !("payload" in message) ||
-      typeof message.payload !== "object" ||
-      !message.payload
-    ) {
-      return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
-    }
-    const payload = ExtensionPairingApprovedGrantAdmission.parse(
-      message.payload,
+    const envelopeSchema = Schema.Struct({
+      type: Schema.Literal(
+        ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+      ),
+      payload: Schema.Unknown,
+      eventLogRecords: Schema.Array(Schema.Unknown).pipe(Schema.minItems(1)),
+    });
+    return decodeRuntimeMessage(
+      envelopeSchema,
+      message,
+      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
+    ).pipe(
+      Effect.flatMap(({ type, payload, eventLogRecords }) =>
+        Effect.all(eventLogRecords.map(ExtensionEventLogRecordSchema.decode), {
+          concurrency: "unbounded",
+        }).pipe(
+          Effect.flatMap((decodedRecords) =>
+            ExtensionPairingApprovedGrantAdmission.decode(payload).pipe(
+              Effect.map((decodedPayload) => ({
+                type,
+                payload: decodedPayload,
+                eventLogRecords: decodedRecords,
+              })),
+            ),
+          ),
+        ),
+      ),
     );
-    if (payload.isErr()) return err(payload.error);
-    const records =
-      ExtensionPairingApprovedMessage.parseExtensionEventLogRecords(
-        "eventLogRecords" in message ? message.eventLogRecords : false,
-      );
-    if (records.isErr()) return err(records.error);
-    const admitted: ExtensionPairingApprovedMessage = {
-      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-      payload: payload.value,
-      eventLogRecords: records.value,
-    };
-    return ok(admitted);
-  }
-  static is(message: unknown): message is ExtensionPairingApprovedMessage {
-    return ExtensionPairingApprovedMessage.parse(message).isOk();
   }
 }
 
@@ -406,36 +330,29 @@ export class ExtensionIdentityHandoffRequestMessage {
     expectedDevicePublicKey: string;
     expectedDeviceSigningPublicKey: string;
   };
-  static is(
+  static decode(
     message: unknown,
-  ): message is ExtensionIdentityHandoffRequestMessage {
-    if (
-      !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
-      message.type !==
-        ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest ||
-      !("payload" in message) ||
-      typeof message.payload !== "object" ||
-      !message.payload
-    ) {
-      return false;
-    }
-    const { payload } = message;
-    return (
-      "recipientPublicKey" in payload &&
-      typeof payload.recipientPublicKey === "string" &&
-      payload.recipientPublicKey.length > 0 &&
-      "nonce" in payload &&
-      typeof payload.nonce === "string" &&
-      payload.nonce.length > 0 &&
-      "expectedDeviceId" in payload &&
-      typeof payload.expectedDeviceId === "string" &&
-      payload.expectedDeviceId.length > 0 &&
-      "expectedDevicePublicKey" in payload &&
-      typeof payload.expectedDevicePublicKey === "string" &&
-      payload.expectedDevicePublicKey.length > 0 &&
-      "expectedDeviceSigningPublicKey" in payload &&
-      typeof payload.expectedDeviceSigningPublicKey === "string" &&
-      payload.expectedDeviceSigningPublicKey.length > 0
+  ): Effect.Effect<
+    ExtensionIdentityHandoffRequestMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(
+          ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
+        ),
+        payload: Schema.Struct({
+          recipientPublicKey: Schema.String.pipe(Schema.minLength(1)),
+          nonce: Schema.String.pipe(Schema.minLength(1)),
+          expectedDeviceId: Schema.String.pipe(Schema.minLength(1)),
+          expectedDevicePublicKey: Schema.String.pipe(Schema.minLength(1)),
+          expectedDeviceSigningPublicKey: Schema.String.pipe(
+            Schema.minLength(1),
+          ),
+        }),
+      }),
+      message,
+      RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
     );
   }
 }
@@ -448,15 +365,22 @@ export enum ExtensionPairedVaultIdentityDiscoveryMessageType {
 export class ExtensionPairedVaultIdentityDiscoveryMessage {
   private constructor() {}
   declare readonly type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery;
-  declare readonly payload: CompanionIdentityDiscoveryObservation;
-  static is(
+  declare readonly payload: unknown;
+  static decode(
     message: unknown,
-  ): message is ExtensionPairedVaultIdentityDiscoveryMessage {
-    return (
-      RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) &&
-      message.type ===
-        ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery &&
-      "payload" in message
+  ): Effect.Effect<
+    ExtensionPairedVaultIdentityDiscoveryMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(
+          ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
+        ),
+        payload: Schema.Unknown,
+      }),
+      message,
+      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
     );
   }
 }
@@ -471,38 +395,30 @@ export enum ExtensionPairedVaultUnlockRequestMessageType {
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairedVaultUnlockRequestMessage {
-  private static isPairedVaultRequestMessage(message: unknown): boolean {
-    if (
-      !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
-      message.type !==
-        ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest ||
-      !("payload" in message) ||
-      typeof message.payload !== "object" ||
-      !message.payload
-    ) {
-      return false;
-    }
-    const { payload } = message;
-    return (
-      "requestId" in payload &&
-      typeof payload.requestId === "string" &&
-      payload.requestId.length > 0 &&
-      "vaultStoreId" in payload &&
-      typeof payload.vaultStoreId === "string" &&
-      payload.vaultStoreId.length > 0
-    );
-  }
   private constructor() {}
   declare readonly type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest;
   declare readonly payload: {
     requestId: string;
     vaultStoreId: string;
   };
-  static is(
+  static decode(
     message: unknown,
-  ): message is ExtensionPairedVaultUnlockRequestMessage {
-    return ExtensionPairedVaultUnlockRequestMessage.isPairedVaultRequestMessage(
+  ): Effect.Effect<
+    ExtensionPairedVaultUnlockRequestMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(
+          ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
+        ),
+        payload: Schema.Struct({
+          requestId: Schema.String.pipe(Schema.minLength(1)),
+          vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
+        }),
+      }),
       message,
+      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
     );
   }
 }
@@ -531,19 +447,23 @@ export type CompanionIdentityHandoffResponse = {
 export class ExtensionPairedVaultIdentityHandoffRequestMessage {
   private constructor() {}
   declare readonly type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest;
-  declare readonly payload: CompanionIdentityHandoffRequest;
-  static is(
+  declare readonly payload: unknown;
+  static decode(
     message: unknown,
-  ): message is ExtensionPairedVaultIdentityHandoffRequestMessage {
-    if (
-      !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
-      message.type !==
-        ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest ||
-      !("payload" in message)
-    ) {
-      return false;
-    }
-    return true;
+  ): Effect.Effect<
+    ExtensionPairedVaultIdentityHandoffRequestMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(
+          ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
+        ),
+        payload: Schema.Unknown,
+      }),
+      message,
+      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
+    );
   }
 }
 

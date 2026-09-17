@@ -1,4 +1,24 @@
-import type { ExtensionEventLogRecord as RustExtensionEventLogRecord } from "./nook-companion-wasm/nook_companion_wasm";
+import { Effect, Schema } from "effect";
+import {
+  decode_extension_event_log_record,
+  type ExtensionEventLogRecord as RustExtensionEventLogRecord,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  RuntimeMessageDecodeFailure,
+  RuntimeMessageDecodeFailureKind,
+} from "./runtime-message-decode-failure";
+
+function decodeRuntimeMessage<A>(
+  schema: Schema.Schema<A>,
+  value: unknown,
+  kind: RuntimeMessageDecodeFailureKind,
+): Effect.Effect<A, RuntimeMessageDecodeFailure> {
+  return Schema.decodeUnknown(schema)(value).pipe(
+    Effect.mapError((cause) =>
+      RuntimeMessageDecodeFailure.fromParseError({ kind, cause }),
+    ),
+  );
+}
 
 export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = "nook:open-simple-vault",
@@ -8,11 +28,15 @@ export enum OpenSimpleVaultMessageType {
 export class OpenSimpleVaultMessage {
   private constructor() {}
   declare readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  static is(message: unknown): message is OpenSimpleVaultMessage {
-    return (
-      RuntimeMessageEnvelope.hasRuntimeMessageType(message) &&
-      message.type === OpenSimpleVaultMessageType.NookOpenSimpleVault
+  static decode(
+    message: unknown,
+  ): Effect.Effect<OpenSimpleVaultMessage, RuntimeMessageDecodeFailure> {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
+      }),
+      message,
+      RuntimeMessageDecodeFailureKind.OpenSimpleVault,
     );
   }
 }
@@ -31,32 +55,23 @@ export class BeginExtensionPairingMessage {
     deviceSigningPublicKey: string;
     deviceLabel: string;
   };
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  static is(message: unknown): message is BeginExtensionPairingMessage {
-    if (
-      !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
-      message.type !==
-        BeginExtensionPairingMessageType.NookBeginExtensionPairing ||
-      !("payload" in message) ||
-      typeof message.payload !== "object" ||
-      !message.payload
-    ) {
-      return false;
-    }
-    const { payload } = message;
-    return (
-      "deviceId" in payload &&
-      typeof payload.deviceId === "string" &&
-      payload.deviceId.length > 0 &&
-      "devicePublicKey" in payload &&
-      typeof payload.devicePublicKey === "string" &&
-      payload.devicePublicKey.length > 0 &&
-      "deviceSigningPublicKey" in payload &&
-      typeof payload.deviceSigningPublicKey === "string" &&
-      payload.deviceSigningPublicKey.length > 0 &&
-      "deviceLabel" in payload &&
-      typeof payload.deviceLabel === "string" &&
-      payload.deviceLabel.length > 0
+  static decode(
+    message: unknown,
+  ): Effect.Effect<BeginExtensionPairingMessage, RuntimeMessageDecodeFailure> {
+    return decodeRuntimeMessage(
+      Schema.Struct({
+        type: Schema.Literal(
+          BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+        ),
+        payload: Schema.Struct({
+          deviceId: Schema.String.pipe(Schema.minLength(1)),
+          devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
+          deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
+          deviceLabel: Schema.String.pipe(Schema.minLength(1)),
+        }),
+      }),
+      message,
+      RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
     );
   }
 }
@@ -65,22 +80,17 @@ export class BeginExtensionPairingMessage {
 export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
 export class ExtensionEventLogRecordAdmission {
   private constructor() {}
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  static is(value: unknown): value is ExtensionEventLogRecord {
-    if (!value || typeof value !== "object") return false;
-    return (
-      "eventId" in value &&
-      typeof value.eventId === "string" &&
-      value.eventId.length > 0 &&
-      "path" in value &&
-      typeof value.path === "string" &&
-      value.path.length > 0 &&
-      "event" in value &&
-      !!value.event &&
-      typeof value.event === "object" &&
-      "schema_version" in value.event &&
-      typeof value.event.schema_version === "number"
-    );
+  static decode(
+    value: unknown,
+  ): Effect.Effect<ExtensionEventLogRecord, RuntimeMessageDecodeFailure> {
+    return Effect.try({
+      try: () => decode_extension_event_log_record(value),
+      catch: (cause) =>
+        RuntimeMessageDecodeFailure.fromCause({
+          kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
+          cause,
+        }),
+    });
   }
 }
 
@@ -96,27 +106,38 @@ export class ExtensionLocalEventLogUpdatedMessage {
     vaultStoreId: string;
     eventLogRecords: ExtensionEventLogRecord[];
   };
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  static is(message: unknown): message is ExtensionLocalEventLogUpdatedMessage {
-    if (
-      !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
-      message.type !==
-        ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated ||
-      !("payload" in message) ||
-      typeof message.payload !== "object" ||
-      !message.payload
-    ) {
-      return false;
-    }
-    const { payload } = message;
-    return (
-      "vaultStoreId" in payload &&
-      typeof payload.vaultStoreId === "string" &&
-      payload.vaultStoreId.length > 0 &&
-      "eventLogRecords" in payload &&
-      Array.isArray(payload.eventLogRecords) &&
-      payload.eventLogRecords.length > 0 &&
-      payload.eventLogRecords.every(ExtensionEventLogRecord.is)
+  static decode(
+    message: unknown,
+  ): Effect.Effect<
+    ExtensionLocalEventLogUpdatedMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    const envelopeSchema = Schema.Struct({
+      type: Schema.Literal(
+        ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
+      ),
+      payload: Schema.Struct({
+        vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
+        eventLogRecords: Schema.Array(Schema.Unknown).pipe(
+          Schema.minItems(1),
+        ),
+      }),
+    });
+    return decodeRuntimeMessage(
+      envelopeSchema,
+      message,
+      RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
+    ).pipe(
+      Effect.flatMap(({ type, payload }) =>
+        Effect.all(payload.eventLogRecords.map(ExtensionEventLogRecord.decode), {
+          concurrency: "unbounded",
+        }).pipe(
+          Effect.map((eventLogRecords) => ({
+            type,
+            payload: { vaultStoreId: payload.vaultStoreId, eventLogRecords },
+          })),
+        ),
+      ),
     );
   }
 }
@@ -125,13 +146,13 @@ export class ExtensionLocalEventLogUpdatedMessage {
 export class RuntimeMessageEnvelope {
   private constructor() {}
   declare readonly type: string;
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  static hasRuntimeMessageType(message: unknown): message is { type: string } {
-    return (
-      !!message &&
-      typeof message === "object" &&
-      "type" in message &&
-      typeof message.type === "string"
+  static decode(
+    message: unknown,
+  ): Effect.Effect<{ readonly type: string }, RuntimeMessageDecodeFailure> {
+    return decodeRuntimeMessage(
+      Schema.Struct({ type: Schema.String }),
+      message,
+      RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
     );
   }
 }
