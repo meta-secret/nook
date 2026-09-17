@@ -195,7 +195,6 @@ impl ExtensionPairingDatabase {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
-    use js_sys::Date;
     use std::slice;
 
     use super::*;
@@ -223,7 +222,7 @@ mod wasm_idb_tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id,
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(Date::now())?,
+                approved_at: serde_json::from_str("1784937600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
                 event_count: 2.into(),

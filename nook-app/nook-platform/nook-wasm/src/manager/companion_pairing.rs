@@ -6,7 +6,7 @@ use nook_companion_core::{
 };
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
-use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+use wasm_bindgen::{JsError, JsValue, prelude::wasm_bindgen};
 
 mod activation;
 pub use activation::{
@@ -33,9 +33,9 @@ impl NookExtensionDeviceApproval {
         Ok(Self {
             store_id: nook_core::StoreId::parse(&manager.vault.store_id)
                 .map_err(|error| JsError::new(&error.to_string()))?,
-            approved_at: nook_companion_core::ExtensionPairingApprovalEpochMilliseconds::parse(
-                js_sys::Date::now(),
-            )
+            approved_at: serde_wasm_bindgen::from_value::<
+                nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
+            >(JsValue::from_f64(js_sys::Date::now()))
             .map_err(|error| JsError::new(&error.to_string()))?,
             vault_type: match manager.vault.architecture.vault_type {
                 VaultType::Simple => ExtensionPairingVaultType::Simple,
@@ -355,7 +355,7 @@ mod tests {
         assert_eq!(approval.store_id().value(), manager.vault.store_id);
         let vault_type: ExtensionPairingVaultType = approval.vault_type();
         assert_eq!(vault_type, ExtensionPairingVaultType::Simple);
-        assert!(approval.approved_at().value() > 0.0);
+        assert!(approval.approved_at().validate().is_ok());
         Ok(())
     }
 

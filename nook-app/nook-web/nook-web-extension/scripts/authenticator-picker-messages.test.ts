@@ -3,6 +3,7 @@ import {
   MAX_AUTHENTICATOR_SEARCH_LENGTH,
   AuthenticatorPickerCancelMessage as AuthenticatorPickerCancelMessageSchema,
   AuthenticatorPickerQueryMessage as AuthenticatorPickerQueryMessageSchema,
+  AuthenticatorPickerQueryResponse as AuthenticatorPickerQueryResponseSchema,
   AuthenticatorPickerSelectMessage as AuthenticatorPickerSelectMessageSchema,
   WebsiteAuthenticatorCanceledMessage as WebsiteAuthenticatorCanceledMessageSchema,
   WebsiteAuthenticatorPickerOpenMessage as WebsiteAuthenticatorPickerOpenMessageSchema,
@@ -59,6 +60,31 @@ describe('authenticator picker messages', () => {
           vaultStoreId: '',
           secretId: 'secret-1',
         },
+      }),
+    ).toBe(false)
+  })
+
+  test('admits only complete authenticator query responses', () => {
+    expect(
+      AuthenticatorPickerQueryResponseSchema.is({
+        ok: true,
+        origin: 'https://accounts.example.test',
+        accounts: [
+          {
+            vaultStoreId: 'vault-1',
+            vaultName: 'Personal',
+            secretId: 'secret-1',
+            issuer: 'Example',
+            account: 'alice@example.test',
+          },
+        ],
+      }),
+    ).toBe(true)
+    expect(
+      AuthenticatorPickerQueryResponseSchema.is({
+        ok: true,
+        origin: 'https://accounts.example.test',
+        accounts: [{ vaultStoreId: 'vault-1' }],
       }),
     ).toBe(false)
   })

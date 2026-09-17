@@ -11,11 +11,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  PR_STEWARD_SUBJECT,
   PrStewardEventObserver,
   PrStewardCredentialFile,
-  PrStewardBoundedMessageStream,
-  PrStewardSubscriptionKind,
-  PrStewardSubscriptionOverloadError,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -74,6 +72,66 @@ class PendingPrReader implements PrStewardAssignedPrReader {
   read(_request: PrStewardAssignedPrRequest) {
     this.reads += 1;
     return this.pending.promise;
+  }
+}
+class TwoHintsThenPendingPrReader implements PrStewardAssignedPrReader {
+  readonly pending = Promise.withResolvers<PrStewardAssignedPullRequest>();
+  reads = 0;
+
+  read(_request: PrStewardAssignedPrRequest) {
+    this.reads += 1;
+    return this.reads <= 2
+      ? Promise.resolve({
+          headSha: ASSIGNED_HEAD,
+          url: assignedUrl,
+          state: PrStewardPullRequestState.Open,
+        } as const)
+      : this.pending.promise;
+  }
+}
+type BufferedNatsMessage = { readonly data: Uint8Array };
+
+class BufferedNatsSubscription implements AsyncIterable<BufferedNatsMessage> {
+  readonly #messages: BufferedNatsMessage[] = [];
+  #signal = Promise.withResolvers<void>();
+  #closed = false;
+  unsubscribeCount = 0;
+
+  publish(data: Uint8Array): void {
+    this.#messages.push({ data });
+    this.#signal.resolve();
+  }
+
+  close(): void {
+    this.#closed = true;
+    this.#signal.resolve();
+  }
+
+  unsubscribe(): void {
+    this.unsubscribeCount += 1;
+    this.close();
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<BufferedNatsMessage> {
+    while (true) {
+      const message = this.#messages.shift();
+      if (message) {
+        yield message;
+        continue;
+      }
+      if (this.#closed) return;
+      await this.#signal.promise;
+      this.#signal = Promise.withResolvers<void>();
+    }
+  }
+}
+class BufferedNatsConnection {
+  readonly subscription = new BufferedNatsSubscription();
+  readonly subjects: string[] = [];
+
+  subscribe(subject: string): BufferedNatsSubscription {
+    this.subjects.push(subject);
+    return this.subscription;
   }
 }
 class OrderedPrReader implements PrStewardAssignedPrReader {
@@ -217,60 +275,57 @@ describe('PR Lifecycle Agent credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
-  test('admits four messages and synchronously unsubscribes on overflow', async () => {
-    const messages = new PrStewardBoundedMessageStream();
-    let unsubscribed = 0;
-    const unsubscribe = (): void => {
-      unsubscribed += 1;
-    };
-    messages.admit({ data: encoder.encode('0'), unsubscribe });
-    const iterator = messages[Symbol.asyncIterator]();
-    const first = await iterator.next();
-    if (first.done) throw new Error('expected first admitted message');
-    for (let index = 1; index < 5; index += 1)
-      messages.admit({ data: encoder.encode(String(index)), unsubscribe });
-    expect(unsubscribed).toBe(1);
-    const admitted = [new TextDecoder().decode(first.value.data)];
-    while (true) {
-      const next = await iterator.next();
-      if (next.done) break;
-      admitted.push(new TextDecoder().decode(next.value.data));
-    }
-    expect(admitted).toEqual(['0', '1', '2', '3']);
-    const outcome = messages.outcome();
-    expect(outcome).toEqual({
-      kind: PrStewardSubscriptionKind.Overloaded,
-      pending: 4,
-    });
-    if (outcome.kind !== PrStewardSubscriptionKind.Overloaded)
-      throw new Error('expected overload outcome');
-    const failure = new PrStewardSubscriptionOverloadError({
-      pending: outcome.pending,
-    });
-    expect(failure.pending).toBe(4);
-    expect(failure.message).toContain('4 pending messages');
-  });
-
-  test('settles admitted messages before reporting normal closure', async () => {
-    const messages = new PrStewardBoundedMessageStream();
-    let unsubscribed = false;
-    messages.admit({
-      data: encoder.encode('admitted'),
-      unsubscribe: () => {
-        unsubscribed = true;
-      },
-    });
-    messages.terminate({ kind: PrStewardSubscriptionKind.Closed });
-    const admitted: string[] = [];
-    for await (const message of messages)
-      admitted.push(new TextDecoder().decode(message.data));
-    expect(admitted).toEqual(['admitted']);
-    const outcome = messages.outcome();
-    expect(outcome).toEqual({
-      kind: PrStewardSubscriptionKind.Closed,
-    });
-    expect(unsubscribed).toBe(false);
-  });
+  test(
+    'drains four buffered subscription messages while a check hint is in flight',
+    async () => {
+      const reader = new TwoHintsThenPendingPrReader();
+      const data = Array.from({ length: 7 }, (_, index) =>
+        cloudEvent({
+          event: 'check_run',
+          id: `check-run-${index}`,
+          body: {
+            repository,
+            check_run: {
+              ...associated({ id: 44 + index, head: HEAD }),
+              conclusion: 'success',
+            },
+          },
+        }),
+      );
+      const connection = new BufferedNatsConnection();
+      const lines: string[] = [];
+      let checkHints = 0;
+      const observation = new PrStewardEventObserver({
+        reader,
+      }).observeSubscription({
+        connection,
+        subject: PR_STEWARD_SUBJECT,
+        activity: (event) => {
+          if (event.checkEvent) checkHints += 1;
+        },
+        pullRequest: ASSIGNED_PR,
+        write: (line) => lines.push(line),
+      });
+      for (const message of data.slice(0, 3))
+        connection.subscription.publish(message);
+      await Bun.sleep(0);
+      expect(checkHints).toBe(2);
+      expect(reader.reads).toBe(3);
+      for (const message of data.slice(3))
+        connection.subscription.publish(message);
+      connection.subscription.close();
+      reader.pending.resolve({
+        headSha: ASSIGNED_HEAD,
+        url: assignedUrl,
+        state: PrStewardPullRequestState.Open,
+      });
+      await observation;
+      expect(checkHints).toBe(7);
+      expect(lines).toHaveLength(7);
+      expect(connection.subjects).toEqual([PR_STEWARD_SUBJECT]);
+      expect(connection.subscription.unsubscribeCount).toBe(0);
+    },
+  );
 
   test.each([
     {

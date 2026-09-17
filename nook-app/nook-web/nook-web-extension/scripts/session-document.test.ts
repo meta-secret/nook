@@ -278,6 +278,30 @@ describe('extension session document ownership', () => {
     expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
+  test('rejects a non-object browser reply before invoking the decoder', async () => {
+    const fixture = new SessionDocumentFixture()
+    const opening = fixture.owner.open()
+    await Promise.resolve()
+    expect(fixture.creation.complete()).toEqual(ok())
+    const opened = await opening
+    if (opened.isErr()) throw new Error('document creation must succeed')
+
+    const decodeResponse = mock((response: unknown) => ok(response))
+    const delivery = opened.value.sendMessage(
+      { type: 'fixture-request' },
+      decodeResponse,
+    )
+    expect(fixture.respond(false)).toEqual(ok())
+    expect(await delivery).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.ResponseMissing,
+        ),
+      ),
+    )
+    expect(decodeResponse).not.toHaveBeenCalled()
+  })
+
   test('closing while creation is pending denies the late sending capability', async () => {
     const fixture = new SessionDocumentFixture()
     const opening = fixture.owner.open()

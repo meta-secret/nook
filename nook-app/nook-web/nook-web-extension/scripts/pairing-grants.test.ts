@@ -55,7 +55,7 @@ const storedGrant: StoredExtensionPairingGrant = {
 describe('extension pairing grant transport', () => {
   test('rejects a non-string vault type at the browser wire boundary', () => {
     const admission = ExtensionPairingApprovedGrantAdmission.parse({
-      vaultType: null,
+      vaultType: 7,
     })
 
     expect(admission).toEqual(

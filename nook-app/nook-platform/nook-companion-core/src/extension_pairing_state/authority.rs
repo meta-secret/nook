@@ -265,12 +265,12 @@ mod tests {
         let response = serde_json::to_string(&outcome)?;
         assert_eq!(
             GrantAuthorityResponseJson::from(response.clone())
-                .decode(PairingVaultId::before_genesis_placeholder())?,
+                .decode(&PairingVaultId::before_genesis_placeholder())?,
             outcome
         );
         assert!(
             GrantAuthorityResponseJson::from(response)
-                .decode(PairingVaultId::parse("store_lmnopqrst")?)
+                .decode(&PairingVaultId::parse("store_lmnopqrst")?)
                 .is_err()
         );
         Ok(())

@@ -69,8 +69,13 @@ type CloudKitRecordAsset = {
 
 type CloudKitRecordReference = {
   recordName: string;
-  action?: "DELETE_SELF" | "NONE";
+  action?: CloudKitRecordReferenceAction;
 };
+
+enum CloudKitRecordReferenceAction {
+  DeleteSelf = "DELETE_SELF",
+  None = "NONE",
+}
 
 type CloudKitRecordFieldValue =
   | string
@@ -199,15 +204,14 @@ type ExternalCloudKitContainer = Omit<
 > & {
   setUpAuth: (
     options?: ExternalCloudKitAuthSetupOptions,
-  ) => Promise<CloudKitUserIdentity | CloudKitAuthError | null | undefined>;
-  fetchCurrentUserIdentity?: () => Promise<
-    CloudKitUserIdentity | CloudKitAuthError | null | undefined
-  >;
+  ) => Promise<CloudKitUserIdentity>;
+  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
 };
 
 export type CloudKitAuthTokenStore = {
   putToken: (containerIdentifier: string, authToken: string) => void;
-  getToken: (containerIdentifier: string) => string | undefined;
+  // CloudKit JS owns absent-token handling at this opaque host callback edge.
+  getToken: (containerIdentifier: string) => unknown;
 };
 
 export type CloudKitConfiguration = {

@@ -15,6 +15,16 @@ export enum ExtensionSessionTransportFailureKind {
 
 export class ExtensionSessionTransportFailure {
   constructor(readonly kind: ExtensionSessionTransportFailureKind) {}
+
+  toResult<Response, DecodeFailure = never>(): ExtensionSessionTransportResult<
+    Response,
+    DecodeFailure
+  > {
+    return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+      this,
+    )
+  }
+
   get response() {
     return { ok: false as const, reason: this.kind }
   }
@@ -36,7 +46,7 @@ export interface ExtensionSessionTransport {
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
@@ -56,69 +66,78 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
     message: ExtensionSessionTransportRequest,
     decodeResponse?: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
+  ): Promise<
+    | ExtensionSessionTransportResult<ExtensionSessionResponse>
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
-        err(
-          new ExtensionSessionTransportFailure(
-            ExtensionSessionTransportFailureKind.Closed,
-          ),
-        ),
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ).toResult<Response, DecodeFailure>(),
       )
     return new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage(
           message,
-          (response: ExtensionSessionResponse | undefined) => {
-          const nativeFailure = chrome.runtime.lastError
-          if (this.access === SessionDocumentAccess.Revoked) {
-            resolve(
-              err(
+          (response: ExtensionSessionResponse) => {
+            const nativeFailure = chrome.runtime.lastError
+            if (this.access === SessionDocumentAccess.Revoked) {
+              resolve(
                 new ExtensionSessionTransportFailure(
                   ExtensionSessionTransportFailureKind.Closed,
-                ),
-              ),
-            )
-          } else if (nativeFailure) {
-            resolve(
-              err(
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if (nativeFailure) {
+              resolve(
                 new ExtensionSessionTransportFailure(
                   ExtensionSessionTransportFailureKind.DeliveryFailed,
-                ),
-              ),
-            )
-          } else if (decodeResponse) {
-            resolve(
-              decodeResponse(response).mapErr((failure) => failure),
-            )
-          } else if (response instanceof Object) {
-            resolve(ok(response as Response))
-          } else {
-            resolve(
-              err(
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if (
+              !response ||
+              typeof response !== 'object' ||
+              Array.isArray(response)
+            ) {
+              resolve(
                 new ExtensionSessionTransportFailure(
                   ExtensionSessionTransportFailureKind.ResponseMissing,
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if (decodeResponse) {
+              const decoded = decodeResponse(response)
+              resolve(
+                decoded.match(
+                  (decodedResponse) =>
+                    ok<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(decodedResponse),
+                  (failure) =>
+                    err<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(failure),
                 ),
-              ),
-            )
-          }
+              )
+            } else {
+              resolve(ok<ExtensionSessionResponse, never>(response))
+            }
           },
         )
       } catch {
         resolve(
-          err(
-            new ExtensionSessionTransportFailure(
-              ExtensionSessionTransportFailureKind.DeliveryFailed,
-            ),
-          ),
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ).toResult<Response, DecodeFailure>(),
         )
       }
     })

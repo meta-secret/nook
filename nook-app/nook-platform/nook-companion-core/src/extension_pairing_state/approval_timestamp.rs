@@ -1,6 +1,11 @@
 use super::ExtensionPairingStateError;
+use serde::de::Error as DeError;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 use tsify::Tsify;
+
+const MAX_SAFE_INTEGER_MILLISECONDS: u64 = 9_007_199_254_740_991;
+const MAX_SAFE_INTEGER_MILLISECONDS_NUMBER: f64 = 9_007_199_254_740_991.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
 #[serde(transparent)]
@@ -19,38 +24,45 @@ struct LegacyDateToIsoStringTimestamp<'a>(&'a str);
 impl ExtensionPairingApprovalEpochMilliseconds {
     pub const MINIMUM: Self = Self(1);
 
-    pub fn parse(value: f64) -> Result<Self, ExtensionPairingStateError> {
+    fn parse(value: f64) -> Result<Self, ExtensionPairingStateError> {
         if !value.is_finite()
             || value <= 0.0
             || value.fract() != 0.0
-            || value > 9_007_199_254_740_991.0
+            || value > MAX_SAFE_INTEGER_MILLISECONDS_NUMBER
         {
             return Err(ExtensionPairingStateError::InvalidGrant);
         }
-        Ok(Self(value as u64))
+        let value = format!("{value:.0}")
+            .parse::<u64>()
+            .map_err(|_| ExtensionPairingStateError::InvalidGrant)?;
+        Self::from_unix_milliseconds(value)
     }
 
     pub fn validate(self) -> Result<(), ExtensionPairingStateError> {
-        if self.0 == 0 || self.0 > 9_007_199_254_740_991 {
+        if self.0 == 0 || self.0 > MAX_SAFE_INTEGER_MILLISECONDS {
             return Err(ExtensionPairingStateError::InvalidGrant);
         }
         Ok(())
     }
 
+    fn from_unix_milliseconds(value: u64) -> Result<Self, ExtensionPairingStateError> {
+        let timestamp = Self(value);
+        timestamp.validate()?;
+        Ok(timestamp)
+    }
+
     pub(crate) fn from_legacy_date_to_iso_string(
         value: &str,
     ) -> Result<Self, ExtensionPairingStateError> {
-        Self::parse(LegacyDateToIsoStringTimestamp(value).unix_milliseconds()?)
-    }
-
-    #[must_use]
-    pub fn value(self) -> f64 {
-        self.0 as f64
+        let milliseconds = LegacyDateToIsoStringTimestamp(value).unix_milliseconds()?;
+        let milliseconds =
+            u64::try_from(milliseconds).map_err(|_| ExtensionPairingStateError::InvalidGrant)?;
+        Self::from_unix_milliseconds(milliseconds)
     }
 }
 
 impl LegacyDateToIsoStringTimestamp<'_> {
-    fn unix_milliseconds(&self) -> Result<f64, ExtensionPairingStateError> {
+    fn unix_milliseconds(&self) -> Result<i64, ExtensionPairingStateError> {
         let value = self.0;
         let bytes = value.as_bytes();
         if bytes.len() != 24
@@ -64,9 +76,8 @@ impl LegacyDateToIsoStringTimestamp<'_> {
         {
             return Err(ExtensionPairingStateError::InvalidGrant);
         }
-        let field = |range: std::ops::Range<usize>| {
-            value.get(range).and_then(|part| part.parse::<i64>().ok())
-        };
+        let field =
+            |range: Range<usize>| value.get(range).and_then(|part| part.parse::<i64>().ok());
         let fields = (
             field(0..4),
             field(5..7),
@@ -104,8 +115,8 @@ impl LegacyDateToIsoStringTimestamp<'_> {
         let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
         let days_since_epoch = era * 146_097 + day_of_era - 719_468;
         Ok(
-            ((days_since_epoch * 86_400 + hour * 3_600 + minute * 60 + second) * 1_000
-                + milliseconds) as f64,
+            (days_since_epoch * 86_400 + hour * 3_600 + minute * 60 + second) * 1_000
+                + milliseconds,
         )
     }
 
@@ -129,15 +140,14 @@ impl<'de> Deserialize<'de> for ExtensionPairingApprovalEpochMilliseconds {
         Deserializer: serde::Deserializer<'de>,
     {
         let wire = ExtensionPairingApprovalTimestampWire::deserialize(deserializer)?;
-        let value = match wire {
-            ExtensionPairingApprovalTimestampWire::UnixMilliseconds(value) => value,
-            ExtensionPairingApprovalTimestampWire::LegacyDateToIsoString(value) => {
-                LegacyDateToIsoStringTimestamp(&value)
-                    .unix_milliseconds()
-                    .map_err(serde::de::Error::custom)?
+        match wire {
+            ExtensionPairingApprovalTimestampWire::UnixMilliseconds(value) => {
+                Self::parse(value).map_err(DeError::custom)
             }
-        };
-        Self::parse(value).map_err(serde::de::Error::custom)
+            ExtensionPairingApprovalTimestampWire::LegacyDateToIsoString(value) => {
+                Self::from_legacy_date_to_iso_string(&value).map_err(DeError::custom)
+            }
+        }
     }
 }
 
@@ -160,22 +170,39 @@ mod tests {
     }
 
     #[test]
-    fn approval_timestamp_preserves_numeric_wire_and_number_projection() -> anyhow::Result<()> {
+    fn approval_timestamp_preserves_numeric_wire_with_exact_integer_precision() -> anyhow::Result<()>
+    {
         let timestamp = ExtensionPairingApprovalEpochMilliseconds::parse(9_007_199_254_740_991.0)?;
 
+        assert_eq!(timestamp.0, 9_007_199_254_740_991);
         assert_eq!(serde_json::to_string(&timestamp)?, "9007199254740991");
         let decoded: ExtensionPairingApprovalEpochMilliseconds =
             serde_json::from_str("9007199254740991")?;
         assert_eq!(decoded, timestamp);
-        assert_eq!(decoded.value(), 9_007_199_254_740_991.0);
+        assert_eq!(decoded.0, 9_007_199_254_740_991);
         Ok(())
+    }
+
+    #[test]
+    fn approval_timestamp_rejects_invalid_or_unsafe_numeric_milliseconds() {
+        for value in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -1.0,
+            0.0,
+            1.5,
+            9_007_199_254_740_992.0,
+        ] {
+            assert!(ExtensionPairingApprovalEpochMilliseconds::parse(value).is_err());
+        }
     }
 
     #[test]
     fn exact_legacy_date_to_iso_string_value_converts_to_unix_milliseconds() -> anyhow::Result<()> {
         let decoded: ExtensionPairingApprovalEpochMilliseconds =
             serde_json::from_str(r#""2026-07-25T00:00:00.000Z""#)?;
-        assert_eq!(decoded.value(), 1_784_937_600_000.0);
+        assert_eq!(decoded.0, 1_784_937_600_000);
         Ok(())
     }
 

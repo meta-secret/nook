@@ -3,6 +3,7 @@ import {
   MAX_LOGIN_SEARCH_LENGTH,
   LoginPickerCancelMessage as LoginPickerCancelMessageSchema,
   LoginPickerQueryMessage as LoginPickerQueryMessageSchema,
+  LoginPickerQueryResponse as LoginPickerQueryResponseSchema,
   LoginPickerSelectMessage as LoginPickerSelectMessageSchema,
   WebsiteLoginCanceledMessage as WebsiteLoginCanceledMessageSchema,
   WebsiteLoginPickerOpenMessage as WebsiteLoginPickerOpenMessageSchema,
@@ -39,6 +40,31 @@ describe('login picker runtime messages', () => {
           requestId: 'req-1',
           query: 'a'.repeat(MAX_LOGIN_SEARCH_LENGTH + 1),
         },
+      }),
+    ).toBe(false)
+  })
+
+  test('admits only complete login query responses', () => {
+    expect(
+      LoginPickerQueryResponseSchema.is({
+        ok: true,
+        origin: 'https://login.example.test',
+        accounts: [
+          {
+            vaultStoreId: 'vault-1',
+            secretId: 'secret-1',
+            username: 'alice',
+            websiteHost: 'login.example.test',
+            vaultName: 'Personal',
+          },
+        ],
+      }),
+    ).toBe(true)
+    expect(
+      LoginPickerQueryResponseSchema.is({
+        ok: true,
+        origin: 'https://login.example.test',
+        accounts: [{ vaultStoreId: 'vault-1' }],
       }),
     ).toBe(false)
   })

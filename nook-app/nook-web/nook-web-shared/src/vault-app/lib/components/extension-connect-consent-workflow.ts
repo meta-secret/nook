@@ -5,6 +5,7 @@ import {
   NookExtensionConsentPhaseState,
   NookExtensionConsentTransitionState,
   NookExtensionConsentVaultReadiness,
+  type NookExtensionDeviceApproval,
 } from "$app-wasm";
 import { err, type Result } from "neverthrow";
 import type { I18nKey } from "../../../generated/i18n-keys";
@@ -22,10 +23,7 @@ import {
   VaultStorageFailureKind,
 } from "../runtime/storage-failure";
 import type { VaultState } from "../vault.svelte";
-import {
-  ExtensionVaultApproval,
-  type ExtensionVaultAuthorization,
-} from "../extension/vault-approval";
+import { ExtensionVaultApproval } from "../extension/vault-approval";
 
 export enum ExtensionConsentWorkflowKind {
   Resting = "resting",
@@ -423,7 +421,7 @@ export class ExtensionConnectConsentWorkflow {
         }
 
         let authorization: Result<
-          ExtensionVaultAuthorization,
+          NookExtensionDeviceApproval,
           VaultStorageFailure
         >;
         try {

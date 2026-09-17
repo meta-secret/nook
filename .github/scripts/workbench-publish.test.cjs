@@ -104,7 +104,7 @@ process.exit(1)
         : {}
     let inheritedPath = ''
     for (const [name, value] of Object.entries(process.env)) {
-      if (name === 'PATH') inheritedPath = value
+      if (name === 'PATH' && typeof value === 'string') inheritedPath = value
     }
 
     const result = spawnSync(

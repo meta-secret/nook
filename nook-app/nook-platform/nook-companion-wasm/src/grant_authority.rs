@@ -32,7 +32,7 @@ impl NookPairingVaultId {
     requested: &NookPairingVaultId,
 ) -> Result<ExtensionGrantAuthority, JsError> {
     response
-        .decode(requested.as_core().clone())
+        .decode(requested.as_core())
         .map_err(|error| JsError::new(&error.to_string()))
 }
 

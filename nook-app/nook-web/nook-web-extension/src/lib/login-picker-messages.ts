@@ -24,6 +24,49 @@ export enum LoginPickerQueryMessageType {
   NookLoginPickerQuery = 'nook:login-picker-query',
 }
 
+/** Owns admission of the concrete browser response returned for one query. */
+export class LoginPickerQueryResponse {
+  private constructor() {}
+  declare readonly ok: true
+  declare readonly origin: string
+  declare readonly accounts: WebsiteLoginAccountOption[]
+
+  static is(response: unknown): response is LoginPickerQueryResponse {
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      Array.isArray(response) ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('origin' in response) ||
+      typeof response.origin !== 'string' ||
+      response.origin.length === 0 ||
+      !('accounts' in response) ||
+      !Array.isArray(response.accounts)
+    ) {
+      return false
+    }
+    return response.accounts.every((account: unknown) => {
+      if (!account || typeof account !== 'object' || Array.isArray(account))
+        return false
+      return (
+        'vaultStoreId' in account &&
+        typeof account.vaultStoreId === 'string' &&
+        account.vaultStoreId.length > 0 &&
+        'secretId' in account &&
+        typeof account.secretId === 'string' &&
+        account.secretId.length > 0 &&
+        'username' in account &&
+        typeof account.username === 'string' &&
+        'websiteHost' in account &&
+        typeof account.websiteHost === 'string' &&
+        'vaultName' in account &&
+        typeof account.vaultName === 'string'
+      )
+    })
+  }
+}
+
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class LoginPickerQueryMessage {
   private constructor() {}
@@ -54,6 +97,40 @@ export class LoginPickerSelectMessage {
     return Schema.decodeUnknown(loginPickerSelectMessageSchema)(message)
   }
 }
+
+/** Structural browser acknowledgement returned after a selected account is delivered. */
+export class LoginPickerSelectResponse {
+  private constructor() {}
+  declare readonly ok: true
+
+  static is(response: unknown): response is LoginPickerSelectResponse {
+    return (
+      !!response &&
+      typeof response === 'object' &&
+      !Array.isArray(response) &&
+      'ok' in response &&
+      response.ok === true
+    )
+  }
+}
+
+export type LoginPickerRequestMessage =
+  | LoginPickerQueryMessage
+  | LoginPickerSelectMessage
+
+export enum LoginPickerRuntimeResponseKind {
+  Query = 'query',
+  Selected = 'selected',
+  Rejected = 'rejected',
+}
+
+export type LoginPickerRuntimeResponse =
+  | {
+      readonly kind: LoginPickerRuntimeResponseKind.Query
+      readonly response: LoginPickerQueryResponse
+    }
+  | { readonly kind: LoginPickerRuntimeResponseKind.Selected }
+  | { readonly kind: LoginPickerRuntimeResponseKind.Rejected }
 
 export enum LoginPickerCancelMessageType {
   NookLoginPickerCancel = 'nook:login-picker-cancel',

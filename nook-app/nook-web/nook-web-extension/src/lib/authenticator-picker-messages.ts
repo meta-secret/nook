@@ -26,6 +26,49 @@ export enum AuthenticatorPickerQueryMessageType {
   NookAuthenticatorPickerQuery = 'nook:authenticator-picker-query',
 }
 
+/** Owns admission of the concrete browser response returned for one query. */
+export class AuthenticatorPickerQueryResponse {
+  private constructor() {}
+  declare readonly ok: true
+  declare readonly origin: string
+  declare readonly accounts: WebsiteAuthenticatorOption[]
+
+  static is(response: unknown): response is AuthenticatorPickerQueryResponse {
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      Array.isArray(response) ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('origin' in response) ||
+      typeof response.origin !== 'string' ||
+      response.origin.length === 0 ||
+      !('accounts' in response) ||
+      !Array.isArray(response.accounts)
+    ) {
+      return false
+    }
+    return response.accounts.every((account: unknown) => {
+      if (!account || typeof account !== 'object' || Array.isArray(account))
+        return false
+      return (
+        'vaultStoreId' in account &&
+        typeof account.vaultStoreId === 'string' &&
+        account.vaultStoreId.length > 0 &&
+        'secretId' in account &&
+        typeof account.secretId === 'string' &&
+        account.secretId.length > 0 &&
+        'issuer' in account &&
+        typeof account.issuer === 'string' &&
+        'account' in account &&
+        typeof account.account === 'string' &&
+        'vaultName' in account &&
+        typeof account.vaultName === 'string'
+      )
+    })
+  }
+}
+
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class AuthenticatorPickerQueryMessage {
   private constructor() {}
@@ -58,6 +101,40 @@ export class AuthenticatorPickerSelectMessage {
     )
   }
 }
+
+/** Structural browser acknowledgement returned after a selected account is delivered. */
+export class AuthenticatorPickerSelectResponse {
+  private constructor() {}
+  declare readonly ok: true
+
+  static is(response: unknown): response is AuthenticatorPickerSelectResponse {
+    return (
+      !!response &&
+      typeof response === 'object' &&
+      !Array.isArray(response) &&
+      'ok' in response &&
+      response.ok === true
+    )
+  }
+}
+
+export type AuthenticatorPickerRequestMessage =
+  | AuthenticatorPickerQueryMessage
+  | AuthenticatorPickerSelectMessage
+
+export enum AuthenticatorPickerRuntimeResponseKind {
+  Query = 'query',
+  Selected = 'selected',
+  Rejected = 'rejected',
+}
+
+export type AuthenticatorPickerRuntimeResponse =
+  | {
+      readonly kind: AuthenticatorPickerRuntimeResponseKind.Query
+      readonly response: AuthenticatorPickerQueryResponse
+    }
+  | { readonly kind: AuthenticatorPickerRuntimeResponseKind.Selected }
+  | { readonly kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
 
 export enum AuthenticatorPickerCancelMessageType {
   NookAuthenticatorPickerCancel = 'nook:authenticator-picker-cancel',

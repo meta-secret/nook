@@ -7,22 +7,23 @@
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+  import {
+    LoginPickerCancelMessageType,
+    LoginPickerQueryMessageType,
+    LoginPickerQueryResponse,
+    LoginPickerRuntimeResponseKind,
+    LoginPickerSelectMessageType,
+    LoginPickerSelectResponse,
+    type LoginPickerCancelMessage,
+    type LoginPickerQueryMessage,
+    type LoginPickerRequestMessage,
+    type LoginPickerRuntimeResponse,
+    type LoginPickerSelectMessage,
+  } from '../lib/login-picker-messages'
   type LoginPickerRuntimeMessage =
-    | { type: 'nook:login-picker-query'; payload: { requestId: string; query: string } }
-    | { type: 'nook:login-picker-select'; payload: { requestId: string; vaultStoreId: string; secretId: string } }
-    | { type: 'nook:login-picker-cancel'; payload: { requestId: string } }
-  type LoginPickerRuntimeResponse =
-    | { ok: true; origin: string; accounts?: WebsiteLoginAccountOption[] }
-    | { ok: true }
-    | { ok: false; reason?: string }
-  type LoginPickerAccountQueryResponse = Extract<
-    LoginPickerRuntimeResponse,
-    { ok: true; origin: string }
-  >
-  type LoginPickerRuntimeResponseDecode =
-    | { kind: 'account-query'; response: LoginPickerAccountQueryResponse }
-    | { kind: 'success'; response: { ok: true } }
-    | { kind: 'rejected' }
+    | LoginPickerQueryMessage
+    | LoginPickerSelectMessage
+    | LoginPickerCancelMessage
   import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
@@ -48,35 +49,32 @@
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
-  let searchInput = $state<HTMLInputElement>()
   let querySequence = 0
   let completed = false
 
   function sendRuntimeMessage(
-    message: LoginPickerRuntimeMessage,
-  ): Promise<LoginPickerRuntimeResponse | undefined> {
+    message: LoginPickerRequestMessage,
+  ): Promise<LoginPickerRuntimeResponse> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: LoginPickerRuntimeResponse | undefined) => {
-        resolve(response)
+      chrome.runtime.sendMessage(message, (response: unknown) => {
+        if (message.type === LoginPickerQueryMessageType.NookLoginPickerQuery) {
+          resolve(
+            LoginPickerQueryResponse.is(response)
+              ? {
+                  kind: LoginPickerRuntimeResponseKind.Query,
+                  response,
+                }
+              : { kind: LoginPickerRuntimeResponseKind.Rejected },
+          )
+          return
+        }
+        resolve(
+          LoginPickerSelectResponse.is(response)
+            ? { kind: LoginPickerRuntimeResponseKind.Selected }
+            : { kind: LoginPickerRuntimeResponseKind.Rejected },
+        )
       })
     })
-  }
-
-  function decodeLoginPickerRuntimeResponse(
-    response: LoginPickerRuntimeResponse | undefined,
-  ): LoginPickerRuntimeResponseDecode {
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true
-    ) {
-      return { kind: 'rejected' }
-    }
-    if ('origin' in response && typeof response.origin === 'string') {
-      return { kind: 'account-query', response }
-    }
-    return { kind: 'success', response }
   }
 
   function accountPrimaryLabel(account: WebsiteLoginAccountOption): string {
@@ -101,21 +99,20 @@
     loading = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:login-picker-query',
+      type: LoginPickerQueryMessageType.NookLoginPickerQuery,
       payload: { requestId, query: searchQuery },
     }
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    const responseDecode = decodeLoginPickerRuntimeResponse(response)
-    if (responseDecode.kind !== 'account-query') {
+    if (response.kind !== LoginPickerRuntimeResponseKind.Query) {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
-    destinationOrigin = responseDecode.response.origin
-    accounts = ((v) => (v ? v : []))(responseDecode.response.accounts)
+    destinationOrigin = response.response.origin
+    accounts = response.response.accounts
   }
 
   async function choose(account: WebsiteLoginAccountOption): Promise<void> {
@@ -123,7 +120,7 @@
     busy = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:login-picker-select',
+      type: LoginPickerSelectMessageType.NookLoginPickerSelect,
       payload: {
         requestId,
         vaultStoreId: account.vaultStoreId,
@@ -131,7 +128,7 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (decodeLoginPickerRuntimeResponse(response).kind !== 'rejected') {
+    if (response.kind === LoginPickerRuntimeResponseKind.Selected) {
       completed = true
       window.close()
       return
@@ -145,12 +142,13 @@
   })
 
   onMount(() => {
-    searchInput?.focus()
+    const searchInput = document.getElementById('login-search')
+    if (searchInput instanceof HTMLInputElement) searchInput.focus()
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
       const message: LoginPickerRuntimeMessage = {
-        type: 'nook:login-picker-cancel',
+        type: LoginPickerCancelMessageType.NookLoginPickerCancel,
         payload: { requestId },
       }
       void chrome.runtime.sendMessage(message)
@@ -184,7 +182,6 @@
       id="login-search"
       data-testid="login-search"
       type="search"
-      bind:this={searchInput}
       bind:value={query}
       maxlength="200"
       autocomplete="off"

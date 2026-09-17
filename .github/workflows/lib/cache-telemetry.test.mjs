@@ -5,11 +5,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  CompilePhaseCacheExportMode,
-  CompilePhaseStatus,
   CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
+import {
+  CompilePhaseCacheExportMode,
+  CompilePhaseStatus,
+} from "./cache-scope-telemetry.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */

@@ -535,7 +535,7 @@ mod tests {
                 observed_at: Self::epoch("150")?,
                 vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)?,
+                approved_at: serde_json::from_str("100")?,
             })
         }
 
@@ -544,7 +544,7 @@ mod tests {
                 request: Self::request()?,
                 vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)?,
+                approved_at: serde_json::from_str("100")?,
                 provider_manifest_digest: Self::provider_manifest_digest()?,
             })
         }
