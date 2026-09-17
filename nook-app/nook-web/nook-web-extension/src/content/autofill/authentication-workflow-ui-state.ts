@@ -68,6 +68,11 @@ class AuthenticationWorkflowUi {
   }
 }
 
-export const authenticationWorkflowUi = new AuthenticationWorkflowUi({
+const authenticationWorkflowUiDependencies: ConstructorParameters<
+  typeof AuthenticationWorkflowUi
+>[0] = {
   widgetState,
-})
+}
+export const authenticationWorkflowUi = new AuthenticationWorkflowUi(
+  authenticationWorkflowUiDependencies,
+)

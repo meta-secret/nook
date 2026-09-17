@@ -192,11 +192,15 @@ class AuthenticationWidgetRenderer {
     ) {
       authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
     }
+    const workflowRenderRequest: Parameters<
+      typeof this.ui.widgetState.workflowRenderDisposition
+    >[0] = {
+      key: workflowKey,
+      observation: workflow,
+    }
     if (
-      this.ui.widgetState.workflowRenderDisposition({
-        key: workflowKey,
-        observation: workflow,
-      }) === WidgetRenderDisposition.Reuse
+      this.ui.widgetState.workflowRenderDisposition(workflowRenderRequest) ===
+      WidgetRenderDisposition.Reuse
     ) {
       const renderedWorkflowRoot: Parameters<
         typeof this.ui.widgetState.setRenderedWorkflowRoot
@@ -391,9 +395,10 @@ class AuthenticationWidgetRenderer {
     })
 
     body.append(takeOverButton)
-    if (
-      saved_login_action_available({ action: snapshot.action, loginMatches })
-    ) {
+    const savedLoginActionRequest: Parameters<
+      typeof saved_login_action_available
+    >[0] = { action: snapshot.action, loginMatches }
+    if (saved_login_action_available(savedLoginActionRequest)) {
       const savedLoginButton = document.createElement('button')
       savedLoginButton.type = 'button'
       savedLoginButton.className = 'text-button'
@@ -466,7 +471,12 @@ class AuthenticationWidgetRenderer {
   }
 }
 
-export const authenticationWidgetRenderer = new AuthenticationWidgetRenderer({
+const authenticationWidgetRendererDependencies: ConstructorParameters<
+  typeof AuthenticationWidgetRenderer
+>[0] = {
   widgetState,
   pickerState,
-})
+}
+export const authenticationWidgetRenderer = new AuthenticationWidgetRenderer(
+  authenticationWidgetRendererDependencies,
+)
