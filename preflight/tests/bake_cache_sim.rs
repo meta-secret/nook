@@ -227,6 +227,7 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     let root = RepositoryFixture::repository_root();
     let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
     let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
+    let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let production_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let workflow = root.read(".github/workflows/remote.yml");
@@ -234,6 +235,7 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
 
     for path in [
         "infra/sim/bake-cache/inputs/compile-base.txt",
+        "infra/sim/bake-cache/inputs/compile-platform-manifests.txt",
         "infra/sim/bake-cache/inputs/compile-wasm-manifest.txt",
         "infra/sim/bake-cache/inputs/compile-wasm-shared.txt",
         "infra/sim/bake-cache/inputs/compile-nook-wasm.txt",
@@ -253,11 +255,15 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION"));
     assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE"));
     assert!(dockerfile.contains("AS compile-native-dependencies"));
+    assert!(dockerfile.contains("AS compile-platform-manifests"));
+    assert!(dockerfile.contains("bake-sim-compile-cargo-fetch"));
     assert!(dockerfile.contains("AS compile-wasm-dependencies"));
     assert!(dockerfile.contains("AS compile-web-dependencies"));
     assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
     assert!(!dockerfile.contains("ci-agent"));
     assert!(bake.contains("target \"compile-warm\""));
+    assert!(bake.contains("SIMULATED_SCCACHE_TELEMETRY_REPLAY"));
+    assert!(bake.contains("target \"compile-toolchain-context\""));
     assert!(bake.contains("COMPILE_PARENT_SOURCE_SCOPE"));
     assert!(bake.contains("nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}"));
     assert!(bake.contains("nook-bake-sim-compile-${COMPILE_PARENT_SOURCE_SCOPE}"));
@@ -281,6 +287,26 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(workflow.contains("build:compile' && 5 || 360"));
     assert!(runtime_proof.contains("Scenario AA: cold compile cache seeds exact head"));
     assert!(runtime_proof.contains("Scenario AB: successor head imports parent lineage"));
+    assert!(
+        runtime_proof.contains("replay-aa-${suffix}")
+            && runtime_proof.contains("replay-ab-${suffix}")
+    );
+    assert!(
+        runtime_proof
+            .contains("require_cached_step \"$proof_log\" \"bake-sim-compile-cargo-fetch\"")
+    );
+
+    let rust_base_start = product
+        .find("FROM ${RUST_IMAGE} AS rust-base")
+        .expect("product rust-base stage is missing");
+    let rust_base_end = product[rust_base_start + 1..]
+        .find("\nFROM ")
+        .map(|offset| rust_base_start + 1 + offset)
+        .expect("product rust-base end is missing");
+    assert!(
+        !product[rust_base_start..rust_base_end].contains("NOOK_SCCACHE_TELEMETRY_REPLAY"),
+        "per-run replay argument must not vary the shared rust-base lineage"
+    );
 }
 
 fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {

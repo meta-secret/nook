@@ -226,11 +226,13 @@ tasks:
           local source_scope="$2"
           local parent_scope="$3"
           local export_enabled="$4"
+          local telemetry_replay="$5"
           set +e
           env \
             COMPILE_SOURCE_SCOPE="$source_scope" \
             COMPILE_PARENT_SOURCE_SCOPE="$parent_scope" \
             COMPILE_SOURCE_CACHE_WRITE_ENABLED="$export_enabled" \
+            SIMULATED_SCCACHE_TELEMETRY_REPLAY="$telemetry_replay" \
             SIMULATED_SCCACHE_RUNTIME_MODE_FILE="$compile_runtime_mode" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_cli" buildx bake \
@@ -952,7 +954,8 @@ tasks:
         compile_seed_scope="git-${suffix}-aa"
         compile_next_scope="git-${suffix}-ab"
         create_builder "nook-bake-sim-compile-aa-${suffix}"
-        bake_compile "$proof_log" "$compile_seed_scope" "" 1
+        bake_compile "$proof_log" "$compile_seed_scope" "" 1 "replay-aa-${suffix}"
+        require_uncached_step "$proof_log" "bake-sim-compile-cargo-fetch"
         require_uncached_step "$proof_log" "bake-sim-compile-native-dependencies"
         require_uncached_step "$proof_log" "bake-sim-compile-nook-wasm-build"
         require_registry_ref "nook/remote-buildcache/nook-bake-sim-compile-${compile_seed_scope}"
@@ -960,7 +963,8 @@ tasks:
 
         echo "== Scenario AB: successor head imports parent lineage =="
         create_builder "nook-bake-sim-compile-ab-${suffix}"
-        bake_compile "$proof_log" "$compile_next_scope" "$compile_seed_scope" 1
+        bake_compile "$proof_log" "$compile_next_scope" "$compile_seed_scope" 1 "replay-ab-${suffix}"
+        require_cached_step "$proof_log" "bake-sim-compile-cargo-fetch"
         require_cached_step "$proof_log" "bake-sim-compile-native-dependencies"
         require_cached_step "$proof_log" "bake-sim-compile-wasm-dependencies"
         require_cached_step "$proof_log" "bake-sim-compile-web-dependencies"

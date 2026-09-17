@@ -580,6 +580,24 @@ class DockerizedRustContract {
     );
   }
 
+  sharedRustBaseDoesNotConsumeTelemetryReplayArgument(): void {
+    const product = this.read(
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    const baseStart = product.indexOf(
+      "\nFROM ${RUST_IMAGE} AS rust-base\n",
+    );
+    const baseEnd = product.indexOf("\nFROM ", baseStart + 1);
+    expect(baseStart).toBeGreaterThanOrEqual(0);
+    expect(baseEnd).toBeGreaterThan(baseStart);
+    expect(product.slice(baseStart, baseEnd)).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+    expect(product).toContain(
+      "ARG NOOK_SCCACHE_TELEMETRY_REPLAY\nRUN if [ \"$NOOK_SCCACHE_TELEMETRY_REPLAY\" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi",
+    );
+  }
+
   workflowTooling(): void {
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
@@ -1052,6 +1070,10 @@ test(
 test(
   "WASM Node compilers retain secrets and Dylint telemetry has Node",
   contract.wasmNodeCompilerSecretsAndDylintTelemetryRuntime.bind(contract),
+);
+test(
+  "shared rust-base cache key excludes per-run sccache telemetry replay",
+  contract.sharedRustBaseDoesNotConsumeTelemetryReplayArgument.bind(contract),
 );
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
