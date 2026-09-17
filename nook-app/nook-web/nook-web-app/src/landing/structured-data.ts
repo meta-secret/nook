@@ -32,7 +32,7 @@ export class LandingStructuredDataDecodeFailure extends Error {
 
   private constructor(
     readonly kind: LandingStructuredDataDecodeFailureKind,
-    readonly cause: Error | ParseResult.ParseError,
+    override readonly cause: Error | ParseResult.ParseError,
   ) {
     super(kind)
   }

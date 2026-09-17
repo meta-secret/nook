@@ -164,10 +164,7 @@ function decodePagesWorker(value: unknown): PagesWorker {
   const fetchHandler = worker.fetch
   return {
     async fetch(request: Request, env: PagesWorkerEnvironment): Promise<Response> {
-      const response: unknown = await Reflect.apply(fetchHandler, worker, [
-        request,
-        env,
-      ])
+      const response: unknown = await fetchHandler.call(worker, request, env)
       if (!(response instanceof Response)) {
         throw new TypeError('Pages Function did not return a Response.')
       }
