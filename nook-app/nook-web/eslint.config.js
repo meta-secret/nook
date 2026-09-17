@@ -1,40 +1,40 @@
-import js from '@eslint/js'
-import noUnsanitized from 'eslint-plugin-no-unsanitized'
-import svelte from 'eslint-plugin-svelte'
-import globals from 'globals'
-import ts from 'typescript-eslint'
-import { typedApiRules } from './typed-api-rules.js'
-import { noEmptySuccessContractRule } from './no-empty-success-contract-rule.js'
+import js from "@eslint/js";
+import noUnsanitized from "eslint-plugin-no-unsanitized";
+import svelte from "eslint-plugin-svelte";
+import globals from "globals";
+import ts from "typescript-eslint";
+import { noEmptySuccessContractRule } from "./no-empty-success-contract-rule.js";
 import {
   concreteObjectTypeRules,
+  typedApiRules,
   typedApiSourceFiles,
   untrustedInputAdapterFiles,
   untrustedInputAdapterRules,
-} from './typed-api-rules.js'
-import { noRawObjectArgumentsRule } from './no-raw-object-arguments-rule.js'
+} from "./typed-api-rules.js";
+import { noRawObjectArgumentsRule } from "./no-raw-object-arguments-rule.js";
 
-export { noEmptySuccessContractRule, noRawObjectArgumentsRule }
+export { noEmptySuccessContractRule, noRawObjectArgumentsRule };
 
 const nookTypedApiPlugin = {
   rules: {
-    'no-raw-object-arguments': noRawObjectArgumentsRule,
-    'no-empty-success-contract': noEmptySuccessContractRule,
+    "no-raw-object-arguments": noRawObjectArgumentsRule,
+    "no-empty-success-contract": noEmptySuccessContractRule,
   },
-}
+};
 
 export default [
   {
     ignores: [
-      '**/dist/**',
-      '**/dist-prod/**',
-      '**/node_modules/**',
-      'nook-web-shared/src/vault-app/lib/nook-wasm*/**',
-      'nook-web-shared/src/extension/nook-companion-wasm/**',
+      "**/dist/**",
+      "**/dist-prod/**",
+      "**/node_modules/**",
+      "nook-web-shared/src/vault-app/lib/nook-wasm*/**",
+      "nook-web-shared/src/extension/nook-companion-wasm/**",
     ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
-  ...svelte.configs['flat/recommended'],
+  ...svelte.configs["flat/recommended"],
   noUnsanitized.configs.recommended,
   {
     languageOptions: {
@@ -42,88 +42,90 @@ export default [
     },
   },
   {
-    files: ['nook-web-extension/src/**/*.{ts,svelte}', 'src/**/*.{ts,svelte}'],
+    files: ["nook-web-extension/src/**/*.{ts,svelte}", "src/**/*.{ts,svelte}"],
     languageOptions: {
       globals: {
         ...globals.webextensions,
-        chrome: 'readonly',
+        chrome: "readonly",
       },
     },
   },
   {
     files: [
-      'eslint.config.js',
-      '**/eslint.config.js',
-      '**/svelte.config.js',
-      '*.js',
-      '**/scripts/**/*.{js,mjs,cjs}',
-      '**/e2e/**/*.{js,mjs,cjs}',
+      "eslint.config.js",
+      "**/eslint.config.js",
+      "**/svelte.config.js",
+      "*.js",
+      "**/scripts/**/*.{js,mjs,cjs}",
+      "**/e2e/**/*.{js,mjs,cjs}",
     ],
     languageOptions: {
       globals: globals.node,
     },
   },
   {
-    files: ['**/*.{ts,js,mjs,cjs}'],
+    files: ["**/*.{ts,js,mjs,cjs}"],
     rules: {
-      '@typescript-eslint/no-unsafe-assignment': 'error',
-      '@typescript-eslint/no-unsafe-argument': 'error',
-      '@typescript-eslint/no-unsafe-call': 'error',
-      '@typescript-eslint/no-unsafe-member-access': 'error',
-      '@typescript-eslint/no-unsafe-return': 'error',
-      '@typescript-eslint/no-unsafe-type-assertion': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'error',
-      '@typescript-eslint/await-thenable': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
-      '@typescript-eslint/switch-exhaustiveness-check': [
-        'error',
+      "no-restricted-syntax": typedApiRules["no-restricted-syntax"],
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-type-assertion": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
         { considerDefaultExhaustiveForUnions: false },
       ],
     },
     languageOptions: {
       parser: ts.parser,
       parserOptions: {
-        project: './tsconfig.eslint.json',
+        project: "./tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['**/*.svelte'],
+    files: ["**/*.svelte"],
     rules: {
-      '@typescript-eslint/no-unsafe-assignment': 'error',
-      '@typescript-eslint/no-unsafe-argument': 'error',
-      '@typescript-eslint/no-unsafe-call': 'error',
-      '@typescript-eslint/no-unsafe-member-access': 'error',
-      '@typescript-eslint/no-unsafe-return': 'error',
-      '@typescript-eslint/no-unsafe-type-assertion': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'error',
-      '@typescript-eslint/await-thenable': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
-      '@typescript-eslint/switch-exhaustiveness-check': [
-        'error',
+      "no-restricted-syntax": typedApiRules["no-restricted-syntax"],
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-type-assertion": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
         { considerDefaultExhaustiveForUnions: false },
       ],
     },
     languageOptions: {
       parserOptions: {
         parser: ts.parser,
-        project: './tsconfig.eslint.json',
-        extraFileExtensions: ['.svelte'],
+        project: "./tsconfig.eslint.json",
+        extraFileExtensions: [".svelte"],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['**/*.{ts,svelte}'],
+    files: ["**/*.{ts,svelte}"],
     rules: concreteObjectTypeRules,
   },
   {
     files: typedApiSourceFiles,
     plugins: {
-      'nook-typed-api': nookTypedApiPlugin,
+      "nook-typed-api": nookTypedApiPlugin,
     },
     rules: typedApiRules,
   },
@@ -132,9 +134,9 @@ export default [
     rules: untrustedInputAdapterRules,
   },
   {
-    files: ['**/tests/**', '**/e2e/**'],
+    files: ["**/tests/**", "**/e2e/**"],
     rules: {
-      'no-unsanitized/property': 'off',
+      "no-unsanitized/property": "off",
     },
   },
-]
+];

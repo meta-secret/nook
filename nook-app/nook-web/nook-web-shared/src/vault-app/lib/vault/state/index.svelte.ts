@@ -182,26 +182,6 @@ const syncKeys = [
   "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 
-type VaultStateSliceFields = VaultRuntimeState &
-  VaultUiState &
-  VaultProviderState &
-  VaultSessionState &
-  VaultSecretsState &
-  VaultSentinelState &
-  VaultSyncState;
-
-type VaultDelegatedValue = VaultStateSliceFields[keyof VaultStateSliceFields];
-type VaultDelegatedArguments = never[];
-type VaultDelegatedCallable = (
-  ...args: VaultDelegatedArguments
-) => VaultDelegatedValue;
-
-function isVaultDelegatedCallable<DelegatedStateValue>(
-  value: DelegatedStateValue,
-): value is DelegatedStateValue & VaultDelegatedCallable {
-  return typeof value === "function";
-}
-
 class VaultStateSlicesImplementation {
   declare browserLocale: VaultRuntimeState["browserLocale"];
   declare clientPolicy: VaultRuntimeState["clientPolicy"];
@@ -366,11 +346,11 @@ class VaultStateSlicesImplementation {
         enumerable: true,
         get: () => {
           const value = state[key];
-          if (!isVaultDelegatedCallable(value)) return value;
-          return (...args: VaultDelegatedArguments): VaultDelegatedValue =>
-            value.apply(state, args);
+          return typeof value === "function" ? value.bind(state) : value;
         },
-        set: (value: State[keyof State]) => Reflect.set(state, key, value),
+        set: (value: State[keyof State]) => {
+          Reflect.set(state, key, value);
+        },
       };
       Object.defineProperty(target, key, definePropertyArgs);
     }

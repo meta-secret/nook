@@ -1,4 +1,4 @@
-import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
+import { Schema } from 'effect'
 
 import type { WebsiteLoginAccountOption } from './login-fill-messages'
 
@@ -15,12 +15,8 @@ export class WebsiteLoginPickerOpenMessage {
   declare readonly payload: {
     origin: string
   }
-  static is(message: unknown): message is WebsiteLoginPickerOpenMessage {
-    return (
-      OriginRuntimeMessageSchema.is(message) &&
-      message.type ===
-        WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginPickerOpenMessageSchema)(message)
   }
 }
 
@@ -35,39 +31,8 @@ export class LoginPickerQueryResponse {
   declare readonly origin: string
   declare readonly accounts: WebsiteLoginAccountOption[]
 
-  static is(response: unknown): response is LoginPickerQueryResponse {
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      Array.isArray(response) ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('origin' in response) ||
-      typeof response.origin !== 'string' ||
-      response.origin.length === 0 ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      return false
-    }
-    return response.accounts.every((account: unknown) => {
-      if (!account || typeof account !== 'object' || Array.isArray(account))
-        return false
-      return (
-        'vaultStoreId' in account &&
-        typeof account.vaultStoreId === 'string' &&
-        account.vaultStoreId.length > 0 &&
-        'secretId' in account &&
-        typeof account.secretId === 'string' &&
-        account.secretId.length > 0 &&
-        'username' in account &&
-        typeof account.username === 'string' &&
-        'websiteHost' in account &&
-        typeof account.websiteHost === 'string' &&
-        'vaultName' in account &&
-        typeof account.vaultName === 'string'
-      )
-    })
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(loginPickerQueryResponseSchema)(response)
   }
 }
 
@@ -79,30 +44,8 @@ export class LoginPickerQueryMessage {
     requestId: string
     query: string
   }
-  static isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0
-  }
-
-  static is(message: unknown): message is LoginPickerQueryMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== LoginPickerQueryMessageType.NookLoginPickerQuery ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-    return (
-      'requestId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.requestId) &&
-      'query' in payload &&
-      typeof payload.query === 'string' &&
-      payload.query.length <= MAX_LOGIN_SEARCH_LENGTH
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(loginPickerQueryMessageSchema)(message)
   }
 }
 
@@ -119,28 +62,8 @@ export class LoginPickerSelectMessage {
     vaultStoreId: string
     secretId: string
   }
-  static is(message: unknown): message is LoginPickerSelectMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== LoginPickerSelectMessageType.NookLoginPickerSelect ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'requestId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.requestId) &&
-      'vaultStoreId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.vaultStoreId) &&
-      'secretId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.secretId)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(loginPickerSelectMessageSchema)(message)
   }
 }
 
@@ -149,20 +72,13 @@ export class LoginPickerSelectResponse {
   private constructor() {}
   declare readonly ok: true
 
-  static is(response: unknown): response is LoginPickerSelectResponse {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
-    )
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(loginPickerSelectResponseSchema)(response)
   }
 }
 
 export type LoginPickerRequestMessage =
-  | LoginPickerQueryMessage
-  | LoginPickerSelectMessage
+  LoginPickerQueryMessage | LoginPickerSelectMessage
 
 export enum LoginPickerRuntimeResponseKind {
   Query = 'query',
@@ -189,24 +105,8 @@ export class LoginPickerCancelMessage {
   declare readonly payload: {
     requestId: string
   }
-  static is(message: unknown): message is LoginPickerCancelMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== LoginPickerCancelMessageType.NookLoginPickerCancel ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'requestId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.requestId)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(loginPickerCancelMessageSchema)(message)
   }
 }
 
@@ -225,43 +125,8 @@ export class WebsiteLoginSelectedMessage {
       authorizationGeneration: string
     }
   }
-  static is(message: unknown): message is WebsiteLoginSelectedMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    if (
-      !('origin' in payload) ||
-      !LoginPickerQueryMessage.isNonEmptyString(payload.origin) ||
-      !('requestId' in payload) ||
-      !LoginPickerQueryMessage.isNonEmptyString(payload.requestId) ||
-      !('account' in payload) ||
-      !payload.account ||
-      typeof payload.account !== 'object'
-    ) {
-      return false
-    }
-    const { account } = payload
-
-    return (
-      'vaultStoreId' in account &&
-      LoginPickerQueryMessage.isNonEmptyString(account.vaultStoreId) &&
-      'secretId' in account &&
-      LoginPickerQueryMessage.isNonEmptyString(account.secretId) &&
-      'authorizationGeneration' in account &&
-      typeof account.authorizationGeneration === 'string' &&
-      account.authorizationGeneration.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginSelectedMessageSchema)(message)
   }
 }
 
@@ -277,15 +142,84 @@ export class WebsiteLoginCanceledMessage {
     origin: string
     requestId: string
   }
-  static is(message: unknown): message is WebsiteLoginCanceledMessage {
-    if (!OriginRuntimeMessageSchema.is(message)) return false
-    const { payload } = message
-
-    return (
-      message.type ===
-        WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled &&
-      'requestId' in payload &&
-      LoginPickerQueryMessage.isNonEmptyString(payload.requestId)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginCanceledMessageSchema)(message)
   }
 }
+
+const loginPickerNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+
+const loginPickerQueryResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  origin: loginPickerNonEmptyStringSchema,
+  accounts: Schema.mutable(
+    Schema.Array(
+      Schema.Struct({
+        vaultStoreId: loginPickerNonEmptyStringSchema,
+        secretId: loginPickerNonEmptyStringSchema,
+        username: Schema.String,
+        websiteHost: Schema.String,
+        websiteUrl: Schema.String,
+        vaultName: Schema.String,
+      }),
+    ),
+  ),
+}) satisfies Schema.Schema<LoginPickerQueryResponse>
+
+const loginPickerSelectResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+}) satisfies Schema.Schema<LoginPickerSelectResponse>
+
+const websiteLoginPickerOpenMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
+  ),
+  payload: Schema.Struct({ origin: loginPickerNonEmptyStringSchema }),
+}) satisfies Schema.Schema<WebsiteLoginPickerOpenMessage>
+
+const loginPickerQueryMessageSchema = Schema.Struct({
+  type: Schema.Literal(LoginPickerQueryMessageType.NookLoginPickerQuery),
+  payload: Schema.Struct({
+    requestId: loginPickerNonEmptyStringSchema,
+    query: Schema.String.pipe(Schema.maxLength(MAX_LOGIN_SEARCH_LENGTH)),
+  }),
+}) satisfies Schema.Schema<LoginPickerQueryMessage>
+
+const loginPickerSelectMessageSchema = Schema.Struct({
+  type: Schema.Literal(LoginPickerSelectMessageType.NookLoginPickerSelect),
+  payload: Schema.Struct({
+    requestId: loginPickerNonEmptyStringSchema,
+    vaultStoreId: loginPickerNonEmptyStringSchema,
+    secretId: loginPickerNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<LoginPickerSelectMessage>
+
+const loginPickerCancelMessageSchema = Schema.Struct({
+  type: Schema.Literal(LoginPickerCancelMessageType.NookLoginPickerCancel),
+  payload: Schema.Struct({ requestId: loginPickerNonEmptyStringSchema }),
+}) satisfies Schema.Schema<LoginPickerCancelMessage>
+
+const websiteLoginSelectedMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected,
+  ),
+  payload: Schema.Struct({
+    origin: loginPickerNonEmptyStringSchema,
+    requestId: loginPickerNonEmptyStringSchema,
+    account: Schema.Struct({
+      vaultStoreId: loginPickerNonEmptyStringSchema,
+      secretId: loginPickerNonEmptyStringSchema,
+      authorizationGeneration: loginPickerNonEmptyStringSchema,
+    }),
+  }),
+}) satisfies Schema.Schema<WebsiteLoginSelectedMessage>
+
+const websiteLoginCanceledMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+  ),
+  payload: Schema.Struct({
+    origin: loginPickerNonEmptyStringSchema,
+    requestId: loginPickerNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteLoginCanceledMessage>

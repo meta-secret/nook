@@ -7,7 +7,7 @@ import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
-import type { VaultProjectionConflictSnapshot } from "$lib/vault/state/sync.svelte";
+import type { ProjectionConflictRefreshSnapshot } from "$lib/vault/action-contexts";
 import {
   import_named_local_vault_blob,
   DeviceProtectionStatus,
@@ -74,10 +74,6 @@ type ProviderVaultImportOutcome =
       readonly storeId: string;
     };
 
-enum ImportedProviderVaultIdentityActivationOutcome {
-  Activated = "activated",
-}
-
 /** Owns browser orchestration for one sync resolution context. */
 export class SyncConflictActions {
   constructor(private readonly state: SyncActionsContext) {}
@@ -87,15 +83,17 @@ export class SyncConflictActions {
     importedStoreId,
   }: ImportedProviderVaultIdentityActivation): Promise<void> {
     const state = this.state;
+    let completedStoreId: string;
     try {
       const completed = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           await admittedManager.value.activate_local_identity(identityId);
-          return storageOk(
-            ImportedProviderVaultIdentityActivationOutcome.Activated,
-          );
+          return storageOk({
+            kind: ProviderVaultImportOutcomeKind.Imported,
+            storeId: importedStoreId,
+          });
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -104,6 +102,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
+      completedStoreId = completed.value.storeId;
     } catch {
       state.errorMsg = state.t(
         I18N_KEYS.AuthStorageProviderVaultIdentitySelectionFailed,
@@ -114,7 +113,7 @@ export class SyncConflictActions {
     state.deviceId = "";
     state.devicePublicKey = "";
     state.clearIdentityProviderSession();
-    state.selectLoginVault(importedStoreId);
+    state.selectLoginVault(completedStoreId);
     try {
       const protectionStatus = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -202,12 +201,15 @@ export class SyncConflictActions {
   }
 
   async refreshReplacementConflicts(): Promise<
-    Result<VaultProjectionConflictSnapshot, StorageOperationFailure>
+    Result<ProjectionConflictRefreshSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk(state.projectionConflictSnapshot);
+      return storageOk({
+        replacementConflictCount: 0,
+        securityConflictCount: 0,
+      });
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -233,7 +235,10 @@ export class SyncConflictActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.replaceProjectionConflicts(snapshot.value);
-    return storageOk(state.projectionConflictSnapshot);
+    return storageOk({
+      replacementConflictCount: snapshot.value.replacementConflicts.length,
+      securityConflictCount: snapshot.value.securityConflicts.length,
+    });
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
@@ -328,10 +333,7 @@ export class SyncConflictActions {
     }
   }
 
-  clearRemoteVaultRecovery(): Result<
-    RemoteVaultRecoveryState,
-    StorageOperationFailure
-  > {
+  clearRemoteVaultRecovery() {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);

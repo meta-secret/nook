@@ -421,7 +421,9 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
 
   private controlIsNativelyDisabledOrInert(control: HTMLElement): boolean {
     if (
-      (this.controlHasDisabledProperty(control) && control.disabled) ||
+      ((control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
+        control.disabled) ||
       this.isDisabledByAncestorFieldset(control)
     ) {
       return true;

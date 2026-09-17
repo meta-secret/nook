@@ -35,7 +35,7 @@ export interface ExtensionVaultGrant {
 
 type ImportVaultRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.ImportVault }
+  { type: typeof ExtensionSessionMessageType.ImportVault }
 >
 
 export type ImportExtensionVaultArgs = {
@@ -93,6 +93,10 @@ export type OpenPasskeyVaultRequest = {
   grant: ExtensionVaultGrant
 }
 
+export enum PasskeyVaultOpenOutcome {
+  Opened = 'opened',
+}
+
 export type CompanionDiscoveryEndpoint =
   | {
       kind: CompanionDiscoveryEndpointKind.Initial
@@ -122,6 +126,10 @@ export type PasskeyEventProviderFlushRequest = {
     'load_auth_providers_snapshot' | 'flush_event_outbox_for_provider'
   >
   vaultStoreId: string
+}
+
+export enum PasskeyEventProviderFlushOutcome {
+  Flushed = 'flushed',
 }
 
 export type ActivatedExtensionIdentityOperation<
@@ -312,7 +320,9 @@ export async function importExtensionVaultWithDependencies({
 export async function openPasskeyVault({
   activeManager,
   grant,
-}: OpenPasskeyVaultRequest): Promise<Result<void, SessionOperationFailure>> {
+}: OpenPasskeyVaultRequest): Promise<
+  Result<PasskeyVaultOpenOutcome, SessionOperationFailure>
+> {
   try {
     await activeManager.open_extension_passkey_vault_js(
       grant.vaultStoreId,
@@ -320,7 +330,7 @@ export async function openPasskeyVault({
       grant.devicePublicKey,
       grant.deviceSigningPublicKey,
     )
-    return ok()
+    return ok(PasskeyVaultOpenOutcome.Opened)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
@@ -385,7 +395,7 @@ export async function flushPasskeyEventToProviders({
   activeManager,
   vaultStoreId,
 }: PasskeyEventProviderFlushRequest): Promise<
-  Result<void, SessionOperationFailure>
+  Result<PasskeyEventProviderFlushOutcome, SessionOperationFailure>
 > {
   try {
     const snapshot = await activeManager.load_auth_providers_snapshot()
@@ -411,7 +421,7 @@ export async function flushPasskeyEventToProviders({
       return err(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
-    return ok()
+    return ok(PasskeyEventProviderFlushOutcome.Flushed)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }

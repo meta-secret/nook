@@ -1,4 +1,4 @@
-import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
+import { Schema } from 'effect'
 
 import type { WebsiteAuthenticatorOption } from './login-fill-messages'
 
@@ -15,13 +15,9 @@ export class WebsiteAuthenticatorPickerOpenMessage {
   declare readonly payload: {
     origin: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorPickerOpenMessage {
-    return (
-      OriginRuntimeMessageSchema.is(message) &&
-      message.type ===
-        WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorPickerOpenMessageSchema)(
+      message,
     )
   }
 }
@@ -37,39 +33,10 @@ export class AuthenticatorPickerQueryResponse {
   declare readonly origin: string
   declare readonly accounts: WebsiteAuthenticatorOption[]
 
-  static is(response: unknown): response is AuthenticatorPickerQueryResponse {
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      Array.isArray(response) ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('origin' in response) ||
-      typeof response.origin !== 'string' ||
-      response.origin.length === 0 ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      return false
-    }
-    return response.accounts.every((account: unknown) => {
-      if (!account || typeof account !== 'object' || Array.isArray(account))
-        return false
-      return (
-        'vaultStoreId' in account &&
-        typeof account.vaultStoreId === 'string' &&
-        account.vaultStoreId.length > 0 &&
-        'secretId' in account &&
-        typeof account.secretId === 'string' &&
-        account.secretId.length > 0 &&
-        'issuer' in account &&
-        typeof account.issuer === 'string' &&
-        'account' in account &&
-        typeof account.account === 'string' &&
-        'vaultName' in account &&
-        typeof account.vaultName === 'string'
-      )
-    })
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerQueryResponseSchema)(
+      response,
+    )
   }
 }
 
@@ -81,32 +48,8 @@ export class AuthenticatorPickerQueryMessage {
     requestId: string
     query: string
   }
-  static isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0
-  }
-
-  static is(message: unknown): message is AuthenticatorPickerQueryMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'requestId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) &&
-      'query' in payload &&
-      typeof payload.query === 'string' &&
-      payload.query.length <= MAX_AUTHENTICATOR_SEARCH_LENGTH
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerQueryMessageSchema)(message)
   }
 }
 
@@ -123,29 +66,8 @@ export class AuthenticatorPickerSelectMessage {
     vaultStoreId: string
     secretId: string
   }
-  static is(message: unknown): message is AuthenticatorPickerSelectMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'requestId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) &&
-      'vaultStoreId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.vaultStoreId) &&
-      'secretId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.secretId)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerSelectMessageSchema)(message)
   }
 }
 
@@ -154,20 +76,15 @@ export class AuthenticatorPickerSelectResponse {
   private constructor() {}
   declare readonly ok: true
 
-  static is(response: unknown): response is AuthenticatorPickerSelectResponse {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerSelectResponseSchema)(
+      response,
     )
   }
 }
 
 export type AuthenticatorPickerRequestMessage =
-  | AuthenticatorPickerQueryMessage
-  | AuthenticatorPickerSelectMessage
+  AuthenticatorPickerQueryMessage | AuthenticatorPickerSelectMessage
 
 export enum AuthenticatorPickerRuntimeResponseKind {
   Query = 'query',
@@ -194,25 +111,8 @@ export class AuthenticatorPickerCancelMessage {
   declare readonly payload: {
     requestId: string
   }
-  static is(message: unknown): message is AuthenticatorPickerCancelMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'requestId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerCancelMessageSchema)(message)
   }
 }
 
@@ -231,42 +131,9 @@ export class WebsiteAuthenticatorSelectedMessage {
       authorizationGeneration: string
     }
   }
-  static is(message: unknown): message is WebsiteAuthenticatorSelectedMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object'
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    if (
-      !('origin' in payload) ||
-      !AuthenticatorPickerQueryMessage.isNonEmptyString(payload.origin) ||
-      !('requestId' in payload) ||
-      !AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) ||
-      !('account' in payload) ||
-      !payload.account ||
-      typeof payload.account !== 'object'
-    ) {
-      return false
-    }
-    const { account } = payload
-
-    return (
-      'vaultStoreId' in account &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(account.vaultStoreId) &&
-      'secretId' in account &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(account.secretId) &&
-      'authorizationGeneration' in account &&
-      typeof account.authorizationGeneration === 'string' &&
-      account.authorizationGeneration.length > 0
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorSelectedMessageSchema)(
+      message,
     )
   }
 }
@@ -283,15 +150,97 @@ export class WebsiteAuthenticatorCanceledMessage {
     origin: string
     requestId: string
   }
-  static is(message: unknown): message is WebsiteAuthenticatorCanceledMessage {
-    if (!OriginRuntimeMessageSchema.is(message)) return false
-    const { payload } = message
-
-    return (
-      message.type ===
-        WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&
-      'requestId' in payload &&
-      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId)
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorCanceledMessageSchema)(
+      message,
     )
   }
 }
+
+const authenticatorPickerNonEmptyStringSchema = Schema.String.pipe(
+  Schema.minLength(1),
+)
+
+const authenticatorPickerQueryResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  origin: authenticatorPickerNonEmptyStringSchema,
+  accounts: Schema.mutable(
+    Schema.Array(
+      Schema.Struct({
+        vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+        secretId: authenticatorPickerNonEmptyStringSchema,
+        issuer: Schema.String,
+        account: Schema.String,
+        vaultName: Schema.String,
+      }),
+    ),
+  ),
+}) satisfies Schema.Schema<AuthenticatorPickerQueryResponse>
+
+const authenticatorPickerSelectResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+}) satisfies Schema.Schema<AuthenticatorPickerSelectResponse>
+
+const websiteAuthenticatorPickerOpenMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen,
+  ),
+  payload: Schema.Struct({ origin: authenticatorPickerNonEmptyStringSchema }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorPickerOpenMessage>
+
+const authenticatorPickerQueryMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+  ),
+  payload: Schema.Struct({
+    requestId: authenticatorPickerNonEmptyStringSchema,
+    query: Schema.String.pipe(
+      Schema.maxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH),
+    ),
+  }),
+}) satisfies Schema.Schema<AuthenticatorPickerQueryMessage>
+
+const authenticatorPickerSelectMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
+  ),
+  payload: Schema.Struct({
+    requestId: authenticatorPickerNonEmptyStringSchema,
+    vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+    secretId: authenticatorPickerNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<AuthenticatorPickerSelectMessage>
+
+const authenticatorPickerCancelMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel,
+  ),
+  payload: Schema.Struct({
+    requestId: authenticatorPickerNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<AuthenticatorPickerCancelMessage>
+
+const websiteAuthenticatorSelectedMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
+  ),
+  payload: Schema.Struct({
+    origin: authenticatorPickerNonEmptyStringSchema,
+    requestId: authenticatorPickerNonEmptyStringSchema,
+    account: Schema.Struct({
+      vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+      secretId: authenticatorPickerNonEmptyStringSchema,
+      authorizationGeneration: authenticatorPickerNonEmptyStringSchema,
+    }),
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorSelectedMessage>
+
+const websiteAuthenticatorCanceledMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+  ),
+  payload: Schema.Struct({
+    origin: authenticatorPickerNonEmptyStringSchema,
+    requestId: authenticatorPickerNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorCanceledMessage>

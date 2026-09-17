@@ -1,3 +1,5 @@
+import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -10,6 +12,26 @@ type ExtensionMessageRequest = {
   readonly message: RuntimeMessage;
   readonly responseWait: ExtensionMessageResponseWait;
 };
+
+type ChromeExtensionRuntimeResponse =
+  | CompanionIdentityDiscoveryTransportResponse
+  | CompanionIdentityHandoffTransportResponse
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason?: string;
+      readonly error?: string;
+    }
+  | {
+      readonly ok: true;
+      readonly requestId: string;
+      readonly vaultStoreId: string;
+    }
+  | {
+      readonly ok: true;
+      readonly envelope: string;
+      readonly nextNonce: string;
+    };
 
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
@@ -24,44 +46,28 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ExtensionPairingRejectionResponse =
-  | { readonly ok: false }
-  | { readonly ok: false; readonly reason: string }
-  | { readonly ok: false; readonly error: string };
+type PendingExtensionResponseRequest = {
+  readonly browser: typeof globalThis;
+  readonly wait: ExtensionMessageResponseWait;
+  readonly resolve: (delivery: ExtensionMessageDelivery) => void;
+};
 
-type ExtensionPairedVaultUnlockResponse =
-  | {
-      readonly ok: true;
-      readonly requestId: string;
-      readonly vaultStoreId: string;
-    }
-  | {
-      readonly ok: false;
-      readonly requestId: string;
-      readonly vaultStoreId: string;
-      readonly reason: string;
-    };
-
-type ExtensionMessageResponse =
-  | { readonly ok: true }
-  | ExtensionPairingRejectionResponse
-  | ExtensionPairedVaultUnlockResponse
-  | CompanionIdentityDiscoveryTransportResponse
-  | CompanionIdentityHandoffTransportResponse;
+type ChromeRuntimeResponseCallback = (
+  response: ChromeExtensionRuntimeResponse | undefined,
+) => void;
 
 type ChromeRuntimeHost = {
-  sendMessage: (
+  readonly lastError: { readonly message?: string } | undefined;
+  readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
-    callback: (response: unknown) => void,
+    callback: ChromeRuntimeResponseCallback,
   ) => void;
 };
 
-type ChromeRuntimeResponseCallback = Parameters<
-  ChromeRuntimeHost["sendMessage"]
->[2];
-
-type ExtensionBrowserHost = typeof globalThis;
+type ExtensionBrowserHost = typeof globalThis & {
+  readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
+};
 
 enum ChromeRuntimeAvailabilityKind {
   Unavailable = "unavailable",
@@ -98,20 +104,17 @@ import {
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
-  type CompanionIdentityDiscoveryTransportResponse,
-  type CompanionIdentityHandoffTransportResponse,
   type OpenCompanionLauncherMessage,
   type RuntimeMessage,
+  type CompanionIdentityDiscoveryTransportResponse,
+  type CompanionIdentityHandoffTransportResponse,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
   type ExtensionConnectRequestFor,
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
-import {
-  extensionConnectScopeCatalog,
-  type ExtensionConnectScope,
-} from "$web-shared/extension/extension-connect-scope";
+import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -120,8 +123,7 @@ import {
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
-export { extensionConnectScopeCatalog, ExtensionIdentityRequestSource };
-export type { ExtensionConnectScope };
+export { ExtensionConnectScope, ExtensionIdentityRequestSource };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -202,24 +204,45 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | {
       kind: ExtensionMessageDeliveryKind.Received;
-      response: ExtensionMessageResponse;
+      response: ChromeExtensionRuntimeResponse;
     };
 
-function isAcceptedIdentityHandoffResponse(value: unknown): value is {
-  readonly ok: true;
-  readonly envelope: string;
-  readonly nextNonce: string;
-} {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return (
-    "ok" in value &&
-    value.ok === true &&
-    "envelope" in value &&
-    typeof value.envelope === "string" &&
-    "nextNonce" in value &&
-    typeof value.nextNonce === "string" &&
-    value.nextNonce.length > 0
-  );
+export const AcceptedIdentityHandoffResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  envelope: Schema.String,
+  nextNonce: Schema.String.pipe(Schema.minLength(1)),
+});
+
+export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
+  typeof AcceptedIdentityHandoffResponseSchema
+>;
+
+export enum IdentityHandoffResponseDecodeFailureKind {
+  InvalidResponse = "invalid-response",
+}
+
+export class IdentityHandoffResponseDecodeFailure {
+  readonly _tag = "IdentityHandoffResponseDecodeFailure";
+  readonly kind = IdentityHandoffResponseDecodeFailureKind.InvalidResponse;
+
+  constructor(readonly cause: ParseResult.ParseError) {}
+}
+
+export class IdentityHandoffResponseDecoder {
+  static decode(
+    value: unknown,
+  ): Effect.Effect<
+    AcceptedIdentityHandoffResponse,
+    IdentityHandoffResponseDecodeFailure
+  > {
+    return Schema.decodeUnknown(AcceptedIdentityHandoffResponseSchema)(
+      value,
+    ).pipe(
+      Effect.mapError(
+        (cause) => new IdentityHandoffResponseDecodeFailure(cause),
+      ),
+    );
+  }
 }
 
 enum ExtensionResponsePhase {
@@ -239,13 +262,7 @@ class PendingExtensionResponse {
     kind: ExtensionResponsePhase.Pending,
     timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
   };
-  constructor(
-    private readonly request: {
-      browser: typeof globalThis;
-      wait: ExtensionMessageResponseWait;
-      resolve: (delivery: ExtensionMessageDelivery) => void;
-    },
-  ) {
+  constructor(private readonly request: PendingExtensionResponseRequest) {
     if (request.wait.kind === ExtensionMessageResponseWaitKind.Bounded) {
       this.state = {
         kind: ExtensionResponsePhase.Pending,
@@ -268,10 +285,17 @@ class PendingExtensionResponse {
     this.request.resolve(delivery);
   }
   unavailable(): void {
-    this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
+    const delivery: ExtensionMessageDelivery = {
+      kind: ExtensionMessageDeliveryKind.Unavailable,
+    };
+    this.settle(delivery);
   }
-  receive(response: ExtensionMessageResponse): void {
-    this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
+  receive(response: ChromeExtensionRuntimeResponse): void {
+    const delivery: ExtensionMessageDelivery = {
+      kind: ExtensionMessageDeliveryKind.Received,
+      response,
+    };
+    this.settle(delivery);
   }
 }
 
@@ -279,47 +303,7 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
-    return (
-      typeof value === "object" &&
-      !!value &&
-      "sendMessage" in value &&
-      typeof value.sendMessage === "function"
-    );
-  }
-
-  private isExtensionMessageResponse(
-    response: unknown,
-  ): response is ExtensionMessageResponse {
-    if (
-      !response ||
-      typeof response !== "object" ||
-      Array.isArray(response) ||
-      !("ok" in response) ||
-      typeof response.ok !== "boolean"
-    ) {
-      return false;
-    }
-    if (response.ok) {
-      // Rust admission validates the payloads before application code consumes them.
-      if ("status" in response || "response" in response) return true;
-      if ("requestId" in response || "vaultStoreId" in response) {
-        return (
-          "requestId" in response &&
-          typeof response.requestId === "string" &&
-          "vaultStoreId" in response &&
-          typeof response.vaultStoreId === "string"
-        );
-      }
-      return true;
-    }
-    if ("reason" in response) return typeof response.reason === "string";
-    if ("error" in response) return typeof response.error === "string";
-    return true;
-  }
-
   private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-    if (!("lastError" in runtime)) return false;
     const error = runtime.lastError;
     return (
       typeof error === "object" &&
@@ -331,23 +315,17 @@ class ExtensionConnectionBrowser {
   }
 
   private chromeRuntime(): ChromeRuntimeAvailability {
-    if (!("chrome" in this.browser)) {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
     const chromeHost = this.browser.chrome;
-    if (
-      typeof chromeHost !== "object" ||
-      !chromeHost ||
-      !("runtime" in chromeHost)
-    ) {
+    if (!chromeHost?.runtime) {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
     }
-    return this.isChromeRuntimeHost(chromeHost.runtime)
-      ? {
-          kind: ChromeRuntimeAvailabilityKind.Available,
-          runtime: chromeHost.runtime,
-        }
-      : { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    if (typeof chromeHost.runtime.sendMessage !== "function") {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    return {
+      kind: ChromeRuntimeAvailabilityKind.Available,
+      runtime: chromeHost.runtime,
+    };
   }
 
   isExtensionConnectPath(pathname: string): boolean {
@@ -363,9 +341,14 @@ class ExtensionConnectionBrowser {
       .map((scope) => scope.trim())
       .filter(Boolean);
 
-    return scopes.filter((scope) =>
-      extensionConnectScopeCatalog.isExtensionConnectScopeValue(scope),
-    );
+    const admittedScopes: ExtensionConnectScope[] = [];
+    for (const scope of scopes) {
+      const admitted = Effect.runSync(
+        Effect.either(ExtensionConnectScope.decode(scope)),
+      );
+      if (admitted._tag === "Right") admittedScopes.push(admitted.right);
+    }
+    return admittedScopes;
   }
 
   extensionConnectRequestFromLocation(
@@ -454,39 +437,28 @@ class ExtensionConnectionBrowser {
         return;
       }
       const { runtime } = runtimeAvailability;
-      const sendMessage = runtime.sendMessage.bind(runtime);
-      const pending = new PendingExtensionResponse({
+      const pendingRequest: PendingExtensionResponseRequest = {
         browser: this.browser,
         wait: responseWait,
         resolve,
-      });
-      const receiveExtensionResponse: ChromeRuntimeResponseCallback = (
-        response,
-      ): void => {
+      };
+      const pending = new PendingExtensionResponse(pendingRequest);
+      runtime.sendMessage(extensionId, message, (response) => {
         if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
         }
-        if (
-          !response ||
-          typeof response !== "object" ||
-          Array.isArray(response)
-        ) {
-          pending.unavailable();
-          return;
-        }
-        if (!this.isExtensionMessageResponse(response)) {
+        if (response === undefined) {
           pending.unavailable();
           return;
         }
         pending.receive(response);
-      };
-      sendMessage(extensionId, message, receiveExtensionResponse);
+      });
     });
   }
 
   private pairingDeliveryFromResponse(
-    response: ExtensionMessageResponse,
+    response: unknown,
   ): ExtensionPairingDelivery {
     if (
       response &&
@@ -790,13 +762,15 @@ class ExtensionConnectionBrowser {
             );
             return;
           }
-          if (isAcceptedIdentityHandoffResponse(response)) {
-            resolve(
-              ok({
-                envelope: response.envelope,
-                nextNonce: response.nextNonce,
-              }),
-            );
+          const decodedResponse = Effect.runSync(
+            Effect.either(IdentityHandoffResponseDecoder.decode(response)),
+          );
+          if (decodedResponse._tag === "Right") {
+            const identityEnvelope = {
+              envelope: decodedResponse.right.envelope,
+              nextNonce: decodedResponse.right.nextNonce,
+            };
+            resolve(ok(identityEnvelope));
             return;
           }
           resolve(
@@ -848,14 +822,15 @@ class ExtensionConnectionBrowser {
           type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload,
         };
-        const delivery = await this.sendExtensionMessage({
+        const sendArgs: ExtensionMessageRequest = {
           extensionId: request.extensionRuntimeId,
           message,
           responseWait: {
             kind: ExtensionMessageResponseWaitKind.Bounded,
             timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
           },
-        });
+        };
+        const delivery = await this.sendExtensionMessage(sendArgs);
         if (
           delivery.kind !== ExtensionMessageDeliveryKind.Received ||
           !delivery.response ||
@@ -894,6 +869,7 @@ class ExtensionConnectionBrowser {
           try {
             handoff.cancel(manager);
           } catch {
+            // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
             return err(
               new VaultStorageFailure(
                 VaultStorageFailureKind.IdentityHandoffCleanupFailed,
@@ -928,10 +904,13 @@ class ExtensionConnectionBrowser {
           expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
         },
       };
-      const delivered = await this.requestIdentityEnvelope({
+      const identityEnvelopeRequest: IdentityEnvelopeRequest = {
         request,
         message,
-      });
+      };
+      const delivered = await this.requestIdentityEnvelope(
+        identityEnvelopeRequest,
+      );
       if (delivered.isErr()) return err(delivered.error);
       let context: ReturnType<
         typeof NookExtensionIdentityHandoffContext.vault_creation
@@ -965,6 +944,7 @@ class ExtensionConnectionBrowser {
         try {
           pending.cancel(manager);
         } catch {
+          // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
           return err(
             new VaultStorageFailure(
               VaultStorageFailureKind.IdentityHandoffCleanupFailed,

@@ -14,32 +14,24 @@
 
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
-  { file: 'nook-web-extension/src/offscreen/session-vault-operations.ts', gitBlobSha1: 'daa0877ceeb87be78b81f106e2029624216f6c12' },
-  { file: 'nook-web-shared/src/extension/event-log-bridge.ts', gitBlobSha1: '9c0ba97f5d2c67831846d56a250ec3daba854aac' },
-  { file: 'nook-web-shared/src/vault-app/lib/app/browser-lifecycle.ts', gitBlobSha1: 'd4ecd09e578f84ca12eb11c77eac0c3520722938' },
-  { file: 'nook-web-shared/src/vault-app/lib/app/workspace-route.ts', gitBlobSha1: 'facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/google/oauth.ts', gitBlobSha1: '11638f312bd90609f104169ad98e29a3ce216fd9' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/passkey-device-protection.ts', gitBlobSha1: 'dd2547f07c56eaebe7ec213fb0a14c6e754f54fb' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/providers.ts', gitBlobSha1: '2bfcdb4b46a8457574f48cc3398f51f3e6c42fbf' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte', gitBlobSha1: 'cc0207c2eff1a0dc1c9fb3a8daa631855716babb' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/login/LoginCreateVaultChooser.svelte', gitBlobSha1: '655715853b43247717290c3804d5bd5b0e06ad25' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/login/SentinelGenesisJoinFlow.svelte', gitBlobSha1: '082c434976e4fe17e45183c4deb34270668aa53f' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/login/SentinelTerminalDashboard.svelte', gitBlobSha1: 'c99db64363b0b7ce415af6fb21bb39fea8490296' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/login/login-create-vault-chooser-contract.ts', gitBlobSha1: 'faecca9bd99aad4979e60f6b0a25f15331d6857e' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/settings/VaultDevicesCard.svelte', gitBlobSha1: '78efb06975cf7e1af4fde2f1ee4fc324ad4acd4a' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/settings/VaultSettingsAccordion.svelte', gitBlobSha1: 'cdabd104dc2de5ccccc3967d3712221f437fe077' },
-  { file: 'nook-web-shared/src/vault-app/lib/components/login/sentinel-card-stack-contract.ts', gitBlobSha1: '48f3f75a34f131097d3e613e825c005745ee7588' },
-  { file: 'nook-web-shared/src/vault-app/lib/runtime/browser-data.ts', gitBlobSha1: '3bdba3fca023aa57610bab43fe885b7afeb1975e' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/device-protection.svelte.ts', gitBlobSha1: 'c49b08a3165a1682f105c089abe1ec083f9b3bf0' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts', gitBlobSha1: 'bfb49a4e7a2a49629ab8a956baabb779da5c717e' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/login-unlock-capabilities.ts', gitBlobSha1: '23c173550f97b0017608511f7c806959414c890b' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts', gitBlobSha1: '8ebb17c2f2be5123da7e1f86f38cae3199952d79' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/provider-sync.svelte.ts', gitBlobSha1: '80609c2910e213a47683a2244f789b030607ad3d' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/multi-device.ts', gitBlobSha1: 'b45565a0721c49d24fff4cab4331f3e0ff85d657' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/password-enrollment-issue.ts', gitBlobSha1: 'b1a60427ce71c6c46092819358cf521d7f4c3005' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/session.ts', gitBlobSha1: 'faa5b93548ff491e1e06063bd519bf47d7141e8d' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/sentinel-genesis.ts', gitBlobSha1: '144c4e48e228cdb25ddb9a1d2ed1f7bed4f1662a' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/sentinel-unlock.ts', gitBlobSha1: 'fc0110544d24b36ceb7d87128ad46333a6810a34' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/ui.ts', gitBlobSha1: '6a8ba87e12276bdc94128a11d0d7a188b882cc99' },
-  { file: 'nook-web-shared/src/vault-app/main.ts', gitBlobSha1: '6e0d9a3acb0a9d6e7b904d44c086261c0d93884d' },
-]
+  {
+    file: "nook-web-shared/src/extension/event-log-bridge.ts",
+    gitBlobSha1: "9c0ba97f5d2c67831846d56a250ec3daba854aac",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/app/workspace-route.ts",
+    gitBlobSha1: "facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts",
+    gitBlobSha1: "bfb49a4e7a2a49629ab8a956baabb779da5c717e",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts",
+    gitBlobSha1: "8ebb17c2f2be5123da7e1f86f38cae3199952d79",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/session.ts",
+    gitBlobSha1: "faa5b93548ff491e1e06063bd519bf47d7141e8d",
+  },
+];

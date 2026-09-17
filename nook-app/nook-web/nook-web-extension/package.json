@@ -17,6 +17,7 @@
     "test:e2e": "bash scripts/test-e2e.sh"
   },
   "dependencies": {
+    "effect": "3.22.2",
     "fflate": "0.8.3",
     "neverthrow": "8.2.0"
   }

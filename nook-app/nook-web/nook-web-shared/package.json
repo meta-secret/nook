@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "neverthrow": "8.2.0",
-    "bits-ui": "2.18.1"
+    "bits-ui": "2.18.1",
+    "effect": "3.22.2",
+    "neverthrow": "8.2.0"
   }
 }

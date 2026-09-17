@@ -1,4 +1,9 @@
-import { expect, type Page, type TestInfo } from '@playwright/test'
+import {
+  expect,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
 import { ProviderSyncFreshness } from '$app-wasm'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
@@ -390,6 +395,16 @@ export function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
   )
 }
 
+export async function tryJoinerQuickConnect(
+  button: Pick<Locator, 'isVisible' | 'click'>,
+  waitForIdle: () => Promise<void>,
+): Promise<boolean> {
+  if (!(await button.isVisible())) return false
+  await button.click()
+  await waitForIdle()
+  return true
+}
+
 export async function tryGithubVaultConnect(
   page: Page,
   target: JoinerVaultReadyTarget,
@@ -398,11 +413,12 @@ export async function tryGithubVaultConnect(
   await dismissJoinEnrollmentDialog(page)
 
   const quickConnect = page.getByTestId('connect-provider-btn').first()
-  if (await quickConnect.isVisible()) {
-    await quickConnect.click()
-    await waitForVaultOperationsIdle(page)
+  if (
+    await tryJoinerQuickConnect(quickConnect, () =>
+      waitForVaultOperationsIdle(page),
+    )
+  )
     return
-  }
   if (await page.getByTestId('login-provider-setup').isVisible()) {
     await page.getByTestId('provider-option-github').click()
     const repoInput = page.getByTestId('github-repo-input')

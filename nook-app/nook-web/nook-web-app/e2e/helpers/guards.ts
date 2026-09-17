@@ -1,21 +1,17 @@
 /** Parse untrusted JSON without allowing its `any` result into the test code. */
 export function parseJson(value: string): unknown {
-  return JSON.parse(value) as unknown
+  const parsed: unknown = JSON.parse(value)
+  return parsed
 }
 
-export function requireValue<T>(value: T, label: string): NonNullable<T> {
-  if (!value) {
+export function requireValue<T>(
+  value: T | null | undefined,
+  label: string,
+): NonNullable<T> {
+  if (value === null || value === undefined) {
     throw new Error(`${label} was not available.`)
   }
-  return value as NonNullable<T>
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    Object(value) === value &&
-    !Array.isArray(value)
-  )
+  return value
 }
 
 export function requireStringArray(value: unknown, label: string): string[] {
@@ -36,10 +32,10 @@ export function requireRecord(
   value: unknown,
   label: string,
 ): Record<string, unknown> {
-  if (!isRecord(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} was not an object.`)
   }
-  return { ...value }
+  return Object.fromEntries(Object.entries(value))
 }
 
 export function readStringProperty(

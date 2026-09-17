@@ -1,7 +1,6 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   SecretEditRejection,
-  SecretMutationOutcome,
   type SecretOperationResult,
 } from "./secret-operation-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
@@ -23,14 +22,14 @@ import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
 import { VaultEditDecision } from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
-import type { VaultSessionState } from "$lib/vault/state/session.svelte";
+import type {
+  PasswordEntriesRefreshSnapshot,
+  SecretPageRefreshSnapshot,
+} from "$lib/vault/action-contexts";
+
 export { VaultConnectionActions } from "$lib/vault/connection";
 
 const log = browserLogRuntime.createLogger("connect");
-
-export enum SecretPageLoadOutcome {
-  PageApplied = "page-applied",
-}
 
 interface VaultSecretAllocation {
   free(): void;
@@ -104,6 +103,13 @@ interface SecretReplacement {
   readonly data: string;
 }
 
+export enum SecretMutationOutcome {
+  Prepared = "prepared",
+  Added = "added",
+  Deleted = "deleted",
+  Replaced = "replaced",
+}
+
 interface SecretPageRequest {
   readonly query: string;
   readonly requestedOffset: number;
@@ -172,7 +178,7 @@ export class VaultSecretActions {
   }
 
   private async prepareSecretMutation(): Promise<
-    SecretOperationResult<SecretMutationOutcome>
+    SecretOperationResult<SecretMutationOutcome.Prepared>
   > {
     const state = this.state;
     const manager = state.admitManager();
@@ -192,7 +198,9 @@ export class VaultSecretActions {
     id,
     type,
     data,
-  }: SecretCreation): Promise<SecretOperationResult<SecretMutationOutcome>> {
+  }: SecretCreation): Promise<
+    SecretOperationResult<SecretMutationOutcome.Added>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -444,7 +452,9 @@ export class VaultSecretActions {
 
   async handleDeleteSecret({
     id,
-  }: SecretDeletion): Promise<SecretOperationResult<SecretMutationOutcome>> {
+  }: SecretDeletion): Promise<
+    SecretOperationResult<SecretMutationOutcome.Deleted>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -485,7 +495,9 @@ export class VaultSecretActions {
     oldId,
     type,
     data,
-  }: SecretReplacement): Promise<SecretOperationResult<SecretMutationOutcome>> {
+  }: SecretReplacement): Promise<
+    SecretOperationResult<SecretMutationOutcome.Replaced>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -522,14 +534,14 @@ export class VaultSecretActions {
 
   async refreshPasswordEntriesList(): Promise<
     Result<
-      VaultSessionState["passwordEntries"],
+      PasswordEntriesRefreshSnapshot,
       OAuthFailure | StorageOperationFailure
     >
   > {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return storageOk(state.passwordEntries);
+      return storageOk({ entries: state.passwordEntries });
     }
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
@@ -561,11 +573,11 @@ export class VaultSecretActions {
       for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
     }
-    return storageOk(state.passwordEntries);
+    return storageOk({ entries: entries.value });
   }
 
   async refreshSecretsFromSession(): Promise<
-    Result<SecretPageLoadOutcome, StorageOperationFailure>
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager) {
@@ -593,7 +605,7 @@ export class VaultSecretActions {
     query,
     requestedOffset,
   }: SecretPageRequest): Promise<
-    Result<SecretPageLoadOutcome, StorageOperationFailure>
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager)
@@ -694,7 +706,12 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk(SecretPageLoadOutcome.PageApplied);
+    return storageOk({
+      displayedSecretCount: state.secrets.length,
+      totalSecretCount: state.secretTotal,
+      pageOffset: state.secretPageOffset,
+      query: state.secretQuery,
+    });
   }
 
   applyConnectedSecretPage({

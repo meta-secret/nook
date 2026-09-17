@@ -1,4 +1,5 @@
 import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
+import { Effect, Schema } from "effect";
 import {
   InstalledExtensionRuntimeKind,
   extensionConnectionBrowser,
@@ -71,30 +72,73 @@ type ExtensionMetadataParse =
       metadata: ExtensionDeploymentMetadata;
     };
 
-type ExtensionMetadataTransport = {
-  readonly channel: string;
-  readonly version: string;
-  readonly extension_id: string;
-  readonly install_method: string;
-  readonly install_url: string;
-};
+export enum ExtensionDeploymentMetadataDecodeFailureKind {
+  Invalid = "invalid-extension-deployment-metadata",
+}
 
-function isExtensionMetadataTransport(
-  value: unknown,
-): value is ExtensionMetadataTransport {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return (
-    "channel" in value &&
-    typeof value.channel === "string" &&
-    "version" in value &&
-    typeof value.version === "string" &&
-    "extension_id" in value &&
-    typeof value.extension_id === "string" &&
-    "install_method" in value &&
-    typeof value.install_method === "string" &&
-    "install_url" in value &&
-    typeof value.install_url === "string"
-  );
+export class ExtensionDeploymentMetadataDecodeFailure extends Error {
+  readonly _tag = "ExtensionDeploymentMetadataDecodeFailure";
+
+  constructor(
+    readonly kind: ExtensionDeploymentMetadataDecodeFailureKind,
+    override readonly cause: unknown,
+  ) {
+    super(kind);
+  }
+}
+
+const ExtensionDeploymentMetadataSchema = Schema.Struct({
+  channel: Schema.String.pipe(Schema.minLength(1)),
+  version: Schema.String.pipe(Schema.minLength(1)),
+  extension_id: Schema.String.pipe(Schema.minLength(1)),
+  install_method: Schema.Literal(
+    ExtensionInstallMethod.ChromeWebStore,
+    ExtensionInstallMethod.ManualZip,
+  ),
+  install_url: Schema.String.pipe(Schema.minLength(1)),
+});
+
+export class ExtensionDeploymentMetadataDecoder {
+  private constructor() {}
+
+  static decode(
+    value: unknown,
+  ): Effect.Effect<
+    ExtensionDeploymentMetadata,
+    ExtensionDeploymentMetadataDecodeFailure
+  > {
+    return Schema.decodeUnknown(ExtensionDeploymentMetadataSchema)(value).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ExtensionDeploymentMetadataDecodeFailure(
+            ExtensionDeploymentMetadataDecodeFailureKind.Invalid,
+            cause,
+          ),
+      ),
+      Effect.flatMap((metadata) => {
+        const installUrl = metadata.install_url.trim();
+        return Effect.try({
+          try: () => new URL(installUrl),
+          catch: (cause) =>
+            new ExtensionDeploymentMetadataDecodeFailure(
+              ExtensionDeploymentMetadataDecodeFailureKind.Invalid,
+              cause,
+            ),
+        }).pipe(
+          Effect.flatMap((parsedUrl) =>
+            parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:"
+              ? Effect.succeed({ ...metadata, install_url: installUrl })
+              : Effect.fail(
+                  new ExtensionDeploymentMetadataDecodeFailure(
+                    ExtensionDeploymentMetadataDecodeFailureKind.Invalid,
+                    parsedUrl.protocol,
+                  ),
+                ),
+          ),
+        );
+      }),
+    );
+  }
 }
 
 enum ExtensionMetadataFetchKind {
@@ -165,51 +209,16 @@ class ExtensionInstallationBrowser {
     );
   }
 
-  private isExtensionInstallMethod(
-    value: unknown,
-  ): value is ExtensionInstallMethod {
-    return (
-      value === ExtensionInstallMethod.ChromeWebStore ||
-      value === ExtensionInstallMethod.ManualZip
-    );
-  }
-
   private parseExtensionMetadata(value: unknown): ExtensionMetadataParse {
-    if (!isExtensionMetadataTransport(value)) {
-      return { kind: ExtensionMetadataParseKind.Invalid };
-    }
-    const channel = typeof value.channel === "string" ? value.channel : "";
-    const version = typeof value.version === "string" ? value.version : "";
-    const extensionId =
-      typeof value.extension_id === "string" ? value.extension_id : "";
-    const installUrl =
-      typeof value.install_url === "string" ? value.install_url.trim() : "";
-    if (
-      !channel ||
-      !version ||
-      !extensionId ||
-      !installUrl ||
-      !this.isExtensionInstallMethod(value.install_method)
-    ) {
-      return { kind: ExtensionMetadataParseKind.Invalid };
-    }
-    try {
-      const parsed = new URL(installUrl);
-      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-        return { kind: ExtensionMetadataParseKind.Invalid };
-      }
-    } catch {
+    const decoded = Effect.runSync(
+      Effect.either(ExtensionDeploymentMetadataDecoder.decode(value)),
+    );
+    if (decoded._tag === "Left") {
       return { kind: ExtensionMetadataParseKind.Invalid };
     }
     return {
       kind: ExtensionMetadataParseKind.Valid,
-      metadata: {
-        channel,
-        version,
-        extension_id: extensionId,
-        install_method: value.install_method,
-        install_url: installUrl,
-      },
+      metadata: decoded.right,
     };
   }
 

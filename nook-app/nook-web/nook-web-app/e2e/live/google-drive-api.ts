@@ -230,9 +230,10 @@ export async function getFileMetadata(
     name: typeof meta.name === 'string' ? meta.name.trim() || fileId : fileId,
   }
   if (Array.isArray(meta.parents)) {
-    const parents = meta.parents.filter(
-      (parent): parent is string => typeof parent === 'string',
-    )
+    const parents: string[] = []
+    for (const parent of meta.parents) {
+      if (typeof parent === 'string') parents.push(parent)
+    }
     metadata.parents = parents
   }
   return metadata

@@ -14,9 +14,12 @@ export function readRegisteredE2eGithubRepos(): string[] {
       return []
     }
     const parsed: unknown = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'))
-    return Array.isArray(parsed)
-      ? parsed.filter((entry): entry is string => typeof entry === 'string')
-      : []
+    if (!Array.isArray(parsed)) return []
+    const repositoryNames: string[] = []
+    for (const entry of parsed) {
+      if (typeof entry === 'string') repositoryNames.push(entry)
+    }
+    return repositoryNames
   } catch {
     return []
   }

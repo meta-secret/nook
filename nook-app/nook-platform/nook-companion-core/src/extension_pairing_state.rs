@@ -438,10 +438,15 @@ impl StoredExtensionPairingGrant {
     }
 
     pub fn validate_json(value: &str) -> Result<(), ExtensionPairingStateError> {
-        let grant = serde_json::from_str::<StoredExtensionPairingGrant>(value)
+        Self::decode_json(value).map(|_| ())
+    }
+
+    pub fn decode_json(value: &str) -> Result<Self, ExtensionPairingStateError> {
+        let grant = serde_json::from_str::<Self>(value)
             .map_err(|_| ExtensionPairingStateError::InvalidGrant)?;
         let key = StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id);
-        ExtensionPairingRecord::Grant(grant).validate_for_key(&key)
+        ExtensionPairingRecord::Grant(grant.clone()).validate_for_key(&key)?;
+        Ok(grant)
     }
 }
 
@@ -515,9 +520,14 @@ impl ExtensionReadySetup {
     }
 
     pub fn validate_json(value: &str) -> Result<(), ExtensionPairingStateError> {
-        let setup = serde_json::from_str::<ExtensionReadySetup>(value)
+        Self::decode_json(value).map(|_| ())
+    }
+
+    pub fn decode_json(value: &str) -> Result<Self, ExtensionPairingStateError> {
+        let setup = serde_json::from_str::<Self>(value)
             .map_err(|_| ExtensionPairingStateError::InvalidSetup)?;
-        ExtensionPairingRecord::Setup(setup).validate_for_key(EXTENSION_SETUP_KEY)
+        ExtensionPairingRecord::Setup(setup.clone()).validate_for_key(EXTENSION_SETUP_KEY)?;
+        Ok(setup)
     }
 }
 
@@ -829,6 +839,18 @@ mod tests {
     }
 
     #[test]
+    fn grant_json_decoder_returns_the_validated_domain_record() -> anyhow::Result<()> {
+        let expected = Fixture::grant();
+        let decoded = StoredExtensionPairingGrant::decode_json(&serde_json::to_string(&expected)?)?;
+        assert_eq!(decoded, expected);
+        assert_eq!(
+            StoredExtensionPairingGrant::decode_json("{}"),
+            Err(ExtensionPairingStateError::InvalidGrant)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
     -> anyhow::Result<()> {
         let mut value = serde_json::to_value(Fixture::grant())?;
@@ -855,6 +877,18 @@ mod tests {
         setup.event_count = 0.into();
         assert_eq!(
             ExtensionReadySetup::validate_json(&serde_json::to_string(&setup)?),
+            Err(ExtensionPairingStateError::InvalidSetup)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_json_decoder_returns_the_validated_domain_record() -> anyhow::Result<()> {
+        let expected = ExtensionReadySetup::from_grant(&Fixture::grant());
+        let decoded = ExtensionReadySetup::decode_json(&serde_json::to_string(&expected)?)?;
+        assert_eq!(decoded, expected);
+        assert_eq!(
+            ExtensionReadySetup::decode_json("{}"),
             Err(ExtensionPairingStateError::InvalidSetup)
         );
         Ok(())

@@ -4,11 +4,13 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import { err, ok, type Result } from "neverthrow";
-import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ArchitectureActionsContext,
+  VaultArchitectureRefreshSnapshot,
+} from "$lib/vault/action-contexts";
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
-  type VaultArchitectureSelection,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
 
@@ -29,15 +31,10 @@ export class VaultArchitectureActions {
   }
 
   applyDraftVaultArchitecture(): Result<
-    VaultArchitectureSelection,
+    VaultArchitectureRefreshSnapshot,
     VaultStorageFailure
   > {
     const state = this.state;
-    const selection: VaultArchitectureSelection = {
-      device_mode: state.draftDeviceMode,
-      vault_type: state.draftVaultType,
-      replication_type: state.draftReplicationType,
-    };
     let architecture: VaultArchitecture;
     try {
       architecture = NookVaultArchitecture.draft(
@@ -70,11 +67,15 @@ export class VaultArchitectureActions {
     }
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = allowed;
-    return ok(selection);
+    return ok({
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    });
   }
 
   refreshVaultArchitectureFromManager(): Result<
-    VaultArchitectureSelection,
+    VaultArchitectureRefreshSnapshot,
     VaultStorageFailure
   > {
     const state = this.state;
@@ -102,11 +103,6 @@ export class VaultArchitectureActions {
     state.draftDeviceMode = deviceMode;
     state.draftVaultType = vaultType;
     state.draftReplicationType = replicationType;
-    const selection: VaultArchitectureSelection = {
-      device_mode: deviceMode,
-      vault_type: vaultType,
-      replication_type: replicationType,
-    };
     void this.refreshArchitectureSecretCreationAllowed().then((permission) => {
       if (permission.isErr()) {
         const current = state.admitManager();
@@ -119,11 +115,11 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok(selection);
+    return ok({ deviceMode, vaultType, replicationType });
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
-    Result<ArchitectureActionsContext["editRestriction"], VaultStorageFailure>
+    Result<VaultArchitectureRefreshSnapshot, VaultStorageFailure>
   > {
     const state = this.state;
     const architecture = state.vaultArchitecture;
@@ -159,6 +155,10 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok(state.editRestriction);
+    return ok({
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    });
   }
 }

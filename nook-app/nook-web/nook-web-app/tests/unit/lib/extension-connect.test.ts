@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { Effect } from 'effect'
 import {
   ExtensionConnectIntentKind,
   ExtensionConnectionIntentProjection,
@@ -8,6 +9,8 @@ import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
+  IdentityHandoffResponseDecodeFailureKind,
+  IdentityHandoffResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
@@ -40,6 +43,48 @@ const {
 } = await extensionPairingGrantPolicyReady
 
 const simplePairingVaultType = admit_extension_pairing_vault_type('simple')
+
+describe('extension identity handoff response decoding', () => {
+  test('decodes a successful identity handoff response', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        IdentityHandoffResponseDecoder.decode({
+          ok: true,
+          envelope: 'encrypted-handoff',
+          nextNonce: 'nonce-next',
+        }),
+      ),
+    )
+
+    expect(decoded).toEqual({
+      _tag: 'Right',
+      right: {
+        ok: true,
+        envelope: 'encrypted-handoff',
+        nextNonce: 'nonce-next',
+      },
+    })
+  })
+
+  test('returns a typed failure for a response with an empty next nonce', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        IdentityHandoffResponseDecoder.decode({
+          ok: true,
+          envelope: 'encrypted-handoff',
+          nextNonce: '',
+        }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+    if (decoded._tag === 'Left') {
+      expect(decoded.left.kind).toBe(
+        IdentityHandoffResponseDecodeFailureKind.InvalidResponse,
+      )
+    }
+  })
+})
 
 function locationFromUrl(url: string): Location {
   const parsed = new URL(url)

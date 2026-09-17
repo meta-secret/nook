@@ -53,6 +53,14 @@ export enum ProviderSyncOutcome {
   FailureCaptured = "failure-captured",
 }
 
+enum ProviderStoreMismatchStagingOutcome {
+  ConflictStaged = "conflict-staged",
+}
+
+export enum LocalFolderProviderSyncOutcome {
+  Synchronized = "synchronized",
+}
+
 type ProviderFailurePresentation = {
   readonly provider: StorageProvider;
   readonly visibility: ProviderSyncVisibility;
@@ -69,7 +77,7 @@ export class ProviderSyncActions {
     localStoreId,
     remoteStoreId,
   }: ProviderStoreMismatchConflict): Promise<
-    Result<void, VaultStorageFailure>
+    Result<ProviderStoreMismatchStagingOutcome, VaultStorageFailure>
   > {
     let localYaml: string;
     try {
@@ -101,7 +109,7 @@ export class ProviderSyncActions {
         return err(new NativeVaultStorageFailure(failure));
       }
       this.state.stageSyncConflict(conflict);
-      return ok();
+      return ok(ProviderStoreMismatchStagingOutcome.ConflictStaged);
     } finally {
       revision.free();
     }
@@ -109,7 +117,9 @@ export class ProviderSyncActions {
 
   async syncLocalFolderProvider({
     provider,
-  }: LocalFolderProviderSync): Promise<Result<void, VaultStorageFailure>> {
+  }: LocalFolderProviderSync): Promise<
+    Result<LocalFolderProviderSyncOutcome, VaultStorageFailure>
+  > {
     const state = this.state;
     const configuration = new StorageProviderPresentation(
       provider,
@@ -146,7 +156,7 @@ export class ProviderSyncActions {
       });
       if (metadata.isErr()) return err(metadata.error);
     }
-    return ok();
+    return ok(LocalFolderProviderSyncOutcome.Synchronized);
   }
 
   private async presentFailure({

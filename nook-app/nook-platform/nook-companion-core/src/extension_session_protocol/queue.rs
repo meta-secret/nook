@@ -1,22 +1,22 @@
 //! Queue policy carried by extension-session requests.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum QueuePriority {
     Probe,
     Interactive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 pub enum PasskeyCeremonyPriority {
     Interactive,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(
     deny_unknown_fields,
     tag = "kind",
@@ -31,13 +31,13 @@ pub enum QueueDisposition {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
 pub enum MessageDefaultQueueDisposition {
     MessageDefault {},
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(
     deny_unknown_fields,
     tag = "kind",

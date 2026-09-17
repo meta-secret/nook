@@ -1,12 +1,13 @@
+import { Effect } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   compare_extension_pairing_records,
   create_extension_pairing_state,
+  decode_extension_ready_setup_json,
+  decode_stored_extension_pairing_grant_json,
   extension_pairing_grant_storage_key,
   extension_setup_after_pairing_grant_removal,
   first_extension_pairing_grant,
-  is_extension_ready_setup_json,
-  is_stored_extension_pairing_grant_json,
   migrate_legacy_extension_pairing_state_json,
   ordered_extension_pairing_grants,
   refresh_extension_pairing_grant,
@@ -94,24 +95,44 @@ function pairingGrantStorageKey(vaultStoreId: string): string {
   return extension_pairing_grant_storage_key(vaultStoreId)
 }
 
-function isStoredExtensionPairingGrant(
-  value: unknown,
-): value is StoredExtensionPairingGrant {
-  const result = transportJson(value)
-  return (
-    result.kind === TransportJsonResultKind.Serialized &&
-    is_stored_extension_pairing_grant_json(result.json)
-  )
+export enum ExtensionPairingStateDecodeFailureKind {
+  SerializationFailed = 'serialization-failed',
+  StoredGrant = 'stored-grant-decode-failed',
+  ReadySetup = 'ready-setup-decode-failed',
 }
 
-function isExtensionReadySetupState(
-  value: unknown,
-): value is ExtensionReadySetupState {
+export type ExtensionPairingStateDecodeFailure = {
+  kind: ExtensionPairingStateDecodeFailureKind
+}
+
+function decodeStoredExtensionPairingGrant(value: unknown) {
   const result = transportJson(value)
-  return (
-    result.kind === TransportJsonResultKind.Serialized &&
-    is_extension_ready_setup_json(result.json)
-  )
+  if (result.kind === TransportJsonResultKind.SerializationFailed) {
+    return Effect.fail<ExtensionPairingStateDecodeFailure>({
+      kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
+    })
+  }
+  return Effect.try({
+    try: () => decode_stored_extension_pairing_grant_json(result.json),
+    catch: (): ExtensionPairingStateDecodeFailure => ({
+      kind: ExtensionPairingStateDecodeFailureKind.StoredGrant,
+    }),
+  })
+}
+
+function decodeExtensionReadySetupState(value: unknown) {
+  const result = transportJson(value)
+  if (result.kind === TransportJsonResultKind.SerializationFailed) {
+    return Effect.fail<ExtensionPairingStateDecodeFailure>({
+      kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
+    })
+  }
+  return Effect.try({
+    try: () => decode_extension_ready_setup_json(result.json),
+    catch: (): ExtensionPairingStateDecodeFailure => ({
+      kind: ExtensionPairingStateDecodeFailureKind.ReadySetup,
+    }),
+  })
 }
 
 type ExtensionPairingGrantStorageItemsArgs = {
@@ -196,8 +217,8 @@ function migratedLegacyPairingStorageItems(
 export type ExtensionPairingGrantPolicy = {
   compare_extension_pairing_records: typeof compare_extension_pairing_records
   pairingGrantStorageKey: typeof pairingGrantStorageKey
-  isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
-  isExtensionReadySetupState: typeof isExtensionReadySetupState
+  decodeStoredExtensionPairingGrant: typeof decodeStoredExtensionPairingGrant
+  decodeExtensionReadySetupState: typeof decodeExtensionReadySetupState
   extensionPairingGrantStorageItems: typeof extensionPairingGrantStorageItems
   extensionStoredPairingGrantStorageItems: typeof extensionStoredPairingGrantStorageItems
   setupAfterPairingGrantRemoval: typeof setupAfterPairingGrantRemoval
@@ -211,8 +232,8 @@ export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPoli
   companionWasmReady.then(() => ({
     compare_extension_pairing_records,
     pairingGrantStorageKey,
-    isStoredExtensionPairingGrant,
-    isExtensionReadySetupState,
+    decodeStoredExtensionPairingGrant,
+    decodeExtensionReadySetupState,
     extensionPairingGrantStorageItems,
     extensionStoredPairingGrantStorageItems,
     setupAfterPairingGrantRemoval,

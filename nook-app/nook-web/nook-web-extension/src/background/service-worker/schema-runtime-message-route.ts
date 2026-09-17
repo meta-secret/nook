@@ -1,3 +1,5 @@
+import { Effect, Either, ParseResult } from 'effect'
+
 import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
 type ChromeMessageListener = Parameters<
@@ -34,8 +36,27 @@ export interface BackgroundRuntimeMessageRoute {
 }
 
 export interface RuntimeMessageSchema<Message extends BrowserRuntimeMessage> {
-  is(message: BrowserRuntimeMessage): message is Message
+  decode(
+    message: BrowserRuntimeMessage,
+  ): Effect.Effect<Message, ParseResult.ParseError>
 }
+
+export enum RuntimeMessageSchemaDecodeKind {
+  Decoded = 'decoded',
+  Rejected = 'rejected',
+}
+
+export type RuntimeMessageSchemaDecodeResult<
+  Message extends BrowserRuntimeMessage,
+> =
+  | {
+      readonly kind: RuntimeMessageSchemaDecodeKind.Decoded
+      readonly message: Message
+    }
+  | {
+      readonly kind: RuntimeMessageSchemaDecodeKind.Rejected
+      readonly failure: ParseResult.ParseError
+    }
 
 export type SchemaRuntimeMessageOperationRequest<
   Message extends BrowserRuntimeMessage,
@@ -100,10 +121,11 @@ export class SchemaRuntimeMessageRoute<
   route(
     request: BackgroundRuntimeMessageRoutingRequest,
   ): RuntimeMessageRouteOutcome {
-    if (!this.request.schema.is(request.message))
+    const decodeResult = this.decodeMessage(request.message)
+    if (decodeResult.kind === RuntimeMessageSchemaDecodeKind.Rejected)
       return { kind: RuntimeMessageRouteKind.Unhandled }
     const operationRequest: SchemaRuntimeMessageOperationRequest<Message> = {
-      message: request.message,
+      message: decodeResult.message,
       sender: request.sender,
     }
     void this.request
@@ -114,6 +136,24 @@ export class SchemaRuntimeMessageRoute<
       kind: RuntimeMessageRouteKind.Handled,
       responseChannel: RuntimeMessageResponseChannel.Open,
     }
+  }
+
+  private decodeMessage(
+    message: BrowserRuntimeMessage,
+  ): RuntimeMessageSchemaDecodeResult<Message> {
+    const decodeResult = Effect.runSync(
+      Effect.either(this.request.schema.decode(message)),
+    )
+    return Either.match(decodeResult, {
+      onLeft: (failure) => ({
+        kind: RuntimeMessageSchemaDecodeKind.Rejected,
+        failure,
+      }),
+      onRight: (decodedMessage) => ({
+        kind: RuntimeMessageSchemaDecodeKind.Decoded,
+        message: decodedMessage,
+      }),
+    })
   }
 
   static create<

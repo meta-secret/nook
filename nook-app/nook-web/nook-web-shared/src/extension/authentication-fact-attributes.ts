@@ -77,20 +77,43 @@ export type AuthenticationSourceMessage = { source?: string };
 type InputValueGetter = () => string;
 type InputValueSetter = (value: string) => void;
 
+enum InputValueAccessorKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+type InputValueGetterDecode =
+  | { readonly kind: InputValueAccessorKind.Unavailable }
+  | {
+      readonly kind: InputValueAccessorKind.Available;
+      readonly getter: InputValueGetter;
+    };
+
+type InputValueSetterDecode =
+  | { readonly kind: InputValueAccessorKind.Unavailable }
+  | {
+      readonly kind: InputValueAccessorKind.Available;
+      readonly setter: InputValueSetter;
+    };
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class AuthenticationFactObserver {
   constructor(private readonly browser: typeof globalThis) {}
 
-  private isInputValueGetter(
+  private decodeInputValueGetter(
     value: PropertyDescriptor["get"],
-  ): value is InputValueGetter {
-    return typeof value === "function";
+  ): InputValueGetterDecode {
+    return typeof value === "function"
+      ? { kind: InputValueAccessorKind.Available, getter: value }
+      : { kind: InputValueAccessorKind.Unavailable };
   }
 
-  private isInputValueSetter(
+  private decodeInputValueSetter(
     value: PropertyDescriptor["set"],
-  ): value is InputValueSetter {
-    return typeof value === "function";
+  ): InputValueSetterDecode {
+    return typeof value === "function"
+      ? { kind: InputValueAccessorKind.Available, setter: value }
+      : { kind: InputValueAccessorKind.Unavailable };
   }
 
   private elementLabelsAuthenticationControl({
@@ -244,10 +267,12 @@ class AuthenticationFactObserver {
     if (!descriptor || !descriptor.get || !descriptor.set) {
       return () => {};
     }
-    if (!this.isInputValueGetter(descriptor.get)) return () => {};
-    if (!this.isInputValueSetter(descriptor.set)) return () => {};
-    const originalGet = descriptor.get;
-    const originalSet = descriptor.set;
+    const getter = this.decodeInputValueGetter(descriptor.get);
+    if (getter.kind === InputValueAccessorKind.Unavailable) return () => {};
+    const setter = this.decodeInputValueSetter(descriptor.set);
+    if (setter.kind === InputValueAccessorKind.Unavailable) return () => {};
+    const originalGet = getter.getter;
+    const originalSet = setter.setter;
     const valueProperty: PropertyDescriptor & ThisType<HTMLInputElement> = {
       configurable: true,
       get(): string {

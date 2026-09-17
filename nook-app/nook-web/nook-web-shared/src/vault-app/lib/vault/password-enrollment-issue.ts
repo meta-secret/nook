@@ -36,7 +36,8 @@ import {
   configuredOAuthFile,
   githubPatValue,
   githubRepositoryValue,
-  isConfiguredOAuthFile,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
   oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
@@ -61,6 +62,19 @@ enum CatalogVaultLabelKind {
 type CatalogVaultLabel =
   | { kind: CatalogVaultLabelKind.Missing }
   | { kind: CatalogVaultLabelKind.Present; label: string };
+
+enum StorageChainReadinessKind {
+  Idle = "idle",
+}
+
+type StorageChainReadiness = {
+  readonly kind: StorageChainReadinessKind.Idle;
+};
+
+type ProviderEventOutboxFlush = {
+  readonly providerType: StorageProvider["type"];
+  readonly target: SharedStorageTarget;
+};
 
 const log = browserLogRuntime.createLogger("vault-password");
 
@@ -99,10 +113,15 @@ export class PasswordEnrollmentIssue {
       // future leaves its IndexedDB transaction dangling, which surfaces later as
       // "database is not open" and poisons subsequent borrows. Surface a
       // retriable error instead.
-      const idle = await state.raceStorageTimeout({
-        promise: state.waitForStorageChain().then(() => storageOk()),
+      const storageChainReadiness: StorageChainReadiness = {
+        kind: StorageChainReadinessKind.Idle,
+      };
+      const idleResult = storageOk(storageChainReadiness);
+      const waitForStorageRequest = {
+        promise: state.waitForStorageChain().then(() => idleResult),
         releaseLateValue: () => {},
-      });
+      };
+      const idle = await state.raceStorageTimeout(waitForStorageRequest);
       if (idle.isErr()) return storageErr(idle.error);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -170,15 +189,20 @@ export class PasswordEnrollmentIssue {
       }
       const githubPat = githubPatValue(selectedProvider.githubPat);
       const githubRepo = githubRepositoryValue(selectedProvider.githubRepo);
-      const selectedOauth = selectedProvider.oauthFile;
+      const selectedOauthConfiguration = decodeStoredOAuthFileConfiguration(
+        selectedProvider.oauthFile,
+      );
+      const selectedOauth =
+        selectedOauthConfiguration.kind ===
+        StoredOAuthFileConfigurationDecodeKind.Configured
+          ? selectedOauthConfiguration.config
+          : undefined;
       const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
       const usesSharedProviderGrant =
         provider_onboarding_type(selectedProvider, state.vaultArchitecture) ===
         OnboardingType.SharedProviderGrant;
       const usesSharedICloud =
-        usesSharedProviderGrant &&
-        isConfiguredOAuthFile(selectedOauth) &&
-        selectedOauth.config.preset === "icloud";
+        usesSharedProviderGrant && selectedOauth?.preset === "icloud";
       log.info("enrollment provider selected");
       if (
         usesSharedProviderGrant &&
@@ -209,36 +233,43 @@ export class PasswordEnrollmentIssue {
       let enrollmentProviderRow: StorageProvider = selectedProvider;
       if (usesSharedProviderGrant) {
         if (usesSharedICloud) {
-          if (selectedOauth.config.iCloudShareTarget.state === "personal") {
-            return storageErr(
-              new EnrollmentIssueFailure(
-                EnrollmentIssueRejection.ICloudTargetRequired,
-              ),
-            );
-          }
-          const targetId = selectedOauth.config.iCloudShareTarget.value;
-          sharedStorageTarget = {
-            kind: SharedStorageTargetKind.Bound,
-            storageTargetId: targetId,
-          };
-        } else {
-          if (!isConfiguredOAuthFile(selectedOauth)) {
+          if (!selectedOauth) {
             return storageErr(
               new EnrollmentIssueFailure(
                 EnrollmentIssueRejection.OAuthProviderRequired,
               ),
             );
           }
-          const accessCredential = oauth_access_token(selectedOauth.config);
+          if (selectedOauth.iCloudShareTarget.state === "personal") {
+            return storageErr(
+              new EnrollmentIssueFailure(
+                EnrollmentIssueRejection.ICloudTargetRequired,
+              ),
+            );
+          }
+          const targetId = selectedOauth.iCloudShareTarget.value;
+          sharedStorageTarget = {
+            kind: SharedStorageTargetKind.Bound,
+            storageTargetId: targetId,
+          };
+        } else {
+          if (!selectedOauth) {
+            return storageErr(
+              new EnrollmentIssueFailure(
+                EnrollmentIssueRejection.OAuthProviderRequired,
+              ),
+            );
+          }
+          const accessCredential = oauth_access_token(selectedOauth);
           log.info("shared enrollment grant started");
           const fileName = new OAuthFilePresentation(
-            selectedOauth.config,
+            selectedOauth,
           ).oauthFileName();
           const storageTargetHint =
             fileName.kind === OAuthFileNameKind.Resolved
               ? fileName.fileName
               : githubRepo;
-          const folderId = selectedOauth.config.folderId;
+          const folderId = selectedOauth.folderId;
           const prepareSharedStorageGrantArgs: Parameters<
             typeof prepare_shared_storage_grant
           >[0] = {
@@ -317,12 +348,12 @@ export class PasswordEnrollmentIssue {
           }
           if (
             sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
-            isConfiguredOAuthFile(selectedOauth)
+            selectedOauth
           ) {
             let updatedOauth;
             try {
               updatedOauth = bind_google_drive_shared_folder(
-                selectedOauth.config,
+                selectedOauth,
                 sharedStorageTarget.storageTargetId,
               );
             } catch (failure) {
@@ -363,13 +394,16 @@ export class PasswordEnrollmentIssue {
                 if (admittedManager.isErr())
                   return storageErr(admittedManager.error);
                 try {
-                  return storageOk(
-                    await admittedManager.value.flush_event_outbox_for_provider(
-                      targetArgs.mode,
-                      targetArgs.pat,
-                      targetArgs.repo,
-                    ),
+                  await admittedManager.value.flush_event_outbox_for_provider(
+                    targetArgs.mode,
+                    targetArgs.pat,
+                    targetArgs.repo,
                   );
+                  const flush: ProviderEventOutboxFlush = {
+                    providerType: selectedProvider.type,
+                    target: sharedStorageTarget,
+                  };
+                  return storageOk(flush);
                 } catch (nativeFailure) {
                   return storageErr(
                     new NativeVaultStorageFailure(nativeFailure),
@@ -388,13 +422,16 @@ export class PasswordEnrollmentIssue {
             if (admittedManager.isErr())
               return storageErr(admittedManager.error);
             try {
-              return storageOk(
-                await admittedManager.value.flush_event_outbox_for_provider(
-                  targetArgs.mode,
-                  targetArgs.pat,
-                  targetArgs.repo,
-                ),
+              await admittedManager.value.flush_event_outbox_for_provider(
+                targetArgs.mode,
+                targetArgs.pat,
+                targetArgs.repo,
               );
+              const flush: ProviderEventOutboxFlush = {
+                providerType: selectedProvider.type,
+                target: sharedStorageTarget,
+              };
+              return storageOk(flush);
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }

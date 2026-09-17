@@ -108,6 +108,12 @@ export enum PasskeyFallback {
   OfferPin = "offer-pin",
 }
 
+export enum PasskeyDeviceProtectionSuccess {
+  Configured = "configured",
+  Unlocked = "unlocked",
+  Recovered = "recovered",
+}
+
 /** Admits a foreign ceremony failure without retaining its error or credential data. */
 export class PasskeyCeremonyFailure {
   readonly diagnostic: ReturnType<typeof sanitizedPasskeyCeremonyData>;
@@ -165,7 +171,9 @@ export async function setupDeviceProtection({
   manager,
   passkeyLabel,
   deviceMode,
-}: DeviceProtectionSetup): Promise<Result<void, PasskeyCeremonyFailure>> {
+}: DeviceProtectionSetup): Promise<
+  Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
+> {
   try {
     await manager.setup_device_protection_with_passkey_mode(
       location.hostname,
@@ -173,7 +181,7 @@ export async function setupDeviceProtection({
       passkeyLabel,
       deviceMode,
     );
-    return ok();
+    return ok(PasskeyDeviceProtectionSuccess.Configured);
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Create, failure),
@@ -183,10 +191,10 @@ export async function setupDeviceProtection({
 
 export async function unlockDeviceProtection(
   manager: NookVaultManager,
-): Promise<Result<void, PasskeyCeremonyFailure>> {
+): Promise<Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>> {
   try {
     await manager.unlock_device_protection_with_passkey(location.hostname);
-    return ok();
+    return ok(PasskeyDeviceProtectionSuccess.Unlocked);
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Unlock, failure),
@@ -196,10 +204,10 @@ export async function unlockDeviceProtection(
 
 export async function recoverDeviceProtectionWithPasskey(
   manager: NookVaultManager,
-): Promise<Result<void, PasskeyCeremonyFailure>> {
+): Promise<Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>> {
   try {
     await manager.recover_device_protection_with_passkey(location.hostname);
-    return ok();
+    return ok(PasskeyDeviceProtectionSuccess.Recovered);
   } catch (failure) {
     return err(
       new PasskeyCeremonyFailure(PasskeyCeremonyAction.Recover, failure),

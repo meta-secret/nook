@@ -24,3 +24,11 @@ export enum MemberRevocationKind {
 export type MemberRevocation =
   | { kind: MemberRevocationKind.Idle }
   | { kind: MemberRevocationKind.Confirming; authId: string };
+
+export enum JoinApprovalHandlingOutcome {
+  Handled = "handled",
+}
+
+export enum JoinDenialHandlingOutcome {
+  Handled = "handled",
+}

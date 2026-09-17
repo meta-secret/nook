@@ -1,6 +1,12 @@
 import { VaultType } from "$lib/vault/architecture-model";
 import type { Result } from "neverthrow";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+export enum PasswordOperationOutcome {
+  Added = "added",
+  Updated = "updated",
+  Removed = "removed",
+}
+
 export type PasswordOperationResult = Result<
   PasswordOperationOutcome,
   StorageOperationFailure | OAuthFailure
@@ -25,12 +31,6 @@ export {
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import { JoinEnrollmentState } from "$app-wasm";
-
-export enum PasswordOperationOutcome {
-  Added = "added",
-  Updated = "updated",
-  Removed = "removed",
-}
 
 const log = browserLogRuntime.createLogger("vault-password");
 
@@ -132,7 +132,7 @@ export class VaultPasswordActions {
           ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
           : state.t(I18N_KEYS.ToastsPasswordSet),
       );
-      return storageOk(changed.value);
+      return storageOk(PasswordOperationOutcome.Added);
     } finally {
       state.isPasswordBusy = false;
     }
@@ -188,7 +188,7 @@ export class VaultPasswordActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
-      return storageOk(changed.value);
+      return storageOk(PasswordOperationOutcome.Updated);
     } finally {
       state.isPasswordBusy = false;
     }
@@ -239,7 +239,7 @@ export class VaultPasswordActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
-      return storageOk(removal.value);
+      return storageOk(PasswordOperationOutcome.Removed);
     } finally {
       state.isPasswordBusy = false;
     }

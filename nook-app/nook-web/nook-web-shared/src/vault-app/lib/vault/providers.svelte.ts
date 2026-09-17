@@ -28,8 +28,10 @@ import {
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
-  isConfiguredOAuthFile,
-  isConfiguredLocalFolder,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
+  decodeStoredLocalFolderConfiguration,
+  StoredLocalFolderConfigurationDecodeKind,
   missing_oauth_access_token,
   OAUTH_FILE_PROVIDER_TYPE,
   oauth_access_token,
@@ -88,6 +90,7 @@ import {
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
   type ProviderSaveRequest,
+  type AuthProvidersSnapshot,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -112,6 +115,13 @@ const log = browserLogRuntime.createLogger("vault-providers");
 export interface VaultConnectAssessmentRequest {
   readonly args: NookStorageConnectArgs;
 }
+
+type VaultConnectStatusDiscoveryCompletion = {
+  readonly operation: Promise<
+    Result<VaultAccessStatus, StorageOperationFailure>
+  >;
+  readonly releaseLateValue: (status: VaultAccessStatus) => void;
+};
 
 export interface RemoteVaultAssessmentHandling {
   readonly accessStatus: VaultAccessStatus;
@@ -142,30 +152,38 @@ export interface ProviderRemoval {
   readonly id: string;
 }
 
-export enum OAuthRemoteReferenceSyncOutcome {
+export enum OAuthRemoteReferenceSyncKind {
   NotApplicable = "not-applicable",
   Unchanged = "unchanged",
   Updated = "updated",
 }
 
-export enum ProviderPersistenceOutcome {
-  Persisted = "persisted",
-}
+export type OAuthRemoteReferenceSyncOutcome =
+  | { readonly kind: OAuthRemoteReferenceSyncKind.NotApplicable }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Unchanged }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Updated };
 
-export enum ProviderLoadOutcome {
-  Loaded = "loaded",
-}
+export type PromotedProviderSnapshot = {
+  readonly snapshot: AuthProvidersSnapshot;
+  readonly localVaultPresent: boolean;
+};
 
-export enum SessionVaultPromotionOutcome {
-  PromotedToLocal = "promoted-to-local",
-  CurrentProviderModeRetained = "current-provider-mode-retained",
-}
-
-export enum ProviderRemovalOutcome {
-  ProviderNotFound = "provider-not-found",
+export enum ProviderRemovalOutcomeKind {
+  NotFound = "not-found",
   LocalProviderRetained = "local-provider-retained",
   Removed = "removed",
 }
+
+export type ProviderRemovalOutcome =
+  | { readonly kind: ProviderRemovalOutcomeKind.NotFound }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.LocalProviderRetained;
+      readonly provider: StorageProvider;
+    }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.Removed;
+      readonly providers: readonly StorageProvider[];
+    };
 
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
@@ -316,7 +334,7 @@ export class VaultProviderActions {
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
     )
-      return storageOk(OAuthRemoteReferenceSyncOutcome.NotApplicable);
+      return storageOk({ kind: OAuthRemoteReferenceSyncKind.NotApplicable });
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -332,13 +350,13 @@ export class VaultProviderActions {
       let config: typeof draft.config;
       try {
         if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk(OAuthRemoteReferenceSyncOutcome.Unchanged);
+          return storageOk({ kind: OAuthRemoteReferenceSyncKind.Unchanged });
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk(OAuthRemoteReferenceSyncOutcome.Updated);
+      return storageOk({ kind: OAuthRemoteReferenceSyncKind.Updated });
     } finally {
       updated.free();
     }
@@ -353,7 +371,9 @@ export class VaultProviderActions {
     return state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
-      const operation = (async () => {
+      const operation: Promise<
+        Result<VaultAccessStatus, StorageOperationFailure>
+      > = (async () => {
         try {
           return storageOk(
             await admitted.value.assess_vault_connect(
@@ -366,10 +386,14 @@ export class VaultProviderActions {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       })();
-      return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
+      const timeout = new VaultDiscoveryTimeout({ timeoutMs: 30_000 });
+      const timeoutRequest: VaultConnectStatusDiscoveryCompletion = {
         operation,
         releaseLateValue: () => {},
-      });
+      };
+      return timeout.waitFor<VaultAccessStatus, StorageOperationFailure>(
+        timeoutRequest,
+      );
     });
   }
 
@@ -420,9 +444,7 @@ export class VaultProviderActions {
     log.debug("pristine device providers initialized");
   }
 
-  async loadProviders({ options }: ProviderLoad): Promise<
-    Result<ProviderLoadOutcome, StorageOperationFailure>
-  > {
+  async loadProviders({ options }: ProviderLoad) {
     const state = this.state;
     const loaded = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -449,11 +471,15 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk(ProviderLoadOutcome.Loaded);
+    const loadedSnapshot: AuthProvidersSnapshot = {
+      providers: state.providers,
+      activeVaultStoreId: snapshot.activeVaultStoreId,
+    };
+    return storageOk(loadedSnapshot);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<SessionVaultPromotionOutcome, StorageOperationFailure>
+    Result<PromotedProviderSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
@@ -474,7 +500,11 @@ export class VaultProviderActions {
             ensureLocalAuthProviderSnapshotArgs,
           );
         const localVaultPresent = await has_local_vault();
-        return storageOk({ snapshot, localVaultPresent });
+        const promotion: PromotedProviderSnapshot = {
+          snapshot,
+          localVaultPresent,
+        };
+        return storageOk(promotion);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -487,14 +517,11 @@ export class VaultProviderActions {
       state.githubPat = "";
       state.clearOauthFile();
       state.clearLocalFolder();
-      return storageOk(SessionVaultPromotionOutcome.PromotedToLocal);
     }
-    return storageOk(SessionVaultPromotionOutcome.CurrentProviderModeRetained);
+    return storageOk(promoted.value);
   }
 
-  async persistProviders({ opts }: ProviderPersistence): Promise<
-    Result<ProviderPersistenceOutcome, StorageOperationFailure>
-  > {
+  async persistProviders({ opts }: ProviderPersistence) {
     const state = this.state;
     const request: Parameters<
       NookVaultManager["persist_auth_providers_snapshot"]
@@ -524,7 +551,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk(ProviderPersistenceOutcome.Persisted);
+    return storageOk(snapshot.value);
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
@@ -624,14 +651,19 @@ export class VaultProviderActions {
   > {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target) return storageOk(ProviderRemovalOutcome.ProviderNotFound);
+    if (!target)
+      return storageOk({ kind: ProviderRemovalOutcomeKind.NotFound });
     if (target.type === "local")
-      return storageOk(ProviderRemovalOutcome.LocalProviderRetained);
+      return storageOk({
+        kind: ProviderRemovalOutcomeKind.LocalProviderRetained,
+        provider: target,
+      });
 
-    const persistence = await state.persistProviders({
+    const persistenceOptions: ProviderPersistenceOptions = {
       replace: true,
       providers: state.providers.filter((provider) => provider.id !== id),
-    });
+    };
+    const persistence = await state.persistProviders(persistenceOptions);
     if (persistence.isErr()) return storageErr(persistence.error);
     if (state.providers.length === 0 && state.isAuthenticated) {
       state.clearUnlockedSession();
@@ -661,7 +693,10 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk(ProviderRemovalOutcome.Removed);
+    return storageOk({
+      kind: ProviderRemovalOutcomeKind.Removed,
+      providers: state.providers,
+    });
   }
 }
 
@@ -701,7 +736,7 @@ export class ProviderPersistenceActions {
   }
 
   async ensureProviderSaved(): Promise<
-    Result<ProviderPersistenceOutcome, StorageOperationFailure>
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     const scope = await this.providerStoreIdForSave();
@@ -764,22 +799,33 @@ export class ProviderPersistenceActions {
           ),
         );
       }
-      const persistence = await state.persistProviders({
+      const persistenceOptions: ProviderPersistenceOptions = {
         replace: false,
         providers: outcome.snapshot.providers,
-      });
+      };
+      const persistence = await state.persistProviders(persistenceOptions);
       if (persistence.isErr()) {
         return storageErr(persistence.error);
       }
-      if (isConfiguredOAuthFile(outcome.oauthFile)) {
-        state.configureOauthFile(outcome.oauthFile.config);
+      const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+        outcome.oauthFile,
+      );
+      if (
+        oauthFileConfiguration.kind ===
+        StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
+        state.configureOauthFile(oauthFileConfiguration.config);
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      return storageOk(persistence.value);
+      const savedSnapshot: AuthProvidersSnapshot = {
+        providers: outcome.snapshot.providers,
+        activeVaultStoreId: request.snapshot.activeVaultStoreId,
+      };
+      return storageOk(savedSnapshot);
     } finally {
       outcome.free();
     }
@@ -824,13 +870,25 @@ export class ActiveProviderCredentialsActions {
     state.storageMode = draft.storageMode;
     state.githubPat = draft.githubPat;
     state.githubRepo = draft.githubRepo;
-    if (isConfiguredOAuthFile(draft.oauthFile)) {
-      state.configureOauthFile(draft.oauthFile.config);
+    const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+      draft.oauthFile,
+    );
+    if (
+      oauthFileConfiguration.kind ===
+      StoredOAuthFileConfigurationDecodeKind.Configured
+    ) {
+      state.configureOauthFile(oauthFileConfiguration.config);
     } else {
       state.clearOauthFile();
     }
-    if (isConfiguredLocalFolder(draft.localFolder)) {
-      state.configureLocalFolder(draft.localFolder.config);
+    const localFolderConfiguration = decodeStoredLocalFolderConfiguration(
+      draft.localFolder,
+    );
+    if (
+      localFolderConfiguration.kind ===
+      StoredLocalFolderConfigurationDecodeKind.Configured
+    ) {
+      state.configureLocalFolder(localFolderConfiguration.config);
     } else {
       state.clearLocalFolder();
     }

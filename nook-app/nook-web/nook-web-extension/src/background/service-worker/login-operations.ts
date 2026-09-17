@@ -49,7 +49,7 @@ import { decode_website_login_save_pending_response } from '../../../../nook-web
 
 type WebsiteLoginSaveSessionRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.PlanLoginSave }
+  { type: typeof ExtensionSessionMessageType.PlanLoginSave }
 >
 
 enum LoginPickerOpenStatus {

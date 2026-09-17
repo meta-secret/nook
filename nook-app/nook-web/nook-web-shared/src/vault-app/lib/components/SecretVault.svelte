@@ -1,9 +1,7 @@
 <script lang="ts">
-  import {
-    type SecretMutationOutcome,
-    type SecretOperationResult,
-  } from "$lib/vault/secret-operation-failure";
-  import { err, ok, type Result } from "neverthrow";
+  import { type SecretOperationResult } from "$lib/vault/secret-operation-failure";
+  import type { SecretMutationOutcome } from "$lib/vault/secrets";
+  import { err, ok } from "neverthrow";
   import {
     VaultStorageFailure,
     VaultStorageFailureKind,
@@ -106,13 +104,13 @@
     secrets?: NookSecretListItem[];
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>;
     onReplaceSecret: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
     onDeleteSecret: (
       id: string,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>;
     onGeneratePassword: (options: PasswordGenerationOptions) => string;
     onAddModeChange?: (args: SecretAddModeChange) => void;
   } = $props();
@@ -237,13 +235,9 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort(
-          (a, b) => a.type - b.type,
-        ),
+        items: items.sort((a, b) => a.type - b.type),
       }))
-      .sort(
-        (a, b) => a.site.localeCompare(b.site),
-      );
+      .sort((a, b) => a.site.localeCompare(b.site));
   });
 
   function notifyAddMode() {
@@ -375,11 +369,7 @@
       formSelectedType.itemType === SecretType.SecureNote,
   );
 
-  async function copyToClipboard({
-    text,
-    id,
-    field,
-  }: SecretFieldCopy): Promise<Result<ClipboardNotice, VaultStorageFailure>> {
+  async function copyToClipboard({ text, id, field }: SecretFieldCopy) {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -387,23 +377,27 @@
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       );
     }
-    copiedKey = {
+    return ok({
       kind: ClipboardNoticeKind.Visible,
       fieldKey: `${id}-${field}`,
-    };
-    setTimeout(() => {
-      if (
-        copiedKey.kind === ClipboardNoticeKind.Visible &&
-        copiedKey.fieldKey === `${id}-${field}`
-      )
-        copiedKey = { kind: ClipboardNoticeKind.Hidden };
-    }, 2000);
-    return ok(copiedKey);
+    });
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {
     const copied = await copyToClipboard(request);
-    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+    if (copied.isErr()) {
+      vault.errorMsg = vault.t(copied.error.translationKey);
+      return;
+    }
+    const notice = copied.value;
+    copiedKey = notice;
+    setTimeout(() => {
+      if (
+        copiedKey.kind === ClipboardNoticeKind.Visible &&
+        copiedKey.fieldKey === notice.fieldKey
+      )
+        copiedKey = { kind: ClipboardNoticeKind.Hidden };
+    }, 2000);
   }
 
   function secretReveal(itemId: string): SecretReveal {

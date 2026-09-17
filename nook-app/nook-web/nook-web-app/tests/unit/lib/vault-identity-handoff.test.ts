@@ -18,6 +18,7 @@ import {
   type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
 import { VaultState } from '$lib/vault.svelte'
+import { DeviceProtectionLockOutcome } from '$lib/vault/device-protection.svelte'
 import {
   VaultInitializationActions,
   shouldAutoAuthorizeE2e,
@@ -158,7 +159,7 @@ describe('external browser identity handoff commit ownership', () => {
         ok(ProviderLoadOutcome.Loaded),
       )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       const refreshDeviceState = vi
         .spyOn(fixture.state, 'refreshDeviceState')
@@ -168,6 +169,15 @@ describe('external browser identity handoff commit ownership', () => {
         await fixture.lifecycle.continueInitializationAfterDeviceUnlock()
 
       expect(continued.isOk()).toBe(true)
+      expect(
+        continued.match(
+          (snapshot) => snapshot,
+          (failure) => failure,
+        ),
+      ).toEqual({
+        deviceId: fixture.state.deviceId,
+        devicePublicKey: fixture.state.devicePublicKey,
+      })
       expect(refreshDeviceState).not.toHaveBeenCalled()
       expect(fixture.state.enrollmentFromUrlPending).toBe(true)
       expect(fixture.state.prefillEnrollmentCode).toBe('pending-enrollment')
@@ -185,7 +195,7 @@ describe('external browser identity handoff commit ownership', () => {
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockRejectedValue(
         new Error('identity directory cannot be read'),
@@ -224,7 +234,7 @@ describe('external browser identity handoff commit ownership', () => {
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
         DeviceProtectionStatus.Passkey,
@@ -243,7 +253,7 @@ describe('external browser identity handoff commit ownership', () => {
       ).mockResolvedValue(err(continuationFailure))
       const lockDeviceProtection = vi
         .spyOn(fixture.state, 'lockDeviceProtection')
-        .mockResolvedValue(ok())
+        .mockResolvedValue(ok(DeviceProtectionLockOutcome.Locked))
 
       await fixture.lifecycle.initOnce()
 

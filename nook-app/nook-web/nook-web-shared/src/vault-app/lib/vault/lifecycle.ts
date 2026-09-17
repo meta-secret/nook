@@ -17,7 +17,7 @@ import {
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import type { VaultDeviceIdentity } from "$lib/vault/state/session.svelte";
+import type { DeviceIdentityInitializationSnapshot } from "$lib/vault/action-contexts";
 import { VaultManagerRuntime } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -35,7 +35,6 @@ import {
 } from "$app-wasm";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
-  PasskeyCeremonyAction,
   setupDeviceProtection,
   unlockDeviceProtection,
   type PasskeyCeremonyFailure,
@@ -60,6 +59,12 @@ const log = browserLogRuntime.createLogger("vault-lifecycle");
 type DeviceIdentityInitialization = {
   readonly mode: DeviceIdentityInitializationMode;
 };
+
+enum DeviceIdentityAuthorizationState {
+  NotStarted,
+  PasskeyUnlocked,
+  ProtectionConfigured,
+}
 
 type ExternalDeviceIdentityAuthorization = {
   readonly adopt: (
@@ -92,7 +97,8 @@ export class VaultInitializationActions {
     const state = this.state;
     log.info("app init started");
     state.isInitializing = true;
-    let deviceIdentityUnlocked = false;
+    let deviceIdentityAuthorization =
+      DeviceIdentityAuthorizationState.NotStarted;
     if (!state.isVerifying) state.errorMsg = "";
     try {
       const savedLocale = new VaultLocaleActions(state).savedAppLocale();
@@ -211,22 +217,22 @@ export class VaultInitializationActions {
           const authorization = await state.enqueueStorage(
             async (): Promise<
               Result<
-                PasskeyCeremonyAction,
+                DeviceIdentityAuthorizationState,
                 PasskeyCeremonyFailure | StorageOperationFailure
               >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              const unlocked = await unlockDeviceProtection(manager.value);
-              if (unlocked.isErr()) return storageErr(unlocked.error);
-              return storageOk(PasskeyCeremonyAction.Unlock);
+              return (await unlockDeviceProtection(manager.value)).map(
+                () => DeviceIdentityAuthorizationState.PasskeyUnlocked,
+              );
             },
           );
           if (authorization.isErr()) {
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
-          deviceIdentityUnlocked = true;
+          deviceIdentityAuthorization = authorization.value;
           state.deviceAuthorizationInProgress = true;
         } else if (
           state.deviceProtectionStatus === DeviceProtectionStatus.Pin
@@ -238,32 +244,38 @@ export class VaultInitializationActions {
           const authorization = await state.enqueueStorage(
             async (): Promise<
               Result<
-                PasskeyCeremonyAction,
+                DeviceIdentityAuthorizationState,
                 PasskeyCeremonyFailure | StorageOperationFailure
               >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
-                manager: manager.value,
-                passkeyLabel: "",
-                deviceMode: state.draftDeviceMode,
-              };
-              const setup = await setupDeviceProtection(setupArgs);
-              if (setup.isErr()) return storageErr(setup.error);
-              return storageOk(PasskeyCeremonyAction.Create);
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+              return (
+                await setupDeviceProtection({
+                  manager: manager.value,
+                  passkeyLabel: "",
+                  deviceMode: state.draftDeviceMode,
+                })
+              ).map(
+                () => DeviceIdentityAuthorizationState.ProtectionConfigured,
+              );
             },
           );
           if (authorization.isErr()) {
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
-          deviceIdentityUnlocked = true;
+          deviceIdentityAuthorization = authorization.value;
           state.deviceAuthorizationInProgress = true;
         }
       }
 
-      if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {
+      if (
+        !state.deviceProtectionReady &&
+        deviceIdentityAuthorization ===
+          DeviceIdentityAuthorizationState.NotStarted
+      ) {
         const enrollment = state.enrollmentLinkState;
         if (enrollment.kind === EnrollmentLinkKind.Pending) {
           state.clearPendingEnrollmentFromUrl();
@@ -286,7 +298,10 @@ export class VaultInitializationActions {
       }
       const continued = await this.continueInitializationAfterDeviceUnlock();
       if (continued.isErr()) {
-        if (deviceIdentityUnlocked) {
+        if (
+          deviceIdentityAuthorization !==
+          DeviceIdentityAuthorizationState.NotStarted
+        ) {
           const locked = await state.lockDeviceProtection();
           if (locked.isErr()) {
             state.errorMsg = state.t(locked.error.translationKey);
@@ -300,7 +315,8 @@ export class VaultInitializationActions {
     } catch (error) {
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
-        deviceIdentityUnlocked
+        deviceIdentityAuthorization !==
+          DeviceIdentityAuthorizationState.NotStarted
       ) {
         void state.lockDeviceProtection().then((locked) => {
           if (locked.isErr())
@@ -322,7 +338,10 @@ export class VaultInitializationActions {
   }
 
   async continueInitializationAfterDeviceUnlock(): Promise<
-    Result<VaultDeviceIdentity, StorageOperationFailure | OAuthFailure>
+    Result<
+      DeviceIdentityInitializationSnapshot,
+      StorageOperationFailure | OAuthFailure
+    >
   > {
     const continuation = DeviceInitializationContinuation.admit(this.state);
     if (continuation.isErr()) return storageErr(continuation.error);
@@ -332,7 +351,7 @@ export class VaultInitializationActions {
   async initDeviceIdentity({
     mode,
   }: DeviceIdentityInitialization): Promise<
-    Result<VaultDeviceIdentity, StorageOperationFailure>
+    Result<DeviceIdentityInitializationSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (
@@ -351,6 +370,7 @@ export class VaultInitializationActions {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
       try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return storageOk({
           deviceId: admitted.value.device_id,
           devicePublicKey: admitted.value.device_public_key,
@@ -401,6 +421,7 @@ export class VaultInitializationActions {
           state.errorMsg = state.t(marked.error.translationKey);
           return false;
         }
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const initialized = await this.initDeviceIdentity({
           mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
         });
@@ -521,6 +542,7 @@ export class VaultInitializationActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
           operation,
           releaseLateValue: (records) => {
@@ -597,6 +619,7 @@ export class VaultInitializationActions {
 class DeviceInitializationContinuation {
   private readonly state: VaultState;
   private readonly manager: NookVaultManager;
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private constructor(request: {
     state: VaultState;
     manager: NookVaultManager;
@@ -616,18 +639,19 @@ class DeviceInitializationContinuation {
         ),
       );
     return storageOk(
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       new DeviceInitializationContinuation({ state, manager: manager.value }),
     );
   }
-  async continue(): Promise<
-    Result<VaultDeviceIdentity, StorageOperationFailure | OAuthFailure>
+  private async initializeCurrentDeviceIdentity(): Promise<
+    Result<DeviceIdentityInitializationSnapshot, StorageOperationFailure>
   > {
-    const state = this.state;
-    const manager = state.admitManager();
+    const manager = this.state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     if (
       manager.value !== this.manager ||
-      (!state.deviceProtectionReady && !state.deviceAuthorizationInProgress)
+      (!this.state.deviceProtectionReady &&
+        !this.state.deviceAuthorizationInProgress)
     )
       return storageErr(
         new StorageOperationFailure(
@@ -637,9 +661,18 @@ class DeviceInitializationContinuation {
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
-    const initialized = await new VaultInitializationActions(
-      state,
-    ).initDeviceIdentity(initialization);
+    return new VaultInitializationActions(this.state).initDeviceIdentity(
+      initialization,
+    );
+  }
+  async continue(): Promise<
+    Result<
+      DeviceIdentityInitializationSnapshot,
+      StorageOperationFailure | OAuthFailure
+    >
+  > {
+    const state = this.state;
+    const initialized = await this.initializeCurrentDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const pending = await state.enqueueStorage(async () => {
       const admittedManager = state.admitManager();

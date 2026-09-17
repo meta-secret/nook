@@ -85,12 +85,7 @@ const expectedLegacyRoutes = [
 const pagesRoutesJson: unknown = JSON.parse(
   await readFile(join(siteRoot, '_routes.json'), 'utf8'),
 )
-if (!isPagesRoutes(pagesRoutesJson)) {
-  throw new Error(
-    'Public site artifact must invoke its Pages Function only for retired app routes.',
-  )
-}
-const pagesRoutes = pagesRoutesJson
+const pagesRoutes = decodePagesRoutes(pagesRoutesJson)
 if (
   pagesRoutes.version !== 1 ||
   JSON.stringify(pagesRoutes.include) !==
@@ -108,55 +103,83 @@ type PagesWorker = {
     env: { ASSETS: { fetch(request: Request): Promise<Response> } },
   ): Promise<Response>
 }
+type PagesWorkerEnvironment = {
+  ASSETS: { fetch(request: Request): Promise<Response> }
+}
 type PagesRoutes = {
   version?: number
   include?: string[]
   exclude?: string[]
 }
 
-function isPagesRoutes(value: unknown): value is PagesRoutes {
-  return (
-    value instanceof Object &&
-    !Array.isArray(value) &&
-    (!('version' in value) || typeof value.version === 'number') &&
-    (!('include' in value) ||
-      (Array.isArray(value.include) &&
-        value.include.every((route) => typeof route === 'string'))) &&
-    (!('exclude' in value) ||
-      (Array.isArray(value.exclude) &&
-        value.exclude.every((route) => typeof route === 'string')))
-  )
+function decodePagesRoutes(value: unknown): PagesRoutes {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      'Public site artifact must invoke its Pages Function only for retired app routes.',
+    )
+  }
+  const routes: PagesRoutes = {}
+  if ('version' in value) {
+    if (typeof value.version !== 'number') {
+      throw new TypeError('Pages routes version must be a number.')
+    }
+    routes.version = value.version
+  }
+  if ('include' in value) routes.include = decodeRouteList(value.include)
+  if ('exclude' in value) routes.exclude = decodeRouteList(value.exclude)
+  return routes
 }
 
-type PagesWorkerModule = {
-  default: PagesWorker
+function decodeRouteList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError('Pages routes entry must be an array.')
+  }
+  const routes: string[] = []
+  for (const route of value) {
+    if (typeof route !== 'string') {
+      throw new TypeError('Pages routes include a non-string value.')
+    }
+    routes.push(route)
+  }
+  return routes
 }
 
 const requireFromApp = createRequire(import.meta.url)
 
-type ConcreteObject = Record<string, unknown>
-
-function isConcreteObject(value: unknown): value is ConcreteObject {
-  return Boolean(value) && typeof value === 'object'
-}
-
-function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
+function decodePagesWorker(value: unknown): PagesWorker {
   if (
-    !isConcreteObject(value) ||
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
     !('default' in value) ||
-    !isConcreteObject(value.default) ||
-    !('fetch' in value.default)
+    !value.default ||
+    typeof value.default !== 'object' ||
+    Array.isArray(value.default) ||
+    !('fetch' in value.default) ||
+    typeof value.default.fetch !== 'function'
   ) {
-    return false
+    throw new Error(
+      'Public site Pages Function has an invalid worker contract.',
+    )
   }
-  return typeof value.default.fetch === 'function'
+  const worker = value.default
+  const fetchHandler = value.default.fetch
+  return {
+    async fetch(
+      request: Request,
+      env: PagesWorkerEnvironment,
+    ): Promise<Response> {
+      const response: unknown = await fetchHandler.call(worker, request, env)
+      if (!(response instanceof Response)) {
+        throw new TypeError('Pages Function did not return a Response.')
+      }
+      return response
+    },
+  }
 }
 
 const pagesWorkerModule: unknown = requireFromApp(join(siteRoot, '_worker.js'))
-if (!isPagesWorkerModule(pagesWorkerModule)) {
-  throw new Error('Public site Pages Function has an invalid worker contract.')
-}
-const pagesWorker = pagesWorkerModule.default
+const pagesWorker = decodePagesWorker(pagesWorkerModule)
 class StaticAssetRequestCensus {
   private count = 0
 
@@ -170,7 +193,7 @@ class StaticAssetRequestCensus {
 }
 
 const staticAssetRequests = new StaticAssetRequestCensus()
-const workerEnv = {
+const workerEnv: PagesWorkerEnvironment = {
   ASSETS: {
     async fetch(): Promise<Response> {
       staticAssetRequests.record()

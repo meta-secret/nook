@@ -135,8 +135,18 @@ type GoogleIdentityServices =
   | { kind: GoogleIdentityServicesKind.NotLoaded }
   | {
       kind: GoogleIdentityServicesKind.Loading;
-      completion: Promise<Result<void, OAuthFailure>>;
+      completion: Promise<
+        Result<GoogleIdentityServicesReadiness, OAuthFailure>
+      >;
     };
+
+enum GoogleIdentityServicesReadiness {
+  Ready = "ready",
+}
+
+export enum GoogleOAuthInitializationOutcome {
+  Initialized = "initialized",
+}
 
 type TokenClientSlot = {
   scopeKey: string;
@@ -164,17 +174,19 @@ class GoogleOAuthSession {
     }
   }
 
-  private loadGisScript(): Promise<Result<void, OAuthFailure>> {
+  private loadGisScript(): Promise<
+    Result<GoogleIdentityServicesReadiness, OAuthFailure>
+  > {
     return new Promise((resolve) => {
       try {
         if (window.google?.accounts?.oauth2) {
-          resolve(ok());
+          resolve(ok(GoogleIdentityServicesReadiness.Ready));
           return;
         }
         const existing = document.querySelector(
           `script[src="${GIS_SCRIPT_URL}"]`,
         );
-        const loaded = () => resolve(ok());
+        const loaded = () => resolve(ok(GoogleIdentityServicesReadiness.Ready));
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
         if (existing) {
@@ -195,7 +207,9 @@ class GoogleOAuthSession {
     });
   }
 
-  private ensureGisReady(): Promise<Result<void, OAuthFailure>> {
+  private ensureGisReady(): Promise<
+    Result<GoogleIdentityServicesReadiness, OAuthFailure>
+  > {
     if (this.googleIdentityServices.kind === GoogleIdentityServicesKind.Loading)
       return this.googleIdentityServices.completion;
     const completion = this.loadGisScript();
@@ -257,14 +271,18 @@ class GoogleOAuthSession {
     }
   }
 
-  async initGoogleAuth(): Promise<Result<void, OAuthFailure>> {
+  async initGoogleAuth(): Promise<
+    Result<GoogleOAuthInitializationOutcome, OAuthFailure>
+  > {
     return (await this.tokenClientForScope(GoogleDriveOAuthScope.AppData)).map(
-      () => {},
+      () => GoogleOAuthInitializationOutcome.Initialized,
     );
   }
-  async initGoogleSharedDriveAuth(): Promise<Result<void, OAuthFailure>> {
+  async initGoogleSharedDriveAuth(): Promise<
+    Result<GoogleOAuthInitializationOutcome, OAuthFailure>
+  > {
     return (await this.tokenClientForScope(GoogleDriveOAuthScope.Shared)).map(
-      () => {},
+      () => GoogleOAuthInitializationOutcome.Initialized,
     );
   }
   private tokensFromResponse(

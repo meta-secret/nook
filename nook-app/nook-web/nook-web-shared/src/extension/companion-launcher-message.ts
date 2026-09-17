@@ -1,3 +1,10 @@
+import { Effect, Schema } from "effect";
+
+import {
+  RuntimeMessageDecodeFailure,
+  RuntimeMessageDecodeFailureKind,
+} from "./runtime-message-decode-failure";
+
 export enum OpenCompanionLauncherMessageType {
   NookOpenCompanionLauncher = "nook:open-companion-launcher",
 }
@@ -14,14 +21,13 @@ export class OpenCompanionLauncherMessage {
   declare readonly payload?: {
     intent: OpenCompanionLauncherIntent.Pair;
   };
-  static is<Message>(
-    message: Message,
-  ): message is Message & OpenCompanionLauncherMessage {
-    return (
-      NormalizedOpenCompanionLauncherMessage.normalizeOpenCompanionLauncherMessage(
-        message,
-      ).kind === OpenCompanionLauncherNormalizationKind.Normalized
-    );
+  static decode<WireMessage>(
+    message: WireMessage,
+  ): Effect.Effect<
+    NormalizedOpenCompanionLauncherMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return NormalizedOpenCompanionLauncherMessage.decode(message);
   }
 }
 
@@ -30,54 +36,40 @@ export class NormalizedOpenCompanionLauncherMessage {
   private constructor() {}
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly intent: OpenCompanionLauncherIntent;
-  static normalizeOpenCompanionLauncherMessage<Message>(
-    message: Message,
-  ): OpenCompanionLauncherNormalization {
-    if (
-      !message ||
-      typeof message !== "object" ||
-      !("type" in message) ||
-      message.type !==
-        OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-    ) {
-      return { kind: OpenCompanionLauncherNormalizationKind.NotLauncher };
-    }
-    if (!("payload" in message)) {
-      return {
-        kind: OpenCompanionLauncherNormalizationKind.Normalized,
-        message: {
-          type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-          intent: OpenCompanionLauncherIntent.Default,
-        },
-      };
-    }
-    const payload = message.payload;
-    if (
-      !payload ||
-      typeof payload !== "object" ||
-      !("intent" in payload) ||
-      payload.intent !== OpenCompanionLauncherIntent.Pair
-    ) {
-      return { kind: OpenCompanionLauncherNormalizationKind.NotLauncher };
-    }
-    return {
-      kind: OpenCompanionLauncherNormalizationKind.Normalized,
-      message: {
-        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-        intent: OpenCompanionLauncherIntent.Pair,
-      },
-    };
+
+  static decode<WireMessage>(
+    message: WireMessage,
+  ): Effect.Effect<
+    NormalizedOpenCompanionLauncherMessage,
+    RuntimeMessageDecodeFailure
+  > {
+    return Schema.decodeUnknown(NormalizedOpenCompanionLauncherMessageSchema)(
+      message,
+    ).pipe(
+      Effect.mapError((cause) =>
+        RuntimeMessageDecodeFailure.fromParseError({
+          kind: RuntimeMessageDecodeFailureKind.OpenCompanionLauncher,
+          cause,
+        }),
+      ),
+      Effect.map(({ type, payload }) => ({
+        type,
+        intent:
+          payload?.intent === OpenCompanionLauncherIntent.Pair
+            ? OpenCompanionLauncherIntent.Pair
+            : OpenCompanionLauncherIntent.Default,
+      })),
+    );
   }
 }
 
-export enum OpenCompanionLauncherNormalizationKind {
-  NotLauncher = "not-launcher",
-  Normalized = "normalized",
-}
-
-export type OpenCompanionLauncherNormalization =
-  | { kind: OpenCompanionLauncherNormalizationKind.NotLauncher }
-  | {
-      kind: OpenCompanionLauncherNormalizationKind.Normalized;
-      message: NormalizedOpenCompanionLauncherMessage;
-    };
+const NormalizedOpenCompanionLauncherMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  ),
+  payload: Schema.optional(
+    Schema.Struct({
+      intent: Schema.Literal(OpenCompanionLauncherIntent.Pair),
+    }),
+  ),
+});

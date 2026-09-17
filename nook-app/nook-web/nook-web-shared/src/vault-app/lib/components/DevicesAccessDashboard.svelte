@@ -22,6 +22,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import type { VaultState } from "$lib/vault.svelte";
   import {
     DashboardLoadKind,
+    IdentityLifecycleMutationOutcome,
     DashboardReadyProjectionKind,
     DashboardSnapshotFailureTransition,
     type DashboardSnapshotFailureRequest,
@@ -219,7 +220,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error);
       try {
         await manager.value.begin_local_identity_creation(vault.t(labelArgs));
-        return ok();
+        return ok(IdentityLifecycleMutationOutcome.CreationPrepared);
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
@@ -296,7 +297,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error);
       try {
         await manager.value.activate_local_identity(identityId);
-        return ok();
+        return ok(IdentityLifecycleMutationOutcome.Activated);
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }

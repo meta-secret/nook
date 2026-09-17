@@ -1,15 +1,25 @@
 import {
   GeneratePasswordRequestType,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
+  ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
   ExtensionPairedVaultIdentityHandoffRequestMessage as ExtensionPairedVaultIdentityHandoffRequestMessageSchema,
   ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
+  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
+  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
 } from '../lib/browser-runtime-message'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationWorkflowSnapshotIngress,
@@ -83,7 +93,7 @@ import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageS
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
-  InterruptedAuthorizationCleanupRecovery,
+  recoverInterruptedAuthorizationCleanup,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
 import {
@@ -102,10 +112,10 @@ import {
   extensionSessionLifecycle,
 } from './service-worker/session-lifecycle'
 import {
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
 } from './service-worker/session-runtime-messages'
 import {
   OrderedBackgroundRuntimeMessageRouter,
@@ -116,6 +126,7 @@ import {
   type BackgroundRuntimeMessageRoutes,
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
+import { Effect, Either } from 'effect'
 
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
@@ -145,17 +156,21 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
   extensionSessionDocument,
   handlePairingStateQuery,
-  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType.bind(
-    extensionPairingIdentity,
-  ),
+  decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionPairingStateQueryMessage:
-    ExtensionPairingStateQueryMessageSchema.is,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionPairingStateQueryMessage:
+    ExtensionPairingStateQueryMessageSchema.decode,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
+  decodeExtensionLocalEventLogUpdatedMessage:
+    ExtensionLocalEventLogUpdatedMessageSchema.decode,
+  decodeOpenSimpleVaultMessage: OpenSimpleVaultMessageSchema.decode,
+  decodeBeginExtensionPairingMessage: BeginExtensionPairingMessageSchema.decode,
+  decodeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.decode,
   openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
     extensionSessionLifecycle,
   ),
@@ -172,17 +187,19 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
 }
 
-void new InterruptedAuthorizationCleanupRecovery(
-  extensionLifecycleRoutingDependencies,
-)
-  .recover()
-  .then((cleanup) => {
-    if (cleanup.isErr())
-      console.warn(
-        'Extension authorization cleanup remains pending',
-        cleanup.error,
-      )
-  })
+void Effect.runPromise(
+  Effect.either(
+    recoverInterruptedAuthorizationCleanup(
+      extensionLifecycleRoutingDependencies,
+    ),
+  ),
+).then((cleanup) => {
+  if (Either.isLeft(cleanup))
+    console.warn(
+      'Extension authorization cleanup remains pending',
+      cleanup.left,
+    )
+})
 
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
@@ -197,21 +214,18 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       extensionPairingIdentity.discoverPairedVaultIdentity.bind(
         extensionPairingIdentity,
       ),
-    hasPairingApprovedType:
-      extensionPairingIdentity.hasPairingApprovedType.bind(
-        extensionPairingIdentity,
-      ),
+    decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
     importPairingAfterCompanionReady,
-    isExtensionIdentityHandoffRequestMessage:
-      ExtensionIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultIdentityDiscoveryMessage:
-      ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
-    isExtensionPairedVaultIdentityHandoffRequestMessage:
-      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultUnlockRequestMessage:
-      ExtensionPairedVaultUnlockRequestMessageSchema.is,
-    normalizeOpenCompanionLauncherMessage:
-      NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+    decodeExtensionIdentityHandoffRequestMessage:
+      ExtensionIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityDiscoveryMessage:
+      ExtensionPairedVaultIdentityDiscoveryMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityHandoffRequestMessage:
+      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultUnlockRequestMessage:
+      ExtensionPairedVaultUnlockRequestMessageSchema.decode,
+    decodeOpenCompanionLauncherMessage:
+      NormalizedOpenCompanionLauncherMessageSchema.decode,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
@@ -519,12 +533,17 @@ class BackgroundRuntimeMessageRouter {
       return true
     }
 
-    if (AuthenticationOutcomeClassifyMessageSchema.is(message)) {
+    const outcomeClassify = runConcreteDecoder(
+      AuthenticationOutcomeClassifyMessageSchema.decode,
+      message,
+    )
+    if (outcomeClassify.kind === ConcreteDecoderResultKind.Decoded) {
+      const outcomeMessage = outcomeClassify.value
       const nookTypedArgs0_3: Parameters<
         typeof backgroundVaultRuntime.classifyAuthenticationOutcome
       >[0] = {
-        observation: message.payload.observation,
-        timeoutMs: message.payload.timeoutMs,
+        observation: outcomeMessage.payload.observation,
+        timeoutMs: outcomeMessage.payload.timeoutMs,
       }
       void backgroundVaultRuntime
         .classifyAuthenticationOutcome(nookTypedArgs0_3)
@@ -596,18 +615,21 @@ class BackgroundRuntimeMessageRouter {
   }
 }
 
-const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
-  (runtimeMessage: unknown, sender, sendResponse) => {
-    const admission = BrowserRuntimeMessage.from(runtimeMessage)
-    if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
-      return false
-    const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
-      runtimeMessage: admission.message,
-      sender,
-      sendResponse,
-    }
-    return new BackgroundRuntimeMessageRouter(routingRequest).route()
+const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
+  runtimeMessage: unknown,
+  sender,
+  sendResponse,
+) => {
+  const admission = BrowserRuntimeMessage.from(runtimeMessage)
+  if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
+    return false
+  const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
+    runtimeMessage: admission.message,
+    sender,
+    sendResponse,
   }
+  return new BackgroundRuntimeMessageRouter(routingRequest).route()
+}
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
@@ -621,9 +643,9 @@ chrome.runtime.onMessageExternal.addListener(
       sender,
       sendResponse,
     }
-    void new ExternalCompanionRouter(externalRoutingArgs).route().catch(() =>
-      sendResponse({ ok: false, reason: 'forbidden-sender' }),
-    )
+    void new ExternalCompanionRouter(externalRoutingArgs)
+      .route()
+      .catch(() => sendResponse({ ok: false, reason: 'forbidden-sender' }))
     return true
   },
 )

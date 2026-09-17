@@ -1,14 +1,7 @@
-import { err, ok, type Result } from 'neverthrow'
+import { Effect, Either } from 'effect'
 import type { ExtensionSessionTransportFailure } from './session-document'
-import {
-  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
-  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
-  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
-} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
-import {
-  OpenCompanionLauncherNormalizationKind,
-  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   ExternalSenderTrustPolicy,
   isExtensionRuntimeSender,
@@ -25,6 +18,10 @@ import type * as AccountPickers from './account-pickers'
 import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
 import { CleanupEvidence } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -48,14 +45,18 @@ export type ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
-  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
+  decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
-  isExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.is
-  isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
-  isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
-  isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
+  decodeExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.decodeExtensionAuthenticationSurfacesRefreshMessage
+  decodeExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.decode
+  decodeExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.decodeExtensionSessionEnsureMessage
+  decodeExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.decodeExtensionSessionExpiryMessage
+  decodeExtensionSessionLockMessage: typeof SessionRuntimeMessages.decodeExtensionSessionLockMessage
+  decodeExtensionLocalEventLogUpdatedMessage: typeof RuntimeMessages.ExtensionLocalEventLogUpdatedMessage.decode
+  decodeOpenSimpleVaultMessage: typeof RuntimeMessages.OpenSimpleVaultMessage.decode
+  decodeBeginExtensionPairingMessage: typeof RuntimeMessages.BeginExtensionPairingMessage.decode
+  decodeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.decode
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.extensionPairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
@@ -111,27 +112,6 @@ type ClearAuthorizationStateArgs = {
   cleanupStart: AuthorizationCleanupStart
 }
 
-enum AuthorizationCleanupSessionDisposition {
-  Close = 'close-session',
-  Preserve = 'preserve-session',
-}
-
-enum AuthorizationCleanupSessionOperationKind {
-  Closed = 'closed',
-  Preserved = 'preserved',
-  Rejected = 'rejected',
-}
-
-type AuthorizationCleanupSessionOperation =
-  | { kind: AuthorizationCleanupSessionOperationKind.Preserved }
-  | { kind: AuthorizationCleanupSessionOperationKind.Rejected }
-  | {
-      kind: AuthorizationCleanupSessionOperationKind.Closed
-      result: Awaited<
-        ReturnType<ClearAuthorizationStateArgs['closeExtensionSessionDocument']>
-      >
-    }
-
 enum AuthorizationCleanupStartKind {
   Begin = 'begin',
   Existing = 'existing',
@@ -144,6 +124,11 @@ type AuthorizationCleanupStart =
       cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     }
 
+enum AuthorizationCleanupSessionDisposition {
+  Close = 'close-session',
+  Preserve = 'preserve-session',
+}
+
 export enum AuthorizationCleanupFailureKind {
   MarkerUnavailable = 'authorization-cleanup-marker-unavailable',
   PendingPickerRemovalFailed = 'authorization-cleanup-picker-removal-failed',
@@ -151,21 +136,36 @@ export enum AuthorizationCleanupFailureKind {
   MarkerLookupFailed = 'authorization-cleanup-marker-lookup-failed',
 }
 
-export enum AuthorizationCleanupSuccess {
+type AuthorizationCleanupFailure =
+  AuthorizationCleanupFailureKind | ExtensionSessionTransportFailure
+
+export enum AuthorizationCleanupSuccessKind {
   Cleared = 'authorization-cleanup-cleared',
 }
 
-type AuthorizationCleanupFailure =
-  AuthorizationCleanupFailureKind | ExtensionSessionTransportFailure
-type AuthorizationCleanupResult = Result<
+export type AuthorizationCleanupSuccess = {
+  kind: AuthorizationCleanupSuccessKind.Cleared
+  authorizationGeneration: AccountPickers.AccountPickerAuthorizationCleanupStart['authorizationGeneration']
+}
+
+type AuthorizationCleanupEffect = Effect.Effect<
   AuthorizationCleanupSuccess,
   readonly AuthorizationCleanupFailure[]
 >
 
+enum AuthorizationCleanupCloseKind {
+  Skipped = 'skipped',
+  Closed = 'closed',
+}
+
+type AuthorizationCleanupClose =
+  | { kind: AuthorizationCleanupCloseKind.Skipped }
+  | { kind: AuthorizationCleanupCloseKind.Closed }
+
 class AuthorizationCleanupLifecycle {
   constructor(private readonly request: ClearAuthorizationStateArgs) {}
 
-  async clear(): Promise<AuthorizationCleanupResult> {
+  clear(): AuthorizationCleanupEffect {
     const {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
@@ -176,169 +176,159 @@ class AuthorizationCleanupLifecycle {
       sessionDisposition,
       cleanupStart,
     } = this.request
-    const cleanupOperation =
-      cleanupStart.kind === AuthorizationCleanupStartKind.Existing
-        ? Promise.resolve(cleanupStart.cleanup)
-        : beginAccountPickerAuthorizationCleanup()
-    let sessionOperation: Promise<AuthorizationCleanupSessionOperation>
-    switch (sessionDisposition) {
-      case AuthorizationCleanupSessionDisposition.Close:
-        sessionOperation = closeExtensionSessionDocument().then(
-          (result): AuthorizationCleanupSessionOperation => ({
-            kind: AuthorizationCleanupSessionOperationKind.Closed,
-            result,
-          }),
-          (): AuthorizationCleanupSessionOperation => ({
-            kind: AuthorizationCleanupSessionOperationKind.Rejected,
-          }),
-        )
-        break
-      case AuthorizationCleanupSessionDisposition.Preserve: {
-        const preservedOperation: AuthorizationCleanupSessionOperation = {
-          kind: AuthorizationCleanupSessionOperationKind.Preserved,
-        }
-        sessionOperation = Promise.resolve(preservedOperation)
-        break
-      }
-    }
-    let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-    try {
-      startedCleanup = await cleanupOperation
-    } catch {
-      await sessionOperation
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    const { authorizationGeneration, markerStatus } = startedCleanup
-    const failures: AuthorizationCleanupFailure[] = []
-    if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
-      failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
-    const sessionOutcome = await sessionOperation
-    switch (sessionOutcome.kind) {
-      case AuthorizationCleanupSessionOperationKind.Closed:
-        if (sessionOutcome.result.isErr())
-          failures.push(sessionOutcome.result.error)
-        break
-      case AuthorizationCleanupSessionOperationKind.Preserved:
-        break
-      case AuthorizationCleanupSessionOperationKind.Rejected:
-        failures.push(AuthorizationCleanupFailureKind.Rejected)
-        break
-    }
-    clearStagedAuthenticatorEnrollments()
-    try {
-      await clearPendingAccountPickers()
-    } catch {
-      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-    }
-    try {
-      await clearPendingAccountPickers()
-    } catch {
-      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-    }
-    clearStagedAuthenticatorEnrollments()
-    if (failures.length > 0) {
-      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-      return err(failures)
-    }
-    let outcome: Awaited<
-      ReturnType<typeof completeAccountPickerAuthorizationCleanup>
-    >
-    try {
-      outcome = await completeAccountPickerAuthorizationCleanup(
-        authorizationGeneration,
-        CleanupEvidence.Full,
+    return Effect.gen(function* () {
+      const cleanupOperation =
+        cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+          ? Effect.succeed(cleanupStart.cleanup)
+          : Effect.tryPromise({
+              try: () => beginAccountPickerAuthorizationCleanup(),
+              catch: () => AuthorizationCleanupFailureKind.Rejected,
+            })
+      const closeOperation: Effect.Effect<
+        AuthorizationCleanupClose,
+        AuthorizationCleanupFailure
+      > =
+        sessionDisposition === AuthorizationCleanupSessionDisposition.Close
+          ? Effect.tryPromise({
+              try: () => closeExtensionSessionDocument(),
+              catch: () => AuthorizationCleanupFailureKind.Rejected,
+            }).pipe(
+              Effect.flatMap((closed) =>
+                closed.isErr()
+                  ? Effect.fail(closed.error)
+                  : Effect.succeed({
+                      kind: AuthorizationCleanupCloseKind.Closed,
+                    }),
+              ),
+            )
+          : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Skipped })
+      const [cleanupResult, closeResult] = yield* Effect.all(
+        [Effect.either(cleanupOperation), Effect.either(closeOperation)],
+        { concurrency: 'unbounded' },
       )
-    } catch {
-      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    if ('error' in outcome) {
-      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    return ok(AuthorizationCleanupSuccess.Cleared)
+      if (Either.isLeft(cleanupResult)) {
+        return yield* Effect.fail([cleanupResult.left])
+      }
+      const { authorizationGeneration, markerStatus } = cleanupResult.right
+      const failures: AuthorizationCleanupFailure[] = []
+      if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable) {
+        failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
+      }
+      if (Either.isLeft(closeResult)) failures.push(closeResult.left)
+      const firstStagedCleanup = yield* Effect.either(
+        Effect.try({
+          try: () => clearStagedAuthenticatorEnrollments(),
+          catch: () => AuthorizationCleanupFailureKind.Rejected,
+        }),
+      )
+      if (Either.isLeft(firstStagedCleanup))
+        failures.push(firstStagedCleanup.left)
+      const firstPickerCleanup = yield* Effect.either(
+        Effect.tryPromise({
+          try: () => clearPendingAccountPickers(),
+          catch: () =>
+            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+        }),
+      )
+      if (Either.isLeft(firstPickerCleanup))
+        failures.push(firstPickerCleanup.left)
+      const secondPickerCleanup = yield* Effect.either(
+        Effect.tryPromise({
+          try: () => clearPendingAccountPickers(),
+          catch: () =>
+            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+        }),
+      )
+      if (Either.isLeft(secondPickerCleanup))
+        failures.push(secondPickerCleanup.left)
+      const secondStagedCleanup = yield* Effect.either(
+        Effect.try({
+          try: () => clearStagedAuthenticatorEnrollments(),
+          catch: () => AuthorizationCleanupFailureKind.Rejected,
+        }),
+      )
+      if (Either.isLeft(secondStagedCleanup))
+        failures.push(secondStagedCleanup.left)
+      if (failures.length > 0) {
+        releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+        return yield* Effect.fail(failures)
+      }
+      const outcome = yield* Effect.tryPromise({
+        try: () =>
+          completeAccountPickerAuthorizationCleanup(
+            authorizationGeneration,
+            CleanupEvidence.Full,
+          ),
+        catch: (): readonly AuthorizationCleanupFailure[] => [
+          AuthorizationCleanupFailureKind.Rejected,
+        ],
+      })
+      if ('error' in outcome) {
+        return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
+      }
+      return {
+        kind: AuthorizationCleanupSuccessKind.Cleared,
+        authorizationGeneration,
+      }
+    })
   }
 }
 
-enum AuthorizationCleanupMarkerLookupKind {
-  Resolved = 'resolved',
-  Rejected = 'rejected',
-}
-
-type AuthorizationCleanupMarkerLookup =
-  | {
-      readonly kind: AuthorizationCleanupMarkerLookupKind.Resolved
-      readonly pending: boolean
+export function recoverInterruptedAuthorizationCleanup(
+  dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
+): AuthorizationCleanupEffect {
+  return Effect.gen(function* () {
+    const pendingLookup = Effect.tryPromise({
+      try: () => dependencies.accountPickerAuthorizationCleanupPending(),
+      catch: () => AuthorizationCleanupFailureKind.MarkerLookupFailed,
+    })
+    const cleanupStart = Effect.tryPromise({
+      try: () => dependencies.beginAccountPickerAuthorizationCleanup(),
+      catch: () => AuthorizationCleanupFailureKind.Rejected,
+    })
+    const [lookupResult, cleanupResult] = yield* Effect.all(
+      [Effect.either(pendingLookup), Effect.either(cleanupStart)],
+      { concurrency: 'unbounded' },
+    )
+    if (Either.isLeft(cleanupResult)) {
+      return yield* Effect.fail([cleanupResult.left])
     }
-  | { readonly kind: AuthorizationCleanupMarkerLookupKind.Rejected }
-
-export class InterruptedAuthorizationCleanupRecovery {
-  constructor(
-    private readonly dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
-  ) {}
-
-  async recover(): Promise<AuthorizationCleanupResult> {
-    const pendingLookup: Promise<AuthorizationCleanupMarkerLookup> =
-      this.dependencies
-        .accountPickerAuthorizationCleanupPending()
-        .then(
-          (pending): AuthorizationCleanupMarkerLookup => ({
-            kind: AuthorizationCleanupMarkerLookupKind.Resolved,
-            pending,
-          }),
-          (): AuthorizationCleanupMarkerLookup => ({
-            kind: AuthorizationCleanupMarkerLookupKind.Rejected,
-          }),
-        )
-    let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-    try {
-      cleanup = await this.dependencies.beginAccountPickerAuthorizationCleanup()
-    } catch {
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    const lookup = await pendingLookup
-    if (lookup.kind === AuthorizationCleanupMarkerLookupKind.Rejected) {
-      this.dependencies.releaseAccountPickerAuthorizationCleanup(
+    const cleanup = cleanupResult.right
+    if (Either.isLeft(lookupResult)) {
+      dependencies.releaseAccountPickerAuthorizationCleanup(
         cleanup.authorizationGeneration,
       )
-      return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
+      return yield* Effect.fail([lookupResult.left])
     }
-    if (!lookup.pending) {
-      let outcome: Awaited<
-        ReturnType<
-          InterruptedAuthorizationCleanupRecoveryDependencies['completeAccountPickerAuthorizationCleanup']
-        >
-      >
-      try {
-        outcome =
-          await this.dependencies.completeAccountPickerAuthorizationCleanup(
+    if (!lookupResult.right) {
+      const outcome = yield* Effect.tryPromise({
+        try: () =>
+          dependencies.completeAccountPickerAuthorizationCleanup(
             cleanup.authorizationGeneration,
             CleanupEvidence.Partial,
-          )
-      } catch {
-        this.dependencies.releaseAccountPickerAuthorizationCleanup(
-          cleanup.authorizationGeneration,
-        )
-        return err([AuthorizationCleanupFailureKind.Rejected])
-      }
+          ),
+        catch: (): readonly AuthorizationCleanupFailure[] => [
+          AuthorizationCleanupFailureKind.Rejected,
+        ],
+      })
       if ('error' in outcome) {
-        this.dependencies.releaseAccountPickerAuthorizationCleanup(
-          cleanup.authorizationGeneration,
-        )
-        return err([AuthorizationCleanupFailureKind.Rejected])
+        return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
       }
-      return ok(AuthorizationCleanupSuccess.Cleared)
+      return {
+        kind: AuthorizationCleanupSuccessKind.Cleared,
+        authorizationGeneration: cleanup.authorizationGeneration,
+      }
     }
     const cleanupArgs: ClearAuthorizationStateArgs = {
-      ...this.dependencies,
+      ...dependencies,
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: {
         kind: AuthorizationCleanupStartKind.Existing,
         cleanup,
       },
     }
-    return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
-  }
+    return yield* new AuthorizationCleanupLifecycle(cleanupArgs).clear()
+  })
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -360,14 +350,18 @@ export function routeExtensionLifecycleMessage({
     ensureExtensionSessionDocument,
     extensionSessionDocument,
     handlePairingStateQuery,
-    hasPairingApprovedType,
+    decodePairingApprovedMessage,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
-    isExtensionAuthenticationSurfacesRefreshMessage,
-    isExtensionPairingStateQueryMessage,
-    isExtensionSessionEnsureMessage,
-    isExtensionSessionExpiryMessage,
-    isExtensionSessionLockMessage,
+    decodeExtensionAuthenticationSurfacesRefreshMessage,
+    decodeExtensionPairingStateQueryMessage,
+    decodeExtensionSessionEnsureMessage,
+    decodeExtensionSessionExpiryMessage,
+    decodeExtensionSessionLockMessage,
+    decodeExtensionLocalEventLogUpdatedMessage,
+    decodeOpenSimpleVaultMessage,
+    decodeBeginExtensionPairingMessage,
+    decodeOpenCompanionLauncherMessage,
     openCompanionLauncher,
     openExtensionPairing,
     openSimpleVault,
@@ -375,7 +369,11 @@ export function routeExtensionLifecycleMessage({
     rebindStagedAuthenticatorEnrollmentsAuthorization,
     refreshAuthenticationSurfaces,
   } = dependencies
-  if (isExtensionPairingStateQueryMessage(message)) {
+  const pairingStateQuery = runConcreteDecoder(
+    decodeExtensionPairingStateQueryMessage,
+    message,
+  )
+  if (pairingStateQuery.kind === ConcreteDecoderResultKind.Decoded) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
       sender,
       sendResponse,
@@ -383,7 +381,11 @@ export function routeExtensionLifecycleMessage({
     return handlePairingStateQuery(queryContext)
   }
 
-  if (isExtensionSessionEnsureMessage(message)) {
+  const sessionEnsure = runConcreteDecoder(
+    decodeExtensionSessionEnsureMessage,
+    message,
+  )
+  if (sessionEnsure.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -396,7 +398,14 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionAuthenticationSurfacesRefreshMessage(message)) {
+  const refreshAuthenticationSurfacesMessage = runConcreteDecoder(
+    decodeExtensionAuthenticationSurfacesRefreshMessage,
+    message,
+  )
+  if (
+    refreshAuthenticationSurfacesMessage.kind ===
+    ConcreteDecoderResultKind.Decoded
+  ) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -407,7 +416,11 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionSessionLockMessage(message)) {
+  const sessionLock = runConcreteDecoder(
+    decodeExtensionSessionLockMessage,
+    message,
+  )
+  if (sessionLock.kind === ConcreteDecoderResultKind.Decoded) {
     const senderUrlAllowed =
       !('url' in sender) ||
       (typeof sender.url === 'string' &&
@@ -426,18 +439,25 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void new AuthorizationCleanupLifecycle(cleanupArgs)
-      .clear()
+    void Effect.runPromise(
+      Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    )
       .then((cleanup) =>
         sendResponse(
-          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+          Either.isRight(cleanup)
+            ? successResponse
+            : sessionLockFailureResponse,
         ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
-  if (isExtensionSessionExpiryMessage(message)) {
+  const sessionExpiry = runConcreteDecoder(
+    decodeExtensionSessionExpiryMessage,
+    message,
+  )
+  if (sessionExpiry.kind === ConcreteDecoderResultKind.Decoded) {
     if (
       !isExtensionRuntimeSender(sender) ||
       !sender.url?.endsWith(`/${extensionSessionDocument}`)
@@ -455,23 +475,30 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void new AuthorizationCleanupLifecycle(cleanupArgs)
-      .clear()
+    void Effect.runPromise(
+      Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    )
       .then((cleanup) =>
         sendResponse(
-          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+          Either.isRight(cleanup)
+            ? successResponse
+            : sessionLockFailureResponse,
         ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
-  if (hasPairingApprovedType(message)) {
+  const pairingApproval = runConcreteDecoder(
+    decodePairingApprovedMessage,
+    message,
+  )
+  if (pairingApproval.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void importPairingAfterCompanionReady(message)
+    void importPairingAfterCompanionReady(pairingApproval.value)
       .then(async (response) => {
         if (response.ok) await refreshAuthenticationSurfaces()
         return response
@@ -480,7 +507,12 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (ExtensionLocalEventLogUpdatedMessageSchema.is(message)) {
+  const localEventLogUpdate = runConcreteDecoder(
+    decodeExtensionLocalEventLogUpdatedMessage,
+    message,
+  )
+  if (localEventLogUpdate.kind === ConcreteDecoderResultKind.Decoded) {
+    const decodedMessage = localEventLogUpdate.value
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -492,8 +524,8 @@ export function routeExtensionLifecycleMessage({
           return
         }
         const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
-          vaultStoreId: message.payload.vaultStoreId,
-          eventLogRecords: message.payload.eventLogRecords,
+          vaultStoreId: decodedMessage.payload.vaultStoreId,
+          eventLogRecords: decodedMessage.payload.eventLogRecords,
         }
         void beginAccountPickerAuthorizationCleanup()
           .then(async (cleanupStart) => {
@@ -517,10 +549,12 @@ export function routeExtensionLifecycleMessage({
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
               ) {
                 try {
-                  const cleanup = await new AuthorizationCleanupLifecycle(
-                    cleanupArgs,
-                  ).clear()
-                  if (cleanup.isErr())
+                  const cleanup = await Effect.runPromise(
+                    Effect.either(
+                      new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
+                    ),
+                  )
+                  if (Either.isLeft(cleanup))
                     return {
                       ok: false,
                       reason: LocalEventLogUpdateFailure.EventLogImportFailed,
@@ -543,10 +577,12 @@ export function routeExtensionLifecycleMessage({
               return response
             } catch {
               try {
-                const cleanup = await new AuthorizationCleanupLifecycle(
-                  cleanupArgs,
-                ).clear()
-                if (cleanup.isErr())
+                const cleanup = await Effect.runPromise(
+                  Effect.either(
+                    new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
+                  ),
+                )
+                if (Either.isLeft(cleanup))
                   return {
                     ok: false,
                     reason: LocalEventLogUpdateFailure.EventLogImportFailed,
@@ -566,7 +602,11 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (OpenSimpleVaultMessageSchema.is(message)) {
+  const openSimpleVaultMessage = runConcreteDecoder(
+    decodeOpenSimpleVaultMessage,
+    message,
+  )
+  if (openSimpleVaultMessage.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -577,29 +617,31 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  const launcherMessage =
-    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
-      message,
-    )
-  if (
-    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
-  ) {
+  const launcherMessage = runConcreteDecoder(
+    decodeOpenCompanionLauncherMessage,
+    message,
+  )
+  if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(launcherMessage.message.intent)
+    void openCompanionLauncher(launcherMessage.value.intent)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true
   }
 
-  if (BeginExtensionPairingMessageSchema.is(message)) {
+  const beginExtensionPairing = runConcreteDecoder(
+    decodeBeginExtensionPairingMessage,
+    message,
+  )
+  if (beginExtensionPairing.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openExtensionPairing(message.payload)
+    void openExtensionPairing(beginExtensionPairing.value.payload)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(pairingLaunchFailureResponse))
     return true

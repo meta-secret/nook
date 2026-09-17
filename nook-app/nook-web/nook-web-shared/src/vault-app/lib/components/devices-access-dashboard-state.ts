@@ -15,6 +15,11 @@ export enum DashboardLoadKind {
   Failed = "failed",
 }
 
+export enum IdentityLifecycleMutationOutcome {
+  CreationPrepared = "creation-prepared",
+  Activated = "activated",
+}
+
 export interface DashboardSnapshotFailureRequest {
   readonly currentGeneration: () => number;
   readonly failAccessSnapshot: () => void;

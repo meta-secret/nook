@@ -45,6 +45,10 @@ export type LocaleUpdate = {
   readonly catalogSource: LocaleCatalogSource;
 };
 
+export enum LocaleUpdateOutcome {
+  Updated = "updated",
+}
+
 /** Owns locale catalog preparation and persistence for one application state. */
 export class VaultLocaleActions {
   constructor(private readonly state: VaultState) {}
@@ -91,7 +95,7 @@ export class VaultLocaleActions {
 
   async updateLocale(
     request: LocaleUpdate,
-  ): Promise<Result<NookAppLocale, LocaleUpdateFailure>> {
+  ): Promise<Result<LocaleUpdateOutcome, LocaleUpdateFailure>> {
     const catalog = this.catalog(request);
     if (catalog.isErr()) return err(catalog.error);
     try {
@@ -115,6 +119,6 @@ export class VaultLocaleActions {
     }
     this.state.locale = request.newLocale;
     this.state.translations = catalog.value;
-    return ok(request.newLocale);
+    return ok(LocaleUpdateOutcome.Updated);
   }
 }

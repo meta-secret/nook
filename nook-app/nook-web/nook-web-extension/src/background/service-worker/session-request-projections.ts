@@ -1,4 +1,3 @@
-import type { ExtensionIdentityHandoffRequestMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -11,26 +10,33 @@ import {
 
 type IdentityHandoffSessionRequest = Extract<
   ExtensionSessionTransportRequest,
-  { type: `${ExtensionSessionMessageType.SealIdentityHandoff}` }
+  { type: typeof ExtensionSessionMessageType.SealIdentityHandoff }
 >
 
 type WebsiteLoginRevealSessionRequest = Extract<
   ExtensionSessionTransportRequest,
-  { type: `${ExtensionSessionMessageType.RevealLogin}` }
+  { type: typeof ExtensionSessionMessageType.RevealLogin }
 >
 
+export type IdentityHandoffSessionProjection = {
+  readonly recipientPublicKey: string
+  readonly nonce: string
+  readonly expectedDeviceId: string
+  readonly expectedDevicePublicKey: string
+  readonly expectedDeviceSigningPublicKey: string
+}
+
 export function identityHandoffSessionRequest(
-  message: ExtensionIdentityHandoffRequestMessage,
+  request: IdentityHandoffSessionProjection,
 ): IdentityHandoffSessionRequest {
   return {
     type: ExtensionSessionMessageType.SealIdentityHandoff,
     payload: {
-      recipientPublicKey: message.payload.recipientPublicKey,
-      nonce: message.payload.nonce,
-      expectedDeviceId: message.payload.expectedDeviceId,
-      expectedDevicePublicKey: message.payload.expectedDevicePublicKey,
-      expectedDeviceSigningPublicKey:
-        message.payload.expectedDeviceSigningPublicKey,
+      recipientPublicKey: request.recipientPublicKey,
+      nonce: request.nonce,
+      expectedDeviceId: request.expectedDeviceId,
+      expectedDevicePublicKey: request.expectedDevicePublicKey,
+      expectedDeviceSigningPublicKey: request.expectedDeviceSigningPublicKey,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }

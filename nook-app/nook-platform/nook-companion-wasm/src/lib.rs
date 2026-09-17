@@ -361,6 +361,27 @@ pub fn is_extension_ready_setup_json(value: &str) -> bool {
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
+pub fn decode_stored_extension_pairing_grant_json(
+    value: &str,
+) -> Result<StoredExtensionPairingGrant, JsError> {
+    StoredExtensionPairingGrant::decode_json(value)
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_ready_setup_json(value: &str) -> Result<ExtensionReadySetup, JsError> {
+    ExtensionReadySetup::decode_json(value).map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn migrate_legacy_extension_pairing_state_json(
     value: &str,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
@@ -613,6 +634,30 @@ mod tests {
             &serde_json::to_string(&grant).map_err(|error| error.to_string())?
         ));
         assert!(!is_stored_extension_pairing_grant_json("{}"));
+        let grant_json = serde_json::to_string(&grant).map_err(|error| error.to_string())?;
+        assert_eq!(
+            decode_stored_extension_pairing_grant_json(&grant_json)
+                .map_err(|error| format!("grant decode failed: {error:?}"))?,
+            grant
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(decode_stored_extension_pairing_grant_json("{}").is_err());
+        let setup = created
+            .entries
+            .iter()
+            .find_map(|entry| match &entry.record {
+                nook_companion_core::ExtensionPairingRecord::Setup(setup) => Some(setup.clone()),
+                nook_companion_core::ExtensionPairingRecord::Grant(_) => None,
+            })
+            .ok_or_else(|| "created pairing state did not contain setup".to_owned())?;
+        let setup_json = serde_json::to_string(&setup).map_err(|error| error.to_string())?;
+        assert_eq!(
+            decode_extension_ready_setup_json(&setup_json)
+                .map_err(|error| format!("setup decode failed: {error:?}"))?,
+            setup
+        );
+        #[cfg(target_arch = "wasm32")]
+        assert!(decode_extension_ready_setup_json("{}").is_err());
         let refreshed = refresh_extension_pairing_grant(
             nook_companion_core::RefreshExtensionPairingGrantInput {
                 grant,

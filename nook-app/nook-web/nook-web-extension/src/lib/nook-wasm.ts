@@ -74,17 +74,17 @@ export type StoredAppLocaleParse =
 type ExtensionControlPayload = { queue: ExtensionSessionQueue }
 
 type ExtensionStatusRequest = {
-  type: ExtensionSessionMessageType.Status
+  type: typeof ExtensionSessionMessageType.Status
   payload: ExtensionControlPayload
 }
 
 type ExtensionBeginPasskeySetupRequest = {
-  type: ExtensionSessionMessageType.BeginPasskeySetup
+  type: typeof ExtensionSessionMessageType.BeginPasskeySetup
   payload: ExtensionControlPayload
 }
 
 type ExtensionFinishPasskeySetupRequest = {
-  type: ExtensionSessionMessageType.FinishPasskeySetup
+  type: typeof ExtensionSessionMessageType.FinishPasskeySetup
   payload: {
     credentialId: number[]
     userHandle: number[]
@@ -96,7 +96,7 @@ type ExtensionFinishPasskeySetupRequest = {
 }
 
 type ExtensionRecoverPasskeyRequest = {
-  type: ExtensionSessionMessageType.RecoverPasskey
+  type: typeof ExtensionSessionMessageType.RecoverPasskey
   payload: {
     credentialId: number[]
     userHandle: number[]
@@ -106,22 +106,22 @@ type ExtensionRecoverPasskeyRequest = {
 }
 
 type ExtensionUnlockOptionsRequest = {
-  type: ExtensionSessionMessageType.UnlockOptions
+  type: typeof ExtensionSessionMessageType.UnlockOptions
   payload: ExtensionControlPayload
 }
 
 type ExtensionUnlockPasskeyRequest = {
-  type: ExtensionSessionMessageType.UnlockPasskey
+  type: typeof ExtensionSessionMessageType.UnlockPasskey
   payload: { prfOutput: number[]; queue: ExtensionSessionQueue }
 }
 
 type ExtensionCreatePinRequest = {
-  type: ExtensionSessionMessageType.CreatePin
+  type: typeof ExtensionSessionMessageType.CreatePin
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
 type ExtensionUnlockPinRequest = {
-  type: ExtensionSessionMessageType.UnlockPin
+  type: typeof ExtensionSessionMessageType.UnlockPin
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
@@ -196,7 +196,6 @@ class ExtensionWasmRuntime {
   ): Promise<Response> {
     // Promise owns this callback's resolve and reject signature.
     return new Promise<Response>((resolve, reject) => {
-
       chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {
         if (chrome.runtime.lastError?.message) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -220,8 +219,14 @@ class ExtensionWasmRuntime {
     const runtime = await this.runtimeMessage(
       { type: ExtensionRuntimeRequestType.EnsureRuntime },
       (response): { ok: true } | { ok: false; reason?: string } => {
-        if (!response || typeof response !== 'object' || Array.isArray(response)) {
-          throw new Error('Extension session runtime returned a malformed response.')
+        if (
+          !response ||
+          typeof response !== 'object' ||
+          Array.isArray(response)
+        ) {
+          throw new Error(
+            'Extension session runtime returned a malformed response.',
+          )
         }
         if ('ok' in response && response.ok === true) return { ok: true }
         return {

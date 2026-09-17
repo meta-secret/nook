@@ -174,8 +174,9 @@ pub use extension_persistence::{
     ExtensionPersistenceStoreState,
 };
 pub use extension_session_protocol::{
-    ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
-    LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
+    ExtensionEventLogRecord, ExtensionSessionRequest, ExtensionSessionRequestValidation,
+    ExtensionSessionRequestWire, LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError,
+    LoginPickerOpenResponseWire,
 };
 pub use extension_session_status_response::{
     ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,

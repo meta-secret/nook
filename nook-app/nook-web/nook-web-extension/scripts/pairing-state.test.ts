@@ -19,11 +19,20 @@ const readySetup: ExtensionReadySetupState = {
   lastLocalSyncAt: '2026-09-12T00:00:00.000Z',
 }
 
-const pairingPolicy = Promise.resolve({
-  isExtensionReadySetupState: (
-    value: unknown,
-  ): value is ExtensionReadySetupState => value === readySetup,
-})
+function decodeExtensionReadySetupState(
+  value: unknown,
+): ExtensionReadySetupState {
+  if (value !== readySetup) {
+    throw new TypeError('test pairing setup does not match the fixture')
+  }
+  return {
+    ...readySetup,
+    pairedVaults: [...readySetup.pairedVaults],
+    eventLogHeads: [...readySetup.eventLogHeads],
+  }
+}
+
+const pairingPolicy = Promise.resolve({ decodeExtensionReadySetupState })
 
 describe('extension pairing state loader', () => {
   test('keeps the query message structural while loading setup through its transport owner', async () => {

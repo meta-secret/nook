@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { err } from 'neverthrow'
+import { Effect, Either } from 'effect'
 import {
   AccountPickerAuthorizationLifecycle,
   CleanupEvidence,
@@ -8,8 +8,7 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 import { AccountPickerCleanupMarkerStatus } from '../src/background/service-worker/account-pickers'
 import {
   AuthorizationCleanupFailureKind,
-  InterruptedAuthorizationCleanupRecovery,
-  type InterruptedAuthorizationCleanupRecoveryDependencies,
+  recoverInterruptedAuthorizationCleanup,
 } from '../src/background/service-worker/extension-lifecycle-routing'
 import {
   ExtensionSessionTransportFailure,
@@ -23,6 +22,10 @@ const startedCleanup = new AccountPickerAuthorizationLifecycle('opening')
 const rejectedCleanup = startedCleanup
   .complete_cleanup('stale', CleanupEvidence.Full)
   .outcome()
+
+type InterruptedAuthorizationCleanupRecoveryDependencies = Parameters<
+  typeof recoverInterruptedAuthorizationCleanup
+>[0]
 
 const baseDependencies: InterruptedAuthorizationCleanupRecoveryDependencies = {
   accountPickerAuthorizationCleanupPending: () => Promise.resolve(false),
@@ -65,8 +68,10 @@ describe('interrupted authorization cleanup recovery', () => {
     }
 
     expect(
-      await new InterruptedAuthorizationCleanupRecovery(dependencies).recover(),
-    ).toEqual(err([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
+      await Effect.runPromise(
+        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+      ),
+    ).toEqual(Either.left([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
   })
 
@@ -78,8 +83,10 @@ describe('interrupted authorization cleanup recovery', () => {
     }
 
     expect(
-      await new InterruptedAuthorizationCleanupRecovery(dependencies).recover(),
-    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+      await Effect.runPromise(
+        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+      ),
+    ).toEqual(Either.left([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
@@ -101,8 +108,10 @@ describe('interrupted authorization cleanup recovery', () => {
     }
 
     expect(
-      await new InterruptedAuthorizationCleanupRecovery(dependencies).recover(),
-    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+      await Effect.runPromise(
+        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+      ),
+    ).toEqual(Either.left([AuthorizationCleanupFailureKind.Rejected]))
     expect(release).toHaveBeenCalledWith('epoch-1')
   })
 })

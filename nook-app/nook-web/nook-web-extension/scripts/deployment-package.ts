@@ -1,15 +1,7 @@
 import { createHash } from 'node:crypto'
-import {
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import { zipSync, type ZipOptions, type Zippable } from 'fflate'
-import type { ExtensionManifest } from '../src/manifest'
 import {
   extensionIdFromManifestKey,
   parseExtensionChannel,
@@ -47,32 +39,55 @@ export type DeterministicZipRequest = {
 }
 
 class ExtensionManifestAdmission {
-  parse(value: unknown): ExtensionManifest {
-    if (!this.isManifest(value)) {
-      throw new Error('Deployment extension manifest has an invalid shape.')
-    }
-    return value
-  }
-
-  private isManifest(value: unknown): value is ExtensionManifest {
-    if (!value || typeof value !== 'object') return false
+  parse(value: unknown): DeploymentManifest {
     if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
       !('manifest_version' in value) ||
       value.manifest_version !== 3 ||
       !('version' in value) ||
       typeof value.version !== 'string' ||
+      !('key' in value) ||
+      typeof value.key !== 'string' ||
       !('externally_connectable' in value) ||
       !value.externally_connectable ||
       typeof value.externally_connectable !== 'object' ||
-      !('matches' in value.externally_connectable) ||
-      !Array.isArray(value.externally_connectable.matches)
+      Array.isArray(value.externally_connectable) ||
+      !('matches' in value.externally_connectable)
     ) {
-      return false
+      throw new Error('Deployment extension manifest has an invalid shape.')
     }
-    return value.externally_connectable.matches.every(
-      (match) => typeof match === 'string',
-    )
+    return {
+      manifest_version: 3,
+      version: value.version,
+      key: value.key,
+      externally_connectable: {
+        matches: decodeMatchList(value.externally_connectable.matches),
+      },
+    }
   }
+}
+
+type DeploymentManifest = {
+  manifest_version: 3
+  version: string
+  key: string
+  externally_connectable: { matches: string[] }
+}
+
+function decodeMatchList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError('Deployment extension match list is invalid.')
+  }
+  const matches: string[] = []
+  for (const match of value) {
+    if (typeof match !== 'string') {
+      throw new TypeError('Deployment extension match list is invalid.')
+    }
+    matches.push(match)
+  }
+  return matches
 }
 
 const extensionManifestAdmission = new ExtensionManifestAdmission()

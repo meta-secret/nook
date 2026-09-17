@@ -16,27 +16,54 @@ import {
   type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-type MessageWireObject = {
-  [key: string]:
-    string | number | boolean | MessageWireObject | MessageWireObject[]
-}
-
 class SessionMessageWireFixture {
-  messagePayload(message: unknown): MessageWireObject {
-    if (!message || typeof message !== 'object' || !('payload' in message)) {
-      return {}
+  pin(message: ParsedExtensionSessionTransportRequest): string {
+    if (
+      message.type !== ExtensionSessionMessageType.CreatePin &&
+      message.type !== ExtensionSessionMessageType.UnlockPin
+    ) {
+      throw new TypeError('test request does not contain a PIN')
     }
-    const payload = message.payload
-    return this.isMessageWireObject(payload) ? payload : {}
+    return message.payload.pin
+  }
+
+  loginSave(message: ParsedExtensionSessionTransportRequest): {
+    username: string
+    password: string
+    origin: string
+  } {
+    if (message.type !== ExtensionSessionMessageType.PlanLoginSave) {
+      throw new TypeError('test request is not a login-save plan')
+    }
+    return {
+      username: message.payload.username,
+      password: message.payload.password,
+      origin: message.payload.origin,
+    }
+  }
+
+  passkeyRequestJson(message: ParsedExtensionSessionTransportRequest): string {
+    if (
+      message.type !== ExtensionSessionMessageType.RegisterPasskey &&
+      message.type !== ExtensionSessionMessageType.AssertPasskey
+    ) {
+      throw new TypeError('test request is not a passkey request')
+    }
+    return message.payload.requestJson
+  }
+
+  providers(
+    message: ParsedExtensionSessionTransportRequest,
+  ): StorageProvider[] {
+    if (message.type !== ExtensionSessionMessageType.ImportVault) {
+      throw new TypeError('test request is not a vault import')
+    }
+    return message.payload.providers
   }
 
   readonly decodeProviders = async (
     providers: StorageProvider[],
   ): Promise<StorageProvider[]> => structuredClone(providers)
-
-  private isMessageWireObject(value: unknown): value is MessageWireObject {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-  }
 }
 const sessionMessageWireFixture = new SessionMessageWireFixture()
 const decodeProviders = sessionMessageWireFixture.decodeProviders
@@ -361,7 +388,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       decodeProviders,
       handleMessage: async (message) =>
         ok({
-          pin: sessionMessageWireFixture.messagePayload(message).pin,
+          pin: sessionMessageWireFixture.pin(message),
         }),
     })
     const response = dispatcher.enqueue({
@@ -392,15 +419,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
-      expect(
-        sessionMessageWireFixture.messagePayload(parsed.request).username,
-      ).toBe('alice')
-      expect(
-        sessionMessageWireFixture.messagePayload(parsed.request).password,
-      ).toBe('password')
-      expect(
-        sessionMessageWireFixture.messagePayload(parsed.request).origin,
-      ).toBe('https://example.com')
+      expect(sessionMessageWireFixture.loginSave(parsed.request).username).toBe(
+        'alice',
+      )
+      expect(sessionMessageWireFixture.loginSave(parsed.request).password).toBe(
+        'password',
+      )
+      expect(sessionMessageWireFixture.loginSave(parsed.request).origin).toBe(
+        'https://example.com',
+      )
     }
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
@@ -445,7 +472,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
       if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
         expect(
-          sessionMessageWireFixture.messagePayload(parsed.request).requestJson,
+          sessionMessageWireFixture.passkeyRequestJson(parsed.request),
         ).toBe('{"challenge":"browser-owned-secret"}')
       }
     }
@@ -621,9 +648,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
         ),
       decodeProviders,
       handleMessage: async (message) => {
-        const handledProviders =
-          sessionMessageWireFixture.messagePayload(message).providers
-        if (Array.isArray(handledProviders)) {
+        if (message.type === ExtensionSessionMessageType.ImportVault) {
+          const handledProviders = sessionMessageWireFixture.providers(message)
           const provider = handledProviders[0]
           if (
             provider &&

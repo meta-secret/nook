@@ -1,8 +1,9 @@
 import { ok, type Result } from 'neverthrow'
+import { Effect } from 'effect'
 import { NookLocalVaultUnlockState } from '$app-wasm'
+import { unselectedVaultScope } from '$lib/auth/providers'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { ProviderLoadOutcome } from '$lib/vault/providers.svelte'
 
 const wasmMocks = vi.hoisted(() => ({
   getActiveVaultSelection: vi.fn(),
@@ -128,7 +129,7 @@ describe('selectVaultForUnlock', () => {
   test('prepares the selected vault without protected provider or identity access', async () => {
     const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
     const reloadProvidersForActiveVault = vi.fn(async () =>
-      ok(ProviderLoadOutcome.Loaded),
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
     )
     const state = VaultStateTestFixture.create()
     state.clearManager()
@@ -143,11 +144,15 @@ describe('selectVaultForUnlock', () => {
     state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 
-    const selected = await new VaultLoginActions(state).selectVaultForUnlock({
-      storeId: 'store-2',
-    })
+    const selected = await Effect.runPromise(
+      Effect.either(
+        new VaultLoginActions(state).selectVaultForUnlock({
+          storeId: 'store-2',
+        }),
+      ),
+    )
 
-    expect(selected.isOk()).toBe(true)
+    expect(selected._tag).toBe('Right')
     expect(wasmMocks.setActiveVault).toHaveBeenCalledWith('store-2')
     expect(openActiveVault).toHaveBeenCalledWith('store-2')
     expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()

@@ -6,21 +6,16 @@ import {
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type { ExtensionEventLogPublicationSnapshot } from "$lib/vault/action-contexts";
 import { extensionEventLogPublisher } from "$web-shared/extension/event-log-bridge";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
-
-export enum ExtensionEventLogPublicationOutcome {
-  Published = "published",
-  NoRecords = "no-records",
-  BrowserWindowUnavailable = "browser-window-unavailable",
-}
 
 /** Owns browser orchestration for one sync extension bridge context. */
 export class ExtensionSyncPublication {
   constructor(private readonly state: SyncActionsContext) {}
 
   async publishExtensionEventLogUpdateForVault(): Promise<
-    Result<ExtensionEventLogPublicationOutcome, VaultStorageFailure>
+    Result<ExtensionEventLogPublicationSnapshot, VaultStorageFailure>
   > {
     const state = this.state;
     const admitted = state.admitManager();
@@ -55,12 +50,6 @@ export class ExtensionSyncPublication {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      if (!('window' in globalThis))
-        return storageOk(
-          ExtensionEventLogPublicationOutcome.BrowserWindowUnavailable,
-        );
-      if (eventLogRecords.length === 0)
-        return storageOk(ExtensionEventLogPublicationOutcome.NoRecords);
       const publication =
         extensionEventLogPublisher.publishExtensionEventLogUpdate({
           vaultStoreId: vaultStoreId.value,
@@ -73,7 +62,10 @@ export class ExtensionSyncPublication {
           ),
         );
       }
-      return storageOk(ExtensionEventLogPublicationOutcome.Published);
+      return storageOk({
+        vaultStoreId: vaultStoreId.value,
+        publishedRecordCount: eventLogRecords.length,
+      });
     } finally {
       records.value.free();
     }

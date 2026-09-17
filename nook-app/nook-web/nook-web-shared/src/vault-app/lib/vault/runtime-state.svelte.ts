@@ -6,7 +6,6 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
-import type { OAuthTokenRefreshOutcome } from "$lib/vault/oauth";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   DeviceProtectionStatus,
@@ -35,7 +34,6 @@ import * as syncActions from "$lib/vault/sync.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 import {
   ActiveVaultKind,
-  type LocalFolderDraft,
   type LocalProviderLookup,
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
@@ -43,7 +41,10 @@ import {
   TranslationMessage,
   type TranslationRequest,
 } from "$lib/vault/translation";
-import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+import type {
+  OAuthTokenFreshnessOutcome,
+  ProviderActionsContext,
+} from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
 
 export type VaultEditRestriction =
@@ -59,6 +60,10 @@ export type VaultEditRestriction =
 export enum SyncProviderLabelKind {
   Idle = "idle",
   Active = "active",
+}
+
+export enum LocalFolderBackupDirectorySelectionOutcome {
+  Selected = "selected",
 }
 
 export type SyncProviderLabel =
@@ -251,7 +256,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<OAuthTokenRefreshOutcome, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   > {
     return new oauthActions.VaultOAuthActions(
       this.completeVaultState(),
@@ -281,13 +286,14 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<
-    Result<LocalFolderDraft, VaultStorageFailure>
+    Result<LocalFolderBackupDirectorySelectionOutcome, VaultStorageFailure>
   > {
-    const context = this.providerActionsContext();
     const selection = await new providersActions.ProviderSelectionActions(
-      context,
+      this.providerActionsContext(),
     ).chooseLocalFolder();
-    return selection.map(() => context.localFolderDraft);
+    return selection.map(
+      () => LocalFolderBackupDirectorySelectionOutcome.Selected,
+    );
   }
 
   refreshLocalFolderBackupSupport(): void {

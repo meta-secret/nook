@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   MAX_LOGIN_SEARCH_LENGTH,
   LoginPickerCancelMessage as LoginPickerCancelMessageSchema,
@@ -46,26 +47,35 @@ describe('login picker runtime messages', () => {
 
   test('admits only complete login query responses', () => {
     expect(
-      LoginPickerQueryResponseSchema.is({
-        ok: true,
-        origin: 'https://login.example.test',
-        accounts: [
-          {
-            vaultStoreId: 'vault-1',
-            secretId: 'secret-1',
-            username: 'alice',
-            websiteHost: 'login.example.test',
-            vaultName: 'Personal',
-          },
-        ],
-      }),
+      Effect.runSync(
+        Effect.either(
+          LoginPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://login.example.test',
+            accounts: [
+              {
+                vaultStoreId: 'vault-1',
+                secretId: 'secret-1',
+                username: 'alice',
+                websiteHost: 'login.example.test',
+                websiteUrl: 'https://login.example.test',
+                vaultName: 'Personal',
+              },
+            ],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(true)
     expect(
-      LoginPickerQueryResponseSchema.is({
-        ok: true,
-        origin: 'https://login.example.test',
-        accounts: [{ vaultStoreId: 'vault-1' }],
-      }),
+      Effect.runSync(
+        Effect.either(
+          LoginPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://login.example.test',
+            accounts: [{ vaultStoreId: 'vault-1' }],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(false)
   })
 

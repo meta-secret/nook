@@ -1,28 +1,15 @@
 // @vitest-environment node
 
-import { ProviderSyncFreshness } from '$app-wasm'
-import type { Page } from '@playwright/test'
 import { describe, expect, test, vi } from 'vitest'
 import {
   isJoinerVaultReady,
-  tryGithubVaultConnect,
+  tryJoinerQuickConnect,
 } from '../../../e2e/helpers/device-enrollment'
-import { E2eSyncProviderId } from '../../../e2e/sync-provider'
 
 type FakeLocator = {
   click: ReturnType<typeof vi.fn>
   first: () => FakeLocator
   isVisible: () => Promise<boolean>
-}
-
-function isEnrollmentPage(value: unknown): value is Page {
-  if (!(value instanceof Object)) return false
-  return (
-    'evaluate' in value &&
-    typeof value.evaluate === 'function' &&
-    'getByTestId' in value &&
-    typeof value.getByTestId === 'function'
-  )
 }
 
 function createPage() {
@@ -39,48 +26,18 @@ function createPage() {
   const getByTestId = vi.fn((testId: string) =>
     testId === 'connect-provider-btn' ? connectButton : hiddenLocator(),
   )
-  const evaluate = vi.fn(async (_expression: unknown, argument?: unknown) => {
-    if (
-      argument &&
-      typeof argument === 'object' &&
-      'freshness' in argument &&
-      argument.freshness === ProviderSyncFreshness.Forced
-    ) {
-      throw new Error('unexpected forced refresh')
-    }
-    return true
-  })
-
-  const pageCandidate = { evaluate, getByTestId }
-  if (!isEnrollmentPage(pageCandidate))
-    throw new TypeError('enrollment page adapter is incomplete')
-  return {
-    page: pageCandidate,
-    connectButton,
-    evaluate,
-  }
+  return { connectButton, getByTestId }
 }
 
 describe('device enrollment connect helpers', () => {
-  test('does not refresh a joiner a second time during quick connect', async () => {
-    const { page, connectButton, evaluate } = createPage()
+  test('settles a quick-connect joiner without starting a forced refresh', async () => {
+    const { connectButton } = createPage()
+    const waitForIdle = vi.fn(async () => {})
+    const connected = await tryJoinerQuickConnect(connectButton, waitForIdle)
 
-    await tryGithubVaultConnect(page, {
-      providerId: E2eSyncProviderId.GitHub,
-      repoName: 'nook-e2e',
-      pat: 'ghp_test_token',
-    })
-
+    expect(connected).toBe(true)
     expect(connectButton.click).toHaveBeenCalledOnce()
-    expect(
-      evaluate.mock.calls.filter(
-        ([, argument]) =>
-          argument &&
-          typeof argument === 'object' &&
-          'freshness' in argument &&
-          argument.freshness === ProviderSyncFreshness.Forced,
-      ),
-    ).toHaveLength(0)
+    expect(waitForIdle).toHaveBeenCalledOnce()
   })
 
   test('accepts the authenticated shell when the route-specific vault panel is absent', () => {
