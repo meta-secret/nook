@@ -260,18 +260,6 @@ enum CompanionWasmReadinessKind {
   Expired = 'expired',
 }
 
-enum ExtensionSessionDecodedRequestKind {
-  Pending = 'pending',
-  Decoded = 'decoded',
-}
-
-type ExtensionSessionDecodedRequest =
-  | { kind: ExtensionSessionDecodedRequestKind.Pending }
-  | {
-      kind: ExtensionSessionDecodedRequestKind.Decoded
-      request: ExtensionSessionRequest
-    }
-
 type ExtensionSessionIngressStage =
   | { kind: ExtensionSessionSensitiveStageKind.Invalid }
   | {
@@ -622,9 +610,6 @@ export async function parseExtensionSessionRequest(
   }
   const envelope = ingressStage.envelope
   const deadline = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
-  let decodedRequest: ExtensionSessionDecodedRequest = {
-    kind: ExtensionSessionDecodedRequestKind.Pending,
-  }
   const readinessDeadline = new AbortController()
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
     const readinessTimer = setTimeout(
@@ -655,10 +640,6 @@ export async function parseExtensionSessionRequest(
     if (decoded._tag === 'Left')
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     const request = decoded.right
-    decodedRequest = {
-      kind: ExtensionSessionDecodedRequestKind.Decoded,
-      request,
-    }
     const queue = request.payload.queue
     const expiresAt =
       queue.kind === ExtensionSessionQueueKind.Deadline
@@ -668,19 +649,16 @@ export async function parseExtensionSessionRequest(
       clearExtensionSessionRequest(request)
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
+    return {
+      kind: ExtensionSessionRequestParseKind.Parsed,
+      request,
+    }
   } catch {
     clearRawExtensionSessionSecrets(envelope)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   } finally {
     clearRawExtensionSessionSecrets(envelope)
     readinessDeadline.abort()
-  }
-  if (decodedRequest.kind === ExtensionSessionDecodedRequestKind.Pending) {
-    return { kind: ExtensionSessionRequestParseKind.Invalid }
-  }
-  return {
-    kind: ExtensionSessionRequestParseKind.Parsed,
-    request: decodedRequest.request,
   }
 }
 
