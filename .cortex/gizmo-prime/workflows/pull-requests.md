@@ -53,7 +53,8 @@ functional ownership, readiness, promotion, or final delivery.
   - Missing or unprovable branch/bootstrap evidence fails closed; stale head
     observations trigger re-resolution rather than an authority failure.
   - Freeze origin/dev during validation and promotion.
-  - Local dev may continue accepting completed features.
+  - Local dev may continue accepting landing-ready feature commits.
+    Feature completion requires post-landing containment evidence.
   - Preserve complete review and security acceptance for the promoted SHA.
 - **Scope**
   - Keep each feature cohesive and attributable to its owning Gizmo.

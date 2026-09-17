@@ -62,8 +62,10 @@ to generate bookkeeping.
 7. Publish a worklog before completion or blocked handoff.
 8. Re-open Workbench `main` and verify links and state.
 
-Independent features may proceed concurrently. Land completed features through
-serialized local dev integration under [dev delivery](../architecture/dev-delivery.md).
+Independent features may proceed concurrently. Land accepted feature commits
+through serialized local dev integration under
+[dev delivery](../architecture/dev-delivery.md). Feature completion still
+requires post-landing containment evidence.
 
 ## Validation
 
