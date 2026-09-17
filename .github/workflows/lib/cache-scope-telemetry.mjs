@@ -12,10 +12,26 @@ export const CompilePhaseCacheExportMode = Object.freeze({
   Disabled: "disabled",
 });
 
+/** @typedef {import("./cache-telemetry-contracts.mjs").CompilePhaseStatus} CompilePhaseStatusValue */
+
 export class CacheScopeTelemetry {
   /** @param {NodeJS.ProcessEnv} environment */
   constructor(environment) {
     this.environment = environment;
+  }
+
+  /** @param {string} value @returns {CompilePhaseStatusValue} */
+  compilePhaseStatus(value) {
+    switch (value) {
+      case CompilePhaseStatus.NotRequested:
+      case CompilePhaseStatus.NotStarted:
+      case CompilePhaseStatus.Running:
+      case CompilePhaseStatus.Completed:
+      case CompilePhaseStatus.Failed:
+        return value;
+      default:
+        return CompilePhaseStatus.NotStarted;
+    }
   }
 
   record() {
@@ -94,7 +110,7 @@ export class CacheScopeTelemetry {
           target: "build-compile-foundation",
           status: compileRequested
             ? foundationStatusValue.length > 0
-              ? foundationStatusValue
+              ? this.compilePhaseStatus(foundationStatusValue)
               : CompilePhaseStatus.NotStarted
             : CompilePhaseStatus.NotRequested,
           cache_from: foundationCacheFrom,
@@ -114,7 +130,7 @@ export class CacheScopeTelemetry {
           target: "build-compile",
           status: compileRequested
             ? sourceStatusValue.length > 0
-              ? sourceStatusValue
+              ? this.compilePhaseStatus(sourceStatusValue)
               : CompilePhaseStatus.NotStarted
             : CompilePhaseStatus.NotRequested,
           cache_from: sourceCacheFrom,

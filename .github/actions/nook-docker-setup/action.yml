@@ -197,6 +197,7 @@ runs:
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           remote_compile_scope=1
+          echo "NOOK_REMOTE_TASK_SELECTION=$NOOK_REMOTE_TASK_SELECTION" >> "$GITHUB_ENV"
           echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=0" >> "$GITHUB_ENV"
           echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started" >> "$GITHUB_ENV"
           echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started" >> "$GITHUB_ENV"
@@ -492,7 +493,11 @@ runs:
         const verifier = new BuildKitCacheAccessVerifier(process.env, fetch);
         await verifier.verify();
         NODE
-        echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=1" >> "$GITHUB_ENV"
+        {
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=1"
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"
+          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"
+        } >> "$GITHUB_ENV"
 
     - name: Set CI environment
       shell: bash

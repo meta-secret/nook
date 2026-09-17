@@ -11,6 +11,31 @@ export class CacheTelemetryValidator {
   }
 
   /**
+   * @param {unknown} value
+   * @returns {value is import("./cache-telemetry-contracts.mjs").CompilePhaseStatus}
+   */
+  isCompilePhaseStatus(value) {
+    return (
+      value === CompilePhaseStatus.NotRequested ||
+      value === CompilePhaseStatus.NotStarted ||
+      value === CompilePhaseStatus.Running ||
+      value === CompilePhaseStatus.Completed ||
+      value === CompilePhaseStatus.Failed
+    );
+  }
+
+  /**
+   * @param {unknown} value
+   * @returns {value is import("./cache-telemetry-contracts.mjs").CompilePhaseCacheExport['mode']}
+   */
+  isCompilePhaseCacheExportMode(value) {
+    return (
+      value === CompilePhaseCacheExportMode.Max ||
+      value === CompilePhaseCacheExportMode.Disabled
+    );
+  }
+
+  /**
    * @param {unknown} record
    * @param {{runId?: string | number, runAttempt?: string | number}} expected
    * @returns {Record<string, unknown>}
@@ -74,10 +99,7 @@ export class CacheTelemetryValidator {
         throw new Error(`telemetry compile phase ${name}.requested is invalid`);
       if (typeof phase.target !== "string" || !phase.target)
         throw new Error(`telemetry compile phase ${name}.target is invalid`);
-      if (
-        typeof phase.status !== "string" ||
-        !Object.values(CompilePhaseStatus).includes(phase.status)
-      )
+      if (!this.isCompilePhaseStatus(phase.status))
         throw new Error(`telemetry compile phase ${name}.status is invalid`);
       if (!Array.isArray(phase.cache_from))
         throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
@@ -89,10 +111,7 @@ export class CacheTelemetryValidator {
         throw new Error(`telemetry compile phase ${name}.cache_to.enabled is invalid`);
       if (typeof phase.cache_to.ref !== "string")
         throw new Error(`telemetry compile phase ${name}.cache_to.ref is invalid`);
-      if (
-        typeof phase.cache_to.mode !== "string" ||
-        !Object.values(CompilePhaseCacheExportMode).includes(phase.cache_to.mode)
-      )
+      if (!this.isCompilePhaseCacheExportMode(phase.cache_to.mode))
         throw new Error(`telemetry compile phase ${name}.cache_to.mode is invalid`);
       if (!phase.requested && phase.status !== CompilePhaseStatus.NotRequested)
         throw new Error(`telemetry compile phase ${name} has an unrequested status`);
@@ -104,7 +123,12 @@ export class CacheTelemetryValidator {
       )
         throw new Error(`telemetry compile phase ${name} cache export mode is inconsistent`);
     }
-    if (sourceCompile.cache_to.enabled || sourceCompile.cache_to.ref.length > 0)
+    const sourceCompileCacheTo = sourceCompile.cache_to;
+    if (!this.isRecord(sourceCompileCacheTo))
+      throw new Error("telemetry source compile phase cache export is invalid");
+    if (typeof sourceCompileCacheTo.ref !== "string")
+      throw new Error("telemetry source compile phase cache ref is invalid");
+    if (sourceCompileCacheTo.enabled || sourceCompileCacheTo.ref.length > 0)
       throw new Error("telemetry source compile phase must not export registry cache");
     if (
       Object.hasOwn(foundation, "input_refs_access_verified") &&

@@ -30,6 +30,9 @@ class DockerizedRustCacheRegistryContract {
     );
 
     const action = this.read(".github/actions/nook-docker-setup/action.yml");
+    expect(action).toContain(
+      'echo "NOOK_REMOTE_TASK_SELECTION=$NOOK_REMOTE_TASK_SELECTION" >> "$GITHUB_ENV"',
+    );
     const gateMarker = "    - name: Verify Docker cache refs and blobs";
     const gateStart = action.indexOf(gateMarker);
     expect(gateStart).toBeGreaterThanOrEqual(0);
@@ -46,6 +49,12 @@ class DockerizedRustCacheRegistryContract {
     expect(runStart).toBeGreaterThanOrEqual(0);
     const runEnd = gate.indexOf("\n        NODE", runStart + runMarker.length);
     expect(runEnd).toBeGreaterThan(runStart);
+    expect(
+      gate.indexOf('echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"'),
+    ).toBeGreaterThan(runEnd);
+    expect(
+      gate.indexOf('echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"'),
+    ).toBeGreaterThan(runEnd);
     const registryGateScript = gate
       .slice(runStart + runMarker.length, runEnd)
       .split("\n")

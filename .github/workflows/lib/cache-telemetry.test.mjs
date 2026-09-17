@@ -113,6 +113,45 @@ void test("records the two compile phases with the authorized exporter only in P
   });
 });
 
+void test("records the persisted remote workflow handoff after both compile phases", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const scope = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: "completed",
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: "completed",
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+    GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
+    GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "none",
+  }).record();
+
+  assert.equal(scope.compile_phases.foundation.requested, true);
+  assert.equal(
+    scope.compile_phases.foundation.status,
+    CompilePhaseStatus.Completed,
+  );
+  assert.equal(scope.compile_phases.source_compile.requested, true);
+  assert.equal(
+    scope.compile_phases.source_compile.status,
+    CompilePhaseStatus.Completed,
+  );
+  assert.equal(scope.imports.probes_complete, true);
+  assert.equal(scope.imports.failure_class, "none");
+});
+
+void test("normalizes an invalid persisted phase status to not started", () => {
+  const phases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: "unexpected",
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: "unexpected",
+  }).record().compile_phases;
+
+  assert.equal(phases.foundation.status, CompilePhaseStatus.NotStarted);
+  assert.equal(phases.source_compile.status, CompilePhaseStatus.NotStarted);
+});
+
 void test("records both phases without registry exporters for no-export compile verification", () => {
   const currentSuffix = `-git-${"b".repeat(40)}`;
   const currentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${currentSuffix}:buildcache`;
