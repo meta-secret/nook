@@ -57,7 +57,6 @@ export type RuntimeMessageSchemaDecodeResult<
       readonly kind: RuntimeMessageSchemaDecodeKind.Rejected
       readonly failure: Schema.ParseError
     }
-}
 
 export type SchemaRuntimeMessageOperationRequest<
   Message extends BrowserRuntimeMessage,
