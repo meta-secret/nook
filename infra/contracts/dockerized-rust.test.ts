@@ -260,13 +260,16 @@ class DockerizedRustContract {
     );
     expect(bake).toContain('target "pr-native-verify"');
     expect(bake).toContain(
-      'pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"',
+      "PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE",
     );
     const producerStart = dockerfile.indexOf(
       "FROM compile-native-source AS pr-native-build",
     );
     const verifyStart = dockerfile.indexOf(
-      "FROM pr-native-image AS pr-native-verify",
+      "FROM ${PR_NATIVE_IMAGE} AS pr-native-verify",
+    );
+    expect(dockerfile).toContain(
+      "ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured",
     );
     expect(producerStart).toBeGreaterThanOrEqual(0);
     expect(verifyStart).toBeGreaterThan(producerStart);
