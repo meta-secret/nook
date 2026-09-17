@@ -50,8 +50,11 @@ shift
 duration_seconds="${duration%s}"
 start_delay="${FAKE_START_DELAY:-0}"
 if [ "$start_delay" -gt "$duration_seconds" ]; then
-  "$@" >/dev/null 2>&1
+  "$@" >/dev/null 2>&1 &
+  command_pid=$!
   sleep "$duration_seconds"
+  kill "$command_pid" 2>/dev/null || true
+  wait "$command_pid" 2>/dev/null || true
   exit 124
 fi
 sleep "$start_delay"
@@ -211,7 +214,7 @@ NOOK_SCCACHE_READY_MARKER="$ready_marker" \
 NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=3 FAKE_SCCACHE_RESULT=success \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=1 FAKE_SCCACHE_RESULT=success \
 FAKE_START_COUNT_FILE="$concurrent_start_count" \
   "$wrapper" "$fixture_dir/compiler" 2>"$concurrent_first_log" &
 first_pid=$!
