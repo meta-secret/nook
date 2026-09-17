@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -69,13 +69,28 @@ type ChromeRuntimeResponseCallback = (
 ) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError: typeof globalThis.chrome.runtime.lastError;
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
     callback: ChromeRuntimeResponseCallback,
   ) => void;
 };
+
+enum ChromeRuntimeLastErrorStateKind {
+  Absent = "absent",
+  Present = "present",
+}
+
+type ChromeRuntimeLastErrorState =
+  | { readonly kind: ChromeRuntimeLastErrorStateKind.Absent }
+  | {
+      readonly kind: ChromeRuntimeLastErrorStateKind.Present;
+      readonly message: string;
+    };
+
+const ChromeRuntimeLastErrorSchema = Schema.Struct({
+  message: Schema.optional(Schema.String),
+});
 
 type ExtensionBrowserHost = typeof globalThis & {
   readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
@@ -289,15 +304,26 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-    const error = runtime.lastError;
-    return (
-      typeof error === "object" &&
-      !!error &&
-      "message" in error &&
-      typeof error.message === "string" &&
-      error.message.length > 0
+  private chromeRuntimeLastError(
+    runtime: ChromeRuntimeHost,
+  ): ChromeRuntimeLastErrorState {
+    if (!("lastError" in runtime)) {
+      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
+    }
+    const decoded = Effect.runSync(
+      Effect.either(
+        Schema.decodeUnknown(ChromeRuntimeLastErrorSchema)(
+          Reflect.get(runtime, "lastError"),
+        ),
+      ),
     );
+    if (decoded._tag === "Left" || !decoded.right.message) {
+      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
+    }
+    return {
+      kind: ChromeRuntimeLastErrorStateKind.Present,
+      message: decoded.right.message,
+    };
   }
 
   private chromeRuntime(): ChromeRuntimeAvailability {
@@ -430,7 +456,10 @@ class ExtensionConnectionBrowser {
       };
       const pending = new PendingExtensionResponse(pendingRequest);
       runtime.sendMessage(extensionId, message, (response) => {
-        if (this.chromeRuntimeLastError(runtime)) {
+        if (
+          this.chromeRuntimeLastError(runtime).kind ===
+          ChromeRuntimeLastErrorStateKind.Present
+        ) {
           pending.unavailable();
           return;
         }
@@ -698,7 +727,10 @@ class ExtensionConnectionBrowser {
     return new Promise((resolve) => {
       try {
         runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
-          if (this.chromeRuntimeLastError(runtime)) {
+          if (
+            this.chromeRuntimeLastError(runtime).kind ===
+            ChromeRuntimeLastErrorStateKind.Present
+          ) {
             resolve(
               err(
                 new VaultStorageFailure(
