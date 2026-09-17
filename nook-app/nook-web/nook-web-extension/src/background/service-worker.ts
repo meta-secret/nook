@@ -470,11 +470,21 @@ class BackgroundRuntimeMessageRouter {
       message.type ===
         AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
     ) {
+      type ModuleSendResponseRequest2 = { ok: boolean; reason: string }
+      const moduleSendResponseRequest2: ModuleSendResponseRequest2 = {
+        ok: false,
+        reason: 'workflow-invalid-observation',
+      }
       void companionWasmReady
         .then(async () => {
           const admission = AuthenticationWorkflowSnapshotIngress.admit(message)
           if (admission.kind !== 'accepted') {
-            sendResponse({ ok: false, reason: 'workflow-invalid-observation' })
+            type ModuleSendResponseRequest = { ok: boolean; reason: string }
+            const moduleSendResponseRequest: ModuleSendResponseRequest = {
+              ok: false,
+              reason: 'workflow-invalid-observation',
+            }
+            sendResponse(moduleSendResponseRequest)
             return
           }
           const decoded = admission.message
@@ -527,9 +537,7 @@ class BackgroundRuntimeMessageRouter {
             await authenticationWorkflowMessageResponse(workflowRequest),
           )
         })
-        .catch(() =>
-          sendResponse({ ok: false, reason: 'workflow-invalid-observation' }),
-        )
+        .catch(() => sendResponse(moduleSendResponseRequest2))
       return true
     }
 
@@ -616,10 +624,9 @@ class BackgroundRuntimeMessageRouter {
 }
 
 const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
-  runtimeMessage: unknown,
-  sender,
-  sendResponse,
+  ...listenerArguments
 ) => {
+  const [runtimeMessage, sender, sendResponse] = listenerArguments
   const admission = BrowserRuntimeMessage.from(runtimeMessage)
   if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
     return false
@@ -633,19 +640,32 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
-chrome.runtime.onMessageExternal.addListener(
-  (runtimeMessage: ExternalCompanionMessage, sender, sendResponse) => {
-    if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
-    const message = runtimeMessage
-    const externalRoutingArgs: ExternalCompanionRoutingRequest = {
-      dependencies: externalCompanionRoutingDependencies,
-      message,
-      sender,
-      sendResponse,
-    }
-    void new ExternalCompanionRouter(externalRoutingArgs)
-      .route()
-      .catch(() => sendResponse({ ok: false, reason: 'forbidden-sender' }))
-    return true
-  },
-)
+type ExternalRuntimeMessageListener = Parameters<
+  typeof chrome.runtime.onMessageExternal.addListener
+>[0]
+
+const externalRuntimeMessageListener: ExternalRuntimeMessageListener = (
+  ...listenerArguments
+) => {
+  const [externalMessage, sender, sendResponse] = listenerArguments
+  const runtimeMessage = externalMessage as ExternalCompanionMessage
+  if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
+  const message = runtimeMessage
+  const externalRoutingArgs: ExternalCompanionRoutingRequest = {
+    dependencies: externalCompanionRoutingDependencies,
+    message,
+    sender,
+    sendResponse,
+  }
+  type ModuleSendResponseRequest3 = { ok: boolean; reason: string }
+  const moduleSendResponseRequest3: ModuleSendResponseRequest3 = {
+    ok: false,
+    reason: 'forbidden-sender',
+  }
+  void new ExternalCompanionRouter(externalRoutingArgs)
+    .route()
+    .catch(() => sendResponse(moduleSendResponseRequest3))
+  return true
+}
+
+chrome.runtime.onMessageExternal.addListener(externalRuntimeMessageListener)

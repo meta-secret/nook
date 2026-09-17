@@ -144,7 +144,17 @@ export class SchemaRuntimeMessageRoute<
     const decodeResult = Effect.runSync(
       Effect.either(this.request.schema.decode(message)),
     )
-    return Either.match(decodeResult, {
+    type DecodeMessageMatchRequest = {
+      readonly onLeft: (left: ParseResult.ParseError) => {
+        kind: RuntimeMessageSchemaDecodeKind.Rejected
+        failure: ParseResult.ParseError
+      }
+      readonly onRight: (right: Message) => {
+        kind: RuntimeMessageSchemaDecodeKind.Decoded
+        message: Message
+      }
+    }
+    const decodeMessageMatchRequest: DecodeMessageMatchRequest = {
       onLeft: (failure) => ({
         kind: RuntimeMessageSchemaDecodeKind.Rejected,
         failure,
@@ -153,7 +163,8 @@ export class SchemaRuntimeMessageRoute<
         kind: RuntimeMessageSchemaDecodeKind.Decoded,
         message: decodedMessage,
       }),
-    })
+    }
+    return Either.match(decodeResult, decodeMessageMatchRequest)
   }
 
   static create<

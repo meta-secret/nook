@@ -1,6 +1,7 @@
 import { err, ok, type Result } from 'neverthrow'
 import { Effect, Schema } from 'effect'
 import type {
+  ExtensionSessionTransportDelivery,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportResult,
 } from './session-document'
@@ -84,60 +85,121 @@ type PendingIdentityHandoff = {
   deviceSigningPublicKey: string
 }
 
-const pendingIdentityHandoffSchema = Schema.Struct({
+type ModuleStructRequest = {
+  kind: Schema.Literal<[PendingIdentityHandoffKind]>
+  deviceId: typeof Schema.String
+  devicePublicKey: typeof Schema.String
+  deviceSigningPublicKey: typeof Schema.String
+}
+const moduleStructRequest: ModuleStructRequest = {
   kind: Schema.Literal(PendingIdentityHandoffKind.Pairing),
   deviceId: Schema.String,
   devicePublicKey: Schema.String,
   deviceSigningPublicKey: Schema.String,
-}) satisfies Schema.Schema<PendingIdentityHandoff>
+}
+const pendingIdentityHandoffSchema = Schema.Struct(
+  moduleStructRequest,
+) satisfies Schema.Schema<PendingIdentityHandoff>
 
 function decodePendingIdentityHandoff(value: unknown) {
   return Schema.decodeUnknown(pendingIdentityHandoffSchema)(value)
 }
 
 function decodeCompanionIdentityHandoffRequest(value: unknown) {
-  return Effect.try({
-    try: () => decode_companion_identity_handoff_request(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
-        kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
-        cause,
-      }),
-  })
+  type DecodeCompanionIdentityHandoffRequestTryRequest = {
+    readonly try: () => ReturnType<
+      typeof decode_companion_identity_handoff_request
+    >
+
+    readonly catch: (error: unknown) => RuntimeMessageDecodeFailure
+  }
+  const decodeCompanionIdentityHandoffRequestTryRequest: DecodeCompanionIdentityHandoffRequestTryRequest =
+    {
+      try: () => decode_companion_identity_handoff_request(value),
+      catch: (cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromCause
+        >[0] = {
+          kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
+          cause,
+        }
+        return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+      },
+    }
+  return Effect.try(decodeCompanionIdentityHandoffRequestTryRequest)
 }
 
 function decodeCompanionIdentityDiscoveryObservation(value: unknown) {
-  return Effect.try({
-    try: () => decode_companion_identity_discovery_observation(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
-        cause,
-      }),
-  })
+  type DecodeCompanionIdentityDiscoveryObservationTryRequest = {
+    readonly try: () => ReturnType<
+      typeof decode_companion_identity_discovery_observation
+    >
+
+    readonly catch: (error: unknown) => RuntimeMessageDecodeFailure
+  }
+  const decodeCompanionIdentityDiscoveryObservationTryRequest: DecodeCompanionIdentityDiscoveryObservationTryRequest =
+    {
+      try: () => decode_companion_identity_discovery_observation(value),
+      catch: (cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromCause
+        >[0] = {
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
+          cause,
+        }
+        return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+      },
+    }
+  return Effect.try(decodeCompanionIdentityDiscoveryObservationTryRequest)
 }
 
 function decodeCompanionPairedVaultIdentityHandoffRequest(value: unknown) {
-  return Effect.try({
-    try: () =>
-      decode_extension_paired_vault_identity_handoff_request_message(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
-        cause,
-      }),
-  })
+  type DecodeCompanionPairedVaultIdentityHandoffRequestTryRequest = {
+    readonly try: () => ReturnType<
+      typeof decode_extension_paired_vault_identity_handoff_request_message
+    >
+
+    readonly catch: (error: unknown) => RuntimeMessageDecodeFailure
+  }
+  const decodeCompanionPairedVaultIdentityHandoffRequestTryRequest: DecodeCompanionPairedVaultIdentityHandoffRequestTryRequest =
+    {
+      try: () =>
+        decode_extension_paired_vault_identity_handoff_request_message(value),
+      catch: (cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromCause
+        >[0] = {
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
+          cause,
+        }
+        return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+      },
+    }
+  return Effect.try(decodeCompanionPairedVaultIdentityHandoffRequestTryRequest)
 }
 
 function decodeCompanionPairedVaultUnlockRequest(value: unknown) {
-  return Effect.try({
-    try: () => decode_extension_paired_vault_unlock_request_message(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
-        kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
-        cause,
-      }),
-  })
+  type DecodeCompanionPairedVaultUnlockRequestTryRequest = {
+    readonly try: () => ReturnType<
+      typeof decode_extension_paired_vault_unlock_request_message
+    >
+
+    readonly catch: (error: unknown) => RuntimeMessageDecodeFailure
+  }
+  const decodeCompanionPairedVaultUnlockRequestTryRequest: DecodeCompanionPairedVaultUnlockRequestTryRequest =
+    {
+      try: () => decode_extension_paired_vault_unlock_request_message(value),
+      catch: (cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromCause
+        >[0] = {
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
+          cause,
+        }
+        return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+      },
+    }
+  return Effect.try(decodeCompanionPairedVaultUnlockRequestTryRequest)
 }
 
 export type ExtensionSessionStorageValue =
@@ -259,47 +321,45 @@ class ExtensionPairingIdentity {
   }
 
   setSessionStorage(items: ExtensionSessionStorageWrite): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.set(items, () => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve()
-      })
+    const storageWrite = Promise.withResolvers<void>()
+    chrome.storage.session.set(items, () => {
+      const message = chrome.runtime.lastError?.message
+      if (message) storageWrite.reject(new Error(message))
+      else storageWrite.resolve()
     })
+    return storageWrite.promise
   }
 
   getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.get<ExtensionSessionStorageItems>(key, (items) => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve(items)
-      })
+    const storageRead = Promise.withResolvers<ExtensionSessionStorageItems>()
+    chrome.storage.session.get<ExtensionSessionStorageItems>(key, (items) => {
+      const message = chrome.runtime.lastError?.message
+      if (message) storageRead.reject(new Error(message))
+      else storageRead.resolve(items)
     })
+    return storageRead.promise
   }
 
   getAllSessionStorage(): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.get<ExtensionSessionStorageItems>((items) => {
+    const storageRead = Promise.withResolvers<ExtensionSessionStorageItems>()
+    void chrome.storage.session.get<ExtensionSessionStorageItems>(
+      (items: ExtensionSessionStorageItems) => {
         const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve(items)
-      })
-    })
+        if (message) storageRead.reject(new Error(message))
+        else storageRead.resolve(items)
+      },
+    )
+    return storageRead.promise
   }
 
   removeSessionStorage(key: string): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.remove(key, () => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve()
-      })
+    const storageRemoval = Promise.withResolvers<void>()
+    chrome.storage.session.remove(key, () => {
+      const message = chrome.runtime.lastError?.message
+      if (message) storageRemoval.reject(new Error(message))
+      else storageRemoval.resolve()
     })
+    return storageRemoval.promise
   }
 
   private async issueIdentityHandoff({
@@ -354,36 +414,17 @@ class ExtensionPairingIdentity {
     void chrome.tabs.create(nookTypedArgs0_2)
   }
 
-  sendSessionMessage(
+  async sendSessionMessage(
     message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
-  sendSessionMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
-  async sendSessionMessage<
-    Response = ExtensionSessionResponse,
-    DecodeFailure = never,
-  >(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
-  ): Promise<
-    | ExtensionSessionTransportResult<ExtensionSessionResponse>
-    | ExtensionSessionTransportResult<Response, DecodeFailure>
-  > {
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>> {
     const document = await extensionSessionLifecycle.openSessionDocument()
     if (document.isErr()) {
       return err<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
         document.error,
       )
     }
-    return decodeResponse
-      ? document.value.sendMessage(message, decodeResponse)
-      : document.value.sendMessage(message)
+    const delivery: ExtensionSessionTransportDelivery = { message }
+    return document.value.sendMessage(delivery)
   }
 
   async createIdentityHandoff(
@@ -489,8 +530,10 @@ class ExtensionPairingIdentity {
       grant,
     )
     if (grantDecode.kind === ConcreteDecoderResultKind.Rejected) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({ kind: 'unavailable' })
+      const unavailablePresence: CompanionExtensionPresence = {
+        kind: 'unavailable',
+      }
+      return ok(unavailablePresence)
     }
     const decodedGrant = grantDecode.value
     const selected = pairingPolicy.selectedPairingGrant(stored)
@@ -510,16 +553,15 @@ class ExtensionPairingIdentity {
       this.websiteSessionStatusTransport(statusResponse) !==
       ExtensionSessionStatusAvailability.Unlocked
     ) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      const lockedPresence: CompanionExtensionPresence = {
         kind: 'locked',
         vault_type: currentGrant.vaultType,
         vault_store_id: currentGrant.vaultStoreId,
         vault_name: currentGrant.vaultName,
-      })
+      }
+      return ok(lockedPresence)
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return ok({
+    const unlockedPresence: CompanionExtensionPresence = {
       kind: 'unlocked',
       vault_type: currentGrant.vaultType,
       vault_store_id: currentGrant.vaultStoreId,
@@ -535,7 +577,8 @@ class ExtensionPairingIdentity {
         nonce,
         scopes: currentGrant.scopes,
       },
-    })
+    }
+    return ok(unlockedPresence)
   }
 
   async createPairedIdentityHandoff(
@@ -807,41 +850,40 @@ class ExtensionPairingIdentity {
   }
 
   private readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get<LegacyPairingStorageItems>((items) => {
-        if (chrome.runtime.lastError) {
-          reject(
-            new Error(
-              ((...[v = 'Unable to read legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
+    const storageRead = Promise.withResolvers<LegacyPairingStorageItems>()
+    chrome.storage.local.get<LegacyPairingStorageItems>((items) => {
+      if (chrome.runtime.lastError) {
+        storageRead.reject(
+          new Error(
+            ((...[v = 'Unable to read legacy extension pairing state.']) => v)(
+              chrome.runtime.lastError.message,
             ),
-          )
-          return
-        }
-        resolve(items)
-      })
+          ),
+        )
+        return
+      }
+      storageRead.resolve(items)
     })
+    return storageRead.promise
   }
 
   private removeLegacyPairingStorage(
     keys: LegacyPairingStorageKeys,
   ): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.remove(keys, () => {
-        if (chrome.runtime.lastError) {
-          reject(
-            new Error(
-              ((...[v = 'Unable to remove legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
-            ),
-          )
-          return
-        }
-        resolve()
-      })
+    const storageRemoval = Promise.withResolvers<void>()
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        storageRemoval.reject(
+          new Error(
+            ((...[v = 'Unable to remove legacy extension pairing state.']) =>
+              v)(chrome.runtime.lastError.message),
+          ),
+        )
+        return
+      }
+      storageRemoval.resolve()
     })
+    return storageRemoval.promise
   }
 
   ensureLegacyPairingMigration(): Promise<void> {

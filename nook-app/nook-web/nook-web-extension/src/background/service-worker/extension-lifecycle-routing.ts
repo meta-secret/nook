@@ -177,34 +177,60 @@ class AuthorizationCleanupLifecycle {
       cleanupStart,
     } = this.request
     return Effect.gen(function* () {
+      type ModuleTryPromiseRequest = {
+        readonly try: (
+          signal: AbortSignal,
+        ) => PromiseLike<AccountPickers.AccountPickerAuthorizationCleanupStart>
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryPromiseRequest: ModuleTryPromiseRequest = {
+        try: () => beginAccountPickerAuthorizationCleanup(),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      }
       const cleanupOperation =
         cleanupStart.kind === AuthorizationCleanupStartKind.Existing
           ? Effect.succeed(cleanupStart.cleanup)
-          : Effect.tryPromise({
-              try: () => beginAccountPickerAuthorizationCleanup(),
-              catch: () => AuthorizationCleanupFailureKind.Rejected,
-            })
+          : Effect.tryPromise(moduleTryPromiseRequest)
+      type CloseOperationSucceedRequest = {
+        kind: AuthorizationCleanupCloseKind.Closed
+      }
+      const closeOperationSucceedRequest: CloseOperationSucceedRequest = {
+        kind: AuthorizationCleanupCloseKind.Closed,
+      }
+      type ModuleTryPromiseRequest2 = {
+        readonly try: (
+          signal: AbortSignal,
+        ) => ReturnType<typeof closeExtensionSessionDocument>
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryPromiseRequest2: ModuleTryPromiseRequest2 = {
+        try: () => closeExtensionSessionDocument(),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      }
+      type ModuleSucceedRequest = {
+        kind: AuthorizationCleanupCloseKind.Skipped
+      }
+      const moduleSucceedRequest: ModuleSucceedRequest = {
+        kind: AuthorizationCleanupCloseKind.Skipped,
+      }
       const closeOperation: Effect.Effect<
         AuthorizationCleanupClose,
         AuthorizationCleanupFailure
       > =
         sessionDisposition === AuthorizationCleanupSessionDisposition.Close
-          ? Effect.tryPromise({
-              try: () => closeExtensionSessionDocument(),
-              catch: () => AuthorizationCleanupFailureKind.Rejected,
-            }).pipe(
+          ? Effect.tryPromise(moduleTryPromiseRequest2).pipe(
               Effect.flatMap((closed) =>
                 closed.isErr()
                   ? Effect.fail(closed.error)
-                  : Effect.succeed({
-                      kind: AuthorizationCleanupCloseKind.Closed,
-                    }),
+                  : Effect.succeed(closeOperationSucceedRequest),
               ),
             )
-          : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Skipped })
+          : Effect.succeed(moduleSucceedRequest)
+      type ModuleAllRequest = { concurrency: 'unbounded' } | undefined
+      const moduleAllRequest: ModuleAllRequest = { concurrency: 'unbounded' }
       const [cleanupResult, closeResult] = yield* Effect.all(
         [Effect.either(cleanupOperation), Effect.either(closeOperation)],
-        { concurrency: 'unbounded' },
+        moduleAllRequest,
       )
       if (Either.isLeft(cleanupResult)) {
         return yield* Effect.fail([cleanupResult.left])
@@ -215,37 +241,55 @@ class AuthorizationCleanupLifecycle {
         failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
       }
       if (Either.isLeft(closeResult)) failures.push(closeResult.left)
+      type ModuleTryRequest = {
+        readonly try: () => void
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryRequest: ModuleTryRequest = {
+        try: () => clearStagedAuthenticatorEnrollments(),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      }
       const firstStagedCleanup = yield* Effect.either(
-        Effect.try({
-          try: () => clearStagedAuthenticatorEnrollments(),
-          catch: () => AuthorizationCleanupFailureKind.Rejected,
-        }),
+        Effect.try(moduleTryRequest),
       )
       if (Either.isLeft(firstStagedCleanup))
         failures.push(firstStagedCleanup.left)
+      type ModuleTryPromiseRequest3 = {
+        readonly try: (signal: AbortSignal) => PromiseLike<void>
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryPromiseRequest3: ModuleTryPromiseRequest3 = {
+        try: () => clearPendingAccountPickers(),
+        catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+      }
       const firstPickerCleanup = yield* Effect.either(
-        Effect.tryPromise({
-          try: () => clearPendingAccountPickers(),
-          catch: () =>
-            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
-        }),
+        Effect.tryPromise(moduleTryPromiseRequest3),
       )
       if (Either.isLeft(firstPickerCleanup))
         failures.push(firstPickerCleanup.left)
+      type ModuleTryPromiseRequest4 = {
+        readonly try: (signal: AbortSignal) => PromiseLike<void>
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryPromiseRequest4: ModuleTryPromiseRequest4 = {
+        try: () => clearPendingAccountPickers(),
+        catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+      }
       const secondPickerCleanup = yield* Effect.either(
-        Effect.tryPromise({
-          try: () => clearPendingAccountPickers(),
-          catch: () =>
-            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
-        }),
+        Effect.tryPromise(moduleTryPromiseRequest4),
       )
       if (Either.isLeft(secondPickerCleanup))
         failures.push(secondPickerCleanup.left)
+      type ModuleTryRequest2 = {
+        readonly try: () => void
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const moduleTryRequest2: ModuleTryRequest2 = {
+        try: () => clearStagedAuthenticatorEnrollments(),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      }
       const secondStagedCleanup = yield* Effect.either(
-        Effect.try({
-          try: () => clearStagedAuthenticatorEnrollments(),
-          catch: () => AuthorizationCleanupFailureKind.Rejected,
-        }),
+        Effect.try(moduleTryRequest2),
       )
       if (Either.isLeft(secondStagedCleanup))
         failures.push(secondStagedCleanup.left)
@@ -253,15 +297,24 @@ class AuthorizationCleanupLifecycle {
         releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
         return yield* Effect.fail(failures)
       }
+      type ModuleTryPromiseRequest5 = {
+        readonly try: (
+          signal: AbortSignal,
+        ) => ReturnType<typeof completeAccountPickerAuthorizationCleanup>
+        readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+      }
+      const completionRequest: Parameters<
+        typeof completeAccountPickerAuthorizationCleanup
+      >[0] = {
+        authorizationGeneration,
+        evidence: CleanupEvidence.Full,
+      }
+      const moduleTryPromiseRequest5: ModuleTryPromiseRequest5 = {
+        try: () => completeAccountPickerAuthorizationCleanup(completionRequest),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      }
       const completion = yield* Effect.either(
-        Effect.tryPromise({
-          try: () =>
-            completeAccountPickerAuthorizationCleanup(
-              authorizationGeneration,
-              CleanupEvidence.Full,
-            ),
-          catch: () => AuthorizationCleanupFailureKind.Rejected,
-        }),
+        Effect.tryPromise(moduleTryPromiseRequest5),
       )
       if (Either.isLeft(completion)) {
         releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
@@ -283,17 +336,31 @@ export function recoverInterruptedAuthorizationCleanup(
   dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
 ): AuthorizationCleanupEffect {
   return Effect.gen(function* () {
-    const pendingLookup = Effect.tryPromise({
+    type ModuleTryPromiseRequest6 = {
+      readonly try: (signal: AbortSignal) => PromiseLike<boolean>
+      readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+    }
+    const moduleTryPromiseRequest6: ModuleTryPromiseRequest6 = {
       try: () => dependencies.accountPickerAuthorizationCleanupPending(),
       catch: () => AuthorizationCleanupFailureKind.MarkerLookupFailed,
-    })
-    const cleanupStart = Effect.tryPromise({
+    }
+    const pendingLookup = Effect.tryPromise(moduleTryPromiseRequest6)
+    type ModuleTryPromiseRequest7 = {
+      readonly try: (
+        signal: AbortSignal,
+      ) => PromiseLike<AccountPickers.AccountPickerAuthorizationCleanupStart>
+      readonly catch: (error: unknown) => AuthorizationCleanupFailureKind
+    }
+    const moduleTryPromiseRequest7: ModuleTryPromiseRequest7 = {
       try: () => dependencies.beginAccountPickerAuthorizationCleanup(),
       catch: () => AuthorizationCleanupFailureKind.Rejected,
-    })
+    }
+    const cleanupStart = Effect.tryPromise(moduleTryPromiseRequest7)
+    type ModuleAllRequest2 = { concurrency: 'unbounded' } | undefined
+    const moduleAllRequest2: ModuleAllRequest2 = { concurrency: 'unbounded' }
     const [lookupResult, cleanupResult] = yield* Effect.all(
       [Effect.either(pendingLookup), Effect.either(cleanupStart)],
-      { concurrency: 'unbounded' },
+      moduleAllRequest2,
     )
     if (Either.isLeft(cleanupResult)) {
       return yield* Effect.fail([cleanupResult.left])
@@ -306,16 +373,32 @@ export function recoverInterruptedAuthorizationCleanup(
       return yield* Effect.fail([lookupResult.left])
     }
     if (!lookupResult.right) {
-      const outcome = yield* Effect.tryPromise({
+      const completionRequest: Parameters<
+        typeof dependencies.completeAccountPickerAuthorizationCleanup
+      >[0] = {
+        authorizationGeneration: cleanup.authorizationGeneration,
+        evidence: CleanupEvidence.Partial,
+      }
+      type ModuleTryPromiseRequest8 = {
+        readonly try: (
+          signal: AbortSignal,
+        ) => ReturnType<
+          typeof dependencies.completeAccountPickerAuthorizationCleanup
+        >
+        readonly catch: (
+          error: unknown,
+        ) => readonly AuthorizationCleanupFailure[]
+      }
+      const moduleTryPromiseRequest8: ModuleTryPromiseRequest8 = {
         try: () =>
           dependencies.completeAccountPickerAuthorizationCleanup(
-            cleanup.authorizationGeneration,
-            CleanupEvidence.Partial,
+            completionRequest,
           ),
         catch: (): readonly AuthorizationCleanupFailure[] => [
           AuthorizationCleanupFailureKind.Rejected,
         ],
-      })
+      }
+      const outcome = yield* Effect.tryPromise(moduleTryPromiseRequest8)
       if ('error' in outcome) {
         return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
       }
@@ -571,10 +654,16 @@ export function routeExtensionLifecycleMessage({
                 rebindStagedAuthenticatorEnrollmentsAuthorization(
                   cleanupStart.authorizationGeneration,
                 )
-                const outcome = await completeAccountPickerAuthorizationCleanup(
-                  cleanupStart.authorizationGeneration,
-                  CleanupEvidence.Partial,
-                )
+                const completionRequest: Parameters<
+                  typeof completeAccountPickerAuthorizationCleanup
+                >[0] = {
+                  authorizationGeneration: cleanupStart.authorizationGeneration,
+                  evidence: CleanupEvidence.Partial,
+                }
+                const outcome =
+                  await completeAccountPickerAuthorizationCleanup(
+                    completionRequest,
+                  )
                 // Preserve the import outcome without refreshing a rejected generation.
                 if ('error' in outcome) return response
                 if (response.ok) await refreshAuthenticationSurfaces()
