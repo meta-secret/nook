@@ -56,6 +56,7 @@ export class BuildkitPlainLogTelemetry {
       if (transfer) {
         const [, transferName = "", transferBytes = "0B"] = transfer;
         const bytes = this.byteCount(transferBytes);
+        if (bytes <= 0) continue;
         cacheExport.transfers.set(
           transferName,
           Math.max(cacheExport.transfers.get(transferName) || 0, bytes),

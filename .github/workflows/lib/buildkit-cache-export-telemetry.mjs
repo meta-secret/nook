@@ -89,8 +89,9 @@ export class BuildkitCacheExportTelemetry {
               `${id} ${name}`,
             ));
         if (!belongsToCacheExport) continue;
-        // Completed BuildKit status records may retain only `total`, or reset
-        // `current` to zero after the transfer. Either is measured evidence.
+        // Completed BuildKit status records may reset `current` to zero after
+        // the transfer, so retain a positive `total`. Zero-only counters are
+        // placeholders and do not prove that BuildKit emitted transfer bytes.
         const currentValue = candidate.current;
         const totalValue = candidate.total;
         const currentIsMeasured =
@@ -110,6 +111,7 @@ export class BuildkitCacheExportTelemetry {
             : totalIsMeasured
               ? observedTotal
               : observedCurrent;
+        if (current <= 0) continue;
         const key = `${vertexKey}:${id}`;
         bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
       }

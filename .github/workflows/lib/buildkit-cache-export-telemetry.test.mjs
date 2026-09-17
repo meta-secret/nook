@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import { BuildkitPlainLogTelemetry } from "./buildkit-plain-log-telemetry.mjs";
 
 void test("extracts structured registry cache bytes, timings, and incomplete failures", () => {
   const summary = new BuildkitCacheExportTelemetry([
@@ -48,7 +49,7 @@ void test("extracts structured registry cache bytes, timings, and incomplete fai
   });
 });
 
-void test("preserves an observed zero-byte registry transfer as measured", () => {
+void test("treats completed structured zero counters as unavailable placeholder data", () => {
   const summary = new BuildkitCacheExportTelemetry([
     {
       vertexes: [
@@ -72,8 +73,8 @@ void test("preserves an observed zero-byte registry transfer as measured", () =>
   ]).summary();
 
   assert.deepEqual(summary.byte_measurement, {
-    status: "measured",
-    bytes: 0,
+    status: "unavailable",
+    reason: "buildkit_did_not_emit_byte_count",
   });
 });
 
@@ -97,6 +98,21 @@ void test("does not infer zero bytes from exporter statuses without counters", (
       ],
     },
   ]).summary();
+
+  assert.deepEqual(summary.byte_measurement, {
+    status: "unavailable",
+    reason: "buildkit_did_not_emit_byte_count",
+  });
+});
+
+void test("treats a completed plain-log zero transfer as unavailable placeholder data", () => {
+  const summary = new BuildkitPlainLogTelemetry(
+    [
+      "#93 exporting cache to registry",
+      "#93 writing cache manifest sha256:bbbbbbbb 0B / 0B done",
+      "#93 DONE 7.4s",
+    ].join("\n"),
+  ).summary();
 
   assert.deepEqual(summary.byte_measurement, {
     status: "unavailable",
