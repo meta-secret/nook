@@ -14,6 +14,7 @@ import type {
   NookStorageConnectArgs,
 } from "$lib/vault/action-contexts";
 import type { VaultSyncApplicationOutcome } from "$lib/vault/sync-runtime";
+import type { ProviderPersistenceOutcome } from "$lib/vault/providers.svelte";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   isoTimestamp,
@@ -409,7 +410,7 @@ export class VaultSyncActions {
     yaml,
     revision,
   }: ProviderSyncMetadataUpdate): Promise<
-    Result<StorageProvider[], StorageOperationFailure>
+    Result<ProviderPersistenceOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -457,7 +458,7 @@ export class VaultSyncActions {
         providers: updated.value.providers,
       });
       if (persisted.isErr()) return storageErr(persisted.error);
-      return storageOk(state.providers);
+      return storageOk(persisted.value);
     } finally {
       revision.free();
     }

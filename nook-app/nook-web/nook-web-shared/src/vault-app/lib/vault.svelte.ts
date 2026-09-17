@@ -271,7 +271,9 @@ export class VaultState extends VaultRuntimeState {
     return this.localLoginActions.prepareExistingVaultImportSlot();
   }
 
-  async reloadProvidersForActiveVault() {
+  async reloadProvidersForActiveVault(): Promise<
+    Result<providersActions.ProviderLoadOutcome, VaultStorageFailure>
+  > {
     return this.localLoginActions.reloadProvidersForActiveVault();
   }
 
@@ -308,7 +310,9 @@ export class VaultState extends VaultRuntimeState {
     ).lockDeviceProtection();
   }
 
-  async loadProviders(options: providersActions.ProviderLoadOptions) {
+  async loadProviders(
+    options: providersActions.ProviderLoadOptions,
+  ): Promise<Result<providersActions.ProviderLoadOutcome, VaultStorageFailure>> {
     return new providersActions.VaultProviderActions(this).loadProviders({
       options,
     });
@@ -440,7 +444,7 @@ export class VaultState extends VaultRuntimeState {
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
   async removeProvider(
     id: string,
-  ): Promise<Result<VaultState["providers"], VaultStorageFailure>> {
+  ): Promise<Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>> {
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,
     });
@@ -545,7 +549,9 @@ export class VaultState extends VaultRuntimeState {
     providerId,
     yaml,
     revision,
-  }: ProviderSyncMetadataChange) {
+  }: ProviderSyncMetadataChange): Promise<
+    Result<providersActions.ProviderPersistenceOutcome, VaultStorageFailure>
+  > {
     return new syncActions.VaultSyncActions(this).updateProviderSyncMetadata({
       providerId,
       yaml,
@@ -758,7 +764,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<VaultState["providers"], VaultStorageFailure>
+    Result<providersActions.SessionVaultPromotionOutcome, VaultStorageFailure>
   > {
     return new providersActions.VaultProviderActions(
       this,

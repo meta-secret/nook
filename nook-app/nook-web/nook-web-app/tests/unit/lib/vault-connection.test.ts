@@ -20,7 +20,9 @@ import { VaultConnectionActions } from '$lib/vault/connection'
 import { OAuthTokenRefreshOutcome } from '$lib/vault/oauth'
 import {
   OAuthRemoteReferenceSyncOutcome,
+  ProviderLoadOutcome,
   ProviderPersistenceOutcome,
+  SessionVaultPromotionOutcome,
 } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { SecretPageLoadOutcome } from '$lib/vault/secrets'
@@ -93,8 +95,12 @@ function connectionScenario(
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
     async () => ok(ProviderPersistenceOutcome.Persisted),
   )
-  state.loadProviders = vi.fn<VaultState['loadProviders']>(async () => ok())
-  state.promoteSessionVaultToLocalIfNeeded = vi.fn(async () => ok())
+  state.loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
+    ok(ProviderLoadOutcome.Loaded),
+  )
+  state.promoteSessionVaultToLocalIfNeeded = vi.fn<
+    VaultState['promoteSessionVaultToLocalIfNeeded']
+  >(async () => ok(SessionVaultPromotionOutcome.CurrentProviderModeRetained))
   state.refreshPasswordEntriesList = vi.fn(async () => ok())
   state.hydrateMultiDeviceState = vi.fn(async () => ok())
   state.markVaultUnlocked = vi.fn(() => {

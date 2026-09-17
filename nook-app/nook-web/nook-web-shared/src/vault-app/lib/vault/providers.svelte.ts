@@ -152,6 +152,21 @@ export enum ProviderPersistenceOutcome {
   Persisted = "persisted",
 }
 
+export enum ProviderLoadOutcome {
+  Loaded = "loaded",
+}
+
+export enum SessionVaultPromotionOutcome {
+  PromotedToLocal = "promoted-to-local",
+  CurrentProviderModeRetained = "current-provider-mode-retained",
+}
+
+export enum ProviderRemovalOutcome {
+  ProviderNotFound = "provider-not-found",
+  LocalProviderRetained = "local-provider-retained",
+  Removed = "removed",
+}
+
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
@@ -405,7 +420,9 @@ export class VaultProviderActions {
     log.debug("pristine device providers initialized");
   }
 
-  async loadProviders({ options }: ProviderLoad) {
+  async loadProviders({ options }: ProviderLoad): Promise<
+    Result<ProviderLoadOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const loaded = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -432,11 +449,11 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk(state.providers);
+    return storageOk(ProviderLoadOutcome.Loaded);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<StorageProvider[], StorageOperationFailure>
+    Result<SessionVaultPromotionOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
@@ -470,8 +487,9 @@ export class VaultProviderActions {
       state.githubPat = "";
       state.clearOauthFile();
       state.clearLocalFolder();
+      return storageOk(SessionVaultPromotionOutcome.PromotedToLocal);
     }
-    return storageOk(state.providers);
+    return storageOk(SessionVaultPromotionOutcome.CurrentProviderModeRetained);
   }
 
   async persistProviders({ opts }: ProviderPersistence): Promise<
@@ -601,10 +619,14 @@ export class VaultProviderActions {
 
   async removeProvider({
     id,
-  }: ProviderRemoval): Promise<Result<StorageProvider[], StorageOperationFailure>> {
+  }: ProviderRemoval): Promise<
+    Result<ProviderRemovalOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target || target.type === "local") return storageOk(state.providers);
+    if (!target) return storageOk(ProviderRemovalOutcome.ProviderNotFound);
+    if (target.type === "local")
+      return storageOk(ProviderRemovalOutcome.LocalProviderRetained);
 
     const persistence = await state.persistProviders({
       replace: true,
@@ -639,7 +661,7 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk(state.providers);
+    return storageOk(ProviderRemovalOutcome.Removed);
   }
 }
 

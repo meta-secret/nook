@@ -24,6 +24,7 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
+import { ProviderPersistenceOutcome } from '$lib/vault/providers.svelte'
 import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -92,7 +93,9 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   )
   state.refreshSecretsFromSession = secretRefresh
   state.refreshReplacementConflicts = vi.fn(async () => ok())
-  state.updateProviderSyncMetadata = vi.fn(async () => ok())
+  state.updateProviderSyncMetadata = vi.fn(async () =>
+    ok(ProviderPersistenceOutcome.Persisted),
+  )
   state.hydrateMultiDeviceState = vi.fn(async () => ok())
   vi.spyOn(VaultStorageSynchronization.prototype, 'run').mockResolvedValue(
     ok(syncResult),

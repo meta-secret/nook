@@ -2,6 +2,7 @@ import { ok, type Result } from 'neverthrow'
 import { NookLocalVaultUnlockState } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { ProviderLoadOutcome } from '$lib/vault/providers.svelte'
 
 const wasmMocks = vi.hoisted(() => ({
   getActiveVaultSelection: vi.fn(),
@@ -126,7 +127,9 @@ describe('selectVaultForUnlock', () => {
 
   test('prepares the selected vault without protected provider or identity access', async () => {
     const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
-    const reloadProvidersForActiveVault = vi.fn(async () => ok())
+    const reloadProvidersForActiveVault = vi.fn(async () =>
+      ok(ProviderLoadOutcome.Loaded),
+    )
     const state = VaultStateTestFixture.create()
     state.clearManager()
     state.errorMsg = ''

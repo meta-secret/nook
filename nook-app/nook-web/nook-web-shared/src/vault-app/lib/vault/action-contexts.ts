@@ -8,7 +8,10 @@ import type { Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { OAuthTokenRefreshOutcome } from "$lib/vault/oauth";
-import type { ProviderPersistenceOutcome } from "$lib/vault/providers.svelte";
+import type {
+  ProviderPersistenceOutcome,
+  ProviderRemovalOutcome,
+} from "$lib/vault/providers.svelte";
 import type { SecretPageLoadOutcome } from "$lib/vault/secrets";
 import type { NookStorageConnectArgs } from "$app-wasm";
 export type { NookStorageConnectArgs } from "$app-wasm";
@@ -354,7 +357,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure>>;
   removeProvider(
     providerId: string,
-  ): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ): Promise<Result<ProviderRemovalOutcome, VaultStorageFailure>>;
   ensureProviderSaved(): Promise<
     Result<ProviderPersistenceOutcome, VaultStorageFailure>
   >;
@@ -375,7 +378,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure | OAuthFailure>>;
   updateProviderSyncMetadata(
     request: ProviderSyncMetadataRequest,
-  ): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   wasmStorageArgs(): NookStorageConnectArgs;
 }
 

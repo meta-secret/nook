@@ -27,6 +27,7 @@ import {
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
+import { ProviderLoadOutcome } from "$lib/vault/providers.svelte";
 
 const log = browserLogRuntime.createLogger("vault-local");
 
@@ -66,7 +67,7 @@ export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
 
   async reloadProvidersForActiveVault(): Promise<
-    Result<VaultState["providers"], StorageOperationFailure>
+    Result<ProviderLoadOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const snapshot = await state.enqueueStorage(async () => {
@@ -86,7 +87,7 @@ export class VaultLoginActions {
       state.openActiveVault(snapshot.value.activeVaultStoreId.value);
     }
     state.applyActiveProviderCredentials();
-    return storageOk(state.providers);
+    return storageOk(ProviderLoadOutcome.Loaded);
   }
 
   beginLoginVaultPicker(): void {
