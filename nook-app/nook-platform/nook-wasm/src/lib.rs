@@ -182,7 +182,9 @@ mod browser_tests {
         let store_id = NookStoreId::from(nook_core::StoreId::before_genesis_placeholder());
         assert_eq!(store_id.value(), "store_abcdefghijk");
         assert_eq!(
-            NookStoreIdPresence::from_raw("")?.state(),
+            NookStoreIdPresence::from_raw("")
+                .map_err(|error| JsError::new(&error.to_string()))?
+                .state(),
             NookStoreIdPresenceState::Absent,
         );
         Ok(())

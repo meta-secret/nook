@@ -1,6 +1,14 @@
 use nook_core::StoreId;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub(crate) enum StoreIdPresenceError {
+    #[error("vault store identity is absent")]
+    Absent,
+    #[error(transparent)]
+    Invalid(#[from] nook_core::ValidationError),
+}
+
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct NookStoreId(StoreId);
@@ -36,13 +44,17 @@ pub enum NookStoreIdPresenceState {
 pub struct NookStoreIdPresence(Option<StoreId>);
 
 impl NookStoreIdPresence {
-    pub(crate) fn from_raw(value: &str) -> Result<Self, JsError> {
+    pub(crate) fn from_raw(value: &str) -> Result<Self, StoreIdPresenceError> {
         if value.trim().is_empty() {
             return Ok(Self(None));
         }
         StoreId::parse(value)
             .map(|store_id| Self(Some(store_id)))
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(StoreIdPresenceError::Invalid)
+    }
+
+    fn require_store_id(&self) -> Result<StoreId, StoreIdPresenceError> {
+        self.0.clone().ok_or(StoreIdPresenceError::Absent)
     }
 }
 
@@ -57,10 +69,9 @@ impl NookStoreIdPresence {
     }
 
     pub fn store_id(&self) -> Result<NookStoreId, JsError> {
-        self.0
-            .clone()
+        self.require_store_id()
             .map(NookStoreId::from)
-            .ok_or_else(|| JsError::new("vault store identity is absent"))
+            .map_err(|error| JsError::new(&error.to_string()))
     }
 }
 
@@ -77,18 +88,35 @@ mod tests {
     }
 
     #[test]
-    fn generated_store_id_has_an_explicit_string_edge() -> Result<(), JsError> {
+    fn generated_store_id_has_an_explicit_string_edge() -> Result<(), StoreIdPresenceError> {
         let presence = NookStoreIdPresence::from_raw(StoreIdValueScenario::valid())?;
         assert_eq!(presence.state(), NookStoreIdPresenceState::Present);
-        assert_eq!(presence.store_id()?.value(), StoreIdValueScenario::valid());
+        assert_eq!(
+            presence.require_store_id()?.as_str(),
+            StoreIdValueScenario::valid()
+        );
         Ok(())
     }
 
     #[test]
-    fn absent_store_id_cannot_be_unwrapped_as_an_empty_string() -> Result<(), JsError> {
+    fn absent_store_id_returns_a_typed_error_without_constructing_a_js_error()
+    -> Result<(), StoreIdPresenceError> {
         let presence = NookStoreIdPresence::from_raw("")?;
         assert_eq!(presence.state(), NookStoreIdPresenceState::Absent);
-        assert!(presence.store_id().is_err());
+        assert!(matches!(
+            presence.require_store_id(),
+            Err(StoreIdPresenceError::Absent)
+        ));
         Ok(())
+    }
+
+    #[test]
+    fn malformed_store_id_preserves_core_validation() {
+        assert!(matches!(
+            NookStoreIdPresence::from_raw("invalid"),
+            Err(StoreIdPresenceError::Invalid(
+                nook_core::ValidationError::StoreIdInvalid
+            ))
+        ));
     }
 }
