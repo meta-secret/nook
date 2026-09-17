@@ -240,7 +240,7 @@ class PendingExtensionResponse {
   unavailable(): void {
     this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
   }
-  receive(response: ChromeExtensionRuntimeResponse): void {
+  receive(response: unknown): void {
     this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
   }
 }

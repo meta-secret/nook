@@ -44,7 +44,7 @@ type ExtensionVaultAuthorizationCapabilityRequest = {
 /** Holds the live manager and generated approval that authorize one grant. */
 class ExtensionVaultAuthorizationCapability {
   readonly manager: NookVaultManager;
-  readonly authorization: ExtensionVaultAuthorization;
+  readonly authorization: NookExtensionDeviceApproval;
 
   constructor(request: ExtensionVaultAuthorizationCapabilityRequest) {
     this.manager = request.manager;
