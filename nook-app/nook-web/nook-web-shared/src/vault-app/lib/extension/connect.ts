@@ -46,9 +46,28 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ChromeRuntimeHost = Pick<typeof chrome.runtime, "sendMessage">;
+type PendingExtensionResponseRequest = {
+  readonly browser: typeof globalThis;
+  readonly wait: ExtensionMessageResponseWait;
+  readonly resolve: (delivery: ExtensionMessageDelivery) => void;
+};
 
-type ExtensionBrowserHost = typeof globalThis;
+type ChromeRuntimeResponseCallback = (
+  response: ChromeExtensionRuntimeResponse | undefined,
+) => void;
+
+type ChromeRuntimeHost = {
+  readonly lastError?: { readonly message?: string };
+  readonly sendMessage: (
+    extensionId: string,
+    message: RuntimeMessage,
+    callback: ChromeRuntimeResponseCallback,
+  ) => void;
+};
+
+type ExtensionBrowserHost = typeof globalThis & {
+  readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
+};
 
 enum ChromeRuntimeAvailabilityKind {
   Unavailable = "unavailable",
@@ -243,14 +262,7 @@ class PendingExtensionResponse {
     kind: ExtensionResponsePhase.Pending,
     timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
   };
-  constructor(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    private readonly request: {
-      browser: typeof globalThis;
-      wait: ExtensionMessageResponseWait;
-      resolve: (delivery: ExtensionMessageDelivery) => void;
-    },
-  ) {
+  constructor(private readonly request: PendingExtensionResponseRequest) {
     if (request.wait.kind === ExtensionMessageResponseWaitKind.Bounded) {
       this.state = {
         kind: ExtensionResponsePhase.Pending,
@@ -273,12 +285,17 @@ class PendingExtensionResponse {
     this.request.resolve(delivery);
   }
   unavailable(): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
+    const delivery: ExtensionMessageDelivery = {
+      kind: ExtensionMessageDeliveryKind.Unavailable,
+    };
+    this.settle(delivery);
   }
   receive(response: ChromeExtensionRuntimeResponse): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
+    const delivery: ExtensionMessageDelivery = {
+      kind: ExtensionMessageDeliveryKind.Received,
+      response,
+    };
+    this.settle(delivery);
   }
 }
 
@@ -299,21 +316,11 @@ class ExtensionConnectionBrowser {
   }
 
   private chromeRuntime(): ChromeRuntimeAvailability {
-    if (!("chrome" in this.browser)) {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
     const chromeHost = this.browser.chrome;
-    if (
-      typeof chromeHost !== "object" ||
-      !chromeHost ||
-      !("runtime" in chromeHost)
-    ) {
+    if (!chromeHost?.runtime) {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
     }
-    if (
-      !("sendMessage" in chromeHost.runtime) ||
-      typeof chromeHost.runtime.sendMessage !== "function"
-    ) {
+    if (typeof chromeHost.runtime.sendMessage !== "function") {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
     }
     return {
@@ -431,12 +438,12 @@ class ExtensionConnectionBrowser {
         return;
       }
       const { runtime } = runtimeAvailability;
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const pending = new PendingExtensionResponse({
+      const pendingRequest: PendingExtensionResponseRequest = {
         browser: this.browser,
         wait: responseWait,
         resolve,
-      });
+      };
+      const pending = new PendingExtensionResponse(pendingRequest);
       runtime.sendMessage(extensionId, message, (response) => {
         if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
@@ -762,13 +769,11 @@ class ExtensionConnectionBrowser {
             ),
           );
           if (decodedResponse._tag === "Right") {
-            resolve(
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              ok({
-                envelope: decodedResponse.right.envelope,
-                nextNonce: decodedResponse.right.nextNonce,
-              }),
-            );
+            const identityEnvelope = {
+              envelope: decodedResponse.right.envelope,
+              nextNonce: decodedResponse.right.nextNonce,
+            };
+            resolve(ok(identityEnvelope));
             return;
           }
           resolve(
@@ -820,15 +825,15 @@ class ExtensionConnectionBrowser {
           type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload,
         };
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        const delivery = await this.sendExtensionMessage({
+        const sendArgs: ExtensionMessageRequest = {
           extensionId: request.extensionRuntimeId,
           message,
           responseWait: {
             kind: ExtensionMessageResponseWaitKind.Bounded,
             timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
           },
-        });
+        };
+        const delivery = await this.sendExtensionMessage(sendArgs);
         if (
           delivery.kind !== ExtensionMessageDeliveryKind.Received ||
           !delivery.response ||
@@ -902,11 +907,13 @@ class ExtensionConnectionBrowser {
           expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
         },
       };
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const delivered = await this.requestIdentityEnvelope({
+      const identityEnvelopeRequest: IdentityEnvelopeRequest = {
         request,
         message,
-      });
+      };
+      const delivered = await this.requestIdentityEnvelope(
+        identityEnvelopeRequest,
+      );
       if (delivered.isErr()) return err(delivered.error);
       let context: ReturnType<
         typeof NookExtensionIdentityHandoffContext.vault_creation
