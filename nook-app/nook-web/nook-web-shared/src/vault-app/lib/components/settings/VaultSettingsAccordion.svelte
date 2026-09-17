@@ -13,6 +13,10 @@
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
+  import type {
+    JoinApprovalHandlingOutcome,
+    JoinDenialHandlingOutcome,
+  } from '$lib/components/settings/vault-devices-card-state'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
   import { SettingsAccordionSection } from '$lib/vault/state/ui.svelte'
@@ -42,8 +46,8 @@
     pendingJoins: JoinRequest[]
     vaultMembers: VaultMember[]
     hasPasswordEnvelope?: boolean
-    onApproveJoin: (deviceId: string) => void | Promise<void>
-    onDenyJoin: (deviceId: string) => void | Promise<void>
+    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>
+    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>
     onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
     onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
     accordionSection?: SettingsAccordionSection

@@ -12,6 +12,7 @@ import type {
 } from "$lib/vault/action-contexts";
 import {
   browserDataLifecycle,
+  LocalDataRecoveryQuiescenceOutcome,
   NookDatabaseCleanupOutcome,
   RemoteLocalBrowserDataDeletionOutcome,
 } from "$lib/runtime/browser-data";
@@ -269,12 +270,14 @@ export class VaultWorkspaceActions {
           if (manager.isErr()) return storageErr(manager.error);
           try {
             manager.value.quiesce_for_local_recovery();
-            return storageOk();
+            return storageOk(LocalDataRecoveryQuiescenceOutcome.Quiesced);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })
-      : state.waitForStorageChain().then(() => storageOk());
+      : state
+          .waitForStorageChain()
+          .then(() => storageOk(LocalDataRecoveryQuiescenceOutcome.Quiesced));
     state.localDataDeletionStarted = true;
     state.stopIdleSessionTracking();
     state.stopVaultSync();

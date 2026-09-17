@@ -35,6 +35,8 @@
     type ExtensionSetupOffer,
   } from '$lib/app/extension-setup'
   import {
+    type JoinApprovalHandlingOutcome,
+    type JoinDenialHandlingOutcome,
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
@@ -65,8 +67,8 @@
     vaultMembers?: VaultMember[]
     isBusy: boolean
     hasPasswordEnvelope?: boolean
-    onApproveJoin: (deviceId: string) => void | Promise<void>
-    onDenyJoin: (deviceId: string) => void | Promise<void>
+    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>
+    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>
     onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
     onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
   } = $props()

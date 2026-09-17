@@ -26,6 +26,10 @@
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
+  import {
+    JoinApprovalHandlingOutcome,
+    JoinDenialHandlingOutcome,
+  } from '$lib/components/settings/vault-devices-card-state'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { generate_password, SecretType } from '$lib/nook'
   import {
@@ -373,12 +377,18 @@
           pendingJoins={vault.pendingJoins}
           vaultMembers={vault.vaultMembers}
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
-          onApproveJoin={(
+          onApproveJoin={async (
             id: Parameters<VaultSettingsAccordionProps['onApproveJoin']>[0],
-          ) => vault.approveJoin(id)}
-          onDenyJoin={(
+          ) => {
+            await vault.approveJoin(id)
+            return JoinApprovalHandlingOutcome.Handled
+          }}
+          onDenyJoin={async (
             id: Parameters<VaultSettingsAccordionProps['onDenyJoin']>[0],
-          ) => vault.denyJoin(id)}
+          ) => {
+            await vault.denyJoin(id)
+            return JoinDenialHandlingOutcome.Handled
+          }}
           onRenameDevice={(
             renameRequest: Parameters<
               VaultSettingsAccordionProps['onRenameDevice']
