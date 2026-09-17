@@ -17,6 +17,7 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
+import { OAuthTokenRefreshOutcome } from '$lib/vault/oauth'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -72,7 +73,9 @@ function connectionScenario(
   state.isAuthenticated = false
   state.localVaultPresent = false
   state.initDeviceIdentity = vi.fn(async () => ok())
-  state.ensureOAuthTokensFresh = vi.fn(async () => ok())
+  state.ensureOAuthTokensFresh = vi.fn<VaultState['ensureOAuthTokensFresh']>(
+    async () => ok(OAuthTokenRefreshOutcome.NotRequired),
+  )
   state.syncProviderById = syncProviderById
   state.assessVaultConnectStatus = assessVaultConnectStatus
   state.handleRemoteVaultAssessStatus = vi.fn(async () => false)

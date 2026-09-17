@@ -4,6 +4,7 @@ import type { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import type { Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import type { OAuthTokenRefreshOutcome } from "$lib/vault/oauth";
 import type { NookStorageConnectArgs } from "$app-wasm";
 export type { NookStorageConnectArgs } from "$app-wasm";
 import type {
@@ -301,7 +302,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   beginProviderSetup(request: ProviderSetupRequest): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenRefreshOutcome, OAuthFailure | VaultStorageFailure>
   >;
   ensureProviderSavedAfterConflict(
     conflict: NookSyncConflictReview,
