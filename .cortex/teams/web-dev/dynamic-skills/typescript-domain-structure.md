@@ -216,7 +216,7 @@ Does not apply to:
 
 - Forbidden: `new Set(['stageHostUpdates', ...])`, `result.ts` with
   `Result` / `Maybe`
-- Required: `enum PrePushField { ... }`, nested `agentStats.assemble`,
+- Required: `enum PrePushField { ... }`, nested `documentExport.assemble`,
   `DecodeOutcome` only inside codecs, `LoomFailure` for runtime failures
 
 ## Application Checklist
