@@ -853,14 +853,23 @@ mod tests {
     #[test]
     fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
     -> anyhow::Result<()> {
-        let mut value = serde_json::to_value(Fixture::grant())?;
-        value["approvedAt"] = serde_json::Value::String("2026-07-25T00:00:00.000Z".to_owned());
-        let decoded: StoredExtensionPairingGrant = serde_json::from_value(value)?;
+        let legacy_approval_time = "2026-07-25T00:00:00.000Z";
+        let mut expected = Fixture::grant();
+        expected.approved_at = Fixture::approved_at(&serde_json::to_string(legacy_approval_time)?)?;
+        let canonical_json = serde_json::to_string(&expected)?;
+        let legacy_json = canonical_json.replace(
+            r#""approvedAt":1784937600000"#,
+            r#""approvedAt":"2026-07-25T00:00:00.000Z""#,
+        );
+        assert_ne!(legacy_json, canonical_json);
+
+        let decoded = StoredExtensionPairingGrant::decode_json(&legacy_json)?;
+        assert_eq!(decoded, expected);
         assert_eq!(
             serde_json::to_string(&decoded.approved_at)?,
             "1784937600000"
         );
-        assert!(serde_json::to_value(decoded)?["approvedAt"].is_number());
+        assert_eq!(serde_json::to_string(&decoded)?, canonical_json);
         Ok(())
     }
 
