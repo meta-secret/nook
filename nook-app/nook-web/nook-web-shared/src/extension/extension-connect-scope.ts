@@ -1,15 +1,14 @@
-import type { ExtensionConnectScope as RustExtensionConnectScope } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { ExtensionConnectScope } from "./nook-companion-wasm/nook_companion_wasm.js";
 
-export type ExtensionConnectScope = RustExtensionConnectScope;
+export type { ExtensionConnectScope };
 
-export type ExtensionConnectScopeRuntime = Pick<
-  typeof import("./nook-companion-wasm/nook_companion_wasm.js"),
-  | "extension_vault_access_scope"
-  | "extension_password_filling_scope"
-  | "extension_passkey_management_scope"
-  | "extension_sync_provider_credentials_scope"
-  | "is_extension_connect_scope"
->;
+export type ExtensionConnectScopeRuntime = {
+  readonly vaultAccess: typeof import("./nook-companion-wasm/nook_companion_wasm.js").extension_vault_access_scope;
+  readonly passwordFilling: typeof import("./nook-companion-wasm/nook_companion_wasm.js").extension_password_filling_scope;
+  readonly passkeyManagement: typeof import("./nook-companion-wasm/nook_companion_wasm.js").extension_passkey_management_scope;
+  readonly syncProviderCredentials: typeof import("./nook-companion-wasm/nook_companion_wasm.js").extension_sync_provider_credentials_scope;
+  readonly is_extension_connect_scope: typeof import("./nook-companion-wasm/nook_companion_wasm.js").is_extension_connect_scope;
+};
 
 enum ExtensionConnectScopeRuntimeStateKind {
   Unconfigured = "unconfigured",
@@ -54,16 +53,16 @@ class ExtensionConnectScopeCatalog {
     );
   }
   get VaultAccess(): ExtensionConnectScope {
-    return this.requireScopeRuntime().extension_vault_access_scope();
+    return this.requireScopeRuntime().vaultAccess();
   }
   get PasswordFilling(): ExtensionConnectScope {
-    return this.requireScopeRuntime().extension_password_filling_scope();
+    return this.requireScopeRuntime().passwordFilling();
   }
   get PasskeyManagement(): ExtensionConnectScope {
-    return this.requireScopeRuntime().extension_passkey_management_scope();
+    return this.requireScopeRuntime().passkeyManagement();
   }
   get SyncProviderCredentials(): ExtensionConnectScope {
-    return this.requireScopeRuntime().extension_sync_provider_credentials_scope();
+    return this.requireScopeRuntime().syncProviderCredentials();
   }
 }
 

@@ -521,8 +521,7 @@ export class VaultOAuthActions {
       existing = configuredOAuthFile(
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          :
-            defaultOAuthFileConfig({
+          : defaultOAuthFileConfig({
               preset: "icloud",
               fileName: fallbackFileName,
             }),
@@ -584,8 +583,7 @@ export class VaultOAuthActions {
       const previous =
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          :
-            defaultOAuthFileConfig({
+          : defaultOAuthFileConfig({
               preset: "google-drive",
               fileName: fallbackFileName,
             });

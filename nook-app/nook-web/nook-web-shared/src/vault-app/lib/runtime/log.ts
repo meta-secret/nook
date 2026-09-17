@@ -282,13 +282,11 @@ class BrowserLogRuntime {
   runtimeFailure<NativeCause>(cause: NativeCause): RuntimeFailure {
     return new RuntimeFailure(
       cause instanceof Error
-        ?
-          {
+        ? {
             message: cause.message,
             ...(cause.stack ? { stack: cause.stack } : {}),
           }
-        :
-          { message: String(cause) },
+        : { message: String(cause) },
     );
   }
 

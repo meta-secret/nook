@@ -361,8 +361,7 @@ export class PasswordEnrollmentActions {
               const existingCredential = oauth_access_token(existingConfig);
               const tokens =
                 existingCredential.kind === "available"
-                  ?
-                    storageOk({
+                  ? storageOk({
                       accessToken: existingCredential.token,
                       accountName:
                         existingConfig.accountEmail.state === "email"

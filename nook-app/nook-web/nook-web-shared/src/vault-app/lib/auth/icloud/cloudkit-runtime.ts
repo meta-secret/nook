@@ -442,9 +442,11 @@ class CloudKitRuntime {
 
   isBraveBrowser(): boolean {
     return Boolean(
-      (navigator as Navigator & {
-        brave?: { readonly isBrave?: () => Promise<boolean> };
-      }).brave,
+      (
+        navigator as Navigator & {
+          brave?: { readonly isBrave?: () => Promise<boolean> };
+        }
+      ).brave,
     );
   }
 
@@ -589,8 +591,7 @@ class CloudKitRuntime {
       return ok(
         raw
           ? this.normalizeWebAuthToken(JSON.parse(raw))
-          :
-            { kind: WebAuthTokenLookupKind.Unavailable },
+          : { kind: WebAuthTokenLookupKind.Unavailable },
       );
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));

@@ -30,7 +30,11 @@ type ExtensionPairingRejectionResponse =
   | { readonly ok: false; readonly error: string };
 
 type ExtensionPairedVaultUnlockResponse =
-  | { readonly ok: true; readonly requestId: string; readonly vaultStoreId: string }
+  | {
+      readonly ok: true;
+      readonly requestId: string;
+      readonly vaultStoreId: string;
+    }
   | {
       readonly ok: false;
       readonly requestId: string;

@@ -112,9 +112,9 @@ class ExtensionVaultManagerContext {
       case ExtensionVaultManagerContextKind.Unavailable:
         return err(this.state.failure);
       case ExtensionVaultManagerContextKind.Captured:
-        return this.vault.admitManager().andThen((manager) =>
-          this.admitCapturedManager(manager),
-        );
+        return this.vault
+          .admitManager()
+          .andThen((manager) => this.admitCapturedManager(manager));
     }
   }
 
@@ -239,7 +239,9 @@ export class ExtensionVaultApproval {
 
     let providers: StorageProvider[] = [];
     if (
-      this.request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
+      this.request.scopes.includes(
+        ExtensionConnectScope.SyncProviderCredentials,
+      )
     ) {
       const snapshot = await this.vault.enqueueStorage(async () => {
         const capability = this.admitAuthorization();
@@ -280,9 +282,7 @@ export class ExtensionVaultApproval {
       const capability = this.admitAuthorization();
       if (capability.isErr()) return err(capability.error);
       try {
-        return ok(
-          await capability.value.manager.export_event_log_records_js(),
-        );
+        return ok(await capability.value.manager.export_event_log_records_js());
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
@@ -332,9 +332,7 @@ export class ExtensionVaultApproval {
     return this.admitAuthorization().map(({ manager }) => ({ manager }));
   }
 
-  async deliver(
-    message: ExtensionPairingApprovedMessage,
-  ) {
+  async deliver(message: ExtensionPairingApprovedMessage) {
     const capability = this.admitAuthorization();
     if (capability.isErr()) return err(capability.error);
     const deliveryArgs: Parameters<

@@ -225,10 +225,8 @@ class NativeAccessTimestamp {
         return ok({ kind: DashboardTimestampKind.Known, value: value.value() });
       return ok(
         value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
-          ?
-            { kind: DashboardTimestampKind.NotYetObserved }
-          :
-            { kind: DashboardTimestampKind.Unavailable },
+          ? { kind: DashboardTimestampKind.NotYetObserved }
+          : { kind: DashboardTimestampKind.Unavailable },
       );
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));

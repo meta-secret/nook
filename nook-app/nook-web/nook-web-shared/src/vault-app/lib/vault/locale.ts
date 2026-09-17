@@ -56,10 +56,8 @@ export class VaultLocaleActions {
       const parsed = parse_app_locale(stored);
       return ok(
         parsed === NookAppLocaleParse.Unsupported
-          ?
-            { kind: SavedAppLocaleKind.Missing }
-          :
-            {
+          ? { kind: SavedAppLocaleKind.Missing }
+          : {
               kind: SavedAppLocaleKind.Supported,
               locale: supported_app_locale_code(parsed),
             },

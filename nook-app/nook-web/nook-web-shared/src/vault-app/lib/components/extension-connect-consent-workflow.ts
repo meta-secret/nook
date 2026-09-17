@@ -206,7 +206,9 @@ type ExtensionConsentAuthorizationOwner =
       readonly approval: ExtensionVaultApproval;
     };
 
-function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliveryOutcome {
+function deliveryOutcome(
+  value: ExtensionPairingDelivery,
+): ExtensionConsentDeliveryOutcome {
   switch (value.kind) {
     case ExtensionPairingDeliveryKind.Delivered:
       return { kind: ExtensionConsentDeliveryOutcomeKind.Delivered };
@@ -250,7 +252,9 @@ export class ExtensionConnectConsentWorkflow {
     if (
       this.lifecycle.kind !== ExtensionConsentWorkflowLifecycleKind.NotStarted
     ) {
-      throw new Error("Extension consent workflow has already been initialized.");
+      throw new Error(
+        "Extension consent workflow has already been initialized.",
+      );
     }
     const phase = NookExtensionConsentPhase.awaiting_authorization();
     this.lifecycle = {
@@ -294,9 +298,7 @@ export class ExtensionConnectConsentWorkflow {
       state.kind === ExtensionConsentWorkflowKind.Failed &&
       state.phase.state === NookExtensionConsentPhaseState.Approved
     ) {
-      return (
-        this.vaultReadiness() === NookExtensionConsentVaultReadiness.Ready
-      );
+      return this.vaultReadiness() === NookExtensionConsentVaultReadiness.Ready;
     }
     return this.canAuthorize(state);
   }
@@ -312,12 +314,16 @@ export class ExtensionConnectConsentWorkflow {
   dispose(): void {
     switch (this.lifecycle.kind) {
       case ExtensionConsentWorkflowLifecycleKind.NotStarted:
-        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        this.lifecycle = {
+          kind: ExtensionConsentWorkflowLifecycleKind.Disposed,
+        };
         return;
       case ExtensionConsentWorkflowLifecycleKind.Ready:
         this.releaseAuthorization();
         this.lifecycle.phase.free();
-        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        this.lifecycle = {
+          kind: ExtensionConsentWorkflowLifecycleKind.Disposed,
+        };
         return;
       case ExtensionConsentWorkflowLifecycleKind.Approving:
         this.lifecycle = {
@@ -337,8 +343,7 @@ export class ExtensionConnectConsentWorkflow {
   ): Promise<void> {
     const retriesAuthorization =
       state.kind === ExtensionConsentWorkflowKind.Failed &&
-      state.phase.state ===
-        NookExtensionConsentPhaseState.AuthorizationFailed;
+      state.phase.state === NookExtensionConsentPhaseState.AuthorizationFailed;
     const resumesDelivery =
       state.kind === ExtensionConsentWorkflowKind.Failed &&
       state.phase.state === NookExtensionConsentPhaseState.Approved;
@@ -437,7 +442,9 @@ export class ExtensionConnectConsentWorkflow {
           const failed = authorizingPhase.transition(
             NookExtensionConsentEvent.AuthorizationFailed,
           );
-          if (failed.state === NookExtensionConsentTransitionState.Transitioned) {
+          if (
+            failed.state === NookExtensionConsentTransitionState.Transitioned
+          ) {
             const failedPhase = failed.phase();
             failed.free();
             this.replacePhase(authorizingPhase, failedPhase);
@@ -498,11 +505,7 @@ export class ExtensionConnectConsentWorkflow {
         const approvedPhase = authorizationSucceeded.phase();
         authorizationSucceeded.free();
         this.replacePhase(authorizingPhase, approvedPhase);
-        await this.deliverApprovedGrant(
-          approval,
-          approvedPhase,
-          publish,
-        );
+        await this.deliverApprovedGrant(approval, approvedPhase, publish);
         return;
       }
     } finally {
@@ -743,7 +746,9 @@ export class ExtensionConnectConsentWorkflow {
       case ExtensionConsentWorkflowLifecycleKind.DisposedDuringApproval:
         this.releaseAuthorization();
         this.lifecycle.phase.free();
-        this.lifecycle = { kind: ExtensionConsentWorkflowLifecycleKind.Disposed };
+        this.lifecycle = {
+          kind: ExtensionConsentWorkflowLifecycleKind.Disposed,
+        };
         return;
       case ExtensionConsentWorkflowLifecycleKind.NotStarted:
       case ExtensionConsentWorkflowLifecycleKind.Ready:
@@ -772,8 +777,7 @@ export class ExtensionConnectConsentWorkflow {
       return NookExtensionConsentVaultReadiness.Locked;
     if (this.vault.isVerifying)
       return NookExtensionConsentVaultReadiness.Verifying;
-    if (this.vault.isSaving)
-      return NookExtensionConsentVaultReadiness.Saving;
+    if (this.vault.isSaving) return NookExtensionConsentVaultReadiness.Saving;
     return NookExtensionConsentVaultReadiness.Ready;
   }
 }
