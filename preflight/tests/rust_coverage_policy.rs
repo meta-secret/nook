@@ -161,6 +161,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let (compiler, browser) = compiler_and_browser
         .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
         .context("isolated Node compiler and secret-free browser validation stages")?;
+    assert!(!handoff.contains("RUSTC_WRAPPER="));
+    assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(compiler.contains("wasm-pack test --node --release nook-wasm"));
     assert!(compiler.contains("wasm-pack test --node --release nook-companion-wasm"));
     assert_eq!(
