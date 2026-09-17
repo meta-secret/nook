@@ -7,6 +7,11 @@ import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+
+const fixtureSessionRequest = {
+  type: ExtensionSessionMessageType.Status,
+} as const
 
 enum BrowserEffectPhase {
   Initializing = 'initializing',
@@ -288,7 +293,7 @@ describe('extension session document ownership', () => {
 
     const decodeResponse = mock((response: unknown) => ok(response))
     const delivery = opened.value.sendMessage(
-      { type: 'fixture-request' },
+      fixtureSessionRequest,
       decodeResponse,
     )
     expect(fixture.respond(false)).toEqual(ok())
@@ -327,11 +332,9 @@ describe('extension session document ownership', () => {
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
     if (opened.isErr()) throw new Error('document creation must succeed')
-    const delivery = opened.value.sendMessage({ type: 'fixture-request' })
+    const delivery = opened.value.sendMessage(fixtureSessionRequest)
     const closing = fixture.owner.close()
-    expect(
-      await opened.value.sendMessage({ type: 'fixture-after-close' }),
-    ).toEqual(
+    expect(await opened.value.sendMessage(fixtureSessionRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,
@@ -367,9 +370,7 @@ describe('extension session document ownership', () => {
     )
     expect(await fixture.owner.close()).toEqual(failure)
     expect(await fixture.owner.open()).toEqual(failure)
-    expect(
-      await opened.value.sendMessage({ type: 'fixture-after-failure' }),
-    ).toEqual(
+    expect(await opened.value.sendMessage(fixtureSessionRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,

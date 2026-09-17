@@ -24,6 +24,7 @@ import {
 } from "../runtime/storage-failure";
 import type { VaultState } from "../vault.svelte";
 import { ExtensionVaultApproval } from "../extension/vault-approval";
+import { ExtensionConsentCloseOutcome } from "./extension-connect-consent-outcome";
 
 export enum ExtensionConsentWorkflowKind {
   Resting = "resting",
@@ -56,11 +57,6 @@ export enum ExtensionConsentDeliveryOutcomeKind {
 export enum ExtensionConsentRejectionKind {
   WithReason = "with-reason",
   WithoutReason = "without-reason",
-}
-
-export enum ExtensionConsentCloseOutcome {
-  Cancelled = "cancelled",
-  Approved = "approved",
 }
 
 export type ExtensionConsentRejection =

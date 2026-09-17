@@ -17,6 +17,10 @@ import {
   ExtensionSessionQueueKind,
 } from '../src/offscreen/session-request-adapter'
 import {
+  PasskeyEventProviderFlushOutcome,
+  PasskeyVaultOpenOutcome,
+} from '../src/offscreen/session-vault-operations'
+import {
   type AssertPasskeyRequest,
   type CancelPasskeyRequest,
   type RegisterPasskeyRequest,
@@ -169,10 +173,10 @@ describe('website passkey session operations', () => {
       message: cancelRequest('request-cancel'),
       getManager: async () => manager,
       openVault: async () => {
-        return ok()
+        return ok(PasskeyVaultOpenOutcome.Opened)
       },
       flushEvent: async () => {
-        return ok()
+        return ok(PasskeyEventProviderFlushOutcome.Flushed)
       },
     }
 
@@ -209,12 +213,12 @@ describe('website passkey session operations', () => {
     const openVault: WebsitePasskeyOperationArgs['openVault'] = async () => {
       openCount += 1
 
-      return ok()
+      return ok(PasskeyVaultOpenOutcome.Opened)
     }
     const flushEvent: WebsitePasskeyOperationArgs['flushEvent'] = async () => {
       flushCount += 1
 
-      return ok()
+      return ok(PasskeyEventProviderFlushOutcome.Flushed)
     }
     const getManager = async () => manager
     const registrationArgs: WebsitePasskeyOperationArgs = {

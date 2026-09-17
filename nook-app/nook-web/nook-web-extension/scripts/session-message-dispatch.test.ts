@@ -15,7 +15,14 @@ import {
   type ExtensionSessionQueue,
   type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
-import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  NookVaultManager,
+  StorageProvider,
+} from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../src/lib/browser-runtime-message'
 class SessionMessageWireFixture {
   pin(message: ParsedExtensionSessionTransportRequest): string {
     if (
@@ -86,7 +93,7 @@ function vaultImportRequest(
   queue: ExtensionSessionQueue = MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 ): Extract<
   ParsedExtensionSessionTransportRequest,
-  { type: ExtensionSessionMessageType.ImportVault }
+  { type: typeof ExtensionSessionMessageType.ImportVault }
 > {
   return {
     type: ExtensionSessionMessageType.ImportVault,
@@ -125,7 +132,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const { classifySessionGrantAuthority } =
       await import('../src/offscreen/session-operations')
     const manager = {
-      classify_extension_grant_authority: (stored: string, vault: string) => {
+      classify_extension_grant_authority: (
+        stored: Parameters<
+          NookVaultManager['classify_extension_grant_authority']
+        >[0],
+        vault: Parameters<
+          NookVaultManager['classify_extension_grant_authority']
+        >[1],
+      ) => {
         expect(events).toEqual([
           'block-started',
           'block-finished',
@@ -602,7 +616,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         metadata: new Date(),
       },
     ]
-    const response = await parseExtensionSessionRequest({
+    const admission = BrowserRuntimeMessage.from({
       type: ExtensionSessionMessageType.ImportVault,
       payload: {
         providers,
@@ -610,8 +624,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    expect(response.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
-    expect(providers[0]).toHaveProperty('githubPat.state', 'missing')
+    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
+    expect(providers[0]?.githubPat).toBe('github_pat_rejected_secret')
   })
 
   test('rejects a vault import without a provider array', async () => {

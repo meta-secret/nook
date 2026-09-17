@@ -2,7 +2,6 @@ import { expect, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import { unlockVaultOnLogin } from './settings-auth'
 import { disableVaultIdleLock, waitForStorageChainIdle } from './vault-runtime'
-import { requireValue } from './guards'
 
 export async function openLoginProviderSetup(page: Page) {
   if (await page.getByTestId('provider-picker-list').isVisible()) {
@@ -212,8 +211,10 @@ export async function fillSeedPhraseGrid(page: Page, words: readonly string[]) {
     await page.getByTestId('seed-word-count-24').click()
   }
   for (let index = 0; index < words.length; index += 1) {
-    await page
-      .getByTestId(`seed-word-${index + 1}`)
-      .fill(requireValue(words[index], `seed word ${index + 1}`))
+    const word = words[index]
+    if (typeof word !== 'string') {
+      throw new Error(`seed word ${index + 1} was not available.`)
+    }
+    await page.getByTestId(`seed-word-${index + 1}`).fill(word)
   }
 }

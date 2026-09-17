@@ -86,14 +86,14 @@ type VaultEventYaml = {
   operations?: VaultEventOperation[]
 }
 
-enum OptionalYamlStringKind {
+enum VaultYamlOptionalStringStateKind {
   Absent = 'absent',
   Present = 'present',
 }
 
-type OptionalYamlString =
-  | { kind: OptionalYamlStringKind.Absent }
-  | { kind: OptionalYamlStringKind.Present; value: string }
+type VaultYamlOptionalStringState =
+  | { kind: VaultYamlOptionalStringStateKind.Absent }
+  | { kind: VaultYamlOptionalStringStateKind.Present; value: string }
 
 class VaultYamlDecoder {
   decodeStoredVault(value: unknown): StoredVaultYaml {
@@ -131,7 +131,7 @@ class VaultYamlDecoder {
       const eventValue = this.decodeObject(value, 'event YAML')
       const event: VaultEventYaml = {}
       const createdAt = this.optionalString(eventValue, 'created_at')
-      if (createdAt.kind === OptionalYamlStringKind.Present) {
+      if (createdAt.kind === VaultYamlOptionalStringStateKind.Present) {
         event.created_at = createdAt.value
       }
       if ('operations' in eventValue) {
@@ -151,38 +151,43 @@ class VaultYamlDecoder {
     value: unknown,
     fallbackId: string,
   ): { deviceId: string; publicKey: string } {
-    let payload: object
+    let payload: Record<string, unknown>
     try {
       payload = this.decodeObject(value, 'join YAML')
     } catch {
       return { deviceId: fallbackId, publicKey: '' }
     }
-    const decodedDeviceId = this.optionalString(payload, 'device_id')
+    const deviceIdField = this.optionalString(payload, 'device_id')
+    const publicKeyField = this.optionalString(payload, 'public_key')
     const deviceId =
-      decodedDeviceId.kind === OptionalYamlStringKind.Present
-        ? decodedDeviceId.value
+      deviceIdField.kind === VaultYamlOptionalStringStateKind.Present
+        ? deviceIdField.value
         : fallbackId
-    const decodedPublicKey = this.optionalString(payload, 'public_key')
     const publicKey =
-      decodedPublicKey.kind === OptionalYamlStringKind.Present
-        ? decodedPublicKey.value
+      publicKeyField.kind === VaultYamlOptionalStringStateKind.Present
+        ? publicKeyField.value
         : ''
     return { deviceId, publicKey }
   }
 
-  private decodeObject(value: unknown, label: string): object {
+  private decodeObject(value: unknown, label: string): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new TypeError(`${label} must be an object`)
     }
-    return value
+    return Object.fromEntries(Object.entries(value))
   }
 
-  private optionalString(value: object, key: string): OptionalYamlString {
-    if (!(key in value)) return { kind: OptionalYamlStringKind.Absent }
+  private optionalString(
+    value: Record<string, unknown>,
+    key: string,
+  ): VaultYamlOptionalStringState {
+    if (!(key in value)) {
+      return { kind: VaultYamlOptionalStringStateKind.Absent }
+    }
     const field: unknown = Reflect.get(value, key)
     if (typeof field !== 'string')
       throw new TypeError(`${key} must be a string`)
-    return { kind: OptionalYamlStringKind.Present, value: field }
+    return { kind: VaultYamlOptionalStringStateKind.Present, value: field }
   }
 
   private decodeStoredSecrets(value: unknown): StoredSecretRecord[] {
@@ -193,9 +198,12 @@ class VaultYamlDecoder {
       const data = this.optionalString(secret, 'data')
       const type = this.optionalString(secret, 'type')
       if (
-        id.kind === OptionalYamlStringKind.Absent ||
-        data.kind === OptionalYamlStringKind.Absent ||
-        type.kind === OptionalYamlStringKind.Absent
+        id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        data.kind !== VaultYamlOptionalStringStateKind.Present ||
+        type.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !id.value ||
+        !data.value ||
+        !type.value
       ) {
         throw new TypeError('secret fields are invalid')
       }
@@ -230,9 +238,12 @@ class VaultYamlDecoder {
       const secrets_key = this.optionalString(auth, 'secrets_key')
       const members_key = this.optionalString(auth, 'members_key')
       if (
-        pk_id.kind === OptionalYamlStringKind.Absent ||
-        secrets_key.kind === OptionalYamlStringKind.Absent ||
-        members_key.kind === OptionalYamlStringKind.Absent
+        pk_id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        secrets_key.kind !== VaultYamlOptionalStringStateKind.Present ||
+        members_key.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !pk_id.value ||
+        !secrets_key.value ||
+        !members_key.value
       ) {
         throw new TypeError('auth record fields are invalid')
       }
@@ -251,11 +262,12 @@ class VaultYamlDecoder {
       const pk_id = this.optionalString(member, 'pk_id')
       const ciphertext = this.optionalString(member, 'ciphertext')
       if (
-        pk_id.kind === OptionalYamlStringKind.Absent ||
-        ciphertext.kind === OptionalYamlStringKind.Absent
-      ) {
+        pk_id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        ciphertext.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !pk_id.value ||
+        !ciphertext.value
+      )
         throw new TypeError('member fields are invalid')
-      }
       return { pk_id: pk_id.value, ciphertext: ciphertext.value }
     })
   }
@@ -264,7 +276,9 @@ class VaultYamlDecoder {
     const unlockValue = this.decodeObject(value, 'unlock')
     const unlock: UnlockYaml = {}
     const type = this.optionalString(unlockValue, 'type')
-    if (type.kind === OptionalYamlStringKind.Present) unlock.type = type.value
+    if (type.kind === VaultYamlOptionalStringStateKind.Present) {
+      unlock.type = type.value
+    }
     if ('entries' in unlockValue)
       unlock.entries = this.decodePasswordEntries(unlockValue.entries)
     return unlock
@@ -278,9 +292,12 @@ class VaultYamlDecoder {
       const decoded: PasswordEntryYaml = {}
       const id = this.optionalString(passwordEntry, 'id')
       const label = this.optionalString(passwordEntry, 'label')
-      if (id.kind === OptionalYamlStringKind.Present) decoded.id = id.value
-      if (label.kind === OptionalYamlStringKind.Present)
+      if (id.kind === VaultYamlOptionalStringStateKind.Present) {
+        decoded.id = id.value
+      }
+      if (label.kind === VaultYamlOptionalStringStateKind.Present) {
         decoded.label = label.value
+      }
       if ('envelope' in passwordEntry)
         decoded.envelope = this.decodePasswordEnvelope(passwordEntry.envelope)
       return decoded
@@ -304,8 +321,10 @@ class VaultYamlDecoder {
     }
     const kdf = this.optionalString(envelopeValue, 'kdf')
     const ciphertext = this.optionalString(envelopeValue, 'ciphertext')
-    if (kdf.kind === OptionalYamlStringKind.Present) envelope.kdf = kdf.value
-    if (ciphertext.kind === OptionalYamlStringKind.Present) {
+    if (kdf.kind === VaultYamlOptionalStringStateKind.Present) {
+      envelope.kdf = kdf.value
+    }
+    if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
       envelope.ciphertext = ciphertext.value
     }
     return envelope
@@ -329,7 +348,7 @@ class VaultYamlDecoder {
     ] as const
     for (const field of stringFields) {
       const decoded = this.optionalString(operationValue, field)
-      if (decoded.kind === OptionalYamlStringKind.Present) {
+      if (decoded.kind === VaultYamlOptionalStringStateKind.Present) {
         operation[field] = decoded.value
       }
     }
@@ -368,11 +387,13 @@ class VaultYamlDecoder {
     const ciphertext = this.optionalString(eventSecret, 'ciphertext')
     const type = this.optionalString(eventSecret, 'type')
     const decoded: EventSecretRecord = {}
-    if (id.kind === OptionalYamlStringKind.Present) decoded.id = id.value
-    if (ciphertext.kind === OptionalYamlStringKind.Present) {
+    if (id.kind === VaultYamlOptionalStringStateKind.Present) {
+      decoded.id = id.value
+    }
+    if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
       decoded.ciphertext = ciphertext.value
     }
-    if (type.kind === OptionalYamlStringKind.Present) {
+    if (type.kind === VaultYamlOptionalStringStateKind.Present) {
       decoded.type = this.decodeStoredSecretType(type.value)
     }
     return decoded
@@ -397,10 +418,10 @@ class VaultYamlDecoder {
       const share: { device_id?: string; ciphertext?: string } = {}
       const deviceId = this.optionalString(shareValue, 'device_id')
       const ciphertext = this.optionalString(shareValue, 'ciphertext')
-      if (deviceId.kind === OptionalYamlStringKind.Present) {
+      if (deviceId.kind === VaultYamlOptionalStringStateKind.Present) {
         share.device_id = deviceId.value
       }
-      if (ciphertext.kind === OptionalYamlStringKind.Present) {
+      if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
         share.ciphertext = ciphertext.value
       }
       return share

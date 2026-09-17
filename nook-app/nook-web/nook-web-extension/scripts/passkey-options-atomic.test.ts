@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import type { WebsitePasskeyOptionsDependencies } from '../src/background/service-worker/passkey-operations'
@@ -8,12 +8,70 @@ import {
 } from '../src/lib/webauthn-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { WebsitePasskeyRequestContext } from '../src/background/service-worker/pairing-identity'
+import type {
+  ExtensionSessionTransport,
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportResult,
+} from '../src/background/service-worker/session-document'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
+import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
 
 await companionWasmReady
+
+const unusedSessionTransport: ExtensionSessionTransport = {
+  sendMessage: async () => {
+    throw new Error('passkey fixture session transport must not send directly')
+  },
+}
+
+type PasskeySessionTransportFixtureArgs = {
+  responses: ExtensionSessionResponse[]
+}
+
+class PasskeySessionTransportFixture implements ExtensionSessionTransport {
+  deliveryCount = 0
+
+  constructor(private readonly args: PasskeySessionTransportFixtureArgs) {}
+
+  sendMessage(
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
+  sendMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+  async sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
+    _message: ExtensionSessionTransportRequest,
+    decodeResponse?: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<
+    | ExtensionSessionTransportResult<ExtensionSessionResponse>
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
+    this.deliveryCount += 1
+    const response = this.args.responses.shift()
+    if (!response) throw new Error('passkey session fixture exhausted')
+    if (!decodeResponse)
+      return ok<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
+        response,
+      )
+    const decoded = decodeResponse(response)
+    return decoded.isErr()
+      ? err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+          decoded.error,
+        )
+      : ok<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+          decoded.value,
+        )
+  }
+}
 
 function pairingGrant(id: string): StoredExtensionPairingGrant {
   return {
@@ -40,7 +98,7 @@ describe('website passkey options', () => {
         import('../src/background/service-worker/passkey-operations'),
         import('../src/background/service-worker/pairing-identity'),
       ])
-    const sessionResponses: unknown[] = [
+    const sessionResponses: ExtensionSessionResponse[] = [
       { ok: true },
       {
         ok: true,
@@ -52,13 +110,20 @@ describe('website passkey options', () => {
           },
         ],
       },
-      { ok: true, accounts: [{ credentialId: '' }] },
+      {
+        ok: true,
+        accounts: [
+          { credentialId: '', userName: 'invalid', userDisplayName: 'Invalid' },
+        ],
+      },
     ]
-    const sendSessionMessage = mock(() =>
-      Promise.resolve(ok(sessionResponses.shift())),
-    )
+    const sessionTransport = new PasskeySessionTransportFixture({
+      responses: sessionResponses,
+    })
     const dependencies: WebsitePasskeyOptionsDependencies = {
-      ensureExtensionSessionDocument: mock(() => Promise.resolve(ok())),
+      ensureExtensionSessionDocument: mock(() =>
+        Promise.resolve(ok(unusedSessionTransport)),
+      ),
       isAuthorizedWebsiteSender: mock(() => true),
       isUnlockedSessionStatus: mock(() => true),
       passkeyPairingGrants: mock(() =>
@@ -81,7 +146,7 @@ describe('website passkey options', () => {
           },
         }),
       ),
-      sendSessionMessage,
+      sendSessionMessage: sessionTransport.sendMessage.bind(sessionTransport),
     }
     const args: Parameters<
       typeof websitePasskeyRequests.websitePasskeyOptions
@@ -103,7 +168,7 @@ describe('website passkey options', () => {
       status: WebsitePasskeyOptionsStatus.Invalid,
       options: [],
     })
-    expect(sendSessionMessage).toHaveBeenCalledTimes(3)
+    expect(sessionTransport.deliveryCount).toBe(3)
   })
 
   test('classifies unavailable passkey lookup as closed passkey evidence', async () => {

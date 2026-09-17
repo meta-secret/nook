@@ -50,7 +50,7 @@ import {
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
 } from './vault-runtime'
-import { requireRecord, requireValue } from './guards'
+import { requireRecord } from './guards'
 
 export type E2eOauthFileStub =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
@@ -597,7 +597,8 @@ export async function sendJoinRequestLocalE2e(
 
   const snapshot = parseVaultEventLogSnapshot(stub.getEventFileContents())
   assertJoinPendingYaml(snapshot)
-  const join = requireValue(snapshot.joinEntries[0], 'join request')
+  const join = snapshot.joinEntries[0]
+  if (!join) throw new Error('join request was not available.')
 
   await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
     'Waiting for approval',

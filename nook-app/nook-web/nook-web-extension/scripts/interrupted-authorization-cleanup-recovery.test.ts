@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { err } from 'neverthrow'
 import { Effect, Either } from 'effect'
 import {
   AccountPickerAuthorizationLifecycle,

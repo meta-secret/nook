@@ -1,9 +1,16 @@
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
+  ExtensionSessionDocumentStateKind,
+  type ExtensionSessionTransport,
 } from '../src/background/service-worker/session-document'
 import { err, ok } from 'neverthrow'
-import { OpenSimpleVaultMessageType } from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import {
+  BeginExtensionPairingMessage,
+  ExtensionLocalEventLogUpdatedMessage,
+  OpenSimpleVaultMessage,
+  OpenSimpleVaultMessageType,
+} from '../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { describe, expect, mock, test } from 'bun:test'
 import {
   OpenCompanionLauncherIntent,
@@ -13,7 +20,10 @@ import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLaunch
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { LocalEventLogUpdateResult } from '../src/background/service-worker/pairing-import'
-import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
+import type {
+  ExternalCompanionMessage,
+  ExternalCompanionRoutingDependencies,
+} from '../src/background/service-worker/external-companion-routing'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AccountPickerAuthorizationLifecycle,
@@ -27,10 +37,10 @@ import { ExtensionSessionMessageType } from '../src/lib/extension-session-messag
 import { extensionPairingIdentity } from '../src/background/service-worker/pairing-identity'
 import { ExtensionPairingStateQueryMessage } from '../src/lib/pairing-state'
 import {
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
 } from '../src/background/service-worker/session-runtime-messages'
 import {
   ExtensionPairingApprovedMessage,
@@ -76,7 +86,7 @@ const routedGrant: StoredExtensionPairingGrant = {
   lastLocalSyncAt: '2026-09-11T00:00:00.000Z',
 }
 
-const externalPairingMessage = {
+const externalPairingMessage: ExternalCompanionMessage = {
   type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
   payload: {
     vaultType: routedGrant.vaultType,
@@ -124,7 +134,14 @@ completedTransition.into_lifecycle().free()
 const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
 )
-const ensureExtensionSessionDocument = mock(() => Promise.resolve(ok()))
+const unusedSessionTransport: ExtensionSessionTransport = {
+  sendMessage: extensionPairingIdentity.sendSessionMessage.bind(
+    extensionPairingIdentity,
+  ),
+}
+const ensureExtensionSessionDocument = mock(() =>
+  Promise.resolve(ok(unusedSessionTransport)),
+)
 const openCompanionLauncher = mock(() => Promise.resolve())
 const accountPickerAuthorizationCleanupPending = mock(() =>
   Promise.resolve(false),
@@ -162,14 +179,21 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
   handlePairingStateQuery: mock(() => false),
-  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
+  decodePairingApprovedMessage: ExtensionPairingApprovedMessage.decode,
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionPairingStateQueryMessage: ExtensionPairingStateQueryMessage.is,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionPairingStateQueryMessage:
+    ExtensionPairingStateQueryMessage.decode,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
+  decodeExtensionLocalEventLogUpdatedMessage:
+    ExtensionLocalEventLogUpdatedMessage.decode,
+  decodeOpenSimpleVaultMessage: OpenSimpleVaultMessage.decode,
+  decodeBeginExtensionPairingMessage: BeginExtensionPairingMessage.decode,
+  decodeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.decode,
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
   openSimpleVault: mock(() => Promise.resolve()),
@@ -218,7 +242,7 @@ async function routeDecodedLocalUpdate(
   ) =>
     importLocalEventLogUpdateWithDependencies({
       ...request,
-      ensureSession: async () => ok(),
+      ensureSession: async () => ok(unusedSessionTransport),
       persistPairingStorage: async () => {},
       loadPairingStorage: async () => ({ [key]: routedGrant }),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
@@ -230,7 +254,14 @@ async function routeDecodedLocalUpdate(
       }),
       sendSession,
     })
-  const closeSession = mock(() => Promise.resolve(ok()))
+  const closeSession = mock(() =>
+    Promise.resolve(
+      ok<
+        ExtensionSessionDocumentStateKind.Closed,
+        ExtensionSessionTransportFailure
+      >(ExtensionSessionDocumentStateKind.Closed),
+    ),
+  )
   const dependencies: ExtensionLifecycleRoutingDependencies = {
     ...lifecycleDependencies,
     closeExtensionSessionDocument: closeSession,
@@ -340,14 +371,17 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve(ok())
+        return Promise.resolve(
+          ok<
+            ExtensionSessionDocumentStateKind.Closed,
+            ExtensionSessionTransportFailure
+          >(ExtensionSessionDocumentStateKind.Closed),
+        )
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
         return Promise.resolve(completedCleanup)
       },
-      isExtensionSessionEnsureMessage,
-      isExtensionSessionLockMessage,
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -389,11 +423,15 @@ describe('service worker routing', () => {
       const dependencies: ExtensionLifecycleRoutingDependencies = {
         ...lifecycleDependencies,
         clearPendingAccountPickers: () => Promise.resolve(),
-        closeExtensionSessionDocument: () => Promise.resolve(ok()),
+        closeExtensionSessionDocument: () =>
+          Promise.resolve(
+            ok<
+              ExtensionSessionDocumentStateKind.Closed,
+              ExtensionSessionTransportFailure
+            >(ExtensionSessionDocumentStateKind.Closed),
+          ),
         completeAccountPickerAuthorizationCleanup: () =>
           Promise.resolve(outcome),
-        isExtensionSessionEnsureMessage,
-        isExtensionSessionLockMessage,
       }
       routeExtensionLifecycleMessage({
         dependencies,
@@ -428,8 +466,6 @@ describe('service worker routing', () => {
         closeExtensionSessionDocument: () =>
           Promise.resolve(err(new ExtensionSessionTransportFailure(kind))),
         completeAccountPickerAuthorizationCleanup: completeCleanup,
-        isExtensionSessionEnsureMessage,
-        isExtensionSessionLockMessage,
       }
       expect(
         routeExtensionLifecycleMessage({
@@ -454,7 +490,12 @@ describe('service worker routing', () => {
     const events: string[] = []
     const closeSession = mock(() => {
       events.push('session-close-started')
-      return Promise.resolve(ok())
+      return Promise.resolve(
+        ok<
+          ExtensionSessionDocumentStateKind.Closed,
+          ExtensionSessionTransportFailure
+        >(ExtensionSessionDocumentStateKind.Closed),
+      )
     })
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
@@ -464,8 +505,6 @@ describe('service worker routing', () => {
       },
       clearPendingAccountPickers: () => Promise.resolve(),
       closeExtensionSessionDocument: closeSession,
-      isExtensionSessionEnsureMessage,
-      isExtensionSessionLockMessage,
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -499,11 +538,15 @@ describe('service worker routing', () => {
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       clearPendingAccountPickers: () => Promise.resolve(),
-      closeExtensionSessionDocument: () => Promise.resolve(ok()),
+      closeExtensionSessionDocument: () =>
+        Promise.resolve(
+          ok<
+            ExtensionSessionDocumentStateKind.Closed,
+            ExtensionSessionTransportFailure
+          >(ExtensionSessionDocumentStateKind.Closed),
+        ),
       completeAccountPickerAuthorizationCleanup: () =>
         Promise.reject(new Error('completion unavailable')),
-      isExtensionSessionEnsureMessage,
-      isExtensionSessionLockMessage,
       releaseAccountPickerAuthorizationCleanup: release,
     }
     const { routeExtensionLifecycleMessage } =
@@ -548,7 +591,12 @@ describe('service worker routing', () => {
       },
       closeExtensionSessionDocument: () => {
         events.push('session-closed')
-        return Promise.resolve(ok())
+        return Promise.resolve(
+          ok<
+            ExtensionSessionDocumentStateKind.Closed,
+            ExtensionSessionTransportFailure
+          >(ExtensionSessionDocumentStateKind.Closed),
+        )
       },
       importLocalEventLogUpdate: () => {
         events.push('revocation-reconciled')
@@ -604,7 +652,14 @@ describe('service worker routing', () => {
     { ok: false as const, reason: LocalEventLogUpdateFailure.VaultNotPaired },
   ])('preserves the warm session for %j', async (response) => {
     const events: string[] = []
-    const closeSession = mock(() => Promise.resolve(ok()))
+    const closeSession = mock(() =>
+      Promise.resolve(
+        ok<
+          ExtensionSessionDocumentStateKind.Closed,
+          ExtensionSessionTransportFailure
+        >(ExtensionSessionDocumentStateKind.Closed),
+      ),
+    )
     const clearPickers = mock(() => Promise.resolve())
     const clearEnrollments = mock(() => {})
     const dependencies: ExtensionLifecycleRoutingDependencies = {
@@ -699,7 +754,7 @@ describe('service worker routing', () => {
   test('keeps the decoded local-update session usable for a subsequent authenticator request', async () => {
     const delivered: ExtensionSessionMessageType[] = []
     const sendSession: Parameters<typeof routeDecodedLocalUpdate>[0] = async (
-      message,
+      message: Parameters<Parameters<typeof routeDecodedLocalUpdate>[0]>[0],
     ) => {
       if (!message || typeof message !== 'object' || !('type' in message)) {
         throw new Error('expected a typed extension session request')
