@@ -319,6 +319,7 @@ impl NookCompanionExtensionProtocol {
 #[cfg(test)]
 mod admission_tests {
     use super::*;
+    use nook_companion_core::CompanionProtocolError;
 
     #[test]
     fn chrome_identity_admissions_are_unknown_and_schema_checked() {
@@ -427,14 +428,11 @@ mod admission_tests {
         let mut admission = serde_json::from_str::<
             ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
         >(&invalid)?;
-        let error = match admission.decode() {
-            Err(error) => error,
-            Ok(_) => panic!("blank recipient key must be rejected"),
-        };
-        assert_eq!(
-            error,
-            nook_companion_core::CompanionProtocolError::InvalidValue
-        );
+        match admission.decode() {
+            Err(CompanionProtocolError::InvalidValue) => {}
+            Err(error) => panic!("invalid handoff must report invalid value, got {error}"),
+            Ok(_) => panic!("invalid handoff must be rejected"),
+        }
         let request = admission.0.request_mut();
         assert!(request.recipient_public_key.is_empty());
         let CompanionIdentityStatus::Unlocked { app_key, .. } = &request.transaction.status else {

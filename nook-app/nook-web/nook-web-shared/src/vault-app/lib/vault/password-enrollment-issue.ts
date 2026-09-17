@@ -230,14 +230,18 @@ export class PasswordEnrollmentIssue {
       };
       let enrollmentProviderRow: StorageProvider = selectedProvider;
       if (usesSharedProviderGrant) {
+        if (
+          selectedOauthConfiguration.kind !==
+          StoredOAuthFileConfigurationDecodeKind.Configured
+        ) {
+          return storageErr(
+            new EnrollmentIssueFailure(
+              EnrollmentIssueRejection.OAuthProviderRequired,
+            ),
+          );
+        }
+        const selectedOauth = selectedOauthConfiguration.config;
         if (usesSharedICloud) {
-          if (!selectedOauth) {
-            return storageErr(
-              new EnrollmentIssueFailure(
-                EnrollmentIssueRejection.OAuthProviderRequired,
-              ),
-            );
-          }
           if (selectedOauth.iCloudShareTarget.state === "personal") {
             return storageErr(
               new EnrollmentIssueFailure(
@@ -251,13 +255,6 @@ export class PasswordEnrollmentIssue {
             storageTargetId: targetId,
           };
         } else {
-          if (!selectedOauth) {
-            return storageErr(
-              new EnrollmentIssueFailure(
-                EnrollmentIssueRejection.OAuthProviderRequired,
-              ),
-            );
-          }
           const accessCredential = oauth_access_token(selectedOauth);
           log.info("shared enrollment grant started");
           const fileName = new OAuthFilePresentation(
@@ -344,10 +341,7 @@ export class PasswordEnrollmentIssue {
             };
             state.sharedGrantInstructions = state.t(tArgs);
           }
-          if (
-            sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
-            selectedOauth
-          ) {
+          if (sharedStorageTarget.kind === SharedStorageTargetKind.Bound) {
             let updatedOauth;
             try {
               updatedOauth = bind_google_drive_shared_folder(

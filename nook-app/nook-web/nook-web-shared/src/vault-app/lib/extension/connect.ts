@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -64,16 +64,33 @@ type PendingExtensionResponseRequest = {
   readonly resolve: (delivery: ExtensionMessageDelivery) => void;
 };
 
-type ChromeRuntimeResponseCallback = (response: unknown) => void;
+type ChromeRuntimeResponseCallback = (
+  response?: ChromeExtensionRuntimeResponse,
+) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError: unknown;
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
     callback: ChromeRuntimeResponseCallback,
   ) => void;
 };
+
+enum ChromeRuntimeLastErrorStateKind {
+  Absent = "absent",
+  Present = "present",
+}
+
+type ChromeRuntimeLastErrorState =
+  | { readonly kind: ChromeRuntimeLastErrorStateKind.Absent }
+  | {
+      readonly kind: ChromeRuntimeLastErrorStateKind.Present;
+      readonly message: string;
+    };
+
+const ChromeRuntimeLastErrorSchema = Schema.Struct({
+  message: Schema.optional(Schema.String),
+});
 
 type ExtensionBrowserHost = typeof globalThis & {
   readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
@@ -131,7 +148,10 @@ import {
   companionResponseDecoder,
   identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
+  type ExtensionRuntimeResponseObject,
 } from "./extension-response-decoders";
+
+type ChromeExtensionRuntimeResponse = ExtensionRuntimeResponseObject;
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -223,7 +243,7 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | {
       kind: ExtensionMessageDeliveryKind.Received;
-      response: unknown;
+      response: ChromeExtensionRuntimeResponse;
     };
 
 enum ExtensionResponsePhase {
@@ -271,7 +291,7 @@ class PendingExtensionResponse {
     };
     this.settle(delivery);
   }
-  receive(response: unknown): void {
+  receive(response: ChromeExtensionRuntimeResponse): void {
     const delivery: ExtensionMessageDelivery = {
       kind: ExtensionMessageDeliveryKind.Received,
       response,
@@ -284,14 +304,26 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-    const error = runtime.lastError;
-    return (
-      error instanceof Object &&
-      "message" in error &&
-      typeof error.message === "string" &&
-      error.message.length > 0
+  private chromeRuntimeLastError(
+    runtime: ChromeRuntimeHost,
+  ): ChromeRuntimeLastErrorState {
+    if (!("lastError" in runtime)) {
+      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
+    }
+    const decoded = Effect.runSync(
+      Effect.either(
+        Schema.decodeUnknown(ChromeRuntimeLastErrorSchema)(
+          Reflect.get(runtime, "lastError"),
+        ),
+      ),
     );
+    if (decoded._tag === "Left" || !decoded.right.message) {
+      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
+    }
+    return {
+      kind: ChromeRuntimeLastErrorStateKind.Present,
+      message: decoded.right.message,
+    };
   }
 
   private chromeRuntime(): ChromeRuntimeAvailability {
@@ -424,7 +456,14 @@ class ExtensionConnectionBrowser {
       };
       const pending = new PendingExtensionResponse(pendingRequest);
       runtime.sendMessage(extensionId, message, (response) => {
-        if (this.chromeRuntimeLastError(runtime)) {
+        if (
+          this.chromeRuntimeLastError(runtime).kind ===
+          ChromeRuntimeLastErrorStateKind.Present
+        ) {
+          pending.unavailable();
+          return;
+        }
+        if (!response) {
           pending.unavailable();
           return;
         }
@@ -434,7 +473,7 @@ class ExtensionConnectionBrowser {
   }
 
   private pairingDeliveryFromResponse(
-    response: unknown,
+    response: ChromeExtensionRuntimeResponse,
   ): ExtensionPairingDelivery {
     const decoded = Effect.runSync(
       Effect.either(pairingApprovalResponseDecoder.decode(response)),
@@ -688,7 +727,10 @@ class ExtensionConnectionBrowser {
     return new Promise((resolve) => {
       try {
         runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
-          if (this.chromeRuntimeLastError(runtime)) {
+          if (
+            this.chromeRuntimeLastError(runtime).kind ===
+            ChromeRuntimeLastErrorStateKind.Present
+          ) {
             resolve(
               err(
                 new VaultStorageFailure(

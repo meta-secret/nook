@@ -228,6 +228,7 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
     let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
     let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let compile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
     let production_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let workflow = root.read(".github/workflows/remote.yml");
@@ -283,6 +284,14 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(!production_bake.contains("ignore-error=true"));
     assert!(setup.contains("git rev-parse --verify HEAD^1"));
     assert!(setup.contains("GHA_CACHE_PARENT_SCOPE_SUFFIX"));
+    assert!(setup.contains("Verify Docker cache refs and blobs"));
+    let pr_native = compile
+        .split_once("FROM compile-native-source AS pr-native-build")
+        .and_then(|(_, stages)| stages.split_once("FROM pr-native-image AS pr-native-verify"))
+        .map(|(stage, _)| stage)
+        .expect("PR native compiler image stage must exist");
+    assert!(pr_native.contains("ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled"));
+    assert!(pr_native.contains("nook-sccache-report --replay compile-native-dependencies"));
     assert!(setup.contains("class BuildKitCacheAccessVerifier"));
     assert!(setup.contains("await this.verifyRegistryAvailability();"));
     assert!(setup.contains("async verifyCacheRef(scopeSuffix)"));

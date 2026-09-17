@@ -18,6 +18,9 @@ if [ "${1:-}" = --start-server ]; then
   if [ -n "${FAKE_START_COUNT_FILE:-}" ]; then
     printf 'start\n' >>"$FAKE_START_COUNT_FILE"
   fi
+  if [ "${FAKE_START_DELAY:-0}" -gt 0 ]; then
+    sleep "$FAKE_START_DELAY"
+  fi
   exit "${FAKE_START_STATUS:-0}"
 fi
 if [ "${1:-}" = --zero-stats ]; then
@@ -197,6 +200,46 @@ if grep -Fq 'startup_coordination_timeout' "$slow_start_owner_log" "$slow_start_
   exit 1
 fi
 echo 'Sccache startup bound: over-bound startup opened one shared circuit and emitted one fallback event'
+
+concurrent_start_count="$fixture_dir/concurrent-start-count"
+concurrent_first_log="$fixture_dir/concurrent-first.log"
+concurrent_waiter_log="$fixture_dir/concurrent-waiter.log"
+rm -f "$fallback_marker" "$ready_marker" "$startup_lock"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=3 FAKE_SCCACHE_RESULT=success \
+FAKE_START_COUNT_FILE="$concurrent_start_count" \
+  "$wrapper" "$fixture_dir/compiler" 2>"$concurrent_first_log" &
+first_pid=$!
+startup_lock_wait=0
+while [ ! -d "$startup_lock" ] && [ "$startup_lock_wait" -lt 20 ]; do
+  sleep 0.1
+  startup_lock_wait=$((startup_lock_wait + 1))
+done
+test -d "$startup_lock"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
+FAKE_START_COUNT_FILE="$concurrent_start_count" \
+  "$wrapper" "$fixture_dir/compiler" 2>"$concurrent_waiter_log"
+wait "$first_pid"
+test "$(wc -l <"$concurrent_start_count" | tr -d ' ')" -eq 1
+grep -Fq 'effective sccache mode: READ_WRITE' "$concurrent_first_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$concurrent_waiter_log"
+if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$concurrent_first_log" "$concurrent_waiter_log"; then
+  echo 'sccache wrapper contract: concurrent waiter incorrectly opened the circuit' >&2
+  exit 1
+fi
+test ! -e "$fallback_marker"
+echo 'Sccache startup coordination: concurrent compilers shared one slow startup without opening the circuit'
 
 compiler_log="$fixture_dir/compiler-failure.log"
 rm -f "$fallback_marker" "$ready_marker"

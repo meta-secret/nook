@@ -61,7 +61,7 @@ export class ExtensionResponseDecodeFailure {
 
 export class IdentityHandoffResponseDecoder {
   decode(
-    value: unknown,
+    value?: ExtensionRuntimeResponseObject,
   ): Effect.Effect<
     AcceptedIdentityHandoffResponse,
     ExtensionResponseDecodeFailure
@@ -114,7 +114,7 @@ type CompanionIdentityHandoffResponse = Schema.Schema.Type<
 /** Owns structural admission for responses from the companion runtime. */
 export class CompanionResponseDecoder {
   decodeLauncher(
-    value: unknown,
+    value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<CompanionLauncherResponse, ExtensionResponseDecodeFailure> {
     return Schema.decodeUnknown(CompanionLauncherResponseSchema)(
       value,
@@ -124,7 +124,7 @@ export class CompanionResponseDecoder {
     );
   }
   decodeIdentityDiscovery(
-    value: unknown,
+    value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<
     CompanionIdentityDiscoveryResponse,
     ExtensionResponseDecodeFailure
@@ -137,7 +137,7 @@ export class CompanionResponseDecoder {
     );
   }
   decodeUnlock(
-    value: unknown,
+    value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<CompanionUnlockResponse, ExtensionResponseDecodeFailure> {
     return Schema.decodeUnknown(CompanionUnlockResponseSchema)(
       value,
@@ -147,7 +147,7 @@ export class CompanionResponseDecoder {
     );
   }
   decodeIdentityHandoff(
-    value: unknown,
+    value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<
     CompanionIdentityHandoffResponse,
     ExtensionResponseDecodeFailure
@@ -193,7 +193,7 @@ const PairingRejectedResponseSchema = Schema.Struct({
 /** Owns admission of the extension's untrusted pairing acknowledgement. */
 export class PairingApprovalResponseDecoder {
   decode(
-    value: unknown,
+    value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<ExtensionPairingDelivery, ExtensionResponseDecodeFailure> {
     const delivered = Schema.decodeUnknown(PairingDeliveredResponseSchema)(
       value,

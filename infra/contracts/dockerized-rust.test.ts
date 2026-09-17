@@ -73,6 +73,7 @@ class DockerizedRustContract {
       })
       .parse(workflow.jobs["extension-e2e"]);
     expect(extension.if).toContain("always()");
+    expect(extension.if).toContain("needs.verify.result == 'success'");
     expect(extension.if).toContain(
       "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
     );
