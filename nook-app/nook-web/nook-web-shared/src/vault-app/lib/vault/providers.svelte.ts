@@ -90,6 +90,7 @@ import {
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
   type ProviderSaveRequest,
+  type AuthProvidersSnapshot,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -143,6 +144,39 @@ export interface ProviderSetup {
 export interface ProviderRemoval {
   readonly id: string;
 }
+
+export enum OAuthRemoteReferenceSyncKind {
+  NotApplicable = "not-applicable",
+  Unchanged = "unchanged",
+  Updated = "updated",
+}
+
+export type OAuthRemoteReferenceSyncOutcome =
+  | { readonly kind: OAuthRemoteReferenceSyncKind.NotApplicable }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Unchanged }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Updated };
+
+export type PromotedProviderSnapshot = {
+  readonly snapshot: AuthProvidersSnapshot;
+  readonly localVaultPresent: boolean;
+};
+
+export enum ProviderRemovalOutcomeKind {
+  NotFound = "not-found",
+  LocalProviderRetained = "local-provider-retained",
+  Removed = "removed",
+}
+
+export type ProviderRemovalOutcome =
+  | { readonly kind: ProviderRemovalOutcomeKind.NotFound }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.LocalProviderRetained;
+      readonly provider: StorageProvider;
+    }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.Removed;
+      readonly providers: readonly StorageProvider[];
+    };
 
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
@@ -283,14 +317,17 @@ export class VaultProviderActions {
     return state.storageMode === LOCAL_PROVIDER_TYPE;
   }
 
-  syncOAuthRemoteRefFromManager(): Result<void, StorageOperationFailure> {
+  syncOAuthRemoteRefFromManager(): Result<
+    OAuthRemoteReferenceSyncOutcome,
+    StorageOperationFailure
+  > {
     const state = this.state;
     const draft = state.oauthFileDraft;
     if (
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
     )
-      return storageOk();
+      return storageOk({ kind: OAuthRemoteReferenceSyncKind.NotApplicable });
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -306,13 +343,13 @@ export class VaultProviderActions {
       let config: typeof draft.config;
       try {
         if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk();
+          return storageOk({ kind: OAuthRemoteReferenceSyncKind.Unchanged });
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk();
+      return storageOk({ kind: OAuthRemoteReferenceSyncKind.Updated });
     } finally {
       updated.free();
     }
@@ -340,11 +377,12 @@ export class VaultProviderActions {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       })();
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
+      const timeout = new VaultDiscoveryTimeout({ timeoutMs: 30_000 });
+      const timeoutRequest: Parameters<typeof timeout.waitFor>[0] = {
         operation,
         releaseLateValue: () => {},
-      });
+      };
+      return timeout.waitFor(timeoutRequest);
     });
   }
 
@@ -422,11 +460,15 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk();
+    const loadedSnapshot: AuthProvidersSnapshot = {
+      providers: state.providers,
+      activeVaultStoreId: snapshot.activeVaultStoreId,
+    };
+    return storageOk(loadedSnapshot);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<PromotedProviderSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
@@ -447,8 +489,11 @@ export class VaultProviderActions {
             ensureLocalAuthProviderSnapshotArgs,
           );
         const localVaultPresent = await has_local_vault();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return storageOk({ snapshot, localVaultPresent });
+        const promotion: PromotedProviderSnapshot = {
+          snapshot,
+          localVaultPresent,
+        };
+        return storageOk(promotion);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -462,7 +507,7 @@ export class VaultProviderActions {
       state.clearOauthFile();
       state.clearLocalFolder();
     }
-    return storageOk();
+    return storageOk(promoted.value);
   }
 
   async persistProviders({ opts }: ProviderPersistence) {
@@ -495,7 +540,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk();
+    return storageOk(snapshot.value);
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
@@ -590,16 +635,24 @@ export class VaultProviderActions {
 
   async removeProvider({
     id,
-  }: ProviderRemoval): Promise<Result<void, StorageOperationFailure>> {
+  }: ProviderRemoval): Promise<
+    Result<ProviderRemovalOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target || target.type === "local") return storageOk();
+    if (!target)
+      return storageOk({ kind: ProviderRemovalOutcomeKind.NotFound });
+    if (target.type === "local")
+      return storageOk({
+        kind: ProviderRemovalOutcomeKind.LocalProviderRetained,
+        provider: target,
+      });
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const persistence = await state.persistProviders({
+    const persistenceOptions: ProviderPersistenceOptions = {
       replace: true,
       providers: state.providers.filter((provider) => provider.id !== id),
-    });
+    };
+    const persistence = await state.persistProviders(persistenceOptions);
     if (persistence.isErr()) return storageErr(persistence.error);
     if (state.providers.length === 0 && state.isAuthenticated) {
       state.clearUnlockedSession();
@@ -629,7 +682,10 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk();
+    return storageOk({
+      kind: ProviderRemovalOutcomeKind.Removed,
+      providers: state.providers,
+    });
   }
 }
 
@@ -668,7 +724,9 @@ export class ProviderPersistenceActions {
     );
   }
 
-  async ensureProviderSaved(): Promise<Result<void, StorageOperationFailure>> {
+  async ensureProviderSaved(): Promise<
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     const scope = await this.providerStoreIdForSave();
     if (scope.isErr()) return storageErr(scope.error);
@@ -730,11 +788,11 @@ export class ProviderPersistenceActions {
           ),
         );
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const persistence = await state.persistProviders({
+      const persistenceOptions: ProviderPersistenceOptions = {
         replace: false,
         providers: outcome.snapshot.providers,
-      });
+      };
+      const persistence = await state.persistProviders(persistenceOptions);
       if (persistence.isErr()) {
         return storageErr(persistence.error);
       }
@@ -752,7 +810,11 @@ export class ProviderPersistenceActions {
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      return storageOk();
+      const savedSnapshot: AuthProvidersSnapshot = {
+        providers: outcome.snapshot.providers,
+        activeVaultStoreId: request.snapshot.activeVaultStoreId,
+      };
+      return storageOk(savedSnapshot);
     } finally {
       outcome.free();
     }

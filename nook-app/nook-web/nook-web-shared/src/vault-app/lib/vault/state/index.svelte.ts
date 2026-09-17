@@ -181,46 +181,6 @@ const syncKeys = [
   "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 
-type VaultStateSliceFields = VaultRuntimeState &
-  VaultUiState &
-  VaultProviderState &
-  VaultSessionState &
-  VaultSecretsState &
-  VaultSentinelState &
-  VaultSyncState;
-
-type VaultDelegatedValue = VaultStateSliceFields[keyof VaultStateSliceFields];
-type VaultDelegatedArguments = never[];
-type VaultDelegatedCallable = (...args: VaultDelegatedArguments) => unknown;
-
-enum VaultDelegatedValueDecodeKind {
-  Value = "value",
-  Callable = "callable",
-}
-
-type VaultDelegatedValueDecode =
-  | {
-      readonly kind: VaultDelegatedValueDecodeKind.Value;
-      readonly value: VaultDelegatedValue;
-    }
-  | {
-      readonly kind: VaultDelegatedValueDecodeKind.Callable;
-      readonly call: VaultDelegatedCallable;
-    };
-
-function decodeVaultDelegatedValue(
-  value: VaultDelegatedValue,
-  state: object,
-): VaultDelegatedValueDecode {
-  if (typeof value === "function") {
-    return {
-      kind: VaultDelegatedValueDecodeKind.Callable,
-      call: (...args) => Reflect.apply(value, state, args),
-    };
-  }
-  return { kind: VaultDelegatedValueDecodeKind.Value, value };
-}
-
 class VaultStateSlicesImplementation {
   declare browserLocale: VaultRuntimeState["browserLocale"];
   declare clientPolicy: VaultRuntimeState["clientPolicy"];
@@ -384,15 +344,11 @@ class VaultStateSlicesImplementation {
         enumerable: true,
         get: () => {
           const value = state[key];
-          const decodedValue = decodeVaultDelegatedValue(value, state);
-          switch (decodedValue.kind) {
-            case VaultDelegatedValueDecodeKind.Value:
-              return decodedValue.value;
-            case VaultDelegatedValueDecodeKind.Callable:
-              return (...args: VaultDelegatedArguments) => decodedValue.call(...args);
-          }
+          return typeof value === "function" ? value.bind(state) : value;
         },
-        set: (value: State[keyof State]) => Reflect.set(state, key, value),
+        set: (value: State[keyof State]) => {
+          Reflect.set(state, key, value);
+        },
       };
       Object.defineProperty(target, key, definePropertyArgs);
     }

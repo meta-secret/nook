@@ -1,6 +1,7 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -9,6 +10,7 @@ import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   SharedGrantProviderOutcomeKind,
   findSharedGrantProvider,
@@ -59,6 +61,8 @@ import { GoogleOAuthPrompt, googleOAuthSession } from "$lib/auth/google/oauth";
 import {
   ICLOUD_SIGN_IN_TIMEOUT_MS,
   ICloudAccountNameKind,
+  type ICloudAccountName,
+  type ICloudOAuthTokens,
   iCloudOAuthSession,
 } from "$lib/auth/icloud/oauth";
 
@@ -84,7 +88,13 @@ export class OAuthFilePresetDecoder {
 
   static decode(
     value: unknown,
-  ): Effect.Effect<OAuthFilePreset, { readonly kind: OAuthFilePresetDecodeFailureKind.Invalid; readonly cause: unknown }> {
+  ): Effect.Effect<
+    OAuthFilePreset,
+    {
+      readonly kind: OAuthFilePresetDecodeFailureKind.Invalid;
+      readonly cause: ParseResult.ParseError;
+    }
+  > {
     return Schema.decodeUnknown(
       Schema.Literal(
         GOOGLE_DRIVE_OAUTH_FILE_PRESET,
@@ -119,7 +129,7 @@ export class PasswordEnrollmentActions {
   private applySavedEnrollmentProvider({
     selection,
   }: SavedEnrollmentProviderApplication): Result<
-    void,
+    StorageProvider["type"],
     StorageOperationFailure
   > {
     const state = this.state;
@@ -129,7 +139,7 @@ export class PasswordEnrollmentActions {
     ) {
       state.storageMode = "local";
       state.activateLoginSetup("local");
-      return storageOk();
+      return storageOk(state.storageMode);
     }
 
     const { provider } = selection;
@@ -140,7 +150,7 @@ export class PasswordEnrollmentActions {
       state.githubRepo = githubRepositoryValue(provider.githubRepo);
       state.clearOauthFile();
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(state.storageMode);
     }
     if (provider.type === "oauth-file") {
       const configuration = provider.oauthFile;
@@ -167,7 +177,7 @@ export class PasswordEnrollmentActions {
         state.githubRepo = fileName.fileName;
       }
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(state.storageMode);
     }
 
     const configuration = new StorageProviderPresentation(
@@ -185,7 +195,7 @@ export class PasswordEnrollmentActions {
     state.configureLocalFolder(configuration.config);
     state.githubPat = "";
     state.clearOauthFile();
-    return storageOk();
+    return storageOk(state.storageMode);
   }
 
   private async localVaultHasPasswordEntries(): Promise<
@@ -393,32 +403,31 @@ export class PasswordEnrollmentActions {
                     return defaultOAuthFileConfig(defaultOAuthFileConfigArgs3);
                   })();
               const existingCredential = oauth_access_token(existingConfig);
-              const tokens =
-                existingCredential.kind === "available"
-                  ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                    storageOk({
-                      accessToken: existingCredential.token,
-                      accountName:
-                        existingConfig.accountEmail.state === "email"
-                          ? {
-                              kind: ICloudAccountNameKind.Available as const,
-                              value: existingConfig.accountEmail.value,
-                            }
-                          : {
-                              kind: ICloudAccountNameKind.Unavailable as const,
-                            },
-                    })
-                  : await (() => {
-                      const request: Parameters<
-                        typeof iCloudOAuthSession.requestICloudWebAuthToken
-                      >[0] = {
-                        signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
-                        clickSignInControl: true,
-                      };
-                      return iCloudOAuthSession.requestICloudWebAuthToken(
-                        request,
-                      );
-                    })();
+              let tokens: Result<ICloudOAuthTokens, OAuthFailure>;
+              if (existingCredential.kind === "available") {
+                const accountName: ICloudAccountName =
+                  existingConfig.accountEmail.state === "email"
+                    ? {
+                        kind: ICloudAccountNameKind.Available,
+                        value: existingConfig.accountEmail.value,
+                      }
+                    : { kind: ICloudAccountNameKind.Unavailable };
+                const availableTokens: ICloudOAuthTokens = {
+                  accessToken: existingCredential.token,
+                  accountName,
+                };
+                tokens = storageOk(availableTokens);
+              } else {
+                const request: Parameters<
+                  typeof iCloudOAuthSession.requestICloudWebAuthToken
+                >[0] = {
+                  signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+                  clickSignInControl: true,
+                };
+                tokens = await iCloudOAuthSession.requestICloudWebAuthToken(
+                  request,
+                );
+              }
               if (tokens.isErr()) {
                 state.errorMsg = state.t(tokens.error.translationKey);
                 return;

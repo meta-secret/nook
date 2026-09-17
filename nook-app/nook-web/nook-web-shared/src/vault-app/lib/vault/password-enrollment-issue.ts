@@ -63,6 +63,14 @@ type CatalogVaultLabel =
   | { kind: CatalogVaultLabelKind.Missing }
   | { kind: CatalogVaultLabelKind.Present; label: string };
 
+enum StorageChainReadinessKind {
+  Idle = "idle",
+}
+
+type StorageChainReadiness = {
+  readonly kind: StorageChainReadinessKind.Idle;
+};
+
 const log = browserLogRuntime.createLogger("vault-password");
 
 export type EnrollmentCodeIssueRequest = {
@@ -100,11 +108,15 @@ export class PasswordEnrollmentIssue {
       // future leaves its IndexedDB transaction dangling, which surfaces later as
       // "database is not open" and poisons subsequent borrows. Surface a
       // retriable error instead.
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const idle = await state.raceStorageTimeout({
-        promise: state.waitForStorageChain().then(() => storageOk()),
+      const storageChainReadiness: StorageChainReadiness = {
+        kind: StorageChainReadinessKind.Idle,
+      };
+      const idleResult = storageOk(storageChainReadiness);
+      const waitForStorageRequest = {
+        promise: state.waitForStorageChain().then(() => idleResult),
         releaseLateValue: () => {},
-      });
+      };
+      const idle = await state.raceStorageTimeout(waitForStorageRequest);
       if (idle.isErr()) return storageErr(idle.error);
       await new Promise((resolve) => setTimeout(resolve, 0));
 

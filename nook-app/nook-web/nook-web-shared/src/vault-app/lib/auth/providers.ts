@@ -524,11 +524,11 @@ export function findDuplicateSyncProviderExcluding({
 export class AuthProviderPersistence {
   constructor(private readonly request: AuthProviderPersistenceRequest) {}
 
-  async save(): Promise<Result<void, VaultStorageFailure>> {
+  async save(): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>> {
     const { manager, snapshot } = this.request;
     try {
       await manager.save_auth_providers_snapshot(snapshot);
-      return ok();
+      return ok(snapshot);
     } catch {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
