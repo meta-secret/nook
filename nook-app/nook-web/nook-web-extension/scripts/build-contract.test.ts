@@ -9,26 +9,23 @@ import {
   extensionEntrypointBuildPolicy,
 } from './build-contract'
 
-test(
-  'uses classic IIFE output for content scripts and module output elsewhere',
-  () => {
-    expect(
-      extensionEntrypointBuildPolicy.format({
-        entrypoint: 'src/content/autofill.ts',
-      }),
-    ).toBe(ExtensionEntrypointBuildFormat.Classic)
-    expect(
-      extensionEntrypointBuildPolicy.format({
-        entrypoint: 'src/content/webauthn-content.ts',
-      }),
-    ).toBe(ExtensionEntrypointBuildFormat.Classic)
-    expect(
-      extensionEntrypointBuildPolicy.format({
-        entrypoint: 'src/background/service-worker.ts',
-      }),
-    ).toBe(ExtensionEntrypointBuildFormat.Module)
-  },
-)
+test('uses classic IIFE output for content scripts and module output elsewhere', () => {
+  expect(
+    extensionEntrypointBuildPolicy.format({
+      entrypoint: 'src/content/autofill.ts',
+    }),
+  ).toBe(ExtensionEntrypointBuildFormat.Classic)
+  expect(
+    extensionEntrypointBuildPolicy.format({
+      entrypoint: 'src/content/webauthn-content.ts',
+    }),
+  ).toBe(ExtensionEntrypointBuildFormat.Classic)
+  expect(
+    extensionEntrypointBuildPolicy.format({
+      entrypoint: 'src/background/service-worker.ts',
+    }),
+  ).toBe(ExtensionEntrypointBuildFormat.Module)
+})
 
 test('emits an executable self-contained classic autofill bundle', async () => {
   const fixtureRoot = await mkdtemp(resolve(tmpdir(), 'nook-autofill-bundle-'))

@@ -1,8 +1,5 @@
 import { Effect, Schema } from "effect";
-import {
-  decode_extension_event_log_record,
-  type ExtensionEventLogRecord as RustExtensionEventLogRecord,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { ExtensionEventLogRecord as RustExtensionEventLogRecord } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeFailureKind,
@@ -85,19 +82,58 @@ export class BeginExtensionPairingMessage {
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
+export type ExtensionEventLogRecordRuntime = {
+  readonly decode_extension_event_log_record: typeof import("./nook-companion-wasm/nook_companion_wasm.js").decode_extension_event_log_record;
+};
+
+enum ExtensionEventLogRecordRuntimeStateKind {
+  Unconfigured = "unconfigured",
+  Configured = "configured",
+}
+
+type ExtensionEventLogRecordRuntimeState =
+  | { readonly kind: ExtensionEventLogRecordRuntimeStateKind.Unconfigured }
+  | {
+      readonly kind: ExtensionEventLogRecordRuntimeStateKind.Configured;
+      readonly runtime: ExtensionEventLogRecordRuntime;
+    };
+
 export class ExtensionEventLogRecordAdmission {
   private constructor() {}
+  private static runtimeState: ExtensionEventLogRecordRuntimeState = {
+    kind: ExtensionEventLogRecordRuntimeStateKind.Unconfigured,
+  };
+
+  static configure(runtime: ExtensionEventLogRecordRuntime): void {
+    ExtensionEventLogRecordAdmission.runtimeState = {
+      kind: ExtensionEventLogRecordRuntimeStateKind.Configured,
+      runtime,
+    };
+  }
+
   static decode<WireValue>(
     value: WireValue,
   ): Effect.Effect<ExtensionEventLogRecord, RuntimeMessageDecodeFailure> {
-    return Effect.try({
-      try: () => decode_extension_event_log_record(value),
-      catch: (cause) =>
-        RuntimeMessageDecodeFailure.fromCause({
-          kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-          cause,
-        }),
-    });
+    switch (ExtensionEventLogRecordAdmission.runtimeState.kind) {
+      case ExtensionEventLogRecordRuntimeStateKind.Unconfigured:
+        return Effect.fail(
+          RuntimeMessageDecodeFailure.fromCause({
+            kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
+            cause: new Error("Extension event-log decoder is not configured."),
+          }),
+        );
+      case ExtensionEventLogRecordRuntimeStateKind.Configured: {
+        const { runtime } = ExtensionEventLogRecordAdmission.runtimeState;
+        return Effect.try({
+          try: () => runtime.decode_extension_event_log_record(value),
+          catch: (cause) =>
+            RuntimeMessageDecodeFailure.fromCause({
+              kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
+              cause,
+            }),
+        });
+      }
+    }
   }
 }
 
