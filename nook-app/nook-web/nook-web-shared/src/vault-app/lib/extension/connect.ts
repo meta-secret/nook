@@ -262,7 +262,7 @@ class PendingExtensionResponse {
   unavailable(): void {
     this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
   }
-  receive(response: unknown): void {
+  receive(response: ExtensionMessageResponse): void {
     this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
   }
 }
