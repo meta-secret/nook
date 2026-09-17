@@ -151,7 +151,6 @@ pub fn validate_companion_authentication_outcome_decision(
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
@@ -223,7 +222,6 @@ pub fn is_extension_connect_scope(value: &str) -> bool {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
