@@ -1,5 +1,6 @@
 import {
   ExtensionSessionDocumentOwner,
+  ExtensionSessionDocumentStateKind,
   type ExtensionSessionTransportResult,
   type ExtensionSessionTransport,
 } from './session-document'
@@ -28,10 +29,9 @@ export class ExtensionSessionLifecycle {
   private readonly document = new ExtensionSessionDocumentOwner()
 
   async ensureExtensionSessionDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionTransport>
   > {
-    const opened = await this.document.open()
-    return opened.map(() => {})
+    return this.document.open()
   }
 
   openSessionDocument(): Promise<
@@ -41,7 +41,7 @@ export class ExtensionSessionLifecycle {
   }
 
   closeExtensionSessionDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     return this.document.close()
   }

@@ -9,6 +9,7 @@ export enum ExtensionSessionTransportFailureKind {
   CreationFailed = 'extension-session-document-creation-failed',
   Closed = 'extension-session-document-closed',
   DeliveryFailed = 'extension-session-delivery-failed',
+  ResponseMissing = 'extension-session-response-missing',
   ClosureFailed = 'extension-session-document-closure-failed',
 }
 
@@ -20,7 +21,7 @@ export class ExtensionSessionTransportFailure {
 }
 
 export type ExtensionSessionTransportResult<
-  T = ExtensionSessionResponse | undefined,
+  T = ExtensionSessionResponse,
   DecodeFailure = never,
 > = Result<
   T,
@@ -31,7 +32,7 @@ export type ExtensionSessionTransportResult<
 export interface ExtensionSessionTransport {
   sendMessage(
     message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult>
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
@@ -51,14 +52,14 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
 
   sendMessage(
     message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult>
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
       response: ExtensionSessionResponse | undefined,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
-  sendMessage<Response = ExtensionSessionResponse | undefined, DecodeFailure = never>(
+  sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
     message: ExtensionSessionTransportRequest,
     decodeResponse?: (
       response: ExtensionSessionResponse | undefined,
@@ -94,11 +95,19 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
                 ),
               ),
             )
+          } else if (decodeResponse) {
+            resolve(
+              decodeResponse(response).mapErr((failure) => failure),
+            )
+          } else if (response instanceof Object) {
+            resolve(ok(response as Response))
           } else {
             resolve(
-              decodeResponse
-                ? decodeResponse(response).mapErr((failure) => failure)
-                : ok(response as Response),
+              err(
+                new ExtensionSessionTransportFailure(
+                  ExtensionSessionTransportFailureKind.ResponseMissing,
+                ),
+              ),
             )
           }
           },
@@ -115,11 +124,13 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
     })
   }
 
-  async close(): Promise<ExtensionSessionTransportResult<void>> {
+  async close(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     this.access = SessionDocumentAccess.Revoked
     try {
       await chrome.offscreen.closeDocument()
-      return ok()
+      return ok(ExtensionSessionDocumentStateKind.Closed)
     } catch {
       return err(
         new ExtensionSessionTransportFailure(
@@ -130,7 +141,7 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   }
 }
 
-enum ExtensionSessionDocumentStateKind {
+export enum ExtensionSessionDocumentStateKind {
   Unobserved = 'unobserved',
   ObservationFailed = 'observation-failed',
   Closed = 'closed',
@@ -159,7 +170,9 @@ type ExtensionSessionDocumentState =
     }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.Closing
-      readonly operation: Promise<ExtensionSessionTransportResult<void>>
+      readonly operation: Promise<
+        ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+      >
     }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.ClosureFailed
@@ -292,7 +305,9 @@ export class ExtensionSessionDocumentOwner {
 
   private async closeDocument(
     document: OpenExtensionSessionDocument,
-  ): Promise<ExtensionSessionTransportResult<void>> {
+  ): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     const closed = await document.close()
     this.state = closed.isOk()
       ? { kind: ExtensionSessionDocumentStateKind.Closed }
@@ -305,7 +320,7 @@ export class ExtensionSessionDocumentOwner {
   }
 
   private async closeUnobservedDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     try {
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
@@ -315,7 +330,7 @@ export class ExtensionSessionDocumentOwner {
       })
       if (contexts.length === 0) {
         this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
-        return ok()
+        return ok(ExtensionSessionDocumentStateKind.Closed)
       }
     } catch {
       const failure = new ExtensionSessionTransportFailure(
@@ -330,10 +345,12 @@ export class ExtensionSessionDocumentOwner {
     return this.closeDocument(new OpenExtensionSessionDocument())
   }
 
-  close(): Promise<ExtensionSessionTransportResult<void>> {
+  close(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     const state = this.state
     if (state.kind === ExtensionSessionDocumentStateKind.Closed)
-      return Promise.resolve(ok())
+      return Promise.resolve(ok(ExtensionSessionDocumentStateKind.Closed))
     if (state.kind === ExtensionSessionDocumentStateKind.Closing)
       return state.operation
     if (
@@ -354,7 +371,9 @@ export class ExtensionSessionDocumentOwner {
     const operation =
       state.kind === ExtensionSessionDocumentStateKind.Creating
         ? state.operation.then(
-            (created): Promise<ExtensionSessionTransportResult<void>> => {
+            (created): Promise<
+              ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+            > => {
               if (created.isErr()) {
                 this.state =
                   created.error.kind ===

@@ -628,14 +628,22 @@ class CloudKitRuntime {
     return outcome;
   }
 
-  loadCloudKitScript(): Promise<Result<void, OAuthFailure>> {
+  private loadedCloudKitApi(): Result<CloudKitGlobal, OAuthFailure> {
+    const cloudKit = window.CloudKit;
+    return cloudKit
+      ? ok(cloudKit)
+      : err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
+  }
+
+  loadCloudKitScript(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     return new Promise((resolve) => {
       try {
-        if (window.CloudKit) {
-          resolve(ok());
+        const cloudKit = window.CloudKit;
+        if (cloudKit) {
+          resolve(ok(cloudKit));
           return;
         }
-        const loaded = () => resolve(ok());
+        const loaded = () => resolve(this.loadedCloudKitApi());
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
         const existing = document.querySelector(

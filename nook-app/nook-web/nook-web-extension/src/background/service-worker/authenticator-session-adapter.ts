@@ -54,7 +54,7 @@ type AuthenticatorSessionError =
 type AuthenticatorSessionTransport = {
   sendSessionMessage(
     message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult<void>>
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendSessionMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
@@ -105,6 +105,15 @@ type SelectedAuthenticatorPageAcknowledgedArgs = {
   vaultStoreId: string
   secretId: string
   authorizationGeneration: string
+}
+
+export enum AuthenticatorPageAcknowledgementKind {
+  Acknowledged = 'acknowledged',
+}
+
+export type AuthenticatorPageAcknowledgement = {
+  readonly kind: AuthenticatorPageAcknowledgementKind.Acknowledged
+  readonly requestId: string
 }
 
 export class ExtensionAuthenticatorSession {
@@ -294,7 +303,7 @@ export class ExtensionAuthenticatorSession {
     secretId,
     authorizationGeneration,
   }: SelectedAuthenticatorPageAcknowledgedArgs): Promise<
-    Result<void, AuthenticatorSessionFailure>
+    Result<AuthenticatorPageAcknowledgement, AuthenticatorSessionFailure>
   > {
     const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
       type: 'nook:website-authenticator-selected',
@@ -319,7 +328,10 @@ export class ExtensionAuthenticatorSession {
       typeof response === 'object' &&
       'ok' in response &&
       response.ok === true
-      ? ok()
+      ? ok({
+          kind: AuthenticatorPageAcknowledgementKind.Acknowledged,
+          requestId,
+        })
       : err(
           new AuthenticatorSessionFailure(
             AuthenticatorSessionFailureKind.PageRejected,

@@ -42,10 +42,14 @@ import {
   WebAuthTokenLookupKind,
   type CloudKitContainer,
   type CloudKitConfiguration,
+  type CloudKitGlobal,
   type CloudKitRecordInfosResponse,
   cloudKitRuntime,
 } from "$lib/auth/icloud/cloudkit-runtime";
-import { CloudKitSetupFailure } from "$lib/auth/icloud/auth-errors";
+import {
+  CloudKitFailureDiagnostic,
+  CloudKitSetupFailure,
+} from "$lib/auth/icloud/auth-errors";
 import {
   CloudKitAuthSetupKind,
   CloudKitIdentityKind,
@@ -169,7 +173,7 @@ class ICloudOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
   }
-  initICloudAuth(): Promise<Result<void, OAuthFailure>> {
+  initICloudAuth(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     if (
       this.cloudKitInitialization.kind ===
       CloudKitInitializationKind.Initializing
@@ -182,7 +186,7 @@ class ICloudOAuthSession {
     };
     return completion;
   }
-  private async initialize(): Promise<Result<void, OAuthFailure>> {
+  private async initialize(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     const loaded = await cloudKitRuntime.loadCloudKitScript();
     if (loaded.isErr()) return err(loaded.error);
     const configureArgs: CloudKitConfiguration = {
@@ -207,10 +211,8 @@ class ICloudOAuthSession {
       services: { authTokenStore: cloudKitAuthTokenStore },
     };
     try {
-      if (!window.CloudKit)
-        return err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
-      window.CloudKit.configure(configureArgs);
-      return ok();
+      loaded.value.configure(configureArgs);
+      return ok(loaded.value);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
@@ -243,7 +245,7 @@ class ICloudOAuthSession {
       if (
         // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         new CloudKitSetupFailure({
-          error,
+          diagnostic: new CloudKitFailureDiagnostic(error),
           hasSignInControl: this.hasCloudKitSignInControl(),
         }).expected
       )
@@ -252,7 +254,7 @@ class ICloudOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
   }
-  async prepareICloudSignInControl(): Promise<Result<void, OAuthFailure>> {
+  async prepareICloudSignInControl(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     const initialized = await this.initICloudAuth();
     if (initialized.isErr()) return err(initialized.error);
     const admitted = cloudKitRuntime.getDefaultCloudKitContainer();
@@ -270,9 +272,11 @@ class ICloudOAuthSession {
       !existing
     )
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
-    return (await this.setUpCloudKitAuth(admitted.value)).map(() => {});
+    return (await this.setUpCloudKitAuth(admitted.value)).map(
+      () => initialized.value,
+    );
   }
-  private clickCloudKitSignInButton(): Result<void, OAuthFailure> {
+  private clickCloudKitSignInButton(): Result<HTMLElement, OAuthFailure> {
     try {
       const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
       const control = mount
@@ -283,7 +287,7 @@ class ICloudOAuthSession {
       if (!control)
         return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
       control.click();
-      return ok();
+      return ok(control);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
     }
@@ -602,7 +606,7 @@ class ICloudOAuthSession {
           !clickSignInControl ||
           // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           new CloudKitSetupFailure({
-            error,
+            diagnostic: new CloudKitFailureDiagnostic(error),
             hasSignInControl: this.hasCloudKitSignInControl(),
           }).expected
         ) {

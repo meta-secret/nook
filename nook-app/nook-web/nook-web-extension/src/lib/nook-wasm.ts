@@ -326,7 +326,7 @@ class ExtensionWasmRuntime {
       return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
-        error,
+        error: error instanceof Error ? error : new Error(),
         action: PasskeyOperation.Get,
       }
       throw new PasskeyCeremonyFailure(args).error
@@ -353,7 +353,7 @@ class ExtensionWasmRuntime {
       return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
-        error,
+        error: error instanceof Error ? error : new Error(),
         action: PasskeyOperation.Create,
       }
       throw new PasskeyCeremonyFailure(args).error

@@ -89,6 +89,8 @@ export class ExtensionPairingApprovedGrantAdmission {
     const payload = value;
     if (!("vaultType" in payload))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
+    if (typeof payload.vaultType !== "string")
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
     const vaultType = extensionPairingVaultType.admit(payload.vaultType);
     if (vaultType.isErr())
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);

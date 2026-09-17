@@ -5,7 +5,7 @@
   }
 
   type ErrorMessageArgs = {
-    caught: unknown
+    caught: Error
     fallbackKey: I18nKey
   }
 
@@ -172,21 +172,21 @@
       enterToolbarMenu(device)
     } catch (caught) {
       busy = false
+      const failure = caught instanceof Error ? caught : new Error()
       if (
-        caught instanceof Error &&
-        (caught.message.includes('PASSKEY_UNAVAILABLE') ||
-          caught.message.includes('PASSKEY_PRF_UNAVAILABLE'))
+        failure.message.includes('PASSKEY_UNAVAILABLE') ||
+        failure.message.includes('PASSKEY_PRF_UNAVAILABLE')
       ) {
         status = DeviceProtectionStatus.PinSetup
         error = translatePlain(
-          caught.message.includes('PASSKEY_UNAVAILABLE')
+          failure.message.includes('PASSKEY_UNAVAILABLE')
             ? I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady
             : I18N_KEYS.DeviceProtectionPinFallbackReady,
         )
         return
       }
       const errorArgs: Parameters<typeof errorMessage>[0] = {
-        caught,
+        caught: failure,
         fallbackKey,
       }
       error = errorMessage(errorArgs)

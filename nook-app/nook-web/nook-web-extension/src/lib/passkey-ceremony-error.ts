@@ -4,7 +4,7 @@ export enum PasskeyOperation {
 }
 
 type PasskeyCeremonyErrorArgs = {
-  error: unknown
+  error: Error
   action: PasskeyOperation
 }
 
