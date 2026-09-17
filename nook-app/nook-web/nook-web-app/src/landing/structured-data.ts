@@ -6,7 +6,19 @@ export enum LandingLocale {
   Russian = 'ru',
 }
 
-const landingStructuredDataFields = {
+type LandingStructuredDataFields = {
+  readonly '@context': Schema.optional<typeof Schema.String>
+  readonly '@type': Schema.optional<typeof Schema.String>
+  readonly name: Schema.optional<typeof Schema.String>
+  readonly url: Schema.optional<typeof Schema.String>
+  readonly description: typeof Schema.String
+  readonly applicationCategory: Schema.optional<typeof Schema.String>
+  readonly operatingSystem: Schema.optional<typeof Schema.String>
+  readonly isAccessibleForFree: Schema.optional<typeof Schema.Boolean>
+  readonly inLanguage: Schema.optional<typeof Schema.String>
+}
+
+const landingStructuredDataFields: LandingStructuredDataFields = {
   '@context': Schema.optional(Schema.String),
   '@type': Schema.optional(Schema.String),
   name: Schema.optional(Schema.String),
@@ -16,7 +28,7 @@ const landingStructuredDataFields = {
   operatingSystem: Schema.optional(Schema.String),
   isAccessibleForFree: Schema.optional(Schema.Boolean),
   inLanguage: Schema.optional(Schema.String),
-} satisfies Schema.Struct.Fields
+}
 
 type LandingStructuredDataSchemaDefinition = Schema.Struct<
   typeof landingStructuredDataFields
