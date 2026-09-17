@@ -576,13 +576,10 @@ class DockerizedRustContract {
     const dylintJob = ecosystem
       .split("\n  dylint:\n")[1];
     if (!dylintJob) throw new Error("Dylint job is missing");
-    const nodeProvision = dylintJob.indexOf("actions/setup-node@v7");
-    const dockerSetup = dylintJob.indexOf(
+    expect(dylintJob).not.toContain("actions/setup-node@v7");
+    expect(dylintJob).toContain(
       "uses: ./.github/actions/nook-docker-setup",
     );
-    expect(nodeProvision).toBeGreaterThanOrEqual(0);
-    expect(nodeProvision).toBeLessThan(dockerSetup);
-    expect(dylintJob).toContain('node-version: "24.19.0"');
     expect(this.read(".github/actions/nook-cache-telemetry/action.yml")).not.toContain(
       "skipping cache telemetry",
     );
