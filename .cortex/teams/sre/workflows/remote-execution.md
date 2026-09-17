@@ -34,11 +34,13 @@ committed branch head; the returned exact SHA is observational evidence only.
 - Preserve that boundary through every transitive Task and Docker stage.
 - Do not substitute `rust:ci`, `web:verify`, or `loom:verify`.
 - Return positive compilation evidence for local integration.
-- The compile task checks authenticated registry transport before work starts,
-  imports the unversioned exact current-head and first-parent
-  `nook-build-compile` refs through BuildKit, and exports only the current-head
-  graph. An absent exact manifest is a normal miss; transport/authentication
-  and export failures are terminal. The five-minute timeout includes export.
+- The compile task checks authenticated registry transport and access to each
+  present current/parent manifest and its referenced blobs before work starts,
+  imports both unversioned exact `nook-build-compile` refs through BuildKit,
+  and exports only the current-head graph. A missing exact manifest is a
+  normal miss; API, authentication, referenced-content, and export failures
+  are terminal. The access check does not select cache reuse; BuildKit remains
+  authoritative. The five-minute timeout includes export.
 
 ## Slow dev PR validation
 

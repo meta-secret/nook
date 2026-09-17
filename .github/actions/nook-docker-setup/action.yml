@@ -102,29 +102,6 @@ runs:
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.registry-password }}
 
-    - name: Verify registry transport for Docker cache
-      if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.tasks || github.event.inputs.task) == 'build:compile' }}
-      shell: bash
-      env:
-        REGISTRY_HOST: ${{ inputs.registry-host }}
-        REGISTRY_USERNAME: ${{ inputs.registry-username }}
-        REGISTRY_PASSWORD: ${{ inputs.registry-password }}
-      run: |
-        set -euo pipefail
-        if ! status="$(printf 'user = "%s:%s"\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" \
-          | timeout 12s curl --config - --connect-timeout 5 --max-time 10 \
-              --silent --show-error --output /dev/null --write-out '%{http_code}' \
-              "https://${REGISTRY_HOST}/v2/")"; then
-          echo "BuildKit cache registry transport or authentication check failed" >&2
-          exit 1
-        fi
-        if [ "$status" = "200" ]; then
-          echo "BuildKit cache registry transport and authentication are healthy"
-        else
-          echo "BuildKit cache registry returned HTTP $status at /v2/" >&2
-          exit 1
-        fi
-
     - name: Preload hosted BuildKit from Zot
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
@@ -344,6 +321,174 @@ runs:
           cache_write_enabled=""
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
+
+    - name: Verify Docker cache refs and blobs
+      if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.tasks || github.event.inputs.task) == 'build:compile' }}
+      shell: bash
+      env:
+        REGISTRY_HOST: ${{ inputs.registry-host }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+      run: |
+        set -euo pipefail
+        timeout 60s node --input-type=module <<'NODE'
+        class BuildKitCacheAccessVerifier {
+          constructor(environment, fetcher) {
+            this.environment = environment;
+            this.fetcher = fetcher;
+          }
+
+          async verify() {
+            this.registryHost = this.requireValue("REGISTRY_HOST");
+            const username = this.requireValue("REGISTRY_USERNAME");
+            const password = this.requireValue("REGISTRY_PASSWORD");
+            this.authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+            await this.verifyRegistryAvailability();
+            const currentScope = this.environment.GHA_CACHE_SCOPE_SUFFIX;
+            if (typeof currentScope !== "string" || currentScope.length === 0) {
+              throw new Error("remote compile current cache scope is missing");
+            }
+            const scopeSuffixes = [currentScope];
+            const parentScope = this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX;
+            if (
+              typeof parentScope === "string" &&
+              parentScope.length > 0 &&
+              parentScope !== currentScope
+            ) {
+              scopeSuffixes.push(parentScope);
+            }
+
+            for (const scopeSuffix of scopeSuffixes) {
+              await this.verifyCacheRef(scopeSuffix);
+            }
+            console.log("BuildKit cache refs and all referenced blobs are accessible");
+          }
+
+          async verifyRegistryAvailability() {
+            const response = await this.request(`https://${this.registryHost}/v2/`, "GET");
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for the authenticated API check`);
+            }
+          }
+
+          requireValue(name) {
+            const value = this.environment[name];
+            if (typeof value !== "string" || value.length === 0) {
+              throw new Error(`required registry setting ${name} is missing`);
+            }
+            return value;
+          }
+
+          async request(url, method) {
+            return await this.fetcher(url, {
+              method,
+              headers: {
+                authorization: this.authorization,
+                accept: [
+                  "application/vnd.oci.image.index.v1+json",
+                  "application/vnd.oci.image.manifest.v1+json",
+                  "application/vnd.docker.distribution.manifest.list.v2+json",
+                  "application/vnd.docker.distribution.manifest.v2+json",
+                ].join(", "),
+              },
+              signal: AbortSignal.timeout(10_000),
+            });
+          }
+
+          async verifyCacheRef(scopeSuffix) {
+            // This checks access only; BuildKit receives both refs and owns reuse/validity.
+            const repository = `nook/remote-buildcache/nook-build-compile${scopeSuffix}`;
+            const visitedManifests = new Set();
+            const blobDigests = new Set();
+            await this.visitManifest(repository, "buildcache", true, visitedManifests, blobDigests);
+            const digests = Array.from(blobDigests);
+            for (let offset = 0; offset < digests.length; offset += 16) {
+              await Promise.all(
+                digests
+                  .slice(offset, offset + 16)
+                  .map((digest) => this.verifyBlob(repository, digest)),
+              );
+            }
+          }
+
+          async visitManifest(repository, reference, root, visitedManifests, blobDigests) {
+            if (visitedManifests.has(reference)) return;
+            visitedManifests.add(reference);
+            const url = `https://${this.registryHost}/v2/${repository}/manifests/${reference}`;
+            const response = await this.request(url, "GET");
+            if (root && response.status === 404) {
+              console.log(`BuildKit cache ref is absent; BuildKit may treat it as a cache miss: ${repository}:buildcache`);
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for cache manifest ${repository}:${reference}`);
+            }
+
+            let manifest;
+            try {
+              manifest = await response.json();
+            } catch {
+              throw new Error(`registry returned invalid JSON for cache manifest ${repository}:${reference}`);
+            }
+            if (typeof manifest !== "object" || Array.isArray(manifest) || !Object.hasOwn(manifest, "schemaVersion")) {
+              throw new Error(`registry returned an invalid cache manifest ${repository}:${reference}`);
+            }
+
+            if (Object.hasOwn(manifest, "manifests")) {
+              if (!Array.isArray(manifest.manifests)) {
+                throw new Error(`cache manifest list is invalid for ${repository}:${reference}`);
+              }
+              for (const descriptor of manifest.manifests) {
+                await this.visitManifest(
+                  repository,
+                  this.digestFrom(descriptor),
+                  false,
+                  visitedManifests,
+                  blobDigests,
+                );
+              }
+            }
+
+            if (Object.hasOwn(manifest, "config")) {
+              blobDigests.add(this.digestFrom(manifest.config));
+            }
+            if (Object.hasOwn(manifest, "layers")) {
+              if (!Array.isArray(manifest.layers)) {
+                throw new Error(`cache manifest layers are invalid for ${repository}:${reference}`);
+              }
+              for (const descriptor of manifest.layers) {
+                blobDigests.add(this.digestFrom(descriptor));
+              }
+            }
+            if (
+              !Object.hasOwn(manifest, "manifests") &&
+              (!Object.hasOwn(manifest, "config") || !Object.hasOwn(manifest, "layers"))
+            ) {
+              throw new Error(`cache manifest has no referenced content: ${repository}:${reference}`);
+            }
+          }
+
+          digestFrom(descriptor) {
+            const digest = descriptor.digest;
+            if (typeof digest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+              throw new Error("registry cache manifest contains an invalid blob digest");
+            }
+            return digest;
+          }
+
+          async verifyBlob(repository, digest) {
+            const url = `https://${this.registryHost}/v2/${repository}/blobs/${digest}`;
+            const response = await this.request(url, "HEAD");
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for referenced cache blob ${digest}`);
+            }
+          }
+        }
+
+        const verifier = new BuildKitCacheAccessVerifier(process.env, fetch);
+        await verifier.verify();
+        NODE
 
     - name: Set CI environment
       shell: bash

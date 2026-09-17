@@ -347,8 +347,10 @@ Use this workflow for quality, CI, and deployment changes.
     cache, reuses dependency/compiler vertices, and seeds its own exact ref.
     Compile refs use the unversioned `nook-build-compile` semantic name, with
     no manual schema suffix or BuildKit-duplicating fingerprint. The remote
-    compile transport gate distinguishes a healthy authenticated `/v2/`
-    endpoint from auth, HTTP, and network failures before invoking the task.
+    compile gate requires an authenticated healthy `/v2/` endpoint plus access
+    to each present current/parent cache manifest and referenced blob before
+    invoking the task. Only an exact current/parent manifest 404 is a normal
+    miss; the access check does not choose reuse, which remains BuildKit's job.
 
     `task infra:kubernetes-cache:prove` is the Kubernetes integration proof.
     It derives an ephemeral three-agent k3d cluster from the production Zot,

@@ -859,8 +859,10 @@ authenticator-domain to 90 percent.
 - For ordinary Docker builds, cache restoration is an optimization and a
   missing cache can fall back to a correct cold build. The Remote
   `build:compile` contract separately fails before compilation when the
-  authenticated registry transport is unavailable and fails on cache export
-  errors; an absent exact commit manifest alone remains a normal BuildKit miss.
+  authenticated registry API, present cache manifests, or referenced blobs
+  are inaccessible, and fails on cache export errors. An absent exact
+  current/parent commit manifest alone remains a normal BuildKit miss; BuildKit
+  still decides cache validity and reuse.
 - Main ARC producers publish shared Zot cache manifests after lane verification.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.

@@ -18,6 +18,8 @@ void test("records the active compile scope without preselection state", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+      GHA_CACHE_PARENT_SCOPE_SUFFIX: `-git-${"a".repeat(40)}`,
+      NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
     }).record(),
     {
       scope: "",
@@ -29,6 +31,8 @@ void test("records the active compile scope without preselection state", () => {
       },
       compile_source: {
         scope: `nook-build-compile-git-${"b".repeat(40)}`,
+        parent_scope_suffix: `-git-${"a".repeat(40)}`,
+        parent_ref: `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile-git-${"a".repeat(40)}:buildcache`,
       },
       imports: {
         probes_complete: false,
@@ -49,6 +53,21 @@ void test("records transient optional probe failures without marking probes inco
   assert.equal(scope.imports.failure_class, "transient_unavailable");
   assert.equal(scope.compile_dependencies.available, false);
   assert.equal(Object.hasOwn(scope.compile_source, "available"), false);
+});
+
+void test("records an explicit empty parent cache identity for a root commit", () => {
+  const source = new CacheScopeTelemetry({
+    GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+  }).record().compile_source;
+
+  assert.deepEqual(
+    {
+      parent_scope_suffix: source.parent_scope_suffix,
+      parent_ref: source.parent_ref,
+    },
+    { parent_scope_suffix: "", parent_ref: "" },
+  );
 });
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {

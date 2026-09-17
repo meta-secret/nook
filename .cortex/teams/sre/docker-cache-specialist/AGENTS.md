@@ -33,10 +33,11 @@ behavior for packets issued by SRE Team Gizmo.
   `nook-build-compile`. Do not manually rotate a schema suffix or derive a
   toolchain/dependency fingerprint; Dockerfile, context, build args, and base
   image remain BuildKit's invalidation inputs.
-- Let BuildKit own cache availability, Dockerfile/context/build-argument input
-  validation, and layer reuse. Do not precompute a parallel dependency
-  fingerprint, probe selectors to predict reuse, or simulate Docker's cache-key
-  decisions before the actual build.
+- Let BuildKit own cache validity, Dockerfile/context/build-argument input
+  validation, and layer reuse. A narrow authenticated manifest/blob access
+  check may fail fast on inaccessible registry resources, but must not select
+  or filter cache refs, or predict hits/reuse. Do not precompute a parallel
+  dependency fingerprint or simulate Docker's cache-key decisions.
 - Make sccache the primary cross-commit compiler cache. Secret availability is
   the complete trust boundary: jobs receiving the single
   `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` pair use `READ_WRITE`;
@@ -44,12 +45,12 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not require a separate cache-population workflow or prerequisite before an
   ordinary compile. The first cold publish is allowed to miss and must populate
   compiler objects for the next committed head.
-- Require cache-root reachability in addition to manifest existence and import
-  success. The target exported through `cache_to` must retain the reusable
-  dependency and compiler ancestry consumed by ordinary builds. An absent
-  exact ref is an expected first-build miss; a registry transport or
-  authentication failure must stop before compilation, and export failure is
-  terminal.
+- Require authenticated registry reachability and access to each present
+  current/parent cache manifest and every referenced blob before compilation.
+  The target exported through `cache_to` must retain the reusable dependency
+  and compiler ancestry consumed by ordinary builds. A missing exact current
+  or parent manifest is an expected miss; registry/authentication errors,
+  inaccessible referenced content, and export failure are terminal.
 - Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
   export a terminal result while orphaning intermediate cache records.
 - Keep dependency layers reusable across source changes and explicitly root

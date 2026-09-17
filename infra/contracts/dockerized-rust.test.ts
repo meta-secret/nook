@@ -239,18 +239,23 @@ class DockerizedRustContract {
     );
   }
 
-  remoteCompileRestoresLineageAndFailsOnRegistryTransport(): void {
+  remoteCompileRestoresLineageAndFailsOnRegistryOrCacheAccess(): void {
     const action = this.read(".github/actions/nook-docker-setup/action.yml");
-    const gateMarker = "    - name: Verify registry transport for Docker cache";
+    const gateMarker = "    - name: Verify Docker cache refs and blobs";
     const gateStart = action.indexOf(gateMarker);
     expect(gateStart).toBeGreaterThanOrEqual(0);
     const nextStep = action.indexOf("\n    - name:", gateStart + gateMarker.length);
     const gate = action.slice(gateStart, nextStep < 0 ? action.length : nextStep);
-    const runMarker = "      run: |\n";
+    const configureCache = action.indexOf("    - name: Configure hosted BuildKit cache");
+    expect(gateStart).toBeGreaterThan(configureCache);
+    const runMarker = "        timeout 60s node --input-type=module <<'NODE'\n";
     const runStart = gate.indexOf(runMarker);
     expect(runStart).toBeGreaterThanOrEqual(0);
+    const runEndMarker = "\n        NODE";
+    const runEnd = gate.indexOf(runEndMarker, runStart + runMarker.length);
+    expect(runEnd).toBeGreaterThan(runStart);
     const scriptLines: string[] = [];
-    for (const line of gate.slice(runStart + runMarker.length).split("\n")) {
+    for (const line of gate.slice(runStart + runMarker.length, runEnd).split("\n")) {
       if (line.length === 0) continue;
       expect(line.startsWith("        ")).toBe(true);
       scriptLines.push(line.slice(8));
@@ -262,9 +267,13 @@ class DockerizedRustContract {
     const remoteWorkflow = this.read(".github/workflows/remote.yml");
 
     expect(gate).toContain("build:compile");
-    expect(registryGateScript).toContain("--config -");
-    expect(registryGateScript).toContain("/v2/");
-    expect(registryGateScript).toContain('[ "$status" = "200" ]');
+    expect(gate).toContain("GHA_CACHE_PARENT_SCOPE_SUFFIX");
+    expect(registryGateScript).toContain("verifyRegistryAvailability");
+    expect(registryGateScript).toContain('"/v2/"');
+    expect(registryGateScript).toContain("/manifests/buildcache");
+    expect(registryGateScript).toContain("/blobs/");
+    expect(registryGateScript).toContain('method: "HEAD"');
+    expect(registryGateScript).toContain("AbortSignal.timeout");
     expect(compileBake).toContain('variable "GHA_CACHE_PARENT_SCOPE_SUFFIX"');
     expect(compileBake).toContain("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}");
     expect(compileBake).toContain(
@@ -274,38 +283,86 @@ class DockerizedRustContract {
     expect(compileBake).toContain("mode=max,compression=zstd,timeout=20s");
     expect(compileBake).not.toContain("ignore-error=true");
     expect(remoteWorkflow).toContain("timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}");
-    expect(remoteWorkflow).toContain("uses: ./.github/actions/nook-docker-setup");
+    const setupAction = remoteWorkflow.indexOf("uses: ./.github/actions/nook-docker-setup");
+    const compileTask = remoteWorkflow.indexOf("- name: Run task batch");
+    expect(setupAction).toBeGreaterThanOrEqual(0);
+    expect(setupAction).toBeLessThan(compileTask);
 
-    const temporary = mkdtempSync(join(tmpdir(), "nook-registry-gate-"));
-    try {
-      writeFileSync(
-        join(temporary, "curl"),
-        '#!/bin/sh\n[ "${CURL_EXIT:-0}" = 0 ] || exit "$CURL_EXIT"\nprintf "%s" "${CURL_STATUS:-000}"\n',
-        { mode: 0o755 },
-      );
-      for (const [status, exitCode, expected] of [
-        ["200", "0", true],
-        ["401", "0", false],
-        ["404", "0", false],
-        ["503", "0", false],
-        ["000", "7", false],
-      ] as const) {
-        const result = spawnSync("bash", ["-e", "-c", registryGateScript], {
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            PATH: `${temporary}:${process.env.PATH}`,
-            CURL_STATUS: status,
-            CURL_EXIT: exitCode,
-            REGISTRY_HOST: "registry.example.test",
-            REGISTRY_USERNAME: "sim-user",
-            REGISTRY_PASSWORD: "sim-password",
-          },
-        });
-        expect(result.status === 0, result.stderr || result.stdout).toBe(expected);
-      }
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
+    const rootManifest = JSON.stringify({
+      schemaVersion: 2,
+      manifests: [{ digest: `sha256:${"a".repeat(64)}` }],
+    });
+    const nestedManifest = JSON.stringify({
+      schemaVersion: 2,
+      config: { digest: `sha256:${"b".repeat(64)}` },
+      layers: [{ digest: `sha256:${"c".repeat(64)}` }],
+    });
+    const harness = `
+      globalThis.fetch = async (input, init = {}) => {
+        if (process.env.CACHE_FETCH_FAILURE === "1") {
+          throw new Error("mock registry network failure");
+        }
+        const url = new URL(typeof input === "string" ? input : input.url);
+        const headers = new Headers(init.headers);
+        const expectedAuthorization = "Basic " + Buffer.from("sim-user:sim-password").toString("base64");
+        if (headers.get("authorization") !== expectedAuthorization) {
+          return new Response("", { status: 401 });
+        }
+        if (url.pathname === "/v2/") {
+          return new Response("", { status: Number(process.env.CACHE_REGISTRY_STATUS) });
+        }
+        if (url.pathname.endsWith("/manifests/buildcache")) {
+          const isCurrent = url.pathname.includes("nook-build-compile-git-current");
+          const status = Number(process.env[isCurrent ? "CACHE_CURRENT_STATUS" : "CACHE_PARENT_STATUS"]);
+          if (status !== 200) return new Response("", { status });
+          return new Response(process.env.CACHE_ROOT_MANIFEST, { status });
+        }
+        if (url.pathname.includes("/manifests/sha256:")) {
+          return new Response(process.env.CACHE_NESTED_MANIFEST, { status: 200 });
+        }
+        if (url.pathname.includes("/blobs/sha256:")) {
+          if (init.method !== "HEAD") return new Response("", { status: 405 });
+          return new Response("", { status: Number(process.env.CACHE_BLOB_STATUS) });
+        }
+        return new Response("", { status: 500 });
+      };
+      await import("data:text/javascript," + encodeURIComponent(process.env.CACHE_VERIFIER_SCRIPT));
+    `;
+    for (const [registry, current, parent, blob, networkFailure, expected] of [
+      [200, 200, 200, 200, false, true],
+      [200, 404, 200, 200, false, true],
+      [200, 200, 404, 200, false, true],
+      [200, 404, 404, 200, false, true],
+      [401, 200, 200, 200, false, false],
+      [403, 200, 200, 200, false, false],
+      [404, 200, 200, 200, false, false],
+      [503, 200, 200, 200, false, false],
+      [200, 401, 200, 200, false, false],
+      [200, 403, 200, 200, false, false],
+      [200, 503, 200, 200, false, false],
+      [200, 200, 200, 404, false, false],
+      [200, 200, 200, 200, true, false],
+    ] as const) {
+      const result = spawnSync("node", ["--input-type=module", "-e", harness], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CACHE_VERIFIER_SCRIPT: registryGateScript,
+          CACHE_REGISTRY_STATUS: String(registry),
+          CACHE_ROOT_MANIFEST: rootManifest,
+          CACHE_NESTED_MANIFEST: nestedManifest,
+          CACHE_CURRENT_STATUS: String(current),
+          CACHE_PARENT_STATUS: String(parent),
+          CACHE_BLOB_STATUS: String(blob),
+          CACHE_FETCH_FAILURE: networkFailure ? "1" : "0",
+          GHA_CACHE_SCOPE_SUFFIX: "-git-current",
+          GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
+          REGISTRY_HOST: "registry.example.test",
+          REGISTRY_USERNAME: "sim-user",
+          REGISTRY_PASSWORD: "sim-password",
+        },
+      });
+      expect(result.status === 0, result.stderr || result.stdout).toBe(expected);
     }
   }
 
