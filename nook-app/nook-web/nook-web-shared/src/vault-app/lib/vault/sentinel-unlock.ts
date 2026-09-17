@@ -393,7 +393,6 @@ export class SentinelUnlockActions {
     if (manager.isErr()) return storageErr(manager.error);
     try {
       const status = manager.value.sentinel_unlock_session_status();
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.replaceUnlockSession({ status });
       if (!status.active) state.sentinelUnlockRequest = "";
       state.sentinelUnlockStatus = manager.value.sentinel_unlock_status();

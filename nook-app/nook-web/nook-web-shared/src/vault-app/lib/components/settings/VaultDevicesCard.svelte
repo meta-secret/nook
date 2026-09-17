@@ -178,7 +178,6 @@
 
   const sortedMembers = $derived(
     [...vaultMembers].sort(
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       (a, b) => {
         if (a.deviceId === deviceId) return -1
         if (b.deviceId === deviceId) return 1

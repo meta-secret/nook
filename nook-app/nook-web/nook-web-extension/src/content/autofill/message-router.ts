@@ -58,7 +58,6 @@ type AutofillRuntimeMessageInput =
   | boolean
 
 export const routeAutofillMessage: AutofillMessageListener =
-  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
   (runtimeMessage: AutofillRuntimeMessageInput, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage

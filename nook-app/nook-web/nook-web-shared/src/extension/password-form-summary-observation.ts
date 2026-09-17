@@ -22,14 +22,12 @@ export class PasswordFormSummaryObservation {
       new PasswordFormFieldQuery(request).query,
     );
     const currentPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return passwordFieldDiscovery.hasAutocompleteToken({
         field,
         expected: "current-password",
       });
     }).length;
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return passwordFieldDiscovery.hasAutocompleteToken({
         field,
         expected: "new-password",

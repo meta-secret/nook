@@ -128,7 +128,6 @@ type CloudKitSharePresentationOptions = {
 
 export type CloudKitDatabase = {
   saveRecordZones: (zones: CloudKitRecordZones) => Promise<void>;
-  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   saveRecords: (
     records: CloudKitRecordBatch,
     options: CloudKitRecordSaveOptions,
@@ -207,7 +206,6 @@ type ExternalCloudKitContainer = Omit<
 };
 
 export type CloudKitAuthTokenStore = {
-  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   putToken: (containerIdentifier: string, authToken: string) => void;
   getToken: (containerIdentifier: string) => string | undefined;
 };
@@ -256,7 +254,6 @@ type CloudKitWebAuthTokenPersistence = {
 };
 
 export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
-  // eslint-disable-next-line max-params -- CloudKit owns this positional token-store callback signature.
   putToken(containerIdentifier, authToken) {
     log.debug("CloudKit putToken");
     const storeCloudKitWebAuthTokenArgs: Parameters<
@@ -332,13 +329,11 @@ const CloudKitUserIdentitySchema = Schema.Struct({
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
   addTokenListener(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     listener: (token: Result<string, OAuthFailure>) => void,
   ): void {
     this.webAuthTokenListeners.add(listener);
   }
   removeTokenListener(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     listener: (token: Result<string, OAuthFailure>) => void,
   ): void {
     this.webAuthTokenListeners.delete(listener);
@@ -348,7 +343,6 @@ class CloudKitRuntime {
   }
 
   private webAuthTokenListeners = new Set<
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     (token: Result<string, OAuthFailure>) => void
   >();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
@@ -597,7 +591,7 @@ class CloudKitRuntime {
       return ok(
         raw
           ? this.normalizeWebAuthToken(JSON.parse(raw))
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          :
             { kind: WebAuthTokenLookupKind.Unavailable },
       );
     } catch {
@@ -656,9 +650,7 @@ class CloudKitRuntime {
           `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
         );
         if (existing) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("load", loaded, { once: true });
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("error", failed, { once: true });
           return;
         }

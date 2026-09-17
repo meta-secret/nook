@@ -65,7 +65,6 @@ export class VaultArchitectureActions {
         return err(new NativeVaultStorageFailure(failure));
       }
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = allowed;
     return ok({
@@ -99,7 +98,6 @@ export class VaultArchitectureActions {
       architecture.free();
       return err(new NativeVaultStorageFailure(failure));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = false;
     state.draftDeviceMode = deviceMode;

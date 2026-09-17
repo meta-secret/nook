@@ -1,6 +1,6 @@
 import { StorageProviderPresentation } from "$lib/auth/providers";
 import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
-import { type Result } from "neverthrow";
+import { err, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -208,10 +208,8 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     promise,
     releaseLateValue,
   }: StorageTimeoutRace<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new VaultDiscoveryTimeout({
       timeoutMs: this.storageOpTimeoutMs,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     }).waitFor({ operation: promise, releaseLateValue });
   }
 

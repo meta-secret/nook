@@ -190,7 +190,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       passwordFields: ownedPasswordFields,
       usernameFields: ownedUsernameFields,
       oneTimeCodeFields: ownedOneTimeCodeFields,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     } = authenticationFieldIndexCatalog.fields({
       owner,
       passwordFields,
@@ -430,7 +429,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   authenticationUsernameEvidence(
     field: HTMLInputElement,
   ): AuthenticationUsernameEvidence {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const observation = this.pageInputObservation({
       field,
       loginContext: this.hasLoginContext(field),
@@ -445,7 +443,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeUsernameField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const observation = this.pageInputObservation({
       field,
       loginContext: this.hasLoginContext(field),
@@ -460,7 +457,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const observation = this.pageInputObservation({
       field,
       loginContext: false,
@@ -556,12 +552,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
     return (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.hasAutocompleteToken({
         field,
         expected: "username",
       }) ||
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.hasAutocompleteToken({
         field,
         expected: "email",

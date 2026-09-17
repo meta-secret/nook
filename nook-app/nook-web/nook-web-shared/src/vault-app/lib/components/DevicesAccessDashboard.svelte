@@ -167,7 +167,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   }
 
   function resetSelectedVaultForIdentity(): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     selectedVault = new IdentityVaultSelection({
       loadState,
       directoryLoadState,

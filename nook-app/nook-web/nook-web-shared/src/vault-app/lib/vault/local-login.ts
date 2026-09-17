@@ -574,7 +574,6 @@ export class VaultLoginActions {
       kind: PreviousVaultLabelKind.Missing,
     };
     const previousLabel = state.localVaults.reduce<PreviousVaultLabel>(
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       (current, vault) =>
         vault.storeId.trim() === trimmedStoreId
           ? { kind: PreviousVaultLabelKind.Present, label: vault.label }
@@ -658,7 +657,6 @@ export class VaultLoginActions {
     return state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return new AuthProviderPersistence({
         manager: manager.value,
         snapshot,

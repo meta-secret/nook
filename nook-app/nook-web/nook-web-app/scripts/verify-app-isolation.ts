@@ -161,7 +161,7 @@ function decodePagesWorker(value: unknown): PagesWorker {
     throw new Error('Public site Pages Function has an invalid worker contract.')
   }
   const worker = value.default
-  const fetchHandler = worker.fetch
+  const fetchHandler = value.default.fetch
   return {
     async fetch(request: Request, env: PagesWorkerEnvironment): Promise<Response> {
       const response: unknown = await fetchHandler.call(worker, request, env)

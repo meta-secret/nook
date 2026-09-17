@@ -66,7 +66,6 @@
   const t: VaultState["t"] = (request) => vault.t(request);
 
   function rosterLabel(key: I18nKey) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return t({
       key,
       replacements: { count: String(availableRosterSlots) },
@@ -74,7 +73,6 @@
   }
 
   function policyLabel(key: I18nKey) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return t({
       key,
       replacements: {
@@ -125,7 +123,6 @@
     Math.max(0, participantCount - rosterCount),
   );
   const policyDraft = $derived(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     evaluate_sentinel_policy_draft({
       participants: participantCount,
       threshold,
@@ -194,7 +191,6 @@
     if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return;
     actionBusy = true;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const started = await onStart({
         label: name.trim(),
         participantCount,
@@ -220,7 +216,6 @@
       return;
     actionBusy = true;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const added = await onAddParticipant({
         payload,
         participantLabel: participantLabel.trim(),

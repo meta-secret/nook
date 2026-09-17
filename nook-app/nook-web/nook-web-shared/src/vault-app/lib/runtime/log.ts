@@ -233,7 +233,6 @@ declare global {
     };
     /** Bridge for Rust `tracing` events to reach the original console. */
     __nookConsole?: {
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       echo: (level: LogLevel, text: string) => void;
     };
   }
@@ -280,22 +279,20 @@ class BrowserLogRuntime {
     if (readiness.kind === LogRuntimeReadinessKind.Ready) return;
     await readiness.completion;
   }
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  runtimeFailure(cause: unknown): RuntimeFailure {
+  runtimeFailure<NativeCause>(cause: NativeCause): RuntimeFailure {
     return new RuntimeFailure(
       cause instanceof Error
-        ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        ?
           {
             message: cause.message,
             ...(cause.stack ? { stack: cause.stack } : {}),
           }
-        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        :
           { message: String(cause) },
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  runtimeError(cause: unknown): Error {
+  runtimeError<NativeCause>(cause: NativeCause): Error {
     return cause instanceof Error ? cause : new Error(String(cause));
   }
 
@@ -410,7 +407,6 @@ class BrowserLogRuntime {
     }
   }
 
-  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   private hostEcho(level: LogLevel, text: string): void {
     const echoArgs: Parameters<typeof this.echo>[0] = { level, text };
     this.echo(echoArgs);
@@ -477,9 +473,7 @@ class BrowserLogRuntime {
     this.persistMessage(persistMessageArgs);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  isIgnoredErrorSource(source: unknown): boolean {
-    if (typeof source !== "string") return false;
+  isIgnoredErrorSource(source: string): boolean {
     const value = source.trim();
     if (!value) return false;
     return (
@@ -535,6 +529,7 @@ class BrowserLogRuntime {
     window.addEventListener("unhandledrejection", (event) => {
       if (
         event.reason instanceof Error &&
+        event.reason.stack &&
         this.isIgnoredErrorSource(event.reason.stack)
       )
         return;

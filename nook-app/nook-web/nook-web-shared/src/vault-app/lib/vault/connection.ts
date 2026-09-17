@@ -5,7 +5,7 @@ import { err as storageErr, ok as storageOk } from "neverthrow";
 import { VaultRecoveryErrorKind } from "$app-wasm";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
-import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type { VaultState } from "$lib/vault.svelte";
 import { VaultAccessStatus, type NookSecretRecord } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -39,7 +39,7 @@ type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
 
 /** Owns browser orchestration for one connection context. */
 export class VaultConnectionActions {
-  constructor(private readonly state: SyncActionsContext) {}
+  constructor(private readonly state: VaultState) {}
 
   private freeSecretRecords(records: SecretRecordCollection) {
     for (const record of records) record.free();
@@ -236,7 +236,6 @@ export class VaultConnectionActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
           operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
@@ -246,7 +245,6 @@ export class VaultConnectionActions {
         state.isAuthenticated = false;
         const surfaced = await new SentinelUnlockActions(
           state,
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         ).surfaceSentinelCeremonyIfNeeded({
           recoveryKind: rawRecords.error.recoveryKind,
         });

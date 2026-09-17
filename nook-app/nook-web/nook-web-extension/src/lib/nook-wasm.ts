@@ -195,7 +195,6 @@ class ExtensionWasmRuntime {
     decode: (response: unknown) => Response,
   ): Promise<Response> {
     // Promise owns this callback's resolve and reject signature.
-    // eslint-disable-next-line max-params
     return new Promise<Response>((resolve, reject) => {
 
       chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {

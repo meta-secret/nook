@@ -202,7 +202,6 @@ export class VaultOAuthActions {
     storageTargetId,
   }: SharedICloudTargetBinding): Result<OAuthFileConfig, OAuthFailure> {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         ...config,
         iCloudMode: "shared",
@@ -221,7 +220,6 @@ export class VaultOAuthActions {
       return;
     }
     if (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       !this.ensureSupportedOAuthOrigin({
         provider: BrowserOAuthProvider.GoogleDrive,
       })
@@ -234,7 +232,6 @@ export class VaultOAuthActions {
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
         (state.oauthFileDraft.config.driveMode === "shared" ||
           state.oauthFileDraft.config.folderId.state === "folderId");
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const tokens = await googleOAuthSession.requestGoogleAccessToken({
         prompt: GoogleOAuthPrompt.Consent,
         scope: shared
@@ -245,7 +242,6 @@ export class VaultOAuthActions {
         state.errorMsg = state.t(tokens.error.translationKey);
         return;
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const applied = await this.applyGoogleOAuthTokens({
         tokens: tokens.value,
       });
@@ -293,7 +289,6 @@ export class VaultOAuthActions {
       state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME,
     );
     if (target.isErr()) return err(target.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const bound = this.bindSharedICloudTarget({
       config: state.oauthFileDraft.config,
       storageTargetId: target.value.storageTargetId,
@@ -320,7 +315,6 @@ export class VaultOAuthActions {
     const target =
       await iCloudOAuthSession.acceptICloudSharedVault(shareReference);
     if (target.isErr()) return err(target.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const bound = this.bindSharedICloudTarget({
       config: state.oauthFileDraft.config,
       storageTargetId: target.value.storageTargetId,
@@ -470,7 +464,6 @@ export class VaultOAuthActions {
       return;
     }
     if (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       !this.ensureSupportedOAuthOrigin({
         provider: BrowserOAuthProvider.ICloud,
       })
@@ -490,7 +483,6 @@ export class VaultOAuthActions {
         return;
       }
       const tokens = await iCloudOAuthSession.requestPreparedICloudWebAuthToken(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         {
           clickSignInControl: clickPreparedControl,
           signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
@@ -500,7 +492,6 @@ export class VaultOAuthActions {
         state.errorMsg = state.t(tokens.error.translationKey);
         return;
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const applied = await this.applyICloudOAuthTokens({
         tokens: tokens.value,
       });
@@ -547,7 +538,7 @@ export class VaultOAuthActions {
       existing = configuredOAuthFile(
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          :
             defaultOAuthFileConfig({
               preset: "icloud",
               fileName: fallbackFileName,
@@ -556,7 +547,6 @@ export class VaultOAuthActions {
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const converted = iCloudOAuthSession.oauthTokensToICloudConfig({
       tokens,
       existing,
@@ -613,12 +603,11 @@ export class VaultOAuthActions {
       const previous =
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          :
             defaultOAuthFileConfig({
               preset: "google-drive",
               fileName: fallbackFileName,
             });
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       existing = configuredOAuthFile({
         ...previous,
         fileName:
@@ -633,7 +622,6 @@ export class VaultOAuthActions {
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const converted = googleOAuthSession.oauthTokensToConfig({
       tokens,
       existing,

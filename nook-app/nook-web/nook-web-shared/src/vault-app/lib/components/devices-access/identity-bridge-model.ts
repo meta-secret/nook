@@ -35,7 +35,6 @@ export class IdentityBridgePresentation {
       const identityY = 630;
       const vaultStartY = 920;
       const vaultNodes = verifiedVaults.map(
-        // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
         (vault, index) =>
           (() => {
             const vaultDataArgs: ConstructorParameters<
@@ -260,7 +259,6 @@ export class IdentityBridgePresentation {
       identityY - ((verifiedVaults.length - 1) * gap) / 2,
     );
     const vaultNodes = verifiedVaults.map(
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       (vault, index) =>
         (() => {
           const vaultDataArgs2: ConstructorParameters<

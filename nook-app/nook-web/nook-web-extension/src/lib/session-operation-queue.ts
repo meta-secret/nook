@@ -96,7 +96,6 @@ interface QueuedOperation {
 type QueuedSessionOperationConfiguration<T> = {
   readonly sequence: number
   readonly request: EnqueueSessionOperationArgs<T>
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   readonly resolve: (value: Result<T, SessionOperationFailure>) => void
   readonly remove: (entry: QueuedOperation) => void
 }
@@ -240,7 +239,6 @@ export class SessionOperationQueue {
     request: EnqueueSessionOperationArgs<T>,
   ): Promise<Result<T, SessionOperationFailure>> {
     return new Promise<Result<T, SessionOperationFailure>>((resolve) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const entry = new QueuedSessionOperation({
         sequence: this.sequence++,
         request,
@@ -254,7 +252,6 @@ export class SessionOperationQueue {
       this.entries.push(entry)
       entry.scheduleExpiry()
       this.entries.sort(
-        // eslint-disable-next-line max-params -- Array.sort owns the comparator signature.
         (left, right) =>
           priorityOrder[left.priority] - priorityOrder[right.priority] ||
           left.sequence - right.sequence,

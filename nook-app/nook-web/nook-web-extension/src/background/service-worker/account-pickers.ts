@@ -418,7 +418,6 @@ class AccountPickerSessions {
     const removals = await Promise.allSettled(
       pickerSurfaceTabIds.map(
         (tabId) =>
-          // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
           new Promise<void>((resolve, reject) => {
             const tabs = chrome.tabs as typeof chrome.tabs & {
               remove: RemoveAccountPickerSurface

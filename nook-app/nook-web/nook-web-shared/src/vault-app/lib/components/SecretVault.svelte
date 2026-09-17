@@ -120,7 +120,6 @@
   );
   let searchPattern = $derived(vault.secretQuery);
   let decryptedSecrets = $state<DecryptedSecrets>({});
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   let secretExposure = new SecretExposure({});
   let expandedSecrets = $state<Record<string, boolean>>({});
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
@@ -237,12 +236,10 @@
       .map(([site, items]) => ({
         site,
         items: items.sort(
-          // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
           (a, b) => a.type - b.type,
         ),
       }))
       .sort(
-        // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
         (a, b) => a.site.localeCompare(b.site),
       );
   });
@@ -293,7 +290,6 @@
 
   function resetTransientSecretViews() {
     secretExposure.free();
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     secretExposure = new SecretExposure({});
     decryptedSecrets = {};
     authenticatorCodes = {};
