@@ -448,6 +448,7 @@ jobs:
           .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs
           .github/workflows/lib/cache-telemetry.test.mjs
           .github/workflows/lib/cache-telemetry-split-log.test.mjs
+          .github/workflows/lib/compile-only-dockerfile.test.mjs
 
       - name: Install Bun for registry cache descriptor tests
         uses: oven-sh/setup-bun@v2

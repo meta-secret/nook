@@ -184,6 +184,11 @@ tasks:
         cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /ci-artifacts/summary.json
         cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /ci-artifacts/lcov.info
         cp nook-core/coverage-floor.json /ci-artifacts/coverage-floor.json
+
+  rust:ci:verify-built:
+    desc: Run native validation from a platform-scoped source image.
+    cmds:
+      - task: _rust:ci:verify-built
   sccache:ensure:
     desc: Require a healthy SeaweedFS S3 sccache backend before Rust/WASM builds.
     dir: '{{.REPO_ROOT}}'
