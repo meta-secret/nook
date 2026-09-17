@@ -9,7 +9,10 @@
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
   import type { SentinelParticipation } from "./sentinel-card-stack-contract";
-import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+import type {
+  SentinelActionResult,
+  SentinelGenesisParticipantResponseOutcome,
+} from "$lib/vault/sentinel-genesis";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { tick, type ComponentProps } from "svelte";
@@ -130,7 +133,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   let initiatorPasskeyRequested = $state(false);
   let importedParticipantResponse = $state("");
 
-  function participantActionFailure(): SentinelActionResult<void> {
+  function participantActionFailure(): SentinelActionResult<SentinelGenesisParticipantResponseOutcome> {
     return err(
       new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
     );
@@ -138,7 +141,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   function addCardParticipant(
     request: SentinelParticipation,
-  ): Promise<SentinelActionResult<void>> {
+  ): Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>> {
     return onAddSentinelGenesisParticipantResponse
       ? onAddSentinelGenesisParticipantResponse(request)
       : Promise.resolve(participantActionFailure());
@@ -146,7 +149,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   function addTerminalParticipant(
     payload: string,
-  ): Promise<SentinelActionResult<void>> {
+  ): Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>> {
     const terminalParticipantRequest: SentinelGenesisParticipation = {
       payload,
     };

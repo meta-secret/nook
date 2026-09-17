@@ -5,7 +5,14 @@ import type {
   StartSentinelGenesisArgs,
   VaultApplication,
 } from "$app-wasm";
-import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+import type {
+  SentinelActionResult,
+  SentinelGenesisDeliveryCompletionOutcome,
+  SentinelGenesisFinalizationOutcome,
+  SentinelGenesisParticipantResponseOutcome,
+  SentinelGenesisRequestMemoryOutcome,
+  SentinelGenesisShareDeliveryOutcome,
+} from "$lib/vault/sentinel-genesis";
 import type { VaultState } from "$lib/vault.svelte";
 
 export type SentinelGenesisParticipation = {
@@ -24,8 +31,10 @@ export type LoginCreateVaultChooserProps = {
   onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>;
   onAddSentinelGenesisParticipantResponse?: (
     args: SentinelGenesisParticipation,
-  ) => Promise<SentinelActionResult<void>>;
-  onFinalizeSentinelGenesis?: () => Promise<SentinelActionResult<void>>;
+  ) => Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>>;
+  onFinalizeSentinelGenesis?: () => Promise<
+    SentinelActionResult<SentinelGenesisFinalizationOutcome>
+  >;
   onCreateSentinelGenesisParticipantResponse?: (
     requestPayload: string,
   ) => Promise<SentinelActionResult<string>>;
@@ -34,11 +43,13 @@ export type LoginCreateVaultChooserProps = {
   >;
   onRememberSentinelGenesisRequest?: (
     requestPayload: string,
-  ) => Promise<SentinelActionResult<void>>;
+  ) => Promise<SentinelActionResult<SentinelGenesisRequestMemoryOutcome>>;
   onReceiveSentinelGenesisShare?: (
     sharePayload: string,
-  ) => Promise<SentinelActionResult<void>>;
-  onCompleteSentinelGenesisDelivery?: () => Promise<SentinelActionResult<void>>;
+  ) => Promise<SentinelActionResult<SentinelGenesisShareDeliveryOutcome>>;
+  onCompleteSentinelGenesisDelivery?: () => Promise<
+    SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>
+  >;
   sentinelGenesisPhase?: SentinelGenesisPhase;
   sentinelGenesisRequest?: string;
   sentinelGenesisParticipants?: NookSentinelGenesisParticipantStatus[];

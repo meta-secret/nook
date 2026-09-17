@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
+  import type {
+    SentinelActionResult,
+    SentinelGenesisRequestMemoryOutcome,
+    SentinelGenesisShareDeliveryOutcome,
+  } from '$lib/vault/sentinel-genesis'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Copy, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -30,10 +34,10 @@
     ) => Promise<SentinelActionResult<string>>
     onRememberRequest?: (
       requestPayload: string,
-    ) => Promise<SentinelActionResult<void>>
+    ) => Promise<SentinelActionResult<SentinelGenesisRequestMemoryOutcome>>
     onReceiveShare?: (
       sharePayload: string,
-    ) => Promise<SentinelActionResult<void>>
+    ) => Promise<SentinelActionResult<SentinelGenesisShareDeliveryOutcome>>
     onAcceptOnboardingPackage?: (packageJson: string) => void | Promise<void>
     onFinishSentinelInvitation?: () => void
   } = $props()

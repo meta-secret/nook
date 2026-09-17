@@ -5,7 +5,12 @@ import type {
   StartSentinelGenesisArgs,
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
-import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+import type {
+  SentinelActionResult,
+  SentinelGenesisDeliveryCompletionOutcome,
+  SentinelGenesisFinalizationOutcome,
+  SentinelGenesisParticipantResponseOutcome,
+} from "$lib/vault/sentinel-genesis";
 
 export type SentinelParticipation = {
   readonly payload: string;
@@ -30,7 +35,7 @@ export type SentinelCardStackProperties = {
   onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
   onAddParticipant: (
     args: SentinelParticipation,
-  ) => Promise<SentinelActionResult<void>>;
-  onFinalize: () => Promise<SentinelActionResult<void>>;
-  onCompleteDelivery: () => Promise<SentinelActionResult<void>>;
+  ) => Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>>;
+  onFinalize: () => Promise<SentinelActionResult<SentinelGenesisFinalizationOutcome>>;
+  onCompleteDelivery: () => Promise<SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>>;
 };

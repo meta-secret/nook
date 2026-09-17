@@ -1,5 +1,10 @@
 <script lang="ts">
-  import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+  import type {
+    SentinelActionResult,
+    SentinelGenesisDeliveryCompletionOutcome,
+    SentinelGenesisFinalizationOutcome,
+    SentinelGenesisParticipantResponseOutcome,
+  } from "$lib/vault/sentinel-genesis";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     ArrowLeft,
@@ -58,9 +63,9 @@
     isBusy: boolean;
     onBack: () => void;
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
-    onAddParticipant: (payload: string) => Promise<SentinelActionResult<void>>;
-    onFinalize: () => Promise<SentinelActionResult<void>>;
-    onCompleteDelivery: () => Promise<SentinelActionResult<void>>;
+    onAddParticipant: (payload: string) => Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>>;
+    onFinalize: () => Promise<SentinelActionResult<SentinelGenesisFinalizationOutcome>>;
+    onCompleteDelivery: () => Promise<SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>>;
   } = $props();
 
   let policyStep = $state<SentinelTerminalPolicyStep>(
