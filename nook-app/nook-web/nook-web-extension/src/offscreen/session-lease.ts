@@ -4,6 +4,10 @@ export enum ExtensionSessionLeaseFailure {
   Locked = 'EXTENSION_SESSION_LOCKED',
 }
 
+export enum ExtensionSessionLeaseRenewal {
+  Renewed = 'EXTENSION_SESSION_LEASE_RENEWED',
+}
+
 enum ExtensionSessionLeaseKind {
   Active = 'active',
   Expired = 'expired',
@@ -53,7 +57,7 @@ export class ActiveExtensionSessionLease {
 
   renew(
     generation: ExtensionSessionGeneration,
-  ): Result<void, ExtensionSessionLeaseFailure> {
+  ): Result<ExtensionSessionLeaseRenewal, ExtensionSessionLeaseFailure> {
     const active = this.state
     if (
       active.kind !== ExtensionSessionLeaseKind.Active ||
@@ -67,7 +71,7 @@ export class ActiveExtensionSessionLease {
       deadline: Date.now() + this.request.durationMs,
       timer: setTimeout(() => this.expire(), this.request.durationMs),
     }
-    return ok()
+    return ok(ExtensionSessionLeaseRenewal.Renewed)
   }
 
   stop(): void {
