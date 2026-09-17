@@ -69,7 +69,7 @@ type ChromeRuntimeResponseCallback = (
 ) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError?: { readonly message?: string };
+  readonly lastError: typeof globalThis.chrome.runtime.lastError;
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
