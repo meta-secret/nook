@@ -57,7 +57,7 @@ type ChromeRuntimeResponseCallback = (
 ) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError?: { readonly message?: string };
+  readonly lastError: { readonly message?: string } | undefined;
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
@@ -304,7 +304,6 @@ class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
   private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-    if (!("lastError" in runtime)) return false;
     const error = runtime.lastError;
     return (
       typeof error === "object" &&
