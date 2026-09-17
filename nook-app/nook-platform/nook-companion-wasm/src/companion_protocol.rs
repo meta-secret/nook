@@ -394,7 +394,7 @@ mod admission_tests {
 
     #[test]
     fn paired_vault_handoff_message_decoder_validates_and_cleans_material()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> Result<(), serde_json::Error> {
         let json = r#"{
             "type":"nook:extension-paired-vault-identity-handoff-request",
             "payload":{
@@ -427,12 +427,9 @@ mod admission_tests {
         let mut admission = serde_json::from_str::<
             ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
         >(&invalid)?;
-        let Err(error) = admission.decode() else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "blank recipient key must be rejected",
-            )
-            .into());
+        let error = match admission.decode() {
+            Err(error) => error,
+            Ok(_) => panic!("blank recipient key must be rejected"),
         };
         assert_eq!(
             error,
