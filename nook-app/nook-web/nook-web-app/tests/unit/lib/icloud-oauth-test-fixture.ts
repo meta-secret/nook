@@ -3,8 +3,10 @@ import type { CloudKitUserIdentity } from '$lib/auth/icloud/cloudkit-runtime'
 
 /** Owns checked access to the optional CloudKit host installed by these tests. */
 export class ICloudOAuthTestFixture {
-  static resolvedUserIdentity() {
-    return vi.fn(async (): Promise<CloudKitUserIdentity> => ({}))
+  static resolvedSignedOutIdentity() {
+    return vi.fn(
+      async (): Promise<CloudKitUserIdentity | undefined> => undefined,
+    )
   }
 
   static cloudKit(): NonNullable<typeof window.CloudKit> {

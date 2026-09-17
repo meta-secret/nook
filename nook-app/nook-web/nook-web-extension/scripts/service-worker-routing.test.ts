@@ -72,7 +72,7 @@ const {
 
 const routedGrant: StoredExtensionPairingGrant = {
   vaultType: 'simple',
-  vaultStoreId: 'vault-1',
+  vaultStoreId: 'store_abcdefghijk',
   deviceId: 'device-1',
   devicePublicKey: 'device-public-key',
   deviceSigningPublicKey: 'device-signing-public-key',
@@ -615,7 +615,7 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',
@@ -693,7 +693,7 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',
@@ -732,7 +732,7 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',

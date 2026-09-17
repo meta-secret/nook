@@ -297,7 +297,7 @@ describe('extension pairing grant transport', () => {
           kind: 'Authorized',
           grant: {
             ...storedGrant,
-            vaultStoreId: 'store_otherabcdefghijk',
+            vaultStoreId: 'store_otherid0001',
           },
         })
       },
@@ -323,8 +323,7 @@ describe('extension pairing grant transport', () => {
     freePairingVaultId.mockRestore()
   })
   test('rejects an invalid wire vault ID before allocating a wrapper', async () => {
-    const policy = await extensionPairingGrantPolicyReady
-    const key = policy.pairingGrantStorageKey('vault')
+    await extensionPairingGrantPolicyReady
     const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
     const session = new PairingSessionTransportFixture({
       deliver: async (message) => {
@@ -337,7 +336,7 @@ describe('extension pairing grant transport', () => {
     const response = await importLocalEventLogUpdateWithDependencies({
       vaultStoreId: 'vault',
       eventLogRecords: [],
-      loadPairingStorage: async () => ({ [key]: storedGrant }),
+      loadPairingStorage: async () => ({}),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
       ensureSession: async () => ok(unusedSessionTransport),
       importEventLog: async () => ({
@@ -363,7 +362,7 @@ describe('extension pairing grant transport', () => {
       {},
       {
         kind: 'Authorized',
-        grant: { ...storedGrant, vaultStoreId: 'store_otherabcdefghijk' },
+        grant: { ...storedGrant, vaultStoreId: 'store_otherid0001' },
       },
     ]) {
       const requested = new NookPairingVaultId(storedGrant.vaultStoreId)
@@ -443,7 +442,8 @@ describe('extension pairing grant transport', () => {
     'rejects %s before importing or updating a session',
     async (scenario) => {
       const policy = await extensionPairingGrantPolicyReady
-      const key = policy.pairingGrantStorageKey('unpaired-vault')
+      const unpairedVaultStoreId = 'store_unpaired001'
+      const key = policy.pairingGrantStorageKey(unpairedVaultStoreId)
       const loadPairingStorage = mock(() =>
         scenario === 'serialization-failed'
           ? Promise.resolve(
@@ -482,7 +482,7 @@ describe('extension pairing grant transport', () => {
           }
           expect(message.payload).toEqual({
             stored_json: JSON.stringify(await loadPairingStorage()),
-            vault_store_id: 'unpaired-vault',
+            vault_store_id: unpairedVaultStoreId,
             queue: { kind: 'message-default' },
           })
           return ok({
@@ -498,7 +498,7 @@ describe('extension pairing grant transport', () => {
       const response = await importLocalEventLogUpdateWithDependencies({
         ensureSession: async () => ok(unusedSessionTransport),
         persistPairingStorage: unusedOperation,
-        vaultStoreId: 'unpaired-vault',
+        vaultStoreId: unpairedVaultStoreId,
         eventLogRecords: [],
         loadPairingStorage,
         pairingPolicyReady:

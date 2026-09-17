@@ -15,7 +15,7 @@ const readySetup: ExtensionReadySetupState = {
   status: 'ready',
   deviceLabel: 'Nook Extension',
   pairedVaults: ['Personal'],
-  selectedVaultStoreId: 'vault-1',
+  selectedVaultStoreId: 'store_abcdefghijk',
   selectedVaultName: 'Personal',
   syncProviderCount: 0,
   eventCount: 1,

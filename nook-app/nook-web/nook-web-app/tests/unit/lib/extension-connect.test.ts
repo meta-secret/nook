@@ -563,7 +563,10 @@ describe('extension pairing approved message', () => {
       id: 'github-1',
       type: 'github',
       label: 'Personal GitHub',
-      githubPat: { state: 'token', value: 'github_pat_secret' },
+      githubPat: {
+        state: 'token',
+        value: '-----BEGIN AGE ENCRYPTED FILE-----\\nfixture',
+      },
       githubRepo: { state: 'defaultRepository' },
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
@@ -893,14 +896,14 @@ describe('extension pairing approved message', () => {
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
         deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store_otherabcdefghijk',
+        vaultStoreId: 'store_otherid0001',
         vaultName: 'Work',
         approvedAt: 1_783_929_600_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         syncProviderCount: 0,
       },
       imported: {
-        vaultStoreId: 'store_otherabcdefghijk',
+        vaultStoreId: 'store_otherid0001',
         eventCount: 4,
         heads: ['event-4'],
         accessGranted: true,
@@ -911,7 +914,7 @@ describe('extension pairing approved message', () => {
 
     const removalArgs: Parameters<typeof setupAfterPairingGrantRemoval>[0] = {
       stored,
-      removedVaultStoreId: 'store_otherabcdefghijk',
+      removedVaultStoreId: 'store_otherid0001',
     }
     const restored = setupAfterPairingGrantRemoval(removalArgs)
     if (restored.kind !== 'ready') {
@@ -921,13 +924,13 @@ describe('extension pairing approved message', () => {
     expect(restored.setup.selectedVaultName).toBe('Personal')
     expect(restored.setup.eventCount).toBe(2)
     expect(selectedPairingGrantFirst(stored)[0]?.vaultStoreId).toBe(
-      'store_otherabcdefghijk',
+      'store_otherid0001',
     )
     const selected = selectedPairingGrant(stored)
     if (selected.kind !== 'selected') {
       throw new Error('expected the newest paired vault to be selected')
     }
-    expect(selected.grant.vaultStoreId).toBe('store_otherabcdefghijk')
+    expect(selected.grant.vaultStoreId).toBe('store_otherid0001')
   })
 
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
@@ -995,9 +998,9 @@ describe('extension pairing approved message', () => {
     expect(
       migratedLegacyPairingStorageItems({
         [key]: legacyGrant,
-        [pairingGrantStorageKey('store_otherabcdefghijk')]: {
+        [pairingGrantStorageKey('store_otherid0001')]: {
           ...legacyGrant,
-          vaultStoreId: 'store_otherabcdefghijk',
+          vaultStoreId: 'store_otherid0001',
         },
         [setupStorageKey]: legacySetup,
       }),
