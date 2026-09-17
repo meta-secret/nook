@@ -9,7 +9,10 @@ import {
   type ICloudWebAuthTokenRequest,
   iCloudOAuthSession,
 } from '$lib/auth/icloud/oauth'
-import type { CloudKitUserIdentity } from '$lib/auth/icloud/cloudkit-runtime'
+import {
+  CloudKitIdentityKind,
+  type CloudKitIdentity,
+} from '$lib/auth/icloud/auth-state'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 import { ICloudOAuthTestFixture } from './icloud-oauth-test-fixture'
 
@@ -19,7 +22,9 @@ import {
 } from '$lib/auth/icloud/config'
 
 function resolvedCloudKitEffect() {
-  return vi.fn(async (): Promise<CloudKitUserIdentity> => ({}))
+  return vi.fn(async (): Promise<CloudKitIdentity> => ({
+    kind: CloudKitIdentityKind.SignedOut,
+  }))
 }
 
 function defaultICloudWebAuthTokenRequest(): ICloudWebAuthTokenRequest {

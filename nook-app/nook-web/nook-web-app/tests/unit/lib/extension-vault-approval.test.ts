@@ -98,6 +98,7 @@ class ExtensionApprovalTestFixture {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.clearAllMocks()
   defaultStoreIdFree.mockReset()
   wasm.approveExtensionDevice.mockImplementation(async () => ({
     get storeId() {
@@ -342,7 +343,7 @@ describe('extension vault approval', () => {
     const delivered = await approval.deliver(prepared.value)
 
     expect(delivered.isErr() ? delivered.error.kind : delivered.value).toBe(
-      VaultStorageFailureKind.ExtensionApprovalContextChanged,
+      VaultStorageFailureKind.GenerationChanged,
     )
     expect(deliver).not.toHaveBeenCalled()
   })

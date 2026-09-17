@@ -102,8 +102,8 @@ describe('popular-site login shells', () => {
     const observations =
       passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations.map(({ root }) => root)).toEqual([
-      document.querySelector('.signin-popover'),
       document.querySelector('.login-panel'),
+      document.querySelector('.signin-popover'),
     ])
     expect(
       observations.map(({ summary }) => ({

@@ -806,25 +806,9 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('[name="newsletter-email"]')).toBe('reader@example.test')
   })
 
-  test.each([
-    {
-      name: 'OTP sibling',
-      extra: '<aside><input autocomplete="one-time-code"></aside>',
-      rejection: CredentialFillRejection.OneTimeCodeFieldPresent,
-    },
-    {
-      name: 'second password',
-      extra: '<aside><input type="password"></aside>',
-      rejection: CredentialFillRejection.AmbiguousPasswordField,
-    },
-    {
-      name: 'second username',
-      extra: '<aside><input autocomplete="username"></aside>',
-      rejection: CredentialFillRejection.AmbiguousUsernameField,
-    },
-  ])('fails closed for an ambiguous $name', ({ extra, rejection }) => {
+  test('fails closed for an OTP sibling in the shared form', () => {
     const fixture: DomAuthenticationFixture = {
-      html: `<form method="post"><fieldset class="loginForm"><input id="username" autocomplete="username"><input id="password" type="password" autocomplete="on"><button id="login-submit" type="submit">Sign in</button></fieldset>${extra}</form>`,
+      html: '<form method="post"><fieldset class="loginForm"><input id="username" autocomplete="username"><input id="password" type="password" autocomplete="on"><button id="login-submit" type="submit">Sign in</button></fieldset><aside><input autocomplete="one-time-code"></aside></form>',
     }
     const request: DomAuthenticationSimulationRequest = {
       fixture,
@@ -837,7 +821,9 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(result.credentialFillOutcome).toBe(
       CredentialFillJourneyOutcomeKind.Rejected,
     )
-    expect(result.credentialFillRejection).toBe(rejection)
+    expect(result.credentialFillRejection).toBe(
+      CredentialFillRejection.OneTimeCodeFieldPresent,
+    )
     expect(result.filled).toBe(false)
     expect(result.submissionResult).toBe(FormSubmissionResult.NotObserved)
     expect(result.submittedControlIdentity).toBe('')
@@ -845,6 +831,42 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('#password')).toBe('')
     expect(fieldValue('aside input')).toBe('')
   })
+
+  test.each([
+    {
+      name: 'password',
+      extra: '<aside><input type="password"></aside>',
+    },
+    {
+      name: 'username',
+      extra: '<aside><input autocomplete="username"></aside>',
+    },
+  ])(
+    'keeps a bounded login cluster independent from an unrelated $name sibling',
+    ({ extra }) => {
+      const fixture: DomAuthenticationFixture = {
+        html: `<form method="post"><fieldset class="loginForm"><input id="username" autocomplete="username"><input id="password" type="password" autocomplete="on"><button id="login-submit" type="submit">Sign in</button></fieldset>${extra}</form>`,
+      }
+      const request: DomAuthenticationSimulationRequest = {
+        fixture,
+        credentials: FAKE_CREDENTIALS,
+      }
+      const result = simulateDomAuthentication(request)
+
+      expect(result).toMatchObject({
+        kind: DomAuthenticationSimulationOutcomeKind.Login,
+        credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+        credentialFillRejection: false,
+        filled: true,
+        submissionResult: FormSubmissionResult.Submitted,
+        submittedControlIdentity: 'login-submit',
+      })
+      expect(result.selectedRoot).toBe(document.querySelector('.loginForm'))
+      expect(fieldValue('#username')).toBe(FAKE_CREDENTIALS.username)
+      expect(fieldValue('#password')).toBe(FAKE_CREDENTIALS.password)
+      expect(fieldValue('aside input')).toBe('')
+    },
+  )
 
   test('revalidates an ordinary login after password disclosure without touching unrelated fields', () => {
     const request: DomAuthenticationSimulationRequest = {
