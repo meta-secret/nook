@@ -60,7 +60,7 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
+
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
@@ -453,7 +453,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   }
 
   listener(): Parameters<typeof chrome.runtime.onMessage.addListener>[0] {
-    // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     return (message: SessionRuntimeMessageInput, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
       if (
@@ -573,7 +572,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           : this.enqueue(request)
         void response.then((result) =>
           result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )
