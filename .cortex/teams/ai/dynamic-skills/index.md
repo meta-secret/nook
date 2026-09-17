@@ -116,7 +116,12 @@ catalogs the linked authorities without copying their policies.
     - Nest same-prefix closed vocabularies into parent objects plus operation
       enums.
     - Use field enums instead of string sets.
-    - Use shared `neverthrow` Result values; prohibit competing local wrappers.
+    - Use Effect's typed error channel for effectful workflows; prohibit new
+      `neverthrow` and hand-rolled Promise error workflows.
+- **[typescript-effect.md](../../web-dev/dynamic-skills/typescript-effect.md)**
+  - Purpose: Require Effect for new or materially changed TypeScript workflows
+    that model async work, expected failure, resources, concurrency, services,
+    or untrusted boundary decoding while preserving Rust/WASM ownership.
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
 - **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**

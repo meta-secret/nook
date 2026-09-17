@@ -70,9 +70,9 @@ will implement named files.
 
 ## Authored implementation routing
 
-An AI Team Agent that authors TypeScript or JavaScript, including an executable
-skill or its tests, loads and applies these read-only authorities before
-editing:
+An AI Team Agent that authors TypeScript, JavaScript, or Svelte, including an
+executable skill or its tests, loads and applies these read-only authorities
+before editing:
 
 - [Function ownership](../../shared/dynamic-skills/function-ownership.md)
   assigns every authored function to a meaningful owner. An unowned function
@@ -80,6 +80,11 @@ editing:
 - [TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)
   requires named state and normalizes authored absence. It forbids authored
   `null`, `undefined`, and value-or-`void` contracts.
+- [TypeScript Effect Workflows](../web-dev/dynamic-skills/typescript-effect.md)
+  governs effectful workflows, typed expected failures, untrusted boundary
+  decoding, effectful dependencies, resources, concurrency, observability, and
+  runtime boundaries. Pure calculations, inert declarations, and Svelte
+  rendering remain outside Effect.
 - [Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)
   routes named types, one-parameter requests, typed failures, and schema or
   migration decisions.
@@ -170,8 +175,8 @@ feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
 or formatting. Older instructions to run Loom tests, audits, preflight, or
 broad pre-push commands are not local or feature-stage permissions.
 
-For an AI packet that authors TypeScript or JavaScript, the acceptance packet
-must name the authoritative checks below:
+For an AI packet that authors TypeScript, JavaScript, or Svelte, the acceptance
+packet must name the authoritative checks below:
 
 - `task loom:verify` checks Loom and every executable-skill package. It does
   not replace repository-wide TypeScript state checks or semantic ownership

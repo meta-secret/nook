@@ -203,8 +203,10 @@ selection, narrow external boundaries, and language-specific authorities.
 
 Every authored TypeScript, JavaScript, or Svelte source also follows the
 read-only [TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md)
-authority. It owns explicit absence, discriminated state, enum-backed closed
-vocabularies, and the prohibition on authored `null` or `undefined`.
+and [TypeScript Effect Workflows](teams/web-dev/dynamic-skills/typescript-effect.md)
+authorities. Explicit state owns semantic absence and closed states. The Effect
+policy governs effectful TypeScript workflows and their failure, service,
+resource, concurrency, and boundary-decoding structure.
 
 ### Domain APIs
 
