@@ -223,10 +223,14 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
 }
 
 #[test]
-fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
+fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     let root = RepositoryFixture::repository_root();
     let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
     let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
+    let production_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let workflow = root.read(".github/workflows/remote.yml");
+    let runtime_proof = root.read("infra/tasks/bake-cache.yml");
 
     for path in [
         "infra/sim/bake-cache/inputs/compile-base.txt",
@@ -254,12 +258,29 @@ fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
     assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
     assert!(!dockerfile.contains("ci-agent"));
     assert!(bake.contains("target \"compile-warm\""));
-    assert!(bake.contains("COMPILE_RESTORE_SOURCE_SCOPE"));
-    assert!(bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true"));
+    assert!(bake.contains("COMPILE_PARENT_SOURCE_SCOPE"));
+    assert!(bake.contains("nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}"));
+    assert!(bake.contains("nook-bake-sim-compile-${COMPILE_PARENT_SOURCE_SCOPE}"));
+    assert!(bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(!bake.contains("nook-bake-sim-compile-v"));
+    assert!(!bake.contains("ignore-error=true"));
     assert!(!bake.contains("compile_deps_cache_to"));
     assert!(!bake.contains("target \"compile-dependency-cache\""));
     assert!(!bake.contains("target \"compile-seed"));
     assert!(!bake.contains("SEED_SCOPE"));
+    assert!(!bake.contains("RUST_DEPS_INPUT_FINGERPRINT"));
+    assert!(production_bake.contains("variable \"GHA_CACHE_PARENT_SCOPE_SUFFIX\""));
+    assert!(production_bake.contains("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}"));
+    assert!(production_bake.contains("nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}"));
+    assert!(!production_bake.contains("nook-build-compile-v"));
+    assert!(production_bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(!production_bake.contains("ignore-error=true"));
+    assert!(setup.contains("git rev-parse --verify HEAD^1"));
+    assert!(setup.contains("GHA_CACHE_PARENT_SCOPE_SUFFIX"));
+    assert!(setup.contains("Verify registry transport for Docker cache"));
+    assert!(workflow.contains("build:compile' && 5 || 360"));
+    assert!(runtime_proof.contains("Scenario AA: cold compile cache seeds exact head"));
+    assert!(runtime_proof.contains("Scenario AB: successor head imports parent lineage"));
 }
 
 fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {

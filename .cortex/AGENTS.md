@@ -227,6 +227,9 @@ and apply the complete relevant authority set before editing.
   [single parameters](teams/web-dev/dynamic-skills/typescript-single-parameter.md),
   and [named call arguments](teams/web-dev/dynamic-skills/typescript-named-args.md)
   form the universal TypeScript modeling baseline.
+- [TypeScript Effect Workflows](teams/web-dev/dynamic-skills/typescript-effect.md)
+  governs effectful workflows and their failure, service, resource,
+  concurrency, and boundary-decoding structure.
 - [Source file size](shared/dynamic-skills/source-file-size.md) governs source
   structure.
 - [Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)

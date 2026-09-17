@@ -62,9 +62,11 @@ placing domain decisions on these types.
 - Use one named domain or operation request when an API needs multiple values.
 - Construct independent request values with named fields.
 - Return a domain-specific failure with a stable kind or code.
-- Use `neverthrow` `Result<T, E>` for authored TypeScript failure-capable APIs.
-- Use `Promise<Result<T, E>>` or `ResultAsync<T, E>` for asynchronous failures.
-- Handle or propagate both alternatives explicitly at every caller.
+- For TypeScript effectful workflows, follow the Web-owned
+  [TypeScript Effect Workflows](../../teams/web-dev/dynamic-skills/typescript-effect.md)
+  policy.
+- Keep expected TypeScript failures tagged and in Effect's typed error channel.
+- Handle or propagate typed failures explicitly at every caller.
 - Translate foreign exceptions into concrete failures at the narrow adapter.
 - Retain Rust's standard `Result<T, E>` for fallible operations.
 - Preserve a typed source when one operation fails because another operation
@@ -119,7 +121,8 @@ placing domain decisions on these types.
   hide independent request values.
 - Do not throw to propagate authored TypeScript domain or application failures.
 - Do not use unchecked Result extraction or convert an error into a fake success.
-- Do not duplicate the shared `neverthrow` convention with local Result wrappers.
+- Do not add a TypeScript failure abstraction that competes with Effect for an
+  effectful workflow.
 - Do not introduce generic optional-value or catch-all error wrappers that erase meaning.
 - Do not catch or convert a failure unless the current owner adds domain
   meaning, recovery, or boundary translation.
@@ -156,6 +159,7 @@ Its secret lifetime still follows the security authority above.
 - TypeScript follows
   [domain structure](../../teams/web-dev/dynamic-skills/typescript-domain-structure.md),
   [explicit state](../../teams/web-dev/dynamic-skills/typescript-explicit-state.md),
+  [Effect workflows](../../teams/web-dev/dynamic-skills/typescript-effect.md),
   [concrete values](../../teams/web-dev/dynamic-skills/typescript-no-unknown.md),
   and [single parameter](../../teams/web-dev/dynamic-skills/typescript-single-parameter.md).
 - Rust owns portable product, security, persistence, and wire vocabulary.

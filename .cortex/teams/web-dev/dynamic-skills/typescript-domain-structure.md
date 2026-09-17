@@ -11,7 +11,9 @@
 Keep TypeScript domain models typed by meaning, nested, and enum-driven. A raw
 representation does not carry the metadata that makes a domain value safe to
 use. Treat raw domain primitives, inline unions, raw-string field allow-lists,
-and local Result or Maybe copies as forbidden. Use the shared `neverthrow` Result convention.
+and local Result or Maybe copies as forbidden. Use the Web-owned
+[TypeScript Effect Workflows](typescript-effect.md) policy for effectful
+workflows and typed failures.
 
 This is the TypeScript form of Rust's domain-newtype rule. A domain type must
 make its meaning visible at the declaration, field, parameter, return, and
@@ -66,8 +68,9 @@ boundary where it is used.
   adapters.
 - Create branded and opaque values through a named parser or validating
   factory. Keep the brand token and unchecked construction private.
-- Return `Result<T, E>` with a concrete failure when external input cannot become the domain type.
-- Propagate or handle Result errors explicitly; do not throw them.
+- Decode untrusted values at the boundary with Effect Schema when the workflow
+  is effectful. Keep decoding failures in its typed error channel.
+- Propagate or handle Effect failures explicitly; do not throw expected failures.
 - Give actionable failures a stable enum kind or code.
 - Preserve the concrete source error when translating a lower-level failure.
 - Catch a failure only when the current owner adds domain meaning, recovery, or
@@ -185,13 +188,16 @@ Same-prefix names almost always mean a separate object was flattened. Generic
   `Record<string, string>` or string-set field allow-lists.
 - Closed failure codes are enums. Freeform detail text may accompany an enum
   code at an I/O boundary; the discriminant itself is never a bare string.
-- Use `neverthrow` `Result<T, E>` for TypeScript failure values.
+- Use Effect's typed error channel for expected failures in effectful workflows.
+- Do not introduce `neverthrow` or hand-rolled Promise error workflows for new
+  or materially changed code.
 - Do not invent competing Result or optional-value wrappers.
 - Rust uses its standard Result.
 - YAML decode may accumulate field issues in a **codec-local** type
   (`DecodeOutcome`, `DecodeStatus`, `FieldIssue`). That type must stay in the
   codec layer and must not become a repo-wide Result utility.
-- Command and runtime failures return `Result<T, E>` from `neverthrow`.
+- Effectful command and runtime workflows return Effect values with tagged
+  failure types in the typed error channel.
 - Keep `E` concrete, with its domain code and context.
 - Catch foreign exceptions only at the adapter that admits them.
 - Optional request fields that mean a named state become domain unions
