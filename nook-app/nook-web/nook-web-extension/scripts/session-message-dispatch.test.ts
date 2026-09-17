@@ -3,7 +3,7 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
@@ -15,14 +15,25 @@ import {
   type ExtensionSessionQueue,
   type ParsedExtensionSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
-import type {
-  NookVaultManager,
-  StorageProvider,
+import initNookWasm, {
+  type NookVaultManager,
+  type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
 } from '../src/lib/browser-runtime-message'
+
+beforeAll(async () => {
+  await initNookWasm({
+    module_or_path: await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer(),
+  })
+})
 class SessionMessageWireFixture {
   pin(message: ParsedExtensionSessionTransportRequest): string {
     if (
@@ -76,7 +87,7 @@ const sessionMessageWireFixture = new SessionMessageWireFixture()
 const decodeProviders = sessionMessageWireFixture.decodeProviders
 function githubProvider(token: string): StorageProvider {
   return {
-    id: 'provider',
+    id: 'github',
     type: 'github',
     label: 'GitHub',
     githubPat: { state: 'token', value: token },
@@ -85,7 +96,7 @@ function githubProvider(token: string): StorageProvider {
     localFolder: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     syncCheckpoint: { state: 'neverSynced' },
-    createdAt: '2026-08-10T00:00:00Z',
+    createdAt: '2026-08-10T00:00:00.000Z',
   }
 }
 function vaultImportRequest(
@@ -98,7 +109,7 @@ function vaultImportRequest(
   return {
     type: ExtensionSessionMessageType.ImportVault,
     payload: {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -117,6 +128,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const blocked = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
     const events: string[] = []
+    const classifiedInputs: { stored: string; vault: string }[] = []
     Object.assign(globalThis, {
       chrome: {
         runtime: {
@@ -145,8 +157,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
           'block-finished',
           'interactive',
         ])
-        expect(stored).toBe('{}')
-        expect(vault.value).toBe('vault')
+        classifiedInputs.push({ stored, vault: String(vault) })
         events.push('classified')
         return { kind: 'NoMatchingAuthority' as const }
       },
@@ -210,7 +221,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await started.promise
     const payload = {
       stored_json: '{}',
-      vault_store_id: 'vault',
+      vault_store_id: 'store_abcdefghijk',
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     const response = Promise.withResolvers<unknown>()
@@ -241,6 +252,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ])
     expect(payload.stored_json).toBe('')
     expect(stagedPayloads).toHaveLength(1)
+    expect(classifiedInputs).toEqual([
+      { stored: '{}', vault: 'store_abcdefghijk' },
+    ])
     const [stagedPayload] = stagedPayloads
     if (!stagedPayload) throw new Error('dispatcher must stage one payload')
     expect(stagedPayload.stored_json).toBe('')
@@ -269,7 +283,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   test('rejects malformed backup codes without normalizing them into an empty replacement', async () => {
     const payload = {
       origin: 'https://example.com',
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       secretId: 'authenticator',
       codes: { malformed: true },
       mode: 'replace',
@@ -284,7 +298,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
   test('rejects malformed provider and event-log elements at Rust ingress', async () => {
     const grant = {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -315,7 +329,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const message = {
       type: ExtensionSessionMessageType.UpdateVault,
       payload: {
-        vaultStoreId: 'vault',
+        vaultStoreId: 'store_abcdefghijk',
         deviceId: 'device',
         devicePublicKey: 'public',
         deviceSigningPublicKey: 'signing',
@@ -347,17 +361,21 @@ describe('ExtensionSessionMessageDispatcher', () => {
       id: 'github',
       type: 'github',
       label: 'Personal GitHub',
-      githubPat: { state: 'token', value: 'secret' },
+      githubPat: {
+        state: 'token',
+        value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
+      },
       githubRepo: { state: 'defaultRepository' },
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-08-10T00:00:00Z',
     }
     const message = {
       type: ExtensionSessionMessageType.ImportVault,
       payload: {
-        vaultStoreId: 'vault',
+        vaultStoreId: 'store_abcdefghijk',
         deviceId: 'device',
         devicePublicKey: 'public',
         deviceSigningPublicKey: 'signing',
@@ -377,7 +395,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(stagedProvider.label).toBe('Personal GitHub')
     expect(stagedProvider.githubPat).toEqual({
       state: 'token',
-      value: 'secret',
+      value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
     })
     expect(provider).toHaveProperty('githubPat.state', 'missing')
   })
@@ -414,7 +432,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
   test('keeps a login-save plan after its submitting document navigates', async () => {
     const payload = {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -446,7 +464,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
     const payload = {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -468,7 +486,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       ExtensionSessionMessageType.AssertPasskey,
     ]) {
       const payload = {
-        vaultStoreId: 'vault',
+        vaultStoreId: 'store_abcdefghijk',
         deviceId: 'device',
         devicePublicKey: 'public',
         deviceSigningPublicKey: 'signing',
@@ -493,7 +511,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
   test('rejects an expired request before WASM validation and clears secrets', async () => {
     const payload = {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -557,7 +575,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const ceremonyResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.RegisterPasskey,
       payload: {
-        vaultStoreId: 'vault',
+        vaultStoreId: 'store_abcdefghijk',
         deviceId: 'device',
         devicePublicKey: 'public',
         deviceSigningPublicKey: 'signing',
@@ -584,13 +602,23 @@ describe('ExtensionSessionMessageDispatcher', () => {
   test('stages provider credentials before awaiting cold WASM', async () => {
     const providers = [
       {
-        id: 'provider',
+        id: 'github',
         type: 'github' as const,
-        githubPat: 'github_pat_browser_owned_secret',
+        label: 'GitHub',
+        githubPat: {
+          state: 'token' as const,
+          value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
+        },
+        githubRepo: { state: 'defaultRepository' as const },
+        oauthFile: { state: 'notApplicable' as const },
+        localFolder: { state: 'notApplicable' as const },
+        storeId: { state: 'unscoped' as const },
+        syncCheckpoint: { state: 'neverSynced' as const },
+        createdAt: '2026-06-24T00:00:00.000Z',
       },
     ]
     const payload = {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',

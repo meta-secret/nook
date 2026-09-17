@@ -31,6 +31,9 @@ export class BrowserRuntimeMessage {
   }
 
   static from(value: unknown): BrowserRuntimeMessageAdmission {
+    if (!new SerializedBrowserRuntimeValue(value).accepted()) {
+      return { kind: BrowserRuntimeMessageAdmissionKind.Rejected }
+    }
     const decodeResult = Effect.runSync(
       Effect.either(BrowserRuntimeMessage.decode(value)),
     )
@@ -41,6 +44,32 @@ export class BrowserRuntimeMessage {
         message,
       }),
     })
+  }
+}
+
+class SerializedBrowserRuntimeValue {
+  constructor(private readonly value: unknown) {}
+
+  accepted(): boolean {
+    const value = this.value
+    if (
+      typeof value === 'string' ||
+      typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value))
+    ) {
+      return true
+    }
+    if (Array.isArray(value)) {
+      return value.every((entry) =>
+        new SerializedBrowserRuntimeValue(entry).accepted(),
+      )
+    }
+    if (!value || Object.getPrototypeOf(value) !== Object.prototype) {
+      return false
+    }
+    return Object.values(value).every((entry) =>
+      new SerializedBrowserRuntimeValue(entry).accepted(),
+    )
   }
 }
 

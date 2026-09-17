@@ -292,7 +292,15 @@ export class ExtensionAuthenticatorSession {
         ),
       )
       if (delivery.isErr()) return err(delivery.error)
-      return ok(delivery.value)
+      const response = delivery.value
+      if (!response.backupCodesVerified || !response.reviewedInputPersisted) {
+        return err(
+          new AuthenticatorSessionFailure(
+            AuthenticatorSessionFailureKind.InvalidResponse,
+          ),
+        )
+      }
+      return ok(response)
     } finally {
       transportCodes.fill('')
     }
