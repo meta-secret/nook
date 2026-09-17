@@ -341,6 +341,14 @@ Use this workflow for quality, CI, and deployment changes.
     analogue, and neither PR can consume or overwrite the other's source graph.
     Scenario Z keeps one ARC-shaped BuildKit container and local state across a
     daemon restart. The exact parent and leaf steps remain CACHED afterward.
+    Scenarios AA and AB exercise the compile-shaped graph on fresh builders:
+    the cold first head tolerates absent exact refs, runs its real BuildKit
+    graph, and exports one exact cache; a successor imports that first-parent
+    cache, reuses dependency/compiler vertices, and seeds its own exact ref.
+    Compile refs use the unversioned `nook-build-compile` semantic name, with
+    no manual schema suffix or BuildKit-duplicating fingerprint. The remote
+    compile transport gate distinguishes a healthy authenticated `/v2/`
+    endpoint from auth, HTTP, and network failures before invoking the task.
 
     `task infra:kubernetes-cache:prove` is the Kubernetes integration proof.
     It derives an ephemeral three-agent k3d cluster from the production Zot,

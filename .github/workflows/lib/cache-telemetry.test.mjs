@@ -28,7 +28,7 @@ void test("records the active compile scope without preselection state", () => {
         export_enabled: false,
       },
       compile_source: {
-        scope: `nook-build-compile-v4-git-${"b".repeat(40)}`,
+        scope: `nook-build-compile-git-${"b".repeat(40)}`,
       },
       imports: {
         probes_complete: false,

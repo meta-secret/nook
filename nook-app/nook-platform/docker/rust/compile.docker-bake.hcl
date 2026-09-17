@@ -5,15 +5,23 @@
 // graphs itself. It does not inherit product builder-core-deps or
 // builder-wasm, whose warm-up graphs include validation-only work.
 
-// The source graph is immutable-commit-only; there is deliberately no mutable Main tag.
-// v4 is the single-export schema whose mode=max export is rooted at
-// the final compile target and therefore retains the expensive WASM compiler
-// lineage. Legacy v2 manifests are intentionally incompatible and untrusted
-// as warm-build evidence.
-compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
-  "type=registry,ref=${compile_source_cache_ref},ignore-error=true",
-]
+// Immutable exact-head refs form a commit-parent lineage. The current ref
+// accelerates same-head retries; the first-parent ref restores reusable layers
+// for an ordinary new head. BuildKit validates both against this actual graph.
+// The semantic repository name is unversioned so Dockerfile, context, and build
+// arguments remain the cache invalidation authority.
+variable "GHA_CACHE_PARENT_SCOPE_SUFFIX" {
+  default = ""
+}
+
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+compile_parent_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}:buildcache"
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : concat(
+  ["type=registry,ref=${compile_source_cache_ref}"],
+  GHA_CACHE_PARENT_SCOPE_SUFFIX != "" && GHA_CACHE_PARENT_SCOPE_SUFFIX != GHA_CACHE_SCOPE_SUFFIX ? [
+    "type=registry,ref=${compile_parent_cache_ref}",
+  ] : [],
+)
 
 // Every entry point uses one solve contract. Bake applies CLI overrides after
 // inheritance, so callers also mirror overrides on each named target.
@@ -39,7 +47,7 @@ compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "
   // compiler objects, so serializing a second sibling dependency graph is
   // redundant. The exporter timeout applies to each registry operation; the
   // five-minute GitHub job timeout remains the end-to-end acceptance bound.
-  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s,ignore-error=true",
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s",
 ] : []
 
 target "build-compile" {

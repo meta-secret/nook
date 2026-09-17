@@ -856,11 +856,20 @@ authenticator-domain to 90 percent.
 - A failed candidate upload or hosted validation leaves the prior stable tag
   unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
-- Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
+- For ordinary Docker builds, cache restoration is an optimization and a
+  missing cache can fall back to a correct cold build. The Remote
+  `build:compile` contract separately fails before compilation when the
+  authenticated registry transport is unavailable and fails on cache export
+  errors; an absent exact commit manifest alone remains a normal BuildKit miss.
 - Main ARC producers publish shared Zot cache manifests after lane verification.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.
+- Remote `build:compile` is the lineage exception: BuildKit imports both
+  unversioned immutable current-head and first-parent `nook-build-compile`
+  refs, then exports its single rooted graph to the current-head ref. BuildKit
+  owns layer reuse and invalidation from the actual Docker inputs; no manual
+  schema suffix or custom dependency fingerprint is used.
 - The Remote credential can update only `nook/remote-buildcache/**`. It has read-only access to Zot's public mirror repositories, including Main's `nook/buildcache/**` path and mirrored tool images used to bootstrap hosted BuildKit.
 - Same-repository Remote tasks use that registry identity for git-commit
   exporters under `nook/remote-buildcache/**`.

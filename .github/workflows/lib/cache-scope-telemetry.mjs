@@ -20,7 +20,7 @@ export class CacheScopeTelemetry {
       },
       compile_source: {
         scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
-          ? `nook-build-compile-v4${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
+          ? `nook-build-compile${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
           : "",
       },
       imports: {

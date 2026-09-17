@@ -277,6 +277,13 @@ legacy registered `nook` runner is not used.
 - A manifest lookup proves index availability. It does not prove that a fresh
   builder has hydrated content or extracted snapshots.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
+- Remote `build:compile` uses the unversioned semantic ref name
+  `nook-build-compile` with immutable current-head and first-parent commit
+  refs. BuildKit imports both actual cache graphs; an absent exact ref is an
+  ordinary miss, while an authenticated registry transport failure blocks the
+  compile before work starts. Its single rooted `mode=max` export is fatal on
+  failure. No manual version suffix or custom dependency fingerprint selects
+  this cache; BuildKit invalidates from the real Docker inputs.
 - Delivery CI persists the toolchain in `nook-rust-base-v2`.
 - Native dependencies use `nook-rust-deps-v4`.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.

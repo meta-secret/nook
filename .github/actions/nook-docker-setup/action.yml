@@ -102,6 +102,29 @@ runs:
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.registry-password }}
 
+    - name: Verify registry transport for Docker cache
+      if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.tasks || github.event.inputs.task) == 'build:compile' }}
+      shell: bash
+      env:
+        REGISTRY_HOST: ${{ inputs.registry-host }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+      run: |
+        set -euo pipefail
+        if ! status="$(printf 'user = "%s:%s"\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" \
+          | timeout 12s curl --config - --connect-timeout 5 --max-time 10 \
+              --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              "https://${REGISTRY_HOST}/v2/")"; then
+          echo "BuildKit cache registry transport or authentication check failed" >&2
+          exit 1
+        fi
+        if [ "$status" = "200" ]; then
+          echo "BuildKit cache registry transport and authentication are healthy"
+        else
+          echo "BuildKit cache registry returned HTTP $status at /v2/" >&2
+          exit 1
+        fi
+
     - name: Preload hosted BuildKit from Zot
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
@@ -284,7 +307,22 @@ runs:
             echo "Remote compile read-only verification uses exact source scope $scope_suffix"
           fi
         fi
+        parent_scope_suffix=""
+        if [ -n "$remote_compile_scope" ]; then
+          if parent_scope_sha="$(git rev-parse --verify HEAD^1 2>/dev/null)"; then
+            if [[ "$parent_scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              parent_scope_suffix="-git-$parent_scope_sha"
+              echo "Remote compile cache lineage includes the first-parent scope $parent_scope_suffix"
+            else
+              echo "first-parent commit is not a 40-character lowercase Git SHA" >&2
+              exit 1
+            fi
+          else
+            echo "Remote compile cache lineage has no first-parent scope to import"
+          fi
+        fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_PARENT_SCOPE_SUFFIX=$parent_scope_suffix" >> "$GITHUB_ENV"
         # BuildKit does not replay cached RUN stdout. Compiler stages persist
         # their reports in-layer; this per-job value reruns only the terminal
         # read that emits the persisted, authoritative JSON marker.

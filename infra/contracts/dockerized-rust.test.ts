@@ -239,6 +239,76 @@ class DockerizedRustContract {
     );
   }
 
+  remoteCompileRestoresLineageAndFailsOnRegistryTransport(): void {
+    const action = this.read(".github/actions/nook-docker-setup/action.yml");
+    const gateMarker = "    - name: Verify registry transport for Docker cache";
+    const gateStart = action.indexOf(gateMarker);
+    expect(gateStart).toBeGreaterThanOrEqual(0);
+    const nextStep = action.indexOf("\n    - name:", gateStart + gateMarker.length);
+    const gate = action.slice(gateStart, nextStep < 0 ? action.length : nextStep);
+    const runMarker = "      run: |\n";
+    const runStart = gate.indexOf(runMarker);
+    expect(runStart).toBeGreaterThanOrEqual(0);
+    const scriptLines: string[] = [];
+    for (const line of gate.slice(runStart + runMarker.length).split("\n")) {
+      if (line.length === 0) continue;
+      expect(line.startsWith("        ")).toBe(true);
+      scriptLines.push(line.slice(8));
+    }
+    const registryGateScript = scriptLines.join("\n");
+    const compileBake = this.read(
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    );
+    const remoteWorkflow = this.read(".github/workflows/remote.yml");
+
+    expect(gate).toContain("build:compile");
+    expect(registryGateScript).toContain("--config -");
+    expect(registryGateScript).toContain("/v2/");
+    expect(registryGateScript).toContain('[ "$status" = "200" ]');
+    expect(compileBake).toContain('variable "GHA_CACHE_PARENT_SCOPE_SUFFIX"');
+    expect(compileBake).toContain("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}");
+    expect(compileBake).toContain(
+      "nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}",
+    );
+    expect(compileBake).not.toContain("nook-build-compile-v");
+    expect(compileBake).toContain("mode=max,compression=zstd,timeout=20s");
+    expect(compileBake).not.toContain("ignore-error=true");
+    expect(remoteWorkflow).toContain("timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}");
+    expect(remoteWorkflow).toContain("uses: ./.github/actions/nook-docker-setup");
+
+    const temporary = mkdtempSync(join(tmpdir(), "nook-registry-gate-"));
+    try {
+      writeFileSync(
+        join(temporary, "curl"),
+        '#!/bin/sh\n[ "${CURL_EXIT:-0}" = 0 ] || exit "$CURL_EXIT"\nprintf "%s" "${CURL_STATUS:-000}"\n',
+        { mode: 0o755 },
+      );
+      for (const [status, exitCode, expected] of [
+        ["200", "0", true],
+        ["401", "0", false],
+        ["404", "0", false],
+        ["503", "0", false],
+        ["000", "7", false],
+      ] as const) {
+        const result = spawnSync("bash", ["-e", "-c", registryGateScript], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${temporary}:${process.env.PATH}`,
+            CURL_STATUS: status,
+            CURL_EXIT: exitCode,
+            REGISTRY_HOST: "registry.example.test",
+            REGISTRY_USERNAME: "sim-user",
+            REGISTRY_PASSWORD: "sim-password",
+          },
+        });
+        expect(result.status === 0, result.stderr || result.stdout).toBe(expected);
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+
   dylintWrapperContentInvalidatesBuildGraph(): void {
     const nightlyPath =
       "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
@@ -913,6 +983,10 @@ test(
 test(
   "remote compile keeps runtime and compiler cache secrets together",
   contract.remoteCompilePreservesCompilerCacheSecrets.bind(contract),
+);
+test(
+  "remote compile restores exact cache lineage and rejects registry failures",
+  contract.remoteCompileRestoresLineageAndFailsOnRegistryTransport.bind(contract),
 );
 test(
   "Dylint compiler vertices consume the current wrapper content",
