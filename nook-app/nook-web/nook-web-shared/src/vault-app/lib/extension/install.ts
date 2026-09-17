@@ -81,7 +81,7 @@ export class ExtensionDeploymentMetadataDecodeFailure extends Error {
 
   constructor(
     readonly kind: ExtensionDeploymentMetadataDecodeFailureKind,
-    readonly cause: unknown,
+    override readonly cause: unknown,
   ) {
     super(kind);
   }

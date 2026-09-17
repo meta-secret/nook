@@ -14,6 +14,7 @@ import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import {
   RuntimeMessageDecodeFailure,
+  RuntimeMessageDecodeCauseKind,
   RuntimeMessageDecodeFailureKind,
 } from "./runtime-message-decode-failure";
 import type {
@@ -39,6 +40,7 @@ import {
   type ExtensionEventLogRecord,
   type ExtensionLocalEventLogUpdatedMessage,
   type OpenSimpleVaultMessage,
+  RuntimeMessageEnvelope,
 } from "./lifecycle-runtime-messages";
 
 import {
@@ -77,7 +79,7 @@ export {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   OpenSimpleVaultMessageType,
-  RuntimeMessageEnvelopeSchema as RuntimeMessageEnvelope,
+  RuntimeMessageEnvelope,
   BeginExtensionPairingMessageSchema as BeginExtensionPairingMessage,
   type ExtensionEventLogRecord,
   ExtensionLocalEventLogUpdatedMessageSchema as ExtensionLocalEventLogUpdatedMessage,

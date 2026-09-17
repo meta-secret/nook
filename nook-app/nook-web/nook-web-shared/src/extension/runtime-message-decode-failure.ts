@@ -53,7 +53,7 @@ export class RuntimeMessageDecodeFailure extends Error {
   }
 
   readonly kind: RuntimeMessageDecodeFailureKind;
-  readonly cause: RuntimeMessageDecodeCause;
+  override readonly cause: RuntimeMessageDecodeCause;
 
   static fromParseError(
     request: RuntimeMessageDecodeFailureRequest<ParseResult.ParseError>,

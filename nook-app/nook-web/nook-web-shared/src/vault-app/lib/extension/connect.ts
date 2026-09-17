@@ -48,10 +48,6 @@ type IdentityEnvelopeRequest = {
 
 type ChromeRuntimeHost = Pick<typeof chrome.runtime, "sendMessage">;
 
-type ChromeRuntimeResponseCallback = Parameters<
-  ChromeRuntimeHost["sendMessage"]
->[2];
-
 type ExtensionBrowserHost = typeof globalThis;
 
 enum ChromeRuntimeAvailabilityKind {
@@ -339,9 +335,14 @@ class ExtensionConnectionBrowser {
       .map((scope) => scope.trim())
       .filter(Boolean);
 
-    return scopes.filter((scope) =>
-      ExtensionConnectScope.isExtensionConnectScopeValue(scope),
-    );
+    const admittedScopes: ExtensionConnectScope[] = [];
+    for (const scope of scopes) {
+      const admitted = Effect.runSync(
+        Effect.either(ExtensionConnectScope.decode(scope)),
+      );
+      if (admitted._tag === "Right") admittedScopes.push(admitted.right);
+    }
+    return admittedScopes;
   }
 
   extensionConnectRequestFromLocation(
@@ -430,16 +431,13 @@ class ExtensionConnectionBrowser {
         return;
       }
       const { runtime } = runtimeAvailability;
-      const sendMessage = runtime.sendMessage.bind(runtime);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
         wait: responseWait,
         resolve,
       });
-      const receiveExtensionResponse: ChromeRuntimeResponseCallback = (
-        response,
-      ): void => {
+      runtime.sendMessage(extensionId, message, (response) => {
         if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
@@ -449,8 +447,7 @@ class ExtensionConnectionBrowser {
           return;
         }
         pending.receive(response);
-      };
-      sendMessage(extensionId, message, receiveExtensionResponse);
+      });
     });
   }
 
@@ -761,7 +758,7 @@ class ExtensionConnectionBrowser {
           }
           const decodedResponse = Effect.runSync(
             Effect.either(
-              AcceptedIdentityHandoffResponseDecoder.decode(response),
+              IdentityHandoffResponseDecoder.decode(response),
             ),
           );
           if (decodedResponse._tag === "Right") {
