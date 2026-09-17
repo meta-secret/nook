@@ -91,7 +91,7 @@ export class VaultLocaleActions {
 
   async updateLocale(
     request: LocaleUpdate,
-  ): Promise<Result<void, LocaleUpdateFailure>> {
+  ): Promise<Result<NookAppLocale, LocaleUpdateFailure>> {
     const catalog = this.catalog(request);
     if (catalog.isErr()) return err(catalog.error);
     try {
@@ -115,6 +115,6 @@ export class VaultLocaleActions {
     }
     this.state.locale = request.newLocale;
     this.state.translations = catalog.value;
-    return ok();
+    return ok(request.newLocale);
   }
 }

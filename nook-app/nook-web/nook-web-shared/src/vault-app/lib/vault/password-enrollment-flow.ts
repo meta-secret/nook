@@ -95,7 +95,7 @@ export class PasswordEnrollmentActions {
   private applySavedEnrollmentProvider({
     selection,
   }: SavedEnrollmentProviderApplication): Result<
-    void,
+    SavedEnrollmentProvider,
     StorageOperationFailure
   > {
     const state = this.state;
@@ -105,7 +105,7 @@ export class PasswordEnrollmentActions {
     ) {
       state.storageMode = "local";
       state.activateLoginSetup("local");
-      return storageOk();
+      return storageOk({ kind: SavedEnrollmentProviderKind.Local });
     }
 
     const { provider } = selection;
@@ -116,7 +116,7 @@ export class PasswordEnrollmentActions {
       state.githubRepo = githubRepositoryValue(provider.githubRepo);
       state.clearOauthFile();
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(selection);
     }
     if (provider.type === "oauth-file") {
       const configuration = provider.oauthFile;
@@ -138,7 +138,7 @@ export class PasswordEnrollmentActions {
         state.githubRepo = fileName.fileName;
       }
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(selection);
     }
 
     const configuration = new StorageProviderPresentation(
@@ -156,7 +156,7 @@ export class PasswordEnrollmentActions {
     state.configureLocalFolder(configuration.config);
     state.githubPat = "";
     state.clearOauthFile();
-    return storageOk();
+    return storageOk(selection);
   }
 
   private async localVaultHasPasswordEntries(): Promise<

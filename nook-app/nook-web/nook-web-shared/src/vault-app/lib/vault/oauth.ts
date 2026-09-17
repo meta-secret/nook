@@ -106,19 +106,25 @@ interface GoogleTokenApplication {
   readonly tokens: GoogleOAuthTokens;
 }
 
+export enum OAuthTokenRefreshOutcome {
+  NotRequired = "not-required",
+  AlreadyFresh = "already-fresh",
+  Updated = "updated",
+}
+
 /** Owns browser orchestration for one oauth context. */
 export class VaultOAuthActions {
   constructor(private readonly state: VaultState) {}
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenRefreshOutcome, OAuthFailure | VaultStorageFailure>
   > {
     const state = this.state;
     if (
       state.storageMode !== "oauth-file" ||
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
     ) {
-      return ok();
+      return ok(OAuthTokenRefreshOutcome.NotRequired);
     }
     const oauthFile = state.oauthFileDraft.config;
     log.info("oauth token freshness check started");
@@ -166,7 +172,7 @@ export class VaultOAuthActions {
           refreshed.expiresAt.value === oauthFile.expiresAt.value))
     ) {
       log.info("oauth token freshness check kept existing token");
-      return ok();
+      return ok(OAuthTokenRefreshOutcome.AlreadyFresh);
     }
     if (providerToRefresh.state === "duplicate") {
       const providers = state.providers.map((provider) =>
@@ -183,7 +189,7 @@ export class VaultOAuthActions {
     }
     state.configureOauthFile(refreshed);
     log.info("oauth token freshness check refreshed provider");
-    return ok();
+    return ok(OAuthTokenRefreshOutcome.Updated);
   }
 
   private bindSharedICloudTarget({
@@ -265,7 +271,9 @@ export class VaultOAuthActions {
     state.errorMsg = "";
   }
 
-  async createICloudSharedProvider(): Promise<Result<void, OAuthFailure>> {
+  async createICloudSharedProvider(): Promise<
+    Result<OAuthFileConfig, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -285,12 +293,14 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedCreated,
     );
-    return ok();
+    return ok(bound.value);
   }
 
   async useICloudSharedProvider({
     shareReference,
-  }: ICloudSharedProviderAccess): Promise<Result<void, OAuthFailure>> {
+  }: ICloudSharedProviderAccess): Promise<
+    Result<OAuthFileConfig, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -309,7 +319,7 @@ export class VaultOAuthActions {
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedConnected,
     );
-    return ok();
+    return ok(bound.value);
   }
 
   async createGoogleSharedFolder({
@@ -512,7 +522,7 @@ export class VaultOAuthActions {
 
   private async applyICloudOAuthTokens({
     tokens,
-  }: ICloudTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: ICloudTokenApplication): Promise<Result<OAuthFileConfig, OAuthFailure>> {
     const state = this.state;
     const fallbackFileName =
       state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
@@ -544,7 +554,7 @@ export class VaultOAuthActions {
       name.kind === OAuthFileNameKind.Resolved
         ? name.fileName
         : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(converted.value);
   }
 
   private ensureSupportedOAuthOrigin({
@@ -570,7 +580,7 @@ export class VaultOAuthActions {
 
   private async applyGoogleOAuthTokens({
     tokens,
-  }: GoogleTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: GoogleTokenApplication): Promise<Result<OAuthFileConfig, OAuthFailure>> {
     const state = this.state;
     const email = await googleOAuthSession.fetchGoogleAccountEmail(
       tokens.accessToken,
@@ -619,6 +629,6 @@ export class VaultOAuthActions {
         : name.kind === OAuthFileNameKind.Resolved
           ? name.fileName
           : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(config);
   }
 }
