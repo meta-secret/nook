@@ -88,9 +88,11 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.activate_local_identity(identityId),
-          );
+          await admittedManager.value.activate_local_identity(identityId);
+          return storageOk({
+            kind: ProviderVaultImportOutcomeKind.Imported,
+            storeId: importedStoreId,
+          });
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -109,7 +111,7 @@ export class SyncConflictActions {
     state.deviceId = "";
     state.devicePublicKey = "";
     state.clearIdentityProviderSession();
-    state.selectLoginVault(importedStoreId);
+    state.selectLoginVault(completed.value.storeId);
     try {
       const protectionStatus = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -278,9 +280,8 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            admittedManager.value.prepare_connect_from_local_cache(),
-          );
+          admittedManager.value.prepare_connect_from_local_cache();
+          return storageOk(RemoteVaultRecoveryState.ConnectFromCache);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -289,8 +290,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
-      state.remoteVaultRecoveryState =
-        RemoteVaultRecoveryState.ConnectFromCache;
+      state.remoteVaultRecoveryState = completed.value;
       if (state.loginSetup.kind === LoginSetupKind.Active) {
         await state.loadDb();
         return;

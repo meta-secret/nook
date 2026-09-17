@@ -385,23 +385,27 @@
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       );
     }
-    copiedKey = {
+    return ok({
       kind: ClipboardNoticeKind.Visible,
       fieldKey: `${id}-${field}`,
-    };
-    setTimeout(() => {
-      if (
-        copiedKey.kind === ClipboardNoticeKind.Visible &&
-        copiedKey.fieldKey === `${id}-${field}`
-      )
-        copiedKey = { kind: ClipboardNoticeKind.Hidden };
-    }, 2000);
-    return ok();
+    });
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {
     const copied = await copyToClipboard(request);
-    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+    if (copied.isErr()) {
+      vault.errorMsg = vault.t(copied.error.translationKey);
+      return;
+    }
+    const notice = copied.value;
+    copiedKey = notice;
+    setTimeout(() => {
+      if (
+        copiedKey.kind === ClipboardNoticeKind.Visible &&
+        copiedKey.fieldKey === notice.fieldKey
+      )
+        copiedKey = { kind: ClipboardNoticeKind.Hidden };
+    }, 2000);
   }
 
   function secretReveal(itemId: string): SecretReveal {
