@@ -110,22 +110,19 @@ fn assert_docker_setup_contract(root: &Path) {
         "container ARC must require declared job containers and withhold Kubernetes credentials from job Pods"
     );
     assert!(
-        pr.contains("name: Publish git-scoped native BuildKit cache")
-            && pr.contains("task ci:main:publish-native-cache")
-            && pr.contains("GHA_CACHE_WRITE_ENABLED=\"\"")
-            && pr.contains(
-                "ARC keeps the verified native graph local; Main and sccache remain reusable"
-            ),
-        "trusted ARC PR native verification must remain read-only while hosted fallback can publish its exact cache"
+        pr.contains("name: Build native Rust image")
+            && pr.contains("task ci:pr:rust-build-image")
+            && pr.contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
+            && pr.contains("nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}"),
+        "trusted PR native compilation must publish a run-immutable producer before consumers"
     );
     assert_eq!(
         pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
             .count(),
-        4,
+        3,
         "every general PR cache publisher must explicitly keep ARC verification graphs local"
     );
     for local_graph_message in [
-        "ARC keeps the verified native graph local; Main and sccache remain reusable",
         "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
         "ARC keeps the verified web graph local; Main remains reusable",
     ] {
@@ -216,13 +213,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "task ci:pr:web",
         "task web:e2e:kubernetes-image:artifacts",
         "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
-        "name: Locate trusted native handoff",
         "name: Locate trusted WASM handoff",
-        "nook-trusted-native-validation-v2-",
         "nook-trusted-wasm-validation-v2-",
         "run.name === 'PR validation handoff'",
         "workflowPath === '.github/workflows/pr-validation-handoff.yml'",
-        "steps.trusted-native.outputs.found != 'true'",
         "steps.trusted-wasm.outputs.found != 'true'",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
@@ -230,8 +224,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "'nook-app/nook-platform/nook-companion-core/**'",
         "'nook-app/nook-platform/nook-companion-wasm/**'",
         "'nook-app/nook-platform/nook-wasm/**'",
-        "chmod +x \"$dir/tools/nook-preflight\"",
-        "test -x \"$dir/tools/nook-preflight\"",
+        "name: Build native Rust image",
+        "task ci:pr:rust-build-image",
+        "task docker:ci:rust:verify-built-buildkit",
         "needs: [validation-request, wasm]",
         "        wasm-node-test,",
         "name: Download built WASM handoff",
@@ -274,6 +269,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         !coverage.contains("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --"),
         "coverage input detection belongs in the typed Rust reporter, not workflow shell"
     );
+    let native_build_job = section(&pr, "  rust-build:\n", "  rust-ecosystem:\n");
     let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  wasm-node-test:\n");
     let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
@@ -304,13 +300,17 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR CI must finish WASM Node tests without exporting ARC graphs while preserving hosted exact-cache publication"
     );
     assert!(
-        native_job.contains("cache-write: \"false\"")
+        native_build_job.contains("cache-write: \"false\"")
+            && native_build_job.contains("task ci:pr:rust-build-image")
+            && native_build_job.contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
+            && native_build_job.contains("require-sccache: \"true\"")
             && native_job.contains("main-cache-only: \"true\"")
             && native_job.contains("isolated-cache-write: \"true\"")
             && native_job.contains("NOOK_SCCACHE_ACCESS_KEY")
-            && native_job.contains("if: steps.trusted-native.outputs.found == 'true'")
+            && native_job.contains("needs.rust-build.outputs.produced == 'true'")
+            && native_job.contains("task docker:ci:rust:verify-built-buildkit")
             && native_job.contains("task preflight"),
-        "native PR validation must use sccache, isolate BuildKit writes, and run explicit preflight only for an exact handoff"
+        "native PR compilation must publish before BuildKit-backed verification while retaining sccache and isolated writes"
     );
     assert!(
         verify_job.contains("id: ui-demo-contract")
@@ -466,11 +466,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "trusted validation promotion must accept successful producers omitted from a failed-job rerun while requiring the current consumer attempt"
     );
     assert!(
-        native_job.contains("run.event === 'workflow_run'")
-            && wasm_job.contains("run.event === 'workflow_run'")
-            && !native_job.contains("workflow_dispatch")
+        wasm_job.contains("run.event === 'workflow_run'")
             && !wasm_job.contains("workflow_dispatch"),
-        "trusted handoff consumers must accept only automatic workflow-run promotions"
+        "trusted WASM handoff consumers must accept only automatic workflow-run promotions"
     );
     assert_eq!(
         pr.matches("task ci:pr:wasm").count(),

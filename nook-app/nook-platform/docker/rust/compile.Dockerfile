@@ -156,7 +156,20 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
 FROM compile-native-source AS pr-native-build
 
 WORKDIR /meta-secret/nook
-COPY . .
+COPY .codex .codex
+COPY .cortex .cortex
+COPY .cursor .cursor
+COPY .github .github
+COPY .impeccable .impeccable
+COPY .task .task
+COPY .vale .vale
+COPY agentic-ai agentic-ai
+COPY docs docs
+COPY infra infra
+COPY nook-app nook-app
+COPY preflight preflight
+COPY AGENTS.md CODEX.md LICENSE PRODUCT.md README.md Taskfile.yml ./
+COPY .dockerignore .gitignore .jscpd.json .vale.ini bun.lock deny.toml eslint.config.mjs package.json tsconfig.compile.json tsconfig.json ./
 
 RUN test -f nook-app/Taskfile.yml \
     && git init -q \

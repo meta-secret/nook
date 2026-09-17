@@ -91,7 +91,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
         run: |
-          echo "ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           echo "produced=${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}" >> "$GITHUB_OUTPUT"
       - name: Build native Rust only
         if: steps.image.outputs.produced == 'true'

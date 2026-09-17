@@ -213,10 +213,18 @@ class DockerizedRustContract {
     const bake = this.read(
       "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
+    const dockerfile = this.read(
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+    );
     expect(bake).toContain('target "pr-native-verify"');
     expect(bake).toContain(
       'pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"',
     );
+    const producer = dockerfile.split("FROM compile-native-source AS pr-native-build")[1]
+      ?.split("FROM pr-native-image AS pr-native-verify")[0];
+    expect(producer).toBeDefined();
+    expect(producer).not.toContain("COPY . .");
+    expect(producer).toContain("COPY nook-app nook-app");
   }
 
   dylintDependencyCacheAndSccacheMode(): void {
