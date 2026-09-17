@@ -13,6 +13,7 @@ mod value_types;
 
 pub use approval_timestamp::*;
 pub use authority::*;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 pub use value_types::*;
 
@@ -303,7 +304,7 @@ impl ExtensionPairingState {
                     right
                         .approved_at
                         .partial_cmp(&left.approved_at)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .unwrap_or(Ordering::Equal)
                 })
         });
         grants
@@ -630,7 +631,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Fixture::store(),
                 vault_name: "Personal".to_owned(),
-                approved_at: Fixture::approved_at(1_753_401_600_000.0)?,
+                approved_at: Fixture::approved_at("1753401600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
             },
@@ -661,7 +662,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Fixture::store(),
                 vault_name: "Personal".to_owned(),
-                approved_at: Fixture::approved_at(1_753_401_600_000.0)?,
+                approved_at: Fixture::approved_at("1753401600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
             },
@@ -724,12 +725,12 @@ mod tests {
     }
 
     #[test]
-    fn removal_preserves_setup_when_a_non_selected_vault_is_removed() {
+    fn removal_preserves_setup_when_a_non_selected_vault_is_removed() -> anyhow::Result<()> {
         let selected = Fixture::grant();
         let mut removed = Fixture::grant();
         removed.vault_store_id = Fixture::other_store();
         removed.vault_name = "Removed".to_owned();
-        removed.approved_at = Fixture::valid_approved_at(1_753_488_000_000.0);
+        removed.approved_at = Fixture::approved_at("1753488000000")?;
         let expected = ExtensionReadySetup::from_grant(&selected);
         let state = ExtensionPairingState {
             entries: vec![
@@ -752,19 +753,21 @@ mod tests {
             state.setup_after_removal(&Fixture::other_store()),
             ExtensionSetupAfterRemoval::Ready { setup: expected }
         );
+        Ok(())
     }
 
     #[test]
-    fn removal_selects_the_newest_remaining_grant_when_selected_vault_is_removed() {
+    fn removal_selects_the_newest_remaining_grant_when_selected_vault_is_removed()
+    -> anyhow::Result<()> {
         let selected = Fixture::grant();
         let mut older = Fixture::grant();
         older.vault_store_id = Fixture::other_store();
         older.vault_name = "Older".to_owned();
-        older.approved_at = Fixture::valid_approved_at(1_753_228_800_000.0);
+        older.approved_at = Fixture::approved_at("1753228800000")?;
         let mut newer = Fixture::grant();
         newer.vault_store_id = Fixture::newer_store();
         newer.vault_name = "Newer".to_owned();
-        newer.approved_at = Fixture::valid_approved_at(1_753_574_400_000.0);
+        newer.approved_at = Fixture::approved_at("1753574400000")?;
         let state = ExtensionPairingState {
             entries: vec![
                 ExtensionPairingEntry {
@@ -794,6 +797,7 @@ mod tests {
                 setup: ExtensionReadySetup::from_grant(&newer)
             }
         );
+        Ok(())
     }
 
     #[test]
@@ -830,7 +834,10 @@ mod tests {
         let mut value = serde_json::to_value(Fixture::grant())?;
         value["approvedAt"] = serde_json::Value::String("2026-07-25T00:00:00.000Z".to_owned());
         let decoded: StoredExtensionPairingGrant = serde_json::from_value(value)?;
-        assert_eq!(decoded.approved_at.value(), 1_784_937_600_000.0);
+        assert_eq!(
+            serde_json::to_string(&decoded.approved_at)?,
+            "1784937600000"
+        );
         assert!(serde_json::to_value(decoded)?["approvedAt"].is_number());
         Ok(())
     }
@@ -875,16 +882,8 @@ mod tests {
             }
         }
 
-        fn approved_at(value: f64) -> anyhow::Result<ExtensionPairingApprovalEpochMilliseconds> {
-            ExtensionPairingApprovalEpochMilliseconds::parse(value)
-                .map_err(|error| anyhow::anyhow!(error))
-        }
-
-        fn valid_approved_at(value: f64) -> ExtensionPairingApprovalEpochMilliseconds {
-            match ExtensionPairingApprovalEpochMilliseconds::parse(value) {
-                Ok(timestamp) => timestamp,
-                Err(error) => panic!("invalid fixture timestamp: {error}"),
-            }
+        fn approved_at(value: &str) -> anyhow::Result<ExtensionPairingApprovalEpochMilliseconds> {
+            Ok(serde_json::from_str(value)?)
         }
 
         fn grant() -> StoredExtensionPairingGrant {
@@ -896,7 +895,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Self::store(),
                 vault_name: "Personal".to_owned(),
-                approved_at: Self::valid_approved_at(1_753_401_600_000.0),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
                 event_count: 2.into(),

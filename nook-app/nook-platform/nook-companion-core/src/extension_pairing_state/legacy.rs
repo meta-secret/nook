@@ -60,6 +60,61 @@ impl LegacyExtensionReadySetup {
         }
         Ok(())
     }
+
+    fn selected_grant_key(
+        &self,
+        records: &HashMap<String, LegacyExtensionPairingRecord>,
+    ) -> Result<String, ExtensionPairingStateError> {
+        let mut matching = records.iter().filter_map(|(key, record)| match record {
+            LegacyExtensionPairingRecord::CompleteGrant(grant)
+                if grant.vault_name == self.selected_vault_name =>
+            {
+                Some(key)
+            }
+            LegacyExtensionPairingRecord::Grant(grant)
+                if grant.vault_name == self.selected_vault_name =>
+            {
+                Some(key)
+            }
+            LegacyExtensionPairingRecord::CompleteGrant(_)
+            | LegacyExtensionPairingRecord::Grant(_)
+            | LegacyExtensionPairingRecord::Setup(_) => None,
+        });
+        let Some(selected_key) = matching.next().cloned() else {
+            return Err(ExtensionPairingStateError::InvalidLegacyState);
+        };
+        if matching.next().is_some() {
+            return Err(ExtensionPairingStateError::InvalidLegacyState);
+        }
+        Ok(selected_key)
+    }
+}
+
+impl LegacyStoredExtensionPairingGrant {
+    fn migrate(
+        self,
+        setup: &LegacyExtensionReadySetup,
+    ) -> Result<StoredExtensionPairingGrant, ExtensionPairingStateError> {
+        Ok(StoredExtensionPairingGrant {
+            vault_type: self.vault_type,
+            device_id: self.device_id,
+            device_public_key: self.device_public_key,
+            device_signing_public_key: self.device_signing_public_key,
+            device_label: self.device_label,
+            vault_store_id: StoreId::parse(&self.vault_store_id)
+                .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
+            vault_name: self.vault_name,
+            approved_at: ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
+                &self.approved_at,
+            )
+            .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
+            scopes: self.scopes,
+            sync_provider_count: self.sync_provider_count.into(),
+            event_count: setup.event_count.into(),
+            event_log_heads: setup.event_log_heads.clone(),
+            last_local_sync_at: setup.last_local_sync_at.clone(),
+        })
+    }
 }
 
 impl ExtensionPairingState {
@@ -78,53 +133,14 @@ impl ExtensionPairingState {
             .cloned()
             .ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
         setup.validate()?;
-        let mut matching = records.iter().filter_map(|(key, record)| match record {
-            LegacyExtensionPairingRecord::CompleteGrant(grant)
-                if grant.vault_name == setup.selected_vault_name =>
-            {
-                Some(key)
-            }
-            LegacyExtensionPairingRecord::Grant(grant)
-                if grant.vault_name == setup.selected_vault_name =>
-            {
-                Some(key)
-            }
-            LegacyExtensionPairingRecord::CompleteGrant(_)
-            | LegacyExtensionPairingRecord::Grant(_)
-            | LegacyExtensionPairingRecord::Setup(_) => None,
-        });
-        let Some(selected_key) = matching.next().cloned() else {
-            return Err(ExtensionPairingStateError::InvalidLegacyState);
-        };
-        if matching.next().is_some() {
-            return Err(ExtensionPairingStateError::InvalidLegacyState);
-        }
+        let selected_key = setup.selected_grant_key(&records)?;
         let mut entries = Vec::with_capacity(records.len());
-        let mut selected = Err(ExtensionPairingStateError::InvalidLegacyState);
+        let mut selected = None;
         for (key, record) in records {
             let grant = match record {
                 LegacyExtensionPairingRecord::CompleteGrant(grant) => grant,
                 LegacyExtensionPairingRecord::Grant(grant) if key == selected_key => {
-                    StoredExtensionPairingGrant {
-                        vault_type: grant.vault_type,
-                        device_id: grant.device_id,
-                        device_public_key: grant.device_public_key,
-                        device_signing_public_key: grant.device_signing_public_key,
-                        device_label: grant.device_label,
-                        vault_store_id: StoreId::parse(&grant.vault_store_id)
-                            .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
-                        vault_name: grant.vault_name,
-                        approved_at:
-                            ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
-                                &grant.approved_at,
-                            )
-                            .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
-                        scopes: grant.scopes,
-                        sync_provider_count: grant.sync_provider_count.into(),
-                        event_count: setup.event_count.into(),
-                        event_log_heads: setup.event_log_heads.clone(),
-                        last_local_sync_at: setup.last_local_sync_at.clone(),
-                    }
+                    grant.migrate(&setup)?
                 }
                 LegacyExtensionPairingRecord::Grant(_) | LegacyExtensionPairingRecord::Setup(_) => {
                     continue;
@@ -134,14 +150,14 @@ impl ExtensionPairingState {
                 return Err(ExtensionPairingStateError::InvalidLegacyState);
             }
             if key == selected_key {
-                selected = Ok(grant.clone());
+                selected = Some(grant.clone());
             }
             entries.push(ExtensionPairingEntry {
                 key,
                 record: ExtensionPairingRecord::Grant(grant),
             });
         }
-        let selected = selected?;
+        let selected = selected.ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
         if crate::ExtensionSyncProviderCount::from(setup.sync_provider_count)
             != selected.sync_provider_count
         {
@@ -249,8 +265,9 @@ mod tests {
             Fixture::legacy_pairing_state(Fixture::legacy_grant(Fixture::STORE), setup);
         let mut incomplete_team = Fixture::legacy_grant(Fixture::OTHER_STORE);
         incomplete_team.vault_name = "Team".to_owned();
+        let incomplete_team_store_id = StoreId::parse(&incomplete_team.vault_store_id)?;
         records.insert(
-            StoredExtensionPairingGrant::storage_key_for(&incomplete_team.vault_store_id),
+            StoredExtensionPairingGrant::storage_key_for(&incomplete_team_store_id),
             LegacyExtensionPairingRecord::Grant(incomplete_team),
         );
         let serialized = serde_json::to_string(&records)?;
@@ -290,11 +307,40 @@ mod tests {
         records.insert(
             format!(
                 "{}{}",
-                super::EXTENSION_GRANT_KEY_PREFIX,
+                super::super::EXTENSION_GRANT_KEY_PREFIX,
                 Fixture::OTHER_STORE
             ),
             LegacyExtensionPairingRecord::Grant(Fixture::legacy_grant(Fixture::OTHER_STORE)),
         );
+        let serialized = serde_json::to_string(&records)?;
+
+        assert_eq!(
+            ExtensionPairingState::migrate_legacy_json(&serialized),
+            Err(ExtensionPairingStateError::InvalidLegacyState)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_a_selected_legacy_grant_stored_under_another_vault_key() -> anyhow::Result<()> {
+        let mut records = Fixture::legacy_pairing_state(
+            Fixture::legacy_grant(Fixture::STORE),
+            Fixture::legacy_setup(),
+        );
+        let selected_key = format!(
+            "{}{}",
+            super::super::EXTENSION_GRANT_KEY_PREFIX,
+            Fixture::STORE
+        );
+        let mismatched_key = format!(
+            "{}{}",
+            super::super::EXTENSION_GRANT_KEY_PREFIX,
+            Fixture::OTHER_STORE
+        );
+        let selected_grant = records
+            .remove(&selected_key)
+            .ok_or_else(|| anyhow::anyhow!("fixture is missing its selected grant"))?;
+        records.insert(mismatched_key, selected_grant);
         let serialized = serde_json::to_string(&records)?;
 
         assert_eq!(
@@ -377,7 +423,7 @@ mod tests {
             records.insert(
                 format!(
                     "{}{}",
-                    super::EXTENSION_GRANT_KEY_PREFIX,
+                    super::super::EXTENSION_GRANT_KEY_PREFIX,
                     grant.vault_store_id
                 ),
                 LegacyExtensionPairingRecord::Grant(grant),

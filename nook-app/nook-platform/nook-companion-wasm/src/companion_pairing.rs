@@ -120,13 +120,22 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds,
-        ExtensionPairingVaultType, PairingVaultId,
+        ExtensionConnectScope, ExtensionPairingVaultType, PairingVaultId,
     };
 
     struct PairingProtocolFixture;
     impl PairingProtocolFixture {
         fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
+            serde_json::from_str(value)
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
+        }
+
+        fn approval_timestamp(
+            value: &str,
+        ) -> Result<
+            nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
+            wasm_bindgen::JsValue,
+        > {
             serde_json::from_str(value)
                 .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
         }
@@ -154,8 +163,7 @@ mod tests {
                 request: Self::request()?,
                 vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(100.0)
-                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+                approved_at: Self::approval_timestamp("100")?,
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     &"a".repeat(64),
                 )
@@ -206,8 +214,7 @@ mod tests {
                 observed_at: PairingProtocolFixture::epoch("175")?,
                 vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(175.0)
-                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+                approved_at: PairingProtocolFixture::approval_timestamp("175")?,
             },
             CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
                 .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
@@ -238,8 +245,7 @@ mod tests {
                 observed_at: PairingProtocolFixture::epoch("149")?,
                 vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: ExtensionPairingApprovalEpochMilliseconds::parse(149.0)
-                    .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+                approved_at: PairingProtocolFixture::approval_timestamp("149")?,
             },
             CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
                 .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
