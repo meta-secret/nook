@@ -53,6 +53,8 @@ export const untrustedInputAdapterFiles = [
   "nook-web-shared/src/extension/companion-ready.ts",
   "nook-web-shared/src/extension/extension-connect-scope.ts",
   "nook-web-shared/src/extension/runtime-messages.ts",
+  // Chrome runtime replies enter the Rust decoders as singular unknown values.
+  "nook-web-extension/src/lib/nook-wasm.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/web-auth-wait.ts",

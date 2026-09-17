@@ -105,9 +105,12 @@ describe('typed API concrete values', () => {
     expect(lint(args)).toEqual([])
   })
 
-  test('keeps the unknown exception on one explicitly allowlisted adapter fixture', () => {
+  test('keeps unknown exceptions on explicitly allowlisted adapter fixtures', () => {
     expect(untrustedInputAdapterFiles).toContain(
       'nook-web-extension/src/lib/login-picker-messages.ts',
+    )
+    expect(untrustedInputAdapterFiles).toContain(
+      'nook-web-extension/src/lib/nook-wasm.ts',
     )
     expect(untrustedInputAdapterFiles).not.toContain(
       'nook-web-extension/src/lib/login-picker-controller.ts',
