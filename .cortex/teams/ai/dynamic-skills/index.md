@@ -80,7 +80,7 @@ catalogs the linked authorities without copying their policies.
 - **[feature-issue-planning.md](../../../gizmo-prime/dynamic-skills/feature-issue-planning.md)**
   - Purpose: Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state
 - **[issue-scope-management.md](../../../gizmo-prime/dynamic-skills/issue-scope-management.md)**
-  - Purpose: Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents
+  - Purpose: Keep deferred, risky, or oversized work in a focused Workbench issue while preserving ownership and append-only issue history
 - **[module-expert.md](module-expert.md)**
   - Purpose: Route exact-baseline production-module analysis through one named read-only expert without granting write or scheduling authority
 - **[internal-api-expert.md](internal-api-expert.md)**
