@@ -287,15 +287,11 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(setup.contains("Verify Docker cache refs and blobs"));
     let pr_native = compile
         .split_once("FROM compile-native-source AS pr-native-build")
-        .and_then(|(_, stages)| {
-            stages.split_once("FROM pr-native-image AS pr-native-verify")
-        })
+        .and_then(|(_, stages)| stages.split_once("FROM pr-native-image AS pr-native-verify"))
         .map(|(stage, _)| stage)
         .expect("PR native compiler image stage must exist");
     assert!(pr_native.contains("ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled"));
-    assert!(
-        pr_native.contains("nook-sccache-report --replay compile-native-dependencies")
-    );
+    assert!(pr_native.contains("nook-sccache-report --replay compile-native-dependencies"));
     assert!(setup.contains("class BuildKitCacheAccessVerifier"));
     assert!(setup.contains("await this.verifyRegistryAvailability();"));
     assert!(setup.contains("async verifyCacheRef(scopeSuffix)"));
