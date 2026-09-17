@@ -158,18 +158,6 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(main.contains("uses: ./.github/actions/nook-cache-telemetry"));
 
-    let main_stats =
-        RepositoryFixture::repository_root().read(".github/workflows/main-build-stats.yml");
-    for required in [
-        "Download completed Main cache telemetry",
-        "cache-telemetry-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-*",
-        "cacheTelemetry",
-    ] {
-        assert!(
-            main_stats.contains(required),
-            "Main statistics must retain cache telemetry: {required}"
-        );
-    }
     Ok(())
 }
 

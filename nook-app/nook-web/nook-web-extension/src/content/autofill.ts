@@ -57,248 +57,280 @@ import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
 import { authenticatorEnrollmentInteraction } from './enrollment-flow'
 
-async function performScanAndRender(): Promise<void> {
-  if (widgetState.dismissed) return
-  if (saveOfferState.confirmationActive) return
-  if (authenticatorEnrollmentInteraction.enrollmentScanBlocked()) return
-  const sequence = ++scanState.sequence
-  if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
-    const { offer } = saveOfferState.display
-    if (
-      widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
-      widgetState.workflowKey.key !== `save:${offer.offerId}`
-    ) {
-      loginSaveInteraction.renderSaveOfferWidget(offer)
-    }
-    return
-  }
-  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
-    void loginSaveInteraction.evaluatePendingSaveEvidence()
-    return
-  }
-  const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
-  if (sequence !== scanState.sequence) return
-  if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
-    loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
-    return
-  }
-  const { copy: recoveryCopy, hint: backupCodesHint } =
-    recoveryCopyObservation.authenticationRecoveryEvidence()
-  const enrollmentHints =
-    authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy(
-      recoveryCopy,
-    )
-  enrollmentHints.backupCodes = backupCodesHint === 'present'
-  const workflowForms = passwordFormInteraction
-    .summarizeAuthenticationWorkflowForms()
-    .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)
-  // Setup material starts an enrollment ceremony. Recovery hints remain part
-  // of an active OTP challenge so Rust can keep code fill as the primary action,
-  // while a direct backup-code-only page still exposes the save ceremony.
-  if (
-    (enrollmentHints.qr || enrollmentHints.backupCodes) &&
-    workflowForms.length === 0
-  ) {
-    const enrollmentMatch = authentication_enrollment_workflow_match(
-      enrollmentHints.qr,
-      recoveryCopy,
-      passwordFieldDiscovery.pageHasManualCheckpoint(document),
-    )
-    if (
-      enrollmentMatch.kind !== 'matched' ||
-      authentication_workflow_pilot_presentation_capability(
-        enrollmentMatch.snapshot,
-      ) !== 'propose-action'
-    ) {
-      removeScannedWidget()
-      return
-    }
-    authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
-    loginPasskeyInteraction.cancelPendingLoginPickerRequest()
-    const vaultConnection = await workflowUi.loadPilotVaultConnection()
-    if (sequence !== scanState.sequence) return
-    const nookTypedArgs0_0: Parameters<
-      typeof authenticationWidgetRenderer.renderEnrollmentWidget
-    >[0] = {
-      hints: enrollmentHints,
-      snapshot: enrollmentMatch.snapshot,
-      vaultConnection,
-    }
-    authenticationWidgetRenderer.renderEnrollmentWidget(nookTypedArgs0_0)
-    return
-  }
-  if (workflowForms.length === 0) {
-    removeScannedWidget()
-    return
-  }
-
-  const classifiedRequest: ConstructorParameters<
-    typeof AuthenticationWorkflowClassification
-  >[0] = {
-    workflowForms,
-    authenticatorSetupHint: enrollmentHints.qr,
-    backupCodesHint: enrollmentHints.backupCodes,
-  }
-  const classifiedWorkflows = new AuthenticationWorkflowClassification(
-    classifiedRequest,
-  ).observations
-  if (classifiedWorkflows.length === 0) {
-    removeScannedWidget()
-    return
-  }
-  const message: Parameters<
-    typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage
-  >[0] = {
-    type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
-    payload: {
-      origin: location.origin,
-      observations: classifiedWorkflows.map(({ facts }) => facts),
-    },
-  }
-  const delivery =
-    await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
-      message,
-    )
-  if (sequence !== scanState.sequence) return
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    removeScannedWidget()
-    return
-  }
-  const { response } = delivery
-  const { verdict, loginMatches } = response
-  if (
-    verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
-    !('snapshot' in verdict) ||
-    response.selectedFacts.state !== 'selected'
-  ) {
-    removeScannedWidget()
-    return
-  }
-  const { snapshot } = verdict
-  const selected = classifiedWorkflows[snapshot.observationIndex]
-  if (
-    authentication_workflow_pilot_presentation_capability(snapshot) === 'hidden'
-  ) {
-    removeScannedWidget()
-    return
-  }
-  if (!selected) {
-    removeScannedWidget()
-    return
-  }
-  const vaultConnection = await workflowUi.loadPilotVaultConnection()
-  if (sequence !== scanState.sequence) return
-  const nookTypedArgs0_1: Parameters<
-    typeof authenticationWidgetRenderer.renderWidget
-  >[0] = {
-    snapshot,
-    workflow: selected.observation,
-    facts: response.selectedFacts.facts,
-    loginMatches,
-    vaultConnection,
-  }
-  authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
+enum AuthenticationScanOutcome {
+  Removed = 'removed',
+  Rendered = 'rendered',
+  Stale = 'stale',
+  Suppressed = 'suppressed',
+  Watching = 'watching',
 }
 
-async function scanAndRender(): Promise<void> {
-  try {
-    await performScanAndRender()
-  } finally {
-    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
-  }
-}
-
-function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
-  if (
-    Array.isArray(mutations) &&
-    mutations.length > 0 &&
-    !mutations.some(
-      authenticationFactObserver.authenticationFactMutationRequiresScan.bind(
-        authenticationFactObserver,
-      ),
-    )
-  ) {
-    return
-  }
-  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
-    window.clearTimeout(scanState.scheduleState.timer)
-  }
-  const delay = scanState.remainingScanDelay(
-    AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
-  )
-
-  scanState.scheduleTimer(
-    window.setTimeout(() => {
-      scanState.clearPendingTimer()
-      void scanAndRender()
-    }, delay),
-  )
-}
-
-function invalidateRenderedAuthenticationAction(): void {
-  widgetState.busy = false
-  authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
-  loginPasskeyInteraction.cancelPendingLoginPickerRequest()
+type AuthenticationScanRenderLifecycleRequest = {
+  readonly scanState: typeof scanState
 }
 
 type AuthenticationMutationRecords = MutationRecord[]
 
-function handleAuthenticationMutations(
-  records: AuthenticationMutationRecords,
-): void {
-  if (widgetState.host.kind === WidgetHostKind.Attached) {
-    const mountedHost = widgetState.host.mountedElement
-    const mountedHostWasRemoved = records.some(
-      (record) =>
-        record.type === 'childList' &&
-        !mountedHost.isConnected &&
-        [...record.removedNodes].some((node) => node === mountedHost),
-    )
-    if (mountedHostWasRemoved) {
-      invalidateRenderedAuthenticationAction()
-      widgetState.clearRenderedWidget()
-      scheduleScan()
-      return
+class AuthenticationScanRenderLifecycle {
+  constructor(
+    private readonly request: AuthenticationScanRenderLifecycleRequest,
+  ) {}
+
+  private async performScanAndRender(): Promise<AuthenticationScanOutcome> {
+    if (widgetState.dismissed) return AuthenticationScanOutcome.Suppressed
+    if (saveOfferState.confirmationActive)
+      return AuthenticationScanOutcome.Suppressed
+    if (authenticatorEnrollmentInteraction.enrollmentScanBlocked())
+      return AuthenticationScanOutcome.Suppressed
+    const sequence = ++this.request.scanState.sequence
+    if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+      const { offer } = saveOfferState.display
+      if (
+        widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
+        widgetState.workflowKey.key !== `save:${offer.offerId}`
+      ) {
+        loginSaveInteraction.renderSaveOfferWidget(offer)
+      }
+      return AuthenticationScanOutcome.Rendered
+    }
+    if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
+      void loginSaveInteraction.evaluatePendingSaveEvidence()
+      return AuthenticationScanOutcome.Watching
+    }
+    const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
+    if (sequence !== this.request.scanState.sequence)
+      return AuthenticationScanOutcome.Stale
+    if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
+      loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
+      return AuthenticationScanOutcome.Watching
+    }
+    const { copy: recoveryCopy, hint: backupCodesHint } =
+      recoveryCopyObservation.authenticationRecoveryEvidence()
+    const enrollmentHints =
+      authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy(
+        recoveryCopy,
+      )
+    enrollmentHints.backupCodes = backupCodesHint === 'present'
+    const workflowForms = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)
+    // Setup material starts an enrollment ceremony. Recovery hints remain part
+    // of an active OTP challenge so Rust can keep code fill as the primary action,
+    // while a direct backup-code-only page still exposes the save ceremony.
+    if (
+      (enrollmentHints.qr || enrollmentHints.backupCodes) &&
+      workflowForms.length === 0
+    ) {
+      const enrollmentMatch = authentication_enrollment_workflow_match(
+        enrollmentHints.qr,
+        recoveryCopy,
+        passwordFieldDiscovery.pageHasManualCheckpoint(document),
+      )
+      if (
+        enrollmentMatch.kind !== 'matched' ||
+        authentication_workflow_pilot_presentation_capability(
+          enrollmentMatch.snapshot,
+        ) !== 'propose-action'
+      ) {
+        removeScannedWidget()
+        return AuthenticationScanOutcome.Removed
+      }
+      authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
+      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
+      const vaultConnection = await workflowUi.loadPilotVaultConnection()
+      if (sequence !== this.request.scanState.sequence)
+        return AuthenticationScanOutcome.Stale
+      const nookTypedArgs0_0: Parameters<
+        typeof authenticationWidgetRenderer.renderEnrollmentWidget
+      >[0] = {
+        hints: enrollmentHints,
+        snapshot: enrollmentMatch.snapshot,
+        vaultConnection,
+      }
+      authenticationWidgetRenderer.renderEnrollmentWidget(nookTypedArgs0_0)
+      return AuthenticationScanOutcome.Rendered
+    }
+    if (workflowForms.length === 0) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
+    >[0] = {
+      workflowForms,
+      authenticatorSetupHint: enrollmentHints.qr,
+      backupCodesHint: enrollmentHints.backupCodes,
+    }
+    const classifiedWorkflows = new AuthenticationWorkflowClassification(
+      classifiedRequest,
+    ).observations
+    if (classifiedWorkflows.length === 0) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+    const message: Parameters<
+      typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage
+    >[0] = {
+      type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+      payload: {
+        origin: location.origin,
+        observations: classifiedWorkflows.map(({ facts }) => facts),
+      },
+    }
+    const delivery =
+      await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
+        message,
+      )
+    if (sequence !== this.request.scanState.sequence)
+      return AuthenticationScanOutcome.Stale
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+    const { response } = delivery
+    const { verdict, loginMatches } = response
+    if (
+      verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+      !('snapshot' in verdict) ||
+      response.selectedFacts.state !== 'selected'
+    ) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+    const { snapshot } = verdict
+    const selected = classifiedWorkflows[snapshot.observationIndex]
+    if (
+      authentication_workflow_pilot_presentation_capability(snapshot) ===
+      'hidden'
+    ) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+    if (!selected) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Removed
+    }
+    const vaultConnection = await workflowUi.loadPilotVaultConnection()
+    if (sequence !== this.request.scanState.sequence)
+      return AuthenticationScanOutcome.Stale
+    const nookTypedArgs0_1: Parameters<
+      typeof authenticationWidgetRenderer.renderWidget
+    >[0] = {
+      snapshot,
+      workflow: selected.observation,
+      facts: response.selectedFacts.facts,
+      loginMatches,
+      vaultConnection,
+    }
+    authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
+    return AuthenticationScanOutcome.Rendered
+  }
+
+  async scanAndRender(): Promise<void> {
+    try {
+      await this.performScanAndRender()
+    } finally {
+      authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     }
   }
-  const mountedHost =
-    widgetState.host.kind === WidgetHostKind.Attached
-      ? widgetState.host.mountedElement
-      : false
-  const renderedWorkflow =
-    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
-      ? widgetState.renderedWorkflowRoot.observation
-      : false
-  const impactRequest: Parameters<
-    typeof authenticationSurfaceObservation.authenticationMutationImpact
-  >[0] = {
-    records,
-    mountedHost,
-    renderedWorkflow,
+
+  schedule(mutations?: AuthenticationScanMutationBatch): void {
+    const { scanState } = this.request
+    if (
+      Array.isArray(mutations) &&
+      mutations.length > 0 &&
+      !mutations.some(
+        authenticationFactObserver.authenticationFactMutationRequiresScan.bind(
+          authenticationFactObserver,
+        ),
+      )
+    ) {
+      return
+    }
+    if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
+      window.clearTimeout(scanState.scheduleState.timer)
+    }
+    const delay = scanState.remainingScanDelay(
+      AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
+    )
+    scanState.scheduleTimer(
+      window.setTimeout(() => {
+        scanState.clearPendingTimer()
+        void this.scanAndRender()
+      }, delay),
+    )
   }
-  const impact =
-    authenticationSurfaceObservation.authenticationMutationImpact(impactRequest)
-  if (!impact.shouldScheduleScan) return
-  if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
-    invalidateRenderedAuthenticationAction()
-    removeScannedWidget()
-    scheduleScan()
-    return
+
+  handleMutations(records: AuthenticationMutationRecords): void {
+    if (widgetState.host.kind === WidgetHostKind.Attached) {
+      const mountedHost = widgetState.host.mountedElement
+      const mountedHostWasRemoved = records.some(
+        (record) =>
+          record.type === 'childList' &&
+          !mountedHost.isConnected &&
+          [...record.removedNodes].some((node) => node === mountedHost),
+      )
+      if (mountedHostWasRemoved) {
+        this.invalidateRenderedAuthenticationAction()
+        widgetState.clearRenderedWidget()
+        this.schedule()
+        return
+      }
+    }
+    const mountedHost =
+      widgetState.host.kind === WidgetHostKind.Attached
+        ? widgetState.host.mountedElement
+        : false
+    const renderedWorkflow =
+      widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+        ? widgetState.renderedWorkflowRoot.observation
+        : false
+    const impactRequest: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
+      records,
+      mountedHost,
+      renderedWorkflow,
+    }
+    const impact =
+      authenticationSurfaceObservation.authenticationMutationImpact(
+        impactRequest,
+      )
+    if (!impact.shouldScheduleScan) return
+    if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
+      this.invalidateRenderedAuthenticationAction()
+      removeScannedWidget()
+      this.schedule()
+      return
+    }
+    // Filling may synchronously schedule a framework update that enables the
+    // observed advance control. Keep the mount through that update; the action
+    // path still requires a fresh domain decision and exact control identity.
+    if (
+      widgetState.host.kind === WidgetHostKind.Attached &&
+      renderedWorkflow &&
+      impact.shouldRemountRenderedWorkflow &&
+      !widgetState.credentialActuationInFlight
+    ) {
+      this.invalidateRenderedAuthenticationAction()
+      removeScannedWidget()
+    }
+    this.schedule()
   }
-  // Filling may synchronously schedule a framework update that enables the
-  // observed advance control. Keep the mount through that update; the action
-  // path still requires a fresh domain decision and exact control identity.
-  if (
-    widgetState.host.kind === WidgetHostKind.Attached &&
-    renderedWorkflow &&
-    impact.shouldRemountRenderedWorkflow &&
-    !widgetState.credentialActuationInFlight
-  ) {
-    invalidateRenderedAuthenticationAction()
-    removeScannedWidget()
+
+  private invalidateRenderedAuthenticationAction(): void {
+    widgetState.busy = false
+    authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
+    loginPasskeyInteraction.cancelPendingLoginPickerRequest()
   }
-  scheduleScan()
 }
+
+const authenticationScanRenderLifecycleRequest: AuthenticationScanRenderLifecycleRequest =
+  { scanState }
+const authenticationScanRenderLifecycle = new AuthenticationScanRenderLifecycle(
+  authenticationScanRenderLifecycleRequest,
+)
 
 function handleViewportChange(): void {
   if (widgetState.host.kind !== WidgetHostKind.Attached) return
@@ -324,7 +356,9 @@ function handleViewportChange(): void {
   authenticationWidgetPosition.applyWidgetPosition(applyRequest)
 }
 
-scanState.schedule = scheduleScan
+scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
+  authenticationScanRenderLifecycle,
+)
 
 void companionWasmReady.then(async () => {
   if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
@@ -335,16 +369,22 @@ void companionWasmReady.then(async () => {
     loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
     true,
   )
-  void scanAndRender()
+  void authenticationScanRenderLifecycle.scanAndRender()
 
-  const observer = new MutationObserver(handleAuthenticationMutations)
+  const observer = new MutationObserver(
+    authenticationScanRenderLifecycle.handleMutations.bind(
+      authenticationScanRenderLifecycle,
+    ),
+  )
   const observerOptions: MutationObserverInit = {
     ...authenticationFactObserverOptions,
     attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
   }
   observer.observe(document.documentElement, observerOptions)
   authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
-    scheduleScan,
+    authenticationScanRenderLifecycle.schedule.bind(
+      authenticationScanRenderLifecycle,
+    ),
   )
   const handleWindowMessage = (
     event: MessageEvent<AuthenticationSourceMessage>,
@@ -355,7 +395,7 @@ void companionWasmReady.then(async () => {
     ) {
       return
     }
-    scheduleScan()
+    authenticationScanRenderLifecycle.schedule()
   }
   window.addEventListener('message', handleWindowMessage)
   for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {

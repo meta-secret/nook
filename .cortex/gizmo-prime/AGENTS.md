@@ -38,7 +38,9 @@ Delivery Pipeline Team Gizmo routes that packet to PR Lifecycle, which
 re-fetches and resolves the latest committed head before pushing or invoking
 the remote task.
 It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's bounded
-`dev:land` operation for the completed feature.
+`dev:land` operation for the accepted feature commit. Feature completion
+requires the resulting canonical local `dev` commit to contain that accepted
+feature commit.
 The manually run Dev Manager inside Delivery Pipeline owns remote dev
 publication and main promotion.
 
@@ -252,11 +254,20 @@ worker boundary.
 8. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle's packet. PR
    Lifecycle re-fetches and resolves the latest committed canonical feature
    branch, then pushes and invokes the remote build-only task for that head.
-9. Complete the user-selected terminal state.
+9. Authorize serialized `dev:land` for the accepted feature commit.
+10. Resolve the resulting canonical local `dev` commit and verify that it
+    contains the accepted feature commit.
+11. Complete the user-selected terminal state only after that containment
+    proof succeeds.
 
 For a feature mission, completion includes code review, remote compilation of
-the current branch head, serialized local dev integration, and Workbench handoff.
-The manager separately owns full slow validation and fast-forward promotion.
+the current branch head, serialized local dev integration, verified containment
+of the accepted feature commit in canonical local `dev`, and Workbench handoff.
+No agent may report the feature as complete, done, delivered, successful, or an
+equivalent terminal outcome before containment is proved. Intermediate checks
+may be called successful only when the wording names that specific stage and
+cannot imply feature completion. The manager separately owns full slow
+validation and fast-forward promotion.
 
 ## Verdict
 

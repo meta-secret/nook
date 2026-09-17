@@ -16,7 +16,6 @@ Load only the authority needed for the assigned Docker cache packet.
 - [Docker container and harness hygiene](../dynamic-skills/docker-container-harness.md)
 - [GitHub Actions execution and validation](../dynamic-skills/github-actions-only-validation.md)
 - [CI pipeline](../workflows/ci-pipeline.md)
-- [Main build statistics](../workflows/main-build-statistics.md)
 - [Remote execution](../workflows/remote-execution.md)
 
 ## Delivery authority

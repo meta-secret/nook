@@ -266,7 +266,7 @@ sequenceDiagram
     Prime->>Prime: Fetch, synchronize main and dev, then record latest refs/heads/dev as pinnedLocalDevSha evidence
     Prime->>Feature: Create from exact post-sync local-dev commit; resolve later head by branch name
     Prime->>Gizmo: Issue feature ownership packet
-    Gizmo->>Gizmo: Plan complete feature
+    Gizmo->>Gizmo: Plan requested feature scope
     Gizmo->>Code: Assign Rust and domain work
     Gizmo->>Web: Assign web work
 
@@ -354,8 +354,8 @@ sequenceDiagram
         participant Build as remote:build-compile
     end
 
-    box Feature delivery
-        participant Delivery as feature:verified
+    box Feature verification
+        participant Verification as feature:verified
     end
 
     Prime->>Feature: Route mission with canonical branch name and bootstrap evidence
@@ -370,7 +370,7 @@ sequenceDiagram
     Steward-->>Pipeline: Green evidence or diagnostics
     Pipeline-->>Prime: Synthesized branch-head result
     Prime-->>Feature: Green evidence or feedback
-    Feature->>Delivery: Deliver green branch head
+    Feature->>Verification: Record green branch head
 
     Note over Prime,Steward: Prime authorizes the canonical branch name; PR Lifecycle resolves the latest head before push and dispatch
     Note over Feature,Build: Any failure returns to Level 1
@@ -453,10 +453,11 @@ sequenceDiagram
 ## Level 4: Local dev integration ownership boundary
 
 Git is the coordination layer. Gizmo Prime remains the mission/root owner and
-each Feature Gizmo owns its completed feature and landing request. Delivery
-Pipeline Team Gizmo routes the bounded `dev:land` packet to its `pr-lifecycle`
-agent, which executes the fast-forward-only landing under the serialized local
-integration task. There is no feature PR and no publication of `dev` here.
+each Feature Gizmo owns its accepted feature commit and landing request.
+Delivery Pipeline Team Gizmo routes the bounded `dev:land` packet to its
+`pr-lifecycle` agent. That agent executes the fast-forward-only landing under
+the serialized local integration task. There is no feature PR and no
+publication of `dev` here.
 
 The landing request names only the Prime-authorized canonical feature branch;
 it carries no caller-selected checkout path or synchronization SHAs. Before
@@ -480,12 +481,15 @@ flowchart LR
     Resolve["Feature Gizmo and teams:<br/>reconcile with local dev"]
     Checks["External checks"]
     Dev["Local dev:<br/>updated"]
+    Contained{"Accepted feature commit<br/>contained in local dev?"}
     Complete([Feature complete])
 
     Gizmo --> Pipeline --> Landing --> Result
     Result -- Lock busy --> Retry --> Landing
     Result -- Conflict --> Resolve --> Checks --> Landing
-    Result -- Success --> Pipeline --> Dev --> Complete
+    Result -- Success --> Pipeline --> Dev --> Contained
+    Contained -- No --> Resolve
+    Contained -- Yes --> Complete
 ```
 
 ### Component communication
@@ -525,6 +529,7 @@ sequenceDiagram
     Steward->>Git: Resolve and merge latest branch head under integration lock
     Git->>Dev: Advance local dev
     Git-->>Steward: Observed feature commit and resulting dev SHA
+    Steward->>Dev: Verify accepted feature commit is an ancestor of resulting dev commit
     Steward-->>Pipeline: Landing evidence
     Pipeline-->>Prime: Synthesized landing evidence
     Prime-->>A: Landing result
@@ -534,6 +539,7 @@ sequenceDiagram
     Steward->>Git: Resolve and merge latest branch head under integration lock
     Git->>Dev: Advance local dev
     Git-->>Steward: Observed feature commit and resulting dev SHA
+    Steward->>Dev: Verify accepted feature commit is an ancestor of resulting dev commit
     Steward-->>Pipeline: Landing evidence
     Pipeline-->>Prime: Synthesized landing evidence
     Prime-->>B: Landing result
@@ -727,6 +733,9 @@ sequenceDiagram
   requests.
 - `dev:land` serializes shared local-dev mutations and never creates a feature
   PR.
+- Feature completion requires post-landing proof that canonical local `dev`
+  contains the accepted feature commit. No terminal completion, delivery, or
+  success claim may precede that proof.
 - `dev:pr-manager` is the sole pull-request creation/update path and operates
   only on the manager-selected `origin/dev` snapshot.
 - The Dev Manager freezes each published `origin/dev` SHA for its validation

@@ -96,6 +96,7 @@ tasks:
         buildkit_cfg=""
         proof_log=""
         rust_source_block=""
+        compile_runtime_mode=""
         parent_input="$sim_dir/inputs/parent.txt"
         parent_input_orig="$(cat "$parent_input")"
         leaf_input="$sim_dir/inputs/leaf.txt"
@@ -128,6 +129,9 @@ tasks:
           fi
           if [ -n "$rust_source_block" ]; then
             rm -f "$rust_source_block"
+          fi
+          if [ -n "$compile_runtime_mode" ]; then
+            rm -f "$compile_runtime_mode"
           fi
           rm -rf -- "$trusted_docker_config"
         }
@@ -214,6 +218,31 @@ tasks:
           if [ "$bake_status" -ne 0 ] && grep -Eq 'exporting cache to registry| CACHED$|bake-sim-' "$log_file"; then
             return 0
           fi
+          return "$bake_status"
+        }
+
+        bake_compile() {
+          local log_file="$1"
+          local source_scope="$2"
+          local parent_scope="$3"
+          local export_enabled="$4"
+          local telemetry_replay="$5"
+          set +e
+          env \
+            COMPILE_SOURCE_SCOPE="$source_scope" \
+            COMPILE_PARENT_SOURCE_SCOPE="$parent_scope" \
+            COMPILE_SOURCE_CACHE_WRITE_ENABLED="$export_enabled" \
+            SIMULATED_SCCACHE_TELEMETRY_REPLAY="$telemetry_replay" \
+            SIMULATED_SCCACHE_RUNTIME_MODE_FILE="$compile_runtime_mode" \
+            NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
+            "$docker_cli" buildx bake \
+            --progress=plain \
+            -f "$sim_dir/compile-warm.docker-bake.hcl" \
+            --set "*.context=$sim_dir" \
+            compile-warm >"$log_file" 2>&1
+          local bake_status=$?
+          set -e
+          cat "$log_file"
           return "$bake_status"
         }
 
@@ -918,4 +947,30 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario Z ok"
 
+        echo "== Scenario AA: cold compile cache seeds exact head =="
+        compile_runtime_mode="$(mktemp)"
+        chmod 600 "$compile_runtime_mode"
+        printf 'READ_WRITE\n' >"$compile_runtime_mode"
+        compile_seed_scope="git-${suffix}-aa"
+        compile_next_scope="git-${suffix}-ab"
+        create_builder "nook-bake-sim-compile-aa-${suffix}"
+        bake_compile "$proof_log" "$compile_seed_scope" "" 1 "replay-aa-${suffix}"
+        require_uncached_step "$proof_log" "bake-sim-compile-cargo-fetch"
+        require_uncached_step "$proof_log" "bake-sim-compile-native-dependencies"
+        require_uncached_step "$proof_log" "bake-sim-compile-nook-wasm-build"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-compile-${compile_seed_scope}"
+        echo "scenario AA ok"
+
+        echo "== Scenario AB: successor head imports parent lineage =="
+        create_builder "nook-bake-sim-compile-ab-${suffix}"
+        bake_compile "$proof_log" "$compile_next_scope" "$compile_seed_scope" 1 "replay-ab-${suffix}"
+        require_cached_step "$proof_log" "bake-sim-compile-cargo-fetch"
+        require_cached_step "$proof_log" "bake-sim-compile-native-dependencies"
+        require_cached_step "$proof_log" "bake-sim-compile-wasm-dependencies"
+        require_cached_step "$proof_log" "bake-sim-compile-web-dependencies"
+        require_cached_step "$proof_log" "bake-sim-compile-nook-wasm-build"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-compile-${compile_next_scope}"
+        echo "scenario AB ok"
+
+        echo "bake-cache compile lineage proof passed"
         echo "bake-cache runtime proof passed"

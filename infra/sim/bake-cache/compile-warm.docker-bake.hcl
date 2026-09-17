@@ -10,11 +10,7 @@ variable "COMPILE_SOURCE_SCOPE" {
   default = "git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
-variable "COMPILE_SOURCE_CACHE_AVAILABLE" {
-  default = ""
-}
-
-variable "COMPILE_RESTORE_SOURCE_SCOPE" {
+variable "COMPILE_PARENT_SOURCE_SCOPE" {
   default = ""
 }
 
@@ -46,18 +42,28 @@ variable "SIMULATED_SCCACHE_NEXT_HEAD_HITS" {
   default = "1"
 }
 
-// v4 models the single exact-head export used in production. Its timeout is a
-// per-registry-operation limit; the five-minute job is the total latency bound.
-// manifests do not prove that the final compiler lineage was retained.
-compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v4-${COMPILE_SOURCE_SCOPE}:buildcache"
-compile_restore_source_scope = COMPILE_RESTORE_SOURCE_SCOPE != "" ? COMPILE_RESTORE_SOURCE_SCOPE : COMPILE_SOURCE_SCOPE
-compile_restore_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v4-${compile_restore_source_scope}:buildcache"
-compile_cache_from = COMPILE_SOURCE_CACHE_AVAILABLE != "" ? [
-  "type=registry,ref=${compile_restore_source_cache_ref}",
-] : []
+variable "SIMULATED_SCCACHE_RUNTIME_MODE_FILE" {
+  default = ""
+}
+
+variable "SIMULATED_SCCACHE_TELEMETRY_REPLAY" {
+  default = "disabled"
+}
+
+// BuildKit imports the immutable exact current and first-parent refs. An
+// expected absent ref is an ordinary cache miss; the transport-health check
+// and the actual cache export remain fail-fast.
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}:buildcache"
+compile_parent_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_PARENT_SOURCE_SCOPE}:buildcache"
+compile_cache_from = concat(
+  ["type=registry,ref=${compile_source_cache_ref}"],
+  COMPILE_PARENT_SOURCE_SCOPE != "" && COMPILE_PARENT_SOURCE_SCOPE != COMPILE_SOURCE_SCOPE ? [
+    "type=registry,ref=${compile_parent_cache_ref}",
+  ] : [],
+)
 
 compile_source_cache_to = COMPILE_SOURCE_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s,ignore-error=true",
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s",
 ] : []
 
 compile_solve_args = {
@@ -78,6 +84,7 @@ target "compile-warm" {
     toolchain-base = "target:compile-toolchain-context"
   }
   args = compile_solve_args
+  secret = ["id=sccache_runtime_mode,src=${SIMULATED_SCCACHE_RUNTIME_MODE_FILE}"]
   cache-from = compile_cache_from
   cache-to = compile_source_cache_to
   output = ["type=cacheonly"]
@@ -88,5 +95,8 @@ target "compile-toolchain-context" {
   dockerfile = "compile-warm.Dockerfile"
   target = "compile-toolchain-image"
   platforms = ["linux/amd64"]
+  args = {
+    SIMULATED_SCCACHE_TELEMETRY_REPLAY = SIMULATED_SCCACHE_TELEMETRY_REPLAY
+  }
   output = ["type=cacheonly"]
 }

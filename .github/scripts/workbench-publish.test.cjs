@@ -1,157 +1,233 @@
-/** @type {(moduleName: string) => unknown} */
-const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
 /** @type {typeof import('node:assert/strict')} */
-const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+const assert = /** @type {typeof import('node:assert/strict')} */ (
+  process.getBuiltinModule('node:assert/strict')
+)
 /** @type {typeof import('node:fs')} */
-const fs = /** @type {typeof import('node:fs')} */ (loadBuiltin('node:fs'))
+const fs = /** @type {typeof import('node:fs')} */ (
+  process.getBuiltinModule('node:fs')
+)
 /** @type {typeof import('node:os')} */
-const os = /** @type {typeof import('node:os')} */ (loadBuiltin('node:os'))
+const os = /** @type {typeof import('node:os')} */ (
+  process.getBuiltinModule('node:os')
+)
 /** @type {typeof import('node:path')} */
-const path = /** @type {typeof import('node:path')} */ (loadBuiltin('node:path'))
+const path = /** @type {typeof import('node:path')} */ (
+  process.getBuiltinModule('node:path')
+)
 /** @type {typeof import('node:child_process')} */
-const childProcess = /** @type {typeof import('node:child_process')} */ (loadBuiltin('node:child_process'))
+const childProcess = /** @type {typeof import('node:child_process')} */ (
+  process.getBuiltinModule('node:child_process')
+)
 /** @type {typeof import('node:test')} */
-const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
+const test = /** @type {typeof import('node:test')} */ (
+  process.getBuiltinModule('node:test')
+)
+
+const WorkbenchRemoteShaOverrideKind = Object.freeze({
+  NotConfigured: 'not-configured',
+  Configured: 'configured',
+})
+/** @typedef {{ kind: typeof WorkbenchRemoteShaOverrideKind.NotConfigured } | { kind: typeof WorkbenchRemoteShaOverrideKind.Configured, sha: string }} WorkbenchRemoteShaOverride */
+
+const WorkbenchExpectedShaOverrideKind = Object.freeze({
+  NotConfigured: 'not-configured',
+  Configured: 'configured',
+})
+/** @typedef {{ kind: typeof WorkbenchExpectedShaOverrideKind.NotConfigured } | { kind: typeof WorkbenchExpectedShaOverrideKind.Configured, sha: string }} WorkbenchExpectedShaOverride */
+
+/** @type {WorkbenchRemoteShaOverride} */
+const remoteShaNotConfigured = {
+  kind: WorkbenchRemoteShaOverrideKind.NotConfigured,
+}
+/** @type {WorkbenchExpectedShaOverride} */
+const expectedShaNotConfigured = {
+  kind: WorkbenchExpectedShaOverrideKind.NotConfigured,
+}
 
 const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = fs
 const { tmpdir } = os
 const { delimiter, join, resolve } = path
 const { spawnSync } = childProcess
-
 const repositoryRoot = resolve(__dirname, '../..')
 const publisherPath = join(__dirname, 'workbench-publish.cjs')
+const issueContent = [
+  '# Focused issue',
+  '',
+  'This issue is safe to publish.',
+  '',
+].join(String.fromCharCode(10))
 
-/** @param {string} gizmoId @param {string} [frontmatterGizmoId] @param {string} [issuePath] */
-function plan(gizmoId, frontmatterGizmoId = gizmoId, issuePath = 'null') {
-  return `---
-issue: ${issuePath}
-gizmo_id: ${frontmatterGizmoId}
----
+class WorkbenchPublisherHarness {
+  /** @param {{ remotePath: string, remoteSha: WorkbenchRemoteShaOverride, expectedSha: WorkbenchExpectedShaOverride }} options */
+  constructor({ remotePath, remoteSha, expectedSha }) {
+    const inheritedEnv = { ...process.env }
+    delete inheritedEnv.NOOK_WORKBENCH_EXPECTED_SHA
+    delete inheritedEnv.REMOTE_SHA
+    this.remoteSha = remoteSha
+    this.expectedSha = expectedSha
+    this.remotePath = remotePath
+    this.scratch = mkdtempSync(join(tmpdir(), 'nook-workbench-publish-'))
+    this.binDirectory = join(this.scratch, 'bin')
+    this.localPath = join(this.scratch, 'issue.md')
+    this.ghCalls = join(this.scratch, 'gh-calls.jsonl')
+    this.ghPath = join(this.binDirectory, 'gh')
+    this.inheritedEnv = inheritedEnv
 
-# Task plan
-
-## Interpreted request
-
-Validate interactive plan publication.
-
-## Requirements
-
-- Bind published metadata to the plan body.
-
-## Constraints and exclusions
-
-- Keep the test local.
-
-## Change budget and PR sequence
-
-- Mission controller: Gizmo Prime
-- Current Gizmo ID: ${gizmoId}
-- Estimated authored changed lines: 20
-- Owning modules, packages, or layers: Workbench publisher
-- Ownership units:
-1. Capability: Plan publication; Gizmo ID: ${gizmoId}; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publisher tests pass
-- Public or cross-module interfaces: Interactive Workbench publication
-- Delivery shape: One PR
-- PR sequence mode: One PR
-- Current PR estimated authored changed lines: 20
-- Current PR slice and acceptance evidence: Publisher validation; Acceptance evidence: Publisher tests pass
-- PR slices, estimates, and acceptance evidence:
-1. Gizmo ID: ${gizmoId}; Gizmo name: Publisher; Predecessor Gizmo ID: None; Publisher validation; Estimated authored changed lines: 20; Acceptance evidence: Publisher tests pass
-
-## Initial plan
-
-1. Validate the publication boundary.
-
-## Completion evidence
-
-- Publisher tests pass.
-
-## Safety review
-
-- Contains public-safe test data.
-`
-}
-
-/** @param {string} gizmoId */
-function issue(gizmoId) {
-  const field = gizmoId === '' ? '' : `gizmo_id: ${gizmoId}\n`
-  return `---\ntitle: Focused issue\n${field}---\n\n# Focused issue\n`
-}
-
-/** @typedef {{ assignedGizmoId?: string, assignedIssuePath?: string, remoteIssue?: string }} PublishOptions */
-/** @param {string} candidate @param {PublishOptions} [options] */
-function publish(candidate, { assignedGizmoId = '', assignedIssuePath = '', remoteIssue = '' } = {}) {
-  const inheritedEnv = { ...process.env }
-  delete inheritedEnv.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID
-  delete inheritedEnv.NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH
-  const scratch = mkdtempSync(join(tmpdir(), 'nook-workbench-publish-'))
-  const binDirectory = join(scratch, 'bin')
-  const localPlan = join(scratch, 'plan.md')
-  const sourceTask = join(scratch, 'source-task.md')
-  const ghCalls = join(scratch, 'gh-calls.jsonl')
-  fs.mkdirSync(binDirectory)
-  const ghPath = join(binDirectory, 'gh')
-  writeFileSync(
-    ghPath,
-    `#!/usr/bin/env node
+    fs.mkdirSync(this.binDirectory)
+    writeFileSync(
+      this.ghPath,
+      `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
-appendFileSync(process.env.GH_CALLS, JSON.stringify(args) + '\\n')
+appendFileSync(process.env.GH_CALLS, JSON.stringify(args) + String.fromCharCode(10))
 if (args.includes('PUT')) process.exit(0)
-if (args[1]?.includes('/contents/issues/') && process.env.REMOTE_ISSUE) {
-  process.stdout.write(process.env.REMOTE_ISSUE)
+if (Object.hasOwn(process.env, 'REMOTE_SHA')) {
+  process.stdout.write(process.env.REMOTE_SHA)
   process.exit(0)
 }
 process.exit(1)
 `,
-  )
-  chmodSync(ghPath, 0o755)
-  writeFileSync(localPlan, candidate)
-  writeFileSync(sourceTask, 'Privately supplied publisher validation task.')
-  writeFileSync(ghCalls, '')
+    )
+    chmodSync(this.ghPath, 0o755)
+    writeFileSync(this.localPath, issueContent)
+    writeFileSync(this.ghCalls, '')
+  }
 
-  const result = spawnSync(
-    process.execPath,
-    [publisherPath, localPlan, 'plans/tests/publisher-validation.md', 'test: publish plan'],
-    {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      env: {
-        ...inheritedEnv,
-        GH_CALLS: ghCalls,
-        ...(assignedGizmoId ? { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: assignedGizmoId } : {}),
-        ...(assignedIssuePath ? { NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH: assignedIssuePath } : {}),
-        NOOK_WORKBENCH_SOURCE_TASK_FILE: sourceTask,
-        PATH: `${binDirectory}${delimiter}${process.env.PATH || ''}`,
-        REMOTE_ISSUE: remoteIssue,
+  run() {
+    const expectedShaEnvironment =
+      this.expectedSha.kind === WorkbenchExpectedShaOverrideKind.Configured
+        ? { NOOK_WORKBENCH_EXPECTED_SHA: this.expectedSha.sha }
+        : {}
+    const remoteShaEnvironment =
+      this.remoteSha.kind === WorkbenchRemoteShaOverrideKind.Configured
+        ? { REMOTE_SHA: this.remoteSha.sha }
+        : {}
+    let inheritedPath = ''
+    for (const [name, value] of Object.entries(process.env)) {
+      if (name === 'PATH') inheritedPath = value
+    }
+
+    const result = spawnSync(
+      process.execPath,
+      [publisherPath, this.localPath, this.remotePath, 'test: publish issue'],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        env: {
+          ...this.inheritedEnv,
+          GH_CALLS: this.ghCalls,
+          NOOK_WORKBENCH_REPOSITORY: 'meta-secret/nook-workbench',
+          ...expectedShaEnvironment,
+          ...remoteShaEnvironment,
+          PATH: `${this.binDirectory}${delimiter}${inheritedPath}`,
+        },
       },
-    },
-  )
-  const calls = readFileSync(ghCalls, 'utf8')
-  rmSync(scratch, { recursive: true, force: true })
-  return { result, calls }
+    )
+    const calls = readFileSync(this.ghCalls, 'utf8')
+    return { result, calls }
+  }
+
+  dispose() {
+    rmSync(this.scratch, { recursive: true, force: true })
+  }
 }
 
-const focusedIssue = 'issues/focused.md'
-/** @type {Array<[string, string, PublishOptions, number, RegExp?]>} */
-const cases = [
-  ['publishes a direct self-contained plan', plan('2fa-slice'), {}, 0],
-  ['binds an issue-backed plan to trusted caller metadata', plan('focused-slice', 'focused-slice', focusedIssue), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue, remoteIssue: issue('focused-slice') }, 0],
-  ['rejects a candidate-selected issue path', plan('focused-slice', 'focused-slice', 'issues/spoofed.md'), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue }, 7],
-  ['rejects a remote ID mismatch', plan('local-slice', 'local-slice', focusedIssue), { assignedGizmoId: 'remote-slice', assignedIssuePath: focusedIssue, remoteIssue: issue('remote-slice') }, 7],
-  ['rejects an incorrect caller ID', plan('remote-slice', 'remote-slice', focusedIssue), { assignedGizmoId: 'wrong-caller-id', assignedIssuePath: focusedIssue, remoteIssue: issue('remote-slice') }, 7],
-  ['accepts a legacy issue without an ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('') }, 0],
-  ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('null') }, 0],
-  ['rejects body and frontmatter mismatch', plan('body-slice', 'other-slice'), {}, 7, /gizmo_id must match/],
-  ['rejects null plan Gizmo ID', plan('body-slice', 'null'), {}, 7, /gizmo_id is invalid/],
-]
-for (const [name, candidate, options, status, rejection] of cases) {
-  void test(name, () => {
-    const { result, calls } = publish(candidate, options)
-    assert.equal(result.status, status, result.stderr)
-    if (rejection) assert.match(result.stderr, rejection)
-    if (options.remoteIssue) assert.match(calls, /contents\/issues\/focused\.md\?ref=main/)
-    if (status === 0) assert.match(calls, /"PUT"/)
-    else assert.doesNotMatch(calls, /"PUT"/)
+void test('publishes a Workbench issue', () => {
+  const harness = new WorkbenchPublisherHarness({
+    remotePath: 'issues/focused/one.md',
+    remoteSha: remoteShaNotConfigured,
+    expectedSha: expectedShaNotConfigured,
+  })
+  try {
+    const { result, calls } = harness.run()
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(calls, /"PUT"/)
+    assert.match(calls, /contents\/issues\/focused\/one\.md/)
+    assert.match(calls, /message=test: publish issue/)
+  } finally {
+    harness.dispose()
+  }
+})
+
+for (const remotePath of [
+  'plans/focused.md',
+  'worklogs/focused.md',
+  'stats/main-build/attempt.yaml',
+  'issues/../outside.md',
+]) {
+  void test('rejects non-issue Workbench destination ' + remotePath, () => {
+    const harness = new WorkbenchPublisherHarness({
+      remotePath,
+      remoteSha: remoteShaNotConfigured,
+      expectedSha: expectedShaNotConfigured,
+    })
+    try {
+      const { result, calls } = harness.run()
+      assert.equal(result.status, 2, result.stderr)
+      assert.match(result.stderr, /Refusing invalid Workbench issue path/)
+      assert.equal(calls, '')
+    } finally {
+      harness.dispose()
+    }
   })
 }
+
+void test('requires the expected SHA before replacing an issue', () => {
+  const harness = new WorkbenchPublisherHarness({
+    remotePath: 'issues/focused/one.md',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: expectedShaNotConfigured,
+  })
+  try {
+    const { result, calls } = harness.run()
+    assert.equal(result.status, 4, result.stderr)
+    assert.doesNotMatch(calls, /"PUT"/)
+  } finally {
+    harness.dispose()
+  }
+})
+
+void test('updates an issue when the expected SHA matches', () => {
+  const harness = new WorkbenchPublisherHarness({
+    remotePath: 'issues/focused/one.md',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: {
+      kind: WorkbenchExpectedShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+  })
+  try {
+    const { result, calls } = harness.run()
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(calls, /sha=current-sha/)
+  } finally {
+    harness.dispose()
+  }
+})
+
+void test('rejects an issue update with a stale expected SHA', () => {
+  const harness = new WorkbenchPublisherHarness({
+    remotePath: 'issues/focused/one.md',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: {
+      kind: WorkbenchExpectedShaOverrideKind.Configured,
+      sha: 'stale-sha',
+    },
+  })
+  try {
+    const { result, calls } = harness.run()
+    assert.equal(result.status, 5, result.stderr)
+    assert.doesNotMatch(calls, /"PUT"/)
+  } finally {
+    harness.dispose()
+  }
+})

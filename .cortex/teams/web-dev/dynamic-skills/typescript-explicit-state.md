@@ -105,8 +105,9 @@ mutable flags create the same problem.
 - Follow [TypeScript domain structure](typescript-domain-structure.md) for
   failure propagation and named domain types.
 - Same-prefix closed values almost always belong on a nested object plus an
-  operation enum. Do not flatten `AgentStatsAssemble` / `AgentStatsValidate`
-  into one sibling list. Field allow-lists must be enums, not string sets.
+  operation enum. Do not flatten `DocumentExportAssemble` /
+  `DocumentExportValidate` into one sibling list. Field allow-lists must be
+  enums, not string sets.
 - Name both the union and its variants for the lifecycle being modeled:
   `not-loaded/loaded`, `unmounted/mounted`, `idle/scheduled`,
   `not-selected/selected`, `locked/active`, or more precise domain language.

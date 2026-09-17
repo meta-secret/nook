@@ -6,6 +6,18 @@ export class CacheScopeTelemetry {
   }
 
   record() {
+    const parentScopeSuffix =
+      typeof this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX === "string"
+        ? this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX
+        : "";
+    const registryHost =
+      typeof this.environment.NOOK_REGISTRY_CACHE_HOST === "string"
+        ? this.environment.NOOK_REGISTRY_CACHE_HOST
+        : "";
+    const parentRef =
+      parentScopeSuffix.length > 0 && registryHost.length > 0
+        ? `${registryHost}/nook/remote-buildcache/nook-build-compile${parentScopeSuffix}:buildcache`
+        : "";
     const cacheAvailability = Object.entries(this.environment)
       .filter(([name]) => /^GHA_CACHE_(?:EXACT|MAIN)_.+_AVAILABLE$/.test(name))
       .sort(([left], [right]) => left.localeCompare(right))
@@ -20,8 +32,10 @@ export class CacheScopeTelemetry {
       },
       compile_source: {
         scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
-          ? `nook-build-compile-v4${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
+          ? `nook-build-compile${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
           : "",
+        parent_scope_suffix: parentScopeSuffix,
+        parent_ref: parentRef,
       },
       imports: {
         probes_complete:

@@ -43,8 +43,6 @@ ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
 # Rust-based helper image just to obtain one CLI.
 ARG CARGO_CHEF_VERSION=0.1.77
 ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
-
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/nook-platform/target). The heavy
 # target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
 # the slim web image.

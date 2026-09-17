@@ -96,7 +96,7 @@ A full-tree GC follows this ownership model:
 Does not apply to:
 
 - chat-only scratch notes outside `.cortex`
-- Workbench task status records
+- Workbench issue lifecycle records
 - intentional historical archives that are clearly labeled historical
 - secrets, credentials, or private runtime data
 

@@ -2,6 +2,7 @@ import { Schema } from 'effect'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import { ExtensionSessionLifecycleMessageType } from '../../lib/extension-session-lifecycle-message-type'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
+import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
 export type ExtensionSessionEnsureMessage = {
   type: ExtensionRuntimeRequestType.EnsureRuntime
@@ -19,21 +20,7 @@ export type ExtensionSessionLockMessage = {
   type: ExtensionSessionMessageType.Lock
 }
 
-export type ExtensionSessionRuntimeMessageInput = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | ExtensionSessionRuntimeMessageInput
-    | ExtensionSessionRuntimeMessageInput[]
-}
-
-export type ExtensionSessionRuntimeMessageValue =
-  | ExtensionSessionRuntimeMessageInput
-  | ExtensionSessionRuntimeMessageInput[]
-  | string
-  | number
-  | boolean
+export type ExtensionSessionRuntimeMessageValue = BrowserRuntimeMessage
 
 const extensionSessionEnsureMessageSchema = Schema.Struct({
   type: Schema.Literal(ExtensionRuntimeRequestType.EnsureRuntime),

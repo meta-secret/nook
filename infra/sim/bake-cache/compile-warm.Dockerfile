@@ -18,10 +18,16 @@ ARG SIMULATED_SCCACHE_NEXT_HEAD_HITS=1
 ENV SCCACHE_S3_RW_MODE=READ_WRITE
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
+FROM compile-toolchain AS compile-platform-manifests
+COPY inputs/compile-platform-manifests.txt /tmp/platform-manifests.txt
+RUN test -s /tmp/platform-manifests.txt \
+  && cat /tmp/platform-manifests.txt >/opt/compile-platform-manifests \
+  && echo bake-sim-compile-cargo-fetch
+
 # Every dependency compiler is a direct ancestor of the exported compile
 # target. This models the production root contract instead of a scratch marker
 # join that can obscure the reusable compiler records.
-FROM compile-toolchain AS compile-native-dependencies
+FROM compile-platform-manifests AS compile-native-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" = 1 \

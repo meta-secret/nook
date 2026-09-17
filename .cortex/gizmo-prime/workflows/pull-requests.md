@@ -53,12 +53,14 @@ functional ownership, readiness, promotion, or final delivery.
   - Missing or unprovable branch/bootstrap evidence fails closed; stale head
     observations trigger re-resolution rather than an authority failure.
   - Freeze origin/dev during validation and promotion.
-  - Local dev may continue accepting completed features.
+  - Local dev may continue accepting landing-ready feature commits.
+    Feature completion requires post-landing containment evidence.
   - Preserve complete review and security acceptance for the promoted SHA.
 - **Scope**
   - Keep each feature cohesive and attributable to its owning Gizmo.
   - Record meaningful acceptance criteria and authored test coverage.
-  - Record feature commits and local integration SHA in Workbench handoffs.
+  - Record feature commits and the local integration SHA in the focused
+    issue's progress when relevant.
   - Minimize unnecessary changes without splitting merely to satisfy a size limit.
 
 ## Prohibited actions
@@ -103,16 +105,13 @@ this order:
 ## Nook Workbench
 
 - Focused issue: <public URL or unavailable with reason>
-- Immutable plan: <public commit-pinned URL or unavailable with reason>
-- Worklog: <public URL, pending, or unavailable with reason>
 
 ## Validation
 
 - <published dev SHA and slow check results>
 ```
 
-- Keep provenance for the constituent features discoverable through Workbench.
-- Replace pending worklog values when records are published.
+- Keep feature and issue provenance discoverable through Workbench.
 - Never invent IDs or evidence URLs.
 - Never publish prompts, local paths, credentials, or private machine context.
 - Refresh title, scope, links, and validation after each published snapshot.
@@ -154,7 +153,7 @@ review. Missing evidence remains visible.
    - If ancestry or protection rejects publication, report the blocker.
    - Reconcile through dev and revalidate when a new candidate is necessary.
 5. Verify remote main equals the tested SHA and obtain actual PR status.
-6. Publish Workbench completion evidence.
+6. Update the focused Workbench issue's status and progress when applicable.
 7. Preserve any newer local dev work for the next manually selected cycle.
 
 Follow [mission delivery](mission-delivery.md) for feature handoffs and

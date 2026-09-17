@@ -66,6 +66,17 @@ export type ExtensionLifecycleRoutingDependencies = {
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
 }
 
+export type InterruptedAuthorizationCleanupRecoveryDependencies = Pick<
+  ExtensionLifecycleRoutingDependencies,
+  | 'accountPickerAuthorizationCleanupPending'
+  | 'beginAccountPickerAuthorizationCleanup'
+  | 'clearPendingAccountPickers'
+  | 'clearStagedAuthenticatorEnrollments'
+  | 'closeExtensionSessionDocument'
+  | 'completeAccountPickerAuthorizationCleanup'
+  | 'releaseAccountPickerAuthorizationCleanup'
+>
+
 type MessageResponse = Parameters<
   ExtensionLifecycleRoutingArgs['sendResponse']
 >[0]
@@ -250,7 +261,7 @@ class AuthorizationCleanupLifecycle {
 }
 
 export function recoverInterruptedAuthorizationCleanup(
-  dependencies: ExtensionLifecycleRoutingDependencies,
+  dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
 ): AuthorizationCleanupEffect {
   return Effect.gen(function* () {
     const pendingLookup = Effect.tryPromise({

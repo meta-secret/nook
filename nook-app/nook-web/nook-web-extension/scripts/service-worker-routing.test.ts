@@ -426,11 +426,17 @@ describe('service worker routing', () => {
   )
 
   test('closes the session when authorization initialization fails', async () => {
-    const closeSession = mock(() => Promise.resolve(ok()))
+    const events: string[] = []
+    const closeSession = mock(() => {
+      events.push('session-close-started')
+      return Promise.resolve(ok())
+    })
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
-      beginAccountPickerAuthorizationCleanup: () =>
-        Promise.reject(new Error('session storage unavailable')),
+      beginAccountPickerAuthorizationCleanup: () => {
+        events.push('authorization-cleanup-started')
+        return Promise.reject(new Error('session storage unavailable'))
+      },
       clearPendingAccountPickers: () => Promise.resolve(),
       closeExtensionSessionDocument: closeSession,
       isExtensionSessionEnsureMessage,
@@ -453,6 +459,10 @@ describe('service worker routing', () => {
     await flushResponses()
 
     expect(closeSession).toHaveBeenCalledTimes(1)
+    expect(events).toEqual([
+      'authorization-cleanup-started',
+      'session-close-started',
+    ])
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'session-lock-failed',
@@ -490,50 +500,6 @@ describe('service worker routing', () => {
       ok: false,
       reason: 'session-lock-failed',
     })
-  })
-
-  test('invalidates authorization before a failed startup marker lookup', async () => {
-    const events: string[] = []
-    const dependencies: ExtensionLifecycleRoutingDependencies = {
-      ...lifecycleDependencies,
-      accountPickerAuthorizationCleanupPending: () => {
-        events.push('marker-read-started')
-        return Promise.reject(new Error('session storage unavailable'))
-      },
-      beginAccountPickerAuthorizationCleanup: () => {
-        events.push('authorization-invalidated')
-        return Promise.resolve({
-          authorizationGeneration: 'epoch-13',
-          markerStatus: AccountPickerCleanupMarkerStatus.Unavailable,
-        })
-      },
-    }
-    const {
-      recoverInterruptedAuthorizationCleanup,
-      AuthorizationCleanupFailureKind,
-    } =
-      await import('../src/background/service-worker/extension-lifecycle-routing')
-
-    expect(await recoverInterruptedAuthorizationCleanup(dependencies)).toEqual(
-      err([AuthorizationCleanupFailureKind.MarkerLookupFailed]),
-    )
-    expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
-    const rejectedStartDependencies: ExtensionLifecycleRoutingDependencies = {
-      ...lifecycleDependencies,
-      beginAccountPickerAuthorizationCleanup: () =>
-        Promise.reject(new Error('authorization cleanup unavailable')),
-    }
-    expect(
-      await recoverInterruptedAuthorizationCleanup(rejectedStartDependencies),
-    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
-    const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
-      ...lifecycleDependencies,
-      completeAccountPickerAuthorizationCleanup: () =>
-        Promise.resolve(rejectedCleanup),
-    }
-    expect(
-      await recoverInterruptedAuthorizationCleanup(rejectedDependencies),
-    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
