@@ -63,10 +63,12 @@ class ExtensionConnectScopeCatalog {
     value: unknown,
   ): Effect.Effect<ExtensionConnectScope, ExtensionConnectScopeDecodeFailure> {
     switch (this.scopeRuntimeState.kind) {
-      case ExtensionConnectScopeRuntimeStateKind.Unconfigured:
-        return Effect.fail({
+      case ExtensionConnectScopeRuntimeStateKind.Unconfigured: {
+        const runtimeUnavailableFailure: ExtensionConnectScopeDecodeFailure = {
           kind: ExtensionConnectScopeDecodeFailureKind.RuntimeUnavailable,
-        });
+        };
+        return Effect.fail(runtimeUnavailableFailure);
+      }
       case ExtensionConnectScopeRuntimeStateKind.Configured: {
         const runtime = this.scopeRuntimeState.runtime;
         const schema = Schema.Union(
@@ -76,10 +78,13 @@ class ExtensionConnectScopeCatalog {
           Schema.Literal(runtime.extension_sync_provider_credentials_scope()),
         );
         return Schema.decodeUnknown(schema)(value).pipe(
-          Effect.mapError((cause) => ({
-            kind: ExtensionConnectScopeDecodeFailureKind.InvalidScope,
-            cause,
-          })),
+          Effect.mapError((cause) => {
+            const invalidScopeFailure: ExtensionConnectScopeDecodeFailure = {
+              kind: ExtensionConnectScopeDecodeFailureKind.InvalidScope,
+              cause,
+            };
+            return invalidScopeFailure;
+          }),
         );
       }
     }

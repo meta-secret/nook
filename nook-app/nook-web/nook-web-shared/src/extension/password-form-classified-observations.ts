@@ -112,26 +112,36 @@ export class LiveApprovedAuthenticationWorkflow {
   ) {}
   get disposition(): LiveAuthenticationWorkflowDisposition {
     const { approved, authenticatorSetupHint, backupCodesHint } = this.request;
-    const liveCandidates = new AuthenticationWorkflowClassification({
+    const classificationRequest: ClassifiedAuthenticationWorkflowRequest = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint,
       backupCodesHint,
-    }).observations;
-    const decision = revalidate_approved_authentication_workflow({
+    };
+    const liveCandidates = new AuthenticationWorkflowClassification(
+      classificationRequest,
+    ).observations;
+    const live = {
+      observations: liveCandidates.map((candidate) => candidate.facts),
+    };
+    const revalidationRequest: Parameters<
+      typeof revalidate_approved_authentication_workflow
+    >[0] = {
       approved: approved.facts,
-      live: {
-        observations: liveCandidates.map((candidate) => candidate.facts),
-      },
-    });
+      live,
+    };
+    const decision =
+      revalidate_approved_authentication_workflow(revalidationRequest);
     if (decision.kind === "rejected")
       return LiveAuthenticationWorkflowDisposition.Changed;
     const selected = liveCandidates[decision.observationIndex];
     if (!selected) return LiveAuthenticationWorkflowDisposition.Changed;
-    return new AuthenticationWorkflowScopeComparison({
+    const comparisonRequest: AuthenticationWorkflowScopePair = {
       left: selected.observation,
       right: approved.observation,
-    }).disposition === AuthenticationWorkflowScopeDisposition.Same
+    };
+    return new AuthenticationWorkflowScopeComparison(comparisonRequest)
+      .disposition === AuthenticationWorkflowScopeDisposition.Same
       ? LiveAuthenticationWorkflowDisposition.Current
       : LiveAuthenticationWorkflowDisposition.Changed;
   }

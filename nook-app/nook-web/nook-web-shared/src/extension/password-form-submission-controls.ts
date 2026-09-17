@@ -18,6 +18,7 @@ import {
 export { FormSubmissionResult, type FormSubmissionApproval };
 import {
   PasswordFormScopeKind,
+  type AutocompleteTokenMatchRequest,
   type PasswordFieldQuery,
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
@@ -693,10 +694,11 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields = passwordFieldDiscovery.findPasswordFields(query);
     if (hasLocalUnownedScope && passwordFields.length > 0) {
       const newPasswordFieldCount = passwordFields.filter((field) => {
-        return passwordFieldDiscovery.hasAutocompleteToken({
+        const tokenRequest: AutocompleteTokenMatchRequest = {
           field,
           expected: "new-password",
-        });
+        };
+        return passwordFieldDiscovery.hasAutocompleteToken(tokenRequest);
       }).length;
       const controls = Array.from(
         query.root.querySelectorAll<HTMLElement>(
@@ -812,10 +814,11 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields =
       passwordFieldDiscovery.findPasswordFields(fieldQuery);
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const tokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "new-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(tokenRequest);
     }).length;
     const oneTimeCodeFieldCount =
       passwordFieldDiscovery.findOneTimeCodeFields(fieldQuery).length;

@@ -46,12 +46,15 @@ export class NormalizedOpenCompanionLauncherMessage {
     return Schema.decodeUnknown(NormalizedOpenCompanionLauncherMessageSchema)(
       message,
     ).pipe(
-      Effect.mapError((cause) =>
-        RuntimeMessageDecodeFailure.fromParseError({
+      Effect.mapError((cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromParseError
+        >[0] = {
           kind: RuntimeMessageDecodeFailureKind.OpenCompanionLauncher,
           cause,
-        }),
-      ),
+        };
+        return RuntimeMessageDecodeFailure.fromParseError(failureRequest);
+      }),
       Effect.map(({ type, payload }) => ({
         type,
         intent:
@@ -63,13 +66,23 @@ export class NormalizedOpenCompanionLauncherMessage {
   }
 }
 
-const NormalizedOpenCompanionLauncherMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-  ),
-  payload: Schema.optional(
-    Schema.Struct({
-      intent: Schema.Literal(OpenCompanionLauncherIntent.Pair),
-    }),
-  ),
-});
+const intentSchema = Schema.Literal(OpenCompanionLauncherIntent.Pair);
+const OpenCompanionLauncherPayloadFields: {
+  readonly intent: typeof intentSchema;
+} = { intent: intentSchema };
+const typeSchema = Schema.Literal(
+  OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+);
+const payloadSchema = Schema.optional(
+  Schema.Struct(OpenCompanionLauncherPayloadFields),
+);
+const NormalizedOpenCompanionLauncherMessageFields: {
+  readonly type: typeof typeSchema;
+  readonly payload: typeof payloadSchema;
+} = {
+  type: typeSchema,
+  payload: payloadSchema,
+};
+const NormalizedOpenCompanionLauncherMessageSchema = Schema.Struct(
+  NormalizedOpenCompanionLauncherMessageFields,
+);
