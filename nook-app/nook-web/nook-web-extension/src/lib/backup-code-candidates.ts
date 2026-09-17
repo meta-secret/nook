@@ -19,6 +19,9 @@ type RecoveryCopyTexts = string[]
 type RecoveryCopyEvidence = ReturnType<
   typeof authentication_recovery_copy_evidence
 >
+type AuthenticationRecoveryCopyEvidenceRequest = Parameters<
+  typeof authentication_recovery_copy_evidence
+>[0]
 
 export type DocumentBackupCodeCandidates = string[]
 
@@ -41,11 +44,12 @@ class RecoveryCopyObservation {
 
   authenticationRecoveryEvidence(): RecoveryCopyEvidence {
     if (typeof this.browser.document.querySelectorAll !== 'function') {
-      return authentication_recovery_copy_evidence({
+      const evidenceRequest: AuthenticationRecoveryCopyEvidenceRequest = {
         texts: ((v) => (v ? v : ''))(
           this.browser.document.body?.innerText,
         ).split(/[\r\n]+/),
-      })
+      }
+      return authentication_recovery_copy_evidence(evidenceRequest)
     }
     const texts: RecoveryCopyTexts = []
     const elements = this.browser.document.querySelectorAll<HTMLElement>(
@@ -58,7 +62,10 @@ class RecoveryCopyObservation {
       if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
       texts.push(text)
     }
-    return authentication_recovery_copy_evidence({ texts })
+    const evidenceRequest: AuthenticationRecoveryCopyEvidenceRequest = {
+      texts,
+    }
+    return authentication_recovery_copy_evidence(evidenceRequest)
   }
 
   authenticationRecoveryCopy(): string {

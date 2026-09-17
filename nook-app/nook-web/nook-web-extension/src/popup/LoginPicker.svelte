@@ -66,25 +66,25 @@
             LoginPickerQueryResponse.decode,
             response,
           )
-          resolve(
+          const queryResponse: LoginPickerRuntimeResponse =
             decoded.kind === ConcreteDecoderResultKind.Decoded
               ? {
                   kind: LoginPickerRuntimeResponseKind.Query,
                   response: decoded.value,
                 }
-              : { kind: LoginPickerRuntimeResponseKind.Rejected },
-          )
+              : { kind: LoginPickerRuntimeResponseKind.Rejected }
+          resolve(queryResponse)
           return
         }
         const decoded = runConcreteDecoder(
           LoginPickerSelectResponse.decode,
           response,
         )
-        resolve(
+        const selectionResponse: LoginPickerRuntimeResponse =
           decoded.kind === ConcreteDecoderResultKind.Decoded
             ? { kind: LoginPickerRuntimeResponseKind.Selected }
-            : { kind: LoginPickerRuntimeResponseKind.Rejected },
-        )
+            : { kind: LoginPickerRuntimeResponseKind.Rejected }
+        resolve(selectionResponse)
       })
     })
   }
