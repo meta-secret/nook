@@ -216,7 +216,7 @@ export class VaultSyncActions {
         kind: RosterHydrationKind.Hydrated,
         pendingJoinCount: state.pendingJoins.length,
         vaultMemberCount: state.vaultMembers.length,
-        passwordEntryCount: passwordRefresh.value.entries.length,
+        passwordEntryCount: passwordRefresh1.value.entries.length,
       });
     } finally {
       for (const join of mergedJoins) join.free();
@@ -393,10 +393,11 @@ export class VaultSyncActions {
         provider: target.provider,
       });
       if (synced.isErr()) return storageErr(synced.error);
-      return storageOk({
+      const localFolderOutcome: EventOutboxFlushOutcome = {
         kind: EventOutboxFlushKind.LocalFolderSynchronized,
-        outcome: synced.value,
-      });
+        outcome: ProviderSyncOutcome.Synced,
+      };
+      return storageOk(localFolderOutcome);
     }
     if (target.kind === EventOutboxTargetKind.Unavailable)
       return storageOk({ kind: EventOutboxFlushKind.Unavailable });
@@ -409,10 +410,11 @@ export class VaultSyncActions {
           target.args.pat,
           target.args.repo,
         );
-        return storageOk({
+        const remoteOutboxOutcome: EventOutboxFlushOutcome = {
           kind: EventOutboxFlushKind.RemoteOutboxFlushed,
           requestKind: request.kind,
-        });
+        };
+        return storageOk(remoteOutboxOutcome);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }

@@ -83,6 +83,7 @@ export class SyncConflictActions {
     importedStoreId,
   }: ImportedProviderVaultIdentityActivation): Promise<void> {
     const state = this.state;
+    let completedStoreId: string;
     try {
       const completed = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -101,6 +102,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
+      completedStoreId = completed.value.storeId;
     } catch {
       state.errorMsg = state.t(
         I18N_KEYS.AuthStorageProviderVaultIdentitySelectionFailed,
@@ -111,7 +113,7 @@ export class SyncConflictActions {
     state.deviceId = "";
     state.devicePublicKey = "";
     state.clearIdentityProviderSession();
-    state.selectLoginVault(completed.value.storeId);
+    state.selectLoginVault(completedStoreId);
     try {
       const protectionStatus = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
