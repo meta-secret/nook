@@ -23,6 +23,7 @@ import { DeviceMode, DeviceProtectionStatus, NookVaultManager } from '$app-wasm'
 import {
   PasskeyCeremonyAction,
   PasskeyCeremonyFailure,
+  PasskeyDeviceProtectionSuccess,
 } from '$lib/auth/passkey-device-protection'
 import {
   VaultStorageFailure,
@@ -67,7 +68,9 @@ class DeviceProtectionTestState extends VaultState {
 describe('device protection actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    createPasskeyProtection.mockReturnValue(ok())
+    createPasskeyProtection.mockReturnValue(
+      ok(PasskeyDeviceProtectionSuccess.Configured),
+    )
   })
 
   test('publishes unlocked state after passkey authorization and initialization', async () => {

@@ -8,6 +8,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Device-protection actions that snapshot reactive state for persistence. */
 import {
   PasskeyCeremonyFailure,
+  PasskeyDeviceProtectionSuccess,
   PasskeyFallback,
   isPasskeyCeremonyNotAllowedError,
   isPasskeyPrfUnavailableError,
@@ -227,7 +228,10 @@ export class DeviceProtectionActions {
         state.t(I18N_KEYS.DeviceProtectionPasskeyDefaultLabel);
       const ceremony = await state.enqueueStorage(
         async (): Promise<
-          Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+          Result<
+            PasskeyDeviceProtectionSuccess,
+            PasskeyCeremonyFailure | StorageOperationFailure
+          >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
@@ -342,7 +346,10 @@ export class DeviceProtectionActions {
     try {
       const ceremony = await state.enqueueStorage(
         async (): Promise<
-          Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+          Result<
+            PasskeyDeviceProtectionSuccess,
+            PasskeyCeremonyFailure | StorageOperationFailure
+          >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
@@ -504,7 +511,10 @@ export class DeviceProtectionActions {
     try {
       const ceremony = await state.enqueueStorage(
         async (): Promise<
-          Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+          Result<
+            PasskeyDeviceProtectionSuccess,
+            PasskeyCeremonyFailure | StorageOperationFailure
+          >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
