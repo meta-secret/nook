@@ -14,7 +14,12 @@ import { SentinelDashboard } from '$lib/components/login/sentinel-dashboard-port
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import SentinelCardStackDashboard from '$lib/components/login/SentinelCardStackDashboard.svelte'
 import type { VaultState } from '$lib/vault.svelte'
-import { SentinelGenesisActions } from '$lib/vault/sentinel-genesis'
+import {
+  SentinelGenesisActions,
+  SentinelGenesisDeliveryCompletionOutcome,
+  SentinelGenesisFinalizationOutcome,
+  SentinelGenesisParticipantResponseOutcome,
+} from '$lib/vault/sentinel-genesis'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement } from '../test-dom-helpers'
 
@@ -53,7 +58,11 @@ class GenesisFinalizationFixture {
   readonly state: VaultState = VaultStateTestFixture.create()
   readonly prepare = vi.fn()
   readonly start = vi.fn(async () => false)
-  readonly finalizeAction = vi.fn(async () => ok())
+  readonly finalizeAction = vi.fn(async () =>
+    ok<SentinelGenesisFinalizationOutcome>(
+      SentinelGenesisFinalizationOutcome.Finalized,
+    ),
+  )
 
   constructor() {
     vi.spyOn(this.manager, 'finalize_sentinel_genesis').mockRejectedValue(
@@ -70,7 +79,9 @@ class GenesisFinalizationFixture {
     this.state.errorMsg = ''
     this.state.dismissSuccess = vi.fn()
     this.state.clearSentinelGenesisStore = vi.fn()
-    this.state.initDeviceIdentity = vi.fn(async () => ok())
+    this.state.initDeviceIdentity = vi.fn(async () =>
+      ok({ deviceId: 'fixture-device', devicePublicKey: 'fixture-public-key' }),
+    )
     this.state.sentinelGenesisPhase = SentinelGenesisPhase.ReadyToFinalize
     this.state.sentinelGenesisParticipantCount = 1
     this.state.sentinelGenesisParticipants = [this.previousParticipant]
@@ -135,9 +146,17 @@ class GenesisFinalizationFixture {
       onPrepareInitiator: this.prepare,
       onBack: vi.fn(),
       onStart: this.start,
-      onAddParticipant: vi.fn(async () => ok()),
+      onAddParticipant: vi.fn(async () =>
+        ok<SentinelGenesisParticipantResponseOutcome>(
+          SentinelGenesisParticipantResponseOutcome.Added,
+        ),
+      ),
       onFinalize: this.finalizeAction,
-      onCompleteDelivery: vi.fn(async () => ok()),
+      onCompleteDelivery: vi.fn(async () =>
+        ok<SentinelGenesisDeliveryCompletionOutcome>(
+          SentinelGenesisDeliveryCompletionOutcome.Completed,
+        ),
+      ),
     }
     return props
   }

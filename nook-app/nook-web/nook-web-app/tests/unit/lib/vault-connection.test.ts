@@ -6,6 +6,7 @@ import {
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
+  unselectedVaultScope,
   type StorageProvider,
 } from '$lib/auth/providers'
 import {
@@ -17,15 +18,12 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
-import { OAuthTokenRefreshOutcome } from '$lib/vault/oauth'
 import {
-  OAuthRemoteReferenceSyncOutcome,
-  ProviderLoadOutcome,
-  ProviderPersistenceOutcome,
-  SessionVaultPromotionOutcome,
-} from '$lib/vault/providers.svelte'
+  OAuthTokenFreshnessKind,
+  RosterHydrationKind,
+} from '$lib/vault/action-contexts'
+import { OAuthRemoteReferenceSyncKind } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
-import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 type ConnectionScenario = {
@@ -79,30 +77,45 @@ function connectionScenario(
   state.isVerifying = false
   state.isAuthenticated = false
   state.localVaultPresent = false
-  state.initDeviceIdentity = vi.fn(async () => ok())
+  state.initDeviceIdentity = vi.fn(async () =>
+    ok({ deviceId: 'fixture-device', devicePublicKey: 'fixture-public-key' }),
+  )
   state.ensureOAuthTokensFresh = vi.fn<VaultState['ensureOAuthTokensFresh']>(
-    async () => ok(OAuthTokenRefreshOutcome.NotRequired),
+    async () => ok({ kind: OAuthTokenFreshnessKind.NotConfigured }),
   )
   state.syncProviderById = syncProviderById
   state.assessVaultConnectStatus = assessVaultConnectStatus
   state.handleRemoteVaultAssessStatus = vi.fn(async () => false)
   state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
-    ok(SecretPageLoadOutcome.PageApplied),
+    ok({
+      displayedSecretCount: 0,
+      totalSecretCount: 0,
+      pageOffset: 0,
+      query: '',
+    }),
   )
   state.syncOAuthRemoteRefFromManager = vi.fn(() =>
-    ok(OAuthRemoteReferenceSyncOutcome.NotApplicable),
+    ok({ kind: OAuthRemoteReferenceSyncKind.NotApplicable }),
   )
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () => ok(ProviderPersistenceOutcome.Persisted),
+    async () =>
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
   )
   state.loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
-    ok(ProviderLoadOutcome.Loaded),
+    ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
   )
   state.promoteSessionVaultToLocalIfNeeded = vi.fn<
     VaultState['promoteSessionVaultToLocalIfNeeded']
-  >(async () => ok(SessionVaultPromotionOutcome.CurrentProviderModeRetained))
-  state.refreshPasswordEntriesList = vi.fn(async () => ok())
-  state.hydrateMultiDeviceState = vi.fn(async () => ok())
+  >(async () =>
+    ok({
+      snapshot: { providers: [], activeVaultStoreId: unselectedVaultScope() },
+      localVaultPresent: false,
+    }),
+  )
+  state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
+  state.hydrateMultiDeviceState = vi.fn<VaultState['hydrateMultiDeviceState']>(
+    async () => ok({ kind: RosterHydrationKind.Skipped }),
+  )
   state.markVaultUnlocked = vi.fn(() => {
     state.isAuthenticated = true
     return ok()

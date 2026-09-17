@@ -30,6 +30,7 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { VaultState } from '$lib/vault.svelte'
+import type { DeviceIdentityInitializationSnapshot } from '$lib/vault/action-contexts'
 import {
   DeviceProtectionActions,
   DeviceProtectionLockOutcome,
@@ -44,7 +45,13 @@ class DeviceProtectionTestState extends VaultState {
   }
 
   static create(
-    initialization: Result<void, VaultStorageFailure> = ok(),
+    initialization: Result<
+      DeviceIdentityInitializationSnapshot,
+      VaultStorageFailure
+    > = ok({
+      deviceId: 'fixture-device',
+      devicePublicKey: 'fixture-public-key',
+    }),
   ): DeviceProtectionTestState {
     const state = VaultStateTestFixture.createFrom(DeviceProtectionTestState)
     state.openManager(new NookVaultManager())

@@ -20,6 +20,7 @@ import {
   storedGithubRepository,
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
+  unselectedVaultScope,
   type LocalFolderConfig,
   type OAuthFileConfig,
   type StorageProvider,
@@ -32,7 +33,6 @@ import type {
 import {
   ActiveProviderCredentialsActions,
   ProviderPersistenceActions,
-  ProviderPersistenceOutcome,
 } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
@@ -79,8 +79,8 @@ function providerState(providerType: StorageProviderType): AdapterState {
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
-    persistProviders: vi.fn(async () =>
-      ok(ProviderPersistenceOutcome.Persisted),
+    persistProviders: vi.fn(async ({ providers = [] }) =>
+      ok({ providers, activeVaultStoreId: unselectedVaultScope() }),
     ),
   }
 }
@@ -221,7 +221,11 @@ describe('provider save web adapter', () => {
       state,
     ).ensureProviderSaved()
 
-    expect(saved).toEqual(ok(ProviderPersistenceOutcome.Persisted))
+    expect(saved.isOk()).toBe(true)
+    if (saved.isErr()) expect.fail('the provider snapshot should be saved')
+    expect(saved.value.providers).toContainEqual(
+      expect.objectContaining({ type: GITHUB_PROVIDER_TYPE }),
+    )
     expect(state.persistProviders).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],

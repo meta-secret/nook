@@ -1,7 +1,7 @@
 import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
 import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
-import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
+import { activeVaultScope, LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
@@ -49,7 +49,12 @@ function lifecycleHarness(authenticated = false) {
     .mockResolvedValue()
   const activateConnectedExistingVault = vi
     .spyOn(state, 'activateConnectedExistingVault')
-    .mockResolvedValue(ok())
+    .mockResolvedValue(
+      ok({
+        providers: [],
+        activeVaultStoreId: activeVaultScope('incoming-vault'),
+      }),
+    )
   const clearExistingVaultRecoverySummary = vi.spyOn(
     state,
     'clearExistingVaultRecoverySummary',

@@ -9,6 +9,7 @@ import {
   type ICloudWebAuthTokenRequest,
   iCloudOAuthSession,
 } from '$lib/auth/icloud/oauth'
+import type { CloudKitUserIdentity } from '$lib/auth/icloud/cloudkit-runtime'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 import { ICloudOAuthTestFixture } from './icloud-oauth-test-fixture'
 
@@ -18,7 +19,7 @@ import {
 } from '$lib/auth/icloud/config'
 
 function resolvedCloudKitEffect() {
-  return vi.fn(async (): Promise<void> => {})
+  return vi.fn(async (): Promise<CloudKitUserIdentity> => ({}))
 }
 
 function defaultICloudWebAuthTokenRequest(): ICloudWebAuthTokenRequest {
@@ -377,9 +378,10 @@ describe('icloud-oauth', () => {
       })
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'fresh-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'fresh-token',
+      )
       resolveSignIn({
         nameComponents: { givenName: 'Fresh', familyName: 'User' },
       })
@@ -405,9 +407,10 @@ describe('icloud-oauth', () => {
       })
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'store-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'store-token',
+      )
 
       await expect(pending).resolves.toEqual(
         ok(iCloudTokensWithoutAccountName('store-token')),
@@ -433,9 +436,10 @@ describe('icloud-oauth', () => {
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'fresh-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'fresh-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -461,9 +465,10 @@ describe('icloud-oauth', () => {
       expect(clickSpy).toHaveBeenCalledOnce()
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'cloudkit-div-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'cloudkit-div-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -497,9 +502,10 @@ describe('icloud-oauth', () => {
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'visible-control-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'visible-control-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -525,9 +531,10 @@ describe('icloud-oauth', () => {
       await iCloudOAuthSession.prepareICloudSignInControl()
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
       signInButton?.addEventListener('click', () => {
-        config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-          ckWebAuthToken: 'native-click-token',
-        })
+        config.services?.authTokenStore?.putToken(
+          ICLOUD_CONTAINER_ID,
+          'native-click-token',
+        )
         resolveSignIn({ lookupInfo: {} })
       })
       const request = nativeICloudWebAuthTokenRequest()
@@ -563,9 +570,10 @@ describe('icloud-oauth', () => {
       })
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'opaque-callback-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'opaque-callback-token',
+      )
 
       await expect(pending).resolves.toEqual(
         ok(iCloudTokensWithoutAccountName('opaque-callback-token')),
@@ -818,9 +826,10 @@ describe('icloud-oauth', () => {
       const pending =
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'auth-required-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'auth-required-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -841,9 +850,10 @@ describe('icloud-oauth', () => {
       const pending =
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'opaque-setup-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'opaque-setup-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -913,9 +923,10 @@ describe('icloud-oauth', () => {
       })
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        webAuthToken: 'alt-format-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'alt-format-token',
+      )
 
       await expect(pending).resolves.toEqual(
         ok(iCloudTokensWithoutAccountName('alt-format-token')),
@@ -950,9 +961,10 @@ describe('icloud-oauth', () => {
       const pending = iCloudOAuthSession.requestICloudWebAuthToken(retryRequest)
 
       const config = ICloudOAuthTestFixture.firstConfigureRequest()
-      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
-        ckWebAuthToken: 'retry-token',
-      })
+      config.services?.authTokenStore?.putToken(
+        ICLOUD_CONTAINER_ID,
+        'retry-token',
+      )
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual(
@@ -964,10 +976,7 @@ describe('icloud-oauth', () => {
 
 describe('CloudKit token transport decoding', () => {
   it('persists only a decoded token from SDK payloads', () => {
-    cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, {
-      token: ' accepted ',
-      unrelated: 'not-persisted',
-    })
+    cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, ' accepted ')
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBe(
       'accepted',
     )
@@ -981,7 +990,10 @@ describe('CloudKit token transport decoding', () => {
       '{',
     )
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
-    cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, { token: 42 })
+    sessionStorage.setItem(
+      'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
+      JSON.stringify({ token: 42 }),
+    )
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
   })
 })

@@ -4,7 +4,7 @@ import { render } from '@testing-library/svelte'
 import { SecretType, type NookSecretListItem } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
-import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
+import { SecretMutationOutcome } from '$lib/vault/secrets'
 import {
   SecretRevealKind,
   type SecretReveal,
@@ -49,7 +49,9 @@ function authenticatorProps(
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
+    onDeleteSecret: vi.fn(async () =>
+      ok<SecretMutationOutcome.Deleted>(SecretMutationOutcome.Deleted),
+    ),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,
@@ -81,7 +83,9 @@ function renderLogin(item: NookSecretListItem) {
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
+    onDeleteSecret: vi.fn(async () =>
+      ok<SecretMutationOutcome.Deleted>(SecretMutationOutcome.Deleted),
+    ),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,

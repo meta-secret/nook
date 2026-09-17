@@ -1,5 +1,4 @@
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
-import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
 import { err, ok, type Result } from 'neverthrow'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
@@ -24,14 +23,11 @@ import { LoginVaultEntryKind } from '$lib/components/login/login-unlock-state'
 import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+import { unselectedVaultScope } from '$lib/auth/providers'
+import { RosterHydrationKind } from '$lib/vault/action-contexts'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
-import {
-  ProviderLoadOutcome,
-  ProviderPersistenceOutcome,
-} from '$lib/vault/providers.svelte'
-import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement } from '../test-dom-helpers'
 
@@ -68,18 +64,26 @@ class SentinelFinalizationFixture {
     ok(ProviderSyncOutcome.Synced),
   )
   readonly loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
-    ok(SecretPageLoadOutcome.PageApplied),
+    ok({
+      displayedSecretCount: 0,
+      totalSecretCount: 0,
+      pageOffset: 0,
+      query: '',
+    }),
   )
   readonly ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () => ok(ProviderPersistenceOutcome.Persisted),
+    async () =>
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
   )
   readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
-    ok(ProviderLoadOutcome.Loaded),
+    ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
   )
   readonly refreshPasswordEntriesList = vi.fn<
-    () => Promise<SentinelActionResult<void>>
-  >(async () => ok())
-  readonly hydrateMultiDeviceState = vi.fn(async () => ok())
+    VaultState['refreshPasswordEntriesList']
+  >(async () => ok({ entries: [] }))
+  readonly hydrateMultiDeviceState = vi.fn<
+    VaultState['hydrateMultiDeviceState']
+  >(async () => ok({ kind: RosterHydrationKind.Skipped }))
   readonly markVaultUnlocked = vi.fn(() => ok())
   readonly showSuccess = vi.fn()
   readonly startIdleSessionTracking = vi.fn()
@@ -158,10 +162,24 @@ class SentinelFinalizationFixture {
     this.state.showSuccess = this.showSuccess
     this.state.startIdleSessionTracking = this.startIdleSessionTracking
     this.state.startVaultSync = this.startVaultSync
-    this.state.initDeviceIdentity = vi.fn(async () => ok())
+    this.state.initDeviceIdentity = vi.fn<VaultState['initDeviceIdentity']>(
+      async () =>
+        ok({
+          deviceId: 'fixture-device',
+          devicePublicKey: 'fixture-public-key',
+        }),
+    )
     this.state.syncFromStorage = this.syncFromStorage
     this.state.connectStorageArgs = vi.fn()
-    this.state.refreshVaultArchitectureFromManager = vi.fn(() => ok())
+    this.state.refreshVaultArchitectureFromManager = vi.fn<
+      VaultState['refreshVaultArchitectureFromManager']
+    >(() =>
+      ok({
+        deviceMode: this.state.vaultArchitecture.device_mode,
+        vaultType: this.state.vaultArchitecture.vault_type,
+        replicationType: this.state.vaultArchitecture.replication_type,
+      }),
+    )
     this.state.resolveErrorMessage = (message: string) => message
     this.state.t = (request: Parameters<VaultState['t']>[0]) =>
       typeof request === 'string' ? request : request.key
@@ -548,11 +566,20 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.sentinelUnlockStatus.mockReturnValue(
         SentinelVaultUnlockState.Unlocked,
       )
-      fixture.failureOperations[operation].mockResolvedValue(
-        err(
-          new NativeVaultStorageFailure(new Error('SentinelCeremonyRequired')),
-        ),
+      const failure = err(
+        new NativeVaultStorageFailure(new Error('SentinelCeremonyRequired')),
       )
+      switch (operation) {
+        case 'loadSecretPage':
+          fixture.loadSecretPage.mockResolvedValue(failure)
+          break
+        case 'ensureProviderSaved':
+          fixture.ensureProviderSaved.mockResolvedValue(failure)
+          break
+        case 'loadProviders':
+          fixture.loadProviders.mockResolvedValue(failure)
+          break
+      }
 
       await fixture.finalize()
 

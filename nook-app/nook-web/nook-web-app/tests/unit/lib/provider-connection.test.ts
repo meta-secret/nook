@@ -14,6 +14,7 @@ import {
   scopedProviderVault,
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
+  unselectedVaultScope,
   type StorageProvider,
 } from '$lib/auth/providers'
 import {
@@ -23,7 +24,6 @@ import {
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
-import { ProviderPersistenceOutcome } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
@@ -109,7 +109,11 @@ function providerConnectionScenario(
     stagedRemoteStorageArgs: () => ({
       kind: StagedRemoteStorageKind.Unavailable,
     }),
-    ensureProviderSaved: async () => ok(ProviderPersistenceOutcome.Persisted),
+    ensureProviderSaved: async () =>
+      ok({
+        providers: state.providers,
+        activeVaultStoreId: unselectedVaultScope(),
+      }),
     flushRemoteEventOutboxNow,
     syncProviderById,
   } satisfies Pick<

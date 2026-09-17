@@ -31,8 +31,9 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { TranslationMessage } from '$lib/vault/translation'
+import { LocaleUpdateOutcome } from '$lib/vault/locale'
+import { unselectedVaultScope } from '$lib/auth/providers'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
-import { ProviderLoadOutcome } from '$lib/vault/providers.svelte'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
@@ -156,7 +157,7 @@ describe('external browser identity handoff commit ownership', () => {
         'has_pending_sentinel_genesis_finalization',
       ).mockResolvedValue(false)
       vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(
-        ok(ProviderLoadOutcome.Loaded),
+        ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
       )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),
@@ -193,7 +194,9 @@ describe('external browser identity handoff commit ownership', () => {
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
         ok(fixture.manager),
       )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok<LocaleUpdateOutcome>(LocaleUpdateOutcome.Updated),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),
       )
@@ -232,7 +235,9 @@ describe('external browser identity handoff commit ownership', () => {
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
         ok(fixture.manager),
       )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok<LocaleUpdateOutcome>(LocaleUpdateOutcome.Updated),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),
       )

@@ -2,12 +2,13 @@ import { err } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
   ExtensionSessionLeaseFailure,
 } from '../../../../nook-web-extension/src/offscreen/session-lease'
 
 class SessionLeaseFixture {
   readonly onExpire = vi.fn()
-  readonly generation = 7
+  readonly generation = ExtensionSessionGeneration.initial()
   readonly lease = new ActiveExtensionSessionLease({
     generation: this.generation,
     durationMs: 1000,
@@ -44,7 +45,7 @@ describe('active extension session lease', () => {
   test('stale generations reject without extending the deadline', () => {
     const fixture = new SessionLeaseFixture()
     vi.advanceTimersByTime(600)
-    expect(fixture.lease.renew(fixture.generation + 1)).toEqual(
+    expect(fixture.lease.renew(fixture.generation.next())).toEqual(
       err(ExtensionSessionLeaseFailure.Locked),
     )
     vi.advanceTimersByTime(400)
