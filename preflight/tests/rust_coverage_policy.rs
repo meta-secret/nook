@@ -1,4 +1,4 @@
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -114,11 +114,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_node_deps.contains("apt-get install -y --no-install-recommends clang"));
     assert!(wasm_node_deps.contains("https://bun.sh/install"));
     assert!(wasm_node_deps.contains("sha256sum -c -"));
-    assert!(
-        wasm_node_deps
-            .split_once("llvm-cov clean --workspace")
-            .is_some_and(|(_, later)| later.contains("llvm-cov show-env --sh"))
-    );
+    assert!(wasm_node_deps
+        .split_once("llvm-cov clean --workspace")
+        .is_some_and(|(_, later)| later.contains("llvm-cov show-env --sh")));
     assert!(wasm_node_deps.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
     assert_eq!(
         wasm_node_deps
@@ -165,11 +163,13 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(compiler.contains("wasm-pack test --node --release nook-wasm"));
     assert!(compiler.contains("wasm-pack test --node --release nook-companion-wasm"));
-    let companion_native_coverage =
-        "llvm-cov test --no-clean --release -p nook-companion-wasm --no-report";
+    let companion_native_coverage = "llvm-cov test --no-clean --release -p nook-companion-wasm";
     let companion_wasm_coverage =
         "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines \"$companion_floor\"";
     assert!(compiler.contains(companion_native_coverage));
+    assert!(
+        !compiler.contains("llvm-cov test --no-clean --release -p nook-companion-wasm --no-report")
+    );
     assert!(compiler.contains(companion_wasm_coverage));
     assert!(
         compiler.find(companion_native_coverage) < compiler.find(companion_wasm_coverage),
