@@ -15,6 +15,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/content/webauthn-page.ts",
   // Chrome runtime message guards narrow untyped browser IPC immediately.
   "nook-web-extension/src/lib/auth-workflow-messages.ts",
+  "nook-web-extension/src/lib/browser-runtime-message.ts",
   "nook-web-extension/src/lib/authenticator-picker-messages.ts",
   "nook-web-extension/src/lib/enrollment-messages.ts",
   "nook-web-extension/src/lib/login-detection-messages.ts",

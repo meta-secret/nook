@@ -6,6 +6,10 @@ import {
   ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../lib/browser-runtime-message'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationWorkflowSnapshotIngress,
@@ -162,17 +166,13 @@ const extensionLifecycleRoutingDependencies: Parameters<
 
 void recoverInterruptedAuthorizationCleanup(
   extensionLifecycleRoutingDependencies,
-)
-  .then((cleanup) => {
-    if (cleanup.isErr())
-      console.warn(
-        'Extension authorization cleanup remains pending',
-        cleanup.error,
-      )
-  })
-  .catch(() => {
-    console.warn('Extension authorization cleanup initialization failed')
-  })
+).then((cleanup) => {
+  if (cleanup.isErr())
+    console.warn(
+      'Extension authorization cleanup remains pending',
+      cleanup.error,
+    )
+})
 
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
@@ -215,18 +215,27 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ),
   }
 
-type RuntimeMessageObject = {
-  [key: string]:
-    string | number | boolean | RuntimeMessageObject | RuntimeMessageObject[]
-}
-type RuntimeMessageInput =
-  RuntimeMessageObject | RuntimeMessageObject[] | string | number | boolean
+type BackgroundRuntimeMessageListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
 
-chrome.runtime.onMessage.addListener(
-  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
-  (runtimeMessage: RuntimeMessageInput, sender, sendResponse) => {
-    if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
-    const message = runtimeMessage
+type BackgroundRuntimeMessageRoutingRequest = {
+  readonly runtimeMessage: BrowserRuntimeMessage
+  readonly sender: chrome.runtime.MessageSender
+  readonly sendResponse: Parameters<BackgroundRuntimeMessageListener>[2]
+}
+
+class BackgroundRuntimeMessageRouter {
+  constructor(
+    private readonly request: BackgroundRuntimeMessageRoutingRequest,
+  ) {}
+
+  route(): ReturnType<BackgroundRuntimeMessageListener> {
+    const { runtimeMessage, sender, sendResponse } = this.request
+    const admission = BrowserRuntimeMessage.from(runtimeMessage)
+    if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
+      return false
+    const message = admission.message
     const lifecycleRoutingArgs: Parameters<
       typeof routeExtensionLifecycleMessage
     >[0] = {
@@ -850,8 +859,21 @@ chrome.runtime.onMessage.addListener(
     }
 
     return false
-  },
-)
+  }
+}
+
+const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
+  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
+  (runtimeMessage: BrowserRuntimeMessage, sender, sendResponse) => {
+    const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
+      runtimeMessage,
+      sender,
+      sendResponse,
+    }
+    return new BackgroundRuntimeMessageRouter(routingRequest).route()
+  }
+
+chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
 chrome.runtime.onMessageExternal.addListener(
   // eslint-disable-next-line max-params -- Chrome owns the external listener callback signature.

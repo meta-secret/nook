@@ -57,10 +57,20 @@ import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
 import { authenticatorEnrollmentInteraction } from './enrollment-flow'
 
-async function performScanAndRender(): Promise<void> {
-  if (widgetState.dismissed) return
-  if (saveOfferState.confirmationActive) return
-  if (authenticatorEnrollmentInteraction.enrollmentScanBlocked()) return
+enum AuthenticationScanOutcome {
+  Removed = 'removed',
+  Rendered = 'rendered',
+  Stale = 'stale',
+  Suppressed = 'suppressed',
+  Watching = 'watching',
+}
+
+async function performScanAndRender(): Promise<AuthenticationScanOutcome> {
+  if (widgetState.dismissed) return AuthenticationScanOutcome.Suppressed
+  if (saveOfferState.confirmationActive)
+    return AuthenticationScanOutcome.Suppressed
+  if (authenticatorEnrollmentInteraction.enrollmentScanBlocked())
+    return AuthenticationScanOutcome.Suppressed
   const sequence = ++scanState.sequence
   if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
     const { offer } = saveOfferState.display
@@ -70,17 +80,17 @@ async function performScanAndRender(): Promise<void> {
     ) {
       loginSaveInteraction.renderSaveOfferWidget(offer)
     }
-    return
+    return AuthenticationScanOutcome.Rendered
   }
   if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
     void loginSaveInteraction.evaluatePendingSaveEvidence()
-    return
+    return AuthenticationScanOutcome.Watching
   }
   const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
-  if (sequence !== scanState.sequence) return
+  if (sequence !== scanState.sequence) return AuthenticationScanOutcome.Stale
   if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
     loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
-    return
+    return AuthenticationScanOutcome.Watching
   }
   const { copy: recoveryCopy, hint: backupCodesHint } =
     recoveryCopyObservation.authenticationRecoveryEvidence()
@@ -111,12 +121,12 @@ async function performScanAndRender(): Promise<void> {
       ) !== 'propose-action'
     ) {
       removeScannedWidget()
-      return
+      return AuthenticationScanOutcome.Removed
     }
     authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
     loginPasskeyInteraction.cancelPendingLoginPickerRequest()
     const vaultConnection = await workflowUi.loadPilotVaultConnection()
-    if (sequence !== scanState.sequence) return
+    if (sequence !== scanState.sequence) return AuthenticationScanOutcome.Stale
     const nookTypedArgs0_0: Parameters<
       typeof authenticationWidgetRenderer.renderEnrollmentWidget
     >[0] = {
@@ -125,11 +135,11 @@ async function performScanAndRender(): Promise<void> {
       vaultConnection,
     }
     authenticationWidgetRenderer.renderEnrollmentWidget(nookTypedArgs0_0)
-    return
+    return AuthenticationScanOutcome.Rendered
   }
   if (workflowForms.length === 0) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
 
   const classifiedRequest: ConstructorParameters<
@@ -144,7 +154,7 @@ async function performScanAndRender(): Promise<void> {
   ).observations
   if (classifiedWorkflows.length === 0) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
   const message: Parameters<
     typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage
@@ -159,10 +169,10 @@ async function performScanAndRender(): Promise<void> {
     await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
       message,
     )
-  if (sequence !== scanState.sequence) return
+  if (sequence !== scanState.sequence) return AuthenticationScanOutcome.Stale
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
   const { response } = delivery
   const { verdict, loginMatches } = response
@@ -172,7 +182,7 @@ async function performScanAndRender(): Promise<void> {
     response.selectedFacts.state !== 'selected'
   ) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
   const { snapshot } = verdict
   const selected = classifiedWorkflows[snapshot.observationIndex]
@@ -180,14 +190,14 @@ async function performScanAndRender(): Promise<void> {
     authentication_workflow_pilot_presentation_capability(snapshot) === 'hidden'
   ) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
   if (!selected) {
     removeScannedWidget()
-    return
+    return AuthenticationScanOutcome.Removed
   }
   const vaultConnection = await workflowUi.loadPilotVaultConnection()
-  if (sequence !== scanState.sequence) return
+  if (sequence !== scanState.sequence) return AuthenticationScanOutcome.Stale
   const nookTypedArgs0_1: Parameters<
     typeof authenticationWidgetRenderer.renderWidget
   >[0] = {
@@ -198,6 +208,7 @@ async function performScanAndRender(): Promise<void> {
     vaultConnection,
   }
   authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
+  return AuthenticationScanOutcome.Rendered
 }
 
 async function scanAndRender(): Promise<void> {

@@ -17,8 +17,24 @@ type ExtensionSessionLeaseState =
     }
   | { readonly kind: ExtensionSessionLeaseKind.Expired }
 
+export class ExtensionSessionGeneration {
+  private constructor(private readonly value: number) {}
+
+  static initial(): ExtensionSessionGeneration {
+    return new ExtensionSessionGeneration(0)
+  }
+
+  next(): ExtensionSessionGeneration {
+    return new ExtensionSessionGeneration(this.value + 1)
+  }
+
+  matches(candidate: ExtensionSessionGeneration): boolean {
+    return this.value === candidate.value
+  }
+}
+
 type ExtensionSessionLeaseRequest = {
-  readonly generation: number
+  readonly generation: ExtensionSessionGeneration
   readonly durationMs: number
   readonly onExpire: () => void
 }
@@ -35,11 +51,13 @@ export class ActiveExtensionSessionLease {
     }
   }
 
-  renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+  renew(
+    generation: ExtensionSessionGeneration,
+  ): Result<void, ExtensionSessionLeaseFailure> {
     const active = this.state
     if (
       active.kind !== ExtensionSessionLeaseKind.Active ||
-      generation !== this.request.generation ||
+      !this.request.generation.matches(generation) ||
       Date.now() >= active.deadline
     )
       return err(ExtensionSessionLeaseFailure.Locked)

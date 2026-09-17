@@ -216,11 +216,22 @@ export async function recoverInterruptedAuthorizationCleanup(
     return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
   }
   if (!lookup.pending) {
-    const outcome =
-      await dependencies.completeAccountPickerAuthorizationCleanup(
+    let outcome: Awaited<
+      ReturnType<
+        ExtensionLifecycleRoutingDependencies['completeAccountPickerAuthorizationCleanup']
+      >
+    >
+    try {
+      outcome = await dependencies.completeAccountPickerAuthorizationCleanup(
         cleanup.authorizationGeneration,
         CleanupEvidence.Partial,
       )
+    } catch {
+      dependencies.releaseAccountPickerAuthorizationCleanup(
+        cleanup.authorizationGeneration,
+      )
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
     return 'error' in outcome
       ? err([AuthorizationCleanupFailureKind.Rejected])
       : ok()

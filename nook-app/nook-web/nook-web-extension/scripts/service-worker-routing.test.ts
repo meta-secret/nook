@@ -534,6 +534,17 @@ describe('service worker routing', () => {
     expect(
       await recoverInterruptedAuthorizationCleanup(rejectedDependencies),
     ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+    const rejectedCompletionDependencies: ExtensionLifecycleRoutingDependencies =
+      {
+        ...lifecycleDependencies,
+        completeAccountPickerAuthorizationCleanup: () =>
+          Promise.reject(new Error('cleanup completion unavailable')),
+      }
+    expect(
+      await recoverInterruptedAuthorizationCleanup(
+        rejectedCompletionDependencies,
+      ),
+    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
