@@ -1,7 +1,12 @@
 import { vi } from 'vitest'
+import type { CloudKitUserIdentity } from '$lib/auth/icloud/cloudkit-runtime'
 
 /** Owns checked access to the optional CloudKit host installed by these tests. */
 export class ICloudOAuthTestFixture {
+  static resolvedUserIdentity() {
+    return vi.fn(async (): Promise<CloudKitUserIdentity> => ({}))
+  }
+
   static cloudKit(): NonNullable<typeof window.CloudKit> {
     const cloudKit = window.CloudKit
     if (!cloudKit) throw new Error('CloudKit test global is not installed')
