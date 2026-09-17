@@ -30,7 +30,10 @@ export class VaultArchitectureActions {
     if (previous !== architecture) previous.free();
   }
 
-  applyDraftVaultArchitecture(): Result<void, VaultStorageFailure> {
+  applyDraftVaultArchitecture(): Result<
+    VaultArchitectureRefreshSnapshot,
+    VaultStorageFailure
+  > {
     const state = this.state;
     let architecture: VaultArchitecture;
     try {
@@ -65,7 +68,11 @@ export class VaultArchitectureActions {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.replaceVaultArchitecture({ architecture });
     state.architectureSecretCreationAllowed = allowed;
-    return ok();
+    return ok({
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    });
   }
 
   refreshVaultArchitectureFromManager(): Result<
@@ -114,7 +121,7 @@ export class VaultArchitectureActions {
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<VaultArchitectureRefreshSnapshot, VaultStorageFailure>
   > {
     const state = this.state;
     const architecture = state.vaultArchitecture;
@@ -150,6 +157,10 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok();
+    return ok({
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    });
   }
 }

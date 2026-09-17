@@ -340,7 +340,7 @@ export class SyncConflictActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-    return storageOk();
+    return storageOk(state.remoteVaultRecoveryState);
   }
 
   private async resumeConnectAfterSyncConflict({

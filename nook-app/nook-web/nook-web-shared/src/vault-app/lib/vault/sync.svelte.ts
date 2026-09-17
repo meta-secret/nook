@@ -15,6 +15,7 @@ import type {
   SyncActionsContext,
   SyncFromProvidersRequest,
   NookStorageConnectArgs,
+  VaultSyncApplicationOutcome,
 } from "$lib/vault/action-contexts";
 import {
   EventOutboxFlushKind,
@@ -612,7 +613,7 @@ export class VaultSyncActions {
           );
         try {
           await current.value.restore_local_after_provider_assessment();
-          return storageOk();
+          return storageOk(state.activeVault);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -805,7 +806,9 @@ export class VaultSyncActions {
     mode,
     pat,
     repo,
-  }: NookStorageConnectArgs): Promise<Result<void, StorageOperationFailure>> {
+  }: NookStorageConnectArgs): Promise<
+    Result<VaultSyncApplicationOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const synchronized = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
