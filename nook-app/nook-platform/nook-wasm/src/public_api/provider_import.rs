@@ -9,6 +9,26 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 #[tsify(type = "unknown", from_wasm_abi)]
 pub struct ExtensionPairingStorageProviderAdmission(StorageProvider);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExtensionPairingStorageProviderFailure {
+    PlaintextCredential,
+}
+
+impl ExtensionPairingStorageProviderAdmission {
+    fn decode(
+        &mut self,
+    ) -> Result<ExtensionPairingStorageProviderPayload, ExtensionPairingStorageProviderFailure>
+    {
+        if self.0.credential_storage_admission()
+            != ProviderCredentialStorageAdmission::MarkerCompatible
+        {
+            self.0.zeroize_credentials();
+            return Err(ExtensionPairingStorageProviderFailure::PlaintextCredential);
+        }
+        Ok(ExtensionPairingStorageProviderPayload(self.0.clone()))
+    }
+}
+
 impl Drop for ExtensionPairingStorageProviderAdmission {
     fn drop(&mut self) {
         self.0.zeroize_credentials();
@@ -31,16 +51,11 @@ impl Drop for ExtensionPairingStorageProviderPayload {
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_pairing_storage_provider(
-    admission: ExtensionPairingStorageProviderAdmission,
+    mut admission: ExtensionPairingStorageProviderAdmission,
 ) -> Result<ExtensionPairingStorageProviderPayload, JsError> {
-    if admission.0.credential_storage_admission()
-        != ProviderCredentialStorageAdmission::MarkerCompatible
-    {
-        return Err(JsError::new(
-            "Extension pairing provider credentials are not storage-safe.",
-        ));
-    }
-    Ok(ExtensionPairingStorageProviderPayload(admission.0.clone()))
+    admission.decode().map_err(|_| {
+        JsError::new("Extension pairing provider credentials are not storage-safe.")
+    })
 }
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
@@ -158,11 +173,15 @@ mod extension_pairing_provider_tests {
     }
 
     #[test]
-    fn pairing_provider_admission_rejects_unknown_fields_and_wrong_types() {
-        let unknown = ProviderFixture::json(ARMORED_SECRET)
-            .replace("\"createdAt\"", "\"unexpected\":true,\"createdAt\"");
+    fn pairing_provider_admission_rejects_missing_fields_and_wrong_types() {
+        let extended = ProviderFixture::json(ARMORED_SECRET)
+            .replace("\"createdAt\"", "\"futureField\":true,\"createdAt\"");
         assert!(
-            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&unknown).is_err()
+            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&extended).is_ok()
+        );
+        let missing = ProviderFixture::json(ARMORED_SECRET).replace("\"label\":\"GitHub\",", "");
+        assert!(
+            serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(&missing).is_err()
         );
         let wrong_type = ProviderFixture::json(ARMORED_SECRET)
             .replace("\"label\":\"GitHub\"", "\"label\":false");
@@ -174,10 +193,17 @@ mod extension_pairing_provider_tests {
     #[test]
     fn pairing_provider_decoder_rejects_plaintext_and_cleanup_clears_sensitive_fields()
     -> anyhow::Result<()> {
-        let admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
+        let mut admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
             &ProviderFixture::json("plaintext-token"),
         )?;
-        assert!(decode_extension_pairing_storage_provider(admission).is_err());
+        assert!(matches!(
+            admission.decode(),
+            Err(ExtensionPairingStorageProviderFailure::PlaintextCredential)
+        ));
+        assert_eq!(
+            admission.0.github_pat,
+            StoredGithubPat::Token(String::new())
+        );
 
         let mut provider =
             serde_json::from_str::<StorageProvider>(&ProviderFixture::json(ARMORED_SECRET))?;
