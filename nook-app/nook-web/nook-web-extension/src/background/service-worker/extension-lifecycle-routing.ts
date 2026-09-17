@@ -119,10 +119,14 @@ export enum AuthorizationCleanupFailureKind {
   MarkerLookupFailed = 'authorization-cleanup-marker-lookup-failed',
 }
 
+export enum AuthorizationCleanupSuccess {
+  Cleared = 'authorization-cleanup-cleared',
+}
+
 type AuthorizationCleanupFailure =
   AuthorizationCleanupFailureKind | ExtensionSessionTransportFailure
 type AuthorizationCleanupResult = Result<
-  void,
+  AuthorizationCleanupSuccess,
   readonly AuthorizationCleanupFailure[]
 >
 
@@ -144,9 +148,6 @@ class AuthorizationCleanupLifecycle {
       cleanupStart.kind === AuthorizationCleanupStartKind.Existing
         ? Promise.resolve(cleanupStart.cleanup)
         : beginAccountPickerAuthorizationCleanup()
-    const closeOperation = closeSession
-      ? closeExtensionSessionDocument()
-      : Promise.resolve(ok())
     let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     try {
       startedCleanup = await cleanupOperation
@@ -157,8 +158,10 @@ class AuthorizationCleanupLifecycle {
     const failures: AuthorizationCleanupFailure[] = []
     if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
       failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
-    const closed = await closeOperation
-    if (closed.isErr()) failures.push(closed.error)
+    if (closeSession) {
+      const closed = await closeExtensionSessionDocument()
+      if (closed.isErr()) failures.push(closed.error)
+    }
     clearStagedAuthenticatorEnrollments()
     try {
       await clearPendingAccountPickers()
@@ -187,64 +190,75 @@ class AuthorizationCleanupLifecycle {
       releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
       return err([AuthorizationCleanupFailureKind.Rejected])
     }
-    return 'error' in outcome
-      ? err([AuthorizationCleanupFailureKind.Rejected])
-      : ok()
+    if ('error' in outcome) {
+      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
+    return ok(AuthorizationCleanupSuccess.Cleared)
   }
 }
 
-export async function recoverInterruptedAuthorizationCleanup(
-  dependencies: ExtensionLifecycleRoutingDependencies,
-): Promise<AuthorizationCleanupResult> {
-  const pendingLookup = dependencies
-    .accountPickerAuthorizationCleanupPending()
-    .then(
-      (pending) => ({ kind: 'resolved' as const, pending }),
-      () => ({ kind: 'rejected' as const }),
-    )
-  let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-  try {
-    cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
-  } catch {
-    return err([AuthorizationCleanupFailureKind.Rejected])
-  }
-  const lookup = await pendingLookup
-  if (lookup.kind === 'rejected') {
-    dependencies.releaseAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-    )
-    return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
-  }
-  if (!lookup.pending) {
-    let outcome: Awaited<
-      ReturnType<
-        ExtensionLifecycleRoutingDependencies['completeAccountPickerAuthorizationCleanup']
-      >
-    >
+export class InterruptedAuthorizationCleanupRecovery {
+  constructor(
+    private readonly dependencies: ExtensionLifecycleRoutingDependencies,
+  ) {}
+
+  async recover(): Promise<AuthorizationCleanupResult> {
+    const pendingLookup = this.dependencies
+      .accountPickerAuthorizationCleanupPending()
+      .then(
+        (pending) => ({ kind: 'resolved' as const, pending }),
+        () => ({ kind: 'rejected' as const }),
+      )
+    let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     try {
-      outcome = await dependencies.completeAccountPickerAuthorizationCleanup(
-        cleanup.authorizationGeneration,
-        CleanupEvidence.Partial,
-      )
+      cleanup = await this.dependencies.beginAccountPickerAuthorizationCleanup()
     } catch {
-      dependencies.releaseAccountPickerAuthorizationCleanup(
-        cleanup.authorizationGeneration,
-      )
       return err([AuthorizationCleanupFailureKind.Rejected])
     }
-    return 'error' in outcome
-      ? err([AuthorizationCleanupFailureKind.Rejected])
-      : ok()
+    const lookup = await pendingLookup
+    if (lookup.kind === 'rejected') {
+      this.dependencies.releaseAccountPickerAuthorizationCleanup(
+        cleanup.authorizationGeneration,
+      )
+      return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
+    }
+    if (!lookup.pending) {
+      let outcome: Awaited<
+        ReturnType<
+          ExtensionLifecycleRoutingDependencies['completeAccountPickerAuthorizationCleanup']
+        >
+      >
+      try {
+        outcome =
+          await this.dependencies.completeAccountPickerAuthorizationCleanup(
+            cleanup.authorizationGeneration,
+            CleanupEvidence.Partial,
+          )
+      } catch {
+        this.dependencies.releaseAccountPickerAuthorizationCleanup(
+          cleanup.authorizationGeneration,
+        )
+        return err([AuthorizationCleanupFailureKind.Rejected])
+      }
+      if ('error' in outcome) {
+        this.dependencies.releaseAccountPickerAuthorizationCleanup(
+          cleanup.authorizationGeneration,
+        )
+        return err([AuthorizationCleanupFailureKind.Rejected])
+      }
+      return ok(AuthorizationCleanupSuccess.Cleared)
+    }
+    const cleanupArgs: ClearAuthorizationStateArgs = {
+      ...this.dependencies,
+      closeSession: true,
+      cleanupStart: {
+        kind: AuthorizationCleanupStartKind.Existing,
+        cleanup,
+      },
+    }
+    return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
   }
-  const cleanupArgs: ClearAuthorizationStateArgs = {
-    ...dependencies,
-    closeSession: true,
-    cleanupStart: {
-      kind: AuthorizationCleanupStartKind.Existing,
-      cleanup,
-    },
-  }
-  return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
 }
 
 export enum ExtensionLifecycleRoutingResult {

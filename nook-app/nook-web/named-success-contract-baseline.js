@@ -14,7 +14,6 @@
 
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
-  { file: 'nook-web-extension/src/background/service-worker/extension-lifecycle-routing.ts', gitBlobSha1: 'efc028b74d41316a7d7d9418fa5577dc33dbaea9' },
   { file: 'nook-web-extension/src/offscreen/session-lease.ts', gitBlobSha1: '31ace004ee84763da821ca435ec23cba1257dfb5' },
   { file: 'nook-web-extension/src/offscreen/session-vault-operations.ts', gitBlobSha1: '5a398613f9a10c4a6700c0340ed68acb6a74b183' },
   { file: 'nook-web-shared/src/extension/event-log-bridge.ts', gitBlobSha1: '9c0ba97f5d2c67831846d56a250ec3daba854aac' },

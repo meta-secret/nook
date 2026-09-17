@@ -509,14 +509,14 @@ describe('service worker routing', () => {
       },
     }
     const {
-      recoverInterruptedAuthorizationCleanup,
+      InterruptedAuthorizationCleanupRecovery,
       AuthorizationCleanupFailureKind,
     } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
 
-    expect(await recoverInterruptedAuthorizationCleanup(dependencies)).toEqual(
-      err([AuthorizationCleanupFailureKind.MarkerLookupFailed]),
-    )
+    expect(
+      await new InterruptedAuthorizationCleanupRecovery(dependencies).recover(),
+    ).toEqual(err([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
     const rejectedStartDependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
@@ -524,27 +524,37 @@ describe('service worker routing', () => {
         Promise.reject(new Error('authorization cleanup unavailable')),
     }
     expect(
-      await recoverInterruptedAuthorizationCleanup(rejectedStartDependencies),
+      await new InterruptedAuthorizationCleanupRecovery(
+        rejectedStartDependencies,
+      ).recover(),
     ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+    const rejectedOutcomeRelease = mock(() => {})
     const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
+      releaseAccountPickerAuthorizationCleanup: rejectedOutcomeRelease,
       completeAccountPickerAuthorizationCleanup: () =>
         Promise.resolve(rejectedCleanup),
     }
     expect(
-      await recoverInterruptedAuthorizationCleanup(rejectedDependencies),
+      await new InterruptedAuthorizationCleanupRecovery(
+        rejectedDependencies,
+      ).recover(),
     ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+    expect(rejectedOutcomeRelease).toHaveBeenCalledWith('epoch-1')
+    const rejectedCompletionRelease = mock(() => {})
     const rejectedCompletionDependencies: ExtensionLifecycleRoutingDependencies =
       {
         ...lifecycleDependencies,
+        releaseAccountPickerAuthorizationCleanup: rejectedCompletionRelease,
         completeAccountPickerAuthorizationCleanup: () =>
           Promise.reject(new Error('cleanup completion unavailable')),
       }
     expect(
-      await recoverInterruptedAuthorizationCleanup(
+      await new InterruptedAuthorizationCleanupRecovery(
         rejectedCompletionDependencies,
-      ),
+      ).recover(),
     ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+    expect(rejectedCompletionRelease).toHaveBeenCalledWith('epoch-1')
   })
 
   test.each([

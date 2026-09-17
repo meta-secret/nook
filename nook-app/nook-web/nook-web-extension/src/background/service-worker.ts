@@ -83,7 +83,7 @@ import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageS
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
-  recoverInterruptedAuthorizationCleanup,
+  InterruptedAuthorizationCleanupRecovery,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
 import {
@@ -172,15 +172,17 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
 }
 
-void recoverInterruptedAuthorizationCleanup(
+void new InterruptedAuthorizationCleanupRecovery(
   extensionLifecycleRoutingDependencies,
-).then((cleanup) => {
-  if (cleanup.isErr())
-    console.warn(
-      'Extension authorization cleanup remains pending',
-      cleanup.error,
-    )
-})
+)
+  .recover()
+  .then((cleanup) => {
+    if (cleanup.isErr())
+      console.warn(
+        'Extension authorization cleanup remains pending',
+        cleanup.error,
+      )
+  })
 
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
