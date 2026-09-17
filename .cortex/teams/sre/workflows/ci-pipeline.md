@@ -654,7 +654,14 @@ authenticator-domain to 90 percent.
 **PR CI split:**
 
 - PR CI uses independent native Rust and WASM producers.
-- Native Rust runs the portable Rust nextest/coverage branch and uploads its small coverage handoff.
+- Trusted native Rust first publishes an exact-source, run-attempt-scoped image
+  and its BuildKit cache before any format, clippy, test, or coverage consumer
+  starts. Native verification consumes that image through BuildKit, and the
+  sibling Rust ecosystem jobs import the same exact-head cache on their nodes.
+- Fork and Dependabot validation remains secret-free and runs the existing
+  native verification path without publishing or transporting the large image.
+- Native verification uploads its small coverage handoff after consuming the
+  producer image.
 - The WASM build producer runs clippy/build once and uploads the generated package under a run-stable artifact name.
 - `WASM Node tests` depends on that build job and finishes the producer gate.
 - `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.

@@ -13,6 +13,16 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:pr:rust:host }
 
+  ci:pr:rust-build-image:
+    desc: Build the exact-source native Rust image without running validation.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:pr:rust-build-image:host }
+
+  _ci:pr:rust-build-image:host:
+    cmds:
+      - task: setup:rust:pr-build
+
   ci:main:rust:
     desc: Main native Rust verification after the authoritative preflight job succeeds.
     cmds:

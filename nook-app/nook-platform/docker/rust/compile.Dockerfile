@@ -3,7 +3,7 @@
 # Compile-only product graph. The rust-base and web-base stages are supplied as
 # named contexts by compile.docker-bake.hcl. Do not change this
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
-# tests, Clippy, and coverage as part of their dependency warm-up.
+# non-build validation as part of their dependency warm-up.
 
 FROM rust-base AS compile-platform-manifests
 
@@ -59,8 +59,8 @@ RUN mkdir -p \
 # outside the 16 explicitly secret-mounted compiler vertices below.
 RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 
-# These sibling stages warm only ordinary library dependencies. No --tests,
-# --all-targets, test runner, Clippy, coverage, or test-only package is used.
+# These sibling stages warm only ordinary library dependencies. No validation
+# target, runner, or validation-only package is used.
 FROM compile-platform-manifests AS compile-native-dependencies
 
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -149,6 +149,48 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
+
+# Exact-source native build image for PR validation consumers. This stage only
+# performs the ordinary native cargo builds above. All validation and
+# repository policy run later in their own jobs.
+FROM compile-native-source AS pr-native-build
+
+WORKDIR /meta-secret/nook
+COPY .codex .codex
+COPY .cortex .cortex
+COPY .cursor .cursor
+COPY .github .github
+COPY .impeccable .impeccable
+COPY .task .task
+COPY .vale .vale
+COPY agentic-ai agentic-ai
+COPY docs docs
+COPY infra infra
+COPY nook-app nook-app
+COPY AGENTS.md CODEX.md LICENSE PRODUCT.md README.md ./
+COPY .dockerignore .gitignore .jscpd.json .vale.ini bun.lock deny.toml eslint.config.mjs package.json tsconfig.compile.json tsconfig.json ./
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "PR native build source snapshot" >/dev/null
+
+# Trusted ARC consumers have a remote BuildKit API but no container runtime.
+# Import the producer's exact Zot image as a named context, execute validation
+# as a normal solve vertex, then expose only the small validation handoff.
+FROM pr-native-image AS pr-native-verify
+
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    PLATFORM_ROOT=/meta-secret/nook/nook-app/nook-platform \
+    task --dir nook-app/nook-platform rust:ci:verify-built
+
+FROM scratch AS pr-native-verify-export
+
+COPY --from=pr-native-verify /ci-artifacts/ /
 
 FROM compile-wasm-dependencies AS compile-wasm-source
 
@@ -415,7 +457,7 @@ COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock agentic-ai/loom/tscon
 COPY agentic-ai/loom/src src
 # Loom's production modules import the tracked Cortex implementation contracts.
 # Keep those sources in the compile-only container without copying any nested
-# skill dependencies or running their test/verification scripts.
+# skill dependencies or running their validation scripts.
 COPY .cortex /meta-secret/nook/.cortex
 RUN bun install --frozen-lockfile --ignore-scripts \
     && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \
