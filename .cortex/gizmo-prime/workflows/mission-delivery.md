@@ -3,9 +3,10 @@
 ## Outcome
 
 Each feature Gizmo owns one feature branch, parent worktree, and Team Agent
-children. Feature delivery ends after remote compilation, required review,
-and serialized local dev integration. The manually run dev manager owns
-publication, slow PR checks, and main promotion.
+children. Feature delivery ends only after remote compilation, required review,
+serialized local dev integration, and proof that canonical local `dev` contains
+the accepted feature commit. The manually run dev manager owns publication,
+slow PR checks, and main promotion.
 
 Gizmo Prime is the mission/root coordinator. Every team reports through a Team
 Gizmo. Team Gizmo receives Prime's high-level packet, decomposes only team
@@ -61,7 +62,12 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not introduce a persistent Delivery Pipeline or PR Lifecycle Agent
   service, scheduler, or notification journal.
 - Do not rebase, squash, force-push, or discard another feature's work.
-- Do not treat a worker commit or parent integration as completed feature delivery.
+- Do not treat a worker commit or parent integration as feature completion or
+  delivery.
+- Do not call a feature complete, done, delivered, successful, or an equivalent
+  terminal outcome before post-landing containment is verified.
+- Do not let a successful check, review, compilation, or integration-command
+  result imply feature completion. Name the intermediate stage explicitly.
 - Do not skip a required stage because a separately named tool was not found.
 
 ## Procedure
@@ -125,13 +131,18 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Do not request tests, checks, coverage, e2e, or preflight in that stage.
    - Fast agents review code and required security boundaries.
    - Route fixes to the responsible team and repeat compilation after each push.
-7. **Land the completed feature.**
+7. **Land the accepted feature commit.**
    - Require positive compilation evidence for the current branch head.
    - Require resolved review findings and required security acceptance.
    - Authorize Delivery Pipeline Team Gizmo's bounded local-integration packet
      to PR Lifecycle Agent for `dev:land`.
    - Tooling serializes the shared local dev checkout and verifies build evidence.
    - Record observed feature and resulting local dev SHAs.
+   - Resolve canonical local `dev` after landing.
+   - Verify that the resulting local dev commit contains the accepted feature
+     commit with `git merge-base --is-ancestor`.
+   - Treat missing or negative containment evidence as an incomplete landing
+     stage.
 8. **Hand off to the manager.**
    - Name the canonical branch and observed feature and local dev SHAs.
    - Identify the manager-owned stages that remain.
@@ -186,6 +197,8 @@ rather than present authored or committed changes as successful delivery.
 - Required review and security findings are resolved.
 - Tests were authored for execution in the manager's slow stage.
 - The accepted feature is present in local dev.
+- Post-landing ancestry proves that canonical local `dev` contains the accepted
+  feature commit.
 - The handoff names all commits and any remaining blocker.
 - The final report names the actual last completed stage and remaining stages.
 - A blocked report includes the concrete observed blocker and supporting evidence.

@@ -453,7 +453,11 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Delivery Pipeline's PR Lifecycle Agent re-fetches and resolves that branch's
     latest committed head before each packetized push and remote invocation.
     A branch advance follows the latest head and reruns affected evidence.
-  - Completed features enter local dev through serialized local integration.
+  - Accepted feature changes enter local dev through serialized local
+    integration.
+  - Feature completion requires containment evidence after that integration.
+    Resolve canonical local `dev` after `dev:land` and verify that its commit
+    contains the accepted feature commit.
   - The dev manager alone publishes dev and requests full slow PR validation.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
@@ -772,12 +776,18 @@ merge is not an intermediate selection.
 ### Delivery completion
 
 Feature delivery completes after reviewed, remotely compiled changes merge
-into local dev through local integration. The manually run dev manager owns the
-slow delivery stage through snapshot publication, full dev PR validation, and
-guarded fast-forward promotion. Delivery Pipeline Team Gizmo routes authorized
-mechanics to the PR Lifecycle Agent for the owning controller. Promotion
-fast-forwards main to the tested dev SHA. A worker commit alone does not
-complete feature delivery. Every change passes through dev.
+into canonical local `dev` through local integration and containment is
+verified. Resolve both commits after `dev:land`, then require
+`git merge-base --is-ancestor <accepted-feature-commit> <resulting-dev-commit>`
+to succeed. No agent may call a feature complete, done, delivered, successful,
+or an equivalent terminal outcome before that proof. Review, compilation,
+acceptance, a worker commit, parent integration, or a successful `dev:land`
+invocation may describe only its own intermediate stage until containment is
+proved. The manually run dev manager owns the slow delivery stage through
+snapshot publication, full dev PR validation, and guarded fast-forward
+promotion. Delivery Pipeline Team Gizmo routes authorized mechanics to the PR
+Lifecycle Agent for the owning controller. Promotion fast-forwards main to the
+tested dev SHA. Every change passes through dev.
 
 ### Failed validation waves
 
