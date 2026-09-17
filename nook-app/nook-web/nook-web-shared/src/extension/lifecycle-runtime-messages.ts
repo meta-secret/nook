@@ -8,14 +8,21 @@ import {
   RuntimeMessageDecodeFailureKind,
 } from "./runtime-message-decode-failure";
 
-function decodeRuntimeMessage<A>(
-  schema: Schema.Schema<A>,
-  value: unknown,
-  kind: RuntimeMessageDecodeFailureKind,
-): Effect.Effect<A, RuntimeMessageDecodeFailure> {
-  return Schema.decodeUnknown(schema)(value).pipe(
+type RuntimeMessageDecodeRequest<DecodedMessage, WireMessage> = {
+  readonly schema: Schema.Schema<DecodedMessage>;
+  readonly value: WireMessage;
+  readonly kind: RuntimeMessageDecodeFailureKind;
+};
+
+function decodeRuntimeMessage<DecodedMessage, WireMessage>(
+  request: RuntimeMessageDecodeRequest<DecodedMessage, WireMessage>,
+): Effect.Effect<DecodedMessage, RuntimeMessageDecodeFailure> {
+  return Schema.decodeUnknown(request.schema)(request.value).pipe(
     Effect.mapError((cause) =>
-      RuntimeMessageDecodeFailure.fromParseError({ kind, cause }),
+      RuntimeMessageDecodeFailure.fromParseError({
+        kind: request.kind,
+        cause,
+      }),
     ),
   );
 }
@@ -28,15 +35,17 @@ export enum OpenSimpleVaultMessageType {
 export class OpenSimpleVaultMessage {
   private constructor() {}
   declare readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-  static decode(
-    message: unknown,
+  static decode<WireMessage>(
+    message: WireMessage,
   ): Effect.Effect<OpenSimpleVaultMessage, RuntimeMessageDecodeFailure> {
     return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.OpenSimpleVault,
+      {
+        schema: Schema.Struct({
+          type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
+        }),
+        value: message,
+        kind: RuntimeMessageDecodeFailureKind.OpenSimpleVault,
+      },
     );
   }
 }
@@ -55,23 +64,25 @@ export class BeginExtensionPairingMessage {
     deviceSigningPublicKey: string;
     deviceLabel: string;
   };
-  static decode(
-    message: unknown,
+  static decode<WireMessage>(
+    message: WireMessage,
   ): Effect.Effect<BeginExtensionPairingMessage, RuntimeMessageDecodeFailure> {
     return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(
-          BeginExtensionPairingMessageType.NookBeginExtensionPairing,
-        ),
-        payload: Schema.Struct({
-          deviceId: Schema.String.pipe(Schema.minLength(1)),
-          devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
-          deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
-          deviceLabel: Schema.String.pipe(Schema.minLength(1)),
+      {
+        schema: Schema.Struct({
+          type: Schema.Literal(
+            BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+          ),
+          payload: Schema.Struct({
+            deviceId: Schema.String.pipe(Schema.minLength(1)),
+            devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
+            deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
+            deviceLabel: Schema.String.pipe(Schema.minLength(1)),
+          }),
         }),
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
+        value: message,
+        kind: RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
+      },
     );
   }
 }
@@ -80,8 +91,8 @@ export class BeginExtensionPairingMessage {
 export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
 export class ExtensionEventLogRecordAdmission {
   private constructor() {}
-  static decode(
-    value: unknown,
+  static decode<WireValue>(
+    value: WireValue,
   ): Effect.Effect<ExtensionEventLogRecord, RuntimeMessageDecodeFailure> {
     return Effect.try({
       try: () => decode_extension_event_log_record(value),
@@ -106,8 +117,8 @@ export class ExtensionLocalEventLogUpdatedMessage {
     vaultStoreId: string;
     eventLogRecords: ExtensionEventLogRecord[];
   };
-  static decode(
-    message: unknown,
+  static decode<WireMessage>(
+    message: WireMessage,
   ): Effect.Effect<
     ExtensionLocalEventLogUpdatedMessage,
     RuntimeMessageDecodeFailure
@@ -124,9 +135,11 @@ export class ExtensionLocalEventLogUpdatedMessage {
       }),
     });
     return decodeRuntimeMessage(
-      envelopeSchema,
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
+      {
+        schema: envelopeSchema,
+        value: message,
+        kind: RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
+      },
     ).pipe(
       Effect.flatMap(({ type, payload }) =>
         Effect.all(payload.eventLogRecords.map(ExtensionEventLogRecord.decode), {
@@ -146,13 +159,15 @@ export class ExtensionLocalEventLogUpdatedMessage {
 export class RuntimeMessageEnvelope {
   private constructor() {}
   declare readonly type: string;
-  static decode(
-    message: unknown,
-  ): Effect.Effect<{ readonly type: string }, RuntimeMessageDecodeFailure> {
+  static decode<WireMessage>(
+    message: WireMessage,
+  ): Effect.Effect<RuntimeMessageEnvelope, RuntimeMessageDecodeFailure> {
     return decodeRuntimeMessage(
-      Schema.Struct({ type: Schema.String }),
-      message,
-      RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
+      {
+        schema: Schema.Struct({ type: Schema.String }),
+        value: message,
+        kind: RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
+      },
     );
   }
 }

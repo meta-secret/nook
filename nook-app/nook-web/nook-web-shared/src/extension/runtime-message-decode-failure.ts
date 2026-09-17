@@ -16,34 +16,70 @@ export enum RuntimeMessageDecodeFailureKind {
   ExtensionPairedVaultIdentityHandoffRequest = "extension-paired-vault-identity-handoff-request",
 }
 
-type RuntimeMessageDecodeFailureRequest = {
+export enum RuntimeMessageDecodeCauseKind {
+  Parse = "parse",
+  Error = "error",
+  ThrownValue = "thrown-value",
+}
+
+export type RuntimeMessageDecodeCause =
+  | {
+      readonly kind: RuntimeMessageDecodeCauseKind.Parse;
+      readonly error: ParseResult.ParseError;
+    }
+  | {
+      readonly kind: RuntimeMessageDecodeCauseKind.Error;
+      readonly error: Error;
+    }
+  | {
+      readonly kind: RuntimeMessageDecodeCauseKind.ThrownValue;
+      readonly detail: string;
+    };
+
+type RuntimeMessageDecodeFailureRequest<Cause> = {
   readonly kind: RuntimeMessageDecodeFailureKind;
-  readonly cause: unknown;
+  readonly cause: Cause;
 };
 
 export class RuntimeMessageDecodeFailure extends Error {
   readonly _tag = "RuntimeMessageDecodeFailure";
 
-  private constructor(request: RuntimeMessageDecodeFailureRequest) {
+  private constructor(
+    request: RuntimeMessageDecodeFailureRequest<RuntimeMessageDecodeCause>,
+  ) {
     super(request.kind);
     this.kind = request.kind;
     this.cause = request.cause;
   }
 
   readonly kind: RuntimeMessageDecodeFailureKind;
-  readonly cause: unknown;
+  readonly cause: RuntimeMessageDecodeCause;
 
   static fromParseError(
-    request: RuntimeMessageDecodeFailureRequest & {
-      readonly cause: ParseResult.ParseError;
-    },
+    request: RuntimeMessageDecodeFailureRequest<ParseResult.ParseError>,
   ): RuntimeMessageDecodeFailure {
-    return new RuntimeMessageDecodeFailure(request);
+    return new RuntimeMessageDecodeFailure({
+      kind: request.kind,
+      cause: {
+        kind: RuntimeMessageDecodeCauseKind.Parse,
+        error: request.cause,
+      },
+    });
   }
 
-  static fromCause(
-    request: RuntimeMessageDecodeFailureRequest,
+  static fromCause<SourceCause>(
+    request: RuntimeMessageDecodeFailureRequest<SourceCause>,
   ): RuntimeMessageDecodeFailure {
-    return new RuntimeMessageDecodeFailure(request);
+    const cause: RuntimeMessageDecodeCause =
+      request.cause instanceof Error
+        ? {
+            kind: RuntimeMessageDecodeCauseKind.Error,
+            error: request.cause,
+          }
+        : {
+            kind: RuntimeMessageDecodeCauseKind.ThrownValue,
+            detail: String(request.cause),
+          };
+    return new RuntimeMessageDecodeFailure({ kind: request.kind, cause });
   }
 }

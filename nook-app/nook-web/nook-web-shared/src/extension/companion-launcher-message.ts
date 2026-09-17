@@ -21,8 +21,8 @@ export class OpenCompanionLauncherMessage {
   declare readonly payload?: {
     intent: OpenCompanionLauncherIntent.Pair;
   };
-  static decode(
-    message: unknown,
+  static decode<WireMessage>(
+    message: WireMessage,
   ): Effect.Effect<
     NormalizedOpenCompanionLauncherMessage,
     RuntimeMessageDecodeFailure
@@ -37,8 +37,8 @@ export class NormalizedOpenCompanionLauncherMessage {
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly intent: OpenCompanionLauncherIntent;
 
-  static decode(
-    message: unknown,
+  static decode<WireMessage>(
+    message: WireMessage,
   ): Effect.Effect<
     NormalizedOpenCompanionLauncherMessage,
     RuntimeMessageDecodeFailure

@@ -87,7 +87,12 @@ export {
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
 export { ExtensionPairingApprovedMessageAdmissionFailure };
-export { RuntimeMessageDecodeFailure, RuntimeMessageDecodeFailureKind };
+export {
+  RuntimeMessageDecodeFailure,
+  RuntimeMessageDecodeFailureKind,
+  RuntimeMessageDecodeCauseKind,
+};
+export type { RuntimeMessageDecodeCause } from "./runtime-message-decode-failure";
 
 export type { ExtensionPairingVaultType } from "./nook-companion-wasm/nook_companion_wasm.js";
 
