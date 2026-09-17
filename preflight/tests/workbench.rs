@@ -42,15 +42,6 @@ impl RepositoryFixture {
     }
 }
 
-fn directory_has_files(path: &Path) -> bool {
-    fs::read_dir(path).is_ok_and(|entries| {
-        entries.filter_map(Result::ok).any(|entry| {
-            let path = entry.path();
-            path.is_file() || (path.is_dir() && directory_has_files(&path))
-        })
-    })
-}
-
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
@@ -206,46 +197,33 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
 }
 
 #[test]
-fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
-    let collector =
-        RepositoryFixture::repository_root().read(".github/workflows/main-build-stats.yml");
-    let publisher =
-        RepositoryFixture::repository_root().read(".github/scripts/workbench-publish.cjs");
+fn workbench_stores_issues_without_build_statistics_publication() -> anyhow::Result<()> {
+    let repository = RepositoryFixture::repository_root();
+    let publisher = repository.read(".github/scripts/workbench-publish.cjs");
+    assert!(
+        publisher.contains("class WorkbenchIssuePublisher")
+            && publisher.contains("issuePathPattern")
+            && publisher.contains("meta-secret/nook-workbench")
+            && publisher.contains("NOOK_WORKBENCH_EXPECTED_SHA"),
+        "the Workbench publisher must be limited to issue records"
+    );
 
-    for required in [
-        "repository: meta-secret/nook-workbench",
-        "workbench/stats/main-build/",
-        "git -C workbench push origin HEAD:main",
+    for path in [
+        ".github/workflows/main-build-stats.yml",
+        ".github/workflows/lib/main-build-stats.mjs",
+        ".github/workflows/lib/main-build-stats-legacy.mjs",
+        ".github/workflows/lib/main-build-stats-codecs.mjs",
+        ".github/workflows/lib/main-build-stats.test.mjs",
     ] {
         assert!(
-            collector.contains(required),
-            "Main statistics collector is missing: {required}"
+            !repository.join(path).exists(),
+            "obsolete Main statistics publisher remains: {path}"
         );
     }
-    assert!(
-        !collector.contains("gh pr create")
-            && !collector.contains("gh pr merge")
-            && !collector.contains(".stats/"),
-        "Main statistics must not create Nook bookkeeping PRs or files"
-    );
-    assert!(
-        !directory_has_files(&RepositoryFixture::repository_root().join(".stats")),
-        "statistics must live only in Nook Workbench"
-    );
-    assert!(
-        publisher.contains("remotePath.startsWith('stats/')")
-            && publisher.contains("Refusing to overwrite immutable Workbench record")
-            && publisher.contains("NOOK_WORKBENCH_EXPECTED_SHA")
-            && publisher.contains("Refusing stale Workbench update"),
-        "the Workbench publisher must refuse to replace immutable statistics"
-    );
-
     for path in [".github/workflows/main.yml", ".github/workflows/pr.yml"] {
         assert!(
-            !RepositoryFixture::repository_root()
-                .read(path)
-                .contains(".stats/**"),
-            "{path} must not retain obsolete statistics path exceptions"
+            !repository.read(path).contains("main-build-stats"),
+            "{path} must not retain Main statistics collector wiring"
         );
     }
     Ok(())
