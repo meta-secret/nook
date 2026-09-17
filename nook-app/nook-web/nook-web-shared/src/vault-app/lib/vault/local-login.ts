@@ -35,6 +35,7 @@ import {
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
+import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 
 const log = browserLogRuntime.createLogger("vault-local");
 
@@ -331,11 +332,7 @@ export class VaultLoginActions {
       state.localVaultPresent = yield* Effect.tryPromise(presenceAttempt);
       state.localLoginPreparation = LocalLoginPreparationState.Idle;
       const passwordRefresh: StorageResultOperation<
-        Awaited<
-          ReturnType<typeof state.refreshPasswordEntriesList>
-        > extends Result<infer Value, infer _Failure>
-          ? Value
-          : never,
+        PasswordEntriesRefreshSnapshot,
         OAuthFailure | StorageOperationFailure
       > = {
         operation: () => state.refreshPasswordEntriesList(),
