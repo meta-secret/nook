@@ -109,8 +109,8 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 #[test]
 fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
     let pr_workflow = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
-    let publisher_suite = RepositoryFixture::repository_root()
-        .read(".github/scripts/workbench-publish.test.cjs");
+    let publisher_suite =
+        RepositoryFixture::repository_root().read(".github/scripts/workbench-publish.test.cjs");
 
     assert!(
         pr_workflow.contains("node --test .github/scripts/workbench-publish.test.cjs"),

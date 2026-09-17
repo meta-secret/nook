@@ -6,11 +6,20 @@ import { CacheTelemetry } from "./cache-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
 
+/** @type {Readonly<{Required: 'required', NotRequired: 'not_required', NotApplicable: 'not_applicable'}>} */
+export const SccacheExpectation = Object.freeze({
+  Required: "required",
+  NotRequired: "not_required",
+  NotApplicable: "not_applicable",
+});
+/** @typedef {typeof SccacheExpectation.Required | typeof SccacheExpectation.NotRequired | typeof SccacheExpectation.NotApplicable} SccacheExpectationValue */
+
 /**
  * @typedef {object} PrCacheJob
  * @property {string} id
  * @property {string} result
  * @property {boolean} buildExpected
+ * @property {SccacheExpectationValue} sccacheExpectation
  * @property {boolean} readOnly
  */
 /**
@@ -63,11 +72,6 @@ export class PrCacheHealth {
     const warnings = [];
     const results = jobs.map((job) => {
       const record = recordsByJob.get(job.id);
-      // Web verification produces BuildKit telemetry but no Rust compiler
-      // requests. Keep its intentionally unavailable sccache summary a
-      // warning-free non-applicable state while compiler-bearing jobs fail
-      // closed when their cache authority disappears.
-      const compilerExpected = job.buildExpected && job.id !== "verify";
       if (job.result !== "success")
         reasons.push(`${job.id}:upstream_failure_or_timeout`);
       if (!record) {
@@ -86,24 +90,49 @@ export class PrCacheHealth {
       CacheTelemetry.validateTelemetryRecord(record);
       if (!record.collection.complete)
         reasons.push(`${job.id}:telemetry_incomplete`);
-      if (compilerExpected && record.sccache.runtime_mode === "UNAVAILABLE")
-        reasons.push(`${job.id}:sccache_unavailable`);
-      if (compilerExpected && record.sccache.fallback.state === "fallback")
-        reasons.push(
-          `${job.id}:sccache_fallback:${record.sccache.fallback.reason}`,
-        );
-      if (record.sccache.cache_errors > 0)
-        reasons.push(`${job.id}:sccache_errors:${record.sccache.cache_errors}`);
-      if (record.sccache.cache_write_errors > 0)
-        reasons.push(
-          `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
-        );
-      if (
-        job.buildExpected &&
-        record.sccache.cache_misses > 0 &&
-        record.sccache.remote_writes === 0
-      )
-        reasons.push(`${job.id}:sccache_remote_writes_missing`);
+      const imports = record.cache_scope.imports || {
+        probes_complete: false,
+        availability: [],
+      };
+      const hasAvailableImport = imports.availability.some(
+        (candidate) => candidate.available,
+      );
+      switch (job.sccacheExpectation) {
+        case SccacheExpectation.Required:
+          if (record.sccache.runtime_mode === "UNAVAILABLE")
+            reasons.push(`${job.id}:sccache_unavailable`);
+          if (record.sccache.fallback.state === "fallback")
+            reasons.push(
+              `${job.id}:sccache_fallback:${record.sccache.fallback.reason}`,
+            );
+          if (record.sccache.cache_errors > 0)
+            reasons.push(
+              `${job.id}:sccache_errors:${record.sccache.cache_errors}`,
+            );
+          if (record.sccache.cache_write_errors > 0)
+            reasons.push(
+              `${job.id}:sccache_write_errors:${record.sccache.cache_write_errors}`,
+            );
+          if (
+            record.sccache.counter_reliability === "authoritative" &&
+            record.sccache.cache_misses > 0 &&
+            record.sccache.remote_writes === 0
+          )
+            reasons.push(`${job.id}:sccache_remote_writes_missing`);
+          if (
+            record.sccache.publication_status === "pending_verification"
+          ) {
+            if (hasAvailableImport && record.sccache.cache_hits === 0) {
+              reasons.push(`${job.id}:sccache_next_head_zero_hits`);
+            } else if (!hasAvailableImport) {
+              warnings.push(`${job.id}:publication_pending_verification`);
+            }
+          }
+          break;
+        case SccacheExpectation.NotRequired:
+        case SccacheExpectation.NotApplicable:
+          break;
+      }
       if (record.buildkit.cache_export.incomplete_failures > 0)
         reasons.push(`${job.id}:cache_export_incomplete`);
       if (job.readOnly && record.buildkit.cache_export.attempts > 0)
@@ -113,23 +142,6 @@ export class PrCacheHealth {
       if (!job.buildExpected) warnings.push(`${job.id}:build_not_expected`);
       const steps = record.buildkit.completed_steps;
       const buildkitHitRate = record.buildkit.cache_hit_rate_percent;
-      const imports = record.cache_scope.imports || {
-        probes_complete: false,
-        availability: [],
-      };
-      const hasAvailableImport = imports.availability.some(
-        (candidate) => candidate.available,
-      );
-      if (
-        job.buildExpected &&
-        record.sccache.publication_status === "pending_verification"
-      ) {
-        if (hasAvailableImport && record.sccache.cache_hits === 0) {
-          reasons.push(`${job.id}:sccache_next_head_zero_hits`);
-        } else if (!hasAvailableImport) {
-          warnings.push(`${job.id}:publication_pending_verification`);
-        }
-      }
       if (
         job.buildExpected &&
         steps > 0 &&
@@ -280,13 +292,24 @@ export class PrCacheHealth {
         typeof candidate.id !== "string" ||
         typeof candidate.result !== "string" ||
         typeof candidate.buildExpected !== "boolean" ||
+        (candidate.sccacheExpectation !== SccacheExpectation.Required &&
+          candidate.sccacheExpectation !== SccacheExpectation.NotRequired &&
+          candidate.sccacheExpectation !== SccacheExpectation.NotApplicable) ||
         typeof candidate.readOnly !== "boolean"
       )
         throw new Error("cache-health jobs must be a valid job array");
+      if (
+        (candidate.buildExpected &&
+          candidate.sccacheExpectation === SccacheExpectation.NotApplicable) ||
+        (!candidate.buildExpected &&
+          candidate.sccacheExpectation !== SccacheExpectation.NotApplicable)
+      )
+        throw new Error("cache-health sccache expectation is inconsistent");
       jobs.push({
         id: candidate.id,
         result: candidate.result,
         buildExpected: candidate.buildExpected,
+        sccacheExpectation: candidate.sccacheExpectation,
         readOnly: candidate.readOnly,
       });
     }
