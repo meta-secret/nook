@@ -62,5 +62,8 @@ const browserRuntimeMessageSchema = Schema.Struct(
   {
     type: Schema.String.pipe(Schema.minLength(1)),
   },
-  Schema.Record({ key: Schema.String, value: browserRuntimeMessageValueSchema }),
+  Schema.Record({
+    key: Schema.String,
+    value: browserRuntimeMessageValueSchema,
+  }),
 ) satisfies Schema.Schema<BrowserRuntimeMessage>

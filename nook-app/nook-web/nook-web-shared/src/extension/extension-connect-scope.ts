@@ -61,10 +61,9 @@ class ExtensionConnectScopeCatalog {
     return this.scopeRuntimeState.runtime;
   }
 
-  decode(value: unknown): Effect.Effect<
-    ExtensionConnectScope,
-    ExtensionConnectScopeDecodeFailure
-  > {
+  decode(
+    value: unknown,
+  ): Effect.Effect<ExtensionConnectScope, ExtensionConnectScopeDecodeFailure> {
     switch (this.scopeRuntimeState.kind) {
       case ExtensionConnectScopeRuntimeStateKind.Unconfigured:
         return Effect.fail({

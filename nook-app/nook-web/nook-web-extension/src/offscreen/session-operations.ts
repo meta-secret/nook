@@ -568,10 +568,8 @@ export async function handleSessionMessage({
             payload.password = ''
             return ok(
               decision === NookWebsiteLoginSaveDecision.AlreadySaved
-                ?
-                  { ok: true, decision, secretId: plan.secretId }
-                :
-                  { ok: true, decision },
+                ? { ok: true, decision, secretId: plan.secretId }
+                : { ok: true, decision },
             )
           }
           pendingLoginSaveOfferStore.clearForOrigin(payload.origin)

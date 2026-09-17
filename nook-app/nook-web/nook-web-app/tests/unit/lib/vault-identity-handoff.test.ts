@@ -32,6 +32,7 @@ import {
 } from '$lib/runtime/storage-failure'
 import { TranslationMessage } from '$lib/vault/translation'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
+import { ProviderLoadOutcome } from '$lib/vault/providers.svelte'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
@@ -154,7 +155,9 @@ describe('external browser identity handoff commit ownership', () => {
         fixture.manager,
         'has_pending_sentinel_genesis_finalization',
       ).mockResolvedValue(false)
-      vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(
+        ok(ProviderLoadOutcome.Loaded),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),
       )

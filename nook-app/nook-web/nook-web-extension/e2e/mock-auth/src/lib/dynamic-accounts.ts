@@ -92,9 +92,12 @@ export function findDynamicMockAuthAccount(
   username: string,
   password: string,
 ): DynamicMockAuthAccountLookup {
-  const account = dynamicMockAuthAccountStore.read().find(
-    (account) => account.username === username && account.password === password,
-  )
+  const account = dynamicMockAuthAccountStore
+    .read()
+    .find(
+      (account) =>
+        account.username === username && account.password === password,
+    )
   return account
     ? { kind: DynamicMockAuthAccountLookupKind.Found, account }
     : { kind: DynamicMockAuthAccountLookupKind.Missing }

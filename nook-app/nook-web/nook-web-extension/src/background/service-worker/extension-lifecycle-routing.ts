@@ -1,9 +1,7 @@
 import { Effect, Either } from 'effect'
 import type { ExtensionSessionTransportFailure } from './session-document'
 import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
-import {
-  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   ExternalSenderTrustPolicy,
   isExtensionRuntimeSender,
@@ -189,18 +187,21 @@ class AuthorizationCleanupLifecycle {
       const closeOperation: Effect.Effect<
         AuthorizationCleanupClose,
         AuthorizationCleanupFailure
-      > = sessionDisposition === AuthorizationCleanupSessionDisposition.Close
-        ? Effect.tryPromise({
-            try: () => closeExtensionSessionDocument(),
-            catch: () => AuthorizationCleanupFailureKind.Rejected,
-          }).pipe(
-            Effect.flatMap((closed) =>
-              closed.isErr()
-                ? Effect.fail(closed.error)
-                : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Closed }),
-            ),
-          )
-        : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Skipped })
+      > =
+        sessionDisposition === AuthorizationCleanupSessionDisposition.Close
+          ? Effect.tryPromise({
+              try: () => closeExtensionSessionDocument(),
+              catch: () => AuthorizationCleanupFailureKind.Rejected,
+            }).pipe(
+              Effect.flatMap((closed) =>
+                closed.isErr()
+                  ? Effect.fail(closed.error)
+                  : Effect.succeed({
+                      kind: AuthorizationCleanupCloseKind.Closed,
+                    }),
+              ),
+            )
+          : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Skipped })
       const [cleanupResult, closeResult] = yield* Effect.all(
         [Effect.either(cleanupOperation), Effect.either(closeOperation)],
         { concurrency: 'unbounded' },
@@ -220,28 +221,34 @@ class AuthorizationCleanupLifecycle {
           catch: () => AuthorizationCleanupFailureKind.Rejected,
         }),
       )
-      if (Either.isLeft(firstStagedCleanup)) failures.push(firstStagedCleanup.left)
+      if (Either.isLeft(firstStagedCleanup))
+        failures.push(firstStagedCleanup.left)
       const firstPickerCleanup = yield* Effect.either(
         Effect.tryPromise({
           try: () => clearPendingAccountPickers(),
-          catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+          catch: () =>
+            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
         }),
       )
-      if (Either.isLeft(firstPickerCleanup)) failures.push(firstPickerCleanup.left)
+      if (Either.isLeft(firstPickerCleanup))
+        failures.push(firstPickerCleanup.left)
       const secondPickerCleanup = yield* Effect.either(
         Effect.tryPromise({
           try: () => clearPendingAccountPickers(),
-          catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+          catch: () =>
+            AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
         }),
       )
-      if (Either.isLeft(secondPickerCleanup)) failures.push(secondPickerCleanup.left)
+      if (Either.isLeft(secondPickerCleanup))
+        failures.push(secondPickerCleanup.left)
       const secondStagedCleanup = yield* Effect.either(
         Effect.try({
           try: () => clearStagedAuthenticatorEnrollments(),
           catch: () => AuthorizationCleanupFailureKind.Rejected,
         }),
       )
-      if (Either.isLeft(secondStagedCleanup)) failures.push(secondStagedCleanup.left)
+      if (Either.isLeft(secondStagedCleanup))
+        failures.push(secondStagedCleanup.left)
       if (failures.length > 0) {
         releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
         return yield* Effect.fail(failures)
@@ -374,7 +381,10 @@ export function routeExtensionLifecycleMessage({
     return handlePairingStateQuery(queryContext)
   }
 
-  const sessionEnsure = runConcreteDecoder(decodeExtensionSessionEnsureMessage, message)
+  const sessionEnsure = runConcreteDecoder(
+    decodeExtensionSessionEnsureMessage,
+    message,
+  )
   if (sessionEnsure.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
@@ -406,7 +416,10 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  const sessionLock = runConcreteDecoder(decodeExtensionSessionLockMessage, message)
+  const sessionLock = runConcreteDecoder(
+    decodeExtensionSessionLockMessage,
+    message,
+  )
   if (sessionLock.kind === ConcreteDecoderResultKind.Decoded) {
     const senderUrlAllowed =
       !('url' in sender) ||
@@ -430,13 +443,20 @@ export function routeExtensionLifecycleMessage({
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
       .then((cleanup) =>
-        sendResponse(Either.isRight(cleanup) ? successResponse : sessionLockFailureResponse),
+        sendResponse(
+          Either.isRight(cleanup)
+            ? successResponse
+            : sessionLockFailureResponse,
+        ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
-  const sessionExpiry = runConcreteDecoder(decodeExtensionSessionExpiryMessage, message)
+  const sessionExpiry = runConcreteDecoder(
+    decodeExtensionSessionExpiryMessage,
+    message,
+  )
   if (sessionExpiry.kind === ConcreteDecoderResultKind.Decoded) {
     if (
       !isExtensionRuntimeSender(sender) ||
@@ -459,13 +479,20 @@ export function routeExtensionLifecycleMessage({
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
       .then((cleanup) =>
-        sendResponse(Either.isRight(cleanup) ? successResponse : sessionLockFailureResponse),
+        sendResponse(
+          Either.isRight(cleanup)
+            ? successResponse
+            : sessionLockFailureResponse,
+        ),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
-  const pairingApproval = runConcreteDecoder(decodePairingApprovedMessage, message)
+  const pairingApproval = runConcreteDecoder(
+    decodePairingApprovedMessage,
+    message,
+  )
   if (pairingApproval.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)

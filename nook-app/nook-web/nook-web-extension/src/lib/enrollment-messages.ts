@@ -76,9 +76,9 @@ export class WebsiteAuthenticatorEnrollConfirmMessage {
     stageId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(
-      websiteAuthenticatorEnrollConfirmMessageSchema,
-    )(message)
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollConfirmMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -95,9 +95,9 @@ export class WebsiteAuthenticatorEnrollDismissMessage {
     stageId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(
-      websiteAuthenticatorEnrollDismissMessageSchema,
-    )(message)
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollDismissMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -113,9 +113,9 @@ export class WebsiteAuthenticatorEnrollPendingMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(
-      websiteAuthenticatorEnrollPendingMessageSchema,
-    )(message)
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollPendingMessageSchema)(
+      message,
+    )
   }
 }
 

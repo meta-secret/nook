@@ -74,7 +74,9 @@ export class WebsiteLoginSaveCommitMessage {
     evidence: AuthenticationOutcomeObservationView
   }
   static decodeOutcomeObservation(value: unknown) {
-    return Schema.decodeUnknown(AuthenticationOutcomeObservationViewSchema)(value)
+    return Schema.decodeUnknown(AuthenticationOutcomeObservationViewSchema)(
+      value,
+    )
   }
 
   static decode(message: unknown) {
@@ -106,7 +108,9 @@ const loginSaveOriginSchema = Schema.Struct({
 })
 
 const websiteLoginSaveOfferMessageSchema = Schema.Struct({
-  type: Schema.Literal(WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer),
+  type: Schema.Literal(
+    WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
+  ),
   payload: Schema.Struct({
     ...loginSaveOriginSchema.fields,
     username: Schema.String.pipe(

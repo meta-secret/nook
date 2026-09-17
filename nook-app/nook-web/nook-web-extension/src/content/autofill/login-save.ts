@@ -112,7 +112,10 @@ class AuthenticationSubmitEvent {
         submitter: { kind: AuthenticationSubmitterKind.Absent },
       }
     }
-    if (!(submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement)) {
+    if (!(
+      submitter instanceof HTMLButtonElement ||
+      submitter instanceof HTMLInputElement
+    )) {
       return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
     }
     return {

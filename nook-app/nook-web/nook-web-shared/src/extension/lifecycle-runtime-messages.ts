@@ -38,15 +38,13 @@ export class OpenSimpleVaultMessage {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<OpenSimpleVaultMessage, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage(
-      {
-        schema: Schema.Struct({
-          type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
-        }),
-        value: message,
-        kind: RuntimeMessageDecodeFailureKind.OpenSimpleVault,
-      },
-    );
+    return decodeRuntimeMessage({
+      schema: Schema.Struct({
+        type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
+      }),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.OpenSimpleVault,
+    });
   }
 }
 
@@ -67,23 +65,21 @@ export class BeginExtensionPairingMessage {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<BeginExtensionPairingMessage, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage(
-      {
-        schema: Schema.Struct({
-          type: Schema.Literal(
-            BeginExtensionPairingMessageType.NookBeginExtensionPairing,
-          ),
-          payload: Schema.Struct({
-            deviceId: Schema.String.pipe(Schema.minLength(1)),
-            devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
-            deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
-            deviceLabel: Schema.String.pipe(Schema.minLength(1)),
-          }),
+    return decodeRuntimeMessage({
+      schema: Schema.Struct({
+        type: Schema.Literal(
+          BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+        ),
+        payload: Schema.Struct({
+          deviceId: Schema.String.pipe(Schema.minLength(1)),
+          devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
+          deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
+          deviceLabel: Schema.String.pipe(Schema.minLength(1)),
         }),
-        value: message,
-        kind: RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
-      },
-    );
+      }),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
+    });
   }
 }
 
@@ -129,22 +125,21 @@ export class ExtensionLocalEventLogUpdatedMessage {
       ),
       payload: Schema.Struct({
         vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-        eventLogRecords: Schema.Array(Schema.Unknown).pipe(
-          Schema.minItems(1),
-        ),
+        eventLogRecords: Schema.Array(Schema.Unknown).pipe(Schema.minItems(1)),
       }),
     });
-    return decodeRuntimeMessage(
-      {
-        schema: envelopeSchema,
-        value: message,
-        kind: RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
-      },
-    ).pipe(
+    return decodeRuntimeMessage({
+      schema: envelopeSchema,
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
+    }).pipe(
       Effect.flatMap(({ type, payload }) =>
-        Effect.all(payload.eventLogRecords.map(ExtensionEventLogRecord.decode), {
-          concurrency: "unbounded",
-        }).pipe(
+        Effect.all(
+          payload.eventLogRecords.map(ExtensionEventLogRecord.decode),
+          {
+            concurrency: "unbounded",
+          },
+        ).pipe(
           Effect.map((eventLogRecords) => ({
             type,
             payload: { vaultStoreId: payload.vaultStoreId, eventLogRecords },
@@ -162,13 +157,11 @@ export class RuntimeMessageEnvelope {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<RuntimeMessageEnvelope, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage(
-      {
-        schema: Schema.Struct({ type: Schema.String }),
-        value: message,
-        kind: RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
-      },
-    );
+    return decodeRuntimeMessage({
+      schema: Schema.Struct({ type: Schema.String }),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
+    });
   }
 }
 

@@ -2,39 +2,39 @@
   import {
     SecretFailurePresentation,
     type SecretOperationResult,
-  } from '$lib/vault/secret-operation-failure'
-  import type { SecretMutationOutcome } from '$lib/vault/secrets'
+  } from "$lib/vault/secret-operation-failure";
+  import type { SecretMutationOutcome } from "$lib/vault/secrets";
   type SecretCreationSubmission = {
-    readonly id: string
-    readonly type: SecretType
-    readonly data: string
-  }
+    readonly id: string;
+    readonly type: SecretType;
+    readonly data: string;
+  };
 
   type SecretReplacementSubmission = {
-    readonly oldId: string
-    readonly type: SecretType
-    readonly data: string
-  }
+    readonly oldId: string;
+    readonly type: SecretType;
+    readonly data: string;
+  };
 
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { ArrowLeft, RefreshCw } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { ArrowLeft, RefreshCw } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
   import {
     buildSecretYaml,
     generate_secret_id,
     SecretType,
     type PasswordGenerationOptions,
-  } from '$lib/nook'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$lib/nook";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
-  } from '$lib/components/secret-form-state'
-  import PasskeyCreationGuidance from './add-secret/PasskeyCreationGuidance.svelte'
-  import SecretFields from './add-secret/SecretFields.svelte'
-  import { SecretFormState } from './add-secret/secret-form-state.svelte'
-  import SecretTypePicker from './add-secret/SecretTypePicker.svelte'
-  import { SecretEditorKind, type SecretEditor } from './secret-vault-state'
+  } from "$lib/components/secret-form-state";
+  import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
+  import SecretFields from "./add-secret/SecretFields.svelte";
+  import { SecretFormState } from "./add-secret/secret-form-state.svelte";
+  import SecretTypePicker from "./add-secret/SecretTypePicker.svelte";
+  import { SecretEditorKind, type SecretEditor } from "./secret-vault-state";
 
   let {
     vault,
@@ -48,28 +48,28 @@
       kind: SecretTypeSelectionKind.ChoosingType,
     }),
   }: {
-    vault: VaultState
-    isSaving: boolean
+    vault: VaultState;
+    isSaving: boolean;
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>;
     onReplaceSecret?: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>
-    onGeneratePassword: (options: PasswordGenerationOptions) => string
-    onCancel: () => void
-    editor?: SecretEditor
-    selectedTypeState?: SecretTypeSelection
-  } = $props()
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
+    onGeneratePassword: (options: PasswordGenerationOptions) => string;
+    onCancel: () => void;
+    editor?: SecretEditor;
+    selectedTypeState?: SecretTypeSelection;
+  } = $props();
 
-  const state = new SecretFormState()
-  const isEditMode = $derived(editor.kind === SecretEditorKind.Editing)
+  const state = new SecretFormState();
+  const isEditMode = $derived(editor.kind === SecretEditorKind.Editing);
 
   const typeTitle = $derived.by(() => {
     if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields) {
-      return vault.t(I18N_KEYS.AddSecretTitleAddItem)
+      return vault.t(I18N_KEYS.AddSecretTitleAddItem);
     }
-    const selectedType = selectedTypeState.itemType
+    const selectedType = selectedTypeState.itemType;
     return isEditMode
       ? selectedType === SecretType.Login
         ? vault.t(I18N_KEYS.AddSecretTitleEditLogin)
@@ -100,52 +100,55 @@
                   ? vault.t(I18N_KEYS.AddSecretTitleNewCreditCard)
                   : selectedType === SecretType.FileAttachment
                     ? vault.t(I18N_KEYS.AddSecretTitleNewFileAttachment)
-                    : vault.t(I18N_KEYS.AddSecretTitleAddItem)
-  })
+                    : vault.t(I18N_KEYS.AddSecretTitleAddItem);
+  });
 
   $effect(() => {
-    if (editor.kind !== SecretEditorKind.Editing) return
-    const item = editor.record
+    if (editor.kind !== SecretEditorKind.Editing) return;
+    const item = editor.record;
     selectedTypeState = {
       kind: SecretTypeSelectionKind.EditingFields,
       itemType: item.type,
-    }
-    state.load(item)
-  })
+    };
+    state.load(item);
+  });
 
   function resetForm() {
-    selectedTypeState = { kind: SecretTypeSelectionKind.ChoosingType }
-    state.reset()
+    selectedTypeState = { kind: SecretTypeSelectionKind.ChoosingType };
+    state.reset();
   }
 
   function handleCancel() {
-    resetForm()
-    onCancel()
+    resetForm();
+    onCancel();
   }
 
   async function handleSubmit(event: SubmitEvent) {
-    event.preventDefault()
-    if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields) return
-    const selectedType = selectedTypeState.itemType
-    state.submitError = ''
+    event.preventDefault();
+    if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields)
+      return;
+    const selectedType = selectedTypeState.itemType;
+    state.submitError = "";
 
-    if (selectedType === SecretType.SecureNote && !state.noteBody.trim()) return
+    if (selectedType === SecretType.SecureNote && !state.noteBody.trim())
+      return;
     if (selectedType === SecretType.FileAttachment && !state.fileContentBase64)
-      return
-    if (selectedType === SecretType.SeedPhrase && !state.seedPhraseValid) return
+      return;
+    if (selectedType === SecretType.SeedPhrase && !state.seedPhraseValid)
+      return;
 
-    let dataYaml: string
+    let dataYaml: string;
     try {
       const toFormFieldsArgs: Parameters<typeof state.toFormFields>[0] = {
         selectedType,
         editor,
-      }
-      dataYaml = buildSecretYaml(state.toFormFields(toFormFieldsArgs))
+      };
+      dataYaml = buildSecretYaml(state.toFormFields(toFormFieldsArgs));
     } catch (error) {
       state.submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),
-      )
-      return
+      );
+      return;
     }
 
     if (
@@ -157,63 +160,60 @@
         oldId: editor.record.id,
         type: selectedType,
         data: dataYaml,
-      }
-      const result = await onReplaceSecret(onReplaceSecretArgs)
+      };
+      const result = await onReplaceSecret(onReplaceSecretArgs);
       if (result.isErr()) {
-        new SecretFailurePresentation(vault).show(result.error)
-        return
+        new SecretFailurePresentation(vault).show(result.error);
+        return;
       }
     } else {
       const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = {
         id: generate_secret_id(),
         type: selectedType,
         data: dataYaml,
-      }
-      const result = await onAddSecret(onAddSecretArgs)
+      };
+      const result = await onAddSecret(onAddSecretArgs);
       if (result.isErr()) {
-        new SecretFailurePresentation(vault).show(result.error)
-        return
+        new SecretFailurePresentation(vault).show(result.error);
+        return;
       }
     }
-    resetForm()
-    onCancel()
+    resetForm();
+    onCancel();
   }
 
   const isSecureNoteForm = $derived(
     selectedTypeState.kind === SecretTypeSelectionKind.EditingFields &&
       selectedTypeState.itemType === SecretType.SecureNote,
-  )
+  );
   const canSubmit = $derived(
     selectedTypeState.kind === SecretTypeSelectionKind.EditingFields &&
       (() => {
         const canSubmitArgs: Parameters<typeof state.canSubmit>[0] = {
           selectedType: selectedTypeState.itemType,
           isSaving,
-        }
-        return state.canSubmit(canSubmitArgs)
+        };
+        return state.canSubmit(canSubmitArgs);
       })(),
-  )
+  );
   const saveLabel = $derived(
     isSaving
       ? vault.t(I18N_KEYS.AddSecretWorking)
       : isEditMode
         ? vault.t(I18N_KEYS.AddSecretSaveChanges)
         : vault.t(I18N_KEYS.CommonSave),
-  )
+  );
 
   function selectSecretType(type: SecretType): void {
     selectedTypeState = {
       kind: SecretTypeSelectionKind.EditingFields,
       itemType: type,
-    }
+    };
   }
 </script>
 
 {#if selectedTypeState.kind === SecretTypeSelectionKind.ChoosingType && !isEditMode}
-  <SecretTypePicker
-    {vault}
-    onSelect={selectSecretType}
-  />
+  <SecretTypePicker {vault} onSelect={selectSecretType} />
 {:else if selectedTypeState.kind === SecretTypeSelectionKind.EditingFields && selectedTypeState.itemType === SecretType.Passkey && !isEditMode}
   <PasskeyCreationGuidance
     {vault}
@@ -225,9 +225,9 @@
   <form
     onsubmit={handleSubmit}
     class={isSecureNoteForm
-      ? 'flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain'
-      : 'space-y-4'}
-    {...isEditMode ? { 'data-testid': 'edit-secret-form' } : {}}
+      ? "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain"
+      : "space-y-4"}
+    {...isEditMode ? { "data-testid": "edit-secret-form" } : {}}
   >
     <div
       class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"

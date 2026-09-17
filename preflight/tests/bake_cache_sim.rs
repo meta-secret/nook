@@ -296,6 +296,19 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(
         pr_native.contains("nook-sccache-report --replay compile-native-dependencies")
     );
+    assert!(setup.contains("class BuildKitCacheAccessVerifier"));
+    assert!(setup.contains("await this.verifyRegistryAvailability();"));
+    assert!(setup.contains("async verifyCacheRef(scopeSuffix)"));
+    assert!(setup.contains("async verifyBlob(repository, digest)"));
+    assert!(setup.contains(
+        "const url = `https://${this.registryHost}/v2/${repository}/manifests/${reference}`;"
+    ));
+    assert!(
+        setup.contains(
+            "const url = `https://${this.registryHost}/v2/${repository}/blobs/${digest}`;"
+        )
+    );
+    assert!(setup.contains("const available = await this.verifyCacheRef(cacheRef.scopeSuffix);"));
     assert!(workflow.contains("build:compile' && 5 || 360"));
     assert!(runtime_proof.contains("Scenario AA: cold compile cache seeds exact head"));
     assert!(runtime_proof.contains("Scenario AB: successor head imports parent lineage"));

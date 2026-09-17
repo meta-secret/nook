@@ -14,9 +14,24 @@
 
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
-  { file: 'nook-web-shared/src/extension/event-log-bridge.ts', gitBlobSha1: '9c0ba97f5d2c67831846d56a250ec3daba854aac' },
-  { file: 'nook-web-shared/src/vault-app/lib/app/workspace-route.ts', gitBlobSha1: 'facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts', gitBlobSha1: 'bfb49a4e7a2a49629ab8a956baabb779da5c717e' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts', gitBlobSha1: '8ebb17c2f2be5123da7e1f86f38cae3199952d79' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/session.ts', gitBlobSha1: 'faa5b93548ff491e1e06063bd519bf47d7141e8d' },
-]
+  {
+    file: "nook-web-shared/src/extension/event-log-bridge.ts",
+    gitBlobSha1: "9c0ba97f5d2c67831846d56a250ec3daba854aac",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/app/workspace-route.ts",
+    gitBlobSha1: "facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts",
+    gitBlobSha1: "bfb49a4e7a2a49629ab8a956baabb779da5c717e",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts",
+    gitBlobSha1: "8ebb17c2f2be5123da7e1f86f38cae3199952d79",
+  },
+  {
+    file: "nook-web-shared/src/vault-app/lib/vault/session.ts",
+    gitBlobSha1: "faa5b93548ff491e1e06063bd519bf47d7141e8d",
+  },
+];

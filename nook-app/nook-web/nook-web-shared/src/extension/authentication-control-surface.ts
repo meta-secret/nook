@@ -46,14 +46,12 @@ export class AuthenticationControlSurface {
   protected decodeDisabledPropertyControl(
     control: HTMLElement,
   ): DisabledPropertyControlDecode {
-    return (
-      control instanceof HTMLButtonElement ||
+    return control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement ||
       control instanceof HTMLSelectElement ||
       control instanceof HTMLTextAreaElement ||
       control instanceof HTMLFieldSetElement ||
       control instanceof HTMLOptionElement
-    )
       ? {
           kind: DisabledPropertyControlDecodeKind.Supported,
           control,

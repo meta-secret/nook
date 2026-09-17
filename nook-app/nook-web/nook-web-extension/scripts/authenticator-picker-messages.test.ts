@@ -67,26 +67,34 @@ describe('authenticator picker messages', () => {
 
   test('admits only complete authenticator query responses', () => {
     expect(
-      Effect.runSync(Effect.either(AuthenticatorPickerQueryResponseSchema.decode({
-        ok: true,
-        origin: 'https://accounts.example.test',
-        accounts: [
-          {
-            vaultStoreId: 'vault-1',
-            vaultName: 'Personal',
-            secretId: 'secret-1',
-            issuer: 'Example',
-            account: 'alice@example.test',
-          },
-        ],
-      })))._tag === 'Right',
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://accounts.example.test',
+            accounts: [
+              {
+                vaultStoreId: 'vault-1',
+                vaultName: 'Personal',
+                secretId: 'secret-1',
+                issuer: 'Example',
+                account: 'alice@example.test',
+              },
+            ],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(true)
     expect(
-      Effect.runSync(Effect.either(AuthenticatorPickerQueryResponseSchema.decode({
-        ok: true,
-        origin: 'https://accounts.example.test',
-        accounts: [{ vaultStoreId: 'vault-1' }],
-      })))._tag === 'Right',
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://accounts.example.test',
+            accounts: [{ vaultStoreId: 'vault-1' }],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(false)
   })
 

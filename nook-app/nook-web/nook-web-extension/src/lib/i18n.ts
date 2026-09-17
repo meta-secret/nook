@@ -81,9 +81,7 @@ class ExtensionLocaleCatalog {
     return [
       ...((v) => (v ? v : []))(this.browser.navigator.languages),
       this.browser.navigator.language,
-    ].flatMap((language) =>
-      typeof language === 'string' ? [language] : [],
-    )
+    ].flatMap((language) => (typeof language === 'string' ? [language] : []))
   }
 
   private uniqueLanguageTags(tags: ExtensionLanguageTagCandidates): string[] {

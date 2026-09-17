@@ -42,7 +42,7 @@ void test("aggregates sccache and exporter evidence from appended Phase A and Ph
     rawLog,
     [
       "NOOK_BUILDKIT_PHASE phase=foundation event=started",
-      `\u001b[34m#71 9.2 NOOK_SCCACHE_STATS ${SplitBuildLogFixture.report({ stage: "native-dependencies", hits: 18, misses: 2 })}\u001b[0m`,
+      `\u001b[38;5;82m#71 9.2 NOOK_SCCACHE_STATS ${SplitBuildLogFixture.report({ stage: "native-dependencies", hits: 18, misses: 2 })}\u001b[0m`,
       "\u001b[32m#93 0.0 exporting cache to registry\u001b[0m",
       "#93 preparing build cache for export 4.1s done",
       "#93 writing layer sha256:aaaaaaaa 12.5MB / 12.5MB 2.0s done",

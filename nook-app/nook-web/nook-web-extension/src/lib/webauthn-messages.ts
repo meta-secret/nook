@@ -148,10 +148,9 @@ const websitePasskeyPerformMessageSchema = Schema.Struct({
   payload: Schema.Struct({
     ...websitePasskeyOptionsPayloadSchema.fields,
     vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-    credentialId: Schema.optionalWith(
-      Schema.String.pipe(Schema.minLength(1)),
-      { exact: true },
-    ),
+    credentialId: Schema.optionalWith(Schema.String.pipe(Schema.minLength(1)), {
+      exact: true,
+    }),
   }),
 }) satisfies Schema.Schema<WebsitePasskeyPerformMessage>
 

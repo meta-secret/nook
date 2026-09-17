@@ -63,9 +63,17 @@
     isBusy: boolean;
     onBack: () => void;
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
-    onAddParticipant: (payload: string) => Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>>;
-    onFinalize: () => Promise<SentinelActionResult<SentinelGenesisFinalizationOutcome>>;
-    onCompleteDelivery: () => Promise<SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>>;
+    onAddParticipant: (
+      payload: string,
+    ) => Promise<
+      SentinelActionResult<SentinelGenesisParticipantResponseOutcome>
+    >;
+    onFinalize: () => Promise<
+      SentinelActionResult<SentinelGenesisFinalizationOutcome>
+    >;
+    onCompleteDelivery: () => Promise<
+      SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>
+    >;
   } = $props();
 
   let policyStep = $state<SentinelTerminalPolicyStep>(

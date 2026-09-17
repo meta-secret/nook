@@ -16,9 +16,9 @@ export class WebsiteAuthenticatorPickerOpenMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(
-      websiteAuthenticatorPickerOpenMessageSchema,
-    )(message)
+    return Schema.decodeUnknown(websiteAuthenticatorPickerOpenMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -34,7 +34,9 @@ export class AuthenticatorPickerQueryResponse {
   declare readonly accounts: WebsiteAuthenticatorOption[]
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerQueryResponseSchema)(response)
+    return Schema.decodeUnknown(authenticatorPickerQueryResponseSchema)(
+      response,
+    )
   }
 }
 
@@ -65,9 +67,7 @@ export class AuthenticatorPickerSelectMessage {
     secretId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerSelectMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknown(authenticatorPickerSelectMessageSchema)(message)
   }
 }
 
@@ -77,13 +77,14 @@ export class AuthenticatorPickerSelectResponse {
   declare readonly ok: true
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerSelectResponseSchema)(response)
+    return Schema.decodeUnknown(authenticatorPickerSelectResponseSchema)(
+      response,
+    )
   }
 }
 
 export type AuthenticatorPickerRequestMessage =
-  | AuthenticatorPickerQueryMessage
-  | AuthenticatorPickerSelectMessage
+  AuthenticatorPickerQueryMessage | AuthenticatorPickerSelectMessage
 
 export enum AuthenticatorPickerRuntimeResponseKind {
   Query = 'query',
@@ -111,9 +112,7 @@ export class AuthenticatorPickerCancelMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerCancelMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknown(authenticatorPickerCancelMessageSchema)(message)
   }
 }
 
@@ -195,7 +194,9 @@ const authenticatorPickerQueryMessageSchema = Schema.Struct({
   ),
   payload: Schema.Struct({
     requestId: authenticatorPickerNonEmptyStringSchema,
-    query: Schema.String.pipe(Schema.maxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH)),
+    query: Schema.String.pipe(
+      Schema.maxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH),
+    ),
   }),
 }) satisfies Schema.Schema<AuthenticatorPickerQueryMessage>
 

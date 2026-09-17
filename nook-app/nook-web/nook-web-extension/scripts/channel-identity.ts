@@ -26,7 +26,6 @@ class ExtensionChannelAdmission {
       'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
     )
   }
-
 }
 
 export type ExtensionChannelIdentity = {

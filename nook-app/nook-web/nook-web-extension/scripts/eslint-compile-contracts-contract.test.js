@@ -1,8 +1,4 @@
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'

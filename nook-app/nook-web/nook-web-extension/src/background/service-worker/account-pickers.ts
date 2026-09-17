@@ -62,9 +62,7 @@ const pendingAuthenticatorPickerSchema = Schema.Struct({
   frameId: Schema.Number.pipe(
     Schema.filter((value) => Number.isInteger(value) && value >= 0),
   ),
-  allowedVaultStoreIds: Schema.Array(
-    Schema.String.pipe(Schema.minLength(1)),
-  ),
+  allowedVaultStoreIds: Schema.Array(Schema.String.pipe(Schema.minLength(1))),
   expiresAt: Schema.Number.pipe(Schema.filter(Number.isFinite)),
 }) satisfies Schema.Schema<PendingAuthenticatorPicker>
 

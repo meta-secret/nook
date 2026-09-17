@@ -7,8 +7,8 @@ import initCompanionWasm, {
   is_extension_connect_scope,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  type ExtensionConnectScopeRuntime,
   ExtensionConnectScope,
+  type ExtensionConnectScopeRuntime,
 } from "./extension-connect-scope";
 import {
   type ExtensionPairingVaultTypeRuntime,

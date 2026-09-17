@@ -23,10 +23,10 @@ import {
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
-  ExtensionConnectScope,
   extensionConnectionBrowser,
   type ExtensionConnectRequest,
 } from "./connect";
+import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingApprovedMessageType,
   type ExtensionPairingApprovedMessage,

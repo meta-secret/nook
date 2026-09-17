@@ -17,7 +17,15 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
+import { OAuthTokenRefreshOutcome } from '$lib/vault/oauth'
+import {
+  OAuthRemoteReferenceSyncOutcome,
+  ProviderLoadOutcome,
+  ProviderPersistenceOutcome,
+  SessionVaultPromotionOutcome,
+} from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
+import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 type ConnectionScenario = {
@@ -72,17 +80,27 @@ function connectionScenario(
   state.isAuthenticated = false
   state.localVaultPresent = false
   state.initDeviceIdentity = vi.fn(async () => ok())
-  state.ensureOAuthTokensFresh = vi.fn(async () => ok())
+  state.ensureOAuthTokensFresh = vi.fn<VaultState['ensureOAuthTokensFresh']>(
+    async () => ok(OAuthTokenRefreshOutcome.NotRequired),
+  )
   state.syncProviderById = syncProviderById
   state.assessVaultConnectStatus = assessVaultConnectStatus
   state.handleRemoteVaultAssessStatus = vi.fn(async () => false)
-  state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () => ok())
-  state.syncOAuthRemoteRefFromManager = vi.fn(() => ok())
-  state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () => ok(),
+  state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
+    ok(SecretPageLoadOutcome.PageApplied),
   )
-  state.loadProviders = vi.fn<VaultState['loadProviders']>(async () => ok())
-  state.promoteSessionVaultToLocalIfNeeded = vi.fn(async () => ok())
+  state.syncOAuthRemoteRefFromManager = vi.fn(() =>
+    ok(OAuthRemoteReferenceSyncOutcome.NotApplicable),
+  )
+  state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
+    async () => ok(ProviderPersistenceOutcome.Persisted),
+  )
+  state.loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
+    ok(ProviderLoadOutcome.Loaded),
+  )
+  state.promoteSessionVaultToLocalIfNeeded = vi.fn<
+    VaultState['promoteSessionVaultToLocalIfNeeded']
+  >(async () => ok(SessionVaultPromotionOutcome.CurrentProviderModeRetained))
   state.refreshPasswordEntriesList = vi.fn(async () => ok())
   state.hydrateMultiDeviceState = vi.fn(async () => ok())
   state.markVaultUnlocked = vi.fn(() => {

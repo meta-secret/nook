@@ -9,10 +9,10 @@
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
   import type { SentinelParticipation } from "./sentinel-card-stack-contract";
-import type {
-  SentinelActionResult,
-  SentinelGenesisParticipantResponseOutcome,
-} from "$lib/vault/sentinel-genesis";
+  import type {
+    SentinelActionResult,
+    SentinelGenesisParticipantResponseOutcome,
+  } from "$lib/vault/sentinel-genesis";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { tick, type ComponentProps } from "svelte";

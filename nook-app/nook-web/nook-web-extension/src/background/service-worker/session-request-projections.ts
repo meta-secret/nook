@@ -36,8 +36,7 @@ export function identityHandoffSessionRequest(
       nonce: request.nonce,
       expectedDeviceId: request.expectedDeviceId,
       expectedDevicePublicKey: request.expectedDevicePublicKey,
-      expectedDeviceSigningPublicKey:
-        request.expectedDeviceSigningPublicKey,
+      expectedDeviceSigningPublicKey: request.expectedDeviceSigningPublicKey,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }

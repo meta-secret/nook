@@ -196,7 +196,6 @@ class ExtensionWasmRuntime {
   ): Promise<Response> {
     // Promise owns this callback's resolve and reject signature.
     return new Promise<Response>((resolve, reject) => {
-
       chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {
         if (chrome.runtime.lastError?.message) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -220,8 +219,14 @@ class ExtensionWasmRuntime {
     const runtime = await this.runtimeMessage(
       { type: ExtensionRuntimeRequestType.EnsureRuntime },
       (response): { ok: true } | { ok: false; reason?: string } => {
-        if (!response || typeof response !== 'object' || Array.isArray(response)) {
-          throw new Error('Extension session runtime returned a malformed response.')
+        if (
+          !response ||
+          typeof response !== 'object' ||
+          Array.isArray(response)
+        ) {
+          throw new Error(
+            'Extension session runtime returned a malformed response.',
+          )
         }
         if ('ok' in response && response.ok === true) return { ok: true }
         return {

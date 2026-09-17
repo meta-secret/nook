@@ -1,8 +1,6 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
-import {
-  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
@@ -102,7 +100,13 @@ export class ExternalCompanionRouter {
       message,
     )
     if (identityDiscovery.kind === ConcreteDecoderResultKind.Decoded) {
-      void discoverPairedVaultIdentity(identityDiscovery.value).then(sendResponse)
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void discoverPairedVaultIdentity(identityDiscovery.value).then(
+        sendResponse,
+      )
       return true
     }
 
@@ -138,7 +142,13 @@ export class ExternalCompanionRouter {
       message,
     )
     if (pairedIdentityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
-      void createPairedIdentityHandoff(pairedIdentityHandoff.value).then(sendResponse)
+      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+        sendResponse(forbiddenSenderResponse)
+        return false
+      }
+      void createPairedIdentityHandoff(pairedIdentityHandoff.value).then(
+        sendResponse,
+      )
       return true
     }
 

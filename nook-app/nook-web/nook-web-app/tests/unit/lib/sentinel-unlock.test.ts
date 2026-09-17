@@ -27,6 +27,11 @@ import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+import {
+  ProviderLoadOutcome,
+  ProviderPersistenceOutcome,
+} from '$lib/vault/providers.svelte'
+import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement } from '../test-dom-helpers'
 
@@ -63,12 +68,14 @@ class SentinelFinalizationFixture {
     ok(ProviderSyncOutcome.Synced),
   )
   readonly loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
-    ok(),
+    ok(SecretPageLoadOutcome.PageApplied),
   )
   readonly ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () => ok(),
+    async () => ok(ProviderPersistenceOutcome.Persisted),
   )
-  readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () => ok())
+  readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
+    ok(ProviderLoadOutcome.Loaded),
+  )
   readonly refreshPasswordEntriesList = vi.fn<
     () => Promise<SentinelActionResult<void>>
   >(async () => ok())

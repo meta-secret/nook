@@ -272,14 +272,11 @@ class ExtensionPairingIdentity {
   getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
-      chrome.storage.session.get<ExtensionSessionStorageItems>(
-        key,
-        (items) => {
-          const message = chrome.runtime.lastError?.message
-          if (message) reject(new Error(message))
-          else resolve(items)
-        },
-      )
+      chrome.storage.session.get<ExtensionSessionStorageItems>(key, (items) => {
+        const message = chrome.runtime.lastError?.message
+        if (message) reject(new Error(message))
+        else resolve(items)
+      })
     })
   }
 
@@ -380,10 +377,9 @@ class ExtensionPairingIdentity {
   > {
     const document = await extensionSessionLifecycle.openSessionDocument()
     if (document.isErr()) {
-      return err<
-        ExtensionSessionResponse,
-        ExtensionSessionTransportFailure
-      >(document.error)
+      return err<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
+        document.error,
+      )
     }
     return decodeResponse
       ? document.value.sendMessage(message, decodeResponse)
@@ -429,7 +425,8 @@ class ExtensionPairingIdentity {
       const pending = pendingAdmission.value
       if (
         pending.deviceId !== admittedIdentity.appKey.appId ||
-        pending.devicePublicKey !== admittedIdentity.appKey.encryptionPublicKey ||
+        pending.devicePublicKey !==
+          admittedIdentity.appKey.encryptionPublicKey ||
         pending.deviceSigningPublicKey !==
           admittedIdentity.appKey.signingPublicKey
       ) {
@@ -444,7 +441,8 @@ class ExtensionPairingIdentity {
         nonce,
         expectedDeviceId: admittedIdentity.appKey.appId,
         expectedDevicePublicKey: admittedIdentity.appKey.encryptionPublicKey,
-        expectedDeviceSigningPublicKey: admittedIdentity.appKey.signingPublicKey,
+        expectedDeviceSigningPublicKey:
+          admittedIdentity.appKey.signingPublicKey,
       }
       const nookTypedArgs0_3 = identityHandoffSessionRequest(handoffProjection)
       const delivery = await this.sendSessionMessage(nookTypedArgs0_3)
@@ -858,9 +856,10 @@ class ExtensionPairingIdentity {
       const legacy = await this.readLegacyPairingStorage()
       const legacyKeys = this.legacyPairingStorageKeys(legacy)
       if (legacyKeys.length === 0) return
-      const legacyPairingRecords: LegacyPairingStorageItems = Object.fromEntries(
-        Object.entries(legacy).filter(([key]) => legacyKeys.includes(key)),
-      )
+      const legacyPairingRecords: LegacyPairingStorageItems =
+        Object.fromEntries(
+          Object.entries(legacy).filter(([key]) => legacyKeys.includes(key)),
+        )
       const current = await backgroundVaultRuntime.loadExtensionPairingItems()
       const pairingPolicy = await extensionPairingGrantPolicyReady
       const migrated =

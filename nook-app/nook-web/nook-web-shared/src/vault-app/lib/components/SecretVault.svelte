@@ -235,13 +235,9 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort(
-          (a, b) => a.type - b.type,
-        ),
+        items: items.sort((a, b) => a.type - b.type),
       }))
-      .sort(
-        (a, b) => a.site.localeCompare(b.site),
-      );
+      .sort((a, b) => a.site.localeCompare(b.site));
   });
 
   function notifyAddMode() {

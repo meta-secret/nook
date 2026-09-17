@@ -47,27 +47,35 @@ describe('login picker runtime messages', () => {
 
   test('admits only complete login query responses', () => {
     expect(
-      Effect.runSync(Effect.either(LoginPickerQueryResponseSchema.decode({
-        ok: true,
-        origin: 'https://login.example.test',
-        accounts: [
-          {
-            vaultStoreId: 'vault-1',
-            secretId: 'secret-1',
-            username: 'alice',
-            websiteHost: 'login.example.test',
-            websiteUrl: 'https://login.example.test',
-            vaultName: 'Personal',
-          },
-        ],
-      })))._tag === 'Right',
+      Effect.runSync(
+        Effect.either(
+          LoginPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://login.example.test',
+            accounts: [
+              {
+                vaultStoreId: 'vault-1',
+                secretId: 'secret-1',
+                username: 'alice',
+                websiteHost: 'login.example.test',
+                websiteUrl: 'https://login.example.test',
+                vaultName: 'Personal',
+              },
+            ],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(true)
     expect(
-      Effect.runSync(Effect.either(LoginPickerQueryResponseSchema.decode({
-        ok: true,
-        origin: 'https://login.example.test',
-        accounts: [{ vaultStoreId: 'vault-1' }],
-      })))._tag === 'Right',
+      Effect.runSync(
+        Effect.either(
+          LoginPickerQueryResponseSchema.decode({
+            ok: true,
+            origin: 'https://login.example.test',
+            accounts: [{ vaultStoreId: 'vault-1' }],
+          }),
+        ),
+      )._tag === 'Right',
     ).toBe(false)
   })
 

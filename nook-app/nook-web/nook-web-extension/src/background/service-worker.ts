@@ -156,8 +156,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
   extensionSessionDocument,
   handlePairingStateQuery,
-  decodePairingApprovedMessage:
-    ExtensionPairingApprovedMessageSchema.decode,
+  decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
   decodeExtensionAuthenticationSurfacesRefreshMessage,
@@ -194,14 +193,13 @@ void Effect.runPromise(
       extensionLifecycleRoutingDependencies,
     ),
   ),
-)
-  .then((cleanup) => {
-    if (Either.isLeft(cleanup))
-      console.warn(
-        'Extension authorization cleanup remains pending',
-        cleanup.left,
-      )
-  })
+).then((cleanup) => {
+  if (Either.isLeft(cleanup))
+    console.warn(
+      'Extension authorization cleanup remains pending',
+      cleanup.left,
+    )
+})
 
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
@@ -617,18 +615,21 @@ class BackgroundRuntimeMessageRouter {
   }
 }
 
-const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
-  (runtimeMessage: unknown, sender, sendResponse) => {
-    const admission = BrowserRuntimeMessage.from(runtimeMessage)
-    if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
-      return false
-    const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
-      runtimeMessage: admission.message,
-      sender,
-      sendResponse,
-    }
-    return new BackgroundRuntimeMessageRouter(routingRequest).route()
+const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
+  runtimeMessage: unknown,
+  sender,
+  sendResponse,
+) => {
+  const admission = BrowserRuntimeMessage.from(runtimeMessage)
+  if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
+    return false
+  const routingRequest: BackgroundRuntimeMessageRoutingRequest = {
+    runtimeMessage: admission.message,
+    sender,
+    sendResponse,
   }
+  return new BackgroundRuntimeMessageRouter(routingRequest).route()
+}
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
@@ -642,9 +643,9 @@ chrome.runtime.onMessageExternal.addListener(
       sender,
       sendResponse,
     }
-    void new ExternalCompanionRouter(externalRoutingArgs).route().catch(() =>
-      sendResponse({ ok: false, reason: 'forbidden-sender' }),
-    )
+    void new ExternalCompanionRouter(externalRoutingArgs)
+      .route()
+      .catch(() => sendResponse({ ok: false, reason: 'forbidden-sender' }))
     return true
   },
 )

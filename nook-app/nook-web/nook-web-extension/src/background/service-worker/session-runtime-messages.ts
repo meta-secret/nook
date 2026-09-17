@@ -31,7 +31,9 @@ const extensionSessionEnsureMessageSchema = Schema.Struct({
 }) satisfies Schema.Schema<ExtensionSessionEnsureMessage>
 
 const extensionAuthenticationSurfacesRefreshMessageSchema = Schema.Struct({
-  type: Schema.Literal(ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces),
+  type: Schema.Literal(
+    ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  ),
 }) satisfies Schema.Schema<ExtensionAuthenticationSurfacesRefreshMessage>
 
 const extensionSessionExpiryMessageSchema = Schema.Struct({

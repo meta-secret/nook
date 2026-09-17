@@ -10,7 +10,10 @@ import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
-import { ConcreteDecoderResultKind, runConcreteDecoder } from '../../lib/concrete-decoder'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 

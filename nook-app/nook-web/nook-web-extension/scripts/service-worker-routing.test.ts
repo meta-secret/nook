@@ -846,9 +846,9 @@ describe('service worker routing', () => {
       sendResponse,
     }
 
-    expect(
-      await new ExternalCompanionRouter(routingRequest).route(),
-    ).toBe(false)
+    expect(await new ExternalCompanionRouter(routingRequest).route()).toBe(
+      false,
+    )
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'forbidden-sender',

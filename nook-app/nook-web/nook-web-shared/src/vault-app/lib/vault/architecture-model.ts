@@ -89,6 +89,11 @@ export type VaultArchitectureDraft = {
   };
 };
 
+export type VaultArchitectureSelection = Pick<
+  VaultArchitectureDraft,
+  "device_mode" | "vault_type" | "replication_type"
+>;
+
 export function validateVaultArchitecture(
   architecture: VaultArchitectureDraft,
 ): NookVaultArchitecture {

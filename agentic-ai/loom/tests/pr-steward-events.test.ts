@@ -90,6 +90,19 @@ class TwoHintsThenPendingPrReader implements PrStewardAssignedPrReader {
   }
 }
 type BufferedNatsMessage = { readonly data: Uint8Array };
+type CheckRunNotificationBatchRequest = {
+  readonly notificationCount: number;
+  readonly firstCheckRunId: number;
+};
+type CheckRunAssociationRequest = {
+  readonly id: number;
+  readonly head: string | false;
+};
+type CheckRunWebhookRequest = {
+  readonly event: string;
+  readonly body: UntrustedYamlMap;
+  readonly id: string;
+};
 
 class BufferedNatsSubscription implements AsyncIterable<BufferedNatsMessage> {
   readonly #messages: BufferedNatsMessage[] = [];
@@ -157,6 +170,37 @@ class UnexpectedPrReader implements PrStewardAssignedPrReader {
 }
 
 class PrStewardEventFixture {
+  static checkRunNotifications(
+    request: CheckRunNotificationBatchRequest,
+  ): readonly Uint8Array[] {
+    const notifications: Uint8Array[] = [];
+    for (
+      let eventIndex = 0;
+      eventIndex < request.notificationCount;
+      eventIndex += 1
+    ) {
+      const associationRequest: CheckRunAssociationRequest = {
+        id: request.firstCheckRunId + eventIndex,
+        head: HEAD,
+      };
+      const checkRun: UntrustedYamlMap = {
+        ...PrStewardEventFixture.associated(associationRequest),
+        conclusion: 'success',
+      };
+      const body: UntrustedYamlMap = {
+        repository,
+        check_run: checkRun,
+      };
+      const webhookRequest: CheckRunWebhookRequest = {
+        event: 'check_run',
+        id: `check-run-${eventIndex}`,
+        body,
+      };
+      notifications.push(PrStewardEventFixture.cloudEvent(webhookRequest));
+    }
+    return notifications;
+  }
+
   static associated(args: {
     readonly id: number;
     readonly head: string | false;
@@ -279,21 +323,13 @@ describe('exact-head routing observations', () => {
     'drains four buffered subscription messages while a check hint is in flight',
     async () => {
       const reader = new TwoHintsThenPendingPrReader();
-      const data: Uint8Array[] = [];
-      for (let index = 0; index < 7; index += 1)
-        data.push(
-          cloudEvent({
-            event: 'check_run',
-            id: `check-run-${index}`,
-            body: {
-              repository,
-              check_run: {
-                ...associated({ id: 44 + index, head: HEAD }),
-                conclusion: 'success',
-              },
-            },
-          }),
-        );
+      const notificationBatch: CheckRunNotificationBatchRequest = {
+        notificationCount: 7,
+        firstCheckRunId: 44,
+      };
+      const data = PrStewardEventFixture.checkRunNotifications(
+        notificationBatch,
+      );
       const connection = new BufferedNatsConnection();
       const lines: string[] = [];
       let checkHints = 0;

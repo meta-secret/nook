@@ -1,71 +1,71 @@
 <script lang="ts">
-  import { WorkspaceLocation } from '$lib/app/workspace-route'
+  import { WorkspaceLocation } from "$lib/app/workspace-route";
   type SecretAddModeChange = {
-    readonly open: boolean
-    readonly selection: SecretTypeSelection
-  }
+    readonly open: boolean;
+    readonly selection: SecretTypeSelection;
+  };
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onDestroy, tick, type ComponentProps } from 'svelte'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { onDestroy, tick, type ComponentProps } from "svelte";
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app/extension-setup'
+  } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
-  } from '$app-wasm'
-  import { ExtensionSetupStatus } from '$lib/extension/install'
-  import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
-  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
-  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
-  import SecretVault from '$lib/components/SecretVault.svelte'
-  import VaultAdmin from '$lib/components/VaultAdmin.svelte'
-  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
-  import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
-  import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
-  import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
+  } from "$app-wasm";
+  import { ExtensionSetupStatus } from "$lib/extension/install";
+  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
+  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
+  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
+  import SecretVault from "$lib/components/SecretVault.svelte";
+  import VaultAdmin from "$lib/components/VaultAdmin.svelte";
+  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
+  import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
+  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
+  import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
   import {
     JoinApprovalHandlingOutcome,
     JoinDenialHandlingOutcome,
-  } from '$lib/components/settings/vault-devices-card-state'
-  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { generate_password, SecretType } from '$lib/nook'
+  } from "$lib/components/settings/vault-devices-card-state";
+  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import { generate_password, SecretType } from "$lib/nook";
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
-  } from '$lib/components/secret-form-state'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$lib/components/secret-form-state";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     AdminAccordionSection,
     SettingsAccordionSection,
     SettingsSection,
-  } from '$lib/vault/state/ui.svelte'
+  } from "$lib/vault/state/ui.svelte";
   import {
     SecretEditorModeKind,
     type SecretEditorMode,
-  } from './authenticated-vault-workspace-state'
+  } from "./authenticated-vault-workspace-state";
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
     WorkspacePath,
-  } from '$lib/app/workspace-route'
-  import { VaultWorkspaceActions } from '$lib/vault/ui'
+  } from "$lib/app/workspace-route";
+  import { VaultWorkspaceActions } from "$lib/vault/ui";
 
-  type VaultAdminProps = ComponentProps<typeof VaultAdmin>
-  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>
-  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>
-  type SecretVaultProps = ComponentProps<typeof SecretVault>
+  type VaultAdminProps = ComponentProps<typeof VaultAdmin>;
+  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
+  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>;
+  type SecretVaultProps = ComponentProps<typeof SecretVault>;
   type EnrollmentCodeInput = Pick<
-    Parameters<VaultState['issueEnrollmentCode']>[0],
-    'entryId' | 'password'
-  >
+    Parameters<VaultState["issueEnrollmentCode"]>[0],
+    "entryId" | "password"
+  >;
   type VaultSettingsAccordionProps = ComponentProps<
     typeof VaultSettingsAccordion
-  >
+  >;
 
-  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
   let {
     vault,
@@ -82,106 +82,106 @@
     headerDevicesAccessRequestGeneration = 0,
     onHeaderDevicesAccessRequestHandled = () => {},
   }: {
-    vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
-    extensionInstallBusy: boolean
-    extensionConnectError: boolean
-    hasSecurityRecommendations: boolean
-    needsSyncProvider: boolean
-    needsAnotherDevice: boolean
-    onExtensionInstall: () => void
-    onExtensionConnect: () => void
-    onSettingsReconnect: () => void
-    onEditorOpenChange: (open: boolean) => void
-    headerDevicesAccessRequestGeneration?: number
-    onHeaderDevicesAccessRequestHandled?: () => void
-  } = $props()
+    vault: VaultState;
+    extensionSetupState: ExtensionSetupOffer;
+    extensionInstallBusy: boolean;
+    extensionConnectError: boolean;
+    hasSecurityRecommendations: boolean;
+    needsSyncProvider: boolean;
+    needsAnotherDevice: boolean;
+    onExtensionInstall: () => void;
+    onExtensionConnect: () => void;
+    onSettingsReconnect: () => void;
+    onEditorOpenChange: (open: boolean) => void;
+    headerDevicesAccessRequestGeneration?: number;
+    onHeaderDevicesAccessRequestHandled?: () => void;
+  } = $props();
 
-  const appVersion = '0.1.0'
-  let secretsAddOpen = $state(false)
+  const appVersion = "0.1.0";
+  let secretsAddOpen = $state(false);
   let secretsAddFormType = $state<SecretEditorMode>({
     kind: SecretEditorModeKind.Closed,
-  })
-  let secretsEditorResetKey = $state(0)
-  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
+  });
+  let secretsEditorResetKey = $state(0);
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
       secretsAddFormType.itemType === SecretType.SecureNote,
-  )
+  );
 
   function setAddMode({ open, selection }: SecretAddModeChange) {
-    secretsAddOpen = open
+    secretsAddOpen = open;
     secretsAddFormType =
       open && selection.kind === SecretTypeSelectionKind.EditingFields
         ? {
             kind: SecretEditorModeKind.Adding,
             itemType: selection.itemType,
           }
-        : { kind: SecretEditorModeKind.Closed }
-    onEditorOpenChange(open)
+        : { kind: SecretEditorModeKind.Closed };
+    onEditorOpenChange(open);
   }
 
   function leaveSecretsEditor() {
-    secretsAddOpen = false
-    secretsAddFormType = { kind: SecretEditorModeKind.Closed }
-    secretsEditorResetKey += 1
-    onEditorOpenChange(false)
+    secretsAddOpen = false;
+    secretsAddFormType = { kind: SecretEditorModeKind.Closed };
+    secretsEditorResetKey += 1;
+    onEditorOpenChange(false);
   }
 
   function openDevicesAccessFromHeader() {
-    const currentRoute = new WorkspacePath(window.location.pathname).route
+    const currentRoute = new WorkspacePath(window.location.pathname).route;
     if (
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route === WorkspaceRoute.DevicesAccess
     ) {
-      return
+      return;
     }
 
-    leaveSecretsEditor()
+    leaveSecretsEditor();
     devicesAccessReturnRoute =
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route !== WorkspaceRoute.DevicesAccess
         ? currentRoute.route
-        : WorkspaceRoute.Vault
+        : WorkspaceRoute.Vault;
     const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
       section: SettingsSection.DevicesAccess,
       accordion: SettingsAccordionSection.Devices,
-    }
-    vault.openSettings(settingsRequest)
+    };
+    vault.openSettings(settingsRequest);
   }
 
   $effect(() => {
-    if (headerDevicesAccessRequestGeneration === 0) return
-    openDevicesAccessFromHeader()
-    onHeaderDevicesAccessRequestHandled()
-  })
+    if (headerDevicesAccessRequestGeneration === 0) return;
+    openDevicesAccessFromHeader();
+    onHeaderDevicesAccessRequestHandled();
+  });
 
   async function closeDevicesAccess() {
     const navigation = new WorkspaceLocation(
       devicesAccessReturnRoute,
-    ).navigate()
+    ).navigate();
     if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey)
-      return
+      vault.errorMsg = vault.t(navigation.error.translationKey);
+      return;
     }
     const routeApplication: Parameters<
-      VaultWorkspaceActions['applyWorkspaceRoute']
+      VaultWorkspaceActions["applyWorkspaceRoute"]
     >[0] = {
       route: devicesAccessReturnRoute,
-    }
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeApplication)
-    await tick()
+    };
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeApplication);
+    await tick();
     document
       .querySelector<HTMLButtonElement>(
         '[data-testid="header-devices-access-btn"]',
       )
-      ?.focus()
+      ?.focus();
   }
 
   onDestroy(() => {
-    onEditorOpenChange(false)
-  })
+    onEditorOpenChange(false);
+  });
 </script>
 
 <div
@@ -220,8 +220,8 @@
             const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
               section: SettingsSection.Onboard,
               accordion: SettingsAccordionSection.Devices,
-            }
-            vault.openSettings(settingsRequest)
+            };
+            vault.openSettings(settingsRequest);
           }}
         />
       {/if}
@@ -252,45 +252,45 @@
           canManageExistingPasswords={vault.deviceProtectionReady}
           onReconnect={onSettingsReconnect}
           onSyncProvider={async (
-            id: Parameters<NonNullable<VaultAdminProps['onSyncProvider']>>[0],
+            id: Parameters<NonNullable<VaultAdminProps["onSyncProvider"]>>[0],
           ) => {
             const syncRequest: Parameters<typeof vault.syncProviderById>[0] = {
               providerId: id,
               visibility: ProviderSyncVisibility.Visible,
               failureHandling: ProviderSyncFailureHandling.Capture,
-            }
-            const outcome = await vault.syncProviderById(syncRequest)
+            };
+            const outcome = await vault.syncProviderById(syncRequest);
             if (outcome.isErr())
-              vault.errorMsg = vault.t(outcome.error.translationKey)
+              vault.errorMsg = vault.t(outcome.error.translationKey);
           }}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(
-            setupRequest: Parameters<VaultAdminProps['onBeginSetup']>[0],
+            setupRequest: Parameters<VaultAdminProps["onBeginSetup"]>[0],
           ) => vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onRemoveProvider={async (
-            id: Parameters<NonNullable<VaultAdminProps['onRemoveProvider']>>[0],
+            id: Parameters<NonNullable<VaultAdminProps["onRemoveProvider"]>>[0],
           ) => {
-            const removed = await vault.removeProvider(id)
+            const removed = await vault.removeProvider(id);
             if (removed.isErr())
-              vault.errorMsg = vault.t(removed.error.translationKey)
+              vault.errorMsg = vault.t(removed.error.translationKey);
           }}
           onAddPassword={(
-            passwordRequest: Parameters<VaultAdminProps['onAddPassword']>[0],
+            passwordRequest: Parameters<VaultAdminProps["onAddPassword"]>[0],
           ) => vault.addVaultPassword(passwordRequest)}
           onUpdatePassword={(
-            passwordRequest: Parameters<VaultAdminProps['onUpdatePassword']>[0],
+            passwordRequest: Parameters<VaultAdminProps["onUpdatePassword"]>[0],
           ) => vault.updateVaultPasswordEntry(passwordRequest)}
           onRemovePassword={(
-            id: Parameters<VaultAdminProps['onRemovePassword']>[0],
+            id: Parameters<VaultAdminProps["onRemovePassword"]>[0],
           ) => vault.removeVaultPasswordEntry(id)}
           onIssueCode={(enrollment: EnrollmentCodeInput) => {
-            const provider = vault.syncProviders[0]
+            const provider = vault.syncProviders[0];
             if (!provider) {
               throw new Error(
                 vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
-              )
+              );
             }
             const issueRequest: Parameters<
               typeof vault.issueEnrollmentCode
@@ -298,43 +298,43 @@
               entryId: enrollment.entryId,
               password: enrollment.password,
               providerId: provider.id,
-            }
-            return vault.issueEnrollmentCode(issueRequest)
+            };
+            return vault.issueEnrollmentCode(issueRequest);
           }}
           onClearCode={() => vault.clearEnrollmentCode()}
           onImportBitwarden={(
-            importRequest: Parameters<VaultAdminProps['onImportBitwarden']>[0],
+            importRequest: Parameters<VaultAdminProps["onImportBitwarden"]>[0],
           ) => vault.handleBitwardenImport(importRequest)}
           onImportKeePassXc={(
-            csv: Parameters<VaultAdminProps['onImportKeePassXc']>[0],
+            csv: Parameters<VaultAdminProps["onImportKeePassXc"]>[0],
           ) => vault.handleKeePassXcImport(csv)}
           onImportLastPass={(
-            csv: Parameters<VaultAdminProps['onImportLastPass']>[0],
+            csv: Parameters<VaultAdminProps["onImportLastPass"]>[0],
           ) => vault.handleLastPassImport(csv)}
           onImportKeeper={(
-            csv: Parameters<VaultAdminProps['onImportKeeper']>[0],
+            csv: Parameters<VaultAdminProps["onImportKeeper"]>[0],
           ) => vault.handleKeeperImport(csv)}
           onImportOnePassword={(
-            archive: Parameters<VaultAdminProps['onImportOnePassword']>[0],
+            archive: Parameters<VaultAdminProps["onImportOnePassword"]>[0],
           ) => vault.handleOnePasswordImport(archive)}
           onImportApplePasswords={(
             exportBytes: Parameters<
-              VaultAdminProps['onImportApplePasswords']
+              VaultAdminProps["onImportApplePasswords"]
             >[0],
           ) => vault.handleApplePasswordsImport(exportBytes)}
           onImportChromePasswords={(
-            csv: Parameters<VaultAdminProps['onImportChromePasswords']>[0],
+            csv: Parameters<VaultAdminProps["onImportChromePasswords"]>[0],
           ) => vault.handleChromePasswordsImport(csv)}
           onImportDashlane={(
-            exportBytes: Parameters<VaultAdminProps['onImportDashlane']>[0],
+            exportBytes: Parameters<VaultAdminProps["onImportDashlane"]>[0],
           ) => vault.handleDashlaneImport(exportBytes)}
           onImportGoogleAuthenticator={(
             migrationUris: Parameters<
-              VaultAdminProps['onImportGoogleAuthenticator']
+              VaultAdminProps["onImportGoogleAuthenticator"]
             >[0],
           ) => vault.handleGoogleAuthenticatorImport(migrationUris)}
           onImportProtonPass={(
-            exportBytes: Parameters<VaultAdminProps['onImportProtonPass']>[0],
+            exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
           ) => vault.handleProtonPassImport(exportBytes)}
         />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Onboard}
@@ -352,16 +352,16 @@
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
           onIssueCode={(
-            issueRequest: Parameters<OnboardDeviceProps['onIssueCode']>[0],
+            issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0],
           ) => vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
           onAddPassword={(
-            passwordRequest: Parameters<OnboardDeviceProps['onAddPassword']>[0],
+            passwordRequest: Parameters<OnboardDeviceProps["onAddPassword"]>[0],
           ) => vault.addVaultPassword(passwordRequest)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(
-            setupRequest: Parameters<OnboardDeviceProps['onBeginSetup']>[0],
+            setupRequest: Parameters<OnboardDeviceProps["onBeginSetup"]>[0],
           ) => vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
@@ -378,24 +378,24 @@
           vaultMembers={vault.vaultMembers}
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
           onApproveJoin={async (
-            id: Parameters<VaultSettingsAccordionProps['onApproveJoin']>[0],
+            id: Parameters<VaultSettingsAccordionProps["onApproveJoin"]>[0],
           ) => {
-            await vault.approveJoin(id)
-            return JoinApprovalHandlingOutcome.Handled
+            await vault.approveJoin(id);
+            return JoinApprovalHandlingOutcome.Handled;
           }}
           onDenyJoin={async (
-            id: Parameters<VaultSettingsAccordionProps['onDenyJoin']>[0],
+            id: Parameters<VaultSettingsAccordionProps["onDenyJoin"]>[0],
           ) => {
-            await vault.denyJoin(id)
-            return JoinDenialHandlingOutcome.Handled
+            await vault.denyJoin(id);
+            return JoinDenialHandlingOutcome.Handled;
           }}
           onRenameDevice={(
             renameRequest: Parameters<
-              VaultSettingsAccordionProps['onRenameDevice']
+              VaultSettingsAccordionProps["onRenameDevice"]
             >[0],
           ) => vault.renameDevice(renameRequest)}
           onRevokeDevice={(
-            id: Parameters<VaultSettingsAccordionProps['onRevokeDevice']>[0],
+            id: Parameters<VaultSettingsAccordionProps["onRevokeDevice"]>[0],
           ) => vault.revokeDevice(id)}
         />
       {:else}
@@ -405,20 +405,20 @@
             pendingJoins={vault.pendingJoins}
             isBusy={vault.isSaving || vault.isVerifying}
             onApproveJoin={(
-              id: Parameters<PendingJoinsBannerProps['onApproveJoin']>[0],
+              id: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
             ) => vault.approveJoin(id)}
             onRefresh={async () => {
-              const synchronized = await vault.manualSync()
+              const synchronized = await vault.manualSync();
               if (synchronized.isErr())
-                vault.errorMsg = vault.t(synchronized.error.translationKey)
+                vault.errorMsg = vault.t(synchronized.error.translationKey);
             }}
             onOpenDevicesSettings={() => {
               const settingsRequest: Parameters<typeof vault.openSettings>[0] =
                 {
                   section: SettingsSection.Storage,
                   accordion: SettingsAccordionSection.Devices,
-                }
-              vault.openSettings(settingsRequest)
+                };
+              vault.openSettings(settingsRequest);
             }}
           />
         {/if}
@@ -431,15 +431,15 @@
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
               onAddSecret={(
-                secretRequest: Parameters<SecretVaultProps['onAddSecret']>[0],
+                secretRequest: Parameters<SecretVaultProps["onAddSecret"]>[0],
               ) => vault.handleAddSecret(secretRequest)}
               onReplaceSecret={(
                 secretRequest: Parameters<
-                  SecretVaultProps['onReplaceSecret']
+                  SecretVaultProps["onReplaceSecret"]
                 >[0],
               ) => vault.handleReplaceSecret(secretRequest)}
               onDeleteSecret={(
-                id: Parameters<SecretVaultProps['onDeleteSecret']>[0],
+                id: Parameters<SecretVaultProps["onDeleteSecret"]>[0],
               ) => vault.handleDeleteSecret(id)}
               onGeneratePassword={generate_password}
             />
@@ -460,9 +460,9 @@
       syncConflictLabel={vault.syncConflictLabel}
       {appVersion}
       onRefresh={async () => {
-        const synchronized = await vault.manualSync()
+        const synchronized = await vault.manualSync();
         if (synchronized.isErr())
-          vault.errorMsg = vault.t(synchronized.error.translationKey)
+          vault.errorMsg = vault.t(synchronized.error.translationKey);
       }}
       onDismissSuccess={() => vault.dismissSuccess()}
       onDismissError={() => vault.dismissError()}
@@ -472,28 +472,28 @@
       settingsOpen={vault.settingsOpen}
       settingsSection={vault.settingsSection}
       onSelectSecrets={() => {
-        leaveSecretsEditor()
-        vault.closeSettings()
+        leaveSecretsEditor();
+        vault.closeSettings();
       }}
       onSelectOnboard={() => {
-        leaveSecretsEditor()
+        leaveSecretsEditor();
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.Onboard,
           accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
+        };
+        vault.openSettings(settingsRequest);
       }}
       onSelectAdmin={() => {
-        leaveSecretsEditor()
-        vault.openAdmin()
+        leaveSecretsEditor();
+        vault.openAdmin();
       }}
       onSelectSettings={() => {
-        leaveSecretsEditor()
+        leaveSecretsEditor();
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.Storage,
           accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
+        };
+        vault.openSettings(settingsRequest);
       }}
     />
   </div>

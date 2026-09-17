@@ -200,9 +200,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       oneTimeCodeFields,
     };
     const roots = this.localOwnedLoginObservationRoots(rootsRequest);
-    return roots.length === 1 && roots[0]
-      ? roots[0]
-      : owner.ownerDocument;
+    return roots.length === 1 && roots[0] ? roots[0] : owner.ownerDocument;
   }
 
   localOwnedLoginObservationRoots({

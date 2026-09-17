@@ -78,8 +78,7 @@ export class LoginPickerSelectResponse {
 }
 
 export type LoginPickerRequestMessage =
-  | LoginPickerQueryMessage
-  | LoginPickerSelectMessage
+  LoginPickerQueryMessage | LoginPickerSelectMessage
 
 export enum LoginPickerRuntimeResponseKind {
   Query = 'query',

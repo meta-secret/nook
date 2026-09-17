@@ -181,10 +181,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultName);
     if (!("approvedAt" in payload) || typeof payload.approvedAt !== "number")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
-    if (
-      !("scopes" in payload) ||
-      !Array.isArray(payload.scopes)
-    )
+    if (!("scopes" in payload) || !Array.isArray(payload.scopes))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
     const scopes: ExtensionConnectScope[] = [];
     for (const candidate of payload.scopes) {
@@ -200,7 +197,9 @@ export class ExtensionPairingApprovedGrantAdmission {
     const providers: ExtensionPairingStorageProviderPayload[] = [];
     for (const candidate of payload.providers) {
       const decoded = Effect.runSync(
-        Effect.either(ExtensionPairingStorageProviderPayloadDecoder.decode(candidate)),
+        Effect.either(
+          ExtensionPairingStorageProviderPayloadDecoder.decode(candidate),
+        ),
       );
       if (decoded._tag === "Left")
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
@@ -222,10 +221,7 @@ export class ExtensionPairingApprovedGrantAdmission {
   }
   static decode(
     value: unknown,
-  ): Effect.Effect<
-    ExtensionPairingApprovedGrant,
-    RuntimeMessageDecodeFailure
-  > {
+  ): Effect.Effect<ExtensionPairingApprovedGrant, RuntimeMessageDecodeFailure> {
     return decodeAdmissionResult(
       ExtensionPairingApprovedGrantAdmission.parse(value),
       RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
@@ -392,8 +388,7 @@ export class ExtensionPairedVaultIdentityDiscoveryMessage {
 }
 
 export type CompanionIdentityDiscoveryTransportResponse =
-  | { ok: true; status: CompanionIdentityStatus }
-  | { ok: false };
+  { ok: true; status: CompanionIdentityStatus } | { ok: false };
 
 export enum ExtensionPairedVaultUnlockRequestMessageType {
   NookExtensionPairedVaultUnlockRequest = "nook:extension-paired-vault-unlock-request",

@@ -52,7 +52,9 @@ class SessionMessageWireFixture {
     return message.payload.requestJson
   }
 
-  providers(message: ParsedExtensionSessionTransportRequest): StorageProvider[] {
+  providers(
+    message: ParsedExtensionSessionTransportRequest,
+  ): StorageProvider[] {
     if (message.type !== ExtensionSessionMessageType.ImportVault) {
       throw new TypeError('test request is not a vault import')
     }
@@ -417,15 +419,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
-      expect(
-        sessionMessageWireFixture.loginSave(parsed.request).username,
-      ).toBe('alice')
-      expect(
-        sessionMessageWireFixture.loginSave(parsed.request).password,
-      ).toBe('password')
-      expect(
-        sessionMessageWireFixture.loginSave(parsed.request).origin,
-      ).toBe('https://example.com')
+      expect(sessionMessageWireFixture.loginSave(parsed.request).username).toBe(
+        'alice',
+      )
+      expect(sessionMessageWireFixture.loginSave(parsed.request).password).toBe(
+        'password',
+      )
+      expect(sessionMessageWireFixture.loginSave(parsed.request).origin).toBe(
+        'https://example.com',
+      )
     }
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {

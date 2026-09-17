@@ -106,9 +106,7 @@ const websiteLoginFillResponseSchema = Schema.Union(
 ) satisfies Schema.Schema<WebsiteLoginFillResponse>
 
 const websiteLoginOptionsMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
-  ),
+  type: Schema.Literal(WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions),
   payload: Schema.Struct({ origin: nonEmptyStringSchema }),
 }) satisfies Schema.Schema<WebsiteLoginOptionsMessage>
 
