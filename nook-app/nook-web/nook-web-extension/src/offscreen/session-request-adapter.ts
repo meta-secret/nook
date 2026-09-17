@@ -155,8 +155,7 @@ export function isCompanionIdentityHandoffSessionTransportRequest(
   )
 }
 
-export type ParsedExtensionSessionTransportRequest =
-  EnumeratedExtensionSessionRequest<ExtensionSessionTransportRequest>
+export type ParsedExtensionSessionTransportRequest = ExtensionSessionRequest
 type TypedExtensionSessionImportRequest = Extract<
   TypedExtensionSessionRequest,
   { type: ExtensionSessionMessageType.ImportVault }

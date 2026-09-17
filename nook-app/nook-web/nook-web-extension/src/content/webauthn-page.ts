@@ -37,10 +37,6 @@ type SerializedAssertionOptions = {
   userVerificationRequired: boolean
 }
 
-type SerializedPasskeyRequest =
-  | SerializedCreationOptions
-  | SerializedAssertionOptions
-
 type NookPublicCredentialJSON = {
   id: string
   rawId: string

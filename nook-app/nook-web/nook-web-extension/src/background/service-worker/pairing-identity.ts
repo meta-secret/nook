@@ -49,7 +49,6 @@ import type {
   LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
-import type { ExtensionPairingRecord } from '../pairing-grants'
 import type { PendingAuthenticatorPicker } from './account-pickers'
 import {
   extensionPairingGrantPolicyReady,
@@ -76,7 +75,7 @@ type PendingIdentityHandoff = {
 export type ExtensionSessionStorageValue =
   | PendingIdentityHandoff
   | PendingAuthenticatorPicker
-  | ExtensionPairingRecord
+  | ExtensionPairingItems[string]
   | ExtensionReadySetupState
   | StoredExtensionPairingGrant
   | string
@@ -321,7 +320,10 @@ class ExtensionPairingIdentity {
     decodeResponse?: (
       response: ExtensionSessionResponse | undefined,
     ) => Result<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
+  ): Promise<
+    | ExtensionSessionTransportResult<ExtensionSessionResponse>
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
     const document = await extensionSessionLifecycle.openSessionDocument()
     if (document.isErr()) return err(document.error)
     return decodeResponse
@@ -732,10 +734,9 @@ class ExtensionPairingIdentity {
       const legacy = await this.readLegacyPairingStorage()
       const legacyKeys = this.legacyPairingStorageKeys(legacy)
       if (legacyKeys.length === 0) return
-      const legacyPairingRecords: LegacyPairingStorageItems = {}
-      for (const key of legacyKeys) {
-        legacyPairingRecords[key] = legacy[key]
-      }
+      const legacyPairingRecords: LegacyPairingStorageItems = Object.fromEntries(
+        Object.entries(legacy).filter(([key]) => legacyKeys.includes(key)),
+      )
       const current = await backgroundVaultRuntime.loadExtensionPairingItems()
       const pairingPolicy = await extensionPairingGrantPolicyReady
       const migrated =

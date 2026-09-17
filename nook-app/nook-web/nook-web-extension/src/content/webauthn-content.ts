@@ -20,7 +20,7 @@ import type {
   WebsitePasskeyOptionsResponse,
   WebsitePasskeyPerformMessage,
   WebsitePasskeyPerformResponse,
-  type WebsitePasskeyRequest,
+  WebsitePasskeyRequest,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,
@@ -168,14 +168,14 @@ function chooseOption({
     }
     heading.textContent = t(nookTypedArgs0_0)
     const detail = document.createElement('p')
-    const relyingParty = request.request.relyingParty
     const rp =
       request.ceremony === WebsitePasskeyCeremony.Create &&
-      relyingParty &&
-      typeof relyingParty === 'object' &&
-      'name' in relyingParty
-        ? relyingParty.name
-        : request.request.rpId
+      'relyingParty' in request.request &&
+      'name' in request.request.relyingParty
+        ? request.request.relyingParty.name
+        : 'rpId' in request.request
+          ? request.request.rpId
+          : location.hostname
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
     const choices = document.createElement('div')
     for (const option of options) {

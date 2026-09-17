@@ -3,7 +3,7 @@ import type { WebsiteAuthenticatorCanceledMessage } from '../../lib/authenticato
 import type { WebsiteLoginCanceledMessage } from '../../lib/login-picker-messages'
 import type { WebsiteLoginSelectedMessage } from '../../lib/login-picker-messages'
 
-type AccountPickerPageMessage =
+export type AccountPickerPageMessage =
   | WebsiteAuthenticatorSelectedMessage
   | WebsiteAuthenticatorCanceledMessage
   | WebsiteLoginSelectedMessage
