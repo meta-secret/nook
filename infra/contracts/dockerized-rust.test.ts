@@ -520,10 +520,15 @@ class DockerizedRustContract {
       "nook-sccache-report wasm-node-compiler",
     );
     expect(nodeCompilerStage).toContain(
+      "llvm-cov test --no-clean --release -p nook-companion-wasm",
+    );
+    expect(nodeCompilerStage).not.toContain(
       "llvm-cov test --no-clean --release -p nook-companion-wasm --no-report",
     );
     expect(
-      nodeCompilerStage.indexOf("-p nook-companion-wasm --no-report"),
+      nodeCompilerStage.indexOf(
+        "llvm-cov test --no-clean --release -p nook-companion-wasm",
+      ),
     ).toBeLessThan(
       nodeCompilerStage.indexOf(
         "--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines",
