@@ -647,9 +647,8 @@ export class PasswordEnrollmentActions {
               if (admittedManager.isErr())
                 return storageErr(admittedManager.error);
               try {
-                return storageOk(
-                  await admittedManager.value.set_vault_name(vaultName),
-                );
+                await admittedManager.value.set_vault_name(vaultName);
+                return storageOk(vaultStoreId);
               } catch (nativeFailure) {
                 return storageErr(new NativeVaultStorageFailure(nativeFailure));
               }
@@ -659,7 +658,7 @@ export class PasswordEnrollmentActions {
               return;
             }
             try {
-              await set_local_vault_label(vaultStoreId, vaultName);
+              await set_local_vault_label(renamed.value, vaultName);
             } catch (failure) {
               state.errorMsg = state.t(
                 new NativeVaultStorageFailure(failure).translationKey,
