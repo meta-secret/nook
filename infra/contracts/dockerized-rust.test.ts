@@ -543,6 +543,7 @@ class DockerizedRustContract {
       nodeCompilerStage,
     ]) {
       assertCompilerMounts(descendant, 2);
+      expect(descendant).not.toContain("RUSTC_WRAPPER=");
     }
     const browserStage = stage(
       "FROM builder-wasm-handoff AS builder-wasm",

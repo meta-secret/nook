@@ -176,8 +176,9 @@ describe('nook-typed-api/no-empty-success-contract', () => {
       }
     `)
 
-    expect(messages.filter((message) => message.messageId === 'emptySuccessType'))
-      .not.toHaveLength(0)
+    expect(
+      messages.filter((message) => message.messageId === 'emptySuccessType'),
+    ).not.toHaveLength(0)
   })
 
   test('accepts named concrete success values and the vault approval completion shape', () => {

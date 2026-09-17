@@ -1,4 +1,5 @@
 import { ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -6,22 +7,25 @@ import {
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 
-window.addEventListener('message', (event: MessageEvent) => {
-  if (event.source !== window || event.origin !== window.location.origin) return
+void companionWasmReady.then(() => {
+  window.addEventListener('message', (event: MessageEvent) => {
+    if (event.source !== window || event.origin !== window.location.origin)
+      return
 
-  const data: unknown = event.data
-  const message = runConcreteDecoder(
-    ExtensionLocalEventLogUpdatedMessageSchema.decode,
-    data,
-  )
-  if (message.kind === ConcreteDecoderResultKind.Decoded) {
-    chrome.runtime.sendMessage(message.value, () => {
-      // The bridge is best-effort when the vault is not paired. Reading
-      // lastError prevents an expected unloaded/reloaded worker response from
-      // becoming an unhandled console error.
-      void chrome.runtime.lastError
-    })
-  }
+    const data: unknown = event.data
+    const message = runConcreteDecoder(
+      ExtensionLocalEventLogUpdatedMessageSchema.decode,
+      data,
+    )
+    if (message.kind === ConcreteDecoderResultKind.Decoded) {
+      chrome.runtime.sendMessage(message.value, () => {
+        // The bridge is best-effort when the vault is not paired. Reading
+        // lastError prevents an expected unloaded/reloaded worker response from
+        // becoming an unhandled console error.
+        void chrome.runtime.lastError
+      })
+    }
+  })
 })
 
 function publishExtensionRuntimeId(): boolean {
