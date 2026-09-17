@@ -42,10 +42,16 @@ export enum ExtensionPairingRejectionReason {
   PairingGrantAdmissionFailed = "pairing-grant-admission-failed",
 }
 
+export type ExtensionPairingDeliveryDelivered = {
+  readonly kind: ExtensionPairingDeliveryKind.Delivered;
+  readonly eventCount: number;
+};
+
 export type ExtensionPairingDeliveryWithoutRejection = {
   readonly kind: Exclude<
     ExtensionPairingDeliveryKind,
-    ExtensionPairingDeliveryKind.Rejected
+    | ExtensionPairingDeliveryKind.Delivered
+    | ExtensionPairingDeliveryKind.Rejected
   >;
 };
 
@@ -59,6 +65,7 @@ export type ExtensionPairingDeliveryRejectedWithReason = {
 };
 
 export type ExtensionPairingDelivery =
+  | ExtensionPairingDeliveryDelivered
   | ExtensionPairingDeliveryWithoutRejection
   | ExtensionPairingDeliveryRejectedWithoutReason
   | ExtensionPairingDeliveryRejectedWithReason;

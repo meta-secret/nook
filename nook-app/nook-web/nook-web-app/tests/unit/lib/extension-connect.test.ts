@@ -334,7 +334,7 @@ describe('extension pairing approved message', () => {
   test('delivers an approved grant through the extension callback', async () => {
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        args[2]({ ok: true })
+        args[2]({ ok: true, eventCount: 1 })
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
@@ -343,7 +343,10 @@ describe('extension pairing approved message', () => {
       extensionConnectionBrowser.deliverExtensionPairingApproval(
         approvalDeliveryArgs(),
       ),
-    ).resolves.toEqual({ kind: ExtensionPairingDeliveryKind.Delivered })
+    ).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Delivered,
+      eventCount: 1,
+    })
     expect(sendMessage).toHaveBeenCalledOnce()
   })
 
@@ -368,7 +371,7 @@ describe('extension pairing approved message', () => {
   test('reports a runtime error once', async () => {
     const runtimeErrorSend = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        args[2]({ ok: true })
+        args[2]({ ok: true, eventCount: 1 })
       },
     )
     vi.stubGlobal('chrome', {
@@ -391,7 +394,10 @@ describe('extension pairing approved message', () => {
     vi.useFakeTimers()
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        window.setTimeout(() => args[2]({ ok: true }), 6_000)
+        window.setTimeout(
+          () => args[2]({ ok: true, eventCount: 1 }),
+          6_000,
+        )
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
@@ -403,6 +409,7 @@ describe('extension pairing approved message', () => {
 
     await expect(delivery).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.Delivered,
+      eventCount: 1,
     })
     expect(sendMessage).toHaveBeenCalledOnce()
   })
@@ -493,6 +500,19 @@ describe('extension pairing approved message', () => {
 
     expect(decoded._tag).toBe('Left')
   })
+
+  test.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])(
+    'rejects invalid imported event count %s',
+    (eventCount) => {
+      const decoded = Effect.runSync(
+        Effect.either(
+          pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
+        ),
+      )
+
+      expect(decoded._tag).toBe('Left')
+    },
+  )
 
   test('accepts complete approved grants', () => {
     expect(

@@ -161,6 +161,12 @@ export const companionResponseDecoder = new CompanionResponseDecoder();
 
 const PairingDeliveredResponseSchema = Schema.Struct({
   ok: Schema.Literal(true),
+  eventCount: Schema.Number.pipe(
+    Schema.filter(
+      (eventCount) => Number.isSafeInteger(eventCount) && eventCount >= 0,
+      { message: () => "eventCount must be a nonnegative safe integer" },
+    ),
+  ),
 });
 const PairingMigrationReasonResponseSchema = Schema.Struct({
   reason: Schema.Literal("auth-provider-plaintext-migration-required"),
@@ -189,8 +195,9 @@ export class PairingApprovalResponseDecoder {
       value,
       strictDecodeOptions,
     ).pipe(
-      Effect.map((): ExtensionPairingDelivery => ({
+      Effect.map(({ eventCount }): ExtensionPairingDelivery => ({
         kind: ExtensionPairingDeliveryKind.Delivered,
+        eventCount,
       })),
     );
     const migrationByReason = Schema.decodeUnknown(

@@ -114,7 +114,10 @@ describe('extension vault approval', () => {
     const fixture = ExtensionApprovalTestFixture.create()
     const deliver = vi
       .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
-      .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
+      .mockResolvedValue({
+        kind: ExtensionPairingDeliveryKind.Delivered,
+        eventCount: 1,
+      })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
 
     const authorized = await approval.authorize()
@@ -216,7 +219,10 @@ describe('extension vault approval', () => {
     const fixture = ExtensionApprovalTestFixture.create()
     const deliver = vi
       .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
-      .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
+      .mockResolvedValue({
+        kind: ExtensionPairingDeliveryKind.Delivered,
+        eventCount: 1,
+      })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
     const authorized = await approval.authorize()
     expect(authorized.isOk()).toBe(true)

@@ -99,7 +99,7 @@ beforeEach(() => {
     ok({} as ExtensionPairingApprovedMessage),
   )
   approvalPort.deliver.mockResolvedValue(
-    ok({ kind: ExtensionPairingDeliveryKind.Delivered }),
+    ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }),
   )
   approvalPort.admitCompletion.mockReturnValue(ok())
   approvalPort.releaseAuthorization.mockImplementation(() => {})
@@ -169,7 +169,10 @@ describe('extension consent web workflow', () => {
 
     expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(state.outcome).toEqual({ kind: ExtensionConsentDeliveryOutcomeKind.Delivered })
+    expect(state.outcome).toEqual({
+      kind: ExtensionConsentDeliveryOutcomeKind.Delivered,
+      eventCount: 1,
+    })
     expect(harness.workflow.closeOutcome(state)).toBe(
       ExtensionConsentCloseOutcome.Approved,
     )

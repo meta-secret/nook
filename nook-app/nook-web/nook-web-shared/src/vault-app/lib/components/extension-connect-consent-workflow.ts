@@ -71,7 +71,10 @@ export type ExtensionConsentRejection =
   | { readonly kind: ExtensionConsentRejectionKind.WithoutReason };
 
 export type ExtensionConsentDeliveryOutcome =
-  | { readonly kind: ExtensionConsentDeliveryOutcomeKind.Delivered }
+  | {
+      readonly kind: ExtensionConsentDeliveryOutcomeKind.Delivered;
+      readonly eventCount: number;
+    }
   | {
       readonly kind: ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable;
     }
@@ -209,7 +212,10 @@ type ExtensionConsentAuthorizationOwner =
 function deliveryOutcome(value: ExtensionPairingDelivery): ExtensionConsentDeliveryOutcome {
   switch (value.kind) {
     case ExtensionPairingDeliveryKind.Delivered:
-      return { kind: ExtensionConsentDeliveryOutcomeKind.Delivered };
+      return {
+        kind: ExtensionConsentDeliveryOutcomeKind.Delivered,
+        eventCount: value.eventCount,
+      };
     case ExtensionPairingDeliveryKind.MessagingUnavailable:
       return { kind: ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable };
     case ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired:
