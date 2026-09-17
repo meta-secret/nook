@@ -1,7 +1,7 @@
-import { test, expect } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { z } from 'zod';
+import { test, expect } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { z } from "zod";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -21,7 +21,7 @@ interface DockerfileStageRange {
 }
 
 class DockerizedRustBuildKitContract {
-  private readonly root = resolve(import.meta.dir, '../..');
+  private readonly root = resolve(import.meta.dir, "../..");
 
   trustedRustConsumerUsesBuildKit(): void {
     const workflow = z
@@ -46,7 +46,7 @@ class DockerizedRustBuildKitContract {
           }),
         ),
       })
-      .parse(Bun.YAML.parse(this.read('.github/workflows/pr.yml')));
+      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
     const rustJob = z
       .object({
         steps: z.array(
@@ -67,9 +67,9 @@ class DockerizedRustBuildKitContract {
     expect(
       rustSteps.filter(
         (step) =>
-          typeof step.if === 'string' &&
+          typeof step.if === "string" &&
           step.if.includes("needs.rust-build.outputs.produced == 'true'") &&
-          typeof step.run === 'string' &&
+          typeof step.run === "string" &&
           /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
       ),
     ).toEqual([]);
@@ -85,99 +85,97 @@ class DockerizedRustBuildKitContract {
         rustSteps.filter(
           (step) =>
             step.if === "needs.rust-build.outputs.produced == 'true'" &&
-            typeof step.run === 'string' &&
-            step.run.includes('task docker:ci:rust:verify-built-buildkit'),
+            typeof step.run === "string" &&
+            step.run.includes("task docker:ci:rust:verify-built-buildkit"),
         ),
       );
     expect(buildKitVerifySteps).toHaveLength(1);
     for (const step of buildKitVerifySteps) {
       expect(step.env.DOCKER_RUST_IMAGE).toBe(
-        '${{ needs.rust-build.outputs.image }}',
+        "${{ needs.rust-build.outputs.image }}",
       );
     }
 
-    const dockerTasks = this.read('nook-app/nook-platform/docker/Taskfile.yml');
+    const dockerTasks = this.read("nook-app/nook-platform/docker/Taskfile.yml");
     expect(dockerTasks).toMatch(
       /docker:ci:rust:verify-built-buildkit:[\s\S]*?buildx bake[\s\S]*?pr-native-verify/,
     );
     const bake = this.read(
-      'nook-app/nook-platform/docker/rust/compile.docker-bake.hcl',
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
     const dockerfile = this.read(
-      'nook-app/nook-platform/docker/rust/compile.Dockerfile',
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
     );
     expect(bake).toContain('target "pr-native-verify"');
-    expect(bake).toContain(
-      'args = {\n    PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE\n  }',
-    );
+    expect(bake).toContain("PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE");
     expect(dockerfile).toContain(
-      'ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:local',
+      "ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured",
     );
     const producerStart = dockerfile.indexOf(
-      'FROM compile-native-source AS pr-native-build',
+      "FROM compile-native-source AS pr-native-build",
     );
     const verifyStart = dockerfile.indexOf(
-      'FROM pr-native-image AS pr-native-verify',
+      "FROM ${PR_NATIVE_IMAGE} AS pr-native-verify",
     );
     expect(producerStart).toBeGreaterThanOrEqual(0);
     expect(verifyStart).toBeGreaterThan(producerStart);
     const producer = dockerfile.slice(producerStart, verifyStart);
-    expect(producer).not.toContain('COPY . .');
-    expect(producer).toContain('COPY nook-app nook-app');
+    expect(producer).not.toContain("COPY . .");
+    expect(producer).toContain("COPY nook-app nook-app");
   }
 
   dylintDependencyCacheAndSccacheMode(): void {
     const nightly = this.read(
-      'nook-app/nook-platform/docker/rust/nightly.Dockerfile',
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     );
     const product = this.read(
-      'nook-app/nook-platform/docker/rust/product.Dockerfile',
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
     const wrapper = this.read(
-      'nook-app/nook-platform/docker/sccache-wrapper.sh',
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dependencyStage = nightly.indexOf(
-      'FROM rust-ecosystem-nightly AS rust-dylint-deps',
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
     );
     const dependencyBuild = nightly.indexOf(
-      'cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked',
+      "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
       dependencyStage,
     );
     const sourceStage = nightly.indexOf(
-      'FROM rust-dylint-deps AS rust-dylint-build',
+      "FROM rust-dylint-deps AS rust-dylint-build",
     );
     const sourceCopy = nightly.indexOf(
-      'COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/',
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
       sourceStage,
     );
     expect(dependencyStage).toBeGreaterThanOrEqual(0);
     expect(nightly).toContain(
-      'COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml',
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml",
     );
     expect(nightly).toContain(
-      'COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock',
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock",
     );
-    expect(nightly).toContain('mkdir -p dylint/nook-domain-api/src');
+    expect(nightly).toContain("mkdir -p dylint/nook-domain-api/src");
     expect(dependencyBuild).toBeGreaterThan(dependencyStage);
     expect(sourceStage).toBeGreaterThan(dependencyBuild);
     expect(nightly.slice(dependencyStage, sourceStage)).not.toContain(
-      'COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/',
+      "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
     );
     expect(sourceCopy).toBeGreaterThan(sourceStage);
-    expect(product).toContain('ENV SCCACHE_CLIENT_SIDE=0');
-    expect(product).not.toContain('ENV SCCACHE_CLIENT_SIDE=1');
+    expect(product).toContain("ENV SCCACHE_CLIENT_SIDE=0");
+    expect(product).not.toContain("ENV SCCACHE_CLIENT_SIDE=1");
     expect(wrapper).toContain(': "${SCCACHE_CLIENT_SIDE:=0}"');
-    expect(wrapper).not.toContain('SCCACHE_CLIENT_SIDE:=1');
+    expect(wrapper).not.toContain("SCCACHE_CLIENT_SIDE:=1");
   }
 
   remoteCompileUsesTwoPhaseFoundation(): void {
     const bake = this.read(
-      'nook-app/nook-platform/docker/rust/compile.docker-bake.hcl',
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
     const dockerfile = this.read(
-      'nook-app/nook-platform/docker/rust/compile.Dockerfile',
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
     );
-    const script = this.read('.github/scripts/compile-remote.sh');
+    const script = this.read(".github/scripts/compile-remote.sh");
     const phaseA = script.indexOf('"${bake_args[@]}" build-compile-foundation');
     const phaseB = script.indexOf(
       '"${bake_args[@]}" build-compile',
@@ -189,64 +187,64 @@ class DockerizedRustBuildKitContract {
       'target "build-compile-foundation"',
       'target "build-compile"',
       'variable "GHA_CACHE_PARENT_SCOPE_SUFFIX"',
-      'nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}',
-      'nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}',
-      'compile_foundation_cache_from',
-      'compile_source_cache_from',
+      "nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}",
+      "nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}",
+      "compile_foundation_cache_from",
+      "compile_source_cache_from",
     ]) {
       expect(bake).toContain(entry);
     }
-    expect(bake).toContain('cache-to   = compile_foundation_cache_to');
-    expect(bake).toContain('mode=max,compression=zstd,timeout=20s');
-    expect(bake).not.toContain('ignore-error=true');
+    expect(bake).toContain("cache-to   = compile_foundation_cache_to");
+    expect(bake).toContain("mode=max,compression=zstd,timeout=20s");
+    expect(bake).not.toContain("ignore-error=true");
     const sourceTargetStart = bake.indexOf('target "build-compile"');
-    const sourceTargetEnd = bake.indexOf('\n}', sourceTargetStart);
+    const sourceTargetEnd = bake.indexOf("\n}", sourceTargetStart);
     expect(sourceTargetEnd).toBeGreaterThan(sourceTargetStart);
     const sourceTarget = bake.slice(sourceTargetStart, sourceTargetEnd);
-    expect(sourceTarget).toContain('cache-from = compile_source_cache_from');
-    expect(sourceTarget).not.toContain('cache-to');
+    expect(sourceTarget).toContain("cache-from = compile_source_cache_from");
+    expect(sourceTarget).not.toContain("cache-to");
     expect(bake).toContain('inherits   = ["_sccache"]');
     for (const entry of [
-      'FROM compile-wasm-dependencies AS compile-node-dependency-toolchain',
-      'FROM compile-web-dependencies AS compile-web-extension-dependencies',
-      'FROM compile-wasm-source AS compile',
-      'COPY --from=compile-native-source',
-      'COPY --from=compile-web /opt/nook/web-compile-passed',
-      'COPY --from=compile-repository-tooling /opt/nook/repository-tooling-compile-passed',
-      'COPY --from=compile-loom /opt/nook/loom-compile-passed',
+      "FROM compile-wasm-dependencies AS compile-node-dependency-toolchain",
+      "FROM compile-web-dependencies AS compile-web-extension-dependencies",
+      "FROM compile-wasm-source AS compile",
+      "COPY --from=compile-native-source",
+      "COPY --from=compile-web /opt/nook/web-compile-passed",
+      "COPY --from=compile-repository-tooling /opt/nook/repository-tooling-compile-passed",
+      "COPY --from=compile-loom /opt/nook/loom-compile-passed",
     ]) {
       expect(dockerfile).toContain(entry);
     }
-    expect(script).toContain('foundation_status=completed');
-    expect(script).toContain('source_status=completed');
+    expect(script).toContain("foundation_status=completed");
+    expect(script).toContain("source_status=completed");
     expect(script).toContain(
       "trap 'compile_checkpoint_mark_interruption 143' TERM",
     );
-    expect(script).toContain('NOOK_BUILDKIT_RAW_LOG_APPEND=1');
-    expect(dockerfile).not.toContain('type=cache');
+    expect(script).toContain("NOOK_BUILDKIT_RAW_LOG_APPEND=1");
+    expect(dockerfile).not.toContain("type=cache");
   }
 
   dylintWrapperContentInvalidatesBuildGraph(): void {
-    const nightlyPath = 'nook-app/nook-platform/docker/rust/nightly.Dockerfile';
+    const nightlyPath = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
     const nightly = this.read(nightlyPath);
     const bake = this.read(
-      'nook-app/nook-platform/docker/rust/docker-bake.hcl',
+      "nook-app/nook-platform/docker/rust/docker-bake.hcl",
     );
     const wrapper = this.read(
-      'nook-app/nook-platform/docker/sccache-wrapper.sh',
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dockerignore = this.read(
-      'nook-app/nook-platform/docker/rust/nightly.Dockerfile.dockerignore',
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile.dockerignore",
     );
     const ecosystemStage = nightly.indexOf(
-      'FROM rust-base AS rust-ecosystem-nightly',
+      "FROM rust-base AS rust-ecosystem-nightly",
     );
     const ecosystemEnd = nightly.indexOf(
-      'FROM rust-ecosystem-nightly AS rust-dylint-deps',
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
       ecosystemStage,
     );
     const wrapperCopy = nightly.indexOf(
-      'COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache',
+      "COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache",
       ecosystemStage,
     );
     const wrapperMode = wrapper.indexOf(': "${SCCACHE_CLIENT_SIDE:=0}"');
@@ -256,10 +254,10 @@ class DockerizedRustBuildKitContract {
     expect(wrapperCopy).toBeLessThan(ecosystemEnd);
     expect(wrapperMode).toBeGreaterThanOrEqual(0);
     expect(dockerignore).not.toContain(
-      'nook-app/nook-platform/docker/sccache-wrapper.sh',
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     expect(nightly).toContain(
-      'RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report',
+      "RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report",
     );
 
     const dylintTarget = bake.indexOf('target "rust-dylint"');
@@ -270,58 +268,58 @@ class DockerizedRustBuildKitContract {
     expect(dylintTarget).toBeGreaterThanOrEqual(0);
     expect(dylintTargetEnd).toBeGreaterThan(dylintTarget);
     expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
-      'docker/rust/nightly.Dockerfile',
+      "docker/rust/nightly.Dockerfile",
     );
 
     const dylintBuild = nightly.indexOf(
-      'FROM rust-dylint-deps AS rust-dylint-build',
+      "FROM rust-dylint-deps AS rust-dylint-build",
       ecosystemEnd,
     );
     const dylintSelfTest = nightly.indexOf(
-      'FROM rust-dylint-build AS rust-dylint-self-test',
+      "FROM rust-dylint-build AS rust-dylint-self-test",
       dylintBuild,
     );
     expect(dylintBuild).toBeGreaterThan(ecosystemEnd);
     expect(dylintSelfTest).toBeGreaterThan(dylintBuild);
     expect(nightly.slice(dylintBuild, dylintSelfTest)).toContain(
-      'cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked',
+      "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
     );
     expect(nightly.slice(dylintSelfTest)).toContain(
-      'cargo llvm-cov test -p nook_domain_api',
+      "cargo llvm-cov test -p nook_domain_api",
     );
   }
 
   wasmNodeCompilerSecretsAndDylintTelemetryRuntime(): void {
     const product = this.read(
-      'nook-app/nook-platform/docker/rust/product.Dockerfile',
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
     const selectText = (request: RequiredCompilerTextSelection): string => {
       const value = request.sections[request.index];
-      if (typeof value !== 'string') throw new Error(request.label);
+      if (typeof value !== "string") throw new Error(request.label);
       return value;
     };
     const nodeDependencySections = product.split(
-      'FROM wasm-coverage-toolchain AS builder-wasm-node-deps',
+      "FROM wasm-coverage-toolchain AS builder-wasm-node-deps",
     );
     const nodeDependencyStageSelection: RequiredCompilerTextSelection = {
       sections: nodeDependencySections,
       index: 1,
-      label: 'WASM Node dependency stage is missing',
+      label: "WASM Node dependency stage is missing",
     };
     const nodeDependencyStage = selectText(nodeDependencyStageSelection);
     const nodeDependencyBodySections = nodeDependencyStage.split(
-      '# Source overlay for bulk native leaves',
+      "# Source overlay for bulk native leaves",
     );
     const nodeDependencyBodySelection: RequiredCompilerTextSelection = {
       sections: nodeDependencyBodySections,
       index: 0,
-      label: 'WASM Node dependency stage has no body',
+      label: "WASM Node dependency stage has no body",
     };
     const nodeDeps = selectText(nodeDependencyBodySelection);
     const accessMount =
-      '--mount=type=secret,id=sccache_s3_access_key,required=false';
+      "--mount=type=secret,id=sccache_s3_access_key,required=false";
     const secretMount =
-      '--mount=type=secret,id=sccache_s3_secret_key,required=false';
+      "--mount=type=secret,id=sccache_s3_secret_key,required=false";
     const compilerRuns = nodeDeps
       .split(/(?=^RUN\b)/m)
       .filter((run) => run.includes(accessMount));
@@ -330,12 +328,12 @@ class DockerizedRustBuildKitContract {
     const hostCoverageSelection: RequiredCompilerTextSelection = {
       sections: compilerRuns,
       index: 0,
-      label: 'WASM host coverage stage is missing',
+      label: "WASM host coverage stage is missing",
     };
     const browserCoverageSelection: RequiredCompilerTextSelection = {
       sections: compilerRuns,
       index: 1,
-      label: 'WASM browser coverage stage is missing',
+      label: "WASM browser coverage stage is missing",
     };
     const hostCoverage = selectText(hostCoverageSelection);
     const browserCoverage = selectText(browserCoverageSelection);
@@ -356,29 +354,29 @@ class DockerizedRustBuildKitContract {
     assertCompilerMounts(hostCoverageMounts);
     assertCompilerMounts(browserCoverageMounts);
     const bunInstallSections = nodeDeps.split(
-      'RUN curl -fsSL https://bun.sh/install',
+      "RUN curl -fsSL https://bun.sh/install",
     );
     const bunInstallStageSelection: RequiredCompilerTextSelection = {
       sections: bunInstallSections,
       index: 1,
-      label: 'Bun installation stage is missing',
+      label: "Bun installation stage is missing",
     };
     const bunInstallStage = selectText(bunInstallStageSelection);
     const bunInstallBodySections = bunInstallStage.split(
-      '\n\n# Export cargo-llvm-cov',
+      "\n\n# Export cargo-llvm-cov",
     );
     const bunInstallBodySelection: RequiredCompilerTextSelection = {
       sections: bunInstallBodySections,
       index: 0,
-      label: 'Bun installation stage has no body',
+      label: "Bun installation stage has no body",
     };
     const bunInstall = selectText(bunInstallBodySelection);
-    expect(bunInstall).not.toContain('--mount=type=secret');
+    expect(bunInstall).not.toContain("--mount=type=secret");
 
     const stage = (request: DockerfileStageRange): string => {
-      const start = request.content.indexOf('\n' + request.startMarker + '\n');
+      const start = request.content.indexOf("\n" + request.startMarker + "\n");
       const end = request.content.indexOf(
-        '\n' + request.endMarker + '\n',
+        "\n" + request.endMarker + "\n",
         start + 1,
       );
       expect(start).toBeGreaterThanOrEqual(0);
@@ -387,43 +385,48 @@ class DockerizedRustBuildKitContract {
     };
     const nodeCompilerStageRange: DockerfileStageRange = {
       content: product,
-      startMarker: 'FROM builder-wasm-handoff AS builder-wasm-node-compiler',
-      endMarker: 'FROM builder-wasm-handoff AS builder-wasm',
+      startMarker: "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
+      endMarker: "FROM builder-wasm-handoff AS builder-wasm",
     };
     const nodeCompilerStage = stage(nodeCompilerStageRange);
     expect(nodeCompilerStage).toContain(
-      'nook-sccache-report wasm-node-compiler',
+      "nook-sccache-report wasm-node-compiler",
     );
     expect(nodeCompilerStage).toContain(
-      'llvm-cov test --no-clean --release -p nook-companion-wasm --no-report',
+      "llvm-cov test --no-clean --release -p nook-companion-wasm",
+    );
+    expect(nodeCompilerStage).not.toContain(
+      "llvm-cov test --no-clean --release -p nook-companion-wasm --no-report",
     );
     expect(
-      nodeCompilerStage.indexOf('-p nook-companion-wasm --no-report'),
+      nodeCompilerStage.indexOf(
+        "llvm-cov test --no-clean --release -p nook-companion-wasm",
+      ),
     ).toBeLessThan(
       nodeCompilerStage.indexOf(
-        '--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines',
+        "--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines",
       ),
     );
     expect(nodeCompilerStage).toContain(
-      'nook-sccache-report --replay wasm-node-compiler',
+      "nook-sccache-report --replay wasm-node-compiler",
     );
-    expect(nodeCompilerStage).toContain('NOOK_SCCACHE_TELEMETRY_REPLAY');
+    expect(nodeCompilerStage).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     for (const stageName of [
-      'wasm-source-nook-wasm',
-      'wasm-source-companion-wasm',
-      'wasm-clippy',
-      'wasm-build-nook-wasm',
-      'wasm-build-companion-wasm',
-      'wasm-release-tests',
-      'wasm-node-test-and-coverage',
-      'wasm-node-compiler',
+      "wasm-source-nook-wasm",
+      "wasm-source-companion-wasm",
+      "wasm-clippy",
+      "wasm-build-nook-wasm",
+      "wasm-build-companion-wasm",
+      "wasm-release-tests",
+      "wasm-node-test-and-coverage",
+      "wasm-node-compiler",
     ]) {
-      expect(product).toContain('nook-sccache-report --replay ' + stageName);
+      expect(product).toContain("nook-sccache-report --replay " + stageName);
     }
     const handoffStageRange: DockerfileStageRange = {
       content: product,
-      startMarker: 'FROM builder-wasm-node-deps AS builder-wasm-handoff',
-      endMarker: 'FROM builder-wasm-handoff AS builder-wasm-node-compiler',
+      startMarker: "FROM builder-wasm-node-deps AS builder-wasm-handoff",
+      endMarker: "FROM builder-wasm-handoff AS builder-wasm-node-compiler",
     };
     const handoffStage = stage(handoffStageRange);
     for (const descendant of [handoffStage, nodeCompilerStage]) {
@@ -432,44 +435,44 @@ class DockerizedRustBuildKitContract {
         runCount: 2,
       };
       assertCompilerMounts(descendantMounts);
-      expect(descendant).not.toContain('RUSTC_WRAPPER=');
+      expect(descendant).not.toContain("RUSTC_WRAPPER=");
     }
     const browserStageRange: DockerfileStageRange = {
       content: product,
-      startMarker: 'FROM builder-wasm-handoff AS builder-wasm',
-      endMarker: 'FROM scratch AS wasm-export',
+      startMarker: "FROM builder-wasm-handoff AS builder-wasm",
+      endMarker: "FROM scratch AS wasm-export",
     };
     const browserStage = stage(browserStageRange);
-    expect(browserStage).not.toContain('--mount=type=secret');
+    expect(browserStage).not.toContain("--mount=type=secret");
     expect([...browserStage.matchAll(/^RUN\b/gm)]).toHaveLength(0);
 
-    const ecosystem = this.read('.github/workflows/rust-ecosystem-checks.yml');
-    const dylintJob = ecosystem.split('\n  dylint:\n')[1];
-    if (!dylintJob) throw new Error('Dylint job is missing');
-    const nodeProvision = dylintJob.indexOf('actions/setup-node@v7');
+    const ecosystem = this.read(".github/workflows/rust-ecosystem-checks.yml");
+    const dylintJob = ecosystem.split("\n  dylint:\n")[1];
+    if (!dylintJob) throw new Error("Dylint job is missing");
+    const nodeProvision = dylintJob.indexOf("actions/setup-node@v7");
     const dockerSetup = dylintJob.indexOf(
-      'uses: ./.github/actions/nook-docker-setup',
+      "uses: ./.github/actions/nook-docker-setup",
     );
     expect(nodeProvision).toBeGreaterThanOrEqual(0);
     expect(nodeProvision).toBeLessThan(dockerSetup);
     expect(dylintJob).toContain('node-version: "24.19.0"');
     expect(
-      this.read('.github/actions/nook-cache-telemetry/action.yml'),
-    ).not.toContain('skipping cache telemetry');
-    expect(this.read('.github/actions/nook-docker-setup/action.yml')).toContain(
+      this.read(".github/actions/nook-cache-telemetry/action.yml"),
+    ).not.toContain("skipping cache telemetry");
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
       'node-version: "24.19.0"',
     );
     const nightly = this.read(
-      'nook-app/nook-platform/docker/rust/nightly.Dockerfile',
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     );
     for (const stageName of [
-      'rust-dylint-self-test',
-      'rust-dylint-native',
-      'rust-dylint-wasm',
+      "rust-dylint-self-test",
+      "rust-dylint-native",
+      "rust-dylint-wasm",
     ]) {
-      expect(nightly).toContain('nook-sccache-report --replay ' + stageName);
+      expect(nightly).toContain("nook-sccache-report --replay " + stageName);
     }
-    const report = this.read('nook-app/nook-platform/docker/sccache-report.sh');
+    const report = this.read("nook-app/nook-platform/docker/sccache-report.sh");
     expect(report).toContain(
       'report_dir="${NOOK_SCCACHE_REPORT_DIR:-/opt/nook/sccache-reports}"',
     );
@@ -477,23 +480,23 @@ class DockerizedRustBuildKitContract {
     expect(report).toContain(
       'printf \'%s\\n\' "$report" >"$report_dir/$stage.json"',
     );
-    const bake = this.read('nook-app/docker-bake.hcl');
-    expect(bake).toContain('NOOK_SCCACHE_TELEMETRY_REPLAY');
-    expect(this.read('.github/actions/nook-docker-setup/action.yml')).toContain(
-      'NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}',
+    const bake = this.read("nook-app/docker-bake.hcl");
+    expect(bake).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}",
     );
   }
 
   sharedRustBaseDoesNotConsumeTelemetryReplayArgument(): void {
     const product = this.read(
-      'nook-app/nook-platform/docker/rust/product.Dockerfile',
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    const baseStart = product.indexOf('\nFROM ${RUST_IMAGE} AS rust-base\n');
-    const baseEnd = product.indexOf('\nFROM ', baseStart + 1);
+    const baseStart = product.indexOf("\nFROM ${RUST_IMAGE} AS rust-base\n");
+    const baseEnd = product.indexOf("\nFROM ", baseStart + 1);
     expect(baseStart).toBeGreaterThanOrEqual(0);
     expect(baseEnd).toBeGreaterThan(baseStart);
     expect(product.slice(baseStart, baseEnd)).not.toContain(
-      'NOOK_SCCACHE_TELEMETRY_REPLAY',
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
     expect(product).toContain(
       'ARG NOOK_SCCACHE_TELEMETRY_REPLAY\nRUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi',
@@ -501,33 +504,33 @@ class DockerizedRustBuildKitContract {
   }
 
   private read(path: string): string {
-    return readFileSync(join(this.root, path), 'utf8');
+    return readFileSync(join(this.root, path), "utf8");
   }
 }
 
 const contract = new DockerizedRustBuildKitContract();
 
 test(
-  'trusted ARC Rust validation consumes the producer through BuildKit',
+  "trusted ARC Rust validation consumes the producer through BuildKit",
   contract.trustedRustConsumerUsesBuildKit.bind(contract),
 );
 test(
-  'Dylint dependencies stay source-free and sccache uses server-side mode',
+  "Dylint dependencies stay source-free and sccache uses server-side mode",
   contract.dylintDependencyCacheAndSccacheMode.bind(contract),
 );
 test(
-  'remote compile publishes a rooted foundation before source-sensitive compile',
+  "remote compile publishes a rooted foundation before source-sensitive compile",
   contract.remoteCompileUsesTwoPhaseFoundation.bind(contract),
 );
 test(
-  'Dylint compiler vertices consume the current wrapper content',
+  "Dylint compiler vertices consume the current wrapper content",
   contract.dylintWrapperContentInvalidatesBuildGraph.bind(contract),
 );
 test(
-  'WASM Node compilers retain secrets and Dylint telemetry has Node',
+  "WASM Node compilers retain secrets and Dylint telemetry has Node",
   contract.wasmNodeCompilerSecretsAndDylintTelemetryRuntime.bind(contract),
 );
 test(
-  'shared rust-base cache key excludes per-run sccache telemetry replay',
+  "shared rust-base cache key excludes per-run sccache telemetry replay",
   contract.sharedRustBaseDoesNotConsumeTelemetryReplayArgument.bind(contract),
 );

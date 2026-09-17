@@ -8,6 +8,7 @@ import compileContractsEslintConfig from '../../eslint.compile-contracts.config.
 const extensionSourceDirectory = fileURLToPath(
   new URL('../src/', import.meta.url),
 )
+const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const adapterFilePath = fileURLToPath(
   new URL('../src/lib/nook-wasm.ts', import.meta.url),
 )
@@ -26,7 +27,7 @@ class CompileContractsConfigTestHarness {
     const filePath = join(fixtureDirectory, `contract${extension}`)
     try {
       writeFileSync(filePath, source)
-      return new Linter().verify(
+      return new Linter({ cwd: webRoot }).verify(
         source,
         /** @type {import('eslint').Linter.Config[]} */ (
           compileContractsEslintConfig
@@ -44,7 +45,7 @@ class CompileContractsConfigTestHarness {
       ...compileContractsEslintConfig,
       { rules: { 'nook-typed-api/no-empty-success-contract': 'off' } },
     ]
-    return new Linter().verify(
+    return new Linter({ cwd: webRoot }).verify(
       source,
       /** @type {import('eslint').Linter.Config[]} */ (adapterConfig),
       adapterFilePath,
