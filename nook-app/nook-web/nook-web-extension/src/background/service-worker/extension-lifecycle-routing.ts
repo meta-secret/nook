@@ -1,4 +1,4 @@
-import { err, ok, type Result } from 'neverthrow'
+import { Effect, Either } from 'effect'
 import type { ExtensionSessionTransportFailure } from './session-document'
 import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -124,15 +124,34 @@ export enum AuthorizationCleanupFailureKind {
 
 type AuthorizationCleanupFailure =
   AuthorizationCleanupFailureKind | ExtensionSessionTransportFailure
-type AuthorizationCleanupResult = Result<
-  void,
+
+export enum AuthorizationCleanupSuccessKind {
+  Cleared = 'authorization-cleanup-cleared',
+}
+
+export type AuthorizationCleanupSuccess = {
+  kind: AuthorizationCleanupSuccessKind.Cleared
+  authorizationGeneration: AccountPickers.AccountPickerAuthorizationCleanupStart['authorizationGeneration']
+}
+
+type AuthorizationCleanupEffect = Effect.Effect<
+  AuthorizationCleanupSuccess,
   readonly AuthorizationCleanupFailure[]
 >
+
+enum AuthorizationCleanupCloseKind {
+  Skipped = 'skipped',
+  Closed = 'closed',
+}
+
+type AuthorizationCleanupClose =
+  | { kind: AuthorizationCleanupCloseKind.Skipped }
+  | { kind: AuthorizationCleanupCloseKind.Closed }
 
 class AuthorizationCleanupLifecycle {
   constructor(private readonly request: ClearAuthorizationStateArgs) {}
 
-  async clear(): Promise<AuthorizationCleanupResult> {
+  clear(): AuthorizationCleanupEffect {
     const {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
@@ -143,100 +162,146 @@ class AuthorizationCleanupLifecycle {
       closeSession,
       cleanupStart,
     } = this.request
-    const cleanupOperation =
-      cleanupStart.kind === AuthorizationCleanupStartKind.Existing
-        ? Promise.resolve(cleanupStart.cleanup)
-        : beginAccountPickerAuthorizationCleanup()
-    const closeOperation = closeSession
-      ? closeExtensionSessionDocument()
-      : Promise.resolve(ok())
-    let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-    try {
-      startedCleanup = await cleanupOperation
-    } catch {
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    const { authorizationGeneration, markerStatus } = startedCleanup
-    const failures: AuthorizationCleanupFailure[] = []
-    if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
-      failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
-    const closed = await closeOperation
-    if (closed.isErr()) failures.push(closed.error)
-    clearStagedAuthenticatorEnrollments()
-    try {
-      await clearPendingAccountPickers()
-    } catch {
-      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-    }
-    try {
-      await clearPendingAccountPickers()
-    } catch {
-      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
-    }
-    clearStagedAuthenticatorEnrollments()
-    if (failures.length > 0) {
-      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-      return err(failures)
-    }
-    let outcome: Awaited<
-      ReturnType<typeof completeAccountPickerAuthorizationCleanup>
-    >
-    try {
-      outcome = await completeAccountPickerAuthorizationCleanup(
-        authorizationGeneration,
-        CleanupEvidence.Full,
+    return Effect.gen(function* () {
+      const cleanupOperation =
+        cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+          ? Effect.succeed(cleanupStart.cleanup)
+          : Effect.tryPromise({
+              try: () => beginAccountPickerAuthorizationCleanup(),
+              catch: () => AuthorizationCleanupFailureKind.Rejected,
+            })
+      const closeOperation: Effect.Effect<
+        AuthorizationCleanupClose,
+        AuthorizationCleanupFailure
+      > = closeSession
+        ? Effect.tryPromise({
+            try: () => closeExtensionSessionDocument(),
+            catch: () => AuthorizationCleanupFailureKind.Rejected,
+          }).pipe(
+            Effect.flatMap((closed) =>
+              closed.isErr()
+                ? Effect.fail(closed.error)
+                : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Closed }),
+            ),
+          )
+        : Effect.succeed({ kind: AuthorizationCleanupCloseKind.Skipped })
+      const [cleanupResult, closeResult] = yield* Effect.all(
+        [Effect.either(cleanupOperation), Effect.either(closeOperation)],
+        { concurrency: 'unbounded' },
       )
-    } catch {
-      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-      return err([AuthorizationCleanupFailureKind.Rejected])
-    }
-    return 'error' in outcome
-      ? err([AuthorizationCleanupFailureKind.Rejected])
-      : ok()
+      if (Either.isLeft(cleanupResult)) {
+        return yield* Effect.fail([cleanupResult.left])
+      }
+      const { authorizationGeneration, markerStatus } = cleanupResult.right
+      const failures: AuthorizationCleanupFailure[] = []
+      if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable) {
+        failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
+      }
+      if (Either.isLeft(closeResult)) failures.push(closeResult.left)
+      const firstStagedCleanup = yield* Effect.either(
+        Effect.try({
+          try: () => clearStagedAuthenticatorEnrollments(),
+          catch: () => AuthorizationCleanupFailureKind.Rejected,
+        }),
+      )
+      if (Either.isLeft(firstStagedCleanup)) failures.push(firstStagedCleanup.left)
+      const firstPickerCleanup = yield* Effect.either(
+        Effect.tryPromise({
+          try: () => clearPendingAccountPickers(),
+          catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+        }),
+      )
+      if (Either.isLeft(firstPickerCleanup)) failures.push(firstPickerCleanup.left)
+      const secondPickerCleanup = yield* Effect.either(
+        Effect.tryPromise({
+          try: () => clearPendingAccountPickers(),
+          catch: () => AuthorizationCleanupFailureKind.PendingPickerRemovalFailed,
+        }),
+      )
+      if (Either.isLeft(secondPickerCleanup)) failures.push(secondPickerCleanup.left)
+      const secondStagedCleanup = yield* Effect.either(
+        Effect.try({
+          try: () => clearStagedAuthenticatorEnrollments(),
+          catch: () => AuthorizationCleanupFailureKind.Rejected,
+        }),
+      )
+      if (Either.isLeft(secondStagedCleanup)) failures.push(secondStagedCleanup.left)
+      if (failures.length > 0) {
+        releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+        return yield* Effect.fail(failures)
+      }
+      const outcome = yield* Effect.tryPromise({
+        try: () =>
+          completeAccountPickerAuthorizationCleanup(
+            authorizationGeneration,
+            CleanupEvidence.Full,
+          ),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      })
+      if ('error' in outcome) {
+        return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
+      }
+      return {
+        kind: AuthorizationCleanupSuccessKind.Cleared,
+        authorizationGeneration,
+      }
+    })
   }
 }
 
-export async function recoverInterruptedAuthorizationCleanup(
+export function recoverInterruptedAuthorizationCleanup(
   dependencies: ExtensionLifecycleRoutingDependencies,
-): Promise<AuthorizationCleanupResult> {
-  const pendingLookup = dependencies
-    .accountPickerAuthorizationCleanupPending()
-    .then(
-      (pending) => ({ kind: 'resolved' as const, pending }),
-      () => ({ kind: 'rejected' as const }),
+): AuthorizationCleanupEffect {
+  return Effect.gen(function* () {
+    const pendingLookup = Effect.tryPromise({
+      try: () => dependencies.accountPickerAuthorizationCleanupPending(),
+      catch: () => AuthorizationCleanupFailureKind.MarkerLookupFailed,
+    })
+    const cleanupStart = Effect.tryPromise({
+      try: () => dependencies.beginAccountPickerAuthorizationCleanup(),
+      catch: () => AuthorizationCleanupFailureKind.Rejected,
+    })
+    const [lookupResult, cleanupResult] = yield* Effect.all(
+      [Effect.either(pendingLookup), Effect.either(cleanupStart)],
+      { concurrency: 'unbounded' },
     )
-  let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
-  try {
-    cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
-  } catch {
-    return err([AuthorizationCleanupFailureKind.Rejected])
-  }
-  const lookup = await pendingLookup
-  if (lookup.kind === 'rejected') {
-    dependencies.releaseAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-    )
-    return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
-  }
-  if (!lookup.pending) {
-    const outcome =
-      await dependencies.completeAccountPickerAuthorizationCleanup(
+    if (Either.isLeft(cleanupResult)) {
+      return yield* Effect.fail([cleanupResult.left])
+    }
+    const cleanup = cleanupResult.right
+    if (Either.isLeft(lookupResult)) {
+      dependencies.releaseAccountPickerAuthorizationCleanup(
         cleanup.authorizationGeneration,
-        CleanupEvidence.Partial,
       )
-    return 'error' in outcome
-      ? err([AuthorizationCleanupFailureKind.Rejected])
-      : ok()
-  }
-  const cleanupArgs: ClearAuthorizationStateArgs = {
-    ...dependencies,
-    closeSession: true,
-    cleanupStart: {
-      kind: AuthorizationCleanupStartKind.Existing,
-      cleanup,
-    },
-  }
-  return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
+      return yield* Effect.fail([lookupResult.left])
+    }
+    if (!lookupResult.right) {
+      const outcome = yield* Effect.tryPromise({
+        try: () =>
+          dependencies.completeAccountPickerAuthorizationCleanup(
+            cleanup.authorizationGeneration,
+            CleanupEvidence.Partial,
+          ),
+        catch: () => AuthorizationCleanupFailureKind.Rejected,
+      })
+      if ('error' in outcome) {
+        return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
+      }
+      return {
+        kind: AuthorizationCleanupSuccessKind.Cleared,
+        authorizationGeneration: cleanup.authorizationGeneration,
+      }
+    }
+    const cleanupArgs: ClearAuthorizationStateArgs = {
+      ...dependencies,
+      closeSession: true,
+      cleanupStart: {
+        kind: AuthorizationCleanupStartKind.Existing,
+        cleanup,
+      },
+    }
+    return yield* new AuthorizationCleanupLifecycle(cleanupArgs).clear()
+  })
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -341,12 +406,11 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void new AuthorizationCleanupLifecycle(cleanupArgs)
-      .clear()
+    void Effect.runPromise(
+      Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    )
       .then((cleanup) =>
-        sendResponse(
-          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
-        ),
+        sendResponse(Either.isRight(cleanup) ? successResponse : sessionLockFailureResponse),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -371,12 +435,11 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void new AuthorizationCleanupLifecycle(cleanupArgs)
-      .clear()
+    void Effect.runPromise(
+      Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
+    )
       .then((cleanup) =>
-        sendResponse(
-          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
-        ),
+        sendResponse(Either.isRight(cleanup) ? successResponse : sessionLockFailureResponse),
       )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -439,10 +502,12 @@ export function routeExtensionLifecycleMessage({
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
               ) {
                 try {
-                  const cleanup = await new AuthorizationCleanupLifecycle(
-                    cleanupArgs,
-                  ).clear()
-                  if (cleanup.isErr())
+                  const cleanup = await Effect.runPromise(
+                    Effect.either(
+                      new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
+                    ),
+                  )
+                  if (Either.isLeft(cleanup))
                     return {
                       ok: false,
                       reason: LocalEventLogUpdateFailure.EventLogImportFailed,
@@ -465,10 +530,12 @@ export function routeExtensionLifecycleMessage({
               return response
             } catch {
               try {
-                const cleanup = await new AuthorizationCleanupLifecycle(
-                  cleanupArgs,
-                ).clear()
-                if (cleanup.isErr())
+                const cleanup = await Effect.runPromise(
+                  Effect.either(
+                    new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
+                  ),
+                )
+                if (Either.isLeft(cleanup))
                   return {
                     ok: false,
                     reason: LocalEventLogUpdateFailure.EventLogImportFailed,

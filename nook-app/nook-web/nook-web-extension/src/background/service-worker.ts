@@ -114,6 +114,7 @@ import {
   decodeExtensionSessionLockMessage,
 } from './service-worker/session-runtime-messages'
 import { backgroundVaultRuntime } from './vault-runtime'
+import { Effect, Either } from 'effect'
 
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
@@ -174,14 +175,18 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
 }
 
-void recoverInterruptedAuthorizationCleanup(
-  extensionLifecycleRoutingDependencies,
+void Effect.runPromise(
+  Effect.either(
+    recoverInterruptedAuthorizationCleanup(
+      extensionLifecycleRoutingDependencies,
+    ),
+  ),
 )
   .then((cleanup) => {
-    if (cleanup.isErr())
+    if (Either.isLeft(cleanup))
       console.warn(
         'Extension authorization cleanup remains pending',
-        cleanup.error,
+        cleanup.left,
       )
   })
   .catch(() => {

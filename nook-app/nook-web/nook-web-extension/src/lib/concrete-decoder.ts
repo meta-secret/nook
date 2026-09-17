@@ -9,9 +9,9 @@ export type ConcreteDecoderResult<Value, Failure> =
   | { kind: ConcreteDecoderResultKind.Decoded; value: Value }
   | { kind: ConcreteDecoderResultKind.Rejected; failure: Failure }
 
-export function runConcreteDecoder<Value, Failure>(
-  decode: (value: unknown) => Effect.Effect<Value, Failure>,
-  value: unknown,
+export function runConcreteDecoder<Input, Value, Failure>(
+  decode: (value: Input) => Effect.Effect<Value, Failure>,
+  value: Input,
 ): ConcreteDecoderResult<Value, Failure> {
   const result = Effect.runSync(Effect.either(decode(value)))
   if (Either.isLeft(result)) {

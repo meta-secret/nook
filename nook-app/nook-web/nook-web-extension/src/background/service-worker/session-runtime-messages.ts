@@ -51,22 +51,28 @@ const extensionSessionLockMessageSchema = Schema.Struct({
   type: Schema.Literal(ExtensionSessionMessageType.Lock),
 }) satisfies Schema.Schema<ExtensionSessionLockMessage>
 
-export function decodeExtensionSessionEnsureMessage(message: unknown) {
+export function decodeExtensionSessionEnsureMessage(
+  message: ExtensionSessionRuntimeMessageValue,
+) {
   return Schema.decodeUnknown(extensionSessionEnsureMessageSchema)(message)
 }
 
 export function decodeExtensionAuthenticationSurfacesRefreshMessage(
-  message: unknown,
+  message: ExtensionSessionRuntimeMessageValue,
 ) {
   return Schema.decodeUnknown(
     extensionAuthenticationSurfacesRefreshMessageSchema,
   )(message)
 }
 
-export function decodeExtensionSessionExpiryMessage(message: unknown) {
+export function decodeExtensionSessionExpiryMessage(
+  message: ExtensionSessionRuntimeMessageValue,
+) {
   return Schema.decodeUnknown(extensionSessionExpiryMessageSchema)(message)
 }
 
-export function decodeExtensionSessionLockMessage(message: unknown) {
+export function decodeExtensionSessionLockMessage(
+  message: ExtensionSessionRuntimeMessageValue,
+) {
   return Schema.decodeUnknown(extensionSessionLockMessageSchema)(message)
 }

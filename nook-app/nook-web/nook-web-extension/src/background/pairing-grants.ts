@@ -103,7 +103,6 @@ export enum ExtensionPairingStateDecodeFailureKind {
 
 export type ExtensionPairingStateDecodeFailure = {
   kind: ExtensionPairingStateDecodeFailureKind
-  cause?: unknown
 }
 
 function decodeStoredExtensionPairingGrant(value: unknown) {
@@ -115,9 +114,8 @@ function decodeStoredExtensionPairingGrant(value: unknown) {
   }
   return Effect.try({
     try: () => decode_stored_extension_pairing_grant_json(result.json),
-    catch: (cause): ExtensionPairingStateDecodeFailure => ({
+    catch: (): ExtensionPairingStateDecodeFailure => ({
       kind: ExtensionPairingStateDecodeFailureKind.StoredGrant,
-      cause,
     }),
   })
 }
@@ -131,9 +129,8 @@ function decodeExtensionReadySetupState(value: unknown) {
   }
   return Effect.try({
     try: () => decode_extension_ready_setup_json(result.json),
-    catch: (cause): ExtensionPairingStateDecodeFailure => ({
+    catch: (): ExtensionPairingStateDecodeFailure => ({
       kind: ExtensionPairingStateDecodeFailureKind.ReadySetup,
-      cause,
     }),
   })
 }
