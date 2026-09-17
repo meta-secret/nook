@@ -3,6 +3,9 @@ import {
   BuildkitCacheExportByteUnavailableReason,
 } from "./buildkit-cache-export-telemetry.mjs";
 
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_COLOR_SEQUENCE = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`, "g");
+
 /** Owns cache-export telemetry decoded from BuildKit's plain progress stream. */
 /** @typedef {{completed: boolean, failed: boolean, duration_ms: number, transfers: Map<string, number>}} PlainCacheExport */
 export class BuildkitPlainLogTelemetry {
@@ -32,7 +35,7 @@ export class BuildkitPlainLogTelemetry {
     /** @type {Map<string, PlainCacheExport>} */
     const exportsByVertex = new Map();
     for (const line of this.text.split(/\r?\n/)) {
-      const plainLine = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+      const plainLine = line.replace(ANSI_COLOR_SEQUENCE, "").trim();
       const vertexMatch = /^(#[0-9]+)\s+(.*)$/.exec(plainLine);
       if (!vertexMatch) continue;
       const [, vertex = "", detailRaw = ""] = vertexMatch;

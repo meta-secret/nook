@@ -883,6 +883,25 @@ void test("rejects malformed compile phase objects at the ingress", () => {
   );
 });
 
+void test("rejects telemetry without required compile phase evidence", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const missingCompilePhases = {
+    ...record,
+    cache_scope: { ...record.cache_scope },
+  };
+  Reflect.deleteProperty(missingCompilePhases.cache_scope, "compile_phases");
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(missingCompilePhases),
+    /telemetry cache_scope\.compile_phases is required/,
+  );
+});
+
 void test("rejects an unknown sccache fallback state", () => {
   const record = CacheTelemetry.buildUnavailableTelemetry({
     warning: "fixture",

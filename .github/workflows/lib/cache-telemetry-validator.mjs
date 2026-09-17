@@ -154,7 +154,8 @@ export class CacheTelemetryValidator {
   validateCompilePhases(candidate) {
     if (!this.isRecord(candidate))
       throw new Error("telemetry cache_scope is required");
-    if (!Object.hasOwn(candidate, "compile_phases")) return;
+    if (!Object.hasOwn(candidate, "compile_phases"))
+      throw new Error("telemetry cache_scope.compile_phases is required");
     const phases = candidate.compile_phases;
     if (!this.isRecord(phases))
       throw new Error("telemetry cache_scope.compile_phases is invalid");
