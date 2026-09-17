@@ -37,7 +37,19 @@ export type ExtensionPairingItems = Record<
   string,
   ExtensionPairingState['entries'][number]['record']
 >
-export type LegacyPairingStorageItems = ExtensionPairingItems
+export type LegacyPairingStorageValue =
+  | string
+  | number
+  | boolean
+  | LegacyPairingStorageObject
+  | LegacyPairingStorageValue[]
+export type LegacyPairingStorageObject = {
+  readonly [key: string]: LegacyPairingStorageValue
+}
+export type LegacyPairingStorageItems = Record<
+  string,
+  LegacyPairingStorageValue
+>
 
 export type ExtensionSessionGrantIdentity = Pick<
   StoredExtensionPairingGrant,

@@ -11,10 +11,7 @@ import {
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import ProviderVaultDecisionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/ProviderVaultDecisionPanel.svelte'
-import {
-  ProviderLoadOutcome,
-  VaultProviderActions,
-} from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
+import { VaultProviderActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
 import { ProviderVaultIdentitySelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/provider-vault-decision'
 import { SyncConflictActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/sync-resolution'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -189,7 +186,10 @@ test('selected local target survives loading the selected identity providers', a
   const loaded = await new VaultProviderActions(state).loadProviders(request)
 
   if (loaded.isErr()) throw loaded.error
-  expect(loaded.value).toBe(ProviderLoadOutcome.Loaded)
+  expect(loaded.value).toEqual({
+    providers: [identityProvider],
+    activeVaultStoreId: { state: 'storeId', value: 'store-b' },
+  })
   expect(state.providers).toEqual([identityProvider])
   expect(openActiveVault).toHaveBeenCalledWith('store-a')
   expect(openActiveVault).not.toHaveBeenCalledWith('store-b')

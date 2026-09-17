@@ -68,7 +68,11 @@ class NamedSuccessContractTestHarness {
           'nook-typed-api/no-empty-success-contract': 'error',
         },
       }
-      const messages = new Linter().verify(source, config, filePath)
+      const messages = new Linter().verify(
+        source,
+        /** @type {import('eslint').Linter.Config & typeof config} */ (config),
+        filePath,
+      )
       return messages.filter(
         (message) =>
           message.ruleId === 'nook-typed-api/no-empty-success-contract',
@@ -99,7 +103,9 @@ class SvelteNamedSuccessContractTestHarness {
       writeFileSync(filePath, source)
       const messages = new Linter().verify(
         source,
-        namedSuccessEslintConfig,
+        /** @type {import('eslint').Linter.Config[]} */ (
+          namedSuccessEslintConfig
+        ),
         filePath,
       )
       return messages

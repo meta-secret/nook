@@ -8,9 +8,11 @@ import {
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 
 const fixtureSessionRequest = {
   type: ExtensionSessionMessageType.Status,
+  payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
 } as const
 
 enum BrowserEffectPhase {

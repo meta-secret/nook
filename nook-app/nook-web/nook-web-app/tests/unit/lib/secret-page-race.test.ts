@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { ok, type Result } from 'neverthrow'
 import { NookSecretTypeFilter, NookVaultManager } from '$app-wasm'
-import { SecretPageLoadOutcome, VaultSecretActions } from '$lib/vault/secrets'
+import { VaultSecretActions } from '$lib/vault/secrets'
 import { VaultState } from '$lib/vault.svelte'
 import { SecretComponentTestFixture } from '../components/secret-component-test-fixture'
 import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
@@ -71,7 +71,14 @@ describe('loadSecretPage', () => {
     older.resolve(oldPage.page)
     const olderResult = await olderRequest
 
-    expect(newerResult).toEqual(ok(SecretPageLoadOutcome.PageApplied))
+    expect(newerResult).toEqual(
+      ok({
+        displayedSecretCount: 1,
+        totalSecretCount: 1,
+        pageOffset: 0,
+        query: 'newer',
+      }),
+    )
     expect(olderResult.isErr()).toBe(true)
     expect(state.secrets).toEqual([newPage.record])
     expect(state.secretQuery).toBe('newer')
@@ -110,7 +117,14 @@ describe('loadSecretPage', () => {
     pagination.resolve(paginatedPage.page)
     const paginationResult = await paginationRequest
 
-    expect(maintenanceResult).toEqual(ok(SecretPageLoadOutcome.PageApplied))
+    expect(maintenanceResult).toEqual(
+      ok({
+        displayedSecretCount: 1,
+        totalSecretCount: 50,
+        pageOffset: 25,
+        query: 'vault',
+      }),
+    )
     expect(paginationResult.isErr()).toBe(true)
     expect(queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
     expect(queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([25, 25])

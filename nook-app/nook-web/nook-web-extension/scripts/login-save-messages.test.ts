@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   WebsiteLoginSaveCommitMessage as WebsiteLoginSaveCommitMessageSchema,
   WebsiteLoginSaveDismissMessage as WebsiteLoginSaveDismissMessageSchema,
@@ -9,66 +10,93 @@ import {
 describe('website login save runtime messages', () => {
   test('accepts typed save offer, pending, commit, and dismiss messages', () => {
     expect(
-      WebsiteLoginSaveOfferMessageSchema.is({
-        type: 'nook:website-login-save-offer',
-        payload: {
-          origin: 'https://login.example.com',
-          username: 'alice@example.com',
-          password: 'secret',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSaveOfferMessageSchema.decode({
+            type: 'nook:website-login-save-offer',
+            payload: {
+              origin: 'https://login.example.com',
+              username: 'alice@example.com',
+              password: 'secret',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsiteLoginSavePendingMessageSchema.is({
-        type: 'nook:website-login-save-pending',
-        payload: { origin: 'https://login.example.com' },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSavePendingMessageSchema.decode({
+            type: 'nook:website-login-save-pending',
+            payload: { origin: 'https://login.example.com' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsiteLoginSaveCommitMessageSchema.is({
-        type: 'nook:website-login-save-commit',
-        payload: {
-          origin: 'https://login.example.com',
-          offerId: 'offer_1',
-          evidence: {
-            navigatedAwayFromAuthPath: true,
-            authFieldsPresent: false,
-            successMarkerPresent: true,
-            errorMarkerPresent: false,
-            sameDocumentMutation: false,
-            inIframe: false,
-            elapsedMs: 400,
-          },
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSaveCommitMessageSchema.decode({
+            type: 'nook:website-login-save-commit',
+            payload: {
+              origin: 'https://login.example.com',
+              offerId: 'offer_1',
+              evidence: {
+                navigatedAwayFromAuthPath: true,
+                authFieldsPresent: false,
+                successMarkerPresent: true,
+                errorMarkerPresent: false,
+                sameDocumentMutation: false,
+                inIframe: false,
+                elapsedMs: 400,
+              },
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsiteLoginSaveDismissMessageSchema.is({
-        type: 'nook:website-login-save-dismiss',
-        payload: {
-          origin: 'https://login.example.com',
-          offerId: 'offer_1',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSaveDismissMessageSchema.decode({
+            type: 'nook:website-login-save-dismiss',
+            payload: {
+              origin: 'https://login.example.com',
+              offerId: 'offer_1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 
   test('rejects malformed save messages', () => {
     expect(
-      WebsiteLoginSaveOfferMessageSchema.is({
-        type: 'nook:website-login-save-offer',
-        payload: {
-          origin: 'https://login.example.com',
-          username: '',
-          password: 'secret',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSaveOfferMessageSchema.decode({
+            type: 'nook:website-login-save-offer',
+            payload: {
+              origin: 'https://login.example.com',
+              username: '',
+              password: 'secret',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      WebsiteLoginSaveCommitMessageSchema.is({
-        type: 'nook:website-login-save-commit',
-        payload: { origin: 'https://login.example.com', offerId: 'offer_1' },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteLoginSaveCommitMessageSchema.decode({
+            type: 'nook:website-login-save-commit',
+            payload: {
+              origin: 'https://login.example.com',
+              offerId: 'offer_1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
   })
 })

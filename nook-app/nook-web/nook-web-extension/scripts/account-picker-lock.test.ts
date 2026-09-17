@@ -80,7 +80,11 @@ describe('account picker authorization cleanup', () => {
             const frameId =
               typeof options.frameId === 'number' ? options.frameId : 0
             deliveries.push({ tabId, frameId })
-            return Promise.resolve({ ok: options.frameId === 7 })
+            return Promise.resolve(
+              options.frameId === 7
+                ? { ok: true }
+                : { ok: false, reason: 'frame-unavailable' },
+            )
           },
         },
       },
@@ -125,6 +129,7 @@ describe('account picker authorization cleanup', () => {
     })
     expect(await AccountPickerPageTarget.send(wrongFrame)).toEqual({
       ok: false,
+      reason: 'frame-unavailable',
     })
     expect(deliveries).toEqual([
       { tabId: 42, frameId: 7 },
@@ -132,7 +137,7 @@ describe('account picker authorization cleanup', () => {
     ])
   })
 
-  test('rehydrates only picker records carrying a validated frame target', async () => {
+  test('rehydrates only stored values carrying a validated frame target', async () => {
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const stored = {
@@ -144,13 +149,7 @@ describe('account picker authorization cleanup', () => {
         allowedVaultStoreIds: ['vault-1'],
         expiresAt: Date.now() + 60_000,
       },
-      'nook.extension.login-picker.legacy-unframed': {
-        requestId: 'legacy-unframed',
-        origin: 'https://idmsa.apple.test',
-        tabId: 42,
-        allowedVaultStoreIds: ['vault-1'],
-        expiresAt: Date.now() + 60_000,
-      },
+      'nook.extension.login-picker.invalid': 'invalid-picker-record',
     }
 
     expect(
@@ -158,7 +157,7 @@ describe('account picker authorization cleanup', () => {
     ).toEqual({
       storageKeys: [
         'nook.extension.login-picker.framed',
-        'nook.extension.login-picker.legacy-unframed',
+        'nook.extension.login-picker.invalid',
       ],
       cancellations: [
         {

@@ -127,7 +127,9 @@ describe('selectVaultForUnlock', () => {
   })
 
   test('prepares the selected vault without protected provider or identity access', async () => {
-    const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
+    const syncActiveVaultStoreIdToAuth = vi.fn(async () =>
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+    )
     const reloadProvidersForActiveVault = vi.fn(async () =>
       ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
     )
@@ -140,7 +142,7 @@ describe('selectVaultForUnlock', () => {
     state.dismissSuccess = vi.fn()
     const openActiveVault = vi.fn()
     state.openActiveVault = openActiveVault
-    state.refreshPasswordEntriesList = vi.fn(async () => ok())
+    state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
     state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 

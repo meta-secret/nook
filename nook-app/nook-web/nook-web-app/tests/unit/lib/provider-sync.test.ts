@@ -13,6 +13,7 @@ import {
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
+  unselectedVaultScope,
   type StorageProvider,
 } from '$lib/auth/providers'
 import { VaultStorageSynchronization } from '$lib/nook'
@@ -24,12 +25,14 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
-import { ProviderPersistenceOutcome } from '$lib/vault/providers.svelte'
-import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  RosterHydrationKind,
+  VaultSyncApplicationKind,
+} from '$lib/vault/action-contexts'
 
 type ProviderSyncScenario = {
   readonly manager: NookVaultManager
@@ -74,7 +77,12 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   const syncResult = approvedSyncResult()
   const secretRefresh = vi.fn(async () =>
     authenticated
-      ? ok(SecretPageLoadOutcome.PageApplied)
+      ? ok({
+          displayedSecretCount: 0,
+          totalSecretCount: 0,
+          pageOffset: 0,
+          query: '',
+        })
       : err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
   )
 
@@ -88,15 +96,22 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   state.applyVaultSyncResult = vi.fn<VaultState['applyVaultSyncResult']>(
     (result) => {
       result.free()
-      return ok()
+      return ok({ kind: VaultSyncApplicationKind.AuthenticatedRosterApplied })
     },
   )
   state.refreshSecretsFromSession = secretRefresh
-  state.refreshReplacementConflicts = vi.fn(async () => ok())
-  state.updateProviderSyncMetadata = vi.fn(async () =>
-    ok(ProviderPersistenceOutcome.Persisted),
+  state.refreshReplacementConflicts = vi.fn(async () =>
+    ok({ replacementConflictCount: 0, securityConflictCount: 0 }),
   )
-  state.hydrateMultiDeviceState = vi.fn(async () => ok())
+  state.updateProviderSyncMetadata = vi.fn(async () =>
+    ok({
+      providers: state.providers,
+      activeVaultStoreId: unselectedVaultScope(),
+    }),
+  )
+  state.hydrateMultiDeviceState = vi.fn<VaultState['hydrateMultiDeviceState']>(
+    async () => ok({ kind: RosterHydrationKind.Skipped }),
+  )
   vi.spyOn(VaultStorageSynchronization.prototype, 'run').mockResolvedValue(
     ok(syncResult),
   )
