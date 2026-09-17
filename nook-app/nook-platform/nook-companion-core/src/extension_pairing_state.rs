@@ -853,9 +853,14 @@ mod tests {
     #[test]
     fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
     -> anyhow::Result<()> {
-        let legacy_approval_time = "2026-07-25T00:00:00.000Z";
+        let expected_approval_time = Fixture::approved_at("1784937600000")?;
+        let legacy = ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
+            "2026-07-25T00:00:00.000Z",
+        )?;
+        assert_eq!(legacy, expected_approval_time);
+
         let mut expected = Fixture::grant();
-        expected.approved_at = Fixture::approved_at(&serde_json::to_string(legacy_approval_time)?)?;
+        expected.approved_at = legacy;
         let canonical_json = serde_json::to_string(&expected)?;
         let legacy_json = canonical_json.replace(
             r#""approvedAt":1784937600000"#,

@@ -1,5 +1,9 @@
 import { describe, expect, mock, test } from 'bun:test'
-import type { ExtensionReadySetupState } from '../src/background/pairing-grants'
+import {
+  extensionPairingGrantPolicyReady,
+  type ExtensionReadySetupState,
+} from '../src/background/pairing-grants'
+import { Effect } from 'effect'
 import {
   ExtensionPairingStateQueryMessage,
   ExtensionPairingStateQueryMessageType,
@@ -19,21 +23,6 @@ const readySetup: ExtensionReadySetupState = {
   lastLocalSyncAt: '2026-09-12T00:00:00.000Z',
 }
 
-function decodeExtensionReadySetupState(
-  value: unknown,
-): ExtensionReadySetupState {
-  if (value !== readySetup) {
-    throw new TypeError('test pairing setup does not match the fixture')
-  }
-  return {
-    ...readySetup,
-    pairedVaults: [...readySetup.pairedVaults],
-    eventLogHeads: [...readySetup.eventLogHeads],
-  }
-}
-
-const pairingPolicy = Promise.resolve({ decodeExtensionReadySetupState })
-
 describe('extension pairing state loader', () => {
   test('keeps the query message structural while loading setup through its transport owner', async () => {
     const sentMessages: ExtensionPairingStateQueryMessage[] = []
@@ -51,14 +40,18 @@ describe('extension pairing state loader', () => {
     })
     const loader = new ExtensionPairingStateLoader({
       browser: globalThis,
-      pairingPolicy,
+      pairingPolicy: extensionPairingGrantPolicyReady,
     })
 
     expect(
-      ExtensionPairingStateQueryMessage.is({
-        type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
-      }),
-    ).toBe(true)
+      await Effect.runPromise(
+        ExtensionPairingStateQueryMessage.decode({
+          type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+        }),
+      ),
+    ).toEqual({
+      type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+    })
     expect('loadExtensionSetupState' in ExtensionPairingStateQueryMessage).toBe(
       false,
     )
@@ -85,7 +78,7 @@ describe('extension pairing state loader', () => {
     })
     const loader = new ExtensionPairingStateLoader({
       browser: globalThis,
-      pairingPolicy,
+      pairingPolicy: extensionPairingGrantPolicyReady,
     })
 
     expect(await loader.loadExtensionSetupState()).toEqual({

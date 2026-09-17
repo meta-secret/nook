@@ -165,6 +165,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!compiler.contains("RUSTC_WRAPPER="));
     assert!(compiler.contains("wasm-pack test --node --release nook-wasm"));
     assert!(compiler.contains("wasm-pack test --node --release nook-companion-wasm"));
+    let companion_native_coverage =
+        "llvm-cov test --no-clean --release -p nook-companion-wasm --no-report";
+    let companion_wasm_coverage =
+        "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines \"$companion_floor\"";
+    assert!(compiler.contains(companion_native_coverage));
+    assert!(compiler.contains(companion_wasm_coverage));
+    assert!(
+        compiler.find(companion_native_coverage) < compiler.find(companion_wasm_coverage),
+        "native companion tests must contribute profiles before the wasm package floor is evaluated"
+    );
     assert_eq!(
         compiler
             .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
