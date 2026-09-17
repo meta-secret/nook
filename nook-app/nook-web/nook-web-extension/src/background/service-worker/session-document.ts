@@ -20,9 +20,7 @@ export class ExtensionSessionTransportFailure {
     Response,
     DecodeFailure
   > {
-    return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
-      this,
-    )
+    return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(this)
   }
 
   get response() {
@@ -33,10 +31,7 @@ export class ExtensionSessionTransportFailure {
 export type ExtensionSessionTransportResult<
   T = ExtensionSessionResponse,
   DecodeFailure = never,
-> = Result<
-  T,
-  ExtensionSessionTransportFailure | DecodeFailure
->
+> = Result<T, ExtensionSessionTransportFailure | DecodeFailure>
 
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
@@ -388,7 +383,9 @@ export class ExtensionSessionDocumentOwner {
     const operation =
       state.kind === ExtensionSessionDocumentStateKind.Creating
         ? state.operation.then(
-            (created): Promise<
+            (
+              created,
+            ): Promise<
               ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
             > => {
               if (created.isErr()) {

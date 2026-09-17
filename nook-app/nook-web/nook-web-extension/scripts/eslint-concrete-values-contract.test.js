@@ -160,7 +160,10 @@ describe('typed API concrete values', () => {
     ]
 
     for (const source of sources) {
-      const args = { source, rules: concreteValueRule(untrustedInputAdapterRules) }
+      const args = {
+        source,
+        rules: concreteValueRule(untrustedInputAdapterRules),
+      }
       const messages = lint(args)
 
       expect(messages.map((message) => message.ruleId)).toContain(

@@ -37,7 +37,8 @@ describe('authenticator session adapter', () => {
     const {
       AuthenticatorPageAcknowledgementKind,
       extensionAuthenticatorSession,
-    } = await import('../src/background/service-worker/authenticator-session-adapter')
+    } =
+      await import('../src/background/service-worker/authenticator-session-adapter')
     const args: Parameters<
       typeof extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged
     >[0] = {
