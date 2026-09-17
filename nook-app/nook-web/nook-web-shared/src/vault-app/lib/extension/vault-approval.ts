@@ -23,10 +23,10 @@ import {
 import type { VaultState } from "$lib/vault.svelte";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
-  extensionConnectScopeCatalog,
   extensionConnectionBrowser,
   type ExtensionConnectRequest,
 } from "./connect";
+import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingApprovedMessageType,
   type ExtensionPairingApprovedMessage,
@@ -240,7 +240,7 @@ export class ExtensionVaultApproval {
     let providers: StorageProvider[] = [];
     if (
       this.request.scopes.includes(
-        extensionConnectScopeCatalog.SyncProviderCredentials,
+        ExtensionConnectScope.SyncProviderCredentials,
       )
     ) {
       const snapshot = await this.vault.enqueueStorage(async () => {
