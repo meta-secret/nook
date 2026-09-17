@@ -63,6 +63,17 @@ export type ExtensionLifecycleRoutingDependencies = {
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
 }
 
+export type InterruptedAuthorizationCleanupRecoveryDependencies = Pick<
+  ExtensionLifecycleRoutingDependencies,
+  | 'accountPickerAuthorizationCleanupPending'
+  | 'beginAccountPickerAuthorizationCleanup'
+  | 'clearPendingAccountPickers'
+  | 'clearStagedAuthenticatorEnrollments'
+  | 'closeExtensionSessionDocument'
+  | 'completeAccountPickerAuthorizationCleanup'
+  | 'releaseAccountPickerAuthorizationCleanup'
+>
+
 type MessageResponse = Parameters<
   ExtensionLifecycleRoutingArgs['sendResponse']
 >[0]
@@ -96,9 +107,30 @@ type ClearAuthorizationStateArgs = {
   closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
-  closeSession: boolean
+  sessionDisposition: AuthorizationCleanupSessionDisposition
   cleanupStart: AuthorizationCleanupStart
 }
+
+enum AuthorizationCleanupSessionDisposition {
+  Close = 'close-session',
+  Preserve = 'preserve-session',
+}
+
+enum AuthorizationCleanupSessionOperationKind {
+  Closed = 'closed',
+  Preserved = 'preserved',
+  Rejected = 'rejected',
+}
+
+type AuthorizationCleanupSessionOperation =
+  | { kind: AuthorizationCleanupSessionOperationKind.Preserved }
+  | { kind: AuthorizationCleanupSessionOperationKind.Rejected }
+  | {
+      kind: AuthorizationCleanupSessionOperationKind.Closed
+      result: Awaited<
+        ReturnType<ClearAuthorizationStateArgs['closeExtensionSessionDocument']>
+      >
+    }
 
 enum AuthorizationCleanupStartKind {
   Begin = 'begin',
@@ -141,26 +173,56 @@ class AuthorizationCleanupLifecycle {
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession,
+      sessionDisposition,
       cleanupStart,
     } = this.request
     const cleanupOperation =
       cleanupStart.kind === AuthorizationCleanupStartKind.Existing
         ? Promise.resolve(cleanupStart.cleanup)
         : beginAccountPickerAuthorizationCleanup()
+    let sessionOperation: Promise<AuthorizationCleanupSessionOperation>
+    switch (sessionDisposition) {
+      case AuthorizationCleanupSessionDisposition.Close:
+        sessionOperation = closeExtensionSessionDocument().then(
+          (result): AuthorizationCleanupSessionOperation => ({
+            kind: AuthorizationCleanupSessionOperationKind.Closed,
+            result,
+          }),
+          (): AuthorizationCleanupSessionOperation => ({
+            kind: AuthorizationCleanupSessionOperationKind.Rejected,
+          }),
+        )
+        break
+      case AuthorizationCleanupSessionDisposition.Preserve: {
+        const preservedOperation: AuthorizationCleanupSessionOperation = {
+          kind: AuthorizationCleanupSessionOperationKind.Preserved,
+        }
+        sessionOperation = Promise.resolve(preservedOperation)
+        break
+      }
+    }
     let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     try {
       startedCleanup = await cleanupOperation
     } catch {
+      await sessionOperation
       return err([AuthorizationCleanupFailureKind.Rejected])
     }
     const { authorizationGeneration, markerStatus } = startedCleanup
     const failures: AuthorizationCleanupFailure[] = []
     if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
       failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
-    if (closeSession) {
-      const closed = await closeExtensionSessionDocument()
-      if (closed.isErr()) failures.push(closed.error)
+    const sessionOutcome = await sessionOperation
+    switch (sessionOutcome.kind) {
+      case AuthorizationCleanupSessionOperationKind.Closed:
+        if (sessionOutcome.result.isErr())
+          failures.push(sessionOutcome.result.error)
+        break
+      case AuthorizationCleanupSessionOperationKind.Preserved:
+        break
+      case AuthorizationCleanupSessionOperationKind.Rejected:
+        failures.push(AuthorizationCleanupFailureKind.Rejected)
+        break
     }
     clearStagedAuthenticatorEnrollments()
     try {
@@ -200,7 +262,7 @@ class AuthorizationCleanupLifecycle {
 
 export class InterruptedAuthorizationCleanupRecovery {
   constructor(
-    private readonly dependencies: ExtensionLifecycleRoutingDependencies,
+    private readonly dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
   ) {}
 
   async recover(): Promise<AuthorizationCleanupResult> {
@@ -226,7 +288,7 @@ export class InterruptedAuthorizationCleanupRecovery {
     if (!lookup.pending) {
       let outcome: Awaited<
         ReturnType<
-          ExtensionLifecycleRoutingDependencies['completeAccountPickerAuthorizationCleanup']
+          InterruptedAuthorizationCleanupRecoveryDependencies['completeAccountPickerAuthorizationCleanup']
         >
       >
       try {
@@ -251,7 +313,7 @@ export class InterruptedAuthorizationCleanupRecovery {
     }
     const cleanupArgs: ClearAuthorizationStateArgs = {
       ...this.dependencies,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: {
         kind: AuthorizationCleanupStartKind.Existing,
         cleanup,
@@ -343,7 +405,7 @@ export function routeExtensionLifecycleMessage({
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void new AuthorizationCleanupLifecycle(cleanupArgs)
@@ -372,7 +434,7 @@ export function routeExtensionLifecycleMessage({
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
       releaseAccountPickerAuthorizationCleanup,
-      closeSession: true,
+      sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void new AuthorizationCleanupLifecycle(cleanupArgs)
@@ -424,7 +486,7 @@ export function routeExtensionLifecycleMessage({
               closeExtensionSessionDocument,
               completeAccountPickerAuthorizationCleanup,
               releaseAccountPickerAuthorizationCleanup,
-              closeSession: true,
+              sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
               cleanupStart: {
                 kind: AuthorizationCleanupStartKind.Existing,
                 cleanup: cleanupStart,
