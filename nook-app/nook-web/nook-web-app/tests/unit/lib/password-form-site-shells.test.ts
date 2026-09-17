@@ -140,8 +140,7 @@ describe('popular-site login shells', () => {
       document.body.innerHTML = `<form><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></fieldset>${extra}</form>`
 
       expect(
-        passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
-          ?.root,
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
       ).toBe(document.querySelector('.loginForm'))
     },
   )

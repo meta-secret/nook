@@ -124,9 +124,7 @@ describe('extension vault approval', () => {
     expect(authorized.isOk()).toBe(true)
     if (authorized.isErr()) return
     expect(authorized.value.approvedAt).toBe(1_783_373_640_000)
-    expect(authorized.value.vaultType).toBe(
-      simplePairingVaultType,
-    )
+    expect(authorized.value.vaultType).toBe(simplePairingVaultType)
     expect(fixture.manager.export_event_log_records_js).not.toHaveBeenCalled()
     const prepared = await approval.prepareAuthorizedGrant()
     expect(prepared.isOk()).toBe(true)
@@ -248,7 +246,7 @@ describe('extension vault approval', () => {
           kind: ExtensionPairingDeliveryKind.Rejected,
           reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
         }
-    })
+      })
     const approval = new ExtensionVaultApproval(fixture.vault, request)
     const authorized = await approval.authorize()
     expect(authorized.isOk()).toBe(true)

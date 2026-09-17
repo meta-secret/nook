@@ -116,16 +116,12 @@ function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
     throw new Error('expected a persisted auth provider')
   }
   for (const provider of providers) {
-    if (
-      !provider ||
-      typeof provider !== 'object' ||
-      Array.isArray(provider)
-    ) {
+    if (!provider || typeof provider !== 'object' || Array.isArray(provider)) {
       continue
     }
     return {
-      githubPat: 'githubPat' in provider ? provider.githubPat : undefined,
-      oauthFile: 'oauthFile' in provider ? provider.oauthFile : undefined,
+      githubPat: Reflect.get(provider, 'githubPat'),
+      oauthFile: Reflect.get(provider, 'oauthFile'),
     }
   }
   throw new Error('expected the persisted provider to be an object')
@@ -144,11 +140,7 @@ function persistedOAuthCredentials(rawSnapshot: unknown): {
   refreshToken: string
 } {
   const oauthFile = persistedProvider(rawSnapshot).oauthFile
-  if (
-    !oauthFile ||
-    typeof oauthFile !== 'object' ||
-    Array.isArray(oauthFile)
-  ) {
+  if (!oauthFile || typeof oauthFile !== 'object' || Array.isArray(oauthFile)) {
     throw new Error('expected persisted OAuth credentials')
   }
   if (
@@ -305,8 +297,7 @@ describe.sequential(
       if (!provider) throw new Error('expected a loaded OAuth provider')
       const loadedOauth = decodeStoredOAuthFileConfiguration(provider.oauthFile)
       if (
-        loadedOauth.kind !==
-        StoredOAuthFileConfigurationDecodeKind.Configured
+        loadedOauth.kind !== StoredOAuthFileConfigurationDecodeKind.Configured
       ) {
         throw new Error('expected configured OAuth credentials')
       }

@@ -286,10 +286,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<
-    Result<
-      LocalFolderBackupDirectorySelectionOutcome,
-      VaultStorageFailure
-    >
+    Result<LocalFolderBackupDirectorySelectionOutcome, VaultStorageFailure>
   > {
     const selection = await new providersActions.ProviderSelectionActions(
       this.providerActionsContext(),

@@ -86,21 +86,39 @@ type VaultEventYaml = {
   operations?: VaultEventOperation[]
 }
 
+enum OptionalYamlStringKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type OptionalYamlString =
+  | { kind: OptionalYamlStringKind.Absent }
+  | { kind: OptionalYamlStringKind.Present; value: string }
+
 class VaultYamlDecoder {
   decodeStoredVault(value: unknown): StoredVaultYaml {
     try {
       const vaultValue = this.decodeObject(value, 'vault YAML')
       const vault: StoredVaultYaml = {}
-      if ('secrets' in vaultValue) vault.secrets = this.decodeStoredSecrets(vaultValue.secrets)
-      if ('auth' in vaultValue) vault.auth = this.decodeAuthRecords(vaultValue.auth)
-      if ('joins' in vaultValue) vault.joins = this.decodeStoredSecrets(vaultValue.joins)
-      if ('members' in vaultValue) vault.members = this.decodeMembers(vaultValue.members)
-      if ('unlock' in vaultValue) vault.unlock = this.decodeUnlock(vaultValue.unlock)
+      if ('secrets' in vaultValue)
+        vault.secrets = this.decodeStoredSecrets(vaultValue.secrets)
+      if ('auth' in vaultValue)
+        vault.auth = this.decodeAuthRecords(vaultValue.auth)
+      if ('joins' in vaultValue)
+        vault.joins = this.decodeStoredSecrets(vaultValue.joins)
+      if ('members' in vaultValue)
+        vault.members = this.decodeMembers(vaultValue.members)
+      if ('unlock' in vaultValue)
+        vault.unlock = this.decodeUnlock(vaultValue.unlock)
       if ('password_entries' in vaultValue) {
-        vault.password_entries = this.decodePasswordEntries(vaultValue.password_entries)
+        vault.password_entries = this.decodePasswordEntries(
+          vaultValue.password_entries,
+        )
       }
       if ('sentinel_shares' in vaultValue) {
-        vault.sentinel_shares = this.decodeStoredSecrets(vaultValue.sentinel_shares)
+        vault.sentinel_shares = this.decodeStoredSecrets(
+          vaultValue.sentinel_shares,
+        )
       }
       return vault
     } catch {
@@ -113,7 +131,9 @@ class VaultYamlDecoder {
       const eventValue = this.decodeObject(value, 'event YAML')
       const event: VaultEventYaml = {}
       const createdAt = this.optionalString(eventValue, 'created_at')
-      if (createdAt !== undefined) event.created_at = createdAt
+      if (createdAt.kind === OptionalYamlStringKind.Present) {
+        event.created_at = createdAt.value
+      }
       if ('operations' in eventValue) {
         const operations = eventValue.operations
         if (!Array.isArray(operations)) return {}
@@ -127,15 +147,26 @@ class VaultYamlDecoder {
     }
   }
 
-  decodeJoin(value: unknown, fallbackId: string): { deviceId: string; publicKey: string } {
+  decodeJoin(
+    value: unknown,
+    fallbackId: string,
+  ): { deviceId: string; publicKey: string } {
     let payload: object
     try {
       payload = this.decodeObject(value, 'join YAML')
     } catch {
       return { deviceId: fallbackId, publicKey: '' }
     }
-    const deviceId = this.optionalString(payload, 'device_id') ?? fallbackId
-    const publicKey = this.optionalString(payload, 'public_key') ?? ''
+    const decodedDeviceId = this.optionalString(payload, 'device_id')
+    const deviceId =
+      decodedDeviceId.kind === OptionalYamlStringKind.Present
+        ? decodedDeviceId.value
+        : fallbackId
+    const decodedPublicKey = this.optionalString(payload, 'public_key')
+    const publicKey =
+      decodedPublicKey.kind === OptionalYamlStringKind.Present
+        ? decodedPublicKey.value
+        : ''
     return { deviceId, publicKey }
   }
 
@@ -146,11 +177,12 @@ class VaultYamlDecoder {
     return value
   }
 
-  private optionalString(value: object, key: string): string | undefined {
-    if (!(key in value)) return undefined
+  private optionalString(value: object, key: string): OptionalYamlString {
+    if (!(key in value)) return { kind: OptionalYamlStringKind.Absent }
     const field: unknown = Reflect.get(value, key)
-    if (typeof field !== 'string') throw new TypeError(`${key} must be a string`)
-    return field
+    if (typeof field !== 'string')
+      throw new TypeError(`${key} must be a string`)
+    return { kind: OptionalYamlStringKind.Present, value: field }
   }
 
   private decodeStoredSecrets(value: unknown): StoredSecretRecord[] {
@@ -160,20 +192,33 @@ class VaultYamlDecoder {
       const id = this.optionalString(secret, 'id')
       const data = this.optionalString(secret, 'data')
       const type = this.optionalString(secret, 'type')
-      if (!id || !data || !type) {
+      if (
+        id.kind === OptionalYamlStringKind.Absent ||
+        data.kind === OptionalYamlStringKind.Absent ||
+        type.kind === OptionalYamlStringKind.Absent
+      ) {
         throw new TypeError('secret fields are invalid')
       }
-      return { id, data, type: this.decodeStoredSecretType(type) }
+      return {
+        id: id.value,
+        data: data.value,
+        type: this.decodeStoredSecretType(type.value),
+      }
     })
   }
 
   private decodeStoredSecretType(value: string): StoredSecretRecordType {
     switch (value) {
-      case StoredSecretRecordType.Login: return StoredSecretRecordType.Login
-      case StoredSecretRecordType.ApiKey: return StoredSecretRecordType.ApiKey
-      case StoredSecretRecordType.SeedPhrase: return StoredSecretRecordType.SeedPhrase
-      case StoredSecretRecordType.SecureNote: return StoredSecretRecordType.SecureNote
-      default: throw new TypeError('secret type is invalid')
+      case StoredSecretRecordType.Login:
+        return StoredSecretRecordType.Login
+      case StoredSecretRecordType.ApiKey:
+        return StoredSecretRecordType.ApiKey
+      case StoredSecretRecordType.SeedPhrase:
+        return StoredSecretRecordType.SeedPhrase
+      case StoredSecretRecordType.SecureNote:
+        return StoredSecretRecordType.SecureNote
+      default:
+        throw new TypeError('secret type is invalid')
     }
   }
 
@@ -184,10 +229,18 @@ class VaultYamlDecoder {
       const pk_id = this.optionalString(auth, 'pk_id')
       const secrets_key = this.optionalString(auth, 'secrets_key')
       const members_key = this.optionalString(auth, 'members_key')
-      if (!pk_id || !secrets_key || !members_key) {
+      if (
+        pk_id.kind === OptionalYamlStringKind.Absent ||
+        secrets_key.kind === OptionalYamlStringKind.Absent ||
+        members_key.kind === OptionalYamlStringKind.Absent
+      ) {
         throw new TypeError('auth record fields are invalid')
       }
-      return { pk_id, secrets_key, members_key }
+      return {
+        pk_id: pk_id.value,
+        secrets_key: secrets_key.value,
+        members_key: members_key.value,
+      }
     })
   }
 
@@ -197,8 +250,13 @@ class VaultYamlDecoder {
       const member = this.decodeObject(entry, 'member')
       const pk_id = this.optionalString(member, 'pk_id')
       const ciphertext = this.optionalString(member, 'ciphertext')
-      if (!pk_id || !ciphertext) throw new TypeError('member fields are invalid')
-      return { pk_id, ciphertext }
+      if (
+        pk_id.kind === OptionalYamlStringKind.Absent ||
+        ciphertext.kind === OptionalYamlStringKind.Absent
+      ) {
+        throw new TypeError('member fields are invalid')
+      }
+      return { pk_id: pk_id.value, ciphertext: ciphertext.value }
     })
   }
 
@@ -206,21 +264,25 @@ class VaultYamlDecoder {
     const unlockValue = this.decodeObject(value, 'unlock')
     const unlock: UnlockYaml = {}
     const type = this.optionalString(unlockValue, 'type')
-    if (type !== undefined) unlock.type = type
-    if ('entries' in unlockValue) unlock.entries = this.decodePasswordEntries(unlockValue.entries)
+    if (type.kind === OptionalYamlStringKind.Present) unlock.type = type.value
+    if ('entries' in unlockValue)
+      unlock.entries = this.decodePasswordEntries(unlockValue.entries)
     return unlock
   }
 
   private decodePasswordEntries(value: unknown): PasswordEntryYaml[] {
-    if (!Array.isArray(value)) throw new TypeError('password entries must be an array')
+    if (!Array.isArray(value))
+      throw new TypeError('password entries must be an array')
     return value.map((entry) => {
       const passwordEntry = this.decodeObject(entry, 'password entry')
       const decoded: PasswordEntryYaml = {}
       const id = this.optionalString(passwordEntry, 'id')
       const label = this.optionalString(passwordEntry, 'label')
-      if (id !== undefined) decoded.id = id
-      if (label !== undefined) decoded.label = label
-      if ('envelope' in passwordEntry) decoded.envelope = this.decodePasswordEnvelope(passwordEntry.envelope)
+      if (id.kind === OptionalYamlStringKind.Present) decoded.id = id.value
+      if (label.kind === OptionalYamlStringKind.Present)
+        decoded.label = label.value
+      if ('envelope' in passwordEntry)
+        decoded.envelope = this.decodePasswordEnvelope(passwordEntry.envelope)
       return decoded
     })
   }
@@ -230,18 +292,22 @@ class VaultYamlDecoder {
     const envelope: PasswordEnvelopeYaml = {}
     if ('version' in envelopeValue) {
       const version: unknown = Reflect.get(envelopeValue, 'version')
-      if (typeof version !== 'number') throw new TypeError('envelope version must be a number')
+      if (typeof version !== 'number')
+        throw new TypeError('envelope version must be a number')
       envelope.version = version
     }
     if ('work_factor' in envelopeValue) {
       const workFactor: unknown = Reflect.get(envelopeValue, 'work_factor')
-      if (typeof workFactor !== 'number') throw new TypeError('envelope work factor must be a number')
+      if (typeof workFactor !== 'number')
+        throw new TypeError('envelope work factor must be a number')
       envelope.work_factor = workFactor
     }
     const kdf = this.optionalString(envelopeValue, 'kdf')
     const ciphertext = this.optionalString(envelopeValue, 'ciphertext')
-    if (kdf !== undefined) envelope.kdf = kdf
-    if (ciphertext !== undefined) envelope.ciphertext = ciphertext
+    if (kdf.kind === OptionalYamlStringKind.Present) envelope.kdf = kdf.value
+    if (ciphertext.kind === OptionalYamlStringKind.Present) {
+      envelope.ciphertext = ciphertext.value
+    }
     return envelope
   }
 
@@ -249,30 +315,50 @@ class VaultYamlDecoder {
     const operationValue = this.decodeObject(value, 'event operation')
     const operation: VaultEventOperation = {}
     const stringFields = [
-      'type', 'secret_id', 'old_id', 'chosen_secret_id', 'device_id',
-      'encryption_public_key', 'secrets_key_ciphertext', 'members_key_ciphertext',
-      'entry_id', 'label', 'created_at',
+      'type',
+      'secret_id',
+      'old_id',
+      'chosen_secret_id',
+      'device_id',
+      'encryption_public_key',
+      'secrets_key_ciphertext',
+      'members_key_ciphertext',
+      'entry_id',
+      'label',
+      'created_at',
     ] as const
     for (const field of stringFields) {
       const decoded = this.optionalString(operationValue, field)
-      if (decoded !== undefined) operation[field] = decoded
+      if (decoded.kind === OptionalYamlStringKind.Present) {
+        operation[field] = decoded.value
+      }
     }
-    if ('secrets' in operationValue) operation.secrets = this.decodeEventSecrets(operationValue.secrets)
-    if ('secret' in operationValue) operation.secret = this.decodeEventSecret(operationValue.secret)
-    if ('new_secret' in operationValue) operation.new_secret = this.decodeEventSecret(operationValue.new_secret)
+    if ('secrets' in operationValue)
+      operation.secrets = this.decodeEventSecrets(operationValue.secrets)
+    if ('secret' in operationValue)
+      operation.secret = this.decodeEventSecret(operationValue.secret)
+    if ('new_secret' in operationValue)
+      operation.new_secret = this.decodeEventSecret(operationValue.new_secret)
     if ('rejected_secret_ids' in operationValue) {
-      operation.rejected_secret_ids = this.decodeStringList(operationValue.rejected_secret_ids)
+      operation.rejected_secret_ids = this.decodeStringList(
+        operationValue.rejected_secret_ids,
+      )
     }
-    if ('envelope' in operationValue) operation.envelope = this.decodePasswordEnvelope(operationValue.envelope)
+    if ('envelope' in operationValue)
+      operation.envelope = this.decodePasswordEnvelope(operationValue.envelope)
     if ('password_entries' in operationValue) {
-      operation.password_entries = this.decodePasswordEntries(operationValue.password_entries)
+      operation.password_entries = this.decodePasswordEntries(
+        operationValue.password_entries,
+      )
     }
-    if ('shares' in operationValue) operation.shares = this.decodeShares(operationValue.shares)
+    if ('shares' in operationValue)
+      operation.shares = this.decodeShares(operationValue.shares)
     return operation
   }
 
   private decodeEventSecrets(value: unknown): EventSecretRecord[] {
-    if (!Array.isArray(value)) throw new TypeError('event secrets must be an array')
+    if (!Array.isArray(value))
+      throw new TypeError('event secrets must be an array')
     return value.map((entry) => this.decodeEventSecret(entry))
   }
 
@@ -282,31 +368,41 @@ class VaultYamlDecoder {
     const ciphertext = this.optionalString(eventSecret, 'ciphertext')
     const type = this.optionalString(eventSecret, 'type')
     const decoded: EventSecretRecord = {}
-    if (id !== undefined) decoded.id = id
-    if (ciphertext !== undefined) decoded.ciphertext = ciphertext
-    if (type !== undefined) {
-      decoded.type = this.decodeStoredSecretType(type)
+    if (id.kind === OptionalYamlStringKind.Present) decoded.id = id.value
+    if (ciphertext.kind === OptionalYamlStringKind.Present) {
+      decoded.ciphertext = ciphertext.value
+    }
+    if (type.kind === OptionalYamlStringKind.Present) {
+      decoded.type = this.decodeStoredSecretType(type.value)
     }
     return decoded
   }
 
   private decodeStringList(value: unknown): string[] {
-    if (!Array.isArray(value)) throw new TypeError('string list must be an array')
+    if (!Array.isArray(value))
+      throw new TypeError('string list must be an array')
     return value.map((entry) => {
-      if (typeof entry !== 'string') throw new TypeError('string list value is invalid')
+      if (typeof entry !== 'string')
+        throw new TypeError('string list value is invalid')
       return entry
     })
   }
 
-  private decodeShares(value: unknown): Array<{ device_id?: string; ciphertext?: string }> {
+  private decodeShares(
+    value: unknown,
+  ): Array<{ device_id?: string; ciphertext?: string }> {
     if (!Array.isArray(value)) throw new TypeError('shares must be an array')
     return value.map((entry) => {
       const shareValue = this.decodeObject(entry, 'share')
       const share: { device_id?: string; ciphertext?: string } = {}
       const deviceId = this.optionalString(shareValue, 'device_id')
       const ciphertext = this.optionalString(shareValue, 'ciphertext')
-      if (deviceId !== undefined) share.device_id = deviceId
-      if (ciphertext !== undefined) share.ciphertext = ciphertext
+      if (deviceId.kind === OptionalYamlStringKind.Present) {
+        share.device_id = deviceId.value
+      }
+      if (ciphertext.kind === OptionalYamlStringKind.Present) {
+        share.ciphertext = ciphertext.value
+      }
       return share
     })
   }

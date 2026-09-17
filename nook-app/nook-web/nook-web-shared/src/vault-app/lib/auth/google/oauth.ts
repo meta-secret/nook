@@ -186,8 +186,7 @@ class GoogleOAuthSession {
         const existing = document.querySelector(
           `script[src="${GIS_SCRIPT_URL}"]`,
         );
-        const loaded = () =>
-          resolve(ok(GoogleIdentityServicesReadiness.Ready));
+        const loaded = () => resolve(ok(GoogleIdentityServicesReadiness.Ready));
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
         if (existing) {

@@ -144,7 +144,10 @@ type ExtensionSessionRawEnvelope = {
   payload: ExtensionSessionRuntimeMessageValue
 }
 
-type ExtensionSessionRawEnvelopeHeader = Pick<ExtensionSessionRawEnvelope, 'type'>
+type ExtensionSessionRawEnvelopeHeader = Pick<
+  ExtensionSessionRawEnvelope,
+  'type'
+>
 
 const extensionSessionRawEnvelopeHeaderSchema = Schema.Struct({
   type: Schema.String,
@@ -208,7 +211,8 @@ export function decodeCompanionIdentityDiscoverySessionTransportRequest(
   ExtensionSessionRequestDecodeFailure
 > {
   return Effect.try({
-    try: () => decode_companion_identity_discovery_session_transport_request(value),
+    try: () =>
+      decode_companion_identity_discovery_session_transport_request(value),
     catch: (): ExtensionSessionRequestDecodeFailure => ({
       kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityDiscovery,
     }),
@@ -222,7 +226,8 @@ export function decodeCompanionIdentityHandoffSessionTransportRequest(
   ExtensionSessionRequestDecodeFailure
 > {
   return Effect.try({
-    try: () => decode_companion_identity_handoff_session_transport_request(value),
+    try: () =>
+      decode_companion_identity_handoff_session_transport_request(value),
     catch: (): ExtensionSessionRequestDecodeFailure => ({
       kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityHandoff,
     }),
@@ -254,6 +259,18 @@ enum CompanionWasmReadinessKind {
   Ready = 'ready',
   Expired = 'expired',
 }
+
+enum ExtensionSessionDecodedRequestKind {
+  Pending = 'pending',
+  Decoded = 'decoded',
+}
+
+type ExtensionSessionDecodedRequest =
+  | { kind: ExtensionSessionDecodedRequestKind.Pending }
+  | {
+      kind: ExtensionSessionDecodedRequestKind.Decoded
+      request: ExtensionSessionRequest
+    }
 
 type ExtensionSessionIngressStage =
   | { kind: ExtensionSessionSensitiveStageKind.Invalid }
@@ -331,8 +348,7 @@ type ExtensionSessionPayloadTarget =
   | ExtensionSessionNonImportRequest['payload']
 
 type ExtensionSessionPayloadProperty =
-  | ExtensionSessionPayloadField
-  | ExtensionSessionSensitiveField
+  ExtensionSessionPayloadField | ExtensionSessionSensitiveField
 
 const safeReflect: {
   get(
@@ -487,7 +503,8 @@ class ExtensionSessionIngressAdmission {
 
   stage(): ExtensionSessionIngressStage {
     const decoded = this.decodeEnvelope()
-    if (decoded.kind === ExtensionSessionSensitiveStageKind.Invalid) return decoded
+    if (decoded.kind === ExtensionSessionSensitiveStageKind.Invalid)
+      return decoded
     let stagedEnvelope: ExtensionSessionRawEnvelope
     try {
       const staged = structuredClone(this.value)
@@ -511,7 +528,9 @@ class ExtensionSessionIngressAdmission {
   }
 }
 
-function clearRawProviderCredentials(value: ExtensionSessionRuntimeMessageValue): void {
+function clearRawProviderCredentials(
+  value: ExtensionSessionRuntimeMessageValue,
+): void {
   if (!Array.isArray(value)) return
   for (const provider of value) {
     if (!provider || typeof provider !== 'object' || Array.isArray(provider)) {
@@ -537,11 +556,7 @@ function clearRawProviderCredentials(value: ExtensionSessionRuntimeMessageValue)
             oauthFile,
             ExtensionSessionPayloadField.Config,
           )
-          if (
-            config &&
-            typeof config === 'object' &&
-            !Array.isArray(config)
-          ) {
+          if (config && typeof config === 'object' && !Array.isArray(config)) {
             if (ExtensionSessionPayloadField.AccessToken in config)
               safeReflect.set(
                 config,
@@ -579,7 +594,10 @@ function clearRawExtensionSessionSecrets(
   const payload = envelope.payload
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
   if (envelope.type === ExtensionSessionMessageType.ImportVault) {
-    const providers = safeReflect.get(payload, ExtensionSessionPayloadField.Providers)
+    const providers = safeReflect.get(
+      payload,
+      ExtensionSessionPayloadField.Providers,
+    )
     clearRawProviderCredentials(providers)
     safeReflect.set(payload, ExtensionSessionPayloadField.Providers, [])
     return
@@ -604,7 +622,9 @@ export async function parseExtensionSessionRequest(
   }
   const envelope = ingressStage.envelope
   const deadline = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
-  let request: ExtensionSessionRequest | undefined
+  let decodedRequest: ExtensionSessionDecodedRequest = {
+    kind: ExtensionSessionDecodedRequestKind.Pending,
+  }
   const readinessDeadline = new AbortController()
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
     const readinessTimer = setTimeout(
@@ -632,8 +652,13 @@ export async function parseExtensionSessionRequest(
     const decoded = Effect.runSync(
       Effect.either(decodeExtensionSessionIngress(envelope)),
     )
-    if (decoded._tag === 'Left') return { kind: ExtensionSessionRequestParseKind.Invalid }
-    request = decoded.right
+    if (decoded._tag === 'Left')
+      return { kind: ExtensionSessionRequestParseKind.Invalid }
+    const request = decoded.right
+    decodedRequest = {
+      kind: ExtensionSessionDecodedRequestKind.Decoded,
+      request,
+    }
     const queue = request.payload.queue
     const expiresAt =
       queue.kind === ExtensionSessionQueueKind.Deadline
@@ -650,10 +675,12 @@ export async function parseExtensionSessionRequest(
     clearRawExtensionSessionSecrets(envelope)
     readinessDeadline.abort()
   }
-  if (!request) return { kind: ExtensionSessionRequestParseKind.Invalid }
+  if (decodedRequest.kind === ExtensionSessionDecodedRequestKind.Pending) {
+    return { kind: ExtensionSessionRequestParseKind.Invalid }
+  }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,
-    request,
+    request: decodedRequest.request,
   }
 }
 
@@ -667,7 +694,10 @@ function clearExtensionSessionRequest(request: ExtensionSessionRequest): void {
 
 function decodeExtensionSessionIngress(
   envelope: ExtensionSessionRawEnvelope,
-): Effect.Effect<ExtensionSessionRequest, ExtensionSessionRequestDecodeFailure> {
+): Effect.Effect<
+  ExtensionSessionRequest,
+  ExtensionSessionRequestDecodeFailure
+> {
   if (envelope.type !== ExtensionSessionMessageType.ImportVault) {
     return Effect.gen(function* () {
       const decoded = yield* Effect.try({
@@ -686,7 +716,11 @@ function decodeExtensionSessionIngress(
   }
   return Effect.gen(function* () {
     const rawPayload = envelope.payload
-    if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    if (
+      !rawPayload ||
+      typeof rawPayload !== 'object' ||
+      Array.isArray(rawPayload)
+    ) {
       return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
         kind: ExtensionSessionRequestDecodeFailureKind.ImportProviders,
       })
@@ -716,11 +750,12 @@ function decodeExtensionSessionIngress(
       }
       decodedProviders.push(decodedProvider.right)
     }
-    const identities: ExtensionStorageProviderIdentity[] =
-      decodedProviders.map((provider) => ({
+    const identities: ExtensionStorageProviderIdentity[] = decodedProviders.map(
+      (provider) => ({
         id: provider.id,
         type: provider.type,
-      }))
+      }),
+    )
     if (
       !safeReflect.set(
         rawPayload,

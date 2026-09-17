@@ -704,7 +704,8 @@ export class StorageProviderPresentation {
       provider.oauthFile,
     );
     return (
-      configuration.kind === StoredOAuthFileConfigurationDecodeKind.Configured &&
+      configuration.kind ===
+        StoredOAuthFileConfigurationDecodeKind.Configured &&
       configuration.config.preset === "icloud"
     );
   }

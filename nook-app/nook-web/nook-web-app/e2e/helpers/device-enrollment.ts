@@ -1,4 +1,9 @@
-import { expect, type Locator, type Page, type TestInfo } from '@playwright/test'
+import {
+  expect,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
 import { ProviderSyncFreshness } from '$app-wasm'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
@@ -412,7 +417,8 @@ export async function tryGithubVaultConnect(
     await tryJoinerQuickConnect(quickConnect, () =>
       waitForVaultOperationsIdle(page),
     )
-  ) return
+  )
+    return
   if (await page.getByTestId('login-provider-setup').isVisible()) {
     await page.getByTestId('provider-option-github').click()
     const repoInput = page.getByTestId('github-repo-input')

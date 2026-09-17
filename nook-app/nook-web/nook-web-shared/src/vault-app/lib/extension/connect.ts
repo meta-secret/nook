@@ -65,11 +65,11 @@ type PendingExtensionResponseRequest = {
 };
 
 type ChromeRuntimeResponseCallback = (
-  response: ChromeExtensionRuntimeResponse | undefined,
+  response?: ChromeExtensionRuntimeResponse,
 ) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError: { readonly message?: string } | undefined;
+  readonly lastError?: { readonly message?: string };
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
@@ -434,7 +434,7 @@ class ExtensionConnectionBrowser {
           pending.unavailable();
           return;
         }
-        if (response === undefined) {
+        if (!response) {
           pending.unavailable();
           return;
         }
@@ -494,9 +494,7 @@ class ExtensionConnectionBrowser {
     const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
-      Effect.either(
-        companionResponseDecoder.decodeLauncher(delivery.response),
-      ),
+      Effect.either(companionResponseDecoder.decodeLauncher(delivery.response)),
     );
     return decoded._tag === "Right";
   }
@@ -672,9 +670,7 @@ class ExtensionConnectionBrowser {
     const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs3);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
-      Effect.either(
-        companionResponseDecoder.decodeUnlock(delivery.response),
-      ),
+      Effect.either(companionResponseDecoder.decodeUnlock(delivery.response)),
     );
     return (
       decoded._tag === "Right" &&
@@ -713,9 +709,7 @@ class ExtensionConnectionBrowser {
             return;
           }
           const decodedResponse = Effect.runSync(
-            Effect.either(
-              identityHandoffResponseDecoder.decode(response),
-            ),
+            Effect.either(identityHandoffResponseDecoder.decode(response)),
           );
           if (decodedResponse._tag === "Right") {
             const identityEnvelope = {

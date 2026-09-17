@@ -357,8 +357,8 @@ class WebAuthnPageIngress {
     if (!requestJson || requestJson.length > 65_536) {
       return { kind: PageRequestBodyDecodeKind.Rejected }
     }
-    let relyingPartyName: string | undefined
-    let rpId: string | undefined
+    let relyingPartyFields: Pick<PageRequest, 'relyingPartyName'> | object = {}
+    let rpIdFields: Pick<PageRequest, 'rpId'> | object = {}
     if ('relyingParty' in value) {
       const relyingParty = value.relyingParty
       if (
@@ -367,17 +367,17 @@ class WebAuthnPageIngress {
         'name' in relyingParty &&
         typeof relyingParty.name === 'string'
       ) {
-        relyingPartyName = relyingParty.name
+        relyingPartyFields = { relyingPartyName: relyingParty.name }
       }
     }
     if ('rpId' in value && typeof value.rpId === 'string') {
-      rpId = value.rpId
+      rpIdFields = { rpId: value.rpId }
     }
     return {
       kind: PageRequestBodyDecodeKind.Decoded,
       requestJson,
-      ...(relyingPartyName !== undefined ? { relyingPartyName } : {}),
-      ...(rpId !== undefined ? { rpId } : {}),
+      ...relyingPartyFields,
+      ...rpIdFields,
     }
   }
 
@@ -423,16 +423,14 @@ class WebAuthnPageIngress {
       return
     const requestBody = WebAuthnPageIngress.decodeRequestBody(message.request)
     if (requestBody.kind === PageRequestBodyDecodeKind.Rejected) return
+    const { kind: _decodedKind, ...decodedRequestBody } = requestBody
+    void _decodedKind
     const request: PageRequest = {
       source: REQUEST_SOURCE,
       type: PageRequestType.Request,
       requestId,
       ceremony: message.ceremony,
-      requestJson: requestBody.requestJson,
-      ...(requestBody.relyingPartyName !== undefined
-        ? { relyingPartyName: requestBody.relyingPartyName }
-        : {}),
-      ...(requestBody.rpId !== undefined ? { rpId: requestBody.rpId } : {}),
+      ...decodedRequestBody,
       expiresAt: message.expiresAt,
     }
     void handleRequest(request).catch(() => {

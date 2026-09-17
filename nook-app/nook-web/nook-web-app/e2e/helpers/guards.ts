@@ -4,11 +4,8 @@ export function parseJson(value: string): unknown {
   return parsed
 }
 
-export function requireValue<T>(
-  value: T | null | undefined,
-  label: string,
-): NonNullable<T> {
-  if (value === null || value === undefined) {
+export function requireValue<T>(value: T, label: string): NonNullable<T> {
+  if (value == void 0) {
     throw new Error(`${label} was not available.`)
   }
   return value

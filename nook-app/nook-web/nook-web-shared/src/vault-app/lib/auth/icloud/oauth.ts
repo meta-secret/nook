@@ -252,7 +252,9 @@ class ICloudOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
   }
-  async prepareICloudSignInControl(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
+  async prepareICloudSignInControl(): Promise<
+    Result<CloudKitGlobal, OAuthFailure>
+  > {
     const initialized = await this.initICloudAuth();
     if (initialized.isErr()) return err(initialized.error);
     const admitted = cloudKitRuntime.getDefaultCloudKitContainer();
