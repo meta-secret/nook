@@ -12,11 +12,19 @@ export type BrowserRuntimeMessageAdmission =
     }
   | { readonly kind: BrowserRuntimeMessageAdmissionKind.Rejected }
 
+export type BrowserRuntimeMessageValue =
+  | string
+  | number
+  | boolean
+  | readonly BrowserRuntimeMessageValue[]
+  | { readonly [key: string]: BrowserRuntimeMessageValue }
+
 /** Concrete browser IPC envelope admitted before schema-specific routing. */
 export class BrowserRuntimeMessage {
   private constructor() {}
 
   declare readonly type: string
+  declare readonly [key: string]: BrowserRuntimeMessageValue
 
   static decode(value: unknown) {
     return Schema.decodeUnknown(browserRuntimeMessageSchema)(value)
@@ -36,9 +44,23 @@ export class BrowserRuntimeMessage {
   }
 }
 
+const browserRuntimeMessageValueSchema: Schema.Schema<BrowserRuntimeMessageValue> =
+  Schema.suspend(() =>
+    Schema.Union(
+      Schema.String,
+      Schema.Number,
+      Schema.Boolean,
+      Schema.Array(browserRuntimeMessageValueSchema),
+      Schema.Record({
+        key: Schema.String,
+        value: browserRuntimeMessageValueSchema,
+      }),
+    ),
+  )
+
 const browserRuntimeMessageSchema = Schema.Struct(
   {
     type: Schema.String.pipe(Schema.minLength(1)),
   },
-  Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  Schema.Record({ key: Schema.String, value: browserRuntimeMessageValueSchema }),
 ) satisfies Schema.Schema<BrowserRuntimeMessage>

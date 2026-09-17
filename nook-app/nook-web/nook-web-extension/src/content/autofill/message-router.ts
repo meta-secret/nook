@@ -203,8 +203,10 @@ export const routeAutofillMessage: AutofillMessageListener =
     ) {
       return false
     }
-    const message = authenticatorSelected.value
-    const taken = pickerState.takeAuthenticator(message.payload.requestId)
+    const selectedMessage = authenticatorSelected.value
+    const taken = pickerState.takeAuthenticator(
+      selectedMessage.payload.requestId,
+    )
     if (taken.kind !== PendingPickerTakeKind.Taken) return false
     const pending = taken.request
     window.clearTimeout(pending.timeoutId)
@@ -215,7 +217,7 @@ export const routeAutofillMessage: AutofillMessageListener =
     const nookTypedArgs0_3: Parameters<
       typeof authenticatorInteraction.fillAuthenticatorCode
     >[0] = {
-      account: message.payload.account,
+      account: selectedMessage.payload.account,
       workflow: pending.workflow,
       approval: pending.approval,
       step: pending.step,

@@ -143,7 +143,7 @@ const passkeyOptionSchema = Schema.Struct({
       userName: Schema.String,
       userDisplayName: Schema.String,
     }),
-    { as: 'Option' },
+    { exact: true },
   ),
 }) satisfies Schema.Schema<PasskeyOption>
 

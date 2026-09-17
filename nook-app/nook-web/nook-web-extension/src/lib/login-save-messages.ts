@@ -74,7 +74,7 @@ export class WebsiteLoginSaveCommitMessage {
     evidence: AuthenticationOutcomeObservationView
   }
   static decodeOutcomeObservation(value: unknown) {
-    return Schema.decodeUnknown(authenticationOutcomeObservationSchema)(value)
+    return Schema.decodeUnknown(AuthenticationOutcomeObservationViewSchema)(value)
   }
 
   static decode(message: unknown) {

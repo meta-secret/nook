@@ -252,7 +252,9 @@ class AuthorizationCleanupLifecycle {
             authorizationGeneration,
             CleanupEvidence.Full,
           ),
-        catch: () => AuthorizationCleanupFailureKind.Rejected,
+        catch: (): readonly AuthorizationCleanupFailure[] => [
+          AuthorizationCleanupFailureKind.Rejected,
+        ],
       })
       if ('error' in outcome) {
         return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
@@ -298,7 +300,9 @@ export function recoverInterruptedAuthorizationCleanup(
             cleanup.authorizationGeneration,
             CleanupEvidence.Partial,
           ),
-        catch: () => AuthorizationCleanupFailureKind.Rejected,
+        catch: (): readonly AuthorizationCleanupFailure[] => [
+          AuthorizationCleanupFailureKind.Rejected,
+        ],
       })
       if ('error' in outcome) {
         return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
@@ -571,8 +575,11 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  const openSimpleVault = runConcreteDecoder(decodeOpenSimpleVaultMessage, message)
-  if (openSimpleVault.kind === ConcreteDecoderResultKind.Decoded) {
+  const openSimpleVaultMessage = runConcreteDecoder(
+    decodeOpenSimpleVaultMessage,
+    message,
+  )
+  if (openSimpleVaultMessage.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false

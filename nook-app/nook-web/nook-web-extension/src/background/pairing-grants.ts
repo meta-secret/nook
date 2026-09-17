@@ -108,7 +108,7 @@ export type ExtensionPairingStateDecodeFailure = {
 function decodeStoredExtensionPairingGrant(value: unknown) {
   const result = transportJson(value)
   if (result.kind === TransportJsonResultKind.SerializationFailed) {
-    return Effect.fail<never, ExtensionPairingStateDecodeFailure>({
+    return Effect.fail<ExtensionPairingStateDecodeFailure>({
       kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
     })
   }
@@ -123,7 +123,7 @@ function decodeStoredExtensionPairingGrant(value: unknown) {
 function decodeExtensionReadySetupState(value: unknown) {
   const result = transportJson(value)
   if (result.kind === TransportJsonResultKind.SerializationFailed) {
-    return Effect.fail<never, ExtensionPairingStateDecodeFailure>({
+    return Effect.fail<ExtensionPairingStateDecodeFailure>({
       kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
     })
   }

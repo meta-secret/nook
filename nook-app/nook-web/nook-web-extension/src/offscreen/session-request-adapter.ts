@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect'
+import { Effect, ParseResult, Schema } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
@@ -23,17 +23,6 @@ import type {
 import { ExtensionPairingStorageProviderPayloadDecoder } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 export const EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS = 5_000
-
-type EnumeratedExtensionSessionRequest<Request> = Request extends {
-  type: infer RequestType extends string
-}
-  ? Omit<Request, 'type'> & {
-      type: Extract<ExtensionSessionMessageType, RequestType>
-    }
-  : never
-
-type TypedExtensionSessionRequest =
-  EnumeratedExtensionSessionRequest<GeneratedExtensionSessionRequest>
 
 export enum ExtensionSessionQueueKind {
   MessageDefault = 'message-default',
@@ -118,16 +107,10 @@ export type CompanionIdentityHandoffSessionTransportRequest =
   GeneratedCompanionIdentityHandoffSessionTransportRequest
 
 export type ParsedExtensionSessionTransportRequest = ExtensionSessionRequest
-type TypedExtensionSessionImportRequest = Extract<
-  TypedExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.ImportVault }
->
-export type ExtensionSessionNonImportRequest = Exclude<
-  TypedExtensionSessionRequest,
-  TypedExtensionSessionImportRequest
->
+export type ExtensionSessionNonImportRequest =
+  GeneratedExtensionSessionNonImportRequest
 type ExtensionSessionImportRequest = {
-  type: TypedExtensionSessionImportRequest['type']
+  type: GeneratedExtensionSessionImportRequest['type']
   payload: Omit<
     GeneratedExtensionSessionImportRequest['payload'],
     'providers'
@@ -195,7 +178,7 @@ export function decodeExtensionSessionRawEnvelope(
   value: ExtensionSessionRuntimeMessageValue,
 ): Effect.Effect<
   ExtensionSessionRawEnvelope,
-  Schema.ParseError | ExtensionSessionRequestDecodeFailure
+  ParseResult.ParseError | ExtensionSessionRequestDecodeFailure
 > {
   return Effect.flatMap(
     Schema.decodeUnknown(extensionSessionRawEnvelopeHeaderSchema)(value),
@@ -356,10 +339,10 @@ const safeReflect: {
     target: ExtensionSessionPayloadTarget,
     propertyKey: ExtensionSessionPayloadProperty,
   ): ExtensionSessionRuntimeMessageValue
-  set(
+  set<Value>(
     target: ExtensionSessionPayloadTarget,
     propertyKey: ExtensionSessionPayloadProperty,
-    value: ExtensionSessionRuntimeMessageValue,
+    value: Value,
   ): boolean
 } = Reflect
 
@@ -782,9 +765,8 @@ export function replaceExtensionSessionRequestPayload<
 >({
   request,
   payload,
-}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Omit<
-  Request,
-  'payload'
-> & { payload: Request['payload'] } {
-  return { ...request, payload }
+}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Request {
+  const replacement: Request = { ...request }
+  Reflect.set(replacement, ExtensionSessionPayloadField.Payload, payload)
+  return replacement
 }

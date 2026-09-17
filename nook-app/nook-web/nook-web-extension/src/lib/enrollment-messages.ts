@@ -225,7 +225,7 @@ const websiteAuthenticatorBackupAttachMessageSchema = Schema.Struct({
     ...enrollmentOriginSchema.fields,
     vaultStoreId: enrollmentNonEmptyStringSchema,
     secretId: enrollmentNonEmptyStringSchema,
-    codes: Schema.Array(Schema.String),
+    codes: Schema.mutable(Schema.Array(Schema.String)),
     mode: Schema.Literal(
       WebsiteAuthenticatorBackupAttachMessageMode.Replace,
       WebsiteAuthenticatorBackupAttachMessageMode.Merge,

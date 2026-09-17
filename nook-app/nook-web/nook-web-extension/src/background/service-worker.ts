@@ -16,6 +16,10 @@ import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
 } from '../lib/browser-runtime-message'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationWorkflowSnapshotIngress,
@@ -212,21 +216,18 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       extensionPairingIdentity.discoverPairedVaultIdentity.bind(
         extensionPairingIdentity,
       ),
-    hasPairingApprovedType:
-      extensionPairingIdentity.hasPairingApprovedType.bind(
-        extensionPairingIdentity,
-      ),
+    decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
     importPairingAfterCompanionReady,
-    isExtensionIdentityHandoffRequestMessage:
-      ExtensionIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultIdentityDiscoveryMessage:
-      ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
-    isExtensionPairedVaultIdentityHandoffRequestMessage:
-      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultUnlockRequestMessage:
-      ExtensionPairedVaultUnlockRequestMessageSchema.is,
-    normalizeOpenCompanionLauncherMessage:
-      NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+    decodeExtensionIdentityHandoffRequestMessage:
+      ExtensionIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityDiscoveryMessage:
+      ExtensionPairedVaultIdentityDiscoveryMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityHandoffRequestMessage:
+      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultUnlockRequestMessage:
+      ExtensionPairedVaultUnlockRequestMessageSchema.decode,
+    decodeOpenCompanionLauncherMessage:
+      NormalizedOpenCompanionLauncherMessageSchema.decode,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
@@ -534,12 +535,17 @@ class BackgroundRuntimeMessageRouter {
       return true
     }
 
-    if (AuthenticationOutcomeClassifyMessageSchema.is(message)) {
+    const outcomeClassify = runConcreteDecoder(
+      AuthenticationOutcomeClassifyMessageSchema.decode,
+      message,
+    )
+    if (outcomeClassify.kind === ConcreteDecoderResultKind.Decoded) {
+      const outcomeMessage = outcomeClassify.value
       const nookTypedArgs0_3: Parameters<
         typeof backgroundVaultRuntime.classifyAuthenticationOutcome
       >[0] = {
-        observation: message.payload.observation,
-        timeoutMs: message.payload.timeoutMs,
+        observation: outcomeMessage.payload.observation,
+        timeoutMs: outcomeMessage.payload.timeoutMs,
       }
       void backgroundVaultRuntime
         .classifyAuthenticationOutcome(nookTypedArgs0_3)

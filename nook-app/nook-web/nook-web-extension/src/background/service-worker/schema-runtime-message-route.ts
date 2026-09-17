@@ -1,4 +1,4 @@
-import { Effect, Either, Schema } from 'effect'
+import { Effect, Either, ParseResult } from 'effect'
 
 import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
@@ -38,7 +38,7 @@ export interface BackgroundRuntimeMessageRoute {
 export interface RuntimeMessageSchema<Message extends BrowserRuntimeMessage> {
   decode(
     message: BrowserRuntimeMessage,
-  ): Effect.Effect<Message, Schema.ParseError>
+  ): Effect.Effect<Message, ParseResult.ParseError>
 }
 
 export enum RuntimeMessageSchemaDecodeKind {
@@ -55,7 +55,7 @@ export type RuntimeMessageSchemaDecodeResult<
     }
   | {
       readonly kind: RuntimeMessageSchemaDecodeKind.Rejected
-      readonly failure: Schema.ParseError
+      readonly failure: ParseResult.ParseError
     }
 
 export type SchemaRuntimeMessageOperationRequest<

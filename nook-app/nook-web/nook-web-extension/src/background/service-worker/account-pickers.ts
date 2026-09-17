@@ -47,7 +47,7 @@ export type PendingAuthenticatorPicker = {
   origin: string
   tabId: number
   frameId: number
-  allowedVaultStoreIds: string[]
+  allowedVaultStoreIds: readonly string[]
   expiresAt: number
 }
 
@@ -527,8 +527,11 @@ class AccountPickerSessions {
     ) {
       return { kind: AuthenticatorPickerLoadKind.Unavailable }
     }
-    let request = this.pendingAuthenticatorPickers.get(requestId)
-    if (!request) {
+    const cachedRequest = this.pendingAuthenticatorPickers.get(requestId)
+    let request: PendingAuthenticatorPicker
+    if (cachedRequest) {
+      request = cachedRequest
+    } else {
       const key = this.authenticatorPickerStorageKey(requestId)
       const stored = (await extensionPairingIdentity.getSessionStorage(key))[
         key
@@ -547,8 +550,9 @@ class AccountPickerSessions {
       if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
         return { kind: AuthenticatorPickerLoadKind.Unavailable }
       }
-      request = decoded.value
-      this.pendingAuthenticatorPickers.set(requestId, request)
+      const restoredRequest = decoded.value
+      this.pendingAuthenticatorPickers.set(requestId, restoredRequest)
+      request = restoredRequest
     }
     if (request.expiresAt <= Date.now()) {
       await this.removeAuthenticatorPicker(requestId)
@@ -934,8 +938,11 @@ class AccountPickerSessions {
     ) {
       return { kind: LoginPickerLoadKind.Unavailable }
     }
-    let request = this.pendingLoginPickers.get(requestId)
-    if (!request) {
+    const cachedRequest = this.pendingLoginPickers.get(requestId)
+    let request: PendingLoginPicker
+    if (cachedRequest) {
+      request = cachedRequest
+    } else {
       const key = this.loginPickerStorageKey(requestId)
       const stored = (await extensionPairingIdentity.getSessionStorage(key))[
         key
@@ -954,8 +961,9 @@ class AccountPickerSessions {
       if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
         return { kind: LoginPickerLoadKind.Unavailable }
       }
-      request = decoded.value
-      this.pendingLoginPickers.set(requestId, request)
+      const restoredRequest = decoded.value
+      this.pendingLoginPickers.set(requestId, restoredRequest)
+      request = restoredRequest
     }
     if (request.expiresAt <= Date.now()) {
       await this.removeLoginPicker(requestId)

@@ -118,9 +118,7 @@ const websiteLoginRevealMessageSchema = Schema.Struct({
     origin: nonEmptyStringSchema,
     vaultStoreId: nonEmptyStringSchema,
     secretId: nonEmptyStringSchema,
-    authorizationGeneration: Schema.optionalWith(nonEmptyStringSchema, {
-      exact: true,
-    }),
+    authorizationGeneration: nonEmptyStringSchema,
   }),
 }) satisfies Schema.Schema<WebsiteLoginRevealMessage>
 
@@ -139,6 +137,8 @@ const websiteAuthenticatorFillMessageSchema = Schema.Struct({
     origin: nonEmptyStringSchema,
     vaultStoreId: nonEmptyStringSchema,
     secretId: nonEmptyStringSchema,
-    authorizationGeneration: nonEmptyStringSchema,
+    authorizationGeneration: Schema.optionalWith(nonEmptyStringSchema, {
+      exact: true,
+    }),
   }),
 }) satisfies Schema.Schema<WebsiteAuthenticatorFillMessage>

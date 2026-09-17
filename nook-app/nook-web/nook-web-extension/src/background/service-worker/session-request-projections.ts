@@ -1,4 +1,4 @@
-import type { CompanionIdentityHandoffRequest } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { CompanionIdentityHandoffRequestPayload } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -20,7 +20,7 @@ type WebsiteLoginRevealSessionRequest = Extract<
 >
 
 export function identityHandoffSessionRequest(
-  request: CompanionIdentityHandoffRequest,
+  request: CompanionIdentityHandoffRequestPayload,
 ): IdentityHandoffSessionRequest {
   return {
     type: ExtensionSessionMessageType.SealIdentityHandoff,
