@@ -62,6 +62,10 @@ enum LocalVaultSessionResetOutcome {
   Reset = "reset",
 }
 
+enum LocalVaultNamePersistenceOutcome {
+  Saved = "saved",
+}
+
 /** Owns browser orchestration for one local login context. */
 export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
@@ -359,7 +363,8 @@ export class VaultLoginActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(admittedManager.value.reset_vault_session());
+            admittedManager.value.reset_vault_session();
+            return storageOk(LocalVaultSessionResetOutcome.Reset);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -437,9 +442,8 @@ export class VaultLoginActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.set_vault_name(trimmedLabel),
-          );
+          await admittedManager.value.set_vault_name(trimmedLabel);
+          return storageOk(LocalVaultNamePersistenceOutcome.Saved);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -548,9 +552,8 @@ export class VaultLoginActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(
-              await admittedManager.value.set_vault_name(trimmedLabel),
-            );
+            await admittedManager.value.set_vault_name(trimmedLabel);
+            return storageOk(LocalVaultNamePersistenceOutcome.Saved);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }

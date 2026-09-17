@@ -74,6 +74,10 @@ type ProviderVaultImportOutcome =
       readonly storeId: string;
     };
 
+enum ImportedProviderVaultIdentityActivationOutcome {
+  Activated = "activated",
+}
+
 /** Owns browser orchestration for one sync resolution context. */
 export class SyncConflictActions {
   constructor(private readonly state: SyncActionsContext) {}
@@ -88,8 +92,9 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
+          await admittedManager.value.activate_local_identity(identityId);
           return storageOk(
-            await admittedManager.value.activate_local_identity(identityId),
+            ImportedProviderVaultIdentityActivationOutcome.Activated,
           );
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
@@ -273,9 +278,8 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            admittedManager.value.prepare_connect_from_local_cache(),
-          );
+          admittedManager.value.prepare_connect_from_local_cache();
+          return storageOk(RemoteVaultRecoveryState.ConnectFromCache);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -284,8 +288,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
-      state.remoteVaultRecoveryState =
-        RemoteVaultRecoveryState.ConnectFromCache;
+      state.remoteVaultRecoveryState = completed.value;
       if (state.loginSetup.kind === LoginSetupKind.Active) {
         await state.loadDb();
         return;
