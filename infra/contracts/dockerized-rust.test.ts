@@ -55,7 +55,8 @@ class DockerizedRustContract {
         steps: z.array(z.object({ run: z.string().optional() })).nonempty(),
       })
       .parse(workflow.jobs.preview);
-    const script = z.string().parse(preview.steps[0].run);
+    const [previewStep] = preview.steps;
+    const script = z.string().parse(previewStep?.run);
     expect(preview.needs).toContain("wasm-node-test");
     expect(preview.needs).toContain("extension-e2e");
     expect(Object.keys(workflow.jobs)).not.toContain(
@@ -223,14 +224,12 @@ class DockerizedRustContract {
           /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
       ),
     ).toEqual([]);
-    expect(rustSteps).toContainEqual(
-      expect.objectContaining({
-        if: "needs.rust-build.outputs.produced == 'true'",
-        run: expect.stringContaining(
-          "task docker:ci:rust:verify-built-buildkit",
-        ),
-      }),
+    const buildkitVerificationStep = rustSteps.find(
+      (step) =>
+        step.if === "needs.rust-build.outputs.produced == 'true'" &&
+        step.run?.includes("task docker:ci:rust:verify-built-buildkit") === true,
     );
+    expect(buildkitVerificationStep).toBeDefined();
 
     const dockerTasks = this.read(
       "nook-app/nook-platform/docker/Taskfile.yml",

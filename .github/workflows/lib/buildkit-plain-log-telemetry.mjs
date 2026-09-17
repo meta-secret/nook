@@ -32,7 +32,9 @@ export class BuildkitPlainLogTelemetry {
     /** @type {Map<string, PlainCacheExport>} */
     const exportsByVertex = new Map();
     for (const line of this.text.split(/\r?\n/)) {
-      const plainLine = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+      const plainLine = line
+        .replace(new RegExp("\\u001b\\[[0-9;]*m", "g"), "")
+        .trim();
       const vertexMatch = /^(#[0-9]+)\s+(.*)$/.exec(plainLine);
       if (!vertexMatch) continue;
       const [, vertex = "", detailRaw = ""] = vertexMatch;
