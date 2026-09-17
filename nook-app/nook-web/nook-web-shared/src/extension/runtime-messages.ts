@@ -320,12 +320,8 @@ export class ExtensionPairingApprovedMessage {
   static isExtensionEventObject(
     value: unknown,
   ): value is { readonly schema_version: number } {
-    return (
-      Boolean(value) &&
-      typeof value === "object" &&
-      "schema_version" in value &&
-      typeof value.schema_version === "number"
-    );
+    if (!value || typeof value !== "object") return false;
+    return "schema_version" in value && typeof value.schema_version === "number";
   }
   static parseExtensionEventLogRecords(
     value: unknown,

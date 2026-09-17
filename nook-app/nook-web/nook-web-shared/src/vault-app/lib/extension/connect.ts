@@ -53,6 +53,10 @@ type ChromeRuntimeHost = {
   ) => void;
 };
 
+type ChromeRuntimeResponseCallback = Parameters<
+  ChromeRuntimeHost["sendMessage"]
+>[2];
+
 type ExtensionBrowserHost = typeof globalThis;
 
 enum ChromeRuntimeAvailabilityKind {
@@ -260,7 +264,7 @@ class PendingExtensionResponse {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
   }
-  receive(response: unknown): void {
+  receive(response: ChromeExtensionRuntimeResponse): void {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
   }
@@ -422,8 +426,8 @@ class ExtensionConnectionBrowser {
         wait: responseWait,
         resolve,
       });
-      const receiveExtensionResponse = (
-        response: ExtensionRuntimeJsonValue | undefined,
+      const receiveExtensionResponse: ChromeRuntimeResponseCallback = (
+        response,
       ): void => {
         if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
