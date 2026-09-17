@@ -16,12 +16,29 @@ enum PrStewardCompletionFailureKind {
   None = 'none',
   Failed = 'failed',
 }
-type PrStewardCompletionFailure =
+type PrStewardCompletionFailureOutcome =
   | { readonly kind: PrStewardCompletionFailureKind.None }
   | {
       readonly kind: PrStewardCompletionFailureKind.Failed;
       readonly error: Error;
     };
+
+class PrStewardCompletionFailure {
+  #outcome: PrStewardCompletionFailureOutcome = {
+    kind: PrStewardCompletionFailureKind.None,
+  };
+
+  record(error: Error): void {
+    this.#outcome = {
+      kind: PrStewardCompletionFailureKind.Failed,
+      error,
+    };
+  }
+
+  read(): PrStewardCompletionFailureOutcome {
+    return this.#outcome;
+  }
+}
 
 export class PrStewardEventCli {
   private constructor(private readonly request: readonly string[]) {}
@@ -43,9 +60,7 @@ export class PrStewardEventCli {
     });
     let stopping = false;
     let draining: Promise<void> | false = false;
-    let completionFailure: PrStewardCompletionFailure = {
-      kind: PrStewardCompletionFailureKind.None,
-    };
+    const completionFailure = new PrStewardCompletionFailure();
     const terminal: { result: PrStewardCompletionSnapshot | false } = {
       result: false,
     };
@@ -69,10 +84,7 @@ export class PrStewardEventCli {
         stop();
       },
       failed: (error) => {
-        completionFailure = {
-          kind: PrStewardCompletionFailureKind.Failed,
-          error,
-        };
+        completionFailure.record(error);
         stop();
       },
     });
@@ -93,8 +105,9 @@ export class PrStewardEventCli {
       });
       const closeError = await connection.closed();
       if (draining !== false) await draining;
-      if (completionFailure.kind === PrStewardCompletionFailureKind.Failed)
-        throw completionFailure.error;
+      const completionOutcome = completionFailure.read();
+      if (completionOutcome.kind === PrStewardCompletionFailureKind.Failed)
+        throw completionOutcome.error;
       if (closeError) throw new Error('NATS connection closed unexpectedly');
       if (terminal.result !== false && process.exitCode !== 1)
         process.stderr.write(
