@@ -10,7 +10,11 @@ import type {
   SettingsNavigationRequest,
   UiActionsContext,
 } from "$lib/vault/action-contexts";
-import { browserDataLifecycle } from "$lib/runtime/browser-data";
+import {
+  browserDataLifecycle,
+  NookDatabaseCleanupOutcome,
+  RemoteLocalBrowserDataDeletionOutcome,
+} from "$lib/runtime/browser-data";
 import { set_vault_session_locked } from "$app-wasm";
 import {
   AdminAccordionSection,
@@ -229,7 +233,7 @@ export class VaultWorkspaceActions {
         async () => {
           try {
             await admitted.value.delete_local_browser_data();
-            return storageOk();
+            return storageOk(NookDatabaseCleanupOutcome.Cleared);
           } catch {
             return storageErr(
               new StorageOperationFailure(
@@ -251,7 +255,7 @@ export class VaultWorkspaceActions {
   }
 
   async handleRemoteLocalBrowserDataDeletion(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<RemoteLocalBrowserDataDeletionOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (state.localDataDeletionStarted) {
@@ -279,7 +283,7 @@ export class VaultWorkspaceActions {
     const quiescence = await resetManager;
     const cleanup = browserDataLifecycle.clearTabScopedBrowserData();
     if (quiescence.isErr()) return storageErr(quiescence.error);
-    return cleanup;
+    return cleanup.map(() => RemoteLocalBrowserDataDeletionOutcome.Quiesced);
   }
 
   openHelp(): void {

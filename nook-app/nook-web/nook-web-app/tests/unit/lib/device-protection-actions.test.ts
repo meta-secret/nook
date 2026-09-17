@@ -30,7 +30,10 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { VaultState } from '$lib/vault.svelte'
-import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import {
+  DeviceProtectionActions,
+  DeviceProtectionLockOutcome,
+} from '$lib/vault/device-protection.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 class DeviceProtectionTestState extends VaultState {
@@ -53,7 +56,9 @@ class DeviceProtectionTestState extends VaultState {
       state,
       'continueInitializationAfterDeviceUnlock',
     ).mockImplementation(async () => initialization)
-    vi.spyOn(state, 'lockDeviceProtection').mockResolvedValue(ok())
+    vi.spyOn(state, 'lockDeviceProtection').mockResolvedValue(
+      ok(DeviceProtectionLockOutcome.Locked),
+    )
     vi.spyOn(state, 't').mockImplementation((request) =>
       typeof request === 'string'
         ? request

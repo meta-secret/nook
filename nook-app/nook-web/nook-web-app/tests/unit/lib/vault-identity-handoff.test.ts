@@ -18,6 +18,7 @@ import {
   type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
 import { VaultState } from '$lib/vault.svelte'
+import { DeviceProtectionLockOutcome } from '$lib/vault/device-protection.svelte'
 import {
   VaultInitializationActions,
   shouldAutoAuthorizeE2e,
@@ -249,7 +250,7 @@ describe('external browser identity handoff commit ownership', () => {
       ).mockResolvedValue(err(continuationFailure))
       const lockDeviceProtection = vi
         .spyOn(fixture.state, 'lockDeviceProtection')
-        .mockResolvedValue(ok())
+        .mockResolvedValue(ok(DeviceProtectionLockOutcome.Locked))
 
       await fixture.lifecycle.initOnce()
 

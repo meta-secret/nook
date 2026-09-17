@@ -8,7 +8,6 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Device-protection actions that snapshot reactive state for persistence. */
 import {
   PasskeyCeremonyFailure,
-  PasskeyDeviceProtectionSuccess,
   PasskeyFallback,
   isPasskeyCeremonyNotAllowedError,
   isPasskeyPrfUnavailableError,
@@ -114,10 +113,32 @@ type PersistedProtectionStatusRequest = {
   readonly status: DeviceProtectionStatus;
 };
 
+export enum DeviceProtectionLockOutcome {
+  Locked = "locked",
+}
+
+enum AuthorizedDeviceInitializationOutcome {
+  Initialized = "initialized",
+}
+
+enum DeviceProtectionCeremonyOutcome {
+  Authorized = "authorized",
+}
+
+enum DeviceIdentityAuthorizationOutcome {
+  Authorized = "authorized",
+}
+
+enum PersistedProtectionStatusRefreshOutcome {
+  Refreshed = "refreshed",
+}
+
 export class DeviceProtectionActions {
   constructor(private readonly state: VaultState) {}
 
-  async lockDeviceProtection(): Promise<Result<void, StorageOperationFailure>> {
+  async lockDeviceProtection(): Promise<
+    Result<DeviceProtectionLockOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
     state.deviceAuthorizationInProgress = false;
@@ -129,7 +150,8 @@ export class DeviceProtectionActions {
     if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE;
 
     // Dispose native authority synchronously, before any queued or asynchronous work.
-    let locked: Result<void, StorageOperationFailure> = storageOk();
+    let locked: Result<DeviceProtectionLockOutcome, StorageOperationFailure> =
+      storageOk(DeviceProtectionLockOutcome.Locked);
     if (state.hasManager) {
       const manager = state.admitManager();
       if (manager.isErr()) locked = storageErr(manager.error);
@@ -167,7 +189,10 @@ export class DeviceProtectionActions {
     mode,
     initializeSession,
   }: AuthorizedDeviceInitialization): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
+    Result<
+      AuthorizedDeviceInitializationOutcome,
+      StorageOperationFailure | OAuthFailure
+    >
   > {
     const state = this.state;
     state.deviceAuthorizationInProgress = true;
@@ -186,7 +211,7 @@ export class DeviceProtectionActions {
       }
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    return storageOk();
+    return storageOk(AuthorizedDeviceInitializationOutcome.Initialized);
   }
 
   private lockFailedAuthorization({
@@ -229,17 +254,20 @@ export class DeviceProtectionActions {
       const ceremony = await state.enqueueStorage(
         async (): Promise<
           Result<
-            PasskeyDeviceProtectionSuccess,
+            DeviceProtectionCeremonyOutcome,
             PasskeyCeremonyFailure | StorageOperationFailure
           >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          return createPasskeyProtection({
+          const protection = await createPasskeyProtection({
             manager: manager.value,
             passkeyLabel: localizedPasskeyLabel,
             deviceMode,
           });
+          return protection.map(
+            () => DeviceProtectionCeremonyOutcome.Authorized,
+          );
         },
       );
       if (ceremony.isErr()) {
@@ -347,13 +375,17 @@ export class DeviceProtectionActions {
       const ceremony = await state.enqueueStorage(
         async (): Promise<
           Result<
-            PasskeyDeviceProtectionSuccess,
+            DeviceProtectionCeremonyOutcome,
             PasskeyCeremonyFailure | StorageOperationFailure
           >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          return recoverExistingPasskeyProtection(manager.value);
+          const recovery =
+            await recoverExistingPasskeyProtection(manager.value);
+          return recovery.map(
+            () => DeviceProtectionCeremonyOutcome.Authorized,
+          );
         },
       );
       if (ceremony.isErr()) {
@@ -460,9 +492,8 @@ export class DeviceProtectionActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.finish_pin_device_protection(pin),
-          );
+          await admittedManager.value.finish_pin_device_protection(pin);
+          return storageOk(DeviceIdentityAuthorizationOutcome.Authorized);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -512,13 +543,17 @@ export class DeviceProtectionActions {
       const ceremony = await state.enqueueStorage(
         async (): Promise<
           Result<
-            PasskeyDeviceProtectionSuccess,
+            DeviceProtectionCeremonyOutcome,
             PasskeyCeremonyFailure | StorageOperationFailure
           >
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          return authorizePasskeyProtection(manager.value);
+          const authorization =
+            await authorizePasskeyProtection(manager.value);
+          return authorization.map(
+            () => DeviceProtectionCeremonyOutcome.Authorized,
+          );
         },
       );
       if (ceremony.isErr()) {
@@ -590,9 +625,8 @@ export class DeviceProtectionActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.unlock_pin_device_identity(pin),
-          );
+          await admittedManager.value.unlock_pin_device_identity(pin);
+          return storageOk(DeviceIdentityAuthorizationOutcome.Authorized);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -661,7 +695,7 @@ export class DeviceProtectionRecoveryActions {
   }
 
   private async refreshPersistedProtectionStatus(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<PersistedProtectionStatusRefreshOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -683,7 +717,7 @@ export class DeviceProtectionRecoveryActions {
         status: status.value,
       };
       this.applyPersistedProtectionStatus(statusRequest);
-      return storageOk();
+      return storageOk(PersistedProtectionStatusRefreshOutcome.Refreshed);
     } finally {
       state.adoptLocalDataStorageGeneration();
     }
