@@ -636,6 +636,11 @@ class AuthenticationWidgetShell {
   }
 }
 
-export const authenticationWidgetShell = new AuthenticationWidgetShell({
+const authenticationWidgetShellDependencies: ConstructorParameters<
+  typeof AuthenticationWidgetShell
+>[0] = {
   widgetState,
-})
+}
+export const authenticationWidgetShell = new AuthenticationWidgetShell(
+  authenticationWidgetShellDependencies,
+)

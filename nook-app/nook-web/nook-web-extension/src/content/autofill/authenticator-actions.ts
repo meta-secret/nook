@@ -534,7 +534,12 @@ class AuthenticatorInteraction {
   }
 }
 
-export const authenticatorInteraction = new AuthenticatorInteraction({
+const authenticatorInteractionDependencies: ConstructorParameters<
+  typeof AuthenticatorInteraction
+>[0] = {
   widgetState,
   pickerState,
-})
+}
+export const authenticatorInteraction = new AuthenticatorInteraction(
+  authenticatorInteractionDependencies,
+)

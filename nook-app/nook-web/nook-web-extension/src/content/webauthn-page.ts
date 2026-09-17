@@ -286,7 +286,7 @@ async function extensionCeremony({
   const signal = options.signal
 
   return new Promise<Awaited<ReturnType<CredentialsContainer['get']>>>(
-    (resolve, reject) => {
+    (...[resolve, reject]) => {
       let settled = false
       const finish = (callback: () => void) => {
         if (settled) return
@@ -380,11 +380,11 @@ const nativeGet = prototype.get
 const nookTypedArgs0_3: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
-  value(this: CredentialsContainer, options: CredentialCreationOptions) {
+  value: (...[options]: [CredentialCreationOptions]) => {
     const nookTypedArgs0_0: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Create,
       options,
-      fallback: () => nativeCreate.call(this, options),
+      fallback: () => nativeCreate.call(prototype, options),
     }
     return extensionCeremony(nookTypedArgs0_0)
   },
@@ -394,11 +394,11 @@ Object.defineProperty(prototype, 'create', nookTypedArgs0_3)
 const nookTypedArgs0_4: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
-  value(this: CredentialsContainer, options: CredentialRequestOptions) {
+  value: (...[options]: [CredentialRequestOptions]) => {
     const nookTypedArgs0_1: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Get,
       options,
-      fallback: () => nativeGet.call(this, options),
+      fallback: () => nativeGet.call(prototype, options),
     }
     return extensionCeremony(nookTypedArgs0_1)
   },

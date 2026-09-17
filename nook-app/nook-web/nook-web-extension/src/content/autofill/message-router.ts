@@ -42,25 +42,8 @@ type AutofillMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0]
 
-type AutofillRuntimeMessageObject = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | AutofillRuntimeMessageObject
-    | AutofillRuntimeMessageObject[]
-}
-type AutofillRuntimeMessageInput =
-  | AutofillRuntimeMessageObject
-  | AutofillRuntimeMessageObject[]
-  | string
-  | number
-  | boolean
-
 export const routeAutofillMessage: AutofillMessageListener = (
-  runtimeMessage: AutofillRuntimeMessageInput,
-  sender,
-  sendResponse,
+  ...[runtimeMessage, sender, sendResponse]: Parameters<AutofillMessageListener>
 ) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage

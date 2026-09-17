@@ -36,6 +36,29 @@ type WorkflowCopyProjection = {
   readonly descriptionKey: BrowserMessageKey
 }
 
+const workflowCopyProjection = {
+  login: {
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
+  },
+  signup: {
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
+  },
+  passwordChange: {
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
+  },
+  authenticator: {
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
+  },
+  manual: {
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
+  },
+} satisfies Record<string, WorkflowCopyProjection>
+
 export class WorkflowCopy {
   readonly titleKey: BrowserMessageKey
   readonly descriptionKey: BrowserMessageKey
@@ -46,31 +69,16 @@ export class WorkflowCopy {
   static forKind(kind: AuthenticationWorkflowKind): WorkflowCopy {
     switch (kind) {
       case AuthenticationWorkflowKind.Login:
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
-        })
+        return new WorkflowCopy(workflowCopyProjection.login)
       case AuthenticationWorkflowKind.Signup:
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
-        })
+        return new WorkflowCopy(workflowCopyProjection.signup)
       case AuthenticationWorkflowKind.PasswordChange:
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
-        })
+        return new WorkflowCopy(workflowCopyProjection.passwordChange)
       case AuthenticationWorkflowKind.TotpChallenge:
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
-        })
+        return new WorkflowCopy(workflowCopyProjection.authenticator)
       case AuthenticationWorkflowKind.TotpEnrollment:
       case AuthenticationWorkflowKind.Manual:
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
-        })
+        return new WorkflowCopy(workflowCopyProjection.manual)
     }
   }
 }
@@ -186,4 +194,8 @@ class WorkflowUi {
   }
 }
 
-export const workflowUi = new WorkflowUi({ widgetState, saveOfferState })
+const workflowUiDependencies: ConstructorParameters<typeof WorkflowUi>[0] = {
+  widgetState,
+  saveOfferState,
+}
+export const workflowUi = new WorkflowUi(workflowUiDependencies)
