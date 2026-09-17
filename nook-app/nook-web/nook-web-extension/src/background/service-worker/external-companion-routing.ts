@@ -67,6 +67,10 @@ export class ExternalCompanionRouter {
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
     const {
       createIdentityHandoff,
       createPairedIdentityHandoff,
@@ -87,10 +91,6 @@ export class ExternalCompanionRouter {
       message,
     )
     if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
       void openCompanionLauncher(launcherMessage.value.intent)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
@@ -102,10 +102,6 @@ export class ExternalCompanionRouter {
       message,
     )
     if (identityDiscovery.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
       void discoverPairedVaultIdentity(identityDiscovery.value).then(sendResponse)
       return true
     }
@@ -116,10 +112,6 @@ export class ExternalCompanionRouter {
     )
     if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
       const decodedMessage = pairedVaultUnlock.value
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
       void requestPairedVaultUnlock(decodedMessage)
         .then(sendResponse)
         .catch(() => {
@@ -137,10 +129,6 @@ export class ExternalCompanionRouter {
       message,
     )
     if (identityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
       void createIdentityHandoff(identityHandoff.value).then(sendResponse)
       return true
     }
@@ -150,10 +138,6 @@ export class ExternalCompanionRouter {
       message,
     )
     if (pairedIdentityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
       void createPairedIdentityHandoff(pairedIdentityHandoff.value).then(sendResponse)
       return true
     }
@@ -162,10 +146,6 @@ export class ExternalCompanionRouter {
       decodePairingApprovedMessage,
       message,
     )
-    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
     if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
       sendResponse(invalidPairingGrantResponse)
       return false
