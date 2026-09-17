@@ -11,6 +11,7 @@ import {
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
+  activeVaultScope,
   configuredLocalFolder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
