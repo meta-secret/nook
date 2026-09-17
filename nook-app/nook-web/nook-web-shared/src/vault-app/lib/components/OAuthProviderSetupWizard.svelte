@@ -162,10 +162,12 @@
     vault.errorMsg = "";
     try {
       const actions = new oauthActions.VaultOAuthActions(vault);
+      const googleCreationRequest: Parameters<
+        typeof actions.createGoogleSharedFolder
+      >[0] = { collaboratorEmail };
       const creation = isSharedICloud
         ? await actions.createICloudSharedProvider()
-        :
-          await actions.createGoogleSharedFolder({ collaboratorEmail });
+        : await actions.createGoogleSharedFolder(googleCreationRequest);
       if (creation.isErr()) {
         vault.errorMsg = vault.t(creation.error.translationKey);
         return;
@@ -183,13 +185,15 @@
     vault.errorMsg = "";
     try {
       const actions = new oauthActions.VaultOAuthActions(vault);
+      const iCloudConnectionRequest: Parameters<
+        typeof actions.useICloudSharedProvider
+      >[0] = { shareReference: sharedFolderRef };
+      const googleConnectionRequest: Parameters<
+        typeof actions.useGoogleSharedFolder
+      >[0] = { folderRef: sharedFolderRef };
       const connection = isSharedICloud
-        ?
-          await actions.useICloudSharedProvider({
-            shareReference: sharedFolderRef,
-          })
-        :
-          await actions.useGoogleSharedFolder({ folderRef: sharedFolderRef });
+        ? await actions.useICloudSharedProvider(iCloudConnectionRequest)
+        : await actions.useGoogleSharedFolder(googleConnectionRequest);
       if (connection.isErr()) {
         vault.errorMsg = vault.t(connection.error.translationKey);
         return;
@@ -504,9 +508,7 @@
           <div id="apple-sign-in-button"></div>
           <div id="apple-sign-out-button" class="hidden"></div>
           {#if oauthBusy || icloudSignInPreparing}
-            <div
-              class={icloudSignInButtonClass}
-            >
+            <div class={icloudSignInButtonClass}>
               {vault.t(I18N_KEYS.ProviderSetupIcloudSigningIn)}
             </div>
           {/if}

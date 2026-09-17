@@ -181,12 +181,21 @@
     };
   });
 
-  const sortedMembers = $derived(
-    [...vaultMembers].sort((a, b) => {
+  type VaultMemberComparison = readonly [
+    left: (typeof vaultMembers)[number],
+    right: (typeof vaultMembers)[number],
+  ];
+
+  class VaultMemberOrdering {
+    static currentDeviceFirst(...[a, b]: VaultMemberComparison): number {
       if (a.deviceId === deviceId) return -1;
       if (b.deviceId === deviceId) return 1;
       return displayName(a).localeCompare(displayName(b));
-    }),
+    }
+  }
+
+  const sortedMembers = $derived(
+    [...vaultMembers].sort(VaultMemberOrdering.currentDeviceFirst),
   );
 
   function currentDeviceName(): string {

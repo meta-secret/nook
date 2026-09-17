@@ -205,6 +205,37 @@ type ExtensionConsentAuthorizationOwner =
       readonly approval: ExtensionVaultApproval;
     };
 
+type ExtensionConnectConsentWorkflowRequest = {
+  readonly vault: VaultState;
+  readonly request: ExtensionConnectRequest;
+};
+
+export type ExtensionConsentApprovalRequest = {
+  readonly state: ExtensionConsentWorkflowState;
+  readonly publish: (state: ExtensionConsentWorkflowState) => void;
+};
+
+type ExtensionConsentGrantDeliveryRequest = {
+  readonly approval: ExtensionVaultApproval;
+  readonly approvedPhase: NookExtensionConsentPhase;
+  readonly publish: (state: ExtensionConsentWorkflowState) => void;
+};
+
+type ExtensionConsentPhaseReplacement = {
+  readonly previousPhase: NookExtensionConsentPhase;
+  readonly nextPhase: NookExtensionConsentPhase;
+};
+
+type ExtensionConsentStatePublication = {
+  readonly state: ExtensionConsentWorkflowState;
+  readonly publish: (state: ExtensionConsentWorkflowState) => void;
+};
+
+export type ExtensionConsentNoticeRequest = {
+  readonly state: ExtensionConsentWorkflowState;
+  readonly availability: NookExtensionConsentApprovalAvailabilityState;
+};
+
 function deliveryOutcome(
   value: ExtensionPairingDelivery,
 ): ExtensionConsentDeliveryOutcome {
@@ -245,10 +276,13 @@ export class ExtensionConnectConsentWorkflow {
     kind: ExtensionConsentAuthorizationOwnerKind.Empty,
   };
 
-  constructor(
-    private readonly vault: VaultState,
-    private readonly request: ExtensionConnectRequest,
-  ) {}
+  private readonly vault: VaultState;
+  private readonly request: ExtensionConnectRequest;
+
+  constructor(request: ExtensionConnectConsentWorkflowRequest) {
+    this.vault = request.vault;
+    this.request = request.request;
+  }
 
   initialState(): ExtensionConsentWorkflowState {
     if (
@@ -339,10 +373,10 @@ export class ExtensionConnectConsentWorkflow {
     }
   }
 
-  async approve(
-    state: ExtensionConsentWorkflowState,
-    publish: (state: ExtensionConsentWorkflowState) => void,
-  ): Promise<void> {
+  async approve({
+    state,
+    publish,
+  }: ExtensionConsentApprovalRequest): Promise<void> {
     const retriesAuthorization =
       state.kind === ExtensionConsentWorkflowKind.Failed &&
       state.phase.state === NookExtensionConsentPhaseState.AuthorizationFailed;
@@ -368,26 +402,30 @@ export class ExtensionConnectConsentWorkflow {
       if (resumesDelivery) {
         switch (this.authorizationOwner.kind) {
           case ExtensionConsentAuthorizationOwnerKind.Empty:
-            this.publish(
-              {
-                kind: ExtensionConsentWorkflowKind.Failed,
-                phase: state.phase,
-                failure: {
-                  kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
-                  failure: new VaultStorageFailure(
-                    VaultStorageFailureKind.ExtensionApprovalContextChanged,
-                  ),
+            {
+              const publication: ExtensionConsentStatePublication = {
+                publish,
+                state: {
+                  kind: ExtensionConsentWorkflowKind.Failed,
+                  phase: state.phase,
+                  failure: {
+                    kind: ExtensionConsentWorkflowFailureKind.GrantPreparation,
+                    failure: new VaultStorageFailure(
+                      VaultStorageFailureKind.ExtensionApprovalContextChanged,
+                    ),
+                  },
                 },
-              },
-              publish,
-            );
+              };
+              this.publish(publication);
+            }
             return;
           case ExtensionConsentAuthorizationOwnerKind.Authorized:
-            await this.deliverApprovedGrant(
-              this.authorizationOwner.approval,
-              state.phase,
+            const deliveryRequest: ExtensionConsentGrantDeliveryRequest = {
+              approval: this.authorizationOwner.approval,
+              approvedPhase: state.phase,
               publish,
-            );
+            };
+            await this.deliverApprovedGrant(deliveryRequest);
             return;
         }
       }
@@ -399,8 +437,9 @@ export class ExtensionConnectConsentWorkflow {
         );
         if (started.state === NookExtensionConsentTransitionState.Rejected) {
           started.free();
-          this.publish(
-            {
+          const publication: ExtensionConsentStatePublication = {
+            publish,
+            state: {
               kind: ExtensionConsentWorkflowKind.Failed,
               phase: state.phase,
               failure: {
@@ -408,22 +447,26 @@ export class ExtensionConnectConsentWorkflow {
                 state: NookExtensionConsentTransitionState.Rejected,
               },
             },
-            publish,
-          );
+          };
+          this.publish(publication);
           return;
         }
         const authorizingPhase = started.phase();
         started.free();
-        this.replacePhase(state.phase, authorizingPhase);
-        if (
-          !this.publish(
-            {
-              kind: ExtensionConsentWorkflowKind.SubmittingAuthorization,
-              phase: authorizingPhase,
-            },
-            publish,
-          )
-        ) {
+        const authorizationPhaseReplacement: ExtensionConsentPhaseReplacement =
+          {
+            previousPhase: state.phase,
+            nextPhase: authorizingPhase,
+          };
+        this.replacePhase(authorizationPhaseReplacement);
+        const authorizationPublication: ExtensionConsentStatePublication = {
+          publish,
+          state: {
+            kind: ExtensionConsentWorkflowKind.SubmittingAuthorization,
+            phase: authorizingPhase,
+          },
+        };
+        if (!this.publish(authorizationPublication)) {
           return;
         }
 
@@ -449,9 +492,14 @@ export class ExtensionConnectConsentWorkflow {
           ) {
             const failedPhase = failed.phase();
             failed.free();
-            this.replacePhase(authorizingPhase, failedPhase);
-            this.publish(
-              {
+            const failurePhaseReplacement: ExtensionConsentPhaseReplacement = {
+              previousPhase: authorizingPhase,
+              nextPhase: failedPhase,
+            };
+            this.replacePhase(failurePhaseReplacement);
+            const publication: ExtensionConsentStatePublication = {
+              publish,
+              state: {
                 kind: ExtensionConsentWorkflowKind.Failed,
                 phase: failedPhase,
                 failure: {
@@ -459,12 +507,13 @@ export class ExtensionConnectConsentWorkflow {
                   failure: authorization.error,
                 },
               },
-              publish,
-            );
+            };
+            this.publish(publication);
           } else {
             failed.free();
-            this.publish(
-              {
+            const publication: ExtensionConsentStatePublication = {
+              publish,
+              state: {
                 kind: ExtensionConsentWorkflowKind.Failed,
                 phase: authorizingPhase,
                 failure: {
@@ -472,8 +521,8 @@ export class ExtensionConnectConsentWorkflow {
                   state: NookExtensionConsentTransitionState.Rejected,
                 },
               },
-              publish,
-            );
+            };
+            this.publish(publication);
           }
           return;
         }
@@ -491,8 +540,9 @@ export class ExtensionConnectConsentWorkflow {
           NookExtensionConsentTransitionState.Rejected
         ) {
           authorizationSucceeded.free();
-          this.publish(
-            {
+          const publication: ExtensionConsentStatePublication = {
+            publish,
+            state: {
               kind: ExtensionConsentWorkflowKind.Failed,
               phase: authorizingPhase,
               failure: {
@@ -500,14 +550,23 @@ export class ExtensionConnectConsentWorkflow {
                 state: NookExtensionConsentTransitionState.Rejected,
               },
             },
-            publish,
-          );
+          };
+          this.publish(publication);
           return;
         }
         const approvedPhase = authorizationSucceeded.phase();
         authorizationSucceeded.free();
-        this.replacePhase(authorizingPhase, approvedPhase);
-        await this.deliverApprovedGrant(approval, approvedPhase, publish);
+        const approvalPhaseReplacement: ExtensionConsentPhaseReplacement = {
+          previousPhase: authorizingPhase,
+          nextPhase: approvedPhase,
+        };
+        this.replacePhase(approvalPhaseReplacement);
+        const deliveryRequest: ExtensionConsentGrantDeliveryRequest = {
+          approval,
+          approvedPhase,
+          publish,
+        };
+        await this.deliverApprovedGrant(deliveryRequest);
         return;
       }
     } finally {
@@ -516,20 +575,19 @@ export class ExtensionConnectConsentWorkflow {
     }
   }
 
-  private async deliverApprovedGrant(
-    approval: ExtensionVaultApproval,
-    approvedPhase: NookExtensionConsentPhase,
-    publish: (state: ExtensionConsentWorkflowState) => void,
-  ): Promise<void> {
-    if (
-      !this.publish(
-        {
-          kind: ExtensionConsentWorkflowKind.PreparingGrant,
-          phase: approvedPhase,
-        },
-        publish,
-      )
-    ) {
+  private async deliverApprovedGrant({
+    approval,
+    approvedPhase,
+    publish,
+  }: ExtensionConsentGrantDeliveryRequest): Promise<void> {
+    const preparingPublication: ExtensionConsentStatePublication = {
+      publish,
+      state: {
+        kind: ExtensionConsentWorkflowKind.PreparingGrant,
+        phase: approvedPhase,
+      },
+    };
+    if (!this.publish(preparingPublication)) {
       return;
     }
     let prepared: Awaited<ReturnType<typeof approval.prepareAuthorizedGrant>>;
@@ -537,8 +595,9 @@ export class ExtensionConnectConsentWorkflow {
       prepared = await approval.prepareAuthorizedGrant();
     } catch (failure) {
       if (!this.isApproving()) return;
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -546,14 +605,15 @@ export class ExtensionConnectConsentWorkflow {
             failure: new NativeVaultStorageFailure(failure),
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
     if (!this.isApproving()) return;
     if (prepared.isErr()) {
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -561,20 +621,19 @@ export class ExtensionConnectConsentWorkflow {
             failure: prepared.error,
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
 
-    if (
-      !this.publish(
-        {
-          kind: ExtensionConsentWorkflowKind.DeliveringGrant,
-          phase: approvedPhase,
-        },
-        publish,
-      )
-    ) {
+    const deliveryPublication: ExtensionConsentStatePublication = {
+      publish,
+      state: {
+        kind: ExtensionConsentWorkflowKind.DeliveringGrant,
+        phase: approvedPhase,
+      },
+    };
+    if (!this.publish(deliveryPublication)) {
       return;
     }
     let delivered: Awaited<ReturnType<typeof approval.deliver>>;
@@ -582,20 +641,22 @@ export class ExtensionConnectConsentWorkflow {
       delivered = await approval.deliver(prepared.value);
     } catch {
       if (!this.isApproving()) return;
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: { kind: ExtensionConsentWorkflowFailureKind.BrowserHandoff },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
     if (!this.isApproving()) return;
     if (delivered.isErr()) {
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -603,15 +664,16 @@ export class ExtensionConnectConsentWorkflow {
             failure: delivered.error,
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
 
     const outcome = deliveryOutcome(delivered.value);
     if (outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) {
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -619,21 +681,20 @@ export class ExtensionConnectConsentWorkflow {
             outcome,
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
 
-    if (
-      !this.publish(
-        {
-          kind: ExtensionConsentWorkflowKind.RefreshingDevices,
-          phase: approvedPhase,
-          outcome,
-        },
-        publish,
-      )
-    ) {
+    const refreshPublication: ExtensionConsentStatePublication = {
+      publish,
+      state: {
+        kind: ExtensionConsentWorkflowKind.RefreshingDevices,
+        phase: approvedPhase,
+        outcome,
+      },
+    };
+    if (!this.publish(refreshPublication)) {
       return;
     }
     let devices: Awaited<ReturnType<VaultState["refreshDeviceState"]>>;
@@ -641,8 +702,9 @@ export class ExtensionConnectConsentWorkflow {
       devices = await this.vault.refreshDeviceState();
     } catch (failure) {
       if (!this.isApproving()) return;
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -650,14 +712,15 @@ export class ExtensionConnectConsentWorkflow {
             failure: new NativeVaultStorageFailure(failure),
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
     if (!this.isApproving()) return;
     if (devices.isErr()) {
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -665,15 +728,16 @@ export class ExtensionConnectConsentWorkflow {
             failure: devices.error,
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
 
     const completion = approval.admitCompletion();
     if (completion.isErr()) {
-      this.publish(
-        {
+      const publication: ExtensionConsentStatePublication = {
+        publish,
+        state: {
           kind: ExtensionConsentWorkflowKind.Failed,
           phase: approvedPhase,
           failure: {
@@ -681,19 +745,20 @@ export class ExtensionConnectConsentWorkflow {
             failure: completion.error,
           },
         },
-        publish,
-      );
+      };
+      this.publish(publication);
       return;
     }
 
-    this.publish(
-      {
+    const completionPublication: ExtensionConsentStatePublication = {
+      publish,
+      state: {
         kind: ExtensionConsentWorkflowKind.Completed,
         phase: approvedPhase,
         outcome,
       },
-      publish,
-    );
+    };
+    this.publish(completionPublication);
     this.releaseAuthorization();
   }
 
@@ -710,10 +775,10 @@ export class ExtensionConnectConsentWorkflow {
     );
   }
 
-  private replacePhase(
-    previousPhase: NookExtensionConsentPhase,
-    nextPhase: NookExtensionConsentPhase,
-  ): void {
+  private replacePhase({
+    previousPhase,
+    nextPhase,
+  }: ExtensionConsentPhaseReplacement): void {
     if (
       this.lifecycle.kind !== ExtensionConsentWorkflowLifecycleKind.Approving ||
       this.lifecycle.phase !== previousPhase
@@ -728,10 +793,10 @@ export class ExtensionConnectConsentWorkflow {
     previousPhase.free();
   }
 
-  private publish(
-    state: ExtensionConsentWorkflowState,
-    publish: (state: ExtensionConsentWorkflowState) => void,
-  ): boolean {
+  private publish({
+    state,
+    publish,
+  }: ExtensionConsentStatePublication): boolean {
     if (!this.isApproving()) return false;
     publish(state);
     return this.isApproving();
@@ -797,10 +862,10 @@ export class ExtensionConsentWorkflowPresentation {
     return I18N_KEYS.ExtensionConsentApprove;
   }
 
-  notice(
-    state: ExtensionConsentWorkflowState,
-    availability: NookExtensionConsentApprovalAvailabilityState,
-  ): ExtensionConsentWorkflowNotice {
+  notice({
+    state,
+    availability,
+  }: ExtensionConsentNoticeRequest): ExtensionConsentWorkflowNotice {
     switch (state.kind) {
       case ExtensionConsentWorkflowKind.Resting:
         switch (availability) {
@@ -821,6 +886,7 @@ export class ExtensionConsentWorkflowPresentation {
           case NookExtensionConsentApprovalAvailabilityState.RetryAvailable:
             return { kind: ExtensionConsentWorkflowNoticeKind.Hidden };
         }
+        break;
       case ExtensionConsentWorkflowKind.SubmittingAuthorization:
       case ExtensionConsentWorkflowKind.PreparingGrant:
       case ExtensionConsentWorkflowKind.DeliveringGrant:

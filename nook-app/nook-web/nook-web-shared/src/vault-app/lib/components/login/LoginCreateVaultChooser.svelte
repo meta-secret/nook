@@ -215,11 +215,14 @@
   const trimmedVaultName = $derived(vaultName.trim());
   const vaultNameReady = $derived(trimmedVaultName.length > 0);
   const sentinelNameReady = $derived(sentinelName.trim().length > 0);
+  const sentinelPolicyRequest = $derived<
+    Parameters<typeof evaluate_sentinel_policy_draft>[0]
+  >({
+    participants: sentinelParticipantCount,
+    threshold: sentinelThreshold,
+  });
   const sentinelPolicy = $derived(
-    evaluate_sentinel_policy_draft({
-      participants: sentinelParticipantCount,
-      threshold: sentinelThreshold,
-    }),
+    evaluate_sentinel_policy_draft(sentinelPolicyRequest),
   );
   const sentinelPolicyValid = $derived(
     sentinelPolicy.admission.kind === "accepted",

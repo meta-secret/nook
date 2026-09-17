@@ -62,8 +62,10 @@ export class LoginVaultIdentityReader {
     }
     try {
       const kind = snapshot.selectedVaultContextKind;
-      if (kind === NookSelectedVaultIdentityContextKind.Empty)
-        return ok({ kind });
+      if (kind === NookSelectedVaultIdentityContextKind.Empty) {
+        const context: LoginVaultIdentityContext = { kind };
+        return ok(context);
+      }
       const identities: LoginVaultLinkedIdentity[] = [];
       for (let index = 0; index < snapshot.length; index += 1) {
         const identity = new LinkedLoginIdentity(
@@ -72,13 +74,20 @@ export class LoginVaultIdentityReader {
         if (identity.isErr()) return err(identity.error);
         identities.push(identity.value);
       }
-      if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent)
-        return ok({ kind, identities });
+      if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent) {
+        const context: LoginVaultIdentityContext = { kind, identities };
+        return ok(context);
+      }
       const current = new LinkedLoginIdentity(
         snapshot.current_browser_identity(),
       ).read();
       if (current.isErr()) return err(current.error);
-      return ok({ kind, identities, currentIdentity: current.value });
+      const context: LoginVaultIdentityContext = {
+        kind,
+        identities,
+        currentIdentity: current.value,
+      };
+      return ok(context);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -92,10 +101,11 @@ class LinkedLoginIdentity {
   constructor(private readonly identity: NookIdentitySnapshot) {}
   read(): Result<LoginVaultLinkedIdentity, VaultStorageFailure> {
     try {
-      return ok({
+      const identity: LoginVaultLinkedIdentity = {
         identityId: this.identity.identityId,
         label: this.identity.label,
-      });
+      };
+      return ok(identity);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {

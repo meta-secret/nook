@@ -34,8 +34,9 @@ export class IdentityBridgePresentation {
     if (input.compact) {
       const identityY = 630;
       const vaultStartY = 920;
-      const vaultNodes = verifiedVaults.map((vault, index) =>
+      const vaultNodes = verifiedVaults.map((vault) =>
         (() => {
+          const index = verifiedVaults.indexOf(vault);
           const vaultDataArgs: ConstructorParameters<
             typeof IdentityBridgeVaultPresentation
           >[0] = {
@@ -257,8 +258,9 @@ export class IdentityBridgePresentation {
       0,
       identityY - ((verifiedVaults.length - 1) * gap) / 2,
     );
-    const vaultNodes = verifiedVaults.map((vault, index) =>
+    const vaultNodes = verifiedVaults.map((vault) =>
       (() => {
+        const index = verifiedVaults.indexOf(vault);
         const vaultDataArgs2: ConstructorParameters<
           typeof IdentityBridgeVaultPresentation
         >[0] = {
