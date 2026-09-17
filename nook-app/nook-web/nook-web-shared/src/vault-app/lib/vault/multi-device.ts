@@ -40,8 +40,21 @@ type DeviceRevocation = {
   readonly authId: string;
 };
 
-export type DeviceMutationResult = Result<
-  void,
+export enum DeviceRenameOutcome {
+  Renamed = "renamed",
+}
+
+export enum DeviceRevocationOutcome {
+  Revoked = "revoked",
+}
+
+export type DeviceRenameResult = Result<
+  DeviceRenameOutcome,
+  StorageOperationFailure | OAuthFailure
+>;
+
+export type DeviceRevocationResult = Result<
+  DeviceRevocationOutcome,
   StorageOperationFailure | OAuthFailure
 >;
 
@@ -174,7 +187,7 @@ export class VaultDeviceActions {
   async renameDevice({
     authId,
     label,
-  }: DeviceRename): Promise<DeviceMutationResult> {
+  }: DeviceRename): Promise<DeviceRenameResult> {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -211,7 +224,7 @@ export class VaultDeviceActions {
           ? state.t(I18N_KEYS.ToastsDeviceRenamed)
           : state.t(I18N_KEYS.ToastsDeviceNameReset),
       );
-      return storageOk();
+      return storageOk(DeviceRenameOutcome.Renamed);
     } finally {
       state.isSaving = false;
     }
@@ -219,7 +232,7 @@ export class VaultDeviceActions {
 
   async revokeDevice({
     authId,
-  }: DeviceRevocation): Promise<DeviceMutationResult> {
+  }: DeviceRevocation): Promise<DeviceRevocationResult> {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -254,7 +267,7 @@ export class VaultDeviceActions {
       if (isSelf) {
         state.clearUnlockedSession();
         state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRemoved));
-        return storageOk();
+        return storageOk(DeviceRevocationOutcome.Revoked);
       }
       const secretRefresh3 = await state.refreshSecretsFromSession();
       if (secretRefresh3.isErr()) {
@@ -267,7 +280,7 @@ export class VaultDeviceActions {
       }
       state.scheduleFanOutSyncAfterLocalSave();
       state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
-      return storageOk();
+      return storageOk(DeviceRevocationOutcome.Revoked);
     } finally {
       state.isSaving = false;
     }

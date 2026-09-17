@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { DeviceMutationResult } from '$lib/vault/multi-device'
+  import type {
+    DeviceRenameResult,
+    DeviceRevocationResult,
+  } from '$lib/vault/multi-device'
   type IdentityTextTruncation = {
     readonly value: string
     readonly head: number
@@ -69,8 +72,8 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>
     onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
-    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>
+    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>
   } = $props()
 
   let detailsAuthId = $state<MemberDetails>({

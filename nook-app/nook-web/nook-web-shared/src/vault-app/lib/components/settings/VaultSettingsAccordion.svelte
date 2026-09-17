@@ -1,6 +1,9 @@
 <script lang="ts">
   import { LocaleCatalogSource } from '$lib/vault/locale'
-  import type { DeviceMutationResult } from '$lib/vault/multi-device'
+  import type {
+    DeviceRenameResult,
+    DeviceRevocationResult,
+  } from '$lib/vault/multi-device'
   type DeviceRename = { readonly authId: string; readonly label: string }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -48,8 +51,8 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>
     onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
-    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>
+    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>
     accordionSection?: SettingsAccordionSection
   } = $props()
 
