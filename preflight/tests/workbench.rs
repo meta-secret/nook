@@ -107,30 +107,20 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
-fn pr_workbench_suite_loads_sequential_contract_tests() {
+fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
     let pr_workflow = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
-    let pr_suite =
-        RepositoryFixture::repository_root().read(".github/scripts/workbench-records.test.cjs");
-    let mapping_suite = RepositoryFixture::repository_root()
-        .read(".github/scripts/workbench-gizmo-mapping.test.cjs");
+    let publisher_suite = RepositoryFixture::repository_root()
+        .read(".github/scripts/workbench-publish.test.cjs");
 
     assert!(
-        pr_workflow.contains("node --test .github/scripts/workbench-records.test.cjs"),
-        "PR CI must invoke the Workbench record suite"
+        pr_workflow.contains("node --test .github/scripts/workbench-publish.test.cjs"),
+        "PR CI must invoke the issue publisher contract suite"
     );
     assert!(
-        pr_suite.contains("require('./workbench-gizmo-mapping.test.cjs')"),
-        "the PR-invoked Workbench suite must load Gizmo mapping tests"
-    );
-    assert!(
-        pr_suite.contains("require('./workbench-publish.test.cjs')"),
-        "the PR-invoked Workbench suite must load publisher tests"
-    );
-    assert!(
-        mapping_suite.contains("accepts a strictly sequential multi-PR feature plan")
-            && mapping_suite.contains("['Multiple PRs', 'Stacked PRs']")
-            && mapping_suite.contains("immediately preceding Gizmo ID"),
-        "the transitively loaded suite must enforce sequential Gizmo mapping"
+        publisher_suite.contains("rejects non-issue Workbench destination")
+            && publisher_suite.contains("requires the expected SHA")
+            && publisher_suite.contains("rejects an issue update with a stale expected SHA"),
+        "the publisher suite must guard issue-only paths and expected-SHA updates"
     );
 }
 

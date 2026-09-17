@@ -23,6 +23,27 @@ const test = /** @type {typeof import('node:test')} */ (
   process.getBuiltinModule('node:test')
 )
 
+const WorkbenchRemoteShaOverrideKind = Object.freeze({
+  NotConfigured: 'not-configured',
+  Configured: 'configured',
+})
+/** @typedef {{ kind: typeof WorkbenchRemoteShaOverrideKind.NotConfigured } | { kind: typeof WorkbenchRemoteShaOverrideKind.Configured, sha: string }} WorkbenchRemoteShaOverride */
+
+const WorkbenchExpectedShaOverrideKind = Object.freeze({
+  NotConfigured: 'not-configured',
+  Configured: 'configured',
+})
+/** @typedef {{ kind: typeof WorkbenchExpectedShaOverrideKind.NotConfigured } | { kind: typeof WorkbenchExpectedShaOverrideKind.Configured, sha: string }} WorkbenchExpectedShaOverride */
+
+/** @type {WorkbenchRemoteShaOverride} */
+const remoteShaNotConfigured = {
+  kind: WorkbenchRemoteShaOverrideKind.NotConfigured,
+}
+/** @type {WorkbenchExpectedShaOverride} */
+const expectedShaNotConfigured = {
+  kind: WorkbenchExpectedShaOverrideKind.NotConfigured,
+}
+
 const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = fs
 const { tmpdir } = os
 const { delimiter, join, resolve } = path
@@ -37,8 +58,8 @@ const issueContent = [
 ].join(String.fromCharCode(10))
 
 class WorkbenchPublisherHarness {
-  /** @param {{ remotePath: string, remoteSha?: string, expectedSha?: string }} options */
-  constructor({ remotePath, remoteSha = '', expectedSha = '' }) {
+  /** @param {{ remotePath: string, remoteSha: WorkbenchRemoteShaOverride, expectedSha: WorkbenchExpectedShaOverride }} options */
+  constructor({ remotePath, remoteSha, expectedSha }) {
     const inheritedEnv = { ...process.env }
     delete inheritedEnv.NOOK_WORKBENCH_EXPECTED_SHA
     delete inheritedEnv.REMOTE_SHA
@@ -60,7 +81,7 @@ const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
 appendFileSync(process.env.GH_CALLS, JSON.stringify(args) + String.fromCharCode(10))
 if (args.includes('PUT')) process.exit(0)
-if (process.env.REMOTE_SHA) {
+if (Object.hasOwn(process.env, 'REMOTE_SHA')) {
   process.stdout.write(process.env.REMOTE_SHA)
   process.exit(0)
 }
@@ -73,6 +94,19 @@ process.exit(1)
   }
 
   run() {
+    const expectedShaEnvironment =
+      this.expectedSha.kind === WorkbenchExpectedShaOverrideKind.Configured
+        ? { NOOK_WORKBENCH_EXPECTED_SHA: this.expectedSha.sha }
+        : {}
+    const remoteShaEnvironment =
+      this.remoteSha.kind === WorkbenchRemoteShaOverrideKind.Configured
+        ? { REMOTE_SHA: this.remoteSha.sha }
+        : {}
+    let inheritedPath = ''
+    for (const [name, value] of Object.entries(process.env)) {
+      if (name === 'PATH') inheritedPath = value
+    }
+
     const result = spawnSync(
       process.execPath,
       [publisherPath, this.localPath, this.remotePath, 'test: publish issue'],
@@ -83,11 +117,9 @@ process.exit(1)
           ...this.inheritedEnv,
           GH_CALLS: this.ghCalls,
           NOOK_WORKBENCH_REPOSITORY: 'meta-secret/nook-workbench',
-          ...(this.expectedSha
-            ? { NOOK_WORKBENCH_EXPECTED_SHA: this.expectedSha }
-            : {}),
-          ...(this.remoteSha ? { REMOTE_SHA: this.remoteSha } : {}),
-          PATH: `${this.binDirectory}${delimiter}${process.env.PATH || ''}`,
+          ...expectedShaEnvironment,
+          ...remoteShaEnvironment,
+          PATH: `${this.binDirectory}${delimiter}${inheritedPath}`,
         },
       },
     )
@@ -103,6 +135,8 @@ process.exit(1)
 void test('publishes a Workbench issue', () => {
   const harness = new WorkbenchPublisherHarness({
     remotePath: 'issues/focused/one.md',
+    remoteSha: remoteShaNotConfigured,
+    expectedSha: expectedShaNotConfigured,
   })
   try {
     const { result, calls } = harness.run()
@@ -122,7 +156,11 @@ for (const remotePath of [
   'issues/../outside.md',
 ]) {
   void test('rejects non-issue Workbench destination ' + remotePath, () => {
-    const harness = new WorkbenchPublisherHarness({ remotePath })
+    const harness = new WorkbenchPublisherHarness({
+      remotePath,
+      remoteSha: remoteShaNotConfigured,
+      expectedSha: expectedShaNotConfigured,
+    })
     try {
       const { result, calls } = harness.run()
       assert.equal(result.status, 2, result.stderr)
@@ -137,7 +175,11 @@ for (const remotePath of [
 void test('requires the expected SHA before replacing an issue', () => {
   const harness = new WorkbenchPublisherHarness({
     remotePath: 'issues/focused/one.md',
-    remoteSha: 'current-sha',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: expectedShaNotConfigured,
   })
   try {
     const { result, calls } = harness.run()
@@ -151,8 +193,14 @@ void test('requires the expected SHA before replacing an issue', () => {
 void test('updates an issue when the expected SHA matches', () => {
   const harness = new WorkbenchPublisherHarness({
     remotePath: 'issues/focused/one.md',
-    remoteSha: 'current-sha',
-    expectedSha: 'current-sha',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: {
+      kind: WorkbenchExpectedShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
   })
   try {
     const { result, calls } = harness.run()
@@ -166,8 +214,14 @@ void test('updates an issue when the expected SHA matches', () => {
 void test('rejects an issue update with a stale expected SHA', () => {
   const harness = new WorkbenchPublisherHarness({
     remotePath: 'issues/focused/one.md',
-    remoteSha: 'current-sha',
-    expectedSha: 'stale-sha',
+    remoteSha: {
+      kind: WorkbenchRemoteShaOverrideKind.Configured,
+      sha: 'current-sha',
+    },
+    expectedSha: {
+      kind: WorkbenchExpectedShaOverrideKind.Configured,
+      sha: 'stale-sha',
+    },
   })
   try {
     const { result, calls } = harness.run()

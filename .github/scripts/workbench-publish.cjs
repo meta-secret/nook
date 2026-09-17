@@ -3,7 +3,23 @@
 const { execFileSync } = process.getBuiltinModule('node:child_process')
 const { readFileSync } = process.getBuiltinModule('node:fs')
 
-/** @typedef {{ kind: 'missing' } | { kind: 'present', sha: string }} WorkbenchRemoteFile */
+const WorkbenchRemoteFileKind = Object.freeze({
+  Missing: 'missing',
+  Present: 'present',
+})
+/** @typedef {{ kind: typeof WorkbenchRemoteFileKind.Missing } | { kind: typeof WorkbenchRemoteFileKind.Present, sha: string }} WorkbenchRemoteFile */
+
+const WorkbenchPublishArgumentKind = Object.freeze({
+  Missing: 'missing',
+  Present: 'present',
+})
+/** @typedef {{ kind: typeof WorkbenchPublishArgumentKind.Missing } | { kind: typeof WorkbenchPublishArgumentKind.Present, value: string }} WorkbenchPublishArgument */
+
+const WorkbenchExpectedShaKind = Object.freeze({
+  Omitted: 'omitted',
+  Specified: 'specified',
+})
+/** @typedef {{ kind: typeof WorkbenchExpectedShaKind.Omitted } | { kind: typeof WorkbenchExpectedShaKind.Specified, value: string }} WorkbenchExpectedSha */
 
 const issuePathPattern =
   /^issues\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9._-]+)*\.md$/
@@ -11,10 +27,10 @@ const issuePathPattern =
 class WorkbenchIssuePublisher {
   /**
    * @param {string} repository
-   * @param {string | undefined} expectedSha
-   * @param {string | undefined} localPath
-   * @param {string | undefined} remotePath
-   * @param {string} message
+   * @param {WorkbenchExpectedSha} expectedSha
+   * @param {WorkbenchPublishArgument} localPath
+   * @param {WorkbenchPublishArgument} remotePath
+   * @param {WorkbenchPublishArgument} message
    */
   constructor(repository, expectedSha, localPath, remotePath, message) {
     this.repository = repository
@@ -25,37 +41,49 @@ class WorkbenchIssuePublisher {
   }
 
   publish() {
-    if (!this.localPath || !this.remotePath || !this.message) {
+    if (
+      this.localPath.kind === WorkbenchPublishArgumentKind.Missing ||
+      this.remotePath.kind === WorkbenchPublishArgumentKind.Missing ||
+      this.message.kind === WorkbenchPublishArgumentKind.Missing
+    ) {
       console.error(
         'Usage: workbench-publish.cjs <local-file> <issues/<feature>/<issue>.md> <commit-message>',
       )
       return 2
     }
-    if (!issuePathPattern.test(this.remotePath) || this.remotePath.includes('..')) {
-      console.error('Refusing invalid Workbench issue path: ' + this.remotePath)
+
+    const localPath = this.localPath.value
+    const remotePath = this.remotePath.value
+    const message = this.message.value
+    if (!issuePathPattern.test(remotePath) || remotePath.includes('..')) {
+      console.error('Refusing invalid Workbench issue path: ' + remotePath)
       return 2
     }
 
-    const localContent = readFileSync(this.localPath, 'utf8')
+    const localContent = readFileSync(localPath, 'utf8')
     const content = Buffer.from(localContent).toString('base64')
-    const remoteFile = this.readRemoteFile()
+    const remoteFile = this.readRemoteFile(remotePath)
 
-    if (remoteFile.kind === 'present' && !this.expectedSha) {
+    if (
+      remoteFile.kind === WorkbenchRemoteFileKind.Present &&
+      this.expectedSha.kind === WorkbenchExpectedShaKind.Omitted
+    ) {
       console.error(
         'Refusing to overwrite mutable Workbench issue without NOOK_WORKBENCH_EXPECTED_SHA: ' +
-          this.remotePath,
+          remotePath,
       )
       return 4
     }
     if (
-      remoteFile.kind === 'present' &&
-      remoteFile.sha !== this.expectedSha
+      remoteFile.kind === WorkbenchRemoteFileKind.Present &&
+      this.expectedSha.kind === WorkbenchExpectedShaKind.Specified &&
+      remoteFile.sha !== this.expectedSha.value
     ) {
       console.error(
         'Refusing stale Workbench issue update for ' +
-          this.remotePath +
+          remotePath +
           ': expected ' +
-          this.expectedSha +
+          this.expectedSha.value +
           ', current ' +
           remoteFile.sha,
       )
@@ -66,15 +94,15 @@ class WorkbenchIssuePublisher {
       'api',
       '--method',
       'PUT',
-      'repos/' + this.repository + '/contents/' + this.remotePath,
+      'repos/' + this.repository + '/contents/' + remotePath,
       '-f',
-      'message=' + this.message,
+      'message=' + message,
       '-f',
       'content=' + content,
       '-f',
       'branch=main',
     ]
-    if (remoteFile.kind === 'present') {
+    if (remoteFile.kind === WorkbenchRemoteFileKind.Present) {
       args.push('-f', 'sha=' + remoteFile.sha)
     }
 
@@ -82,16 +110,16 @@ class WorkbenchIssuePublisher {
     return 0
   }
 
-  /** @returns {WorkbenchRemoteFile} */
-  readRemoteFile() {
+  /** @param {string} remotePath @returns {WorkbenchRemoteFile} */
+  readRemoteFile(remotePath) {
     try {
       return {
-        kind: 'present',
+        kind: WorkbenchRemoteFileKind.Present,
         sha: execFileSync(
           'gh',
           [
             'api',
-            'repos/' + this.repository + '/contents/' + this.remotePath,
+            'repos/' + this.repository + '/contents/' + remotePath,
             '--jq',
             '.sha',
           ],
@@ -99,18 +127,54 @@ class WorkbenchIssuePublisher {
         ).trim(),
       }
     } catch {
-      /** @type {WorkbenchRemoteFile} */
-      const missing = { kind: 'missing' }
-      return missing
+      return { kind: WorkbenchRemoteFileKind.Missing }
     }
   }
 }
 
-const repository =
-  process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
-const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
-const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
-const message = messageParts.join(' ').trim()
+const cliArguments = process.argv.slice(2)
+/** @type {WorkbenchPublishArgument} */
+let localPath = { kind: WorkbenchPublishArgumentKind.Missing }
+/** @type {WorkbenchPublishArgument} */
+let remotePath = { kind: WorkbenchPublishArgumentKind.Missing }
+const messageParts = []
+let argumentPosition = 0
+for (const argument of cliArguments) {
+  if (argumentPosition === 0 && argument.length > 0) {
+    localPath = { kind: WorkbenchPublishArgumentKind.Present, value: argument }
+  } else if (argumentPosition === 1 && argument.length > 0) {
+    remotePath = { kind: WorkbenchPublishArgumentKind.Present, value: argument }
+  } else if (argumentPosition >= 2) {
+    messageParts.push(argument)
+  }
+  argumentPosition += 1
+}
+
+const messageValue = messageParts.join(' ').trim()
+/** @type {WorkbenchPublishArgument} */
+const message =
+  messageValue.length > 0
+    ? { kind: WorkbenchPublishArgumentKind.Present, value: messageValue }
+    : { kind: WorkbenchPublishArgumentKind.Missing }
+
+let repository = 'meta-secret/nook-workbench'
+/** @type {WorkbenchExpectedSha} */
+let expectedSha = { kind: WorkbenchExpectedShaKind.Omitted }
+for (const [name, value] of Object.entries(process.env)) {
+  if (name === 'NOOK_WORKBENCH_REPOSITORY' && value.length > 0) {
+    repository = value
+  }
+  if (name === 'NOOK_WORKBENCH_EXPECTED_SHA') {
+    const expectedShaValue = value.trim()
+    if (expectedShaValue.length > 0) {
+      expectedSha = {
+        kind: WorkbenchExpectedShaKind.Specified,
+        value: expectedShaValue,
+      }
+    }
+  }
+}
+
 const publisher = new WorkbenchIssuePublisher(
   repository,
   expectedSha,
