@@ -45,7 +45,6 @@ import {
 } from "$app-wasm";
 import {
   activeVaultScope,
-  type AuthProvidersSnapshot,
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   unselectedVaultScope,
@@ -74,6 +73,10 @@ export type VaultSynchronizationResult = Result<
   ProviderSyncOutcome,
   StorageOperationFailure | OAuthFailure
 >;
+
+export enum ProviderSyncMetadataUpdateOutcome {
+  Updated = "updated",
+}
 
 const log = browserLogRuntime.createLogger("vault-sync");
 
@@ -427,7 +430,7 @@ export class VaultSyncActions {
     yaml,
     revision,
   }: ProviderSyncMetadataUpdate): Promise<
-    Result<AuthProvidersSnapshot, StorageOperationFailure>
+    Result<ProviderSyncMetadataUpdateOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -477,7 +480,7 @@ export class VaultSyncActions {
         providers: updated.value.providers,
       });
       if (persisted.isErr()) return storageErr(persisted.error);
-      return storageOk(persisted.value);
+      return storageOk(ProviderSyncMetadataUpdateOutcome.Updated);
     } finally {
       revision.free();
     }

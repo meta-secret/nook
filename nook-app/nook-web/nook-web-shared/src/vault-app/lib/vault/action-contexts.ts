@@ -1,5 +1,9 @@
-import type { VaultSynchronizationResult } from "$lib/vault/sync.svelte";
-import type { StagedProviderConflictOutcome } from "$lib/vault/sync.svelte";
+import type {
+  ProviderSyncMetadataUpdateOutcome,
+  StagedProviderConflictOutcome,
+  VaultSynchronizationResult,
+} from "$lib/vault/sync.svelte";
+import type { ActiveVaultAuthSyncOutcome } from "$lib/vault/local-login";
 import type { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import type { Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
@@ -17,12 +21,12 @@ import type {
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type {
-  AuthProvidersSnapshot,
   ProviderSetupRequest,
   StorageProvider,
 } from "$lib/auth/providers";
 import type {
   ProviderRemovalOutcome,
+  ProviderPersistenceOutcome,
   ProviderSaveOutcome,
 } from "$lib/vault/providers.svelte";
 import type {
@@ -237,7 +241,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: ProviderPersistenceOptions,
-  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
+  ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<
     Result<PasswordEntriesRefreshSnapshot, OAuthFailure | VaultStorageFailure>
@@ -424,7 +428,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: SyncProviderPersistenceOptions,
-  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
+  ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs;
   raceStorageTimeout<T, E = VaultStorageFailure>(
     request: StorageTimeoutRace<T, E>,
@@ -465,7 +469,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
   syncActiveVaultStoreIdToAuth(): Promise<
-    Result<AuthProvidersSnapshot, VaultStorageFailure>
+    Result<ActiveVaultAuthSyncOutcome, VaultStorageFailure>
   >;
   syncFromStorage(
     freshness: ProviderSyncFreshness,
@@ -478,7 +482,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure | OAuthFailure>>;
   updateProviderSyncMetadata(
     request: ProviderSyncMetadataRequest,
-  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
+  ): Promise<Result<ProviderSyncMetadataUpdateOutcome, VaultStorageFailure>>;
   wasmStorageArgs(): NookStorageConnectArgs;
 }
 

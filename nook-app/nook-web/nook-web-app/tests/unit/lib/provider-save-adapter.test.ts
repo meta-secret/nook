@@ -33,6 +33,7 @@ import type {
 import {
   ActiveProviderCredentialsActions,
   ProviderPersistenceActions,
+  ProviderPersistenceOutcome,
   ProviderSaveOutcome,
 } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
@@ -81,7 +82,7 @@ function providerState(providerType: StorageProviderType): AdapterState {
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
     persistProviders: vi.fn(async () =>
-      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+      ok(ProviderPersistenceOutcome.Persisted),
     ),
   }
 }

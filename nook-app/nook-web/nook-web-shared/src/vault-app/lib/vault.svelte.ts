@@ -28,10 +28,7 @@ import {
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
-import {
-  type AuthProvidersSnapshot,
-  type ProviderSetupRequest,
-} from "$lib/auth/providers";
+import { type ProviderSetupRequest } from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
@@ -297,7 +294,12 @@ export class VaultState extends VaultRuntimeState {
 
   async activateConnectedExistingVault(
     storeId: StoreId,
-  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>> {
+  ): Promise<
+    Result<
+      localLoginActions.ConnectedExistingVaultActivationOutcome,
+      VaultStorageFailure
+    >
+  > {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }

@@ -2,6 +2,7 @@ import { ok, type Result } from 'neverthrow'
 import { Effect } from 'effect'
 import { NookLocalVaultUnlockState } from '$app-wasm'
 import { unselectedVaultScope } from '$lib/auth/providers'
+import { ActiveVaultAuthSyncOutcome } from '$lib/vault/local-login'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -128,7 +129,7 @@ describe('selectVaultForUnlock', () => {
 
   test('prepares the selected vault without protected provider or identity access', async () => {
     const syncActiveVaultStoreIdToAuth = vi.fn(async () =>
-      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+      ok(ActiveVaultAuthSyncOutcome.Synchronized),
     )
     const reloadProvidersForActiveVault = vi.fn(async () =>
       ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),

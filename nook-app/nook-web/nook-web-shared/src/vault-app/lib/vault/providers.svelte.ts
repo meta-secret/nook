@@ -157,6 +157,10 @@ export enum ProviderSaveOutcome {
   Saved = "saved",
 }
 
+export enum ProviderPersistenceOutcome {
+  Persisted = "persisted",
+}
+
 export enum OAuthRemoteReferenceSyncKind {
   NotApplicable = "not-applicable",
   Unchanged = "unchanged",
@@ -556,7 +560,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk(snapshot.value);
+    return storageOk(ProviderPersistenceOutcome.Persisted);
   }
 
   beginProviderSetup({ request }: ProviderSetup) {

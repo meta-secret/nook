@@ -69,6 +69,15 @@ export enum LocalVaultPresence {
   Present = "present",
 }
 
+export enum ActiveVaultAuthSyncOutcome {
+  NotRequired = "not-required",
+  Synchronized = "synchronized",
+}
+
+export enum ConnectedExistingVaultActivationOutcome {
+  Activated = "activated",
+}
+
 export interface ExistingVaultImportSlotPrepared {
   readonly activeVaultPresence: LocalVaultPresence;
   readonly localLoginPreparation: LocalLoginPreparationState.Idle;
@@ -638,25 +647,18 @@ export class VaultLoginActions {
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<
-    Result<AuthProvidersSnapshot, StorageOperationFailure>
+    Result<ActiveVaultAuthSyncOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (state.activeVault.kind === ActiveVaultKind.Closed)
-      return storageOk({
-        providers: state.providers,
-        activeVaultStoreId: unselectedVaultScope(),
-      });
+      return storageOk(ActiveVaultAuthSyncOutcome.NotRequired);
     const storeId = state.activeVault.storeId.trim();
-    if (!storeId)
-      return storageOk({
-        providers: state.providers,
-        activeVaultStoreId: unselectedVaultScope(),
-      });
+    if (!storeId) return storageOk(ActiveVaultAuthSyncOutcome.NotRequired);
     const snapshot: AuthProvidersSnapshot = {
       providers: state.providers,
       activeVaultStoreId: activeVaultScope(storeId),
     };
-    return state.enqueueStorage(async () => {
+    const persisted = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       return new AuthProviderPersistence({
@@ -664,12 +666,15 @@ export class VaultLoginActions {
         snapshot,
       }).save();
     });
+    return persisted.isErr()
+      ? storageErr(persisted.error)
+      : storageOk(ActiveVaultAuthSyncOutcome.Synchronized);
   }
 
   async activateConnectedExistingVault({
     storeId,
   }: LoginVaultActionRequest): Promise<
-    Result<AuthProvidersSnapshot, StorageOperationFailure>
+    Result<ConnectedExistingVaultActivationOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.isAuthenticated)
@@ -694,6 +699,9 @@ export class VaultLoginActions {
     state.openActiveVault(storeId);
     const catalog = await this.refreshLocalVaultCatalog();
     if (catalog.isErr()) return storageErr(catalog.error);
-    return this.syncActiveVaultStoreIdToAuth();
+    const synchronized = await this.syncActiveVaultStoreIdToAuth();
+    return synchronized.isErr()
+      ? storageErr(synchronized.error)
+      : storageOk(ConnectedExistingVaultActivationOutcome.Activated);
   }
 }
