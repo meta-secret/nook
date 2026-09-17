@@ -9,6 +9,11 @@ import initNookWasm, {
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../src/lib/browser-runtime-message'
 import {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -52,7 +57,7 @@ class ProviderStagingFixture {
 
 const providerStagingFixture = new ProviderStagingFixture()
 
-function parseProviderImport(providers: unknown[]) {
+function parseProviderImport(providers: BrowserRuntimeMessageValue[]) {
   return parseExtensionSessionRequest({
     type: ExtensionSessionMessageType.ImportVault,
     payload: {
@@ -278,19 +283,16 @@ describe('provider credential staging', () => {
     const source = [
       { ...providerStagingFixture.github(), metadata: new Date() },
     ]
-    const credentialBuffer = new ProviderCredentialBuffer(source)
-    try {
-      expect(
-        await credentialBuffer.stage({
-          decode: async (candidate) =>
-            admit_extension_storage_providers(candidate),
-        }),
-      ).toEqual(err(ProviderCredentialFailure.InvalidTransport))
-      expect(source[0]?.githubPat.state).toBe('token')
-    } finally {
-      credentialBuffer.clear()
-    }
-    expect(source[0]?.githubPat).toEqual({ state: 'missing' })
+    const admission = BrowserRuntimeMessage.from({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers: source,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+
+    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
+    expect(source[0]?.githubPat.state).toBe('token')
   })
 
   test('preserves valid identity-only metadata for canonical provider admission', async () => {

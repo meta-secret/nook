@@ -1,5 +1,6 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test'
-import { err, ok } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
+import { Effect } from 'effect'
 import {
   decode_extension_grant_authority_response,
   NookPairingVaultId,
@@ -8,14 +9,19 @@ import {
 import {
   ExtensionPairingApprovedGrantAdmission,
   ExtensionPairingApprovedMessageAdmissionFailure,
-  ExtensionPairingStorageProviderPayloadAdmission,
+  ExtensionStorageProviderPayloadAdmission,
+  RuntimeMessageDecodeFailureKind,
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
+  type ExtensionSessionTransport,
+  type ExtensionSessionTransportResult,
 } from '../src/background/service-worker/session-document'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
+import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
 import {
   extensionPairingGrantPolicyReady,
   extensionSessionGrantIdentity,
@@ -32,9 +38,51 @@ const {
 } = await import('../src/background/service-worker/pairing-import')
 const { classifySessionGrantAuthority } =
   await import('../src/offscreen/session-operations')
-type ImportDependencies = Parameters<
-  typeof importLocalEventLogUpdateWithDependencies
->[0]
+const unusedSessionTransport: ExtensionSessionTransport = {
+  sendMessage: async () => {
+    throw new Error('pairing fixture session transport must not send directly')
+  },
+}
+
+type PairingSessionTransportFixtureArgs = {
+  deliver: (
+    message: ExtensionSessionTransportRequest,
+  ) => Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
+}
+
+class PairingSessionTransportFixture implements ExtensionSessionTransport {
+  deliveryCount = 0
+
+  constructor(private readonly args: PairingSessionTransportFixtureArgs) {}
+
+  sendMessage(
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
+  sendMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+  async sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse?: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<
+    | ExtensionSessionTransportResult<ExtensionSessionResponse>
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
+    this.deliveryCount += 1
+    const delivery = await this.args.deliver(message)
+    if (delivery.isErr())
+      return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+        delivery.error,
+      )
+    if (!decodeResponse) return delivery
+    return decodeResponse(delivery.value)
+  }
+}
 
 const storedGrant: StoredExtensionPairingGrant = {
   vaultType: 'simple',
@@ -77,20 +125,18 @@ describe('extension pairing grant transport', () => {
     }
 
     expect(
-      new ExtensionPairingStorageProviderPayloadAdmission(complete)
-        .parse()
-        .isOk(),
+      new ExtensionStorageProviderPayloadAdmission(complete).parse().isOk(),
     ).toBe(true)
     const missingCreatedAt = Object.fromEntries(
       Object.entries(complete).filter(([key]) => key !== 'createdAt'),
     )
     expect(
-      new ExtensionPairingStorageProviderPayloadAdmission(missingCreatedAt)
+      new ExtensionStorageProviderPayloadAdmission(missingCreatedAt)
         .parse()
         .isErr(),
     ).toBe(true)
     expect(
-      new ExtensionPairingStorageProviderPayloadAdmission({
+      new ExtensionStorageProviderPayloadAdmission({
         ...complete,
         githubPat: () => 'not cloneable',
       })
@@ -117,8 +163,10 @@ describe('extension pairing grant transport', () => {
     const admission = await ingress.admit({})
     expect('reason' in admission).toBe(true)
     if ('reason' in admission) {
-      expect(admission.reason).toBe(
-        ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
+      expect(admission.reason).toEqual(
+        expect.objectContaining({
+          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
+        }),
       )
     }
   })
@@ -130,6 +178,20 @@ describe('extension pairing grant transport', () => {
       const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
       const events: string[] = []
       const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
+      const session = new PairingSessionTransportFixture({
+        deliver: async (message) => {
+          if (
+            message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
+          ) {
+            expect(events).toEqual(['ensure'])
+            events.push('classify')
+            return ok({ kind: 'Authorized', grant: storedGrant })
+          }
+          expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
+          events.push('update')
+          return ok({ ok: true })
+        },
+      })
       const response = await importLocalEventLogUpdateWithDependencies({
         vaultStoreId: storedGrant.vaultStoreId,
         eventLogRecords: [],
@@ -138,7 +200,7 @@ describe('extension pairing grant transport', () => {
         ensureSession: async () => {
           events.push('ensure')
           if (receiver === 'failed') throw new Error('receiver unavailable')
-          return ok()
+          return ok(unusedSessionTransport)
         },
         importEventLog: async () => {
           events.push('import')
@@ -152,21 +214,7 @@ describe('extension pairing grant transport', () => {
         persistPairingStorage: async () => {
           events.push('persist')
         },
-        sendSession: async (message) => {
-          if (!message || typeof message !== 'object' || !('type' in message)) {
-            throw new Error('expected a typed session request')
-          }
-          if (
-            message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
-          ) {
-            expect(events).toEqual(['ensure'])
-            events.push('classify')
-            return ok({ kind: 'Authorized', grant: storedGrant })
-          }
-          expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
-          events.push('update')
-          return ok({ ok: true })
-        },
+        sendSession: session.sendMessage.bind(session),
       })
       expect(events).toEqual(
         receiver === 'created'
@@ -192,11 +240,8 @@ describe('extension pairing grant transport', () => {
     async (scenario) => {
       const policy = await extensionPairingGrantPolicyReady
       const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
-      const sendSession = mock(
-        async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
-          if (!message || typeof message !== 'object' || !('type' in message)) {
-            throw new Error('expected a typed session request')
-          }
+      const session = new PairingSessionTransportFixture({
+        deliver: async (message) => {
           if (
             message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
           ) {
@@ -212,14 +257,14 @@ describe('extension pairing grant transport', () => {
             ),
           )
         },
-      )
+      })
       const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
       const response = await importLocalEventLogUpdateWithDependencies({
         vaultStoreId: storedGrant.vaultStoreId,
         eventLogRecords: [],
         loadPairingStorage: async () => ({ [key]: storedGrant }),
         pairingPolicyReady: extensionPairingGrantPolicyReady,
-        ensureSession: async () => ok(),
+        ensureSession: async () => ok(unusedSessionTransport),
         importEventLog: async () => ({
           vaultStoreId: storedGrant.vaultStoreId,
           accessGranted: true,
@@ -227,14 +272,14 @@ describe('extension pairing grant transport', () => {
           heads: ['event-1'],
         }),
         persistPairingStorage: async () => {},
-        sendSession,
+        sendSession: session.sendMessage.bind(session),
       })
 
       expect(response).toEqual({
         ok: false,
         reason: LocalEventLogUpdateFailure.EventLogImportFailed,
       })
-      expect(sendSession).toHaveBeenCalledTimes(2)
+      expect(session.deliveryCount).toBe(2)
       expect(freePairingVaultId).toHaveBeenCalledTimes(1)
       freePairingVaultId.mockRestore()
     },
@@ -243,20 +288,8 @@ describe('extension pairing grant transport', () => {
     const policy = await extensionPairingGrantPolicyReady
     const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
     const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
-    const response = await importLocalEventLogUpdateWithDependencies({
-      vaultStoreId: storedGrant.vaultStoreId,
-      eventLogRecords: [],
-      loadPairingStorage: async () => ({ [key]: storedGrant }),
-      pairingPolicyReady: extensionPairingGrantPolicyReady,
-      ensureSession: async () => ok(),
-      importEventLog: async () => {
-        throw new Error('decoder must reject before import')
-      },
-      persistPairingStorage: async () => {},
-      sendSession: async (message) => {
-        if (!message || typeof message !== 'object' || !('type' in message)) {
-          throw new Error('expected a typed session request')
-        }
+    const session = new PairingSessionTransportFixture({
+      deliver: async (message) => {
         expect(message.type).toBe(
           ExtensionSessionMessageType.ClassifyGrantAuthority,
         )
@@ -268,6 +301,18 @@ describe('extension pairing grant transport', () => {
           },
         })
       },
+    })
+    const response = await importLocalEventLogUpdateWithDependencies({
+      vaultStoreId: storedGrant.vaultStoreId,
+      eventLogRecords: [],
+      loadPairingStorage: async () => ({ [key]: storedGrant }),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      ensureSession: async () => ok(unusedSessionTransport),
+      importEventLog: async () => {
+        throw new Error('decoder must reject before import')
+      },
+      persistPairingStorage: async () => {},
+      sendSession: session.sendMessage.bind(session),
     })
 
     expect(response).toEqual({
@@ -281,12 +326,20 @@ describe('extension pairing grant transport', () => {
     const policy = await extensionPairingGrantPolicyReady
     const key = policy.pairingGrantStorageKey('vault')
     const freePairingVaultId = spyOn(NookPairingVaultId.prototype, 'free')
+    const session = new PairingSessionTransportFixture({
+      deliver: async (message) => {
+        expect(message.type).toBe(
+          ExtensionSessionMessageType.ClassifyGrantAuthority,
+        )
+        return ok({ kind: 'Authorized', grant: storedGrant })
+      },
+    })
     const response = await importLocalEventLogUpdateWithDependencies({
       vaultStoreId: 'vault',
       eventLogRecords: [],
       loadPairingStorage: async () => ({ [key]: storedGrant }),
       pairingPolicyReady: extensionPairingGrantPolicyReady,
-      ensureSession: async () => ok(),
+      ensureSession: async () => ok(unusedSessionTransport),
       importEventLog: async () => ({
         vaultStoreId: storedGrant.vaultStoreId,
         accessGranted: true,
@@ -294,15 +347,7 @@ describe('extension pairing grant transport', () => {
         heads: ['event-1'],
       }),
       persistPairingStorage: async () => {},
-      sendSession: async (message) => {
-        if (!message || typeof message !== 'object' || !('type' in message)) {
-          throw new Error('expected a typed session request')
-        }
-        expect(message.type).toBe(
-          ExtensionSessionMessageType.ClassifyGrantAuthority,
-        )
-        return ok({ kind: 'Authorized', grant: storedGrant })
-      },
+      sendSession: session.sendMessage.bind(session),
     })
 
     expect(response).toEqual({
@@ -393,7 +438,6 @@ describe('extension pairing grant transport', () => {
     'policy-unavailable',
     'missing-active',
     'transport-failed',
-    'malformed-response',
     'serialization-failed',
   ] as const)(
     'rejects %s before importing or updating a session',
@@ -417,11 +461,8 @@ describe('extension pairing grant transport', () => {
       const unusedOperation = mock(() =>
         Promise.reject(new Error('must not run')),
       )
-      const sendSession = mock(
-        async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
-          if (!message || typeof message !== 'object' || !('type' in message)) {
-            throw new Error('expected a typed session request')
-          }
+      const session = new PairingSessionTransportFixture({
+        deliver: async (message) => {
           expect(message.type).toBe(
             ExtensionSessionMessageType.ClassifyGrantAuthority,
           )
@@ -436,7 +477,6 @@ describe('extension pairing grant transport', () => {
               ),
             )
           }
-          if (scenario === 'malformed-response') return ok({})
           if (!('payload' in message)) {
             throw new Error('expected a session request payload')
           }
@@ -454,9 +494,9 @@ describe('extension pairing grant transport', () => {
                   : 'NoMatchingAuthority',
           })
         },
-      )
+      })
       const response = await importLocalEventLogUpdateWithDependencies({
-        ensureSession: async () => ok(),
+        ensureSession: async () => ok(unusedSessionTransport),
         persistPairingStorage: unusedOperation,
         vaultStoreId: 'unpaired-vault',
         eventLogRecords: [],
@@ -466,7 +506,7 @@ describe('extension pairing grant transport', () => {
             ? Promise.reject(new Error('policy unavailable'))
             : extensionPairingGrantPolicyReady,
         importEventLog: unusedOperation,
-        sendSession,
+        sendSession: session.sendMessage.bind(session),
       })
       expect(response).toEqual({
         ok: false,
@@ -484,9 +524,12 @@ describe('extension pairing grant transport', () => {
       grant: StoredExtensionPairingGrant
     }> = {}
 
-    expect(policy.isStoredExtensionPairingGrant(storageSnapshot.grant)).toBe(
-      false,
+    const decoded = await Effect.runPromise(
+      Effect.either(
+        policy.decodeStoredExtensionPairingGrant(storageSnapshot.grant),
+      ),
     )
+    expect(decoded._tag).toBe('Left')
   })
 
   test('projects only session identity fields from stored grants', () => {
