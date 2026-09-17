@@ -12,6 +12,11 @@ broad pre-push commands are not local or feature-stage permissions.
 Web development owns Nook's TypeScript and Svelte engineering expertise. It
 also owns browser presentation and frontend interaction behavior.
 
+For authored TypeScript, JavaScript, or Svelte scripts, load the Web-owned
+[TypeScript Effect Workflows](dynamic-skills/typescript-effect.md) policy.
+Apply Effect when the changed workflow meets its scope, and preserve Rust/WASM
+ownership of portable domain and security behavior.
+
 ## Context loading
 
 1. Read [the web development knowledge graph](knowledge-graph.md).

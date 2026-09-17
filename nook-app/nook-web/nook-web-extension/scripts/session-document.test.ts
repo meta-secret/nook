@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow'
 import {
   extensionSessionDocument,
   ExtensionSessionDocumentOwner,
+  ExtensionSessionDocumentStateKind,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
@@ -186,7 +187,7 @@ describe('extension session document ownership', () => {
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(settled).not.toHaveBeenCalled()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('coalesces inherited cleanup and prevents open from overtaking closure', async () => {
@@ -201,8 +202,8 @@ describe('extension session document ownership', () => {
     expect(fixture.createDocument).not.toHaveBeenCalled()
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await first).toEqual(ok())
-    expect(await second).toEqual(ok())
+    expect(await first).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
+    expect(await second).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
     expect(fixture.creation.complete()).toEqual(ok())
     expect((await opening).isOk()).toBe(true)
     expect(fixture.createDocument).toHaveBeenCalledTimes(1)
@@ -210,8 +211,12 @@ describe('extension session document ownership', () => {
 
   test('admits browser-confirmed absence without creating or closing a document', async () => {
     const fixture = new SessionDocumentFixture()
-    expect(await fixture.owner.close()).toEqual(ok())
-    expect(await fixture.owner.close()).toEqual(ok())
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
     expect(fixture.getContexts).toHaveBeenCalledTimes(1)
     expect(fixture.createDocument).not.toHaveBeenCalled()
     expect(fixture.closeDocument).not.toHaveBeenCalled()
@@ -270,7 +275,7 @@ describe('extension session document ownership', () => {
     expect(opened.value).toBe(shared.value)
     const closing = fixture.owner.close()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('closing while creation is pending denies the late sending capability', async () => {
@@ -288,7 +293,7 @@ describe('extension session document ownership', () => {
     )
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('revokes aliases and pending replies before awaiting browser closure', async () => {
@@ -318,7 +323,7 @@ describe('extension session document ownership', () => {
       ),
     )
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('retains denied ownership after closure fails until a caller explicitly closes again', async () => {
@@ -349,7 +354,7 @@ describe('extension session document ownership', () => {
     )
     const closing = fixture.owner.close()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
     expect(fixture.closeDocument).toHaveBeenCalledTimes(2)
   })
 
@@ -365,7 +370,9 @@ describe('extension session document ownership', () => {
         ),
       ),
     )
-    expect(await fixture.owner.close()).toEqual(ok())
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
     expect(fixture.closeDocument).not.toHaveBeenCalled()
   })
 

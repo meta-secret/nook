@@ -59,13 +59,33 @@ export type CloudKitZoneID = {
   ownerRecordName?: string;
 };
 
+type CloudKitRecordAsset = {
+  downloadURL?: string;
+  fileChecksum?: string;
+  size?: number;
+};
+
+type CloudKitRecordReference = {
+  recordName: string;
+  action?: "DELETE_SELF" | "NONE";
+};
+
+type CloudKitRecordFieldValue =
+  | string
+  | number
+  | boolean
+  | Date
+  | ArrayBuffer
+  | CloudKitRecordAsset
+  | CloudKitRecordReference;
+
 export type CloudKitRecord = {
   recordType: string;
   recordName: string;
   recordChangeTag?: string;
   createShortGUID?: boolean;
   shortGUID?: string;
-  fields?: Record<string, { value: unknown }>;
+  fields?: Record<string, { value: CloudKitRecordFieldValue }>;
 };
 
 export type CloudKitRecordsResponse = {
@@ -105,13 +125,13 @@ type CloudKitSharePresentationOptions = {
 };
 
 export type CloudKitDatabase = {
-  saveRecordZones: (zones: CloudKitRecordZones) => Promise<unknown>;
+  saveRecordZones: (zones: CloudKitRecordZones) => Promise<void>;
   // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   saveRecords: (
     records: CloudKitRecordBatch,
     options: CloudKitRecordSaveOptions,
   ) => Promise<CloudKitRecordsResponse>;
-  shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<unknown>;
+  shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<void>;
 };
 
 export type CloudKitAuthError = {
@@ -176,14 +196,18 @@ type ExternalCloudKitContainer = Omit<
   CloudKitContainer,
   "setUpAuth" | "fetchCurrentUserIdentity"
 > & {
-  setUpAuth: (options?: ExternalCloudKitAuthSetupOptions) => Promise<unknown>;
-  fetchCurrentUserIdentity?: () => Promise<unknown>;
+  setUpAuth: (
+    options?: ExternalCloudKitAuthSetupOptions,
+  ) => Promise<CloudKitUserIdentity | CloudKitAuthError | null | undefined>;
+  fetchCurrentUserIdentity?: () => Promise<
+    CloudKitUserIdentity | CloudKitAuthError | null | undefined
+  >;
 };
 
 export type CloudKitAuthTokenStore = {
   // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-  putToken: (containerIdentifier: string, authToken: unknown) => void;
-  getToken: (containerIdentifier: string) => unknown;
+  putToken: (containerIdentifier: string, authToken: string) => void;
+  getToken: (containerIdentifier: string) => string | undefined;
 };
 
 export type CloudKitConfiguration = {
@@ -419,7 +443,11 @@ class CloudKitRuntime {
   }
 
   isBraveBrowser(): boolean {
-    return Boolean((navigator as Navigator & { brave?: unknown }).brave);
+    return Boolean(
+      (navigator as Navigator & {
+        brave?: { readonly isBrave?: () => Promise<boolean> };
+      }).brave,
+    );
   }
 
   webAuthTokenStorageDiagnostics(): {
@@ -600,14 +628,22 @@ class CloudKitRuntime {
     return outcome;
   }
 
-  loadCloudKitScript(): Promise<Result<void, OAuthFailure>> {
+  private loadedCloudKitApi(): Result<CloudKitGlobal, OAuthFailure> {
+    const cloudKit = window.CloudKit;
+    return cloudKit
+      ? ok(cloudKit)
+      : err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
+  }
+
+  loadCloudKitScript(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     return new Promise((resolve) => {
       try {
-        if (window.CloudKit) {
-          resolve(ok());
+        const cloudKit = window.CloudKit;
+        if (cloudKit) {
+          resolve(ok(cloudKit));
           return;
         }
-        const loaded = () => resolve(ok());
+        const loaded = () => resolve(this.loadedCloudKitApi());
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
         const existing = document.querySelector(

@@ -14,21 +14,13 @@
 
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
-  { file: 'nook-web-extension/src/background/service-worker/authenticator-session-adapter.ts', gitBlobSha1: '23bb5ba1e44d21e8d6bc645eece69f2570f3ab93' },
   { file: 'nook-web-extension/src/background/service-worker/extension-lifecycle-routing.ts', gitBlobSha1: 'efc028b74d41316a7d7d9418fa5577dc33dbaea9' },
-  { file: 'nook-web-extension/src/background/service-worker/session-document.ts', gitBlobSha1: '31b38c844da190774a2b260ef5b278a04910b9a7' },
-  { file: 'nook-web-extension/src/background/service-worker/session-lifecycle.ts', gitBlobSha1: 'ef7be9223c1570c86140a8c52634b6c1aea73c03' },
   { file: 'nook-web-extension/src/offscreen/session-lease.ts', gitBlobSha1: '31ace004ee84763da821ca435ec23cba1257dfb5' },
-  { file: 'nook-web-extension/src/offscreen/session-operations.ts', gitBlobSha1: 'eb770e06c0a633a3959600790e52b679575490af' },
   { file: 'nook-web-extension/src/offscreen/session-vault-operations.ts', gitBlobSha1: '5a398613f9a10c4a6700c0340ed68acb6a74b183' },
-  { file: 'nook-web-extension/src/offscreen/session.ts', gitBlobSha1: '6a24837db1577bc2ea794bc626eb5ef3110bffae' },
   { file: 'nook-web-shared/src/extension/event-log-bridge.ts', gitBlobSha1: '9c0ba97f5d2c67831846d56a250ec3daba854aac' },
   { file: 'nook-web-shared/src/vault-app/lib/app/browser-lifecycle.ts', gitBlobSha1: '0ffbc4561b79fe6ee8ea0ed3f637e4ab38a926f7' },
   { file: 'nook-web-shared/src/vault-app/lib/app/workspace-route.ts', gitBlobSha1: 'facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f' },
   { file: 'nook-web-shared/src/vault-app/lib/auth/google/oauth.ts', gitBlobSha1: 'c39c31f80c2e5994fc7dc683f6250ba2a09fbbbe' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/icloud/auth-state.ts', gitBlobSha1: '622ed437bc74c1f552ddee3c8b70d609a7e8293d' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts', gitBlobSha1: '69347207bfab566ee2f9445bf3c3ced8f9865a60' },
-  { file: 'nook-web-shared/src/vault-app/lib/auth/icloud/oauth.ts', gitBlobSha1: 'f64a1694fa343b3315e3edee728e6226644b44d5' },
   { file: 'nook-web-shared/src/vault-app/lib/auth/passkey-device-protection.ts', gitBlobSha1: 'b9f16a802a269449fd6090ef7e6d659a5875e01d' },
   { file: 'nook-web-shared/src/vault-app/lib/auth/providers.ts', gitBlobSha1: '2bfcdb4b46a8457574f48cc3398f51f3e6c42fbf' },
   { file: 'nook-web-shared/src/vault-app/lib/components/AddSecretForm.svelte', gitBlobSha1: '74a60d20248c5ea3114b8eb1e2c3ec2a20a99658' },

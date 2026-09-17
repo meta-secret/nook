@@ -116,14 +116,18 @@ class ExtensionSessionExpiryLifecycle {
     }
   }
 
-  renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+  renew(
+    generation: number,
+  ): Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure> {
     if (
       generation !== this.generation ||
       this.scheduleState.kind !== SessionExpiryScheduleKind.Scheduled
     ) {
       return err(ExtensionSessionLeaseFailure.Locked)
     }
-    return this.scheduleState.lease.renew(generation)
+    const renewed = this.scheduleState.lease.renew(generation)
+    if (renewed.isErr()) return err(renewed.error)
+    return ok(this.scheduleState.lease)
   }
 }
 
@@ -345,7 +349,7 @@ async function handleCompanionIdentityDiscovery(
 
 type SessionSuccess<T> =
   T extends Result<infer Value, SessionOperationFailure> ? Value : never
-type ExtensionSessionResponse = SessionSuccess<
+export type ExtensionSessionResponse = SessionSuccess<
   | Awaited<ReturnType<typeof handleMessage>>
   | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
   | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>

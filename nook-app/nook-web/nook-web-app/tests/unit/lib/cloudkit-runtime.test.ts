@@ -27,6 +27,16 @@ class CloudKitTransportFixture {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CloudKit transport identity adapter', () => {
+  test('returns the loaded CloudKit API capability', async () => {
+    const transport = new CloudKitTransportFixture()
+    transport.install()
+
+    const loaded = await cloudKitRuntime.loadCloudKitScript()
+    expect(loaded.isOk()).toBe(true)
+    if (loaded.isErr()) return
+    expect(loaded.value).toBe(window.CloudKit)
+  })
+
   test('normalizes both transport methods with their owning receivers', async () => {
     const transport = new CloudKitTransportFixture()
     transport.install()

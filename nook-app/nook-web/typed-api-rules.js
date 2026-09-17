@@ -53,6 +53,8 @@ export const untrustedInputAdapterFiles = [
   "nook-web-shared/src/extension/companion-ready.ts",
   "nook-web-shared/src/extension/extension-connect-scope.ts",
   "nook-web-shared/src/extension/runtime-messages.ts",
+  // Chrome runtime replies enter the Rust decoders as singular unknown values.
+  "nook-web-extension/src/lib/nook-wasm.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/web-auth-wait.ts",
@@ -123,6 +125,58 @@ export const typedApiRules = {
 };
 
 export const untrustedInputAdapterRules = {
+  // Keep a singular unknown available at the immediate browser/JSON decoder,
+  // but do not let an untyped value escape inside a collection or composite
+  // contract. These selectors use TypeScript ESTree nodes (not source-text
+  // matching) so nested generic and structural payloads are covered too.
+  "no-restricted-syntax": [
+    "error",
+    {
+      selector: "TSArrayType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in arrays at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSTupleType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in tuples at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSTypeParameterInstantiation:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in generic arguments at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSUnionType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in unions at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSIntersectionType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in intersections at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSPropertySignature > TSTypeAnnotation > TSUnknownKeyword",
+      message:
+        "Nook web forbids unknown properties in transport contracts. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSIndexSignature > TSTypeAnnotation > TSUnknownKeyword",
+      message:
+        "Nook web forbids unknown index-signature values at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSConditionalType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in conditional types at transport boundaries. Decode each value into a concrete type.",
+    },
+    {
+      selector: "TSMappedType:has(TSUnknownKeyword)",
+      message:
+        "Nook web forbids unknown in mapped types at transport boundaries. Decode each value into a concrete type.",
+    },
+  ],
   "@typescript-eslint/no-restricted-types": [
     "error",
     {

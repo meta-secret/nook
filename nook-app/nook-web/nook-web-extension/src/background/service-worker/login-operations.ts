@@ -12,9 +12,18 @@ import {
   type WebsiteLoginFillResponse,
 } from '../../lib/login-fill-messages'
 import { SessionOperationFailureKind } from '../../lib/session-operation-queue'
+import {
+  WebsiteLoginCanceledMessageType,
+  WebsiteLoginSelectedMessageType,
+} from '../../lib/login-picker-messages'
+import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionSessionGrantIdentity } from '../pairing-grants'
-import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
+import {
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  type ExtensionSessionRequest,
+} from '../../offscreen/session-request-adapter'
+import type { AccountPickerPageMessage } from './account-picker-page-target'
 import {
   AccountPickerSurfaceKind,
   AccountPickerPageTarget,
@@ -37,6 +46,11 @@ import {
 } from './login-session-response-adapter'
 import { websiteLoginRevealSessionRequest } from './session-request-projections'
 import { decode_website_login_save_pending_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+type WebsiteLoginSaveSessionRequest = Extract<
+  ExtensionSessionRequest,
+  { type: ExtensionSessionMessageType.PlanLoginSave }
+>
 
 enum LoginPickerOpenStatus {
   Ready = 'ready',
@@ -262,8 +276,8 @@ export async function selectLoginPicker({
     return { ok: false, reason: 'login-picker-expired' }
   }
   try {
-    const nookTypedArgs0_3: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: 'nook:website-login-selected',
+    const nookTypedArgs0_3: AccountPickerPageMessage = {
+      type: WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected,
       payload: {
         origin: request.origin,
         requestId: request.requestId,
@@ -330,8 +344,8 @@ export async function cancelLoginPicker({
   }
   await accountPickerSessions.removeLoginPicker(request.requestId)
   try {
-    const nookTypedArgs0_4: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: 'nook:website-login-canceled',
+    const nookTypedArgs0_4: AccountPickerPageMessage = {
+      type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
       payload: {
         origin: request.origin,
         requestId: request.requestId,
@@ -391,8 +405,8 @@ export async function websiteLoginSaveOffer({
     // clears its credentials synchronously, so a document navigation cannot
     // strand the request behind a disposable sender-bound status round-trip.
     // Prefer the selected/ready vault, then the first password-filling grant.
-    const nookTypedArgs0_7 = {
-      type: 'nook:extension-session-plan-login-save',
+    const nookTypedArgs0_7: WebsiteLoginSaveSessionRequest = {
+      type: ExtensionSessionMessageType.PlanLoginSave,
       payload: {
         ...extensionSessionGrantIdentity(grant),
         origin: message.payload.origin,

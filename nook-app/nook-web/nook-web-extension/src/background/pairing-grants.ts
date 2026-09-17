@@ -16,7 +16,6 @@ import type {
   CreateExtensionPairingStateInput,
   ExtensionPairingGrantApproval,
   ExtensionPairingGrantRemovalInput,
-  ExtensionPairingRecord,
   ExtensionPairingState,
   ExtensionReadySetup,
   ExtensionSetupAfterRemoval,
@@ -33,8 +32,11 @@ export type ImportedEventLogState = ImportedExtensionEventLog
 export type PairingSetupAfterRemoval = ExtensionSetupAfterRemoval
 export type SelectedPairingGrant = SelectedExtensionPairingGrant
 export type { StoredExtensionPairingGrant }
-export type ExtensionPairingItems = Record<string, ExtensionPairingRecord>
-export type LegacyPairingStorageItems = Record<string, unknown>
+export type ExtensionPairingItems = Record<
+  string,
+  ExtensionPairingState['entries'][number]['record']
+>
+export type LegacyPairingStorageItems = ExtensionPairingItems
 
 export type ExtensionSessionGrantIdentity = Pick<
   StoredExtensionPairingGrant,

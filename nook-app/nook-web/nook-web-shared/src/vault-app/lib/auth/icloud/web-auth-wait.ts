@@ -42,8 +42,9 @@ export class CloudKitTokenWait {
   // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private readonly tokenListener = (outcome: Result<string, OAuthFailure>) =>
     this.finish(outcome);
-  private readonly messageListener = (event: MessageEvent<unknown>) => {
-    const token = this.request.owner.webAuthTokenFromMessageData(event.data);
+  private readonly messageListener = (event: MessageEvent) => {
+    const data: unknown = event.data;
+    const token = this.request.owner.webAuthTokenFromMessageData(data);
     if (token.kind === WebAuthTokenLookupKind.Unavailable) return;
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const stored = cloudKitRuntime.storeCloudKitWebAuthToken({

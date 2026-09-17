@@ -72,11 +72,11 @@ type ExtensionMetadataParse =
     };
 
 type ExtensionMetadataTransport = {
-  readonly channel?: unknown;
-  readonly version?: unknown;
-  readonly extension_id?: unknown;
-  readonly install_method?: unknown;
-  readonly install_url?: unknown;
+  readonly channel: string;
+  readonly version: string;
+  readonly extension_id: string;
+  readonly install_method: string;
+  readonly install_url: string;
 };
 
 function isExtensionMetadataTransport(
@@ -85,10 +85,15 @@ function isExtensionMetadataTransport(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return (
     "channel" in value &&
+    typeof value.channel === "string" &&
     "version" in value &&
+    typeof value.version === "string" &&
     "extension_id" in value &&
+    typeof value.extension_id === "string" &&
     "install_method" in value &&
-    "install_url" in value
+    typeof value.install_method === "string" &&
+    "install_url" in value &&
+    typeof value.install_url === "string"
   );
 }
 

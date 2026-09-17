@@ -26,6 +26,42 @@ function pairingGrant(): Parameters<
 }
 
 describe('authenticator session adapter', () => {
+  test('returns a typed acknowledgement only after the page accepts selection', async () => {
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: {
+          sendMessage: async () => ({ ok: true }),
+        },
+      },
+    })
+    const {
+      AuthenticatorPageAcknowledgementKind,
+      extensionAuthenticatorSession,
+    } = await import('../src/background/service-worker/authenticator-session-adapter')
+    const args: Parameters<
+      typeof extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged
+    >[0] = {
+      tabId: 7,
+      frameId: 0,
+      origin: 'https://login.example.test',
+      requestId: 'request-1',
+      vaultStoreId: 'vault-1',
+      secretId: 'secret-1',
+      authorizationGeneration: 'generation-1',
+    }
+
+    expect(
+      await extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged(
+        args,
+      ),
+    ).toEqual(
+      ok({
+        kind: AuthenticatorPageAcknowledgementKind.Acknowledged,
+        requestId: 'request-1',
+      }),
+    )
+  })
+
   test('owns backup codes until the runtime accepts the message', async () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',

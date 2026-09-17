@@ -7,6 +7,14 @@
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
+  type AuthenticatorPickerRuntimeMessage =
+    | { type: 'nook:authenticator-picker-query'; payload: { requestId: string; query: string } }
+    | { type: 'nook:authenticator-picker-select'; payload: { requestId: string; vaultStoreId: string; secretId: string } }
+    | { type: 'nook:authenticator-picker-cancel'; payload: { requestId: string } }
+  type AuthenticatorPickerRuntimeResponse =
+    | { ok: true; origin: string; accounts?: WebsiteAuthenticatorOption[] }
+    | { ok: true }
+    | { ok: false; reason?: string }
   import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
@@ -36,15 +44,19 @@
   let querySequence = 0
   let completed = false
 
-  function sendRuntimeMessage(message: unknown): Promise<unknown> {
+  function sendRuntimeMessage(
+    message: AuthenticatorPickerRuntimeMessage,
+  ): Promise<AuthenticatorPickerRuntimeResponse | undefined> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: unknown) => {
+      chrome.runtime.sendMessage(message, (response: AuthenticatorPickerRuntimeResponse | undefined) => {
         resolve(response)
       })
     })
   }
 
-  function isOkResponse(response: unknown): response is { ok: true } {
+  function isOkResponse(
+    response: AuthenticatorPickerRuntimeResponse | undefined,
+  ): response is { ok: true } {
     return Boolean(
       response &&
       typeof response === 'object' &&
@@ -53,7 +65,9 @@
     )
   }
 
-  function isAccountQueryResponse(response: unknown): response is {
+  function isAccountQueryResponse(
+    response: AuthenticatorPickerRuntimeResponse | undefined,
+  ): response is {
     ok: true
     origin: string
     accounts?: WebsiteAuthenticatorOption[]
@@ -126,7 +140,7 @@
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
-      const message: { type: string; payload: { requestId: string } } = {
+      const message: AuthenticatorPickerRuntimeMessage = {
         type: 'nook:authenticator-picker-cancel',
         payload: { requestId },
       }
