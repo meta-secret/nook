@@ -1,6 +1,7 @@
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import { ExtensionSessionLifecycleMessageType } from '../../lib/extension-session-lifecycle-message-type'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
+import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
 type ExtensionSessionRuntimeMessage = {
   type:
@@ -13,21 +14,7 @@ type AuthenticationSurfacesRefreshMessage = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
-export type ExtensionSessionRuntimeMessageInput = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | ExtensionSessionRuntimeMessageInput
-    | ExtensionSessionRuntimeMessageInput[]
-}
-
-export type ExtensionSessionRuntimeMessageValue =
-  | ExtensionSessionRuntimeMessageInput
-  | ExtensionSessionRuntimeMessageInput[]
-  | string
-  | number
-  | boolean
+export type ExtensionSessionRuntimeMessageValue = BrowserRuntimeMessage
 
 export function isExtensionSessionEnsureMessage(
   message: ExtensionSessionRuntimeMessageValue,

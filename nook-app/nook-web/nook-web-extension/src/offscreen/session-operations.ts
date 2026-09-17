@@ -5,6 +5,7 @@ import {
 } from '../lib/session-operation-queue'
 import type {
   ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
   ExtensionSessionLeaseFailure,
 } from './session-lease'
 import {
@@ -61,9 +62,9 @@ export type SessionOperationContext = {
   getManager: () => Promise<NookVaultManager>
   activateSession: () => Promise<DeviceResult>
   deviceResult: (activeManager: NookVaultManager) => Promise<DeviceResult>
-  currentGeneration: () => number
+  currentGeneration: () => ExtensionSessionGeneration
   renewSessionExpiry: (
-    generation: number,
+    generation: ExtensionSessionGeneration,
   ) => Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure>
   resetOperations: (error: SessionOperationFailure) => void
 }

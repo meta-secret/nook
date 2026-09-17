@@ -3,8 +3,11 @@ import {
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
 import { err, ok, type Result } from 'neverthrow'
-import { ExtensionSessionLeaseFailure } from './session-lease'
-import { ActiveExtensionSessionLease } from './session-lease'
+import {
+  ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
+  ExtensionSessionLeaseFailure,
+} from './session-lease'
 import initNookWasm, {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
@@ -88,14 +91,14 @@ class ExtensionSessionExpiryLifecycle {
   private scheduleState: SessionExpirySchedule = {
     kind: SessionExpiryScheduleKind.Stopped,
   }
-  private generation = 0
+  private generation = ExtensionSessionGeneration.initial()
 
-  currentGeneration(): number {
+  currentGeneration(): ExtensionSessionGeneration {
     return this.generation
   }
 
   activate(onExpire: () => void): void {
-    this.generation += 1
+    this.generation = this.generation.next()
     if (this.scheduleState.kind === SessionExpiryScheduleKind.Scheduled) {
       this.scheduleState.lease.stop()
     }
@@ -107,9 +110,9 @@ class ExtensionSessionExpiryLifecycle {
         generation,
         durationMs: SESSION_DURATION_MS,
         onExpire: () => {
-          if (generation !== this.generation) return
+          if (!this.generation.matches(generation)) return
           this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
-          this.generation += 1
+          this.generation = this.generation.next()
           onExpire()
         },
       }),
@@ -117,10 +120,10 @@ class ExtensionSessionExpiryLifecycle {
   }
 
   renew(
-    generation: number,
+    generation: ExtensionSessionGeneration,
   ): Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure> {
     if (
-      generation !== this.generation ||
+      !this.generation.matches(generation) ||
       this.scheduleState.kind !== SessionExpiryScheduleKind.Scheduled
     ) {
       return err(ExtensionSessionLeaseFailure.Locked)
