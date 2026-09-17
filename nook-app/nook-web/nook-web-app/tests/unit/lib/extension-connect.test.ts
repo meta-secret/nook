@@ -11,6 +11,7 @@ import {
   ExtensionConnectRequestStateKind,
   IdentityHandoffResponseDecodeFailureKind,
   identityHandoffResponseDecoder,
+  companionResponseDecoder,
   pairingApprovalResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -84,6 +85,61 @@ describe('extension identity handoff response decoding', () => {
         IdentityHandoffResponseDecodeFailureKind.InvalidResponse,
       )
     }
+  })
+})
+
+describe('extension runtime response decoding', () => {
+  test('rejects launcher acknowledgements with unrelated fields', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeLauncher({ ok: true, stale: true }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+  })
+
+  test('decodes discovery and paired handoff payload objects', () => {
+    const discovery = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityDiscovery({
+          ok: true,
+          status: { status: 'locked' },
+        }),
+      ),
+    )
+    const handoff = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityHandoff({
+          ok: true,
+          response: { encryptedEnvelope: 'sealed' },
+        }),
+      ),
+    )
+
+    expect(discovery._tag).toBe('Right')
+    expect(handoff._tag).toBe('Right')
+  })
+
+  test('decodes unlock acknowledgements before request binding is checked', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeUnlock({
+          ok: true,
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+        }),
+      ),
+    )
+
+    expect(decoded).toEqual({
+      _tag: 'Right',
+      right: {
+        ok: true,
+        requestId: 'request-1',
+        vaultStoreId: 'store-1',
+      },
+    })
   })
 })
 
