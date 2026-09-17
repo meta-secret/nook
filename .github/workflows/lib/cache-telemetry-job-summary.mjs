@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { BuildkitCacheExportByteMeasurementStatus } from "./buildkit-cache-export-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
 
@@ -7,6 +8,17 @@ export class CacheTelemetryJobSummary {
   /** @param {CacheTelemetryRecord} record */
   constructor(record) {
     this.record = record;
+  }
+
+  /** @returns {string} */
+  exportByteSummary() {
+    const measurement = this.record.buildkit.cache_export.byte_measurement;
+    switch (measurement.status) {
+      case BuildkitCacheExportByteMeasurementStatus.Measured:
+        return `${measurement.bytes} measured bytes`;
+      case BuildkitCacheExportByteMeasurementStatus.Unavailable:
+        return `byte measurement unavailable (${measurement.reason})`;
+    }
   }
 
   /** @param {string | undefined} [filename] @returns {void} */
@@ -44,7 +56,7 @@ export class CacheTelemetryJobSummary {
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
         ...compilePhaseSummary,
-        `- Observed BuildKit registry exporter activity: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
+        `- Observed BuildKit registry exporter activity: ${this.exportByteSummary()} across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
         "",
       ].join("\n"),
     );

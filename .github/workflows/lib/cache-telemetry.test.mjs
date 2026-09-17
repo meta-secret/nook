@@ -5,7 +5,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  BuildkitCacheExportTelemetry,
   CompilePhaseCacheExportMode,
   CompilePhaseStatus,
   CacheScopeTelemetry,
@@ -468,7 +467,10 @@ void test("normalizes Buildx history output and computes the target-step cache r
     cache_export: {
       attempts: 0,
       completed: 0,
-      bytes: 0,
+      byte_measurement: {
+        status: "unavailable",
+        reason: "buildkit_did_not_emit_byte_count",
+      },
       duration_ms: 0,
       incomplete_failures: 0,
     },
@@ -480,51 +482,6 @@ void test("normalizes Buildx history output and computes the target-step cache r
   assert.ok(secondRecord);
   assert.equal(firstRecord.cache_hit_rate_percent, 75);
   assert.equal(secondRecord.status, "error");
-});
-
-void test("extracts structured registry cache bytes, timings, and incomplete failures", () => {
-  const summary = new BuildkitCacheExportTelemetry([
-    {
-      vertexes: [
-        {
-          digest: "sha256:complete",
-          name: "exporting cache to registry",
-          started: "2026-09-13T01:00:00Z",
-          completed: "2026-09-13T01:00:03.250Z",
-        },
-        {
-          digest: "sha256:failed",
-          name: "exporting cache to registry",
-          started: "2026-09-13T01:00:04Z",
-          error: "rpc error: code = Unavailable",
-        },
-      ],
-      statuses: [
-        {
-          vertex: "sha256:complete-transfer",
-          id: "push",
-          name: "pushing cache manifest",
-          current: 0,
-          total: 4096,
-        },
-        {
-          vertex: "sha256:failed-transfer",
-          id: "push",
-          name: "pushing layers",
-          current: 1024,
-          total: 8192,
-        },
-      ],
-    },
-  ]).summary();
-
-  assert.deepEqual(summary, {
-    attempts: 2,
-    completed: 1,
-    bytes: 5120,
-    duration_ms: 3250,
-    incomplete_failures: 1,
-  });
 });
 
 void test("accepts the documented Buildx JSON array and PascalCase fields", () => {
@@ -637,7 +594,9 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
     CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
   const originalReadHistoryEvents =
     CacheTelemetry.readHistoryEvents.bind(CacheTelemetry);
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-telemetry-"));
+  const temporary = fs.mkdtempSync(
+    path.join(os.tmpdir(), "nook-cache-telemetry-"),
+  );
   const report = {
     stage: "wasm-node-test-and-coverage",
     baked_runtime_mode: "READ_WRITE",
@@ -674,19 +633,20 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
       cached_steps: 0,
     },
   ];
-  CacheTelemetry.readHistoryEvents = () => Promise.resolve([
-    {
-      logs: [
-        {
-          vertex: "sha256:wasm-node",
-          timestamp: "2026-09-15T01:01:00Z",
-          data: Buffer.from(
-            `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\nNOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}\n`,
-          ).toString("base64"),
-        },
-      ],
-    },
-  ]);
+  CacheTelemetry.readHistoryEvents = () =>
+    Promise.resolve([
+      {
+        logs: [
+          {
+            vertex: "sha256:wasm-node",
+            timestamp: "2026-09-15T01:01:00Z",
+            data: Buffer.from(
+              `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\nNOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}\n`,
+            ).toString("base64"),
+          },
+        ],
+      },
+    ]);
 
   try {
     const record = await CacheTelemetry.collectTelemetry({
@@ -830,14 +790,7 @@ void test("a real raw fallback remains active despite healthy terminal evidence"
     ),
     { state: "fallback", reason: "cache_transport_unavailable" },
   );
-  assert.deepEqual(
-    resolveSccacheFallback(
-      [],
-      active,
-      fallback,
-    ),
-    fallback,
-  );
+  assert.deepEqual(resolveSccacheFallback([], active, fallback), fallback);
   assert.deepEqual(
     resolveSccacheFallback(
       [],
@@ -853,10 +806,37 @@ void test("rejects malformed nested telemetry records at the ingress", () => {
   assert.throws(
     () =>
       CacheTelemetry.validateTelemetryRecord({
-        schema_version: 1,
+        schema_version: 2,
         github: "invalid",
       }),
     /telemetry github context is required/,
+  );
+});
+
+void test("rejects malformed cache-export byte measurement states", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const malformedMeasurement = {
+    ...record,
+    buildkit: {
+      ...record.buildkit,
+      cache_export: {
+        ...record.buildkit.cache_export,
+        byte_measurement: {
+          status: "unavailable",
+          reason: "zero_assumed",
+        },
+      },
+    },
+  };
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedMeasurement),
+    /telemetry buildkit.cache_export.byte_measurement is invalid/,
   );
 });
 

@@ -295,6 +295,15 @@ legacy registered `nook` runner is not used.
   verification runs both phases with no registry exporter while retaining
   sccache access. No manual version suffix or custom dependency fingerprint
   selects this cache; BuildKit invalidates from the real Docker inputs.
+- Cache telemetry schema version 2 records registry-export bytes as a closed
+  measurement state. A byte count is `measured` only when BuildKit emits a
+  structured status or plain-progress transfer count, including an observed
+  zero. A completed export without either counter is `unavailable` with reason
+  `buildkit_did_not_emit_byte_count`; it is never reported as numeric zero.
+  Export completion and manifest evidence remain authoritative independently
+  of byte-count availability. Version 1 artifacts are rejected rather than
+  migrated because telemetry artifacts are per-run observations, not durable
+  state.
 - Delivery CI persists the toolchain in `nook-rust-base-v2`.
 - Native dependencies use `nook-rust-deps-v4`.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.

@@ -1,3 +1,8 @@
+import {
+  BuildkitCacheExportByteMeasurementStatus,
+  BuildkitCacheExportByteUnavailableReason,
+} from "./buildkit-cache-export-telemetry.mjs";
+
 /** Owns cache-export telemetry decoded from BuildKit's plain progress stream. */
 /** @typedef {{completed: boolean, failed: boolean, duration_ms: number, transfers: Map<string, number>}} PlainCacheExport */
 export class BuildkitPlainLogTelemetry {
@@ -44,9 +49,10 @@ export class BuildkitPlainLogTelemetry {
       const cacheExport = exportsByVertex.get(vertex);
       if (!cacheExport) continue;
       if (/\b(?:ERROR|CANCELED)\b/i.test(detail)) cacheExport.failed = true;
-      const transfer = /^(?:writing|pushing|uploading)\s+(.+?)\s+(\d+(?:\.\d+)?(?:B|kB|MB|GB))(?:\s*\/\s*\d+(?:\.\d+)?(?:B|kB|MB|GB))?\b/i.exec(
-        detail,
-      );
+      const transfer =
+        /^(?:writing|pushing|uploading)\s+(.+?)\s+(\d+(?:\.\d+)?(?:B|kB|MB|GB))(?:\s*\/\s*\d+(?:\.\d+)?(?:B|kB|MB|GB))?\b/i.exec(
+          detail,
+        );
       if (transfer) {
         const [, transferName = "", transferBytes = "0B"] = transfer;
         const bytes = this.byteCount(transferBytes);
@@ -64,6 +70,7 @@ export class BuildkitPlainLogTelemetry {
     }
     let completed = 0;
     let bytes = 0;
+    let measuredTransferCount = 0;
     let durationMs = 0;
     let incompleteFailures = 0;
     for (const cacheExport of exportsByVertex.values()) {
@@ -72,12 +79,22 @@ export class BuildkitPlainLogTelemetry {
       durationMs += cacheExport.duration_ms;
       for (const transferBytes of cacheExport.transfers.values()) {
         bytes += transferBytes;
+        measuredTransferCount += 1;
       }
     }
     return {
       attempts: exportsByVertex.size,
       completed,
-      bytes,
+      byte_measurement:
+        measuredTransferCount > 0
+          ? {
+              status: BuildkitCacheExportByteMeasurementStatus.Measured,
+              bytes,
+            }
+          : {
+              status: BuildkitCacheExportByteMeasurementStatus.Unavailable,
+              reason: BuildkitCacheExportByteUnavailableReason.NotEmitted,
+            },
       duration_ms: durationMs,
       incomplete_failures: incompleteFailures,
     };

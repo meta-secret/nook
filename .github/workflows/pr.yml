@@ -476,6 +476,7 @@ jobs:
       - name: Test cache telemetry collector
         run: >-
           node --test
+          .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs
           .github/workflows/lib/cache-telemetry.test.mjs
           .github/workflows/lib/cache-telemetry-split-log.test.mjs
 

@@ -2,7 +2,10 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import {
+  BuildkitCacheExportReconciler,
+  BuildkitCacheExportTelemetry,
+} from "./buildkit-cache-export-telemetry.mjs";
 import { BuildkitPlainLogTelemetry } from "./buildkit-plain-log-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
@@ -10,8 +13,7 @@ import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
 
-export { BuildkitCacheExportTelemetry };
-export { CacheScopeTelemetry };
+export { BuildkitCacheExportTelemetry, CacheScopeTelemetry };
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
@@ -821,15 +823,12 @@ export class CacheTelemetry {
     }
 
     const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
-    const plainCacheExport = new BuildkitPlainLogTelemetry(rawBuildLog).summary();
-    if (buildkit.cache_export.attempts === 0) {
-      buildkit.cache_export = plainCacheExport;
-    } else if (
-      buildkit.cache_export.bytes === 0 &&
-      plainCacheExport.bytes > 0
-    ) {
-      buildkit.cache_export.bytes = plainCacheExport.bytes;
-    }
+    const plainCacheExport = new BuildkitPlainLogTelemetry(
+      rawBuildLog,
+    ).summary();
+    buildkit.cache_export = new BuildkitCacheExportReconciler(
+      buildkit.cache_export,
+    ).reconcile(plainCacheExport);
     if (buildkit.cache_export.incomplete_failures > 0) {
       warnings.push(
         `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
@@ -841,7 +840,8 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    const rawFallback = CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
+    const rawFallback =
+      CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
     const historyFallback =
       CacheTelemetry.extractSccacheFallback(historyEvents);
     sccache.fallback = resolveSccacheFallback(
@@ -851,7 +851,7 @@ export class CacheTelemetry {
       rawBuildLog,
     );
     return {
-      schema_version: 1,
+      schema_version: 2,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),
@@ -882,7 +882,7 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     return {
-      schema_version: 1,
+      schema_version: 2,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),

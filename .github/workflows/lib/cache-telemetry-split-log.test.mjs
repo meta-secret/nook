@@ -64,18 +64,19 @@ void test("aggregates sccache and exporter evidence from appended Phase A and Ph
       cached_steps: 92,
     },
   ];
-  CacheTelemetry.readHistoryEvents = () => Promise.resolve([
-    {
-      vertexes: [
-        {
-          digest: "sha256:export",
-          name: "exporting cache to registry",
-          started: "2026-09-17T01:00:52Z",
-          completed: "2026-09-17T01:00:59.4Z",
-        },
-      ],
-    },
-  ]);
+  CacheTelemetry.readHistoryEvents = () =>
+    Promise.resolve([
+      {
+        vertexes: [
+          {
+            digest: "sha256:export",
+            name: "exporting cache to registry",
+            started: "2026-09-17T01:00:52Z",
+            completed: "2026-09-17T01:00:59.4Z",
+          },
+        ],
+      },
+    ]);
 
   try {
     const record = await CacheTelemetry.collectTelemetry({
@@ -92,7 +93,52 @@ void test("aggregates sccache and exporter evidence from appended Phase A and Ph
     assert.deepEqual(record.buildkit.cache_export, {
       attempts: 1,
       completed: 1,
-      bytes: 12_501_200,
+      byte_measurement: { status: "measured", bytes: 12_501_200 },
+      duration_ms: 7400,
+      incomplete_failures: 0,
+    });
+  } finally {
+    CacheTelemetry.listBuildHistory = originalListBuildHistory;
+    CacheTelemetry.readHistoryEvents = originalReadHistoryEvents;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+void test("reports unavailable bytes when a successful registry export emits no byte lines", async () => {
+  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
+  const originalReadHistoryEvents = CacheTelemetry.readHistoryEvents;
+  const temporary = fs.mkdtempSync(
+    path.join(os.tmpdir(), "nook-export-no-bytes-"),
+  );
+  const rawLog = path.join(temporary, "nook-build-compile.raw.log");
+  fs.writeFileSync(
+    rawLog,
+    [
+      "#93 exporting cache to registry",
+      "#93 preparing build cache for export 4.1s done",
+      "#93 writing cache manifest sha256:bbbbbbbb done",
+      "#93 DONE 7.4s",
+      "",
+    ].join("\n"),
+  );
+  CacheTelemetry.listBuildHistory = () => [];
+  CacheTelemetry.readHistoryEvents = () => Promise.resolve([]);
+
+  try {
+    const record = await CacheTelemetry.collectTelemetry({
+      baselineRefs: [],
+      environment: {
+        NOOK_BUILDKIT_RAW_LOG: rawLog,
+        NOOK_CACHE_TELEMETRY_JOB_STATUS: "success",
+      },
+    });
+    assert.deepEqual(record.buildkit.cache_export, {
+      attempts: 1,
+      completed: 1,
+      byte_measurement: {
+        status: "unavailable",
+        reason: "buildkit_did_not_emit_byte_count",
+      },
       duration_ms: 7400,
       incomplete_failures: 0,
     });
@@ -136,9 +182,7 @@ void test("Phase A replays cached dependency compiler reports in its rooted grap
     "utf8",
   );
   const bake = fs.readFileSync(
-    path.resolve(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
-    ),
+    path.resolve("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"),
     "utf8",
   );
   assert.match(

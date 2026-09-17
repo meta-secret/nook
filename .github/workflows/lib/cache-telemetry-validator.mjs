@@ -2,6 +2,10 @@ import {
   CompilePhaseCacheExportMode,
   CompilePhaseStatus,
 } from "./cache-scope-telemetry.mjs";
+import {
+  BuildkitCacheExportByteMeasurementStatus,
+  BuildkitCacheExportByteUnavailableReason,
+} from "./buildkit-cache-export-telemetry.mjs";
 
 /** Owns admission of cache telemetry received from workflow artifacts. */
 export class CacheTelemetryValidator {
@@ -52,9 +56,7 @@ export class CacheTelemetryValidator {
     if (!Array.isArray(candidate.cache_from))
       throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
     if (
-      !candidate.cache_from.every(
-        (reference) => typeof reference === "string",
-      )
+      !candidate.cache_from.every((reference) => typeof reference === "string")
     )
       throw new Error(`telemetry compile phase ${name}.cache_from is invalid`);
     if (!this.isRecord(candidate.cache_to))
@@ -64,7 +66,9 @@ export class CacheTelemetryValidator {
         `telemetry compile phase ${name}.cache_to.enabled is invalid`,
       );
     if (typeof candidate.cache_to.ref !== "string")
-      throw new Error(`telemetry compile phase ${name}.cache_to.ref is invalid`);
+      throw new Error(
+        `telemetry compile phase ${name}.cache_to.ref is invalid`,
+      );
     if (!this.isCompilePhaseCacheExportMode(candidate.cache_to.mode))
       throw new Error(
         `telemetry compile phase ${name}.cache_to.mode is invalid`,
@@ -109,8 +113,8 @@ export class CacheTelemetryValidator {
    */
   validate(record, expected = {}) {
     if (!this.isRecord(record)) throw new Error("telemetry record is required");
-    if (record.schema_version !== 1)
-      throw new Error("telemetry schema_version must be 1");
+    if (record.schema_version !== 2)
+      throw new Error("telemetry schema_version must be 2");
     const github = record.github;
     if (!this.isRecord(github))
       throw new Error("telemetry github context is required");
@@ -161,7 +165,9 @@ export class CacheTelemetryValidator {
     );
     const sourceCompileCacheTo = sourceCompile.cache_to;
     if (sourceCompileCacheTo.enabled || sourceCompileCacheTo.ref.length > 0)
-      throw new Error("telemetry source compile phase must not export registry cache");
+      throw new Error(
+        "telemetry source compile phase must not export registry cache",
+      );
   }
 
   /** @param {unknown} candidate */
@@ -243,10 +249,39 @@ export class CacheTelemetryValidator {
     this.validateCounters("buildkit.cache_export", cacheExport, [
       "attempts",
       "completed",
-      "bytes",
       "duration_ms",
       "incomplete_failures",
     ]);
+    const byteMeasurement = cacheExport.byte_measurement;
+    if (!this.isRecord(byteMeasurement))
+      throw new Error(
+        "telemetry buildkit.cache_export.byte_measurement must be an object",
+      );
+    if (
+      byteMeasurement.status ===
+      BuildkitCacheExportByteMeasurementStatus.Measured
+    ) {
+      if (Object.hasOwn(byteMeasurement, "reason"))
+        throw new Error(
+          "telemetry buildkit.cache_export.byte_measurement is invalid",
+        );
+      this.validateCounters(
+        "buildkit.cache_export.byte_measurement",
+        byteMeasurement,
+        ["bytes"],
+      );
+      return;
+    }
+    if (
+      byteMeasurement.status !==
+        BuildkitCacheExportByteMeasurementStatus.Unavailable ||
+      byteMeasurement.reason !==
+        BuildkitCacheExportByteUnavailableReason.NotEmitted ||
+      Object.hasOwn(byteMeasurement, "bytes")
+    )
+      throw new Error(
+        "telemetry buildkit.cache_export.byte_measurement is invalid",
+      );
   }
 
   /** @param {unknown} candidate */
