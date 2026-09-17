@@ -10,7 +10,6 @@ import {
   type BlueprintExplanation,
 } from './blueprint-diff.ts';
 import {
-  AgentStatsOperation,
   PrLandOperation,
   RequestFamily,
   ResponsePhase,
@@ -60,14 +59,6 @@ export class LoomResponseEncoder {
     return { ok: true, family, result };
   }
 
-  static successResponseForAgentStats(
-    args: SuccessResponseForAgentStatsArgs,
-  ): SuccessResponse {
-    const { operation, result } = args;
-
-    return { ok: true, family: RequestFamily.AgentStats, operation, result };
-  }
-
   static successResponseForPrLand(
     args: SuccessResponseForPrLandArgs,
   ): SuccessResponse {
@@ -112,25 +103,6 @@ export class LoomResponseEncoder {
     };
   }
 
-  static executeErrorResponseForAgentStats(
-    args: ExecuteErrorResponseForAgentStatsArgs,
-  ): ExecuteErrorResponse {
-    const { operation, errors } = args;
-
-    return {
-      ok: false,
-      isError: true,
-      phase: ResponsePhase.Execute,
-      family: RequestFamily.AgentStats,
-      operation,
-      errors,
-      recover: {
-        toolsListRequest: TOOLS_LIST_INVOKE,
-        hint: LoomResponseEncoder.EXECUTE_HINT,
-      },
-    };
-  }
-
   static executeErrorResponseForPrLand(
     args: ExecuteErrorResponseForPrLandArgs,
   ): ExecuteErrorResponse {
@@ -159,10 +131,7 @@ export class LoomResponseEncoder {
         family: response.family,
         result: response.result,
       };
-      if (
-        response.family === RequestFamily.AgentStats ||
-        response.family === RequestFamily.PrLand
-      ) {
+      if (response.family === RequestFamily.PrLand) {
         encoded.operation = response.operation;
       }
       return UntrustedYamlBoundary.seal(encoded);
@@ -197,10 +166,7 @@ export class LoomResponseEncoder {
     }
     if (response.phase === ResponsePhase.Execute) {
       encoded.family = response.family;
-      if (
-        response.family === RequestFamily.AgentStats ||
-        response.family === RequestFamily.PrLand
-      ) {
+      if (response.family === RequestFamily.PrLand) {
         encoded.operation = response.operation;
       }
     }
@@ -226,10 +192,6 @@ export type SuccessResponse =
         | RequestFamily.SkillScaffold
         | RequestFamily.DependencyPopularity
         | RequestFamily.ToolsList;
-    })
-  | (SuccessResponseBase & {
-      readonly family: RequestFamily.AgentStats;
-      readonly operation: AgentStatsOperation;
     })
   | (SuccessResponseBase & {
       readonly family: RequestFamily.PrLand;
@@ -265,15 +227,6 @@ export type ExecuteErrorResponse =
       readonly ok: false;
       readonly isError: true;
       readonly phase: ResponsePhase.Execute;
-      readonly family: RequestFamily.AgentStats;
-      readonly operation: AgentStatsOperation;
-      readonly errors: readonly FieldError[];
-      readonly recover: RecoverHint;
-    }
-  | {
-      readonly ok: false;
-      readonly isError: true;
-      readonly phase: ResponsePhase.Execute;
       readonly family: RequestFamily.PrLand;
       readonly operation: PrLandOperation;
       readonly errors: readonly FieldError[];
@@ -290,11 +243,6 @@ export type SuccessResponseForFamilyArgs = {
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList;
-  readonly result: UntrustedYamlNode;
-};
-
-export type SuccessResponseForAgentStatsArgs = {
-  readonly operation: AgentStatsOperation;
   readonly result: UntrustedYamlNode;
 };
 
@@ -318,11 +266,6 @@ export type ExecuteErrorResponseForFamilyArgs = {
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList
     | RequestFamily.ToolsCall;
-  readonly errors: readonly FieldError[];
-};
-
-export type ExecuteErrorResponseForAgentStatsArgs = {
-  readonly operation: AgentStatsOperation;
   readonly errors: readonly FieldError[];
 };
 

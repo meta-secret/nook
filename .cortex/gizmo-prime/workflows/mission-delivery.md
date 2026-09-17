@@ -44,7 +44,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Use the active harness for Team Gizmo and internal Team Agent communication.
 - Keep every writer within its issued child worktree and explicit file scope.
 - Author meaningful behavior tests for the slow stage.
-- Keep Workbench plans, feature handoffs, and completion evidence attributable.
+- Keep feature-delivery completion evidence in the handoff.
+- Update Workbench issue status and progress when its lifecycle changes.
 - Complete every feature stage through local dev landing and manager handoff.
 - Stop at an intermediate stage only when the user explicitly requests it.
 - Report a genuine blocker through the failure procedure below.

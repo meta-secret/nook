@@ -7,7 +7,7 @@ import {
 
 import { RemoteTaskPresence, type RemoteTask } from './args/pr-land.ts';
 
-import { AgentStatsOperation, PrLandOperation } from './enums.ts';
+import { PrLandOperation } from './enums.ts';
 
 import { YamlNullBoundary } from './external.ts';
 
@@ -381,7 +381,5 @@ export type MapDecodeArgs<T, U> = {
   readonly outcome: DecodeOutcome<T>;
   readonly build: (value: T) => U;
 };
-
-export const AGENT_STATS_OPERATIONS = Object.values(AgentStatsOperation);
 
 export const PR_LAND_OPERATIONS = Object.values(PrLandOperation);

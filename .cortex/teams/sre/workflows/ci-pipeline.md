@@ -11,11 +11,9 @@ feature-stage slow checks.
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
 
-Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
-not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues](../../../gizmo-prime/workflows/issues.md),
-[agent statistics](../../../gizmo-prime/workflows/agent-statistics.md), and
-[main-build-statistics.md](main-build-statistics.md).
+Nook Workbench stores development issues only. Issue changes do not create Nook
+branches, PRs, product validation, or recursive Main builds. See
+[issues](../../../gizmo-prime/workflows/issues.md).
 
 ## Central CI entrypoint
 
@@ -114,7 +112,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
-- Owns merged-head ecosystem cache seeding and statistics.
+- Owns merged-head ecosystem cache seeding and local cache telemetry.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e and extension e2e consume verified WASM on separate
@@ -123,11 +121,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
 - Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
-
-**`main-build-stats.yml`**
-
-- Collects run/job/step timing and conclusions.
-- Commits one `stats/main-build/**` record directly to Nook Workbench.
 
 **`release.yml`**
 
@@ -158,9 +151,6 @@ flowchart LR
   ci_yml --> main_yml[main.yml reusable]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
-  main_yml --> main_stats[Persist completed run metrics]
-  main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
   release_yml --> pages[GitHub Pages public site]

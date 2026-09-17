@@ -470,11 +470,8 @@ jobs:
       - name: Test Linear UI demo publishing helper
         run: node --test .github/workflows/lib/linear-ui-demo.test.cjs
 
-      - name: Test Main build statistics collector
-        run: node --test .github/workflows/lib/main-build-stats.test.mjs
-
-      - name: Test Workbench agent records
-        run: node --test .github/scripts/workbench-records.test.cjs
+      - name: Test Workbench issue publisher
+        run: node --test .github/scripts/workbench-publish.test.cjs
 
       - name: Test cache telemetry collector
         run: node --test .github/workflows/lib/cache-telemetry.test.mjs

@@ -134,8 +134,8 @@ For a bounded worker:
 
 ## Validation
 
-- Review the task plan, Workbench owner, branch, and pull request together.
-  - They must identify one coherent owned scope.
+- Review the assigned task scope, Workbench issue owner, branch, and pull
+  request together. They must identify one coherent owned scope.
 - Run `task loom:cortex-audit` after guidance changes.
 
 The repository preflight contract must retain the ownership guard in:

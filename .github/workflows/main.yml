@@ -12,8 +12,7 @@
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
 # Vale-policy, repository-policy-only, and agentic-AI-only changes do not need
-# this workflow. A trusted workflow_run collector records each attempt in
-# meta-secret/nook-workbench.
+# this workflow.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
 # provider tests remain available through the manually dispatched e2e-pr.yml.
