@@ -7,9 +7,29 @@ import {
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 type ExtensionMessageRequest = {
   readonly extensionId: string;
-  readonly message: unknown;
+  readonly message: RuntimeMessage;
   readonly responseWait: ExtensionMessageResponseWait;
 };
+
+type ChromeExtensionRuntimeResponse =
+  | CompanionIdentityDiscoveryTransportResponse
+  | CompanionIdentityHandoffTransportResponse
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason?: string;
+      readonly error?: string;
+    }
+  | {
+      readonly ok: true;
+      readonly requestId: string;
+      readonly vaultStoreId: string;
+    }
+  | {
+      readonly ok: true;
+      readonly envelope: string;
+      readonly nextNonce: string;
+    };
 
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
@@ -24,14 +44,12 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ChromeRuntimeResponseArguments = unknown[];
-
 type ChromeRuntimeHost = {
   // eslint-disable-next-line max-params -- Chrome owns this positional API.
   sendMessage: (
     extensionId: string,
-    message: unknown,
-    callback: (...responses: ChromeRuntimeResponseArguments) => void,
+    message: RuntimeMessage,
+    callback: (response: ChromeExtensionRuntimeResponse | undefined) => void,
   ) => void;
 };
 
@@ -73,6 +91,9 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
+  type RuntimeMessage,
+  type CompanionIdentityDiscoveryTransportResponse,
+  type CompanionIdentityHandoffTransportResponse,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
@@ -167,7 +188,10 @@ enum ExtensionMessageDeliveryKind {
 
 type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
-  | { kind: ExtensionMessageDeliveryKind.Received; response: unknown };
+  | {
+      kind: ExtensionMessageDeliveryKind.Received;
+      response: ChromeExtensionRuntimeResponse;
+    };
 
 function isAcceptedIdentityHandoffResponse(value: unknown): value is {
   readonly ok: true;
@@ -399,17 +423,16 @@ class ExtensionConnectionBrowser {
         resolve,
       });
       const receiveExtensionResponse = (
-        ...responses: ChromeRuntimeResponseArguments
+        response: ExtensionRuntimeJsonValue | undefined,
       ): void => {
         if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
         }
-        if (responses.length === 0) {
+        if (response === undefined) {
           pending.unavailable();
           return;
         }
-        const [response] = responses;
         pending.receive(response);
       };
       sendMessage(extensionId, message, receiveExtensionResponse);

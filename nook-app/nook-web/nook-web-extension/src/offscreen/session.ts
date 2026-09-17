@@ -345,7 +345,7 @@ async function handleCompanionIdentityDiscovery(
 
 type SessionSuccess<T> =
   T extends Result<infer Value, SessionOperationFailure> ? Value : never
-type ExtensionSessionResponse = SessionSuccess<
+export type ExtensionSessionResponse = SessionSuccess<
   | Awaited<ReturnType<typeof handleMessage>>
   | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
   | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>

@@ -3,6 +3,7 @@ import type {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportResult,
 } from './session-document'
+import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
   ExtensionIdentityHandoffRequestMessageType,
   type BeginExtensionPairingMessage,
@@ -32,6 +33,7 @@ import {
   COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   extensionSessionInteractiveDeadline,
   extensionSessionProbeDeadline,
+  type ExtensionSessionTransportRequest,
   type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
 } from '../../offscreen/session-request-adapter'
@@ -43,9 +45,12 @@ import {
 } from '../../lib/webauthn-messages'
 import type {
   ExtensionPairingItems,
+  ExtensionReadySetupState,
   LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
+import type { ExtensionPairingRecord } from '../pairing-grants'
+import type { PendingAuthenticatorPicker } from './account-pickers'
 import {
   extensionPairingGrantPolicyReady,
   setupStorageKey,
@@ -68,7 +73,17 @@ type PendingIdentityHandoff = {
   deviceSigningPublicKey: string
 }
 
-type ExtensionSessionStorageWrite = Record<string, unknown>
+export type ExtensionSessionStorageValue =
+  | PendingIdentityHandoff
+  | PendingAuthenticatorPicker
+  | ExtensionPairingRecord
+  | ExtensionReadySetupState
+  | StoredExtensionPairingGrant
+  | string
+  | boolean
+
+type ExtensionSessionStorageWrite = Record<string, ExtensionSessionStorageValue>
+type ExtensionSessionStorageItems = Record<string, ExtensionSessionStorageValue>
 
 type IssueIdentityHandoffArgs = {
   nonce: string
@@ -89,6 +104,15 @@ export { ExtensionSessionStatusAvailability }
 export enum HasPairingApprovedTypeResultType {
   NookExtensionPairingApproved = 'nook:extension-pairing-approved',
 }
+
+type ExtensionPairedVaultUnlockResponse =
+  | { ok: true; requestId: string; vaultStoreId: string }
+  | {
+      ok: false
+      requestId: string
+      vaultStoreId: string
+      reason: string
+    }
 
 enum LegacyPairingMigrationKind {
   NotStarted = 'not-started',
@@ -195,7 +219,7 @@ class ExtensionPairingIdentity {
     })
   }
 
-  getSessionStorage(key: string): Promise<Record<string, unknown>> {
+  getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.get(key, (items) => {
@@ -206,7 +230,7 @@ class ExtensionPairingIdentity {
     })
   }
 
-  getAllSessionStorage(): Promise<Record<string, unknown>> {
+  getAllSessionStorage(): Promise<ExtensionSessionStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.get((items) => {
@@ -280,12 +304,29 @@ class ExtensionPairingIdentity {
     void chrome.tabs.create(nookTypedArgs0_2)
   }
 
-  async sendSessionMessage(
-    message: unknown,
-  ): Promise<ExtensionSessionTransportResult<unknown>> {
+  sendSessionMessage(
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult>
+  sendSessionMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+  async sendSessionMessage<
+    Response = ExtensionSessionResponse | undefined,
+    DecodeFailure = never,
+  >(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse?: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
     const document = await extensionSessionLifecycle.openSessionDocument()
     if (document.isErr()) return err(document.error)
-    return document.value.sendMessage(message)
+    return decodeResponse
+      ? document.value.sendMessage(message, decodeResponse)
+      : document.value.sendMessage(message)
   }
 
   async createIdentityHandoff(
@@ -583,7 +624,7 @@ class ExtensionPairingIdentity {
 
   async requestPairedVaultUnlock(
     message: ExtensionPairedVaultUnlockRequestMessage,
-  ): Promise<Record<string, unknown>> {
+  ): Promise<ExtensionPairedVaultUnlockResponse> {
     const { requestId, vaultStoreId } = message.payload
     const pairingPolicy = await extensionPairingGrantPolicyReady
     const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)

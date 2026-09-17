@@ -1,8 +1,22 @@
+import type { WebsiteAuthenticatorSelectedMessage } from '../../lib/authenticator-picker-messages'
+import type { WebsiteAuthenticatorCanceledMessage } from '../../lib/authenticator-picker-messages'
+import type { WebsiteLoginCanceledMessage } from '../../lib/login-picker-messages'
+import type { WebsiteLoginSelectedMessage } from '../../lib/login-picker-messages'
+
+type AccountPickerPageMessage =
+  | WebsiteAuthenticatorSelectedMessage
+  | WebsiteAuthenticatorCanceledMessage
+  | WebsiteLoginSelectedMessage
+  | WebsiteLoginCanceledMessage
+
+type AccountPickerPageResponse =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 type AccountPickerPageMessageDelivery = {
   tabId: number
   frameId: number
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  message: unknown
+  message: AccountPickerPageMessage
 }
 
 type AccountPickerPageSenderMatch = {
@@ -38,9 +52,12 @@ export class AccountPickerPageTarget {
     tabId,
     frameId,
     message,
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  }: AccountPickerPageMessageDelivery): Promise<unknown> {
+  }: AccountPickerPageMessageDelivery): Promise<AccountPickerPageResponse> {
     const options: chrome.tabs.MessageSendOptions = { frameId }
-    return chrome.tabs.sendMessage(tabId, message, options)
+    return chrome.tabs.sendMessage(
+      tabId,
+      message,
+      options,
+    ) as Promise<AccountPickerPageResponse>
   }
 }

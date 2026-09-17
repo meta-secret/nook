@@ -82,6 +82,24 @@ export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
 
+type RuntimeMessageResponse =
+  | AuthenticationOutcomeResponse
+  | AuthenticationWorkflowRuntimeResponse
+  | AuthenticationWorkflowSnapshotResponse
+  | AuthenticatorBackupAttachResponse
+  | AuthenticatorCodeResponse
+  | AuthenticatorEnrollmentConfirmResponse
+  | AuthenticatorEnrollmentStageResponse
+  | AuthenticatorOptionsResponse
+  | AuthenticatorPickerOpenResponse
+  | AuthenticatorPreviewResponse
+  | GeneratedPasswordResponse
+  | LoginPickerOpenResponse
+  | WebsiteLoginOptions
+  | WebsiteLoginSaveActionResponse
+  | WebsiteLoginSaveOfferResponse
+  | WebsiteLoginSavePendingResponse
+
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
   loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
@@ -143,9 +161,9 @@ class AuthenticationRuntimeTransport {
 
   private sendRuntimeMessage(
     message: ExtensionRuntimeRequest,
-  ): Promise<RuntimeMessageDelivery<unknown>> {
+  ): Promise<RuntimeMessageDelivery<RuntimeMessageResponse>> {
     return new Promise((resolve) => {
-      this.browser.chrome.runtime.sendMessage(message, (response: unknown) => {
+      this.browser.chrome.runtime.sendMessage(message, (response: RuntimeMessageResponse) => {
         if (this.browser.chrome.runtime.lastError) {
           const unavailable: Parameters<typeof resolve>[0] = {
             kind: RuntimeMessageDeliveryKind.Unavailable,

@@ -34,7 +34,10 @@ export type PairingSetupAfterRemoval = ExtensionSetupAfterRemoval
 export type SelectedPairingGrant = SelectedExtensionPairingGrant
 export type { StoredExtensionPairingGrant }
 export type ExtensionPairingItems = Record<string, ExtensionPairingRecord>
-export type LegacyPairingStorageItems = Record<string, unknown>
+export type LegacyPairingStorageItems = Record<
+  string,
+  ExtensionPairingRecord | ExtensionReadySetup | StoredExtensionPairingGrant
+>
 
 export type ExtensionSessionGrantIdentity = Pick<
   StoredExtensionPairingGrant,

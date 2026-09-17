@@ -1,5 +1,7 @@
 export {}
 
+import type { WebsitePasskeyPerformResponse } from '../lib/webauthn-messages'
+
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
 
@@ -14,6 +16,52 @@ enum WebsitePasskeyCeremony {
   Get = 'get',
 }
 
+type SerializedCredentialDescriptor = { id: string }
+
+type SerializedCreationOptions = {
+  origin: string
+  challenge: string
+  relyingParty: { id: string; name: string }
+  user: { id: string; name: string; displayName: string }
+  algorithms: number[]
+  excludeCredentials: SerializedCredentialDescriptor[]
+  residentKeyRequired: boolean
+  userVerificationRequired: boolean
+}
+
+type SerializedAssertionOptions = {
+  origin: string
+  challenge: string
+  rpId: string
+  allowCredentials: SerializedCredentialDescriptor[]
+  userVerificationRequired: boolean
+}
+
+type SerializedPasskeyRequest =
+  | SerializedCreationOptions
+  | SerializedAssertionOptions
+
+type NookPublicCredentialJSON = {
+  id: string
+  rawId: string
+  type: 'public-key'
+  authenticatorAttachment: 'cross-platform'
+  clientExtensionResults: AuthenticationExtensionsClientOutputs
+  response:
+    | { clientDataJSON: string; attestationObject: string }
+    | {
+        clientDataJSON: string
+        authenticatorData: string
+        signature: string
+        userHandle: string
+      }
+}
+
+type NookPublicCredentialResult = Extract<
+  WebsitePasskeyPerformResponse,
+  { ok: true }
+>
+
 type ExtensionResponse = {
   source: typeof RESPONSE_SOURCE
   requestId: string
@@ -21,7 +69,7 @@ type ExtensionResponse = {
     | ExtensionResponseAction.Fallback
     | ExtensionResponseAction.Result
     | ExtensionResponseAction.Error
-  result?: Record<string, unknown>
+  result?: WebsitePasskeyPerformResponse
   reason?: string
 }
 
@@ -55,7 +103,7 @@ function requestId(): string {
 
 function serializeCreation(
   options: PublicKeyCredentialCreationOptions,
-): Record<string, unknown> {
+): SerializedCreationOptions {
   return {
     origin: location.origin,
     challenge: base64url(options.challenge),
@@ -83,7 +131,7 @@ function serializeCreation(
 
 function serializeAssertion(
   options: PublicKeyCredentialRequestOptions,
-): Record<string, unknown> {
+): SerializedAssertionOptions {
   return {
     origin: location.origin,
     challenge: base64url(options.challenge),
@@ -99,13 +147,22 @@ function serializeAssertion(
 
 type PublicCredentialArgs = {
   ceremony: WebsitePasskeyCeremony
-  result: Record<string, unknown>
+  result: NookPublicCredentialResult
 }
 
-type NookPublicCredentialResponse = Record<
-  string,
-  ArrayBuffer | (() => string[]) | (() => number)
->
+type NookPublicCredentialResponse =
+  | {
+      clientDataJSON: ArrayBuffer
+      attestationObject: ArrayBuffer
+      getTransports: () => string[]
+      getPublicKeyAlgorithm: () => number
+    }
+  | {
+      clientDataJSON: ArrayBuffer
+      authenticatorData: ArrayBuffer
+      signature: ArrayBuffer
+      userHandle: ArrayBuffer
+    }
 
 type NookPublicCredentialState = {
   id: string
@@ -131,21 +188,27 @@ class NookPublicCredential implements Credential {
     return {}
   }
 
-  toJSON(): Record<string, unknown> {
+  toJSON(): NookPublicCredentialJSON {
+    const response = this.response
+    const serializedResponse =
+      'attestationObject' in response
+        ? {
+            clientDataJSON: base64url(response.clientDataJSON),
+            attestationObject: base64url(response.attestationObject),
+          }
+        : {
+            clientDataJSON: base64url(response.clientDataJSON),
+            authenticatorData: base64url(response.authenticatorData),
+            signature: base64url(response.signature),
+            userHandle: base64url(response.userHandle),
+          }
     return {
       id: this.id,
       rawId: this.id,
       type: this.type,
       authenticatorAttachment: this.authenticatorAttachment,
       clientExtensionResults: {},
-      response: Object.fromEntries(
-        Object.entries(this.response)
-          .filter(
-            (entry): entry is [string, ArrayBuffer] =>
-              entry[1] instanceof ArrayBuffer,
-          )
-          .map(([key, value]) => [key, base64url(value)]),
-      ),
+      response: serializedResponse,
     }
   }
 }
@@ -155,27 +218,40 @@ function publicCredential({
   result,
 }: PublicCredentialArgs): Credential {
   const id = result.credentialId
-  if (typeof id !== 'string')
-    throw new DOMException('Invalid Nook response.', 'DataError')
   const rawId = bytes(id)
   const clientDataJSON = bytes(result.clientDataJSON)
-  const response: Record<
-    string,
-    ArrayBuffer | (() => string[]) | (() => number)
-  > =
-    ceremony === WebsitePasskeyCeremony.Create
+  if (
+    ceremony === WebsitePasskeyCeremony.Create &&
+    !('attestationObject' in result)
+  ) {
+    throw new DOMException('Invalid Nook response.', 'DataError')
+  }
+  if (
+    ceremony === WebsitePasskeyCeremony.Get &&
+    !('authenticatorData' in result)
+  ) {
+    throw new DOMException('Invalid Nook response.', 'DataError')
+  }
+  const response: NookPublicCredentialResponse =
+    ceremony === WebsitePasskeyCeremony.Create &&
+    'attestationObject' in result
       ? {
           clientDataJSON,
           attestationObject: bytes(result.attestationObject),
           getTransports: () => ['internal'],
           getPublicKeyAlgorithm: () => -7,
         }
-      : {
-          clientDataJSON,
-          authenticatorData: bytes(result.authenticatorData),
-          signature: bytes(result.signature),
-          userHandle: bytes(result.userHandle),
-        }
+      : ceremony === WebsitePasskeyCeremony.Get &&
+          'authenticatorData' in result
+        ? {
+            clientDataJSON,
+            authenticatorData: bytes(result.authenticatorData),
+            signature: bytes(result.signature),
+            userHandle: bytes(result.userHandle),
+          }
+        : (() => {
+            throw new DOMException('Invalid Nook response.', 'DataError')
+          })()
   const credentialState: NookPublicCredentialState = { id, rawId, response }
   return new NookPublicCredential(credentialState)
 }
@@ -250,7 +326,7 @@ async function extensionCeremony({
           finish(() => void fallback().then(resolve, reject))
         } else if (
           event.data.action === ExtensionResponseAction.Result &&
-          event.data.result
+          event.data.result?.ok === true
         ) {
           const { result } = event.data
           finish(() => {

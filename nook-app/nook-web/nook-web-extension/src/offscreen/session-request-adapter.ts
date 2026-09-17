@@ -1,5 +1,10 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { CompanionIdentityHandoffRequest } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
@@ -92,6 +97,8 @@ type ExtensionSessionImportTransportRequest = {
 export type ExtensionSessionTransportRequest =
   | GeneratedExtensionSessionNonImportRequest
   | ExtensionSessionImportTransportRequest
+  | CompanionIdentityDiscoverySessionTransportRequest
+  | CompanionIdentityHandoffSessionTransportRequest
 
 export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
   'nook:extension-session-authorize-companion-identity-handoff'
@@ -100,12 +107,21 @@ export const COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE =
 
 export type CompanionIdentityDiscoverySessionTransportRequest = {
   type: typeof COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE
-  payload: { presence: unknown; discovery: unknown }
+  payload: {
+    presence: CompanionExtensionPresence
+    discovery: CompanionIdentityDiscoveryObservation
+  }
+}
+
+export type CompanionIdentityHandoffAuthorization = {
+  readonly request: CompanionIdentityHandoffRequest
+  readonly observedAt: number
+  readonly presence: CompanionExtensionPresence
 }
 
 export type CompanionIdentityHandoffSessionTransportRequest = {
   type: typeof COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE
-  payload: { authorization: unknown }
+  payload: { authorization: CompanionIdentityHandoffAuthorization }
 }
 
 export function isCompanionIdentityDiscoverySessionTransportRequest(

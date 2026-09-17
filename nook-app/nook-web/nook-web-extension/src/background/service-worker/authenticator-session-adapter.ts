@@ -4,6 +4,7 @@ import type {
   ExtensionSessionTransportResult,
 } from './session-document'
 import type { WebsiteAuthenticatorBackupAttachMessageMode } from '../../lib/enrollment-messages'
+import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
@@ -53,7 +54,29 @@ type AuthenticatorSessionError =
 type AuthenticatorSessionTransport = {
   sendSessionMessage(
     message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult<unknown>>
+  ): Promise<ExtensionSessionTransportResult<void>>
+  sendSessionMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+}
+
+function authenticatorResponseDecoder<Response>(
+  decode: (response: unknown) => Response,
+): (response: unknown) => Result<Response, AuthenticatorSessionFailure> {
+  return (response) => {
+    try {
+      return ok(decode(response))
+    } catch {
+      return err(
+        new AuthenticatorSessionFailure(
+          AuthenticatorSessionFailureKind.InvalidResponse,
+        ),
+      )
+    }
+  }
 }
 
 type AuthenticatorCodeFromSessionArgs = {
@@ -111,18 +134,12 @@ export class ExtensionAuthenticatorSession {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const delivery = await this.pairing.sendSessionMessage(message)
+    const delivery = await this.pairing.sendSessionMessage(
+      message,
+      authenticatorResponseDecoder(decode_authenticator_code_session_response),
+    )
     if (delivery.isErr()) return err(delivery.error)
-    let response: AuthenticatorCodeSessionResponse
-    try {
-      response = decode_authenticator_code_session_response(delivery.value)
-    } catch {
-      return err(
-        new AuthenticatorSessionFailure(
-          AuthenticatorSessionFailureKind.InvalidResponse,
-        ),
-      )
-    }
+    const response = delivery.value
     if (response.expiresAt <= Date.now()) {
       return err(
         new AuthenticatorSessionFailure(
@@ -151,17 +168,12 @@ export class ExtensionAuthenticatorSession {
       type: 'nook:extension-session-authenticator-enroll-preview',
       payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const delivery = await this.pairing.sendSessionMessage(message)
+    const delivery = await this.pairing.sendSessionMessage(
+      message,
+      authenticatorResponseDecoder(decode_authenticator_preview_session_response),
+    )
     if (delivery.isErr()) return err(delivery.error)
-    try {
-      return ok(decode_authenticator_preview_session_response(delivery.value))
-    } catch {
-      return err(
-        new AuthenticatorSessionFailure(
-          AuthenticatorSessionFailureKind.InvalidResponse,
-        ),
-      )
-    }
+    return ok(delivery.value)
   }
 
   async stagedAuthenticatorCodeFromSession(
@@ -182,18 +194,12 @@ export class ExtensionAuthenticatorSession {
       type: 'nook:extension-session-authenticator-enroll-code',
       payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const delivery = await this.pairing.sendSessionMessage(message)
+    const delivery = await this.pairing.sendSessionMessage(
+      message,
+      authenticatorResponseDecoder(decode_authenticator_code_session_response),
+    )
     if (delivery.isErr()) return err(delivery.error)
-    let response: AuthenticatorCodeSessionResponse
-    try {
-      response = decode_authenticator_code_session_response(delivery.value)
-    } catch {
-      return err(
-        new AuthenticatorSessionFailure(
-          AuthenticatorSessionFailureKind.InvalidResponse,
-        ),
-      )
-    }
+    const response = delivery.value
     if (response.expiresAt <= Date.now()) {
       return err(
         new AuthenticatorSessionFailure(
@@ -229,17 +235,12 @@ export class ExtensionAuthenticatorSession {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const delivery = await this.pairing.sendSessionMessage(message)
+    const delivery = await this.pairing.sendSessionMessage(
+      message,
+      authenticatorResponseDecoder(decode_authenticator_secret_session_response),
+    )
     if (delivery.isErr()) return err(delivery.error)
-    try {
-      return ok(decode_authenticator_secret_session_response(delivery.value))
-    } catch {
-      return err(
-        new AuthenticatorSessionFailure(
-          AuthenticatorSessionFailureKind.InvalidResponse,
-        ),
-      )
-    }
+    return ok(delivery.value)
   }
 
   async attachAuthenticatorBackupCodesFromSession({
@@ -271,21 +272,14 @@ export class ExtensionAuthenticatorSession {
           queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
         },
       }
-      const delivery = await this.pairing.sendSessionMessage(message)
+      const delivery = await this.pairing.sendSessionMessage(
+        message,
+        authenticatorResponseDecoder(
+          decode_authenticator_backup_verification_session_response,
+        ),
+      )
       if (delivery.isErr()) return err(delivery.error)
-      try {
-        return ok(
-          decode_authenticator_backup_verification_session_response(
-            delivery.value,
-          ),
-        )
-      } catch {
-        return err(
-          new AuthenticatorSessionFailure(
-            AuthenticatorSessionFailureKind.InvalidResponse,
-          ),
-        )
-      }
+      return ok(delivery.value)
     } finally {
       transportCodes.fill('')
     }

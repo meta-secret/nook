@@ -1,4 +1,6 @@
 import { err, ok, type Result } from 'neverthrow'
+import type { ExtensionSessionTransportRequest } from '../../offscreen/session-request-adapter'
+import type { ExtensionSessionResponse } from '../../offscreen/session'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -17,18 +19,25 @@ export class ExtensionSessionTransportFailure {
   }
 }
 
-export type ExtensionSessionTransportResult<T> = Result<
+export type ExtensionSessionTransportResult<
+  T = ExtensionSessionResponse | undefined,
+  DecodeFailure = never,
+> = Result<
   T,
-  ExtensionSessionTransportFailure
+  ExtensionSessionTransportFailure | DecodeFailure
 >
 
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
   sendMessage(
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    message: unknown,
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  ): Promise<ExtensionSessionTransportResult<unknown>>
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult>
+  sendMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
 
 enum SessionDocumentAccess {
@@ -41,10 +50,20 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
   sendMessage(
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    message: unknown,
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  ): Promise<ExtensionSessionTransportResult<unknown>> {
+    message: ExtensionSessionTransportRequest,
+  ): Promise<ExtensionSessionTransportResult>
+  sendMessage<Response, DecodeFailure>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+  sendMessage<Response = ExtensionSessionResponse | undefined, DecodeFailure = never>(
+    message: ExtensionSessionTransportRequest,
+    decodeResponse?: (
+      response: ExtensionSessionResponse | undefined,
+    ) => Result<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
         err(
@@ -55,7 +74,9 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
       )
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage(message, (response) => {
+        chrome.runtime.sendMessage(
+          message,
+          (response: ExtensionSessionResponse | undefined) => {
           const nativeFailure = chrome.runtime.lastError
           if (this.access === SessionDocumentAccess.Revoked) {
             resolve(
@@ -74,9 +95,14 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
               ),
             )
           } else {
-            resolve(ok(response))
+            resolve(
+              decodeResponse
+                ? decodeResponse(response).mapErr((failure) => failure)
+                : ok(response as Response),
+            )
           }
-        })
+          },
+        )
       } catch {
         resolve(
           err(
