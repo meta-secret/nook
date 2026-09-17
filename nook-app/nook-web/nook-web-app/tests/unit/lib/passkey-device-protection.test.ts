@@ -6,6 +6,7 @@ import {
   PasskeyFallback,
   passkeyCeremonyOutcome,
   sanitizedPasskeyCeremonyData,
+  type PasskeyCeremonyFailureInput,
 } from '$lib/auth/passkey-device-protection'
 
 describe('passkeyCeremonyOutcome', () => {
@@ -63,24 +64,33 @@ describe('passkey failure presentation', () => {
       PasskeyCeremonyAction.Create,
       PasskeyCeremonyAction.Recover,
     ]) {
-      const failure = new PasskeyCeremonyFailure(
+      const failureInput: PasskeyCeremonyFailureInput = {
         action,
-        new Error('PASSKEY_PRF_UNAVAILABLE'),
-      )
+        diagnostic: sanitizedPasskeyCeremonyData(
+          new Error('PASSKEY_PRF_UNAVAILABLE'),
+        ),
+      }
+      const failure = new PasskeyCeremonyFailure(failureInput)
       expect(failure.fallback).toBe(PasskeyFallback.OfferPin)
     }
-    const unlock = new PasskeyCeremonyFailure(
-      PasskeyCeremonyAction.Unlock,
-      new Error('PASSKEY_PRF_UNAVAILABLE'),
-    )
+    const unlockInput: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Unlock,
+      diagnostic: sanitizedPasskeyCeremonyData(
+        new Error('PASSKEY_PRF_UNAVAILABLE'),
+      ),
+    }
+    const unlock = new PasskeyCeremonyFailure(unlockInput)
     expect(unlock.fallback).toBe(PasskeyFallback.Unchanged)
   })
 
   it('keeps cancellation distinct and does not retain a native secret-bearing error', () => {
-    const failure = new PasskeyCeremonyFailure(
-      PasskeyCeremonyAction.Create,
-      new Error('PASSKEY_CEREMONY_NOT_ALLOWED secret=private'),
-    )
+    const failureInput: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Create,
+      diagnostic: sanitizedPasskeyCeremonyData(
+        new Error('PASSKEY_CEREMONY_NOT_ALLOWED secret=private'),
+      ),
+    }
+    const failure = new PasskeyCeremonyFailure(failureInput)
     expect(failure.fallback).toBe(PasskeyFallback.Unchanged)
     expect(failure.diagnostic.outcome).toBe(
       PasskeyCeremonyOutcome.CeremonyNotAllowed,
