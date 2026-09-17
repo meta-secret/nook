@@ -86,10 +86,14 @@ class DockerizedRustContract {
     ]);
     for (const job of ["extension-e2e", "full-e2e-shard"]) {
       const dependent = z
-        .object({ needs: z.array(z.string()) })
+        .object({ needs: z.union([z.string(), z.array(z.string())]) })
         .parse(workflow.jobs[job]);
-      expect(dependent.needs).not.toContain("wasm-node-test");
-      expect(dependent.needs).toContain("verify");
+      const needs =
+        typeof dependent.needs === "string"
+          ? [dependent.needs]
+          : dependent.needs;
+      expect(needs).not.toContain("wasm-node-test");
+      expect(needs).toContain("verify");
     }
     for (const full of ["true", "false"]) {
       for (const auth of ["true", "false"]) {
@@ -189,17 +193,48 @@ class DockerizedRustContract {
   }
 
   workflowTooling(): void {
+    let containerOwnedRustJobs = 0;
     for (const file of readdirSync(join(this.root, ".github/workflows"))) {
       if (!file.endsWith(".yml")) continue;
-      const source = readFileSync(
-        join(this.root, ".github/workflows", file),
-        "utf8",
-      );
+      const source = this.read(join(".github/workflows", file));
       expect(source).not.toMatch(
         /uses: (?:dtolnay\/rust-toolchain|Swatinem\/rust-cache)/,
       );
-      expect(source).not.toMatch(/^\s*(?:run:\s*)?(?:cargo|rustup|rustfmt)\s/m);
+      const workflow = z
+        .object({
+          jobs: z.record(
+            z.string(),
+            z.object({
+              container: z
+                .object({ image: z.string() })
+                .passthrough()
+                .optional(),
+              steps: z
+                .array(z.object({ run: z.string().optional() }).passthrough())
+                .optional(),
+            }),
+          ),
+        })
+        .parse(Bun.YAML.parse(source));
+      for (const [jobName, job] of Object.entries(workflow.jobs)) {
+        const rustToolSteps = (job.steps ?? []).filter(
+          ({ run }) =>
+            run !== undefined &&
+            /(?:^|\n)\s*(?:cargo|rustup|rustfmt)\s/m.test(run),
+        );
+        if (rustToolSteps.length === 0) continue;
+        containerOwnedRustJobs += 1;
+        expect(jobName).toBe("pages-preview");
+        expect(job.container?.image).toMatch(
+          /^registry\.dev\.nokey\.sh\/library\/rust:1\.97-trixie@sha256:[0-9a-f]{64}$/,
+        );
+        expect(rustToolSteps.map(({ run }) => run)).toEqual([
+          expect.stringContaining("cargo install wasm-pack --version 0.15.0"),
+          expect.stringContaining("rustup target add wasm32-unknown-unknown"),
+        ]);
+      }
     }
+    expect(containerOwnedRustJobs).toBe(1);
     const ecosystem = this.read(".github/workflows/rust-ecosystem-checks.yml");
     expect(ecosystem).toContain("SCCACHE_OPTIONAL:");
     expect(ecosystem).toContain("'dependabot[bot]') && '1' || ''");
@@ -250,7 +285,7 @@ class DockerizedRustContract {
     );
     const webStage = compile.indexOf("FROM web-base AS compile-web");
     const extensionTypecheck = compile.indexOf(
-      "RUN cd nook-app/nook-web/nook-web-extension",
+      "RUN cd nook-app/nook-web/nook-web-extension \\\n    && ../nook-web-app/node_modules/.bin/svelte-check",
     );
     const extensionBuild = compile.indexOf(
       "bun scripts/build.ts",
@@ -448,6 +483,28 @@ class DockerizedRustContract {
   formatterContext(): void {
     const temporary = mkdtempSync(join(tmpdir(), "nook-format-context-"));
     try {
+      const formatterRoot = join(temporary, "formatter");
+      mkdirSync(formatterRoot);
+      for (const file of [
+        "package.json",
+        "bun.lock",
+        "format.sh",
+        "prettier-default.json",
+        "prettier-shared-typescript.json",
+        "prettier-web.json",
+        "prettier-skill.json",
+      ]) {
+        writeFileSync(
+          join(formatterRoot, file),
+          this.read(join(".github/formatting", file)),
+        );
+      }
+      const install = spawnSync(
+        "bun",
+        ["install", "--frozen-lockfile", "--ignore-scripts"],
+        { cwd: formatterRoot, encoding: "utf8" },
+      );
+      expect(install.status, install.stderr).toBe(0);
       const shared =
         "nook-app/nook-web/nook-web-shared/src/vault-app/fixture.ts";
       const skill =
@@ -475,9 +532,9 @@ class DockerizedRustContract {
             env: {
               ...process.env,
               NOOK_REPO_ROOT: temporary,
-              NOOK_FORMATTER_ROOT: join(this.root, ".github/formatting"),
+              NOOK_FORMATTER_ROOT: formatterRoot,
               FORMAT_CHANGED_FILES: files,
-              FORMAT_SCRIPT: join(this.root, ".github/formatting/format.sh"),
+              FORMAT_SCRIPT: join(formatterRoot, "format.sh"),
             },
           },
         );
