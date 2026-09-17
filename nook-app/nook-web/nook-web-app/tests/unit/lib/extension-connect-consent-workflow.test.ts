@@ -48,10 +48,46 @@ import {
 } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
-import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
+import {
+  ExtensionPairingApprovedMessageType,
+  type ExtensionPairingApprovedMessage,
+} from '$web-shared/extension/runtime-messages'
 import type { NookExtensionConsentPhase } from '$app-wasm'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { VaultSynchronizationResult } from '$lib/vault/sync.svelte'
+
+const approvedMessageFixture: ExtensionPairingApprovedMessage = {
+  type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+  payload: {
+    vaultType: 'simple',
+    deviceId: 'device-1',
+    devicePublicKey: 'device-key',
+    deviceSigningPublicKey: 'signing-key',
+    deviceLabel: 'Nook Extension',
+    vaultStoreId: 'store_abcdefghijk',
+    vaultName: 'Personal',
+    approvedAt: 1_789_084_800_000,
+    scopes: [ExtensionConnectScope.VaultAccess],
+    providers: [],
+  },
+  eventLogRecords: [
+    {
+      eventId: 'event-1',
+      path: 'events/event-1.yaml',
+      event: {
+        schema_version: 2,
+        store_id: 'store_abcdefghijk',
+        actor_id: `key_${'0'.repeat(64)}`,
+        actor_signing_public_key: '0'.repeat(64),
+        parents: [],
+        created_at: '2026-09-17T00:00:00.000Z',
+        key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+        operations: [{ type: 'vault-cleared' }],
+        signature: `ed25519:${'0'.repeat(128)}`,
+      },
+    },
+  ],
+}
 
 function createHarness() {
   const vault = VaultStateTestFixture.create()
@@ -102,7 +138,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   approvalPort.authorize.mockResolvedValue(ok())
   approvalPort.prepareAuthorizedGrant.mockResolvedValue(
-    ok({} as ExtensionPairingApprovedMessage),
+    ok(approvedMessageFixture),
   )
   approvalPort.deliver.mockResolvedValue(
     ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }),
@@ -541,6 +577,7 @@ describe('extension consent web workflow', () => {
           approvalPort.admitCompletion.mockReturnValueOnce(err(failure))
           break
         case ExtensionConsentWorkflowFailureKind.Authorization:
+        case ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome:
         case ExtensionConsentWorkflowFailureKind.ProviderTransition:
           throw new Error('Scenario must fail after durable approval.')
       }
@@ -590,7 +627,7 @@ describe('extension consent web workflow', () => {
     approvalPort.prepareAuthorizedGrant.mockImplementationOnce(async () => {
       preparationStarted.resume(true)
       await releasePreparation.promise
-      return ok({} as ExtensionPairingApprovedMessage)
+      return ok(approvedMessageFixture)
     })
 
     const trackedPhases = new Set<NookExtensionConsentPhase>()

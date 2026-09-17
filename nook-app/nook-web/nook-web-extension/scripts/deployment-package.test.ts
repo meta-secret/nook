@@ -12,6 +12,34 @@ import {
 } from './deployment-package'
 import { ExtensionReleaseChannel } from './channel-identity'
 
+enum DeploymentOperationOutcomeKind {
+  Resolved = 'resolved',
+  Rejected = 'rejected',
+}
+
+type DeploymentOperationOutcome =
+  | { readonly kind: DeploymentOperationOutcomeKind.Resolved }
+  | {
+      readonly kind: DeploymentOperationOutcomeKind.Rejected
+      readonly failure: Error
+    }
+
+class DeploymentOperationFixture {
+  constructor(private readonly operation: Promise<void>) {}
+
+  async settle(): Promise<DeploymentOperationOutcome> {
+    try {
+      await this.operation
+      return { kind: DeploymentOperationOutcomeKind.Resolved }
+    } catch (cause) {
+      return {
+        kind: DeploymentOperationOutcomeKind.Rejected,
+        failure: cause instanceof Error ? cause : new Error(String(cause)),
+      }
+    }
+  }
+}
+
 describe('extension deployment archive', () => {
   test('uses predictable channel-specific names', () => {
     expect(
@@ -139,7 +167,12 @@ describe('extension deployment archive', () => {
         archivePath: join(sourceDirectory, 'extension.zip'),
       }
       const archiveResult = makeDeterministicZip(missingManifestArchiveRequest)
-      await expect(archiveResult).rejects.toThrow('manifest.json at its root')
+      const outcome = await new DeploymentOperationFixture(
+        archiveResult,
+      ).settle()
+      expect(outcome.kind).toBe(DeploymentOperationOutcomeKind.Rejected)
+      if (outcome.kind !== DeploymentOperationOutcomeKind.Rejected) return
+      expect(outcome.failure.message).toContain('manifest.json at its root')
     } finally {
       await rm(sourceDirectory, { recursive: true, force: true })
     }
@@ -157,7 +190,10 @@ describe('extension deployment archive', () => {
         archivePath: join(sourceDirectory, 'missing', 'extension.zip'),
       }
       const archiveResult = makeDeterministicZip(failedArchiveRequest)
-      await expect(archiveResult).rejects.toThrow()
+      const outcome = await new DeploymentOperationFixture(
+        archiveResult,
+      ).settle()
+      expect(outcome.kind).toBe(DeploymentOperationOutcomeKind.Rejected)
     } finally {
       await rm(sourceDirectory, { recursive: true, force: true })
     }

@@ -10,6 +10,7 @@ import {
   ExtensionPairingApprovedGrantAdmission,
   ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionStorageProviderPayloadAdmission,
+  RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeFailureKind,
 } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
@@ -163,10 +164,10 @@ describe('extension pairing grant transport', () => {
     const admission = await ingress.admit({})
     expect('reason' in admission).toBe(true)
     if ('reason' in admission) {
-      expect(admission.reason).toEqual(
-        expect.objectContaining({
-          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
-        }),
+      expect(admission.reason).toBeInstanceOf(RuntimeMessageDecodeFailure)
+      if (!(admission.reason instanceof RuntimeMessageDecodeFailure)) return
+      expect(admission.reason.kind).toBe(
+        RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
       )
     }
   })

@@ -4,6 +4,7 @@ import {
   is_cloudflare_pr_preview_host,
   OAuthOriginUnsupportedReason,
   resolveOAuthOriginSupport,
+  type OAuthOriginAssessment,
 } from '$lib/auth/oauth-origin'
 
 type OAuthLocationFixtureRequest = {
@@ -12,16 +13,13 @@ type OAuthLocationFixtureRequest = {
 }
 
 class OAuthLocationFixture {
-  private readonly browserLocation = window.location
-
-  create(request: OAuthLocationFixtureRequest): Location {
-    return new Proxy(this.browserLocation, {
-      get: (target, property, receiver) => {
-        if (property === 'origin') return request.origin
-        if (property === 'hostname') return request.hostname
-        return Reflect.get(target, property, receiver)
-      },
-    })
+  create(
+    request: OAuthLocationFixtureRequest,
+  ): OAuthOriginAssessment['location'] {
+    return {
+      origin: request.origin,
+      hostname: request.hostname,
+    }
   }
 }
 

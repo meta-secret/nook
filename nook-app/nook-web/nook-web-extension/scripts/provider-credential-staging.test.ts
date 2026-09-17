@@ -49,6 +49,24 @@ class ProviderStagingFixture {
       createdAt: '2026-06-24T00:00:00.000Z',
     }
   }
+
+  githubBrowserMessage(): BrowserRuntimeMessageValue {
+    return {
+      id: 'github',
+      type: 'github',
+      label: 'GitHub',
+      githubPat: {
+        state: 'token',
+        value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
+      },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: '2026-06-24T00:00:00.000Z',
+    }
+  }
   async stage(
     providers: ConstructorParameters<typeof ProviderCredentialBuffer>[0],
   ) {
@@ -297,7 +315,8 @@ describe('provider credential staging', () => {
 
   test('preserves valid provider metadata through canonical admission', async () => {
     const provider = providerStagingFixture.github()
-    const parsed = await parseProviderImport([provider])
+    const providerMessage = providerStagingFixture.githubBrowserMessage()
+    const parsed = await parseProviderImport([providerMessage])
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
     expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
