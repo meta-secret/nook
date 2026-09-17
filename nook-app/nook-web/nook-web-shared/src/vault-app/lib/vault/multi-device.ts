@@ -48,6 +48,10 @@ export enum DeviceRevocationOutcome {
   Revoked = "revoked",
 }
 
+enum VaultAccessRequestOutcome {
+  Requested = "requested",
+}
+
 export type DeviceRenameResult = Result<
   DeviceRenameOutcome,
   StorageOperationFailure | OAuthFailure
@@ -203,9 +207,8 @@ export class VaultDeviceActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.rename_vault_member(authId, label),
-          );
+          await admittedManager.value.rename_vault_member(authId, label);
+          return storageOk(DeviceRenameOutcome.Renamed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -305,14 +308,13 @@ export class VaultDeviceActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.request_vault_access(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
-              isoTimestamp(),
-            ),
+          await admittedManager.value.request_vault_access(
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
+            isoTimestamp(),
           );
+          return storageOk(VaultAccessRequestOutcome.Requested);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
