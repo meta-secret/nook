@@ -161,6 +161,9 @@ let repository = 'meta-secret/nook-workbench'
 /** @type {WorkbenchExpectedSha} */
 let expectedSha = { kind: WorkbenchExpectedShaKind.Omitted }
 for (const [name, value] of Object.entries(process.env)) {
+  if (typeof value !== 'string') {
+    continue
+  }
   if (name === 'NOOK_WORKBENCH_REPOSITORY' && value.length > 0) {
     repository = value
   }
