@@ -24,8 +24,6 @@ import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
 import { VaultEditDecision } from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
 import type { VaultSessionState } from "$lib/vault/state/session.svelte";
-import type { VaultSecretsState } from "$lib/vault/state/secrets.svelte";
-
 export { VaultConnectionActions } from "$lib/vault/connection";
 
 const log = browserLogRuntime.createLogger("connect");
@@ -523,7 +521,10 @@ export class VaultSecretActions {
   }
 
   async refreshPasswordEntriesList(): Promise<
-    Result<VaultSessionState["passwordEntries"], OAuthFailure | StorageOperationFailure>
+    Result<
+      VaultSessionState["passwordEntries"],
+      OAuthFailure | StorageOperationFailure
+    >
   > {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {

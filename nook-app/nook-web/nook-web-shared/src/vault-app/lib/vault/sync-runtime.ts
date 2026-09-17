@@ -94,10 +94,12 @@ export class VaultSyncRuntimeActions {
       let autoConnect = AutoConnectAfterApprovalKind.NotRequested;
       switch (decision) {
         case UnauthenticatedSyncDecision.Approved:
-          state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-          state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
         case UnauthenticatedSyncDecision.AutoConnect:
           {
+            if (decision === UnauthenticatedSyncDecision.Approved) {
+              state.joinEnrollmentPrompt = JoinEnrollmentState.None;
+              state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
+            }
             const scheduled = this.scheduleAutoConnectAfterApproval();
             if (scheduled.isErr()) return err(scheduled.error);
             autoConnect = scheduled.value;

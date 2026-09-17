@@ -166,6 +166,7 @@ const syncKeys = [
   "clearSyncingProvider",
   "isFanOutSyncing",
   "replacementConflicts",
+  "projectionConflictSnapshot",
   "securityConflicts",
   "replaceProjectionConflicts",
   "clearProjectionConflicts",
@@ -334,6 +335,7 @@ class VaultStateSlicesImplementation {
   declare clearSyncingProvider: VaultSyncState["clearSyncingProvider"];
   declare isFanOutSyncing: VaultSyncState["isFanOutSyncing"];
   declare readonly replacementConflicts: VaultSyncState["replacementConflicts"];
+  declare readonly projectionConflictSnapshot: VaultSyncState["projectionConflictSnapshot"];
   declare readonly securityConflicts: VaultSyncState["securityConflicts"];
   declare replaceProjectionConflicts: VaultSyncState["replaceProjectionConflicts"];
   declare clearProjectionConflicts: VaultSyncState["clearProjectionConflicts"];

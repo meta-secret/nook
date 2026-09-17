@@ -3,7 +3,7 @@
     type SecretMutationOutcome,
     type SecretOperationResult,
   } from "$lib/vault/secret-operation-failure";
-  import { err, ok } from "neverthrow";
+  import { err, ok, type Result } from "neverthrow";
   import {
     VaultStorageFailure,
     VaultStorageFailureKind,

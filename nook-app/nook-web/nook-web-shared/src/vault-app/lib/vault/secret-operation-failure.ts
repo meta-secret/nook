@@ -1,4 +1,5 @@
 import type { Result } from "neverthrow";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { VaultEditRestriction } from "$lib/vault/runtime-state.svelte";
 import { VaultEditDecision } from "$app-wasm";
@@ -13,7 +14,8 @@ export class SecretEditRejection {
     >,
   ) {}
 }
-export type SecretOperationFailure = VaultStorageFailure | SecretEditRejection;
+export type SecretOperationFailure =
+  VaultStorageFailure | SecretEditRejection | OAuthFailure;
 export type SecretOperationResult<T> = Result<T, SecretOperationFailure>;
 
 export enum SecretMutationOutcome {
