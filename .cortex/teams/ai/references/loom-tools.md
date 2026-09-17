@@ -103,12 +103,16 @@ It returns validated data only; the active harness owns agent lifecycle.
 
 ## TypeScript domain structure
 
-Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md):
+Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md)
+and the [TypeScript Effect Workflows](../../web-dev/dynamic-skills/typescript-effect.md)
+policy for new and materially changed TypeScript workflows:
 
 - nested operation enums for `prLand`
 - field-name enums passed into deny-unknown checks (never string sets)
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
-- runtime failures return `neverthrow` Result values with concrete `LoomFailure` errors
+- Current migration debt: existing Loom runtime failures use `neverthrow` Result
+  values with concrete `LoomFailure` errors. Do not extend this implementation
+  pattern; materially changed workflows migrate coherently to Effect.
 - authored operations use instances; static methods are narrow builders
 - raw `new Set(['field', ...])` allow-lists remain prohibited
 

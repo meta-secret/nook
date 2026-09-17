@@ -2,11 +2,12 @@ import { ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMe
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 
-window.addEventListener('message', (event: MessageEvent<unknown>) => {
+window.addEventListener('message', (event: MessageEvent) => {
   if (event.source !== window || event.origin !== window.location.origin) return
 
-  if (ExtensionLocalEventLogUpdatedMessageSchema.is(event.data)) {
-    chrome.runtime.sendMessage(event.data, () => {
+  const data: unknown = event.data
+  if (ExtensionLocalEventLogUpdatedMessageSchema.is(data)) {
+    chrome.runtime.sendMessage(data, () => {
       // The bridge is best-effort when the vault is not paired. Reading
       // lastError prevents an expected unloaded/reloaded worker response from
       // becoming an unhandled console error.

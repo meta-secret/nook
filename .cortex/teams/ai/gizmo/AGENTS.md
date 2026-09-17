@@ -22,11 +22,12 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 
 - Accept high-level packets from Gizmo Prime through the active harness.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
-- For every leaf packet that authorizes TypeScript or JavaScript, name the
-  read-only [AI authored implementation routes](../AGENTS.md#authored-implementation-routing).
+- For every leaf packet that authorizes TypeScript, JavaScript, or Svelte,
+  name the read-only [AI authored implementation routes](../AGENTS.md#authored-implementation-routing).
   The packet must include [function ownership](../../../shared/dynamic-skills/function-ownership.md)
-  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md).
-  Do not copy either policy into the packet.
+  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md),
+  plus [TypeScript Effect Workflows](../../web-dev/dynamic-skills/typescript-effect.md).
+  Do not copy these policies into the packet.
 - Require the packet's acceptance evidence to include `task loom:verify`,
   `task preflight:typescript-state`, and `task preflight:source-architecture`.
   Also require focused semantic review against function ownership. A missing

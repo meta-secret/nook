@@ -1,5 +1,7 @@
 import { err, ok, type Result } from 'neverthrow'
 import type { ExtensionSessionTransportFailure } from './session-document'
+import type { ExtensionSessionStorageValue } from './pairing-identity'
+import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
   WebsiteAuthenticatorResponseStatus,
   type WebsiteAuthenticatorOption,
@@ -35,7 +37,7 @@ import {
 } from './session-lifecycle'
 import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
 
-type PendingAuthenticatorPicker = {
+export type PendingAuthenticatorPicker = {
   requestId: string
   origin: string
   tabId: number
@@ -109,7 +111,10 @@ export type PersistedAccountPickerCleanupPlan = {
   cancellations: AccountPickerCancellation[]
 }
 
-export type PersistedAccountPickerStorage = Record<string, unknown>
+export type PersistedAccountPickerStorage = Record<
+  string,
+  ExtensionSessionStorageValue
+>
 
 type StoreAuthenticatorPickerArgs = {
   request: PendingAuthenticatorPicker
@@ -421,7 +426,9 @@ class AccountPickerSessions {
     }
   }
 
-  private sessionResponseAccounts(response: unknown): unknown[] {
+  private sessionResponseAccounts(
+    response: ExtensionSessionResponse | undefined,
+  ): Array<WebsiteLoginAccountOption | WebsiteAuthenticatorOption> {
     if (
       !response ||
       typeof response !== 'object' ||

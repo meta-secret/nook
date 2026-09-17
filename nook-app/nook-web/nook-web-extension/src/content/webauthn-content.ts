@@ -20,6 +20,7 @@ import type {
   WebsitePasskeyOptionsResponse,
   WebsitePasskeyPerformMessage,
   WebsitePasskeyPerformResponse,
+  WebsitePasskeyRequest,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,
@@ -41,7 +42,7 @@ type PageRequest = {
   type: PageRequestType.Request
   requestId: string
   ceremony: WebsitePasskeyCeremony
-  request: Record<string, unknown>
+  request: WebsitePasskeyRequest['value']
   expiresAt: number
 }
 
@@ -76,7 +77,7 @@ function t({ key, fallback }: BrowserMessageTranslationRequest): string {
 type WebAuthnPageResponseDelivery = {
   requestId: string
   action: PageResponseAction
-  value?: unknown
+  value?: string | WebsitePasskeyPerformResponse
 }
 
 type WebsitePasskeyRuntimeMessage =
@@ -127,8 +128,7 @@ function isPasskeyOption(value: unknown): value is PasskeyOption {
 
 function validOptions(value: unknown): PasskeyOption[] {
   if (!Array.isArray(value)) return []
-  const candidates: readonly unknown[] = value
-  return candidates.filter(isPasskeyOption)
+  return value.filter(isPasskeyOption)
 }
 
 function removePrompt(requestId: string): void {
@@ -168,14 +168,14 @@ function chooseOption({
     }
     heading.textContent = t(nookTypedArgs0_0)
     const detail = document.createElement('p')
-    const relyingParty = request.request.relyingParty
     const rp =
       request.ceremony === WebsitePasskeyCeremony.Create &&
-      relyingParty &&
-      typeof relyingParty === 'object' &&
-      'name' in relyingParty
-        ? relyingParty.name
-        : request.request.rpId
+      'relyingParty' in request.request &&
+      'name' in request.request.relyingParty
+        ? request.request.relyingParty.name
+        : 'rpId' in request.request
+          ? request.request.rpId
+          : location.hostname
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
     const choices = document.createElement('div')
     for (const option of options) {
@@ -326,15 +326,16 @@ class WebAuthnPageIngress {
     )
   }
 
-  static receive(event: MessageEvent<unknown>): void {
+  static receive(event: MessageEvent): void {
+    const data: unknown = event.data
     if (
       event.source !== window ||
       event.origin !== location.origin ||
-      !event.data ||
-      typeof event.data !== 'object'
+      !data ||
+      typeof data !== 'object'
     )
       return
-    const message = event.data
+    const message = data
     if (
       !('source' in message) ||
       message.source !== REQUEST_SOURCE ||

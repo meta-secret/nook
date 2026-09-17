@@ -37,13 +37,11 @@ class ExtensionPairingVaultTypeCatalog {
   }
 
   admit(
-    value: unknown,
+    value: string,
   ): Result<
     ExtensionPairingVaultType,
     ExtensionPairingVaultTypeAdmissionFailure
   > {
-    if (typeof value !== "string")
-      return err(ExtensionPairingVaultTypeAdmissionFailure.Unsupported);
     switch (this.runtimeState.kind) {
       case ExtensionPairingVaultTypeRuntimeStateKind.Unconfigured:
         return err(

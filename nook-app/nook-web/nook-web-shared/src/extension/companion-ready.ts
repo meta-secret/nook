@@ -191,18 +191,19 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
   return { kind: CompanionWasmModuleKind.Absent };
 }
 
-async function startCompanionWasm(): Promise<unknown> {
+async function startCompanionWasm(): Promise<void> {
   const resolved = await companionWasmModuleOrPath();
   if (resolved.kind === CompanionWasmModuleKind.Present) {
     const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
       module_or_path: resolved.moduleOrPath,
     };
-    return initCompanionWasm(nookTypedArgs0_0);
+    await initCompanionWasm(nookTypedArgs0_0);
+    return;
   }
   // Node/Bun last resort: wasm-bindgen resolves via import.meta.url. Extension
   // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).
   // Web-app vitest installs a fetch mock in setup-wasm for this path.
-  return initCompanionWasm();
+  await initCompanionWasm();
 }
 
 /**

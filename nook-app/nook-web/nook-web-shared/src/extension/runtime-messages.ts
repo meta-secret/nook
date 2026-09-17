@@ -8,6 +8,10 @@ import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
+import type {
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityStatus,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 
@@ -84,6 +88,8 @@ export class ExtensionPairingApprovedGrantAdmission {
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
     const payload = value;
     if (!("vaultType" in payload))
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
+    if (typeof payload.vaultType !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
     const vaultType = extensionPairingVaultType.admit(payload.vaultType);
     if (vaultType.isErr())
@@ -313,8 +319,9 @@ export class ExtensionPairingApprovedMessage {
   }
   static isExtensionEventObject(
     value: unknown,
-  ): value is Record<string, unknown> {
-    return Boolean(value) && typeof value === "object";
+  ): value is { readonly schema_version: number } {
+    if (!value || typeof value !== "object") return false;
+    return "schema_version" in value && typeof value.schema_version === "number";
   }
   static parseExtensionEventLogRecords(
     value: unknown,
@@ -441,7 +448,7 @@ export enum ExtensionPairedVaultIdentityDiscoveryMessageType {
 export class ExtensionPairedVaultIdentityDiscoveryMessage {
   private constructor() {}
   declare readonly type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery;
-  declare readonly payload: unknown;
+  declare readonly payload: CompanionIdentityDiscoveryObservation;
   static is(
     message: unknown,
   ): message is ExtensionPairedVaultIdentityDiscoveryMessage {
@@ -455,7 +462,8 @@ export class ExtensionPairedVaultIdentityDiscoveryMessage {
 }
 
 export type CompanionIdentityDiscoveryTransportResponse =
-  { ok: true; status: unknown } | { ok: false };
+  | { ok: true; status: CompanionIdentityStatus }
+  | { ok: false };
 
 export enum ExtensionPairedVaultUnlockRequestMessageType {
   NookExtensionPairedVaultUnlockRequest = "nook:extension-paired-vault-unlock-request",
@@ -463,13 +471,11 @@ export enum ExtensionPairedVaultUnlockRequestMessageType {
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairedVaultUnlockRequestMessage {
-  static isPairedVaultRequestMessage({
-    message,
-    type,
-  }: IsPairedVaultRequestMessageArgs): boolean {
+  private static isPairedVaultRequestMessage(message: unknown): boolean {
     if (
       !RuntimeMessageEnvelopeSchema.hasRuntimeMessageType(message) ||
-      message.type !== type ||
+      message.type !==
+        ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest ||
       !("payload" in message) ||
       typeof message.payload !== "object" ||
       !message.payload
@@ -495,14 +501,8 @@ export class ExtensionPairedVaultUnlockRequestMessage {
   static is(
     message: unknown,
   ): message is ExtensionPairedVaultUnlockRequestMessage {
-    const nookTypedArgs0_0: Parameters<
-      typeof ExtensionPairedVaultUnlockRequestMessage.isPairedVaultRequestMessage
-    >[0] = {
-      message,
-      type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-    };
     return ExtensionPairedVaultUnlockRequestMessage.isPairedVaultRequestMessage(
-      nookTypedArgs0_0,
+      message,
     );
   }
 }
@@ -511,11 +511,27 @@ export enum ExtensionPairedVaultIdentityHandoffRequestMessageType {
   NookExtensionPairedVaultIdentityHandoffRequest = "nook:extension-paired-vault-identity-handoff-request",
 }
 
+export type CompanionAdmittedIdentityDiscovery = {
+  readonly discovery: CompanionIdentityDiscoveryObservation;
+  readonly status: CompanionIdentityStatus;
+  readonly admittedAt: number;
+};
+
+export type CompanionIdentityHandoffRequest = {
+  readonly transaction: CompanionAdmittedIdentityDiscovery;
+  readonly recipientPublicKey: string;
+};
+
+export type CompanionIdentityHandoffResponse = {
+  readonly request: CompanionIdentityHandoffRequest;
+  readonly encryptedEnvelope: string;
+};
+
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionPairedVaultIdentityHandoffRequestMessage {
   private constructor() {}
   declare readonly type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest;
-  declare readonly payload: unknown;
+  declare readonly payload: CompanionIdentityHandoffRequest;
   static is(
     message: unknown,
   ): message is ExtensionPairedVaultIdentityHandoffRequestMessage {
@@ -532,7 +548,8 @@ export class ExtensionPairedVaultIdentityHandoffRequestMessage {
 }
 
 export type CompanionIdentityHandoffTransportResponse =
-  { ok: true; response: unknown } | { ok: false; reason: string };
+  | { ok: true; response: CompanionIdentityHandoffResponse }
+  | { ok: false; reason: string };
 
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
@@ -544,11 +561,6 @@ export type RuntimeMessage =
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage;
-
-type IsPairedVaultRequestMessageArgs = {
-  message: unknown;
-  type: ExtensionPairedVaultUnlockRequestMessage["type"];
-};
 
 export const ExtensionStorageProviderPayload =
   ExtensionStorageProviderPayloadAdmission;

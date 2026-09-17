@@ -24,14 +24,20 @@ behavior for packets issued by SRE Team Gizmo.
   Dockerfile, build context, build arguments, and base image. Do not duplicate
   that decision with custom dependency fingerprints, cache selectors,
   allowlists, or mutation simulations.
-- Preserve one optional immutable exact-commit BuildKit identity for
-  `mode=max` same-head full-graph acceleration. Dependency and toolchain
-  vertices stay rooted in that ordinary compile graph; do not synchronously
-  export a second sibling graph.
-- Let BuildKit own cache availability, Dockerfile/context/build-argument input
-  validation, and layer reuse. Do not precompute a parallel dependency
-  fingerprint, probe selectors to predict reuse, or simulate Docker's cache-key
-  decisions before the actual build.
+- Preserve immutable exact-commit BuildKit identities for the current head and
+  its first parent. The current ref accelerates same-head retries; the parent
+  ref carries reusable layers to an ordinary successor head. Dependency and
+  toolchain vertices stay rooted in that ordinary compile graph; do not
+  synchronously export a second sibling graph.
+- Use the unversioned semantic compile-cache repository name
+  `nook-build-compile`. Do not manually rotate a schema suffix or derive a
+  toolchain/dependency fingerprint; Dockerfile, context, build args, and base
+  image remain BuildKit's invalidation inputs.
+- Let BuildKit own cache validity, Dockerfile/context/build-argument input
+  validation, and layer reuse. A narrow authenticated manifest/blob access
+  check may fail fast on inaccessible registry resources, but must not select
+  or filter cache refs, or predict hits/reuse. Do not precompute a parallel
+  dependency fingerprint or simulate Docker's cache-key decisions.
 - Make sccache the primary cross-commit compiler cache. Secret availability is
   the complete trust boundary: jobs receiving the single
   `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` pair use `READ_WRITE`;
@@ -39,9 +45,12 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not require a separate cache-population workflow or prerequisite before an
   ordinary compile. The first cold publish is allowed to miss and must populate
   compiler objects for the next committed head.
-- Require cache-root reachability in addition to manifest existence and import
-  success. The target exported through `cache_to` must retain the reusable
-  dependency and compiler ancestry consumed by ordinary builds.
+- Require authenticated registry reachability and access to each present
+  current/parent cache manifest and every referenced blob before compilation.
+  The target exported through `cache_to` must retain the reusable dependency
+  and compiler ancestry consumed by ordinary builds. A missing exact current
+  or parent manifest is an expected miss; registry/authentication errors,
+  inaccessible referenced content, and export failure are terminal.
 - Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
   export a terminal result while orphaning intermediate cache records.
 - Keep dependency layers reusable across source changes and explicitly root
@@ -154,8 +163,9 @@ behavior for packets issued by SRE Team Gizmo.
   allowlists, or source-mutation simulations that duplicate BuildKit layer
   invalidation. Treat such machinery as a P1 finding and stop under the Cortex
   circuit breaker.
-- Do not hide cold compilation, missing cache scopes, or cache transport
-  failures behind successful status.
+- Do not hide cache transport or export failures behind successful status.
+  Ordinary absent exact refs may fall through to the first-parent lineage; a
+  first-ever commit may cold-build and seed its exact ref.
 - Do not retry remote `sccache` after its circuit opens in a Docker `RUN`.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
 - Do not execute GitHub, pull-request, publication, landing, or promotion

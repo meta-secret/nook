@@ -6,6 +6,8 @@ import {
   type WebsiteAuthenticatorOption,
   WebsiteAuthenticatorResponseStatus,
 } from '../../lib/login-fill-messages'
+import { WebsiteAuthenticatorCanceledMessageType } from '../../lib/authenticator-picker-messages'
+import type { AccountPickerPageMessage } from './account-picker-page-target'
 import {
   AccountPickerSurfaceKind,
   AccountPickerPageTarget,
@@ -511,8 +513,9 @@ class AuthenticatorEnrollmentOperations {
     }
     await accountPickerSessions.removeAuthenticatorPicker(request.requestId)
     try {
-      const nookTypedArgs0_5: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-        type: 'nook:website-authenticator-canceled',
+      const nookTypedArgs0_5: AccountPickerPageMessage = {
+        type:
+          WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
         payload: {
           origin: request.origin,
           requestId: request.requestId,

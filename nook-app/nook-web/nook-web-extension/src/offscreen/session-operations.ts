@@ -3,7 +3,10 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
-import type { ExtensionSessionLeaseFailure } from './session-lease'
+import type {
+  ActiveExtensionSessionLease,
+  ExtensionSessionLeaseFailure,
+} from './session-lease'
 import {
   DeviceMode,
   DeviceProtectionStatus,
@@ -61,7 +64,7 @@ export type SessionOperationContext = {
   currentGeneration: () => number
   renewSessionExpiry: (
     generation: number,
-  ) => Result<void, ExtensionSessionLeaseFailure>
+  ) => Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure>
   resetOperations: (error: SessionOperationFailure) => void
 }
 

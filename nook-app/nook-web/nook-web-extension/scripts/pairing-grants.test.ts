@@ -6,6 +6,7 @@ import {
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  ExtensionPairingApprovedGrantAdmission,
   ExtensionPairingApprovedMessageAdmissionFailure,
   ExtensionPairingStorageProviderPayloadAdmission,
 } from '../../nook-web-shared/src/extension/runtime-messages'
@@ -52,6 +53,16 @@ const storedGrant: StoredExtensionPairingGrant = {
 }
 
 describe('extension pairing grant transport', () => {
+  test('rejects a non-string vault type at the browser wire boundary', () => {
+    const admission = ExtensionPairingApprovedGrantAdmission.parse({
+      vaultType: null,
+    })
+
+    expect(admission).toEqual(
+      err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType),
+    )
+  })
+
   test('admits only complete structured-cloneable provider payloads', () => {
     const complete = {
       id: 'github',

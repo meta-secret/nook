@@ -106,12 +106,18 @@ describe('account picker authorization cleanup', () => {
     const requestedFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
       tabId: 42,
       frameId: 7,
-      message: { type: 'selected' },
+      message: {
+        type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+        payload: { origin: 'https://example.test', requestId: 'request-7' },
+      },
     }
     const wrongFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
       tabId: 42,
       frameId: 3,
-      message: { type: 'selected' },
+      message: {
+        type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+        payload: { origin: 'https://example.test', requestId: 'request-3' },
+      },
     }
 
     expect(await AccountPickerPageTarget.send(requestedFrame)).toEqual({

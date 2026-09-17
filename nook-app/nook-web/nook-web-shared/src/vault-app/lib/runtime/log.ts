@@ -131,8 +131,7 @@ type LogRuntimeReadiness =
  * paths (`createLogger`, the `console.*` patch, Rust via `__nookConsole.echo`)
  * print through these so patching never causes recursion or double-persist.
  */
-// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console owns this variadic ingress boundary.
-type ConsoleArguments = unknown[];
+type ConsoleArguments = Parameters<Console["log"]>;
 
 type ConsoleMethod = (...args: ConsoleArguments) => void;
 
