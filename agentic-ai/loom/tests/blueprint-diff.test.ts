@@ -28,8 +28,8 @@ describe('blueprint explanation', () => {
 
   test('marks unknown roots against the default blueprint', () => {
     const explanationArgs3 = {
-      name: 'agent-stats',
-      arguments: { action: 'assemble' },
+      name: 'unsupported-command',
+      arguments: { action: 'run' },
     };
     const explanation =
       RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs3);

@@ -41,11 +41,6 @@ import {
   FieldDecodeProjection,
 } from './object.ts';
 import {
-  type AgentStatsLoomRequest,
-  type DecodeAgentStatsFamilyArgs,
-  AgentStatsFamilyDecoder,
-} from './request-agent-stats.ts';
-import {
   type DecodePrLandFamilyArgs,
   type PrLandLoomRequest,
   PrLandFamilyDecoder,
@@ -66,7 +61,6 @@ export type LoomRequest =
       readonly family: RequestFamily.SkillScaffold;
       readonly skillScaffold: SkillScaffoldRequest;
     }
-  | AgentStatsLoomRequest
   | PrLandLoomRequest
   | {
       readonly family: RequestFamily.DependencyPopularity;
@@ -89,7 +83,6 @@ export class LoomRequestSchema {
     RequestFamily.CortexAudit,
     RequestFamily.CortexSessionClean,
     RequestFamily.SkillScaffold,
-    RequestFamily.AgentStats,
     RequestFamily.PrLand,
     RequestFamily.DependencyPopularity,
     RequestFamily.ToolsList,
@@ -232,15 +225,6 @@ export class LoomRequestSchema {
             }),
           };
         return FieldDecodeProjection.map(mapDecodeArgs4);
-      }
-      case RequestFamily.AgentStats: {
-        const decodeAgentStatsFamilyArgs: DecodeAgentStatsFamilyArgs = {
-          value: payload,
-          path,
-        };
-        return AgentStatsFamilyDecoder.decodeAgentStatsFamily(
-          decodeAgentStatsFamilyArgs,
-        );
       }
       case RequestFamily.PrLand: {
         const decodePrLandFamilyArgs: DecodePrLandFamilyArgs = {

@@ -6,9 +6,6 @@ export enum LoomFailureCode {
   ValidationFailed = 'validationFailed',
   FileReadFailed = 'fileReadFailed',
   YamlStringifyFailed = 'yamlStringifyFailed',
-  ScratchLogInvalid = 'scratchLogInvalid',
-  PrMetadataInvalid = 'prMetadataInvalid',
-  StatsFilenameInvalid = 'statsFilenameInvalid',
   SkillScaffoldFailed = 'skillScaffoldFailed',
   CortexAuditFailed = 'cortexAuditFailed',
 }
@@ -61,12 +58,6 @@ export class LoomFailure extends Error {
         return 'File read failed';
       case LoomFailureCode.YamlStringifyFailed:
         return 'Failed to stringify YAML';
-      case LoomFailureCode.ScratchLogInvalid:
-        return 'Scratch event log is invalid';
-      case LoomFailureCode.PrMetadataInvalid:
-        return 'PR metadata is invalid';
-      case LoomFailureCode.StatsFilenameInvalid:
-        return 'Stats filename must be <pr-number>.yaml';
       case LoomFailureCode.SkillScaffoldFailed:
         return 'Skill scaffold failed';
       case LoomFailureCode.CortexAuditFailed:

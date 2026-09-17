@@ -105,7 +105,7 @@ It returns validated data only; the active harness owns agent lifecycle.
 
 Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md):
 
-- nested same-prefix families (`agentStats`, `prLand`) plus operation enums
+- nested operation enums for `prLand`
 - field-name enums passed into deny-unknown checks (never string sets)
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
 - runtime failures return `neverthrow` Result values with concrete `LoomFailure` errors
@@ -144,22 +144,18 @@ Do **not** use a generic envelope:
 
 ```yaml
 # wrong
-name: agent-stats
+name: unsupported-command
 arguments:
-  action: assemble
-  pr: 123
+  action: run
 ```
 
 Use one domain root family and descriptive fields. Same-prefix operations nest:
 
 ```yaml
 # right
-agentStats:
-  assemble:
+prLand:
+  status:
     prNumber: 123
-    scratchPath: "{agentTempDir}/pr-123-scratch.json"
-    outputPath: "{agentTempDir}/123.yaml"
-    includeTestInventory: true
 ```
 
 Exactly one root family key is allowed.
@@ -197,9 +193,7 @@ Prefer libraries over boilerplate:
 `task loom:tools-list` returns the canonical invoke command in
 `exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every active
 direct request below.
-`resolvedExampleYaml` equals the generated example for static requests and
-fills dynamic tokens for the current worktree and commit. Consume that output
-instead of maintaining request bodies in Cortex.
+Consume that output instead of maintaining request bodies in Cortex.
 
 ### prePush (deprecated)
 
@@ -233,17 +227,6 @@ The request requires `skillOwner` with one of `gizmo`, `ai`, `shared`,
 `dev-core`, `security`, `sre`, or `web-dev`. Loom creates the canonical card in
 that owner's dynamic-skill directory. It registers the card in the AI skill
 catalog. Security remains the owner for security policy and acceptance.
-
-### agentStats (assemble / validate / publish)
-
-```bash
-task loom:agent-stats CONFIG=path/to/assemble-request.yaml
-```
-
-Validate and publish use `agentStats.validate` / `agentStats.publish` with
-`statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
-by Git commit and worktree. See
-[Agent PR Statistics](../../../gizmo-prime/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate)
 

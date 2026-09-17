@@ -28,7 +28,6 @@ issues/<feature>/README.md
 issues/<feature>/<focused-deliverable>.md
 plans/<feature>/<timestamp>-<task>.md
 worklogs/<feature>/<timestamp>-<issue-or-pr>.md
-stats/ai-agent/<nook-pr>.yaml
 stats/main-build/<run-id>-attempt-<attempt>.yaml
 ```
 
