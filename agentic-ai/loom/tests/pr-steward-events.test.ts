@@ -279,19 +279,21 @@ describe('exact-head routing observations', () => {
     'drains four buffered subscription messages while a check hint is in flight',
     async () => {
       const reader = new TwoHintsThenPendingPrReader();
-      const data = Array.from({ length: 7 }, (_, index) =>
-        cloudEvent({
-          event: 'check_run',
-          id: `check-run-${index}`,
-          body: {
-            repository,
-            check_run: {
-              ...associated({ id: 44 + index, head: HEAD }),
-              conclusion: 'success',
+      const data: Uint8Array[] = [];
+      for (let index = 0; index < 7; index += 1)
+        data.push(
+          cloudEvent({
+            event: 'check_run',
+            id: `check-run-${index}`,
+            body: {
+              repository,
+              check_run: {
+                ...associated({ id: 44 + index, head: HEAD }),
+                conclusion: 'success',
+              },
             },
-          },
-        }),
-      );
+          }),
+        );
       const connection = new BufferedNatsConnection();
       const lines: string[] = [];
       let checkHints = 0;
