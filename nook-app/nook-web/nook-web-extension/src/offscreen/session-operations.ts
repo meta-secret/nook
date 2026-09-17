@@ -123,7 +123,6 @@ export async function handleSessionMessage({
         )
         const activeManager = await getManager()
         activeManager.reset_vault_session()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true })
       }
       case ExtensionSessionMessageType.MigrateAuthProviders: {
@@ -132,17 +131,14 @@ export async function handleSessionMessage({
           (await activeManager.device_protection_status()) !==
           DeviceProtectionStatus.Unlocked
         ) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true, migrated: false })
         }
         await activeManager.load_auth_providers_snapshot()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, migrated: true })
       }
       case ExtensionSessionMessageType.Status: {
         const activeManager = await getManager()
         const status = await activeManager.device_protection_status()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           ok: true,
           status,
@@ -157,7 +153,6 @@ export async function handleSessionMessage({
         const userHandle = setup.userHandle
         const prfInput = setup.prfInput
         setup.free()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           ok: true,
           setup: {
@@ -198,7 +193,6 @@ export async function handleSessionMessage({
           prfInput.fill(0)
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, device: await activateSession() })
       }
       case ExtensionSessionMessageType.RecoverPasskey: {
@@ -218,13 +212,11 @@ export async function handleSessionMessage({
           userHandle.fill(0)
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, device: await activateSession() })
       }
       case ExtensionSessionMessageType.UnlockOptions: {
         const options = await (await getManager()).passkey_unlock_options()
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             material: {
@@ -245,7 +237,6 @@ export async function handleSessionMessage({
         } finally {
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, device: await activateSession() })
       }
       case ExtensionSessionMessageType.CreatePin: {
@@ -257,7 +248,6 @@ export async function handleSessionMessage({
             ),
           )
         await (await getManager()).finish_pin_device_protection(pin)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, device: await activateSession() })
       }
       case ExtensionSessionMessageType.UnlockPin: {
@@ -269,7 +259,6 @@ export async function handleSessionMessage({
             ),
           )
         await (await getManager()).unlock_pin_device_identity(pin)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, device: await activateSession() })
       }
       case ExtensionSessionMessageType.SealIdentityHandoff: {
@@ -294,7 +283,6 @@ export async function handleSessionMessage({
             new SessionOperationFailure(SessionOperationFailureKind.Locked),
           )
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         const envelope = await activeManager.seal_extension_identity_handoff({
           recipientPublicKey,
           nonce,
@@ -308,7 +296,6 @@ export async function handleSessionMessage({
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.Locked),
           )
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true, envelope })
       }
       case ExtensionSessionMessageType.ImportVault: {
@@ -345,7 +332,6 @@ export async function handleSessionMessage({
               )
             const status = statusValue.to_object()
             statusValue.free()
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
             return ok({ ok: true, status })
           } catch {
             return err(
@@ -387,7 +373,6 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             accounts: accounts.map((account) => ({
@@ -421,7 +406,6 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             accounts: accounts.map((account) => ({
@@ -460,7 +444,6 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             username: credential.username,
@@ -491,7 +474,6 @@ export async function handleSessionMessage({
           payload.query,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             accounts: accounts.map((account) => ({
@@ -526,7 +508,6 @@ export async function handleSessionMessage({
           Math.floor(Date.now() / 1000),
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             code: code.code,
@@ -587,9 +568,9 @@ export async function handleSessionMessage({
             payload.password = ''
             return ok(
               decision === NookWebsiteLoginSaveDecision.AlreadySaved
-                ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+                ?
                   { ok: true, decision, secretId: plan.secretId }
-                : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+                :
                   { ok: true, decision },
             )
           }
@@ -622,7 +603,6 @@ export async function handleSessionMessage({
           }
           pendingLoginSaveOfferStore.store(offer)
           payload.password = ''
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             decision,
@@ -647,14 +627,12 @@ export async function handleSessionMessage({
         }
         const lookup = pendingLoginSaveOfferStore.findByOrigin(payload.origin)
         if (lookup.state === PendingLoginSaveLookupState.Unavailable) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             ok: true,
             state: PendingLoginSaveLookupState.Unavailable,
           })
         }
         const { offer } = lookup
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           ok: true,
           state: PendingLoginSaveLookupState.Available,
@@ -725,7 +703,6 @@ export async function handleSessionMessage({
           const admission7 =
             await flushPasskeyEventToProviders(nookTypedArgs0_11)
           if (admission7.isErr()) return err(admission7.error)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true, decision: committedOffer.decision })
         } finally {
           pendingLoginSaveOfferStore.clearOffer(committedOffer)
@@ -741,7 +718,6 @@ export async function handleSessionMessage({
           )
         }
         pendingLoginSaveOfferStore.clearById(payload.offerId)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true })
       }
       case ExtensionSessionMessageType.CancelPasskey:
@@ -760,7 +736,6 @@ export async function handleSessionMessage({
         return response
       }
       case ExtensionSessionMessageType.Lock:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ ok: true })
       default:
         return err(

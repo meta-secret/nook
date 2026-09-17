@@ -60,12 +60,10 @@ type WebsitePasskeyManager = Pick<
   | 'load_auth_providers_snapshot'
   | 'flush_event_outbox_for_provider'
 > & {
-  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
   register_website_passkey: (
     request: Parameters<NookVaultManager['register_website_passkey']>[0],
     ceremonyActive: () => boolean,
   ) => Promise<WebsitePasskeyRegistration>
-  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
   assert_website_passkey: (
     request: Parameters<NookVaultManager['assert_website_passkey']>[0],
     ceremonyActive: () => boolean,
@@ -123,7 +121,6 @@ class SessionWebsitePasskeys {
             )
           }
           this.canceledWebsitePasskeyRequests.add(payload.requestId)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true })
         }
         case ExtensionSessionMessageType.RegisterPasskey: {
@@ -166,7 +163,6 @@ class SessionWebsitePasskeys {
               }
               const admission1 = await flushEvent(flushArgs)
               if (admission1.isErr()) return err(admission1.error)
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return ok({
                 ok: true,
                 credentialId: registration.credentialId,
@@ -221,7 +217,6 @@ class SessionWebsitePasskeys {
               }
               const admission3 = await flushEvent(flushArgs)
               if (admission3.isErr()) return err(admission3.error)
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
               return ok({
                 ok: true,
                 credentialId: assertion.credentialId,

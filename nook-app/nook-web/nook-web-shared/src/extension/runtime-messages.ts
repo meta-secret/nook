@@ -195,7 +195,6 @@ export class ExtensionStorageProviderPayloadAdmission {
       case ExtensionStorageProviderType.LocalFolder:
       case ExtensionStorageProviderType.Github:
       case ExtensionStorageProviderType.OAuthFile:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({ id: provider.id, type: provider.type });
       default:
         return err(ExtensionStorageProviderIdentityFailure.Invalid);

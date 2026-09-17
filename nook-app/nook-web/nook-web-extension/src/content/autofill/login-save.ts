@@ -76,8 +76,7 @@ type StageSaveOfferRequest = {
 }
 
 type CrossWorldSubmitEvent = Event & {
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Browser-world input is narrowed immediately by AuthenticationSubmitEvent.
-  readonly submitter: unknown
+  readonly submitter: Pick<SubmitEvent, 'submitter'>['submitter']
 }
 
 enum AuthenticationSubmitterKind {

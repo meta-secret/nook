@@ -112,14 +112,12 @@ export class LiveApprovedAuthenticationWorkflow {
   ) {}
   get disposition(): LiveAuthenticationWorkflowDisposition {
     const { approved, authenticatorSetupHint, backupCodesHint } = this.request;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const liveCandidates = new AuthenticationWorkflowClassification({
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint,
       backupCodesHint,
     }).observations;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const decision = revalidate_approved_authentication_workflow({
       approved: approved.facts,
       live: {
@@ -130,7 +128,6 @@ export class LiveApprovedAuthenticationWorkflow {
       return LiveAuthenticationWorkflowDisposition.Changed;
     const selected = liveCandidates[decision.observationIndex];
     if (!selected) return LiveAuthenticationWorkflowDisposition.Changed;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new AuthenticationWorkflowScopeComparison({
       left: selected.observation,
       right: approved.observation,

@@ -164,7 +164,7 @@
       const actions = new oauthActions.VaultOAuthActions(vault);
       const creation = isSharedICloud
         ? await actions.createICloudSharedProvider()
-        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        :
           await actions.createGoogleSharedFolder({ collaboratorEmail });
       if (creation.isErr()) {
         vault.errorMsg = vault.t(creation.error.translationKey);
@@ -184,11 +184,11 @@
     try {
       const actions = new oauthActions.VaultOAuthActions(vault);
       const connection = isSharedICloud
-        ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        ?
           await actions.useICloudSharedProvider({
             shareReference: sharedFolderRef,
           })
-        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        :
           await actions.useGoogleSharedFolder({ folderRef: sharedFolderRef });
       if (connection.isErr()) {
         vault.errorMsg = vault.t(connection.error.translationKey);

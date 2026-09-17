@@ -111,7 +111,6 @@ export enum PasskeyFallback {
 /** Admits a foreign ceremony failure without retaining its error or credential data. */
 export class PasskeyCeremonyFailure {
   readonly diagnostic: ReturnType<typeof sanitizedPasskeyCeremonyData>;
-  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     private readonly action: PasskeyCeremonyAction,
     failure: unknown,

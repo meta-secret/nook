@@ -691,7 +691,6 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields = passwordFieldDiscovery.findPasswordFields(query);
     if (hasLocalUnownedScope && passwordFields.length > 0) {
       const newPasswordFieldCount = passwordFields.filter((field) => {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return passwordFieldDiscovery.hasAutocompleteToken({
           field,
           expected: "new-password",
@@ -811,7 +810,6 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields =
       passwordFieldDiscovery.findPasswordFields(fieldQuery);
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return passwordFieldDiscovery.hasAutocompleteToken({
         field,
         expected: "new-password",

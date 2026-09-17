@@ -28,7 +28,6 @@ type SentinelDashboardPortalParameters = {
   choice: SentinelDashboardChoice;
 };
 
-// eslint-disable-next-line max-params -- Svelte owns the two-parameter action contract.
 export function sentinelDashboardPortal(
   node: HTMLElement,
   parameters: SentinelDashboardPortalParameters,

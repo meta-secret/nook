@@ -338,7 +338,6 @@ export class VaultProviderActions {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       })();
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
         operation,
         releaseLateValue: () => {},
@@ -445,7 +444,6 @@ export class VaultProviderActions {
             ensureLocalAuthProviderSnapshotArgs,
           );
         const localVaultPresent = await has_local_vault();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return storageOk({ snapshot, localVaultPresent });
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
@@ -593,7 +591,6 @@ export class VaultProviderActions {
     const target = state.providers.find((p) => p.id === id);
     if (!target || target.type === "local") return storageOk();
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const persistence = await state.persistProviders({
       replace: true,
       providers: state.providers.filter((provider) => provider.id !== id),
@@ -728,7 +725,6 @@ export class ProviderPersistenceActions {
           ),
         );
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const persistence = await state.persistProviders({
         replace: false,
         providers: outcome.snapshot.providers,

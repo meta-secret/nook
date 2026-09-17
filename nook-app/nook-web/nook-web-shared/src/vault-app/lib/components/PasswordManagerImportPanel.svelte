@@ -38,7 +38,6 @@
         })
     )
 
-  // eslint-disable-next-line svelte/no-unused-props -- The discriminated props object preserves the format/onImport relationship.
   let props: Props = $props()
   let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,

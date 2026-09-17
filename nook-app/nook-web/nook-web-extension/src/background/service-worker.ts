@@ -460,7 +460,6 @@ class BackgroundRuntimeMessageRouter {
         .then(async () => {
           const admission = AuthenticationWorkflowSnapshotIngress.admit(message)
           if (admission.kind !== 'accepted') {
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
             sendResponse({ ok: false, reason: 'workflow-invalid-observation' })
             return
           }
@@ -515,7 +514,6 @@ class BackgroundRuntimeMessageRouter {
           )
         })
         .catch(() =>
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           sendResponse({ ok: false, reason: 'workflow-invalid-observation' }),
         )
       return true
@@ -599,7 +597,6 @@ class BackgroundRuntimeMessageRouter {
 }
 
 const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
-  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
   (runtimeMessage: unknown, sender, sendResponse) => {
     const admission = BrowserRuntimeMessage.from(runtimeMessage)
     if (admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected)
@@ -615,7 +612,6 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener =
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
 chrome.runtime.onMessageExternal.addListener(
-  // eslint-disable-next-line max-params -- Chrome owns the external listener callback signature.
   (runtimeMessage: ExternalCompanionMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
@@ -626,7 +622,6 @@ chrome.runtime.onMessageExternal.addListener(
       sendResponse,
     }
     void new ExternalCompanionRouter(externalRoutingArgs).route().catch(() =>
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       sendResponse({ ok: false, reason: 'forbidden-sender' }),
     )
     return true
