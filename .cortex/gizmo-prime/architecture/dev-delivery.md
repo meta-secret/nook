@@ -152,8 +152,10 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - The task builds and checks type compilation without running tests,
     coverage, e2e, or preflight, including transitively through Docker stages.
   - Fast agents review code and route corrections through the owning team.
-  - A completed feature has passing compilation for its current branch head and
-    resolved required review and security findings.
+  - An accepted feature commit has passing compilation for its current branch
+    head and resolved required review and security findings.
+  - Acceptance is an intermediate stage. It is not feature completion or
+    delivery.
 - **Local integration**
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo to route bounded local
     integration to PR Lifecycle Agent for local dev.
@@ -164,7 +166,12 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Serialize all mutations of the shared local dev checkout and index.
   - Task tooling owns the integration exclusion across concurrent Gizmos.
   - Record the observed feature commit and resulting local dev SHA.
-  - Feature completion ends at this local integration handoff.
+  - After `dev:land`, resolve the resulting canonical local `dev` commit and
+    verify that it contains the accepted feature commit with
+    `git merge-base --is-ancestor`.
+  - Feature completion occurs only after that containment proof succeeds.
+  - A successful integration command without containment evidence is an
+    incomplete stage result.
   - Keep dev permanent and preserve every previously integrated feature.
 - **Slow stage ownership**
   - A manually started [dev manager](../../teams/delivery-pipeline/dev-manager/AGENTS.md) is the
@@ -204,7 +211,8 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Do not run remote tests, coverage, e2e, or preflight at the feature stage.
   - Do not treat existing `rust:ci`, `web:verify`, or `loom:verify` as build-only.
   - Feature Gizmos must not push dev or main.
-  - Do not require full tests to pass before landing a completed feature locally.
+  - Do not require full tests to pass before landing an accepted feature commit
+    locally.
 - **Shared state**
   - Do not mutate the shared dev checkout outside serialized local integration work.
   - Do not let publication or promotion reset local dev to the tested snapshot.
