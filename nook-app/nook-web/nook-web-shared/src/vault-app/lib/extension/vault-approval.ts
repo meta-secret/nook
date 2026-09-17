@@ -41,6 +41,11 @@ type ExtensionVaultAuthorizationCapabilityRequest = {
   readonly authorization: NookExtensionDeviceApproval;
 };
 
+type ExtensionVaultApprovalConstructorRequest = readonly [
+  vault: VaultState,
+  request: ExtensionConnectRequest,
+];
+
 /** Holds the live manager and generated approval that authorize one grant. */
 class ExtensionVaultAuthorizationCapability {
   readonly manager: NookVaultManager;
@@ -146,13 +151,19 @@ class ExtensionVaultManagerContext {
   ): Result<boolean, VaultStorageFailure> {
     const current = this.vault.activeVault;
     switch (captured.kind) {
-      case ActiveVaultKind.Open:
+      case ActiveVaultKind.Open: {
         switch (current.kind) {
           case ActiveVaultKind.Open:
             return ok(current.storeId === captured.storeId);
           case ActiveVaultKind.Closed:
             return ok(false);
         }
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.ExtensionApprovalContextChanged,
+          ),
+        );
+      }
       case ActiveVaultKind.Closed:
         switch (current.kind) {
           case ActiveVaultKind.Open:
@@ -185,11 +196,12 @@ export class ExtensionVaultApproval {
     kind: ExtensionVaultApprovalStateKind.AwaitingAuthorization,
   };
 
-  constructor(
-    private readonly vault: VaultState,
-    private readonly request: ExtensionConnectRequest,
-  ) {
-    this.managerContext = new ExtensionVaultManagerContext(vault);
+  private readonly vault: VaultState;
+  private readonly request: ExtensionConnectRequest;
+
+  constructor(...constructorRequest: ExtensionVaultApprovalConstructorRequest) {
+    [this.vault, this.request] = constructorRequest;
+    this.managerContext = new ExtensionVaultManagerContext(this.vault);
   }
 
   async authorize(): Promise<
@@ -309,7 +321,7 @@ export class ExtensionVaultApproval {
       const browserVaultStoreId =
         capability.value.projectStoreIdAtBrowserBoundary();
       if (browserVaultStoreId.isErr()) return err(browserVaultStoreId.error);
-      return ok({
+      const approvedMessage: ExtensionPairingApprovedMessage = {
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
           vaultType: authorization.vaultType,
@@ -324,7 +336,8 @@ export class ExtensionVaultApproval {
           providers,
         },
         eventLogRecords,
-      });
+      };
+      return ok(approvedMessage);
     } finally {
       records.value.free();
     }
@@ -383,13 +396,11 @@ export class ExtensionVaultApproval {
         );
       case ExtensionVaultApprovalStateKind.Authorized: {
         const { authorization } = this.authorizationState;
-        return this.managerContext.admit().map(
-          (manager) =>
-            new ExtensionVaultAuthorizationCapability({
-              manager,
-              authorization,
-            }),
-        );
+        return this.managerContext.admit().map((manager) => {
+          const capabilityRequest: ExtensionVaultAuthorizationCapabilityRequest =
+            { manager, authorization };
+          return new ExtensionVaultAuthorizationCapability(capabilityRequest);
+        });
       }
     }
   }

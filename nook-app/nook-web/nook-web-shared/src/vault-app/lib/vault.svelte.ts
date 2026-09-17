@@ -267,16 +267,20 @@ export class VaultState extends VaultRuntimeState {
     storeId,
     label,
   }: LocalVaultRenameRequest): Promise<void> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.localLoginActions.renameLocalVaultLabel({ storeId, label });
+    const renameRequest: LocalVaultRenameRequest = { storeId, label };
+    return this.localLoginActions.renameLocalVaultLabel(renameRequest);
   }
 
   async selectVaultForUnlock(
     storeId: StoreId,
   ): Promise<Result<StoreId, VaultStorageFailure | OAuthFailure>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const unlockSelectionRequest: Parameters<
+      typeof this.localLoginActions.selectVaultForUnlock
+    >[0] = { storeId };
     const selection = await Effect.runPromise(
-      Effect.either(this.localLoginActions.selectVaultForUnlock({ storeId })),
+      Effect.either(
+        this.localLoginActions.selectVaultForUnlock(unlockSelectionRequest),
+      ),
     );
     return selection._tag === "Left"
       ? err(selection.left)
