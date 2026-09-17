@@ -158,9 +158,9 @@ type Maybe<T> = Present<T> | Absent;
 
 // Forbidden: flat same-prefix closed vocabularies
 enum RequestKind {
-  AgentStatsAssemble = "agentStatsAssemble",
-  AgentStatsValidate = "agentStatsValidate",
-  AgentStatsPublish = "agentStatsPublish",
+  DocumentExportAssemble = "documentExportAssemble",
+  DocumentExportValidate = "documentExportValidate",
+  DocumentExportPublish = "documentExportPublish",
 }
 ```
 
@@ -169,17 +169,17 @@ Same-prefix names almost always mean a separate object was flattened. Generic
 
 ## Required Pattern
 
-- Same prefix → nest. Prefer `agentStats` + `AgentStatsOperation`, not flat
-  `AgentStatsAssemble` / `AgentStatsValidate` / `AgentStatsPublish`.
+- Same prefix → nest. Prefer `documentExport` + `DocumentExportOperation`, not
+  flat `DocumentExportAssemble` / `DocumentExportValidate` /
+  `DocumentExportPublish`.
 - YAML and TypeScript shapes match the nest:
 
   ```yaml
-  agentStats:
+  documentExport:
     assemble:
-      prNumber: 123
-      scratchPath: "{agentTempDir}/pr-123-scratch.json"
-      outputPath: "{agentTempDir}/123.yaml"
-      includeTestInventory: true
+      sourcePath: "{workspace}/draft.md"
+      outputPath: "{workspace}/archive/document.md"
+      includeMetadata: true
   ```
 
 - Closed field names are enums typed as `RequestFieldVocabulary<FieldName>`.
@@ -222,7 +222,7 @@ Does not apply to:
 
 - Forbidden: `new Set(['stageHostUpdates', ...])`, `result.ts` with
   `Result` / `Maybe`
-- Required: `enum PrePushField { ... }`, nested `agentStats.assemble`,
+- Required: `enum PrePushField { ... }`, nested `documentExport.assemble`,
   `DecodeOutcome` only inside codecs, `LoomFailure` for runtime failures
 
 ## Application Checklist

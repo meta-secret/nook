@@ -32,11 +32,9 @@ import { LoomRequestCatalog } from './registry.ts';
 
 import type {
   SuccessResponseForFamilyArgs,
-  SuccessResponseForAgentStatsArgs,
   SuccessResponseForPrLandArgs,
   DecodeErrorResponseArgs,
   ExecuteErrorResponseForFamilyArgs,
-  ExecuteErrorResponseForAgentStatsArgs,
   ExecuteErrorResponseForPrLandArgs,
 } from '../codec/response.ts';
 
@@ -265,16 +263,6 @@ export class LoomRequestDispatch {
           successResponseForFamilyArgs3,
         );
       }
-      case RequestFamily.AgentStats: {
-        const successResponseForAgentStatsArgs: SuccessResponseForAgentStatsArgs =
-          {
-            operation: request.operation,
-            result,
-          };
-        return LoomResponseEncoder.successResponseForAgentStats(
-          successResponseForAgentStatsArgs,
-        );
-      }
       case RequestFamily.PrLand: {
         const successResponseForPrLandArgs: SuccessResponseForPrLandArgs = {
           operation: request.operation,
@@ -351,16 +339,6 @@ export class LoomRequestDispatch {
           };
         return LoomResponseEncoder.executeErrorResponseForFamily(
           executeErrorResponseForFamilyArgs3,
-        );
-      }
-      case RequestFamily.AgentStats: {
-        const executeErrorResponseForAgentStatsArgs: ExecuteErrorResponseForAgentStatsArgs =
-          {
-            operation: request.operation,
-            errors,
-          };
-        return LoomResponseEncoder.executeErrorResponseForAgentStats(
-          executeErrorResponseForAgentStatsArgs,
         );
       }
       case RequestFamily.PrLand: {

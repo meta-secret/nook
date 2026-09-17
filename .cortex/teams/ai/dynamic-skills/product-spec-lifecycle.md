@@ -126,7 +126,8 @@ After:
 
 - [ ] Identify if the task touches product behavior, item schemas, or UX flows.
 - [ ] Select the team and read the owning specification through its graph.
-- [ ] Incorporate specification requirements into the Workbench task plan.
+- [ ] Apply specification requirements to the feature summary and focused issue
+      acceptance criteria.
 - [ ] Update the specification when new product knowledge is gained from chat, tasks, or PR feedback.
 - [ ] Create a new specification file if the feature or item type is new.
 - [ ] Update [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md) status and description.

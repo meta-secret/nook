@@ -18,7 +18,6 @@ Use one durable hierarchy:
     it.
 - Feature directories replace milestones and aggregate issues.
 - Focused files replace sub-issues.
-- Worklogs record what actually happened during execution.
 
 ## Trigger
 
@@ -27,7 +26,7 @@ Nook feature.
 
 ## Application procedure
 
-1. Search existing Workbench issues and worklogs before creating anything.
+1. Search existing Workbench issues before creating anything.
 2. Choose one stable, lowercase kebab-case feature directory.
 3. Create or update the feature `README.md` from the Workbench template.
 4. Record product decisions, open questions, current state, and references.

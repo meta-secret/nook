@@ -14,11 +14,7 @@ import {
 import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-import {
-  AgentStatsOperation,
-  PrLandOperation,
-  RequestFamily,
-} from './enums.ts';
+import { PrLandOperation, RequestFamily } from './enums.ts';
 import { YamlDocument } from './yaml.ts';
 
 import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
@@ -159,8 +155,7 @@ export class RequestBlueprintComparison {
     };
     const payloadProperty = UntrustedYamlBoundary.property(payloadPropertyArgs);
     if (
-      (family === RequestFamily.AgentStats ||
-        family === RequestFamily.PrLand) &&
+      family === RequestFamily.PrLand &&
       payloadProperty.presence === UntrustedYamlPropertyPresence.Present &&
       UntrustedYamlBoundary.isRecord(payloadProperty.value)
     ) {
@@ -186,10 +181,7 @@ export class RequestBlueprintComparison {
     args: NestedOperationEntryArgs,
   ): ExampleCatalogLookup {
     const { family, operationKeys } = args;
-    const operations =
-      family === RequestFamily.AgentStats
-        ? Object.values(AgentStatsOperation)
-        : Object.values(PrLandOperation);
+    const operations = Object.values(PrLandOperation);
     for (const operation of operations) {
       if (!operationKeys.includes(operation)) {
         continue;
@@ -226,6 +218,6 @@ type YamlUnifiedDiffArgs = {
 };
 
 type NestedOperationEntryArgs = {
-  readonly family: RequestFamily.AgentStats | RequestFamily.PrLand;
+  readonly family: RequestFamily.PrLand;
   readonly operationKeys: readonly string[];
 };

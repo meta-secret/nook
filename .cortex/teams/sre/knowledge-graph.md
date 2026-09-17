@@ -21,13 +21,12 @@ Load only the category that owns the assigned operational functionality.
 
 ## Operational workflows
 
-Open only the workflow for the pipeline, browser, statistics, quality, or
-remote-execution action being performed.
+Open only the workflow for the pipeline, browser, quality, or remote-execution
+action being performed.
 
 - [Browser validation](workflows/browser-validation.md)
 - [CI operations](workflows/ci-operations.md)
 - [CI pipeline](workflows/ci-pipeline.md)
-- [Main build statistics](workflows/main-build-statistics.md)
 - [Quality and release](workflows/quality.md)
 - [Remote execution](workflows/remote-execution.md)
 

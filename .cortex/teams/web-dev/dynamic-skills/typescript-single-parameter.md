@@ -23,10 +23,10 @@ This is TypeScript's application of the one-parameter request rule in
 ## Problem Pattern
 
 ```ts
-export function writeAgentStatsFile(
-  request: AgentStatsFileRequest,
-  sourcePath: string,
-): Promise<AgentStatsFileResult>;
+export function writeDocumentFile(
+  document: Document,
+  destinationPath: string,
+): Promise<DocumentFileWriteResult>;
 ```
 
 Multiple positional parameters hide argument meaning at call sites and make
@@ -35,21 +35,21 @@ reordering unsafe.
 ## Preferred Pattern
 
 ```ts
-export type WriteAgentStatsFileArgs = {
-  readonly request: AgentStatsFileRequest;
-  readonly sourcePath: string;
+export type DocumentFileWriteRequest = {
+  readonly document: Document;
+  readonly destinationPath: string;
 };
 
-export function writeAgentStatsFile(
-  args: WriteAgentStatsFileArgs,
-): Promise<AgentStatsFileResult>;
+export function writeDocumentFile(
+  request: DocumentFileWriteRequest,
+): Promise<DocumentFileWriteResult>;
 ```
 
 Call sites pass a single object:
 
 ```ts
-const args: WriteAgentStatsFileArgs = { request, sourcePath };
-writeAgentStatsFile(args);
+const request: DocumentFileWriteRequest = { document, destinationPath };
+writeDocumentFile(request);
 ```
 
 Rules:
