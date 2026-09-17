@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Schema } from 'effect'
 import {
   OrderedBackgroundRuntimeMessageRouter,
   RuntimeMessageResponseChannel,
@@ -7,6 +8,7 @@ import {
   type BackgroundRuntimeMessageRoute,
   type BackgroundRuntimeMessageRoutes,
   type BackgroundRuntimeMessageRoutingRequest,
+  type SchemaRuntimeMessageOperationRequest,
   type RuntimeMessageRouteOutcome,
 } from '../src/background/service-worker/schema-runtime-message-route'
 import {
@@ -30,13 +32,36 @@ class RecordedRoute implements BackgroundRuntimeMessageRoute {
 }
 
 class MatchingRuntimeMessageSchema {
-  is(message: BrowserRuntimeMessage): message is BrowserRuntimeMessage {
-    return message.type === 'nook:test'
+  static decode(message: BrowserRuntimeMessage) {
+    return Schema.decodeUnknown(matchingRuntimeMessageSchema)(message)
   }
 }
 
+enum MatchingRuntimeMessageType {
+  Test = 'nook:test',
+}
+
+type MatchingRuntimeMessage = {
+  readonly type: MatchingRuntimeMessageType.Test
+  readonly payload: {
+    readonly value: string
+  }
+}
+
+const matchingRuntimeMessageSchema = Schema.Struct({
+  type: Schema.Literal(MatchingRuntimeMessageType.Test),
+  payload: Schema.Struct({
+    value: Schema.String.pipe(Schema.minLength(1)),
+  }),
+}) satisfies Schema.Schema<MatchingRuntimeMessage>
+
 class RejectingRuntimeMessageOperation {
-  execute(): Promise<string> {
+  constructor(private readonly receivedValues: string[]) {}
+
+  execute(
+    request: SchemaRuntimeMessageOperationRequest<MatchingRuntimeMessage>,
+  ): Promise<string> {
+    this.receivedValues.push(request.message.payload.value)
     return Promise.reject(new Error('expected operation rejection'))
   }
 }
@@ -91,13 +116,17 @@ describe('ordered background runtime message router', () => {
   })
 
   test('sends the typed failure response and keeps the channel open', async () => {
-    const admission = BrowserRuntimeMessage.from({ type: 'nook:test' })
+    const admission = BrowserRuntimeMessage.from({
+      type: MatchingRuntimeMessageType.Test,
+      payload: { value: 'decoded payload' },
+    })
     expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Accepted)
     if (admission.kind !== BrowserRuntimeMessageAdmissionKind.Accepted) return
     const responses: string[] = []
-    const operation = new RejectingRuntimeMessageOperation()
+    const receivedValues: string[] = []
+    const operation = new RejectingRuntimeMessageOperation(receivedValues)
     const route = SchemaRuntimeMessageRoute.matching(
-      new MatchingRuntimeMessageSchema(),
+      MatchingRuntimeMessageSchema,
     )
       .respondWith(operation.execute.bind(operation))
       .onRejected(() => 'operation-failed')
@@ -116,5 +145,30 @@ describe('ordered background runtime message router', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(responses).toEqual(['operation-failed'])
+    expect(receivedValues).toEqual(['decoded payload'])
+  })
+
+  test('leaves schema-invalid messages unhandled', () => {
+    const admission = BrowserRuntimeMessage.from({
+      type: MatchingRuntimeMessageType.Test,
+      payload: { value: 7 },
+    })
+    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Accepted)
+    if (admission.kind !== BrowserRuntimeMessageAdmissionKind.Accepted) return
+
+    const route = SchemaRuntimeMessageRoute.matching(
+      MatchingRuntimeMessageSchema,
+    )
+      .respondWith(async () => 'should-not-run')
+      .onRejected(() => 'operation-failed')
+    const request: BackgroundRuntimeMessageRoutingRequest = {
+      message: admission.message,
+      sender: {},
+      sendResponse: () => {},
+    }
+
+    expect(route.route(request)).toEqual({
+      kind: RuntimeMessageRouteKind.Unhandled,
+    })
   })
 })

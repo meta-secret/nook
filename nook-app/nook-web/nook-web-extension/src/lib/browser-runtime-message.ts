@@ -1,3 +1,5 @@
+import { Effect, Either, Schema } from 'effect'
+
 export enum BrowserRuntimeMessageAdmissionKind {
   Accepted = 'accepted',
   Rejected = 'rejected',
@@ -16,25 +18,27 @@ export class BrowserRuntimeMessage {
 
   declare readonly type: string
 
-  static from(value: unknown): BrowserRuntimeMessageAdmission {
-    if (!BrowserRuntimeMessage.hasMessageType(value)) {
-      return { kind: BrowserRuntimeMessageAdmissionKind.Rejected }
-    }
-    return {
-      kind: BrowserRuntimeMessageAdmissionKind.Accepted,
-      message: value,
-    }
+  static decode(value: unknown) {
+    return Schema.decodeUnknown(browserRuntimeMessageSchema)(value)
   }
 
-  private static hasMessageType(
-    value: unknown,
-  ): value is BrowserRuntimeMessage {
-    return Boolean(
-      value &&
-      typeof value === 'object' &&
-      'type' in value &&
-      typeof value.type === 'string' &&
-      value.type.length > 0,
+  static from(value: unknown): BrowserRuntimeMessageAdmission {
+    const decodeResult = Effect.runSync(
+      Effect.either(BrowserRuntimeMessage.decode(value)),
     )
+    return Either.match(decodeResult, {
+      onLeft: () => ({ kind: BrowserRuntimeMessageAdmissionKind.Rejected }),
+      onRight: (message) => ({
+        kind: BrowserRuntimeMessageAdmissionKind.Accepted,
+        message,
+      }),
+    })
   }
 }
+
+const browserRuntimeMessageSchema = Schema.Struct(
+  {
+    type: Schema.String.pipe(Schema.minLength(1)),
+  },
+  Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+) satisfies Schema.Schema<BrowserRuntimeMessage>
