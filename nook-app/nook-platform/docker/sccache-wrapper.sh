@@ -125,7 +125,11 @@ if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
     fi
   elif [ ! -e "$ready_marker" ]; then
     startup_wait=0
-    while [ "$startup_wait" -lt 20 ] \
+    # Wait longer than the bounded five-second starter attempt. Cargo can
+    # launch several rustc processes while the first process is still warming
+    # the daemon; a waiter must not open the shared circuit before that sole
+    # startup owner reaches its terminal ready/fallback marker.
+    while [ "$startup_wait" -lt 60 ] \
       && [ ! -e "$ready_marker" ] \
       && [ ! -e "$fallback_marker" ]; do
       sleep 0.1
