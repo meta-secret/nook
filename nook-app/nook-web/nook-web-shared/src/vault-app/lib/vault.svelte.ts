@@ -1,7 +1,9 @@
 import type { PasswordOperationResult } from "$lib/vault/password-unlock";
 import type { SecretOperationResult } from "$lib/vault/secret-operation-failure";
-import { err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+import { Effect } from "effect";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import {
@@ -269,9 +271,16 @@ export class VaultState extends VaultRuntimeState {
     return this.localLoginActions.renameLocalVaultLabel({ storeId, label });
   }
 
-  async selectVaultForUnlock(storeId: StoreId) {
+  async selectVaultForUnlock(
+    storeId: StoreId,
+  ): Promise<Result<StoreId, VaultStorageFailure | OAuthFailure>> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.localLoginActions.selectVaultForUnlock({ storeId });
+    const selection = await Effect.runPromise(
+      Effect.either(
+        this.localLoginActions.selectVaultForUnlock({ storeId }),
+      ),
+    );
+    return selection._tag === "Left" ? err(selection.left) : ok(selection.right);
   }
 
   async prepareExistingVaultImportSlot() {

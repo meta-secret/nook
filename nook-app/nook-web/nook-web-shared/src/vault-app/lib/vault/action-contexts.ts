@@ -23,6 +23,7 @@ import type {
 } from "$lib/auth/providers";
 import type { ProviderRemovalOutcome } from "$lib/vault/providers.svelte";
 import type {
+  LocalVaultCatalog,
   LocalProviderLookup,
   StagedRemoteStorage,
   VaultProviderState,
@@ -329,7 +330,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   assessVaultConnectStatus(
     args?: NookStorageConnectArgs,
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
-  refreshLocalVaultCatalog(): Promise<Result<void, VaultStorageFailure>>;
+  refreshLocalVaultCatalog(): Promise<
+    Result<LocalVaultCatalog, VaultStorageFailure>
+  >;
   refreshPasswordEntriesList(): Promise<
     Result<void, OAuthFailure | VaultStorageFailure>
   >;
@@ -482,7 +485,9 @@ export type UiActionsContext = Pick<
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>;
     refreshDeviceState(): Promise<VaultSynchronizationResult>;
-    refreshLocalVaultCatalog(): Promise<Result<void, VaultStorageFailure>>;
+    refreshLocalVaultCatalog(): Promise<
+      Result<LocalVaultCatalog, VaultStorageFailure>
+    >;
     stopIdleSessionTracking(): void;
     stopVaultSync(): void;
     t(request: TranslationRequest): string;

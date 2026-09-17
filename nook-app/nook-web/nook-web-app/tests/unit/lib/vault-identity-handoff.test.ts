@@ -155,7 +155,7 @@ describe('external browser identity handoff commit ownership', () => {
       ).mockResolvedValue(false)
       vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(ok())
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       const refreshDeviceState = vi
         .spyOn(fixture.state, 'refreshDeviceState')
@@ -182,7 +182,7 @@ describe('external browser identity handoff commit ownership', () => {
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockRejectedValue(
         new Error('identity directory cannot be read'),
@@ -221,7 +221,7 @@ describe('external browser identity handoff commit ownership', () => {
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
         DeviceProtectionStatus.Passkey,

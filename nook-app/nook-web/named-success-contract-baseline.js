@@ -42,7 +42,6 @@ export const namedSuccessContractBaseline = [
   { file: 'nook-web-shared/src/vault-app/lib/vault/device-protection.svelte.ts', gitBlobSha1: 'd646a48363c817756a77279d2335cafb7e90e9ae' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts', gitBlobSha1: 'bfb49a4e7a2a49629ab8a956baabb779da5c717e' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/lifecycle.ts', gitBlobSha1: '6c3d9615c419c59d53d4b8af99e68827e7965712' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/local-login.ts', gitBlobSha1: '1f26459d9e7515e4b07b8e386a4c4644b006e84a' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/locale.ts', gitBlobSha1: 'b867e3700481fd8080302bababdf3a22990d3871' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/login-unlock-capabilities.ts', gitBlobSha1: '59cc83909dc1f7f3fdeb1b1a7efc537b08ad3067' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/oauth.ts', gitBlobSha1: '08db30dd0e9fdf1d50499456102683dbd6f324bd' },

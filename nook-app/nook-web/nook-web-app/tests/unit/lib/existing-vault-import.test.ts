@@ -61,7 +61,7 @@ function lifecycleHarness(authenticated = false) {
   })
   selectVaultForUnlock.mockImplementation(async (storeId: string) => {
     state.openActiveVault(storeId)
-    return ok()
+    return ok(storeId)
   })
   activateLoginSetup.mockImplementation((providerType) => {
     activateLoginSetupImplementation(providerType)
