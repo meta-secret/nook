@@ -66,6 +66,19 @@ type PageRequestBodyDecode =
       rpId?: string
     }
 
+enum PageRequestFieldStateKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type PageRequestRelyingPartyNameState =
+  | { kind: PageRequestFieldStateKind.Absent }
+  | { kind: PageRequestFieldStateKind.Present; relyingPartyName: string }
+
+type PageRequestRpIdState =
+  | { kind: PageRequestFieldStateKind.Absent }
+  | { kind: PageRequestFieldStateKind.Present; rpId: string }
+
 type PasskeyOption = {
   vaultStoreId: string
   vaultName: string
@@ -357,8 +370,12 @@ class WebAuthnPageIngress {
     if (!requestJson || requestJson.length > 65_536) {
       return { kind: PageRequestBodyDecodeKind.Rejected }
     }
-    let relyingPartyFields: Pick<PageRequest, 'relyingPartyName'> | object = {}
-    let rpIdFields: Pick<PageRequest, 'rpId'> | object = {}
+    let relyingPartyState: PageRequestRelyingPartyNameState = {
+      kind: PageRequestFieldStateKind.Absent,
+    }
+    let rpIdState: PageRequestRpIdState = {
+      kind: PageRequestFieldStateKind.Absent,
+    }
     if ('relyingParty' in value) {
       const relyingParty = value.relyingParty
       if (
@@ -367,17 +384,27 @@ class WebAuthnPageIngress {
         'name' in relyingParty &&
         typeof relyingParty.name === 'string'
       ) {
-        relyingPartyFields = { relyingPartyName: relyingParty.name }
+        relyingPartyState = {
+          kind: PageRequestFieldStateKind.Present,
+          relyingPartyName: relyingParty.name,
+        }
       }
     }
     if ('rpId' in value && typeof value.rpId === 'string') {
-      rpIdFields = { rpId: value.rpId }
+      rpIdState = {
+        kind: PageRequestFieldStateKind.Present,
+        rpId: value.rpId,
+      }
     }
     return {
       kind: PageRequestBodyDecodeKind.Decoded,
       requestJson,
-      ...relyingPartyFields,
-      ...rpIdFields,
+      ...(relyingPartyState.kind === PageRequestFieldStateKind.Present
+        ? { relyingPartyName: relyingPartyState.relyingPartyName }
+        : {}),
+      ...(rpIdState.kind === PageRequestFieldStateKind.Present
+        ? { rpId: rpIdState.rpId }
+        : {}),
     }
   }
 
