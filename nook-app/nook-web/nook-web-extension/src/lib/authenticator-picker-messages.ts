@@ -52,8 +52,7 @@ export class AuthenticatorPickerQueryResponse {
     ) {
       return false
     }
-    const accounts: unknown[] = response.accounts
-    return accounts.every((account: unknown) => {
+    return response.accounts.every((account: unknown) => {
       if (!account || typeof account !== 'object' || Array.isArray(account))
         return false
       return (
@@ -149,6 +148,40 @@ export class AuthenticatorPickerSelectMessage {
     )
   }
 }
+
+/** Structural browser acknowledgement returned after a selected account is delivered. */
+export class AuthenticatorPickerSelectResponse {
+  private constructor() {}
+  declare readonly ok: true
+
+  static is(response: unknown): response is AuthenticatorPickerSelectResponse {
+    return (
+      !!response &&
+      typeof response === 'object' &&
+      !Array.isArray(response) &&
+      'ok' in response &&
+      response.ok === true
+    )
+  }
+}
+
+export type AuthenticatorPickerRequestMessage =
+  | AuthenticatorPickerQueryMessage
+  | AuthenticatorPickerSelectMessage
+
+export enum AuthenticatorPickerRuntimeResponseKind {
+  Query = 'query',
+  Selected = 'selected',
+  Rejected = 'rejected',
+}
+
+export type AuthenticatorPickerRuntimeResponse =
+  | {
+      readonly kind: AuthenticatorPickerRuntimeResponseKind.Query
+      readonly response: AuthenticatorPickerQueryResponse
+    }
+  | { readonly kind: AuthenticatorPickerRuntimeResponseKind.Selected }
+  | { readonly kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
 
 export enum AuthenticatorPickerCancelMessageType {
   NookAuthenticatorPickerCancel = 'nook:authenticator-picker-cancel',

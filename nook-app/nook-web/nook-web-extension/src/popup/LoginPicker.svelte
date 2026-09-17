@@ -11,9 +11,13 @@
     LoginPickerCancelMessageType,
     LoginPickerQueryMessageType,
     LoginPickerQueryResponse,
+    LoginPickerRuntimeResponseKind,
     LoginPickerSelectMessageType,
+    LoginPickerSelectResponse,
     type LoginPickerCancelMessage,
     type LoginPickerQueryMessage,
+    type LoginPickerRequestMessage,
+    type LoginPickerRuntimeResponse,
     type LoginPickerSelectMessage,
   } from '../lib/login-picker-messages'
   type LoginPickerRuntimeMessage =
@@ -49,11 +53,26 @@
   let completed = false
 
   function sendRuntimeMessage(
-    message: LoginPickerRuntimeMessage,
-  ): Promise<unknown> {
+    message: LoginPickerRequestMessage,
+  ): Promise<LoginPickerRuntimeResponse> {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(message, (response: unknown) => {
-        resolve(response)
+        if (message.type === LoginPickerQueryMessageType.NookLoginPickerQuery) {
+          resolve(
+            LoginPickerQueryResponse.is(response)
+              ? {
+                  kind: LoginPickerRuntimeResponseKind.Query,
+                  response,
+                }
+              : { kind: LoginPickerRuntimeResponseKind.Rejected },
+          )
+          return
+        }
+        resolve(
+          LoginPickerSelectResponse.is(response)
+            ? { kind: LoginPickerRuntimeResponseKind.Selected }
+            : { kind: LoginPickerRuntimeResponseKind.Rejected },
+        )
       })
     })
   }
@@ -86,14 +105,14 @@
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!LoginPickerQueryResponse.is(response)) {
+    if (response.kind !== LoginPickerRuntimeResponseKind.Query) {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
-    destinationOrigin = response.origin
-    accounts = response.accounts
+    destinationOrigin = response.response.origin
+    accounts = response.response.accounts
   }
 
   async function choose(account: WebsiteLoginAccountOption): Promise<void> {
@@ -109,13 +128,7 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (
-      response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
-    ) {
+    if (response.kind === LoginPickerRuntimeResponseKind.Selected) {
       completed = true
       window.close()
       return

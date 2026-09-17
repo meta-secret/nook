@@ -11,9 +11,13 @@
     AuthenticatorPickerCancelMessageType,
     AuthenticatorPickerQueryMessageType,
     AuthenticatorPickerQueryResponse,
+    AuthenticatorPickerRuntimeResponseKind,
     AuthenticatorPickerSelectMessageType,
+    AuthenticatorPickerSelectResponse,
     type AuthenticatorPickerCancelMessage,
     type AuthenticatorPickerQueryMessage,
+    type AuthenticatorPickerRequestMessage,
+    type AuthenticatorPickerRuntimeResponse,
     type AuthenticatorPickerSelectMessage,
   } from '../lib/authenticator-picker-messages'
   type AuthenticatorPickerRuntimeMessage =
@@ -49,11 +53,29 @@
   let completed = false
 
   function sendRuntimeMessage(
-    message: AuthenticatorPickerRuntimeMessage,
-  ): Promise<unknown> {
+    message: AuthenticatorPickerRequestMessage,
+  ): Promise<AuthenticatorPickerRuntimeResponse> {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(message, (response: unknown) => {
-        resolve(response)
+        if (
+          message.type ===
+          AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery
+        ) {
+          resolve(
+            AuthenticatorPickerQueryResponse.is(response)
+              ? {
+                  kind: AuthenticatorPickerRuntimeResponseKind.Query,
+                  response,
+                }
+              : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
+          )
+          return
+        }
+        resolve(
+          AuthenticatorPickerSelectResponse.is(response)
+            ? { kind: AuthenticatorPickerRuntimeResponseKind.Selected }
+            : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
+        )
       })
     })
   }
@@ -78,14 +100,14 @@
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!AuthenticatorPickerQueryResponse.is(response)) {
+    if (response.kind !== AuthenticatorPickerRuntimeResponseKind.Query) {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
       return
     }
-    destinationOrigin = response.origin
-    accounts = response.accounts
+    destinationOrigin = response.response.origin
+    accounts = response.response.accounts
   }
 
   async function choose(account: WebsiteAuthenticatorOption): Promise<void> {
@@ -101,13 +123,7 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (
-      response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
-    ) {
+    if (response.kind === AuthenticatorPickerRuntimeResponseKind.Selected) {
       completed = true
       window.close()
       return

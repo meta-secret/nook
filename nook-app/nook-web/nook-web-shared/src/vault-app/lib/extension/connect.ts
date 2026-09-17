@@ -24,8 +24,28 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
+type ExtensionPairingRejectionResponse =
+  | { readonly ok: false }
+  | { readonly ok: false; readonly reason: string }
+  | { readonly ok: false; readonly error: string };
+
+type ExtensionPairedVaultUnlockResponse =
+  | { readonly ok: true; readonly requestId: string; readonly vaultStoreId: string }
+  | {
+      readonly ok: false;
+      readonly requestId: string;
+      readonly vaultStoreId: string;
+      readonly reason: string;
+    };
+
+type ExtensionMessageResponse =
+  | { readonly ok: true }
+  | ExtensionPairingRejectionResponse
+  | ExtensionPairedVaultUnlockResponse
+  | CompanionIdentityDiscoveryTransportResponse
+  | CompanionIdentityHandoffTransportResponse;
+
 type ChromeRuntimeHost = {
-  // eslint-disable-next-line max-params -- Chrome owns this positional API.
   sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
@@ -74,6 +94,8 @@ import {
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
+  type CompanionIdentityDiscoveryTransportResponse,
+  type CompanionIdentityHandoffTransportResponse,
   type OpenCompanionLauncherMessage,
   type RuntimeMessage,
 } from "$web-shared/extension/runtime-messages";
@@ -172,7 +194,7 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | {
       kind: ExtensionMessageDeliveryKind.Received;
-      response: unknown;
+      response: ExtensionMessageResponse;
     };
 
 function isAcceptedIdentityHandoffResponse(value: unknown): value is {
@@ -256,6 +278,36 @@ class ExtensionConnectionBrowser {
       "sendMessage" in value &&
       typeof value.sendMessage === "function"
     );
+  }
+
+  private isExtensionMessageResponse(
+    response: unknown,
+  ): response is ExtensionMessageResponse {
+    if (
+      !response ||
+      typeof response !== "object" ||
+      Array.isArray(response) ||
+      !("ok" in response) ||
+      typeof response.ok !== "boolean"
+    ) {
+      return false;
+    }
+    if (response.ok) {
+      // Rust admission validates the payloads before application code consumes them.
+      if ("status" in response || "response" in response) return true;
+      if ("requestId" in response || "vaultStoreId" in response) {
+        return (
+          "requestId" in response &&
+          typeof response.requestId === "string" &&
+          "vaultStoreId" in response &&
+          typeof response.vaultStoreId === "string"
+        );
+      }
+      return true;
+    }
+    if ("reason" in response) return typeof response.reason === "string";
+    if ("error" in response) return typeof response.error === "string";
+    return true;
   }
 
   private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
@@ -415,6 +467,10 @@ class ExtensionConnectionBrowser {
           pending.unavailable();
           return;
         }
+        if (!this.isExtensionMessageResponse(response)) {
+          pending.unavailable();
+          return;
+        }
         pending.receive(response);
       };
       sendMessage(extensionId, message, receiveExtensionResponse);
@@ -422,7 +478,7 @@ class ExtensionConnectionBrowser {
   }
 
   private pairingDeliveryFromResponse(
-    response: unknown,
+    response: ExtensionMessageResponse,
   ): ExtensionPairingDelivery {
     if (
       response &&

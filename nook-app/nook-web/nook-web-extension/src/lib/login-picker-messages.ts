@@ -50,8 +50,7 @@ export class LoginPickerQueryResponse {
     ) {
       return false
     }
-    const accounts: unknown[] = response.accounts
-    return accounts.every((account: unknown) => {
+    return response.accounts.every((account: unknown) => {
       if (!account || typeof account !== 'object' || Array.isArray(account))
         return false
       return (
@@ -144,6 +143,40 @@ export class LoginPickerSelectMessage {
     )
   }
 }
+
+/** Structural browser acknowledgement returned after a selected account is delivered. */
+export class LoginPickerSelectResponse {
+  private constructor() {}
+  declare readonly ok: true
+
+  static is(response: unknown): response is LoginPickerSelectResponse {
+    return (
+      !!response &&
+      typeof response === 'object' &&
+      !Array.isArray(response) &&
+      'ok' in response &&
+      response.ok === true
+    )
+  }
+}
+
+export type LoginPickerRequestMessage =
+  | LoginPickerQueryMessage
+  | LoginPickerSelectMessage
+
+export enum LoginPickerRuntimeResponseKind {
+  Query = 'query',
+  Selected = 'selected',
+  Rejected = 'rejected',
+}
+
+export type LoginPickerRuntimeResponse =
+  | {
+      readonly kind: LoginPickerRuntimeResponseKind.Query
+      readonly response: LoginPickerQueryResponse
+    }
+  | { readonly kind: LoginPickerRuntimeResponseKind.Selected }
+  | { readonly kind: LoginPickerRuntimeResponseKind.Rejected }
 
 export enum LoginPickerCancelMessageType {
   NookLoginPickerCancel = 'nook:login-picker-cancel',
