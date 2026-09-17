@@ -5,7 +5,7 @@ import type {
   ExtensionStorageProviderType as RustExtensionStorageProviderType,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
-import { ExtensionConnectScope } from "./extension-connect-scope";
+import { extensionConnectScopeCatalog } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import type {
@@ -125,8 +125,8 @@ export class ExtensionPairingApprovedGrantAdmission {
       !("scopes" in payload) ||
       !Array.isArray(payload.scopes) ||
       !payload.scopes.every(
-        ExtensionConnectScope.isExtensionConnectScopeValue.bind(
-          ExtensionConnectScope,
+        extensionConnectScopeCatalog.isExtensionConnectScopeValue.bind(
+          extensionConnectScopeCatalog,
         ),
       )
     )

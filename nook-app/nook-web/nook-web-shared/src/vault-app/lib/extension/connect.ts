@@ -108,7 +108,10 @@ import {
   type ExtensionConnectRequestFor,
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
-import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import {
+  extensionConnectScopeCatalog,
+  type ExtensionConnectScope,
+} from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -117,7 +120,8 @@ import {
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
-export { ExtensionConnectScope, ExtensionIdentityRequestSource };
+export { extensionConnectScopeCatalog, ExtensionIdentityRequestSource };
+export type { ExtensionConnectScope };
 export {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -360,7 +364,7 @@ class ExtensionConnectionBrowser {
       .filter(Boolean);
 
     return scopes.filter((scope) =>
-      ExtensionConnectScope.isExtensionConnectScopeValue(scope),
+      extensionConnectScopeCatalog.isExtensionConnectScopeValue(scope),
     );
   }
 

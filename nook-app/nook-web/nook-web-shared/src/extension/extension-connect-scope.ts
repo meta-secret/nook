@@ -1,6 +1,6 @@
-import type { ExtensionConnectScope } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type * as CompanionWasm from "./nook-companion-wasm/nook_companion_wasm.js";
 
-export type { ExtensionConnectScope };
+export type { ExtensionConnectScope } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export type ExtensionConnectScopeRuntime = {
   readonly vaultAccess: typeof import("./nook-companion-wasm/nook_companion_wasm.js").extension_vault_access_scope;
@@ -46,24 +46,26 @@ class ExtensionConnectScopeCatalog {
     return this.scopeRuntimeState.runtime;
   }
 
-  isExtensionConnectScopeValue(value: unknown): value is ExtensionConnectScope {
+  isExtensionConnectScopeValue(
+    value: unknown,
+  ): value is CompanionWasm.ExtensionConnectScope {
     return (
       typeof value === "string" &&
       this.requireScopeRuntime().is_extension_connect_scope(value)
     );
   }
-  get VaultAccess(): ExtensionConnectScope {
+  get VaultAccess(): CompanionWasm.ExtensionConnectScope {
     return this.requireScopeRuntime().vaultAccess();
   }
-  get PasswordFilling(): ExtensionConnectScope {
+  get PasswordFilling(): CompanionWasm.ExtensionConnectScope {
     return this.requireScopeRuntime().passwordFilling();
   }
-  get PasskeyManagement(): ExtensionConnectScope {
+  get PasskeyManagement(): CompanionWasm.ExtensionConnectScope {
     return this.requireScopeRuntime().passkeyManagement();
   }
-  get SyncProviderCredentials(): ExtensionConnectScope {
+  get SyncProviderCredentials(): CompanionWasm.ExtensionConnectScope {
     return this.requireScopeRuntime().syncProviderCredentials();
   }
 }
 
-export const ExtensionConnectScope = new ExtensionConnectScopeCatalog();
+export const extensionConnectScopeCatalog = new ExtensionConnectScopeCatalog();

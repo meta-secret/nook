@@ -8,7 +8,7 @@ import initCompanionWasm, {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   type ExtensionConnectScopeRuntime,
-  ExtensionConnectScope,
+  extensionConnectScopeCatalog,
 } from "./extension-connect-scope";
 import {
   type ExtensionPairingVaultTypeRuntime,
@@ -221,7 +221,9 @@ export const companionWasmReady: Promise<void> = startCompanionWasm().then(
       syncProviderCredentials: extension_sync_provider_credentials_scope,
       is_extension_connect_scope,
     };
-    ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
+    extensionConnectScopeCatalog.configureExtensionConnectScopeRuntime(
+      scopeRuntime,
+    );
     const vaultTypeRuntime: ExtensionPairingVaultTypeRuntime = {
       admit_extension_pairing_vault_type,
     };
