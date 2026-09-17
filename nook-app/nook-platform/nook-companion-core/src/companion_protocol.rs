@@ -1,6 +1,7 @@
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum CompanionProtocolError {
@@ -153,7 +154,7 @@ pub struct CompanionIdentityUnlockRequest {
 }
 
 impl CompanionIdentityUnlockRequest {
-    fn validate(&self) -> Result<(), CompanionProtocolError> {
+    pub fn validate(&self) -> Result<(), CompanionProtocolError> {
         if self.request_id.trim().is_empty() || self.vault_store_id.trim().is_empty() {
             return Err(CompanionProtocolError::InvalidValue);
         }
@@ -380,6 +381,51 @@ impl CompanionIdentityHandoffRequest {
             return Err(CompanionProtocolError::InvalidValue);
         }
         Ok(())
+    }
+
+    pub fn zeroize_sensitive_material(&mut self) {
+        self.recipient_public_key.zeroize();
+        self.transaction.discovery.request.request_id.zeroize();
+        self.transaction.discovery.request.vault_store_id.zeroize();
+        match &mut self.transaction.status {
+            CompanionIdentityStatus::Unavailable {
+                request_id,
+                vault_store_id,
+            }
+            | CompanionIdentityStatus::Locked {
+                request_id,
+                vault_store_id,
+            } => {
+                request_id.zeroize();
+                vault_store_id.zeroize();
+            }
+            CompanionIdentityStatus::DifferentVault {
+                request_id,
+                vault_store_id,
+                connected_vault_store_id,
+                connected_vault_name,
+            } => {
+                request_id.zeroize();
+                vault_store_id.zeroize();
+                connected_vault_store_id.zeroize();
+                connected_vault_name.zeroize();
+            }
+            CompanionIdentityStatus::Unlocked {
+                request_id,
+                vault_store_id,
+                app_key,
+            } => {
+                request_id.zeroize();
+                vault_store_id.zeroize();
+                app_key.extension_runtime_id.zeroize();
+                app_key.app_key.app_id.zeroize();
+                app_key.app_key.encryption_public_key.zeroize();
+                app_key.app_key.signing_public_key.zeroize();
+                app_key.app_key.installation_label.zeroize();
+                app_key.nonce.zeroize();
+                app_key.scopes.clear();
+            }
+        }
     }
 }
 
