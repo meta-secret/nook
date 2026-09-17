@@ -71,6 +71,11 @@ type StorageChainReadiness = {
   readonly kind: StorageChainReadinessKind.Idle;
 };
 
+type ProviderEventOutboxFlush = {
+  readonly providerType: StorageProvider["type"];
+  readonly target: SharedStorageTarget;
+};
+
 const log = browserLogRuntime.createLogger("vault-password");
 
 export type EnrollmentCodeIssueRequest = {
@@ -390,13 +395,16 @@ export class PasswordEnrollmentIssue {
                 if (admittedManager.isErr())
                   return storageErr(admittedManager.error);
                 try {
-                  return storageOk(
-                    await admittedManager.value.flush_event_outbox_for_provider(
-                      targetArgs.mode,
-                      targetArgs.pat,
-                      targetArgs.repo,
-                    ),
+                  await admittedManager.value.flush_event_outbox_for_provider(
+                    targetArgs.mode,
+                    targetArgs.pat,
+                    targetArgs.repo,
                   );
+                  const flush: ProviderEventOutboxFlush = {
+                    providerType: selectedProvider.type,
+                    target: sharedStorageTarget,
+                  };
+                  return storageOk(flush);
                 } catch (nativeFailure) {
                   return storageErr(
                     new NativeVaultStorageFailure(nativeFailure),
@@ -415,13 +423,16 @@ export class PasswordEnrollmentIssue {
             if (admittedManager.isErr())
               return storageErr(admittedManager.error);
             try {
-              return storageOk(
-                await admittedManager.value.flush_event_outbox_for_provider(
-                  targetArgs.mode,
-                  targetArgs.pat,
-                  targetArgs.repo,
-                ),
+              await admittedManager.value.flush_event_outbox_for_provider(
+                targetArgs.mode,
+                targetArgs.pat,
+                targetArgs.repo,
               );
+              const flush: ProviderEventOutboxFlush = {
+                providerType: selectedProvider.type,
+                target: sharedStorageTarget,
+              };
+              return storageOk(flush);
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }

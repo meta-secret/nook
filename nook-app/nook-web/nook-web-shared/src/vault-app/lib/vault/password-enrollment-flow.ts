@@ -79,6 +79,11 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
+type VaultNameUpdate = {
+  readonly storeId: string;
+  readonly label: string;
+};
+
 export enum OAuthFilePresetDecodeFailureKind {
   Invalid = "invalid-oauth-file-preset",
 }
@@ -87,7 +92,7 @@ export class OAuthFilePresetDecoder {
   private constructor() {}
 
   static decode(
-    value: unknown,
+    value: string,
   ): Effect.Effect<
     OAuthFilePreset,
     {
@@ -697,9 +702,12 @@ export class PasswordEnrollmentActions {
               if (admittedManager.isErr())
                 return storageErr(admittedManager.error);
               try {
-                return storageOk(
-                  await admittedManager.value.set_vault_name(vaultName),
-                );
+                await admittedManager.value.set_vault_name(vaultName);
+                const vaultNameUpdate: VaultNameUpdate = {
+                  storeId: vaultStoreId,
+                  label: vaultName,
+                };
+                return storageOk(vaultNameUpdate);
               } catch (nativeFailure) {
                 return storageErr(new NativeVaultStorageFailure(nativeFailure));
               }
@@ -709,7 +717,10 @@ export class PasswordEnrollmentActions {
               return;
             }
             try {
-              await set_local_vault_label(vaultStoreId, vaultName);
+              await set_local_vault_label(
+                renamed.value.storeId,
+                renamed.value.label,
+              );
             } catch (failure) {
               state.errorMsg = state.t(
                 new NativeVaultStorageFailure(failure).translationKey,
