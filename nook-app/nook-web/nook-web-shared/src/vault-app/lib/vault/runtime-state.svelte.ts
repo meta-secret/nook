@@ -35,6 +35,7 @@ import * as syncActions from "$lib/vault/sync.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 import {
   ActiveVaultKind,
+  type LocalFolderDraft,
   type LocalProviderLookup,
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
@@ -280,11 +281,13 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<LocalFolderDraft, VaultStorageFailure>
   > {
-    return new providersActions.ProviderSelectionActions(
-      this.providerActionsContext(),
+    const context = this.providerActionsContext();
+    const selection = await new providersActions.ProviderSelectionActions(
+      context,
     ).chooseLocalFolder();
+    return selection.map(() => context.localFolderDraft);
   }
 
   refreshLocalFolderBackupSupport(): void {
