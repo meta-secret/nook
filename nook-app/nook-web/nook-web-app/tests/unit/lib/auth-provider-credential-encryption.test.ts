@@ -22,8 +22,8 @@ const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
 
 type PersistedAuthProvider = {
-  githubPat: unknown
-  oauthFile: unknown
+  githubPat?: unknown
+  oauthFile?: unknown
 }
 
 async function clearAuthProviderStore(): Promise<void> {
@@ -115,14 +115,15 @@ function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new Error('expected a persisted auth provider')
   }
-  for (const provider of providers) {
-    if (!provider || typeof provider !== 'object' || Array.isArray(provider)) {
+  for (const candidate of providers) {
+    const provider: unknown = candidate
+    if (!(provider instanceof Object) || Array.isArray(provider)) {
       continue
     }
-    return {
-      githubPat: Reflect.get(provider, 'githubPat'),
-      oauthFile: Reflect.get(provider, 'oauthFile'),
-    }
+    const persisted: PersistedAuthProvider = {}
+    if ('githubPat' in provider) persisted.githubPat = provider.githubPat
+    if ('oauthFile' in provider) persisted.oauthFile = provider.oauthFile
+    return persisted
   }
   throw new Error('expected the persisted provider to be an object')
 }

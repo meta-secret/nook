@@ -30,7 +30,7 @@
     VaultCreationQueueKind,
   } from '$lib/vault/creation-queue'
   import AppSurface from '$lib/components/app/AppSurface.svelte'
-  import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-workflow'
+  import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
   import type {
     EnrollmentCodeUseRequest,
     PairedExtensionDiscoveryRetry,

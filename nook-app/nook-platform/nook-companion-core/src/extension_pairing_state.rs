@@ -851,19 +851,30 @@ mod tests {
     }
 
     #[test]
-    fn legacy_approval_time_canonicalizes_before_grant_persistence() -> anyhow::Result<()> {
-        let expected = Fixture::approved_at("1784937600000")?;
+    fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
+    -> anyhow::Result<()> {
+        let expected_approval_time = Fixture::approved_at("1784937600000")?;
         let legacy = ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
             "2026-07-25T00:00:00.000Z",
         )?;
-        assert_eq!(legacy, expected);
+        assert_eq!(legacy, expected_approval_time);
 
-        let mut decoded = Fixture::grant();
-        decoded.approved_at = legacy;
+        let mut expected = Fixture::grant();
+        expected.approved_at = legacy;
+        let canonical_json = serde_json::to_string(&expected)?;
+        let legacy_json = canonical_json.replace(
+            r#""approvedAt":1784937600000"#,
+            r#""approvedAt":"2026-07-25T00:00:00.000Z""#,
+        );
+        assert_ne!(legacy_json, canonical_json);
 
-        let reserialized = serde_json::to_string(&decoded)?;
-        let round_trip = StoredExtensionPairingGrant::decode_json(&reserialized)?;
-        assert_eq!(round_trip.approved_at, expected);
+        let decoded = StoredExtensionPairingGrant::decode_json(&legacy_json)?;
+        assert_eq!(decoded, expected);
+        assert_eq!(
+            serde_json::to_string(&decoded.approved_at)?,
+            "1784937600000"
+        );
+        assert_eq!(serde_json::to_string(&decoded)?, canonical_json);
         Ok(())
     }
 

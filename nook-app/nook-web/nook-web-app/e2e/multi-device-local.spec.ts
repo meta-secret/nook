@@ -15,7 +15,6 @@ import {
   sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
   waitForSyncRemoteVaultState,
-  requireValue,
   waitForPendingJoinBanner,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -166,5 +165,7 @@ async function parseJoinFromStub(stub: {
   if (snapshot.joinEntries.length === 0) {
     throw new Error('Expected a pending join entry in remote event log')
   }
-  return requireValue(snapshot.joinEntries[0], 'pending join entry')
+  const join = snapshot.joinEntries[0]
+  if (!join) throw new Error('pending join entry was not available.')
+  return join
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { VaultState } from '$lib/vault.svelte'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
-  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-workflow'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 
   let {
     vault,

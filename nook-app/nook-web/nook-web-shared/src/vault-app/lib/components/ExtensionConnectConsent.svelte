@@ -12,7 +12,6 @@
     type ExtensionConsentIdentityTextLayout,
   } from './extension-consent-identity-text'
   import {
-    ExtensionConsentCloseOutcome,
     ExtensionConsentDeliveryOutcomeKind,
     ExtensionConsentRejectionKind,
     ExtensionConsentWorkflowKind,
@@ -21,6 +20,7 @@
     ExtensionConsentWorkflowPresentation,
     type ExtensionConsentWorkflowState,
   } from './extension-connect-consent-workflow'
+  import { ExtensionConsentCloseOutcome } from './extension-connect-consent-outcome'
 
   type ExtensionConsentWorkflowSession = {
     readonly workflow: ExtensionConnectConsentWorkflow
@@ -73,9 +73,7 @@
   const actionTranslationKey = $derived(
     presentation.actionTranslationKey(workflowState),
   )
-  const closeOutcome = $derived(
-    session.workflow.closeOutcome(workflowState),
-  )
+  const closeOutcome = $derived(session.workflow.closeOutcome(workflowState))
 
   $effect.pre(() => {
     const activeSession = session
@@ -211,10 +209,7 @@
     {/if}
   {/if}
 
-  {#if (workflowState.kind === ExtensionConsentWorkflowKind.Completed &&
-    workflowState.outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) ||
-  (workflowState.kind === ExtensionConsentWorkflowKind.Failed &&
-    workflowState.phase.state === NookExtensionConsentPhaseState.Approved)}
+  {#if (workflowState.kind === ExtensionConsentWorkflowKind.Completed && workflowState.outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) || (workflowState.kind === ExtensionConsentWorkflowKind.Failed && workflowState.phase.state === NookExtensionConsentPhaseState.Approved)}
     <p
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
@@ -234,10 +229,11 @@
     <Button
       type="button"
       variant="outline"
-      disabled={workflowState.kind === ExtensionConsentWorkflowKind.SubmittingAuthorization ||
-      workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
-      workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
-      workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
+      disabled={workflowState.kind ===
+        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+        workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
+        workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
+        workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
       onclick={closeConsent}
     >
       {closeOutcome === ExtensionConsentCloseOutcome.Approved
@@ -250,7 +246,8 @@
       data-testid="approve-extension-device-btn"
       onclick={() => void approveExtension()}
     >
-      {workflowState.kind === ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+      {workflowState.kind ===
+        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
       workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
       workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
       workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
