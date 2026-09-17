@@ -9,6 +9,7 @@ beforeAll(async () => {
   await initNookWasm({ module_or_path: bytes })
 })
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   WebsitePasskeyCeremony,
   WebsitePasskeyCredentialSelectionKind,
@@ -36,60 +37,84 @@ describe('website passkey runtime messages', () => {
       expiresAt: Date.now() + 60_000,
     }
     expect(
-      WebsitePasskeyOptionsMessageSchema.is({
-        type: 'nook:website-passkey-options',
-        payload,
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyOptionsMessageSchema.decode({
+            type: 'nook:website-passkey-options',
+            payload,
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsitePasskeyPerformMessageSchema.is({
-        type: 'nook:website-passkey-perform',
-        payload: { ...payload, vaultStoreId: 'store_test' },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyPerformMessageSchema.decode({
+            type: 'nook:website-passkey-perform',
+            payload: { ...payload, vaultStoreId: 'store_test' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsitePasskeyCancelMessageSchema.is({
-        type: 'nook:website-passkey-cancel',
-        payload: { requestId: payload.requestId },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyCancelMessageSchema.decode({
+            type: 'nook:website-passkey-cancel',
+            payload: { requestId: payload.requestId },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 
   test('rejects oversized, malformed, and unscoped messages', async () => {
     expect(
-      WebsitePasskeyOptionsMessageSchema.is({
-        type: 'nook:website-passkey-options',
-        payload: {
-          requestId: 'short',
-          ceremony: 'get',
-          requestJson,
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyOptionsMessageSchema.decode({
+            type: 'nook:website-passkey-options',
+            payload: {
+              requestId: 'short',
+              ceremony: 'get',
+              requestJson,
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      WebsitePasskeyPerformMessageSchema.is({
-        type: 'nook:website-passkey-perform',
-        payload: {
-          requestId: 'request-1234567890',
-          ceremony: 'get',
-          requestJson,
-          expiresAt: Date.now() + 60_000,
-          vaultStoreId: 'store_test',
-          credentialId: '',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyPerformMessageSchema.decode({
+            type: 'nook:website-passkey-perform',
+            payload: {
+              requestId: 'request-1234567890',
+              ceremony: 'get',
+              requestJson,
+              expiresAt: Date.now() + 60_000,
+              vaultStoreId: 'store_test',
+              credentialId: '',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      WebsitePasskeyPerformMessageSchema.is({
-        type: 'nook:website-passkey-perform',
-        payload: {
-          requestId: 'request-1234567890',
-          ceremony: 'get',
-          requestJson: 'x'.repeat(65_537),
-          vaultStoreId: 'store_test',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsitePasskeyPerformMessageSchema.decode({
+            type: 'nook:website-passkey-perform',
+            payload: {
+              requestId: 'request-1234567890',
+              ceremony: 'get',
+              requestJson: 'x'.repeat(65_537),
+              vaultStoreId: 'store_test',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     const parseArgs = {
       ceremony: WebsitePasskeyCeremony.Get,
       requestJson: '{',

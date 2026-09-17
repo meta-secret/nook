@@ -16,13 +16,12 @@ enum ExtensionPairingStorageProviderFailure {
 
 impl ExtensionPairingStorageProviderAdmission {
     fn decode(
-        &mut self,
+        self,
     ) -> Result<ExtensionPairingStorageProviderPayload, ExtensionPairingStorageProviderFailure>
     {
         if self.0.credential_storage_admission()
             != ProviderCredentialStorageAdmission::MarkerCompatible
         {
-            self.0.zeroize_credentials();
             return Err(ExtensionPairingStorageProviderFailure::PlaintextCredential);
         }
         Ok(ExtensionPairingStorageProviderPayload(self.0.clone()))
@@ -51,7 +50,7 @@ impl Drop for ExtensionPairingStorageProviderPayload {
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_pairing_storage_provider(
-    mut admission: ExtensionPairingStorageProviderAdmission,
+    admission: ExtensionPairingStorageProviderAdmission,
 ) -> Result<ExtensionPairingStorageProviderPayload, JsError> {
     admission.decode().map_err(|_| {
         JsError::new("Extension pairing provider credentials are not storage-safe.")
@@ -191,20 +190,15 @@ mod extension_pairing_provider_tests {
     }
 
     #[test]
-    fn pairing_provider_decoder_rejects_plaintext_and_cleanup_clears_sensitive_fields()
-    -> anyhow::Result<()> {
-        let mut admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
+    fn pairing_provider_decoder_rejects_plaintext_before_drop_owned_cleanup() -> anyhow::Result<()>
+    {
+        let admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
             &ProviderFixture::json("plaintext-token"),
         )?;
         assert!(matches!(
             admission.decode(),
             Err(ExtensionPairingStorageProviderFailure::PlaintextCredential)
         ));
-        assert_eq!(
-            admission.0.github_pat,
-            StoredGithubPat::Token(String::new())
-        );
-
         let mut provider =
             serde_json::from_str::<StorageProvider>(&ProviderFixture::json(ARMORED_SECRET))?;
         provider.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {

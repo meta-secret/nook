@@ -821,6 +821,9 @@ RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-repor
 # an isolated source-derived stage; the browser/runtime stage below consumes
 # only the result stamp and never receives cache credentials.
 FROM builder-wasm-handoff AS builder-wasm-node-compiler
+# cargo-llvm-cov rejects --no-report together with --no-clean. Let the native
+# companion run emit its interim report so its profiles remain available when
+# the following WASM run enforces the unchanged package floor.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     wasm-pack test --node --release nook-wasm \
@@ -834,7 +837,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && test -x "$runner" \
     && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
     && nook_wasm_floor="$(jq -r '.package_lines_percent["nook-wasm"]' nook-core/coverage-floor.json)" \
-    && cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-companion-wasm --no-report \
+    && cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-companion-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
     && WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
     && touch /opt/nook/wasm-coverage-passed \

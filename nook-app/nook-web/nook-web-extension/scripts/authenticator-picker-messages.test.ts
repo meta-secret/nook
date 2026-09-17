@@ -14,55 +14,79 @@ import {
 describe('authenticator picker messages', () => {
   test('accepts bounded picker requests', () => {
     expect(
-      WebsiteAuthenticatorPickerOpenMessageSchema.is({
-        type: 'nook:website-authenticator-picker-open',
-        payload: { origin: 'https://example.test' },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorPickerOpenMessageSchema.decode({
+            type: 'nook:website-authenticator-picker-open',
+            payload: { origin: 'https://example.test' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      AuthenticatorPickerQueryMessageSchema.is({
-        type: 'nook:authenticator-picker-query',
-        payload: { requestId: 'picker-1', query: 'alice' },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerQueryMessageSchema.decode({
+            type: 'nook:authenticator-picker-query',
+            payload: { requestId: 'picker-1', query: 'alice' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      AuthenticatorPickerSelectMessageSchema.is({
-        type: 'nook:authenticator-picker-select',
-        payload: {
-          requestId: 'picker-1',
-          vaultStoreId: 'vault-1',
-          secretId: 'secret-1',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerSelectMessageSchema.decode({
+            type: 'nook:authenticator-picker-select',
+            payload: {
+              requestId: 'picker-1',
+              vaultStoreId: 'vault-1',
+              secretId: 'secret-1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      AuthenticatorPickerCancelMessageSchema.is({
-        type: 'nook:authenticator-picker-cancel',
-        payload: { requestId: 'picker-1' },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerCancelMessageSchema.decode({
+            type: 'nook:authenticator-picker-cancel',
+            payload: { requestId: 'picker-1' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 
   test('rejects oversized search text and incomplete selections', () => {
     expect(
-      AuthenticatorPickerQueryMessageSchema.is({
-        type: 'nook:authenticator-picker-query',
-        payload: {
-          requestId: 'picker-1',
-          query: 'x'.repeat(MAX_AUTHENTICATOR_SEARCH_LENGTH + 1),
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerQueryMessageSchema.decode({
+            type: 'nook:authenticator-picker-query',
+            payload: {
+              requestId: 'picker-1',
+              query: 'x'.repeat(MAX_AUTHENTICATOR_SEARCH_LENGTH + 1),
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      AuthenticatorPickerSelectMessageSchema.is({
-        type: 'nook:authenticator-picker-select',
-        payload: {
-          requestId: 'picker-1',
-          vaultStoreId: '',
-          secretId: 'secret-1',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          AuthenticatorPickerSelectMessageSchema.decode({
+            type: 'nook:authenticator-picker-select',
+            payload: {
+              requestId: 'picker-1',
+              vaultStoreId: '',
+              secretId: 'secret-1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
   })
 
   test('admits only complete authenticator query responses', () => {
@@ -83,8 +107,8 @@ describe('authenticator picker messages', () => {
             ],
           }),
         ),
-      )._tag === 'Right',
-    ).toBe(true)
+      )._tag,
+    ).toBe('Right')
     expect(
       Effect.runSync(
         Effect.either(
@@ -94,49 +118,65 @@ describe('authenticator picker messages', () => {
             accounts: [{ vaultStoreId: 'vault-1' }],
           }),
         ),
-      )._tag === 'Right',
-    ).toBe(false)
+      )._tag,
+    ).toBe('Left')
   })
 
   test('accepts only complete background selections', () => {
     expect(
-      WebsiteAuthenticatorSelectedMessageSchema.is({
-        type: 'nook:website-authenticator-selected',
-        payload: {
-          origin: 'https://example.test',
-          requestId: 'picker-1',
-          account: {
-            vaultStoreId: 'vault-1',
-            secretId: 'secret-1',
-            authorizationGeneration: 'epoch-7',
-          },
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorSelectedMessageSchema.decode({
+            type: 'nook:website-authenticator-selected',
+            payload: {
+              origin: 'https://example.test',
+              requestId: 'picker-1',
+              account: {
+                vaultStoreId: 'vault-1',
+                secretId: 'secret-1',
+                authorizationGeneration: 'epoch-7',
+              },
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsiteAuthenticatorSelectedMessageSchema.is({
-        type: 'nook:website-authenticator-selected',
-        payload: {
-          origin: 'https://example.test',
-          requestId: 'picker-1',
-          account: { vaultStoreId: 'vault-1' },
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorSelectedMessageSchema.decode({
+            type: 'nook:website-authenticator-selected',
+            payload: {
+              origin: 'https://example.test',
+              requestId: 'picker-1',
+              account: { vaultStoreId: 'vault-1' },
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      WebsiteAuthenticatorCanceledMessageSchema.is({
-        type: 'nook:website-authenticator-canceled',
-        payload: {
-          origin: 'https://example.test',
-          requestId: 'picker-1',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorCanceledMessageSchema.decode({
+            type: 'nook:website-authenticator-canceled',
+            payload: {
+              origin: 'https://example.test',
+              requestId: 'picker-1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
     expect(
-      WebsiteAuthenticatorCanceledMessageSchema.is({
-        type: 'nook:website-authenticator-canceled',
-        payload: { origin: 'https://example.test' },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorCanceledMessageSchema.decode({
+            type: 'nook:website-authenticator-canceled',
+            payload: { origin: 'https://example.test' },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
   })
 })

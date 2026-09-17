@@ -146,7 +146,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
           'interactive',
         ])
         expect(stored).toBe('{}')
-        expect(vault).toBe('vault')
+        expect(vault.value).toBe('vault')
         events.push('classified')
         return { kind: 'NoMatchingAuthority' as const }
       },

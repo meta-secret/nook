@@ -241,24 +241,27 @@ class SiteFixtureCatalogAdmission {
       throw new TypeError('fixture field has an invalid shape')
     }
     const field: SiteFixtureField = {}
-    for (const key of [
-      'name',
-      'type',
-      'id',
-      'autocomplete',
-      'label',
-      'placeholder',
-      'aria-label',
-      'data-qa',
-      'data-testid',
-    ] as const) {
-      if (key in value) {
-        const entry: unknown = Reflect.get(value, key)
-        if (typeof entry !== 'string') {
-          throw new TypeError(`fixture field ${key} must be a string`)
-        }
-        field[key] = entry
-      }
+    if ('name' in value) field.name = this.decodeString(value.name, 'name')
+    if ('type' in value) field.type = this.decodeString(value.type, 'type')
+    if ('id' in value) field.id = this.decodeString(value.id, 'id')
+    if ('autocomplete' in value) {
+      field.autocomplete = this.decodeString(value.autocomplete, 'autocomplete')
+    }
+    if ('label' in value) field.label = this.decodeString(value.label, 'label')
+    if ('placeholder' in value) {
+      field.placeholder = this.decodeString(value.placeholder, 'placeholder')
+    }
+    if ('aria-label' in value) {
+      field['aria-label'] = this.decodeString(value['aria-label'], 'aria-label')
+    }
+    if ('data-qa' in value) {
+      field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
+    }
+    if ('data-testid' in value) {
+      field['data-testid'] = this.decodeString(
+        value['data-testid'],
+        'data-testid',
+      )
     }
     if ('inputmode' in value) {
       if (value.inputmode !== SiteFixtureInputMode.Email) {
@@ -292,16 +295,19 @@ class SiteFixtureCatalogAdmission {
       }
       submit.type = value.type
     }
-    for (const key of ['name', 'id', 'data-qa'] as const) {
-      if (key in value) {
-        const entry: unknown = Reflect.get(value, key)
-        if (typeof entry !== 'string') {
-          throw new TypeError(`fixture submit ${key} must be a string`)
-        }
-        submit[key] = entry
-      }
+    if ('name' in value) submit.name = this.decodeString(value.name, 'name')
+    if ('id' in value) submit.id = this.decodeString(value.id, 'id')
+    if ('data-qa' in value) {
+      submit['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
     return submit
+  }
+
+  private decodeString(value: unknown, property: string): string {
+    if (typeof value !== 'string') {
+      throw new TypeError(`fixture property ${property} must be a string`)
+    }
+    return value
   }
 }
 

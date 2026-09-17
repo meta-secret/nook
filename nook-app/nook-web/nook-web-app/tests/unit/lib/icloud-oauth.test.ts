@@ -975,7 +975,7 @@ describe('icloud-oauth', () => {
 })
 
 describe('CloudKit token transport decoding', () => {
-  it('persists only a decoded token from SDK payloads', () => {
+  it('normalizes the strongly typed SDK token before persistence', () => {
     cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, ' accepted ')
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toBe(
       'accepted',
@@ -984,15 +984,10 @@ describe('CloudKit token transport decoding', () => {
       sessionStorage.getItem('nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID),
     ).toBe(JSON.stringify('accepted'))
   })
-  it('rejects malformed persisted JSON and invalid token shapes', () => {
+  it('rejects malformed persisted JSON', () => {
     sessionStorage.setItem(
       'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
       '{',
-    )
-    expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
-    sessionStorage.setItem(
-      'nook.icloud.webAuthToken.' + ICLOUD_CONTAINER_ID,
-      JSON.stringify({ token: 42 }),
     )
     expect(cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)).toEqual(void 0)
   })

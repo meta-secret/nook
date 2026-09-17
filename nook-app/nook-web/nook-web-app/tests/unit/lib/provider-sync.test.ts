@@ -13,6 +13,7 @@ import {
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
+  unselectedVaultScope,
   type StorageProvider,
 } from '$lib/auth/providers'
 import { VaultStorageSynchronization } from '$lib/nook'
@@ -24,15 +25,14 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
-import {
-  RosterHydrationKind,
-  VaultSyncApplicationKind,
-} from '$lib/vault/action-contexts'
-import { unselectedVaultScope } from '$lib/auth/providers'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  RosterHydrationKind,
+  VaultSyncApplicationKind,
+} from '$lib/vault/action-contexts'
 
 type ProviderSyncScenario = {
   readonly manager: NookVaultManager
@@ -96,11 +96,7 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   state.applyVaultSyncResult = vi.fn<VaultState['applyVaultSyncResult']>(
     (result) => {
       result.free()
-      return ok({
-        kind: authenticated
-          ? VaultSyncApplicationKind.AuthenticatedRosterApplied
-          : VaultSyncApplicationKind.UnauthenticatedUpdateIgnored,
-      })
+      return ok({ kind: VaultSyncApplicationKind.AuthenticatedRosterApplied })
     },
   )
   state.refreshSecretsFromSession = secretRefresh

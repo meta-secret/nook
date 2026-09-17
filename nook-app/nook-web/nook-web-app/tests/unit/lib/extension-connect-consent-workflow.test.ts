@@ -1,4 +1,4 @@
-import { err, ok, type Result } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const approvalPort = vi.hoisted(() => ({
@@ -47,22 +47,10 @@ import {
 } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
+import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
 import type { NookExtensionConsentPhase } from '$app-wasm'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
-
-type FailedExtensionConsentWorkflowState = Extract<
-  ExtensionConsentWorkflowState,
-  { readonly kind: ExtensionConsentWorkflowKind.Failed }
->
-
-function requireFailedState(
-  state: ExtensionConsentWorkflowState,
-): FailedExtensionConsentWorkflowState {
-  if (state.kind !== ExtensionConsentWorkflowKind.Failed) {
-    throw new Error('expected the workflow to fail')
-  }
-  return state
-}
+import type { VaultSynchronizationResult } from '$lib/vault/sync.svelte'
 
 function createHarness() {
   const vault = VaultStateTestFixture.create()
@@ -112,7 +100,9 @@ beforeEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
   approvalPort.authorize.mockResolvedValue(ok())
-  approvalPort.prepareAuthorizedGrant.mockResolvedValue(ok({}))
+  approvalPort.prepareAuthorizedGrant.mockResolvedValue(
+    ok({} as ExtensionPairingApprovedMessage),
+  )
   approvalPort.deliver.mockResolvedValue(
     ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }),
   )
@@ -185,10 +175,9 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    if (state.kind !== ExtensionConsentWorkflowKind.Completed) {
-      expect.fail('workflow should complete')
-    }
     expect(state.kind).toBe(ExtensionConsentWorkflowKind.Completed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Completed)
+      expect.fail('approval must complete')
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
     expect(state.outcome).toEqual({
       kind: ExtensionConsentDeliveryOutcomeKind.Delivered,
@@ -252,10 +241,9 @@ describe('extension consent web workflow', () => {
     'keeps $name retryable after Rust approval',
     async ({ delivery, outcome, notice: expectedNotice }) => {
       const harness = createHarness()
-      const refreshDeviceState = vi.fn<
-        () => Promise<Result<ProviderSyncOutcome, VaultStorageFailure>>
-      >(async (): Promise<Result<ProviderSyncOutcome, VaultStorageFailure>> =>
-        ok(ProviderSyncOutcome.Synced),
+      const refreshDeviceState = vi.fn(
+        async (): Promise<VaultSynchronizationResult> =>
+          ok(ProviderSyncOutcome.Synced),
       )
       harness.vault.refreshDeviceState = refreshDeviceState
       approvalPort.deliver.mockResolvedValueOnce(ok(delivery))
@@ -323,8 +311,9 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('authorization must fail')
     if (state.kind === ExtensionConsentWorkflowKind.Failed) {
       expect(state.failure.kind).toBe(
         ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome,
@@ -355,12 +344,13 @@ describe('extension consent web workflow', () => {
       harness.workflow.approvalAvailability(state),
     )
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('grant preparation must fail')
     expect(state.phase.state).toBe(
       NookExtensionConsentPhaseState.AuthorizationFailed,
     )
-    expect(failedState.failure.kind).toBe(
+    expect(state.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.Authorization,
     )
     expect(notice).toEqual({
@@ -385,10 +375,11 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('delivery admission must fail')
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(failedState.failure.kind).toBe(
+    expect(state.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.GrantPreparation,
     )
     expect(harness.workflow.closeOutcome(state)).toBe(
@@ -406,10 +397,11 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('browser handoff must fail')
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(failedState.failure.kind).toBe(
+    expect(state.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.DeliveryAdmission,
     )
     expect(harness.workflow.closeOutcome(state)).toBe(
@@ -428,10 +420,11 @@ describe('extension consent web workflow', () => {
       harness.workflow.approvalAvailability(state),
     )
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('device refresh must fail')
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(failedState.failure.kind).toBe(
+    expect(state.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.BrowserHandoff,
     )
     expect(notice).toEqual({
@@ -450,25 +443,27 @@ describe('extension consent web workflow', () => {
 
     const state = await approve(harness)
 
-    const failedState = requireFailedState(state)
-    expect(failedState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(state.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (state.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('workflow must fail after device refresh rejection')
     expect(state.phase.state).toBe(NookExtensionConsentPhaseState.Approved)
-    expect(failedState.failure.kind).toBe(
+    expect(state.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.DeviceRefresh,
     )
 
     approvalPort.admitCompletion.mockReturnValue(err(failure))
     const completionHarness = createHarness()
     completionHarness.vault.refreshDeviceState = vi.fn(async () =>
-      ok<ProviderSyncOutcome>(ProviderSyncOutcome.Synced),
+      ok(ProviderSyncOutcome.Synced),
     )
     const completionState = await approve(completionHarness)
-    const failedCompletion = requireFailedState(completionState)
-    expect(failedCompletion.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    expect(completionState.kind).toBe(ExtensionConsentWorkflowKind.Failed)
+    if (completionState.kind !== ExtensionConsentWorkflowKind.Failed)
+      expect.fail('completion admission must fail')
     expect(completionState.phase.state).toBe(
       NookExtensionConsentPhaseState.Approved,
     )
-    expect(failedCompletion.failure.kind).toBe(
+    expect(completionState.failure.kind).toBe(
       ExtensionConsentWorkflowFailureKind.CompletionAdmission,
     )
     harness.workflow.dispose()
@@ -518,9 +513,10 @@ describe('extension consent web workflow', () => {
       const failure = new VaultStorageFailure(
         VaultStorageFailureKind.OperationFailed,
       )
-      const refreshDeviceState = vi.fn<
-        () => Promise<Result<ProviderSyncOutcome, VaultStorageFailure>>
-      >(async () => ok(ProviderSyncOutcome.Synced))
+      const refreshDeviceState = vi.fn(
+        async (): Promise<VaultSynchronizationResult> =>
+          ok(ProviderSyncOutcome.Synced),
+      )
       harness.vault.refreshDeviceState = refreshDeviceState
 
       switch (kind) {
@@ -594,7 +590,7 @@ describe('extension consent web workflow', () => {
     approvalPort.prepareAuthorizedGrant.mockImplementationOnce(async () => {
       preparationStarted.resume(true)
       await releasePreparation.promise
-      return ok({})
+      return ok({} as ExtensionPairingApprovedMessage)
     })
 
     const trackedPhases = new Set<NookExtensionConsentPhase>()

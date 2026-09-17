@@ -97,7 +97,7 @@ const externalPairingMessage: ExternalCompanionMessage = {
     vaultName: routedGrant.vaultName,
     deviceLabel: routedGrant.deviceLabel,
     approvedAt: routedGrant.approvedAt,
-    scopes: routedGrant.scopes,
+    scopes: [...routedGrant.scopes],
     providers: [],
   },
   eventLogRecords: [

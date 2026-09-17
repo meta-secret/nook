@@ -110,10 +110,7 @@ function providerConnectionScenario(
       kind: StagedRemoteStorageKind.Unavailable,
     }),
     ensureProviderSaved: async () =>
-      ok({
-        providers: state.providers,
-        activeVaultStoreId: unselectedVaultScope(),
-      }),
+      ok({ providers: [provider], activeVaultStoreId: unselectedVaultScope() }),
     flushRemoteEventOutboxNow,
     syncProviderById,
   } satisfies Pick<

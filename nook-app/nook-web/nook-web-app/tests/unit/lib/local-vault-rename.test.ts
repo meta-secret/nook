@@ -127,7 +127,9 @@ describe('selectVaultForUnlock', () => {
   })
 
   test('prepares the selected vault without protected provider or identity access', async () => {
-    const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
+    const syncActiveVaultStoreIdToAuth = vi.fn(async () =>
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+    )
     const reloadProvidersForActiveVault = vi.fn(async () =>
       ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
     )

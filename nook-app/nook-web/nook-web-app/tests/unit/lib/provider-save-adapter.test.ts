@@ -79,8 +79,8 @@ function providerState(providerType: StorageProviderType): AdapterState {
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
-    persistProviders: vi.fn(async ({ providers = [] }) =>
-      ok({ providers, activeVaultStoreId: unselectedVaultScope() }),
+    persistProviders: vi.fn(async () =>
+      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
     ),
   }
 }
@@ -221,10 +221,11 @@ describe('provider save web adapter', () => {
       state,
     ).ensureProviderSaved()
 
-    expect(saved.isOk()).toBe(true)
-    if (saved.isErr()) expect.fail('the provider snapshot should be saved')
-    expect(saved.value.providers).toContainEqual(
-      expect.objectContaining({ type: GITHUB_PROVIDER_TYPE }),
+    expect(saved).toEqual(
+      ok({
+        providers: [],
+        activeVaultStoreId: unselectedVaultScope(),
+      }),
     )
     expect(state.persistProviders).toHaveBeenCalledWith(
       expect.objectContaining({

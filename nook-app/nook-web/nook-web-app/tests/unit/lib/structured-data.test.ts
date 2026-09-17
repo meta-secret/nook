@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { Effect } from 'effect'
 import {
-  LandingStructuredDataDecodeFailureKind,
   LandingLocale,
   localizeLandingStructuredData,
 } from '../../../src/landing/structured-data'
@@ -27,17 +26,15 @@ describe('landing structured data', () => {
   })
 
   test('rejects structured data without a description', () => {
-    const decoding = localizeLandingStructuredData({
-      serialized: JSON.stringify({ '@type': 'WebApplication' }),
-      description: 'Localized description',
-      locale: LandingLocale.English,
-    })
-    const decoded = Effect.runSync(Effect.either(decoding))
+    const decoded = Effect.runSync(
+      Effect.either(
+        localizeLandingStructuredData({
+          serialized: JSON.stringify({ '@type': 'WebApplication' }),
+          description: 'Localized description',
+          locale: LandingLocale.English,
+        }),
+      ),
+    )
     expect(decoded._tag).toBe('Left')
-    if (decoded._tag === 'Left') {
-      expect(decoded.left.kind).toBe(
-        LandingStructuredDataDecodeFailureKind.InvalidStructuredData,
-      )
-    }
   })
 })

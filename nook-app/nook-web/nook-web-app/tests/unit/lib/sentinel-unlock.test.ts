@@ -23,11 +23,11 @@ import { LoginVaultEntryKind } from '$lib/components/login/login-unlock-state'
 import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
-import { unselectedVaultScope } from '$lib/auth/providers'
-import { RosterHydrationKind } from '$lib/vault/action-contexts'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+import { unselectedVaultScope } from '$lib/auth/providers'
+import { RosterHydrationKind } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement } from '../test-dom-helpers'
 
@@ -88,12 +88,6 @@ class SentinelFinalizationFixture {
   readonly showSuccess = vi.fn()
   readonly startIdleSessionTracking = vi.fn()
   readonly startVaultSync = vi.fn()
-  readonly failureOperations = {
-    loadSecretPage: this.loadSecretPage,
-    ensureProviderSaved: this.ensureProviderSaved,
-    loadProviders: this.loadProviders,
-  }
-
   constructor() {
     Object.defineProperty(this.manager, 'vaultStoreId', {
       configurable: true,
@@ -162,18 +156,15 @@ class SentinelFinalizationFixture {
     this.state.showSuccess = this.showSuccess
     this.state.startIdleSessionTracking = this.startIdleSessionTracking
     this.state.startVaultSync = this.startVaultSync
-    this.state.initDeviceIdentity = vi.fn<VaultState['initDeviceIdentity']>(
-      async () =>
-        ok({
-          deviceId: 'fixture-device',
-          devicePublicKey: 'fixture-public-key',
-        }),
+    this.state.initDeviceIdentity = vi.fn(async () =>
+      ok({
+        deviceId: 'sentinel-device',
+        devicePublicKey: 'sentinel-public-key',
+      }),
     )
     this.state.syncFromStorage = this.syncFromStorage
     this.state.connectStorageArgs = vi.fn()
-    this.state.refreshVaultArchitectureFromManager = vi.fn<
-      VaultState['refreshVaultArchitectureFromManager']
-    >(() =>
+    this.state.refreshVaultArchitectureFromManager = vi.fn(() =>
       ok({
         deviceMode: this.state.vaultArchitecture.device_mode,
         vaultType: this.state.vaultArchitecture.vault_type,

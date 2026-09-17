@@ -31,9 +31,9 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { TranslationMessage } from '$lib/vault/translation'
-import { LocaleUpdateOutcome } from '$lib/vault/locale'
-import { unselectedVaultScope } from '$lib/auth/providers'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
+import { unselectedVaultScope } from '$lib/auth/providers'
+import { LocaleUpdateOutcome } from '$lib/vault/locale'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
@@ -195,7 +195,7 @@ describe('external browser identity handoff commit ownership', () => {
         ok(fixture.manager),
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok<LocaleUpdateOutcome>(LocaleUpdateOutcome.Updated),
+        ok(LocaleUpdateOutcome.Updated),
       )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),
@@ -236,7 +236,7 @@ describe('external browser identity handoff commit ownership', () => {
         ok(fixture.manager),
       )
       vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok<LocaleUpdateOutcome>(LocaleUpdateOutcome.Updated),
+        ok(LocaleUpdateOutcome.Updated),
       )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
         ok(fixture.state.localVaultCatalog),

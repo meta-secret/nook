@@ -2,12 +2,13 @@ import { ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   GITHUB_PROVIDER_TYPE,
+  activeVaultScope,
   providerPersistenceDefaults,
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
-  unselectedVaultScope,
   type StorageProvider,
+  unselectedVaultScope,
 } from '$lib/auth/providers'
 import {
   NookVaultManager,
@@ -18,12 +19,12 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
+import { OAuthRemoteReferenceSyncKind } from '$lib/vault/providers.svelte'
+import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   OAuthTokenFreshnessKind,
   RosterHydrationKind,
 } from '$lib/vault/action-contexts'
-import { OAuthRemoteReferenceSyncKind } from '$lib/vault/providers.svelte'
-import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 type ConnectionScenario = {
@@ -78,7 +79,7 @@ function connectionScenario(
   state.isAuthenticated = false
   state.localVaultPresent = false
   state.initDeviceIdentity = vi.fn(async () =>
-    ok({ deviceId: 'fixture-device', devicePublicKey: 'fixture-public-key' }),
+    ok({ deviceId: 'joiner-device', devicePublicKey: 'joiner-public-key' }),
   )
   state.ensureOAuthTokensFresh = vi.fn<VaultState['ensureOAuthTokensFresh']>(
     async () => ok({ kind: OAuthTokenFreshnessKind.NotConfigured }),
@@ -99,16 +100,25 @@ function connectionScenario(
   )
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
     async () =>
-      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+      ok({
+        providers: [provider],
+        activeVaultStoreId: activeVaultScope('joiner-store'),
+      }),
   )
   state.loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
-    ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+    ok({
+      providers: [provider],
+      activeVaultStoreId: activeVaultScope('joiner-store'),
+    }),
   )
   state.promoteSessionVaultToLocalIfNeeded = vi.fn<
     VaultState['promoteSessionVaultToLocalIfNeeded']
   >(async () =>
     ok({
-      snapshot: { providers: [], activeVaultStoreId: unselectedVaultScope() },
+      snapshot: {
+        providers: [provider],
+        activeVaultStoreId: unselectedVaultScope(),
+      },
       localVaultPresent: false,
     }),
   )

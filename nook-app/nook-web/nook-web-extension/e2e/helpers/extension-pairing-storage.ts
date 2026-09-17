@@ -1,4 +1,3 @@
-import type { Page, Worker } from '@playwright/test'
 import { companionWasmReady } from './companion-wasm-ready'
 import {
   classify_extension_persistence_databases,
@@ -9,9 +8,17 @@ import {
   matching_extension_persistence_stores,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-type ExtensionExecutionScope = Page | Worker
 type ExtensionPageFunctionWithoutArgument<Result> = () =>
   Result | Promise<Result>
+type ExtensionExecutionScope = {
+  evaluate<Result>(
+    pageFunction: ExtensionPageFunctionWithoutArgument<Result>,
+  ): Promise<Result>
+  evaluate<Argument, Result>(
+    pageFunction: ExtensionPageFunctionWithArgument<Argument, Result>,
+    argument: Argument,
+  ): Promise<Result>
+}
 
 async function evaluateExtensionScopeWithoutArgument<Result>([
   scope,
@@ -21,6 +28,22 @@ async function evaluateExtensionScopeWithoutArgument<Result>([
   ExtensionPageFunctionWithoutArgument<Result>,
 ]): Promise<Result> {
   return scope.evaluate(pageFunction)
+}
+
+type ExtensionPageFunctionWithArgument<Argument, Result> = (
+  argument: Argument,
+) => Result | Promise<Result>
+
+async function evaluateExtensionScopeWithArgument<Argument, Result>([
+  scope,
+  pageFunction,
+  argument,
+]: readonly [
+  ExtensionExecutionScope,
+  ExtensionPageFunctionWithArgument<Argument, Result>,
+  Argument,
+]): Promise<Result> {
+  return scope.evaluate(pageFunction, argument)
 }
 
 export type ExtensionPersistenceSnapshot = {
@@ -70,7 +93,11 @@ async function observedStoreNames(
       database.close()
     }
   }
-  return args.scope.evaluate(readStoreNames, databaseName)
+  return evaluateExtensionScopeWithArgument([
+    args.scope,
+    readStoreNames,
+    databaseName,
+  ])
 }
 
 async function readDatabaseSnapshot(
@@ -129,7 +156,11 @@ async function readDatabaseSnapshot(
       database.close()
     }
   }
-  return args.scope.evaluate(readSnapshot, readArgs)
+  return evaluateExtensionScopeWithArgument([
+    args.scope,
+    readSnapshot,
+    readArgs,
+  ])
 }
 
 export async function readExtensionPersistenceSnapshot(
@@ -216,7 +247,7 @@ export async function writeExtensionPairingStorage(
       database.close()
     }
   }
-  await scope.evaluate(writeStorage, entries)
+  await evaluateExtensionScopeWithArgument([scope, writeStorage, entries])
 }
 
 export async function removeExtensionPairingStorageKeys(
@@ -243,5 +274,5 @@ export async function removeExtensionPairingStorageKeys(
       database.close()
     }
   }
-  await scope.evaluate(removeStorageKeys, keys)
+  await evaluateExtensionScopeWithArgument([scope, removeStorageKeys, keys])
 }

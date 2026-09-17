@@ -2,6 +2,7 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   WebsiteAuthenticatorBackupAttachMessage as WebsiteAuthenticatorBackupAttachMessageSchema,
   WebsiteAuthenticatorEnrollConfirmMessage as WebsiteAuthenticatorEnrollConfirmMessageSchema,
@@ -13,88 +14,117 @@ import { recoveryCopyObservation } from '../src/lib/backup-code-candidates'
 describe('enrollment message guards', () => {
   test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
     expect(
-      WebsiteAuthenticatorEnrollPreviewMessageSchema.is({
-        type: 'nook:website-authenticator-enroll-preview',
-        payload: {
-          origin: 'https://example.test',
-          otpauthUri:
-            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorEnrollPreviewMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-preview',
+            payload: {
+              origin: 'https://example.test',
+              otpauthUri:
+                'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
 
     expect(
-      WebsiteAuthenticatorEnrollStageMessageSchema.is({
-        type: 'nook:website-authenticator-enroll-stage',
-        payload: {
-          origin: 'https://example.test',
-          vaultStoreId: 'store-1',
-          otpauthUri:
-            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorEnrollStageMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-stage',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              otpauthUri:
+                'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
 
     expect(
-      WebsiteAuthenticatorEnrollConfirmMessageSchema.is({
-        type: 'nook:website-authenticator-enroll-confirm',
-        payload: {
-          origin: 'https://example.test',
-          vaultStoreId: 'store-1',
-          stageId: 'stage-1',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorEnrollConfirmMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-confirm',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              stageId: 'stage-1',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
 
     expect(
-      WebsiteAuthenticatorEnrollConfirmMessageSchema.is({
-        type: 'nook:website-authenticator-enroll-confirm',
-        payload: {
-          origin: 'https://example.test',
-          vaultStoreId: 'store-1',
-          otpauthUri:
-            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorEnrollConfirmMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-confirm',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              otpauthUri:
+                'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
   })
 
   test('rejects hotp, missing vault, and invalid backup attach modes', () => {
     expect(
-      WebsiteAuthenticatorEnrollPreviewMessageSchema.is({
-        type: 'nook:website-authenticator-enroll-preview',
-        payload: {
-          origin: 'https://example.test',
-          otpauthUri: 'otpauth://hotp/Example:alice?secret=JBSWY3DPEHPK3PXP',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorEnrollPreviewMessageSchema.decode({
+            type: 'nook:website-authenticator-enroll-preview',
+            payload: {
+              origin: 'https://example.test',
+              otpauthUri:
+                'otpauth://hotp/Example:alice?secret=JBSWY3DPEHPK3PXP',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
 
     expect(
-      WebsiteAuthenticatorBackupAttachMessageSchema.is({
-        type: 'nook:website-authenticator-backup-attach',
-        payload: {
-          origin: 'https://example.test',
-          vaultStoreId: 'store-1',
-          secretId: 'secret_1',
-          codes: ['A1B2-C3D4'],
-          mode: 'append',
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorBackupAttachMessageSchema.decode({
+            type: 'nook:website-authenticator-backup-attach',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              secretId: 'secret_1',
+              codes: ['A1B2-C3D4'],
+              mode: 'append',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
 
     expect(
-      WebsiteAuthenticatorBackupAttachMessageSchema.is({
-        type: 'nook:website-authenticator-backup-attach',
-        payload: {
-          origin: 'https://example.test',
-          vaultStoreId: 'store-1',
-          secretId: 'secret_1',
-          codes: ['A1B2-C3D4'],
-          mode: 'replace',
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          WebsiteAuthenticatorBackupAttachMessageSchema.decode({
+            type: 'nook:website-authenticator-backup-attach',
+            payload: {
+              origin: 'https://example.test',
+              vaultStoreId: 'store-1',
+              secretId: 'secret_1',
+              codes: ['A1B2-C3D4'],
+              mode: 'replace',
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 })
 
