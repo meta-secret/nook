@@ -66,10 +66,11 @@ class DockerizedRustCacheRegistryContract {
       .join("\n");
     for (const entry of [
       "verifyRegistryAvailability",
-      '"/v2/"',
-      "/manifests/buildcache",
+      'this.request(`https://${this.registryHost}/v2/`, "GET")',
+      '`https://${this.registryHost}/v2/${repository}/manifests/${reference}`',
       "/blobs/",
-      'method: "HEAD"',
+      'this.request(url, "HEAD")',
+      "method,",
       "AbortSignal.timeout",
     ]) {
       expect(registryGateScript).toContain(entry);
@@ -159,7 +160,7 @@ class DockerizedRustCacheRegistryContract {
     for (const entry of [
       "timeout --kill-after=10s 240s task build:compile",
       "timeout --kill-after=10s 280s task build:compile",
-      "five-minute job boundary",
+      "build:compile) echo 5 ;;",
     ]) {
       expect(batch).toContain(entry);
     }
