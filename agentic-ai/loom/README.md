@@ -343,15 +343,15 @@ There is no checked-in sample-file catalog.
 
 ## Tools
 
-| name                    | Role                                              |
-| ----------------------- | ------------------------------------------------- |
-| `tools-list`            | Discovery                                         |
-| `tools-call`            | Nested call helper                                |
-| `cortex-audit`          | Cortex structure, links, and policy contracts     |
-| `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
-| `skill-scaffold`        | Create a dynamic-skill card                       |
-| `pr-land`               | Status / validate                                 |
-| `dependency-popularity` | Reject low-adoption npm packages and crates       |
+| name                    | Role                                          |
+| ----------------------- | --------------------------------------------- |
+| `tools-list`            | Discovery                                     |
+| `tools-call`            | Nested call helper                            |
+| `cortex-audit`          | Cortex structure, links, and policy contracts |
+| `cortex-session-clean`  | Temporary Cortex session readiness assertion  |
+| `skill-scaffold`        | Create a dynamic-skill card                   |
+| `pr-land`               | Status / validate                             |
+| `dependency-popularity` | Reject low-adoption npm packages and crates   |
 
 ## Quality bar
 

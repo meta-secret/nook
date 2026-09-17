@@ -18,10 +18,7 @@ import {
 } from '../codec/args/pr-land.ts';
 import { SKILL_SCAFFOLD_INPUT_SCHEMA } from '../codec/args/skill-scaffold.ts';
 import { TOOLS_LIST_INPUT_SCHEMA } from '../codec/args/tools-list.ts';
-import {
-  PrLandOperation,
-  RequestFamily,
-} from '../codec/enums.ts';
+import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 import {
   ExampleCatalogPresence,
   ExampleOperationMarker,
@@ -75,10 +72,7 @@ type RetiredRequestFailure = {
   readonly message: string;
 };
 
-type DiscoverableRequestDefinition = Omit<
-  DiscoverableRequest,
-  'exampleYaml'
->;
+type DiscoverableRequestDefinition = Omit<DiscoverableRequest, 'exampleYaml'>;
 
 /** Owns the loom request catalog registry and its capability transitions. */
 export class LoomRequestCatalog {
