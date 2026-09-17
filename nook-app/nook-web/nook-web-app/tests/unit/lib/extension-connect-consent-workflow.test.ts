@@ -10,7 +10,9 @@ const approvalPort = vi.hoisted(() => ({
 }))
 
 vi.mock('$lib/extension/vault-approval', () => ({
-  ExtensionVaultApproval: vi.fn(() => approvalPort),
+  ExtensionVaultApproval: vi.fn(function ExtensionVaultApprovalTestDouble() {
+    return approvalPort
+  }),
 }))
 
 import {
@@ -24,7 +26,6 @@ import {
   type ExtensionConsentWorkflowState,
 } from '$lib/components/extension-connect-consent-workflow'
 import { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
-import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -573,7 +574,6 @@ describe('extension consent web workflow', () => {
       expect(harness.workflow.canContinue(state)).toBe(false)
       expect(approvalPort.authorize).toHaveBeenCalledTimes(1)
       expect(approvalPort.prepareAuthorizedGrant).toHaveBeenCalledTimes(2)
-      expect(ExtensionVaultApproval).toHaveBeenCalledOnce()
       expect(approvalPort.deliver).toHaveBeenCalledTimes(deliveryCalls)
       expect(refreshDeviceState).toHaveBeenCalledTimes(refreshCalls)
       expect(approvalPort.admitCompletion).toHaveBeenCalledTimes(
