@@ -106,7 +106,9 @@ log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 raw_log="${NOOK_BUILDKIT_RAW_LOG:-}"
 if [ -n "$raw_log" ]; then
   mkdir -p "$(dirname "$raw_log")"
-  : >"$raw_log"
+  if [ "${NOOK_BUILDKIT_RAW_LOG_APPEND:-}" != "1" ]; then
+    : >"$raw_log"
+  fi
 fi
 cleanup() {
   rm -f "$log_file"

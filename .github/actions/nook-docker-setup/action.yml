@@ -21,9 +21,9 @@ inputs:
     default: "false"
   publish-compile-cache:
     description: >-
-      Build-only compile cache contract: true publishes the exact-head source cache;
-      false imports caches without exporting them. This input is valid only for
-      the remote build:compile task.
+      Build-only compile cache contract: true publishes the Phase A dependency
+      foundation to the exact-head source cache; false runs both phases without
+      registry export. This input is valid only for remote build:compile.
     required: false
     default: "true"
   monitor-buildkit-storage:
@@ -197,13 +197,17 @@ runs:
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           remote_compile_scope=1
+          echo "NOOK_REMOTE_TASK_SELECTION=$NOOK_REMOTE_TASK_SELECTION" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=0" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started" >> "$GITHUB_ENV"
           # Feature source output is exact-head scoped.
           if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
             && [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
-            echo "build:compile publication mode enables exact-head cache export"
+            echo "build:compile publication mode enables the Phase A exact-head foundation export"
           else
-            echo "build:compile read-only verification imports caches without registry export"
+            echo "build:compile read-only verification imports caches in both phases without registry export"
           fi
         elif [ "$publish_compile_cache" != "true" ]; then
           echo "publish-compile-cache=false requires the remote build:compile task" >&2
@@ -332,6 +336,8 @@ runs:
       run: |
         set -euo pipefail
         timeout 60s node --input-type=module <<'NODE'
+        import fs from "node:fs";
+
         class BuildKitCacheAccessVerifier {
           constructor(environment, fetcher) {
             this.environment = environment;
@@ -349,20 +355,33 @@ runs:
             if (typeof currentScope !== "string" || currentScope.length === 0) {
               throw new Error("remote compile current cache scope is missing");
             }
-            const scopeSuffixes = [currentScope];
+            const cacheRefs = [
+              {
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE",
+                scopeSuffix: currentScope,
+              },
+            ];
             const parentScope = this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX;
             if (
               typeof parentScope === "string" &&
               parentScope.length > 0 &&
               parentScope !== currentScope
             ) {
-              scopeSuffixes.push(parentScope);
+              cacheRefs.push({
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE",
+                scopeSuffix: parentScope,
+              });
             }
 
-            for (const scopeSuffix of scopeSuffixes) {
-              await this.verifyCacheRef(scopeSuffix);
+            for (const cacheRef of cacheRefs) {
+              const available = await this.verifyCacheRef(cacheRef.scopeSuffix);
+              const cacheAvailability = {
+                name: cacheRef.availabilityName,
+                available,
+              };
+              this.persistAvailability(cacheAvailability);
             }
-            console.log("BuildKit cache refs and all referenced blobs are accessible");
+            console.log("Registry transport and every present Phase A cache manifest/blob are accessible; absent exact refs remain expected misses");
           }
 
           async verifyRegistryAvailability() {
@@ -397,11 +416,17 @@ runs:
           }
 
           async verifyCacheRef(scopeSuffix) {
-            // This checks access only; BuildKit receives both refs and owns reuse/validity.
+            // This checks access only; Phase A gives both refs to BuildKit, which owns reuse/validity.
             const repository = `nook/remote-buildcache/nook-build-compile${scopeSuffix}`;
             const visitedManifests = new Set();
             const blobDigests = new Set();
-            await this.visitManifest(repository, "buildcache", true, visitedManifests, blobDigests);
+            const available = await this.visitManifest(
+              repository,
+              "buildcache",
+              true,
+              visitedManifests,
+              blobDigests,
+            );
             const digests = Array.from(blobDigests);
             for (let offset = 0; offset < digests.length; offset += 16) {
               await Promise.all(
@@ -410,6 +435,7 @@ runs:
                   .map((digest) => this.verifyBlob(repository, digest)),
               );
             }
+            return available;
           }
 
           async visitManifest(repository, reference, root, visitedManifests, blobDigests) {
@@ -419,7 +445,7 @@ runs:
             const response = await this.request(url, "GET");
             if (root && response.status === 404) {
               console.log(`BuildKit cache ref is absent; BuildKit may treat it as a cache miss: ${repository}:buildcache`);
-              return;
+              return false;
             }
             if (!response.ok) {
               throw new Error(`registry returned HTTP ${response.status} for cache manifest ${repository}:${reference}`);
@@ -467,6 +493,16 @@ runs:
             ) {
               throw new Error(`cache manifest has no referenced content: ${repository}:${reference}`);
             }
+            return true;
+          }
+
+          persistAvailability(cacheAvailability) {
+            const environmentFile = this.requireValue("GITHUB_ENV");
+            const value = cacheAvailability.available ? "1" : "0";
+            fs.appendFileSync(
+              environmentFile,
+              `${cacheAvailability.name}=${value}\n`,
+            );
           }
 
           digestFrom(descriptor) {
@@ -489,6 +525,11 @@ runs:
         const verifier = new BuildKitCacheAccessVerifier(process.env, fetch);
         await verifier.verify();
         NODE
+        {
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=1"
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"
+          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"
+        } >> "$GITHUB_ENV"
 
     - name: Set CI environment
       shell: bash

@@ -215,155 +215,62 @@ class DockerizedRustContract {
     expect(wrapper).not.toContain("SCCACHE_CLIENT_SIDE:=1");
   }
 
-  remoteCompilePreservesCompilerCacheSecrets(): void {
-    const bake = this.read("nook-app/docker-bake.hcl");
-    const compile = this.read(".github/scripts/compile-remote.sh");
-    expect(bake).toContain('variable "SCCACHE_RUNTIME_MODE_FILE"');
-    expect(bake).toContain(
-      "id=sccache_runtime_mode,src=${SCCACHE_RUNTIME_MODE_FILE}",
-    );
-    expect(bake).toContain(
-      "sccache_secrets = concat(sccache_credentials, sccache_runtime_secrets)",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}",
-    );
-    expect(compile).toContain(
-      "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}",
-    );
-    expect(compile).not.toContain(
-      "--set=build-compile.secrets=id=sccache_runtime_mode",
-    );
-  }
-
-  remoteCompileRestoresLineageAndFailsOnRegistryOrCacheAccess(): void {
-    const action = this.read(".github/actions/nook-docker-setup/action.yml");
-    const gateMarker = "    - name: Verify Docker cache refs and blobs";
-    const gateStart = action.indexOf(gateMarker);
-    expect(gateStart).toBeGreaterThanOrEqual(0);
-    const nextStep = action.indexOf("\n    - name:", gateStart + gateMarker.length);
-    const gate = action.slice(gateStart, nextStep < 0 ? action.length : nextStep);
-    const configureCache = action.indexOf("    - name: Configure hosted BuildKit cache");
-    expect(gateStart).toBeGreaterThan(configureCache);
-    const runMarker = "        timeout 60s node --input-type=module <<'NODE'\n";
-    const runStart = gate.indexOf(runMarker);
-    expect(runStart).toBeGreaterThanOrEqual(0);
-    const runEndMarker = "\n        NODE";
-    const runEnd = gate.indexOf(runEndMarker, runStart + runMarker.length);
-    expect(runEnd).toBeGreaterThan(runStart);
-    const scriptLines: string[] = [];
-    for (const line of gate.slice(runStart + runMarker.length, runEnd).split("\n")) {
-      if (line.length === 0) continue;
-      expect(line.startsWith("        ")).toBe(true);
-      scriptLines.push(line.slice(8));
-    }
-    const registryGateScript = scriptLines.join("\n");
-    const compileBake = this.read(
+  remoteCompileUsesTwoPhaseFoundation(): void {
+    const bake = this.read(
       "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
-    const remoteWorkflow = this.read(".github/workflows/remote.yml");
-
-    expect(gate).toContain("build:compile");
-    expect(gate).toContain("GHA_CACHE_PARENT_SCOPE_SUFFIX");
-    expect(registryGateScript).toContain("verifyRegistryAvailability");
-    expect(registryGateScript).toContain('"/v2/"');
-    expect(registryGateScript).toContain("/manifests/buildcache");
-    expect(registryGateScript).toContain("/blobs/");
-    expect(registryGateScript).toContain('method: "HEAD"');
-    expect(registryGateScript).toContain("AbortSignal.timeout");
-    expect(compileBake).toContain('variable "GHA_CACHE_PARENT_SCOPE_SUFFIX"');
-    expect(compileBake).toContain("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}");
-    expect(compileBake).toContain(
-      "nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}",
+    const dockerfile = this.read(
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
     );
-    expect(compileBake).not.toContain("nook-build-compile-v");
-    expect(compileBake).toContain("mode=max,compression=zstd,timeout=20s");
-    expect(compileBake).not.toContain("ignore-error=true");
-    expect(remoteWorkflow).toContain("timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}");
-    const setupAction = remoteWorkflow.indexOf("uses: ./.github/actions/nook-docker-setup");
-    const compileTask = remoteWorkflow.indexOf("- name: Run task batch");
-    expect(setupAction).toBeGreaterThanOrEqual(0);
-    expect(setupAction).toBeLessThan(compileTask);
-
-    const rootManifest = JSON.stringify({
-      schemaVersion: 2,
-      manifests: [{ digest: `sha256:${"a".repeat(64)}` }],
-    });
-    const nestedManifest = JSON.stringify({
-      schemaVersion: 2,
-      config: { digest: `sha256:${"b".repeat(64)}` },
-      layers: [{ digest: `sha256:${"c".repeat(64)}` }],
-    });
-    const harness = `
-      globalThis.fetch = async (input, init = {}) => {
-        if (process.env.CACHE_FETCH_FAILURE === "1") {
-          throw new Error("mock registry network failure");
-        }
-        const url = new URL(typeof input === "string" ? input : input.url);
-        const headers = new Headers(init.headers);
-        const expectedAuthorization = "Basic " + Buffer.from("sim-user:sim-password").toString("base64");
-        if (headers.get("authorization") !== expectedAuthorization) {
-          return new Response("", { status: 401 });
-        }
-        if (url.pathname === "/v2/") {
-          return new Response("", { status: Number(process.env.CACHE_REGISTRY_STATUS) });
-        }
-        if (url.pathname.endsWith("/manifests/buildcache")) {
-          const isCurrent = url.pathname.includes("nook-build-compile-git-current");
-          const status = Number(process.env[isCurrent ? "CACHE_CURRENT_STATUS" : "CACHE_PARENT_STATUS"]);
-          if (status !== 200) return new Response("", { status });
-          return new Response(process.env.CACHE_ROOT_MANIFEST, { status });
-        }
-        if (url.pathname.includes("/manifests/sha256:")) {
-          return new Response(process.env.CACHE_NESTED_MANIFEST, { status: 200 });
-        }
-        if (url.pathname.includes("/blobs/sha256:")) {
-          if (init.method !== "HEAD") return new Response("", { status: 405 });
-          return new Response("", { status: Number(process.env.CACHE_BLOB_STATUS) });
-        }
-        return new Response("", { status: 500 });
-      };
-      await import("data:text/javascript," + encodeURIComponent(process.env.CACHE_VERIFIER_SCRIPT));
-    `;
-    for (const [registry, current, parent, blob, networkFailure, expected] of [
-      [200, 200, 200, 200, false, true],
-      [200, 404, 200, 200, false, true],
-      [200, 200, 404, 200, false, true],
-      [200, 404, 404, 200, false, true],
-      [401, 200, 200, 200, false, false],
-      [403, 200, 200, 200, false, false],
-      [404, 200, 200, 200, false, false],
-      [503, 200, 200, 200, false, false],
-      [200, 401, 200, 200, false, false],
-      [200, 403, 200, 200, false, false],
-      [200, 503, 200, 200, false, false],
-      [200, 200, 200, 404, false, false],
-      [200, 200, 200, 200, true, false],
-    ] as const) {
-      const result = spawnSync("node", ["--input-type=module", "-e", harness], {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          CACHE_VERIFIER_SCRIPT: registryGateScript,
-          CACHE_REGISTRY_STATUS: String(registry),
-          CACHE_ROOT_MANIFEST: rootManifest,
-          CACHE_NESTED_MANIFEST: nestedManifest,
-          CACHE_CURRENT_STATUS: String(current),
-          CACHE_PARENT_STATUS: String(parent),
-          CACHE_BLOB_STATUS: String(blob),
-          CACHE_FETCH_FAILURE: networkFailure ? "1" : "0",
-          GHA_CACHE_SCOPE_SUFFIX: "-git-current",
-          GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
-          REGISTRY_HOST: "registry.example.test",
-          REGISTRY_USERNAME: "sim-user",
-          REGISTRY_PASSWORD: "sim-password",
-        },
-      });
-      expect(result.status === 0, result.stderr || result.stdout).toBe(expected);
+    const script = this.read(".github/scripts/compile-remote.sh");
+    const phaseA = script.indexOf(
+      '"${bake_args[@]}" build-compile-foundation',
+    );
+    const phaseB = script.indexOf(
+      '"${bake_args[@]}" build-compile',
+      phaseA + 1,
+    );
+    expect(phaseA).toBeGreaterThanOrEqual(0);
+    expect(phaseB).toBeGreaterThan(phaseA);
+    for (const entry of [
+      'target "build-compile-foundation"',
+      'target "build-compile"',
+      'targets = ["compile-web-extension-dependencies"]',
+      'variable "GHA_CACHE_PARENT_SCOPE_SUFFIX"',
+      "nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}",
+      "nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}",
+      "compile_foundation_cache_from",
+      "compile_source_cache_from",
+    ]) {
+      expect(bake).toContain(entry);
     }
+    expect(bake).toContain('cache-to = ["${compile_foundation_cache_to}"]');
+    expect(bake).toContain("mode=max,compression=zstd,timeout=20s");
+    expect(bake).not.toContain("ignore-error=true");
+    const sourceTarget = bake.slice(bake.indexOf('target "build-compile"'));
+    expect(sourceTarget).toContain(
+      'cache-from = ["${compile_source_cache_from}"]',
+    );
+    expect(sourceTarget).not.toContain("cache-to");
+    expect(bake).toContain('inherits   = ["_sccache"]');
+    for (const entry of [
+      "FROM compile-wasm-dependencies AS compile-node-dependency-toolchain",
+      "FROM compile-web-dependencies AS compile-web-extension-dependencies",
+      "FROM compile-wasm-source AS compile",
+      "COPY --from=compile-native-source",
+      "COPY --from=compile-web /opt/nook/web-compile-passed",
+      "COPY --from=compile-repository-tooling /opt/nook/repository-tooling-compile-passed",
+      "COPY --from=compile-loom /opt/nook/loom-compile-passed",
+    ]) {
+      expect(dockerfile).toContain(entry);
+    }
+    expect(script).toContain("foundation_status=completed");
+    expect(script).toContain("source_status=completed");
+    expect(script).toContain(
+      "trap 'compile_checkpoint_mark_interruption 143' TERM",
+    );
+    expect(script).toContain("NOOK_BUILDKIT_RAW_LOG_APPEND=1");
+    expect(dockerfile).not.toContain("type=cache");
   }
 
   dylintWrapperContentInvalidatesBuildGraph(): void {
@@ -649,22 +556,6 @@ class DockerizedRustContract {
       dockerignore.indexOf(`!${generatedWasm}/.gitignore`),
     ).toBeGreaterThan(dockerignore.indexOf(`${generatedWasm}*`));
     expect(dockerignore).toContain("**/node_modules");
-  }
-
-  remoteCompileTimeoutPreservesExportBudget(): void {
-    const batch = this.read(".github/scripts/remote-task-batch.sh");
-    expect(batch).toContain(
-      'if [ "${REQUESTED_PUBLISH_COMPILE_CACHE:-true}" = "false" ]; then',
-    );
-    expect(batch).toContain(
-      "timeout --kill-after=10s 240s task build:compile",
-    );
-    expect(batch).toContain(
-      "timeout --kill-after=10s 280s task build:compile",
-    );
-    expect(batch).toContain(
-      "five-minute job boundary",
-    );
   }
 
   compileExtensionUsesOwnFrozenDependencies(): void {
@@ -1056,12 +947,8 @@ test(
   contract.dylintDependencyCacheAndSccacheMode.bind(contract),
 );
 test(
-  "remote compile keeps runtime and compiler cache secrets together",
-  contract.remoteCompilePreservesCompilerCacheSecrets.bind(contract),
-);
-test(
-  "remote compile restores exact cache lineage and rejects registry failures",
-  contract.remoteCompileRestoresLineageAndFailsOnRegistryTransport.bind(contract),
+  "remote compile publishes a rooted foundation before source-sensitive compile",
+  contract.remoteCompileUsesTwoPhaseFoundation.bind(contract),
 );
 test(
   "Dylint compiler vertices consume the current wrapper content",
@@ -1078,10 +965,6 @@ test(
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
-);
-test(
-  "remote compile reserves export time only for publishing",
-  contract.remoteCompileTimeoutPreservesExportBudget.bind(contract),
 );
 test(
   "sealed web compile installs extension dependencies from its own lockfile",

@@ -241,9 +241,10 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Copy only the Bun and Node runtimes from web-base into a source-free lineage;
-# package manifests enter in the sequential dependency stages below.
-FROM rust-base AS compile-node-dependency-toolchain
+# Continue the rooted dependency foundation from the completed Cargo graph.
+# This keeps Cargo fetch, native/WASM dependencies, and all stable Node/web
+# dependency installs in one exportable ancestry without a synthetic join.
+FROM compile-wasm-dependencies AS compile-node-dependency-toolchain
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
@@ -274,6 +275,17 @@ RUN cd nook-app/nook-web/nook-web-extension \
     && bun install --frozen-lockfile \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-web-extension-dependencies
+
+# Dependency compiler RUN output is absent when BuildKit restores the layer.
+# Bust only this terminal replay vertex per job so the rooted Phase A solve
+# emits the persisted reports without invalidating compiler objects.
+FROM compile-web-extension-dependencies AS compile-foundation
+
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
+      nook-sccache-report --replay compile-native-dependencies \
+      && nook-sccache-report --replay compile-wasm-dependencies; \
+    fi
 
 FROM web-base AS compile-web
 

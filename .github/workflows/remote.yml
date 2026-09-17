@@ -27,7 +27,7 @@ on:
         required: false
         type: string
       publish_compile_cache:
-        description: Publish build:compile BuildKit caches (sccache remains enabled when secrets are available)
+        description: Publish the Phase A build:compile dependency foundation (sccache remains enabled when secrets are available)
         required: false
         type: boolean
         default: true
@@ -171,7 +171,7 @@ jobs:
           : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
-          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
+          echo "Build-only two-phase route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST Phase-A-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
       - name: Run task batch
         shell: bash
         env:

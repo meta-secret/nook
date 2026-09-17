@@ -280,13 +280,30 @@ legacy registered `nook` runner is not used.
 - Remote `build:compile` uses the unversioned semantic ref name
   `nook-build-compile` with immutable current-head and first-parent commit
   refs. A narrow authenticated check requires API reachability and access to
-  each present manifest and referenced blob, while BuildKit imports both
-  actual cache graphs and remains authoritative for validity/reuse. An absent
-  exact current/parent manifest is an ordinary miss; transport, authentication,
-  or referenced-content failures block compilation. Its single rooted
-  `mode=max` export is fatal on failure. No manual version suffix or custom
-  dependency fingerprint selects this cache; BuildKit invalidates from the
-  real Docker inputs.
+  each present manifest and referenced blob, while BuildKit imports the actual
+  cache graphs and remains authoritative for validity/reuse. An absent exact
+  current/parent manifest is an ordinary miss; transport, authentication, or
+  referenced-content failures block compilation.
+- Remote `build:compile` runs two sequential Bake invocations within its
+  five-minute job. Phase A imports current and first-parent refs and builds the
+  rooted foundation containing Cargo fetch, native/WASM dependency
+  compilation, and stable Node/web dependency roots. When publication is
+  enabled, this is the only current-head `mode=max` exporter. Phase B imports
+  the current-head cache, performs source-sensitive compile/type-check work,
+  and has no registry exporter. Phase A's completed cache remains portable if
+  Phase B fails and must be reusable by a retry on a fresh node. A no-export
+  verification runs both phases with no registry exporter while retaining
+  sccache access. No manual version suffix or custom dependency fingerprint
+  selects this cache; BuildKit invalidates from the real Docker inputs.
+- Cache telemetry schema version 2 records registry-export bytes as a closed
+  measurement state. A byte count is `measured` only when BuildKit emits a
+  structured status or plain-progress transfer count, including an observed
+  zero. A completed export without either counter is `unavailable` with reason
+  `buildkit_did_not_emit_byte_count`; it is never reported as numeric zero.
+  Export completion and manifest evidence remain authoritative independently
+  of byte-count availability. Version 1 artifacts are rejected rather than
+  migrated because telemetry artifacts are per-run observations, not durable
+  state.
 - Delivery CI persists the toolchain in `nook-rust-base-v2`.
 - Native dependencies use `nook-rust-deps-v4`.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.
