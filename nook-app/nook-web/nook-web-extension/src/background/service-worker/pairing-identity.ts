@@ -221,18 +221,21 @@ class ExtensionPairingIdentity {
   getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
-      chrome.storage.session.get(key, (items) => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve(items)
-      })
+      chrome.storage.session.get<ExtensionSessionStorageItems>(
+        key,
+        (items) => {
+          const message = chrome.runtime.lastError?.message
+          if (message) reject(new Error(message))
+          else resolve(items)
+        },
+      )
     })
   }
 
   getAllSessionStorage(): Promise<ExtensionSessionStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
-      chrome.storage.session.get((items) => {
+      chrome.storage.session.get<ExtensionSessionStorageItems>((items) => {
         const message = chrome.runtime.lastError?.message
         if (message) reject(new Error(message))
         else resolve(items)
@@ -325,7 +328,12 @@ class ExtensionPairingIdentity {
     | ExtensionSessionTransportResult<Response, DecodeFailure>
   > {
     const document = await extensionSessionLifecycle.openSessionDocument()
-    if (document.isErr()) return err(document.error)
+    if (document.isErr()) {
+      return err<
+        ExtensionSessionResponse,
+        ExtensionSessionTransportFailure
+      >(document.error)
+    }
     return decodeResponse
       ? document.value.sendMessage(message, decodeResponse)
       : document.value.sendMessage(message)
@@ -687,7 +695,7 @@ class ExtensionPairingIdentity {
   private readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
     // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
-      chrome.storage.local.get((items) => {
+      chrome.storage.local.get<LegacyPairingStorageItems>((items) => {
         if (chrome.runtime.lastError) {
           reject(
             new Error(

@@ -21,7 +21,7 @@ import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionSessionGrantIdentity } from '../pairing-grants'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-  type ExtensionSessionTransportRequest,
+  type ExtensionSessionRequest,
 } from '../../offscreen/session-request-adapter'
 import type { AccountPickerPageMessage } from './account-picker-page-target'
 import {
@@ -48,7 +48,7 @@ import { websiteLoginRevealSessionRequest } from './session-request-projections'
 import { decode_website_login_save_pending_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type WebsiteLoginSaveSessionRequest = Extract<
-  ExtensionSessionTransportRequest,
+  ExtensionSessionRequest,
   { type: ExtensionSessionMessageType.PlanLoginSave }
 >
 
