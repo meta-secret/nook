@@ -35,7 +35,6 @@ export const namedSuccessContractBaseline = [
   { file: 'nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts', gitBlobSha1: '8ebb17c2f2be5123da7e1f86f38cae3199952d79' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/provider-sync.svelte.ts', gitBlobSha1: '23d0a1aab8b46345b64dd48d59e4d7c5cdf9d23d' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/multi-device.ts', gitBlobSha1: 'b45565a0721c49d24fff4cab4331f3e0ff85d657' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/runtime-state.svelte.ts', gitBlobSha1: '3dc7fd8d6134f90690f9fef4206e1e8cac37ef05' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/session.ts', gitBlobSha1: 'faa5b93548ff491e1e06063bd519bf47d7141e8d' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/sentinel-genesis.ts', gitBlobSha1: '8fb5641baf8529ad9c3a2f96610db27eec409dcd' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/sentinel-unlock.ts', gitBlobSha1: '5c4c958b4ccf1b20a42849b52f79f4ca75913abe' },

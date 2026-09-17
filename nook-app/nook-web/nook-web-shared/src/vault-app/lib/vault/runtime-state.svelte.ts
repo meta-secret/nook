@@ -1,6 +1,6 @@
 import { StorageProviderPresentation } from "$lib/auth/providers";
 import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
-import { err, type Result } from "neverthrow";
+import { type Result } from "neverthrow";
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -60,6 +60,10 @@ export type VaultEditRestriction =
 export enum SyncProviderLabelKind {
   Idle = "idle",
   Active = "active",
+}
+
+export enum LocalFolderBackupDirectorySelectionOutcome {
+  Selected = "selected",
 }
 
 export type SyncProviderLabel =
@@ -284,11 +288,17 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<
+      LocalFolderBackupDirectorySelectionOutcome,
+      VaultStorageFailure
+    >
   > {
-    return new providersActions.ProviderSelectionActions(
+    const selection = await new providersActions.ProviderSelectionActions(
       this.providerActionsContext(),
     ).chooseLocalFolder();
+    return selection.map(
+      () => LocalFolderBackupDirectorySelectionOutcome.Selected,
+    );
   }
 
   refreshLocalFolderBackupSupport(): void {
