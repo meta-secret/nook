@@ -197,7 +197,7 @@ class ExtensionWasmRuntime {
     // Promise owns this callback's resolve and reject signature.
     // eslint-disable-next-line max-params
     return new Promise<Response>((resolve, reject) => {
-       
+
       chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {
         if (chrome.runtime.lastError?.message) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -217,7 +217,7 @@ class ExtensionWasmRuntime {
     decode: (response: unknown) => Response,
   ): Promise<Response> {
     await this.ensureNookWasm()
-     
+
     const runtime = await this.runtimeMessage(
       { type: ExtensionRuntimeRequestType.EnsureRuntime },
       (response): { ok: true } | { ok: false; reason?: string } => {
@@ -370,7 +370,7 @@ class ExtensionWasmRuntime {
       decode_extension_session_status_details,
     )
     const deviceStatus = status.status
-     
+
     switch (deviceStatus) {
       case DeviceProtectionStatus.Missing:
       case DeviceProtectionStatus.Plaintext:

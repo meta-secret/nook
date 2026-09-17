@@ -416,7 +416,7 @@ export async function websiteLoginSaveOffer({
       },
     }
     const delivery0_7 = await extensionPairingIdentity
-       
+
       .sendSessionMessage(nookTypedArgs0_7)
       .finally(() => {
         pendingPassword.value = ''
