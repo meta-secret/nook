@@ -4,6 +4,7 @@ use nook_companion_core::{
     CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
     CompanionIdentityHandoffResponse, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
     CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
+    CompanionProtocolError,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -427,7 +428,8 @@ mod admission_tests {
         let mut admission = serde_json::from_str::<
             ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
         >(&invalid)?;
-        assert!(admission.decode().is_err());
+        let failure = admission.decode();
+        assert!(matches!(failure, Err(CompanionProtocolError::InvalidValue)));
         let request = admission.0.request_mut();
         assert!(request.recipient_public_key.is_empty());
         let CompanionIdentityStatus::Unlocked { app_key, .. } = &request.transaction.status else {

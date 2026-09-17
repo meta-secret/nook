@@ -35,6 +35,12 @@ pub enum NookStoreIdPresenceState {
 #[wasm_bindgen]
 pub struct NookStoreIdPresence(Option<StoreId>);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+enum StoreIdPresenceError {
+    #[error("vault store identity is absent")]
+    Absent,
+}
+
 impl NookStoreIdPresence {
     pub(crate) fn from_raw(value: &str) -> Result<Self, JsError> {
         if value.trim().is_empty() {
@@ -43,6 +49,13 @@ impl NookStoreIdPresence {
         StoreId::parse(value)
             .map(|store_id| Self(Some(store_id)))
             .map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    fn store_id_result(&self) -> Result<NookStoreId, StoreIdPresenceError> {
+        self.0
+            .clone()
+            .map(NookStoreId::from)
+            .ok_or(StoreIdPresenceError::Absent)
     }
 }
 
@@ -57,10 +70,8 @@ impl NookStoreIdPresence {
     }
 
     pub fn store_id(&self) -> Result<NookStoreId, JsError> {
-        self.0
-            .clone()
-            .map(NookStoreId::from)
-            .ok_or_else(|| JsError::new("vault store identity is absent"))
+        self.store_id_result()
+            .map_err(|error| JsError::new(&error.to_string()))
     }
 }
 
@@ -80,7 +91,10 @@ mod tests {
     fn generated_store_id_has_an_explicit_string_edge() -> Result<(), JsError> {
         let presence = NookStoreIdPresence::from_raw(StoreIdValueScenario::valid())?;
         assert_eq!(presence.state(), NookStoreIdPresenceState::Present);
-        assert_eq!(presence.store_id()?.value(), StoreIdValueScenario::valid());
+        let Ok(store_id) = presence.store_id_result() else {
+            panic!("present store identity must expose its typed value");
+        };
+        assert_eq!(store_id.as_core().as_str(), StoreIdValueScenario::valid());
         Ok(())
     }
 
@@ -88,7 +102,10 @@ mod tests {
     fn absent_store_id_cannot_be_unwrapped_as_an_empty_string() -> Result<(), JsError> {
         let presence = NookStoreIdPresence::from_raw("")?;
         assert_eq!(presence.state(), NookStoreIdPresenceState::Absent);
-        assert!(presence.store_id().is_err());
+        assert!(matches!(
+            presence.store_id_result(),
+            Err(StoreIdPresenceError::Absent)
+        ));
         Ok(())
     }
 }
