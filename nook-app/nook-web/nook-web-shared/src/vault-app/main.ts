@@ -13,9 +13,13 @@ export enum VaultMountFailure {
   RenderUnavailable = "render-unavailable",
 }
 
+export enum VaultMountOutcome {
+  Mounted = "mounted",
+}
+
 class VaultAppMount {
   constructor(private readonly application: VaultApplication) {}
-  async mount(): Promise<Result<void, VaultMountFailure>> {
+  async mount(): Promise<Result<VaultMountOutcome, VaultMountFailure>> {
     const target = document.getElementById("app");
     if (!target) return err(VaultMountFailure.MissingTarget);
     const startupShell = new VaultStartupShell({ target });
@@ -35,7 +39,7 @@ class VaultAppMount {
         return err(VaultMountFailure.DetachedTarget);
       mount(App, { target });
       startupShell.remove();
-      return ok();
+      return ok(VaultMountOutcome.Mounted);
     } catch {
       startupShell.showUnavailable();
       return err(VaultMountFailure.RenderUnavailable);

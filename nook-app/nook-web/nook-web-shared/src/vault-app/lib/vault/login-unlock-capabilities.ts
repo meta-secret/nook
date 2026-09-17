@@ -24,14 +24,21 @@ type LoginUnlockCapabilityState = {
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
 };
 
+export enum LoginUnlockRefreshOutcome {
+  DefaultCapabilityApplied = "default-capability-applied",
+  UnlockOptionsAssessed = "unlock-options-assessed",
+}
+
 /** Assess whether device keys or backup passwords can unlock the active vault. */
 export class LoginUnlockPresentation {
   constructor(private readonly request: LoginUnlockCapabilityState) {}
-  async refresh(): Promise<Result<void, VaultStorageFailure>> {
+  async refresh(): Promise<
+    Result<LoginUnlockRefreshOutcome, VaultStorageFailure>
+  > {
     const state = this.request;
     if (!state.hasManager || !state.localVaultPresent) {
       state.loginDeviceKeysCapable = true;
-      return ok();
+      return ok(LoginUnlockRefreshOutcome.DefaultCapabilityApplied);
     }
     const accessStatus = await state.assessVaultConnectStatus({
       mode: "local",
@@ -57,6 +64,6 @@ export class LoginUnlockPresentation {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    return ok();
+    return ok(LoginUnlockRefreshOutcome.UnlockOptionsAssessed);
   }
 }
