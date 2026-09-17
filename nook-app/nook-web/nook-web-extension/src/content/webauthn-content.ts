@@ -84,6 +84,8 @@ type PasskeyOption = {
     userDisplayName: string
   }
 }
+type PasskeyAccount = NonNullable<PasskeyOption['account']>
+type ExactSchemaPropertyOptions = { readonly exact: true }
 
 enum PasskeyOptionChoiceKind {
   BrowserFallback = 'browser-fallback',
@@ -143,14 +145,16 @@ class WebAuthnRuntimeTransport<T> {
   }
 }
 
-const passkeyAccountSchemaFields = {
+const passkeyAccountSchemaFields: Schema.Struct.Fields = {
   credentialId: Schema.String,
   userName: Schema.String,
   userDisplayName: Schema.String,
 }
-const passkeyAccountSchema = Schema.Struct(passkeyAccountSchemaFields)
-const passkeyAccountSchemaOptions = { exact: true } as const
-const passkeyOptionSchemaFields = {
+const passkeyAccountSchema: Schema.Schema<PasskeyAccount> = Schema.Struct(
+  passkeyAccountSchemaFields,
+)
+const passkeyAccountSchemaOptions: ExactSchemaPropertyOptions = { exact: true }
+const passkeyOptionSchemaFields: Schema.Struct.Fields = {
   vaultStoreId: Schema.String,
   vaultName: Schema.String,
   account: Schema.optionalWith(
@@ -158,9 +162,9 @@ const passkeyOptionSchemaFields = {
     passkeyAccountSchemaOptions,
   ),
 }
-const passkeyOptionSchema = Schema.Struct(
+const passkeyOptionSchema: Schema.Schema<PasskeyOption> = Schema.Struct(
   passkeyOptionSchemaFields,
-) satisfies Schema.Schema<PasskeyOption>
+)
 
 function decodePasskeyOption(value: unknown) {
   return Schema.decodeUnknown(passkeyOptionSchema)(value)

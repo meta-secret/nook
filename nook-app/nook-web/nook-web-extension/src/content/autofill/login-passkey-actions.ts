@@ -669,12 +669,15 @@ class LoginPasskeyInteraction {
         return
       }
 
+      const generatePasswordMessage: Parameters<
+        typeof authenticationRuntimeTransport.sendGeneratePasswordRuntimeMessage
+      >[0] = {
+        type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
+        payload: { origin: location.origin },
+      }
       const delivery =
         await authenticationRuntimeTransport.sendGeneratePasswordRuntimeMessage(
-          {
-            type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
-            payload: { origin: location.origin },
-          },
+          generatePasswordMessage,
         )
       if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
         const authenticationStatusRequest11: Parameters<

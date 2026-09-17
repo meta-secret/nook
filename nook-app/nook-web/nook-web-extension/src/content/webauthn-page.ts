@@ -376,11 +376,13 @@ async function extensionCeremony({
 const prototype = navigator.credentials
 const nativeCreate = prototype.create
 const nativeGet = prototype.get
+type CredentialCreationInvocation = [options: CredentialCreationOptions]
+type CredentialRequestInvocation = [options: CredentialRequestOptions]
 
 const nookTypedArgs0_3: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
-  value: (...[options]: [CredentialCreationOptions]) => {
+  value: (...[options]: CredentialCreationInvocation) => {
     const nookTypedArgs0_0: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Create,
       options,
@@ -394,7 +396,7 @@ Object.defineProperty(prototype, 'create', nookTypedArgs0_3)
 const nookTypedArgs0_4: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
-  value: (...[options]: [CredentialRequestOptions]) => {
+  value: (...[options]: CredentialRequestInvocation) => {
     const nookTypedArgs0_1: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Get,
       options,
