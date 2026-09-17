@@ -43,6 +43,7 @@ compile_solve_args = {
   NOOK_EXTENSION_VERSION  = NOOK_EXTENSION_VERSION
   NOOK_EXTENSION_COMMIT   = NOOK_EXTENSION_COMMIT
   NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
+  NOOK_SCCACHE_TELEMETRY_REPLAY = NOOK_SCCACHE_TELEMETRY_REPLAY
 }
 
 compile_foundation_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
@@ -57,7 +58,7 @@ target "build-compile-foundation" {
   inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
-  target     = "compile-web-extension-dependencies"
+  target     = "compile-foundation"
   platforms  = ["linux/amd64"]
   contexts = {
     // Context targets must be cache-I/O-free. Their component cache scopes are

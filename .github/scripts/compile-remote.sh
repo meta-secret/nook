@@ -130,6 +130,7 @@ trap 'compile_checkpoint_mark_interruption 143' TERM
 trap 'compile_checkpoint_mark_interruption 130' INT
 
 echo "BuildKit Phase A: import current/first-parent caches, build dependency foundation, export current head when authorized"
+echo "NOOK_BUILDKIT_PHASE phase=foundation event=started" >>"$raw_build_log"
 foundation_status=running
 if [ -n "${GITHUB_ENV:-}" ]; then
   echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=running" >>"$GITHUB_ENV"
@@ -147,9 +148,11 @@ fi
 if [ -n "${GITHUB_ENV:-}" ]; then
   echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=${foundation_status}" >>"$GITHUB_ENV"
 fi
+echo "NOOK_BUILDKIT_PHASE phase=foundation event=${foundation_status}" >>"$raw_build_log"
 if [ "$foundation_status" = failed ]; then exit "$bake_status"; fi
 
 echo "BuildKit Phase B: import current-head cache and compile source-sensitive targets without registry export"
+echo "NOOK_BUILDKIT_PHASE phase=source_compile event=started" >>"$raw_build_log"
 source_status=running
 if [ -n "${GITHUB_ENV:-}" ]; then
   echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=running" >>"$GITHUB_ENV"
@@ -167,4 +170,5 @@ fi
 if [ -n "${GITHUB_ENV:-}" ]; then
   echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=${source_status}" >>"$GITHUB_ENV"
 fi
+echo "NOOK_BUILDKIT_PHASE phase=source_compile event=${source_status}" >>"$raw_build_log"
 if [ "$source_status" = failed ]; then exit "$bake_status"; fi

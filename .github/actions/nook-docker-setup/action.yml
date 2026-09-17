@@ -336,6 +336,8 @@ runs:
       run: |
         set -euo pipefail
         timeout 60s node --input-type=module <<'NODE'
+        import fs from "node:fs";
+
         class BuildKitCacheAccessVerifier {
           constructor(environment, fetcher) {
             this.environment = environment;
@@ -353,18 +355,31 @@ runs:
             if (typeof currentScope !== "string" || currentScope.length === 0) {
               throw new Error("remote compile current cache scope is missing");
             }
-            const scopeSuffixes = [currentScope];
+            const cacheRefs = [
+              {
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE",
+                scopeSuffix: currentScope,
+              },
+            ];
             const parentScope = this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX;
             if (
               typeof parentScope === "string" &&
               parentScope.length > 0 &&
               parentScope !== currentScope
             ) {
-              scopeSuffixes.push(parentScope);
+              cacheRefs.push({
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE",
+                scopeSuffix: parentScope,
+              });
             }
 
-            for (const scopeSuffix of scopeSuffixes) {
-              await this.verifyCacheRef(scopeSuffix);
+            for (const cacheRef of cacheRefs) {
+              const available = await this.verifyCacheRef(cacheRef.scopeSuffix);
+              const cacheAvailability = {
+                name: cacheRef.availabilityName,
+                available,
+              };
+              this.persistAvailability(cacheAvailability);
             }
             console.log("Registry transport and every present Phase A cache manifest/blob are accessible; absent exact refs remain expected misses");
           }
@@ -405,7 +420,13 @@ runs:
             const repository = `nook/remote-buildcache/nook-build-compile${scopeSuffix}`;
             const visitedManifests = new Set();
             const blobDigests = new Set();
-            await this.visitManifest(repository, "buildcache", true, visitedManifests, blobDigests);
+            const available = await this.visitManifest(
+              repository,
+              "buildcache",
+              true,
+              visitedManifests,
+              blobDigests,
+            );
             const digests = Array.from(blobDigests);
             for (let offset = 0; offset < digests.length; offset += 16) {
               await Promise.all(
@@ -414,6 +435,7 @@ runs:
                   .map((digest) => this.verifyBlob(repository, digest)),
               );
             }
+            return available;
           }
 
           async visitManifest(repository, reference, root, visitedManifests, blobDigests) {
@@ -423,7 +445,7 @@ runs:
             const response = await this.request(url, "GET");
             if (root && response.status === 404) {
               console.log(`BuildKit cache ref is absent; BuildKit may treat it as a cache miss: ${repository}:buildcache`);
-              return;
+              return false;
             }
             if (!response.ok) {
               throw new Error(`registry returned HTTP ${response.status} for cache manifest ${repository}:${reference}`);
@@ -471,6 +493,16 @@ runs:
             ) {
               throw new Error(`cache manifest has no referenced content: ${repository}:${reference}`);
             }
+            return true;
+          }
+
+          persistAvailability(cacheAvailability) {
+            const environmentFile = this.requireValue("GITHUB_ENV");
+            const value = cacheAvailability.available ? "1" : "0";
+            fs.appendFileSync(
+              environmentFile,
+              `${cacheAvailability.name}=${value}\n`,
+            );
           }
 
           digestFrom(descriptor) {

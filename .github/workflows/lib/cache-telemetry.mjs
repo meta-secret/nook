@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import { BuildkitPlainLogTelemetry } from "./buildkit-plain-log-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
@@ -32,6 +33,7 @@ const HistoryLogCollectionKind = Object.freeze({
 /** @typedef {import("./cache-telemetry-contracts.mjs").TelemetryIdentityExpectation} TelemetryIdentityExpectation */
 /** @typedef {import("./cache-telemetry-contracts.mjs").CollectTelemetryRequest} CollectTelemetryRequest */
 /** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaseline */
+/** @typedef {{line: string, marker: string}} MarkedTelemetryJsonRequest */
 /**
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
@@ -53,6 +55,19 @@ export class CacheTelemetry {
     if (!CacheTelemetry.isJsonRecord(parsed))
       throw new Error("expected a JSON object");
     return parsed;
+  }
+
+  /** @param {MarkedTelemetryJsonRequest} request @returns {string} */
+  static markedJsonObject(request) {
+    const markerAt = request.line.indexOf(request.marker);
+    if (markerAt === -1) throw new Error("telemetry marker is missing");
+    const payload = request.line.slice(markerAt + request.marker.length);
+    const objectStart = payload.indexOf("{");
+    const objectEnd = payload.lastIndexOf("}");
+    if (objectStart === -1 || objectEnd < objectStart) {
+      throw new Error("telemetry marker has no complete JSON object");
+    }
+    return payload.slice(objectStart, objectEnd + 1);
   }
 
   /** @param {string} text @returns {BuildHistoryBaseline} */
@@ -448,7 +463,12 @@ export class CacheTelemetry {
     function inspectLine(line, log) {
       const markerAt = line.indexOf(SCCACHE_MARKER);
       if (markerAt === -1) return;
-      const payload = line.slice(markerAt + SCCACHE_MARKER.length).trim();
+      /** @type {MarkedTelemetryJsonRequest} */
+      const markedReport = {
+        line,
+        marker: SCCACHE_MARKER,
+      };
+      const payload = CacheTelemetry.markedJsonObject(markedReport);
       const vertex = typeof log.vertex === "string" ? log.vertex : "";
       const timestamp = typeof log.timestamp === "string" ? log.timestamp : "";
       const identity = `${vertex}:${timestamp}:${payload}`;
@@ -492,9 +512,11 @@ export class CacheTelemetry {
       const markerAt = line.indexOf(SCCACHE_MARKER);
       if (markerAt === -1) continue;
       try {
+        /** @type {MarkedTelemetryJsonRequest} */
+        const markedReport = { line, marker: SCCACHE_MARKER };
         const report = CacheTelemetry.normalizeSccacheReport(
           CacheTelemetry.parseJsonRecord(
-            line.slice(markerAt + SCCACHE_MARKER.length).trim(),
+            CacheTelemetry.markedJsonObject(markedReport),
           ),
         );
         latestByStage.set(report.stage, report);
@@ -514,9 +536,11 @@ export class CacheTelemetry {
       const reportAt = line.indexOf(SCCACHE_MARKER);
       if (reportAt !== -1) {
         try {
+          /** @type {MarkedTelemetryJsonRequest} */
+          const markedReport = { line, marker: SCCACHE_MARKER };
           const report = CacheTelemetry.normalizeSccacheReport(
             CacheTelemetry.parseJsonRecord(
-              line.slice(reportAt + SCCACHE_MARKER.length).trim(),
+              CacheTelemetry.markedJsonObject(markedReport),
             ),
           );
           if (
@@ -535,8 +559,10 @@ export class CacheTelemetry {
       const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
       if (markerAt === -1) continue;
       try {
+        /** @type {MarkedTelemetryJsonRequest} */
+        const markedFallback = { line, marker: SCCACHE_FALLBACK_MARKER };
         const fallback = CacheTelemetry.parseJsonRecord(
-          line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
+          CacheTelemetry.markedJsonObject(markedFallback),
         );
         if (typeof fallback.reason === "string" && fallback.reason) {
           reason = fallback.reason;
@@ -795,6 +821,15 @@ export class CacheTelemetry {
     }
 
     const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    const plainCacheExport = new BuildkitPlainLogTelemetry(rawBuildLog).summary();
+    if (buildkit.cache_export.attempts === 0) {
+      buildkit.cache_export = plainCacheExport;
+    } else if (
+      buildkit.cache_export.bytes === 0 &&
+      plainCacheExport.bytes > 0
+    ) {
+      buildkit.cache_export.bytes = plainCacheExport.bytes;
+    }
     if (buildkit.cache_export.incomplete_failures > 0) {
       warnings.push(
         `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
