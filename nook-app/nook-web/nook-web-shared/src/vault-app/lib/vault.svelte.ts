@@ -26,7 +26,10 @@ import {
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
-import { type ProviderSetupRequest } from "$lib/auth/providers";
+import {
+  type AuthProvidersSnapshot,
+  type ProviderSetupRequest,
+} from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
@@ -285,7 +288,7 @@ export class VaultState extends VaultRuntimeState {
 
   async activateConnectedExistingVault(
     storeId: StoreId,
-  ): Promise<Result<void, VaultStorageFailure>> {
+  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }
@@ -452,7 +455,9 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
-  async removeProvider(id: string): Promise<Result<void, VaultStorageFailure>> {
+  async removeProvider(
+    id: string,
+  ): Promise<Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,
@@ -794,7 +799,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<providersActions.PromotedProviderSnapshot, VaultStorageFailure>
   > {
     return new providersActions.VaultProviderActions(
       this,

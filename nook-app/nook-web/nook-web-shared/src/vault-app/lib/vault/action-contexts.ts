@@ -17,9 +17,11 @@ import type {
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type {
+  AuthProvidersSnapshot,
   ProviderSetupRequest,
   StorageProvider,
 } from "$lib/auth/providers";
+import type { ProviderRemovalOutcome } from "$lib/vault/providers.svelte";
 import type {
   LocalProviderLookup,
   StagedRemoteStorage,
@@ -122,7 +124,9 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   clearUnlockedSession(resetManager?: boolean): void;
   connectAndSyncStagedProvider(): Promise<void>;
   dismissSuccess(): void;
-  ensureProviderSaved(): Promise<Result<void, VaultStorageFailure>>;
+  ensureProviderSaved(): Promise<
+    Result<AuthProvidersSnapshot, VaultStorageFailure>
+  >;
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
   ): Promise<Result<void, VaultStorageFailure>>;
@@ -132,7 +136,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: ProviderPersistenceOptions,
-  ): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<
     Result<void, OAuthFailure | VaultStorageFailure>
@@ -317,7 +321,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: SyncProviderPersistenceOptions,
-  ): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
   providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs;
   raceStorageTimeout<T, E = VaultStorageFailure>(
     request: StorageTimeoutRace<T, E>,
@@ -340,14 +344,18 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<void, VaultStorageFailure>>;
   removeProvider(
     providerId: string,
-  ): Promise<Result<void, VaultStorageFailure>>;
-  ensureProviderSaved(): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<ProviderRemovalOutcome, VaultStorageFailure>>;
+  ensureProviderSaved(): Promise<
+    Result<AuthProvidersSnapshot, VaultStorageFailure>
+  >;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
   stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
-  syncActiveVaultStoreIdToAuth(): Promise<Result<void, VaultStorageFailure>>;
+  syncActiveVaultStoreIdToAuth(): Promise<
+    Result<AuthProvidersSnapshot, VaultStorageFailure>
+  >;
   syncFromStorage(
     freshness: ProviderSyncFreshness,
   ): Promise<VaultSynchronizationResult>;

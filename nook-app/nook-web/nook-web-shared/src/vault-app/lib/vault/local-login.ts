@@ -20,7 +20,12 @@ import {
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
 } from "$app-wasm";
-import { activeVaultScope, AuthProviderPersistence } from "$lib/auth/providers";
+import {
+  activeVaultScope,
+  AuthProviderPersistence,
+  type AuthProvidersSnapshot,
+  unselectedVaultScope,
+} from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
@@ -588,29 +593,40 @@ export class VaultLoginActions {
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
-    if (state.activeVault.kind === ActiveVaultKind.Closed) return storageOk();
+    if (state.activeVault.kind === ActiveVaultKind.Closed)
+      return storageOk({
+        providers: state.providers,
+        activeVaultStoreId: unselectedVaultScope(),
+      });
     const storeId = state.activeVault.storeId.trim();
-    if (!storeId) return storageOk();
+    if (!storeId)
+      return storageOk({
+        providers: state.providers,
+        activeVaultStoreId: unselectedVaultScope(),
+      });
+    const snapshot: AuthProvidersSnapshot = {
+      providers: state.providers,
+      activeVaultStoreId: activeVaultScope(storeId),
+    };
     return state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return new AuthProviderPersistence({
         manager: manager.value,
-        snapshot: {
-          providers: state.providers,
-          activeVaultStoreId: activeVaultScope(storeId),
-        },
+        snapshot,
       }).save();
     });
   }
 
   async activateConnectedExistingVault({
     storeId,
-  }: LoginVaultActionRequest): Promise<Result<void, StorageOperationFailure>> {
+  }: LoginVaultActionRequest): Promise<
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.isAuthenticated)
       return storageErr(
