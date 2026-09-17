@@ -10,7 +10,9 @@ import {
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   IdentityHandoffResponseDecodeFailureKind,
-  IdentityHandoffResponseDecoder,
+  identityHandoffResponseDecoder,
+  companionResponseDecoder,
+  pairingApprovalResponseDecoder,
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   extensionConnectionBrowser,
@@ -48,7 +50,7 @@ describe('extension identity handoff response decoding', () => {
   test('decodes a successful identity handoff response', () => {
     const decoded = Effect.runSync(
       Effect.either(
-        IdentityHandoffResponseDecoder.decode({
+        identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
           nextNonce: 'nonce-next',
@@ -69,7 +71,7 @@ describe('extension identity handoff response decoding', () => {
   test('returns a typed failure for a response with an empty next nonce', () => {
     const decoded = Effect.runSync(
       Effect.either(
-        IdentityHandoffResponseDecoder.decode({
+        identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
           nextNonce: '',
@@ -83,6 +85,61 @@ describe('extension identity handoff response decoding', () => {
         IdentityHandoffResponseDecodeFailureKind.InvalidResponse,
       )
     }
+  })
+})
+
+describe('extension runtime response decoding', () => {
+  test('rejects launcher acknowledgements with unrelated fields', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeLauncher({ ok: true, stale: true }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+  })
+
+  test('decodes discovery and paired handoff payload objects', () => {
+    const discovery = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityDiscovery({
+          ok: true,
+          status: { status: 'locked' },
+        }),
+      ),
+    )
+    const handoff = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityHandoff({
+          ok: true,
+          response: { encryptedEnvelope: 'sealed' },
+        }),
+      ),
+    )
+
+    expect(discovery._tag).toBe('Right')
+    expect(handoff._tag).toBe('Right')
+  })
+
+  test('decodes unlock acknowledgements before request binding is checked', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeUnlock({
+          ok: true,
+          requestId: 'request-1',
+          vaultStoreId: 'store-1',
+        }),
+      ),
+    )
+
+    expect(decoded).toEqual({
+      _tag: 'Right',
+      right: {
+        ok: true,
+        requestId: 'request-1',
+        vaultStoreId: 'store-1',
+      },
+    })
   })
 })
 
@@ -277,7 +334,7 @@ describe('extension pairing approved message', () => {
   test('delivers an approved grant through the extension callback', async () => {
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        args[2]({ ok: true })
+        args[2]({ ok: true, eventCount: 1 })
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
@@ -286,7 +343,10 @@ describe('extension pairing approved message', () => {
       extensionConnectionBrowser.deliverExtensionPairingApproval(
         approvalDeliveryArgs(),
       ),
-    ).resolves.toEqual({ kind: ExtensionPairingDeliveryKind.Delivered })
+    ).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Delivered,
+      eventCount: 1,
+    })
     expect(sendMessage).toHaveBeenCalledOnce()
   })
 
@@ -311,7 +371,7 @@ describe('extension pairing approved message', () => {
   test('reports a runtime error once', async () => {
     const runtimeErrorSend = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        args[2]({ ok: true })
+        args[2]({ ok: true, eventCount: 1 })
       },
     )
     vi.stubGlobal('chrome', {
@@ -334,7 +394,7 @@ describe('extension pairing approved message', () => {
     vi.useFakeTimers()
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        window.setTimeout(() => args[2]({ ok: true }), 6_000)
+        window.setTimeout(() => args[2]({ ok: true, eventCount: 1 }), 6_000)
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
@@ -346,6 +406,7 @@ describe('extension pairing approved message', () => {
 
     await expect(delivery).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.Delivered,
+      eventCount: 1,
     })
     expect(sendMessage).toHaveBeenCalledOnce()
   })
@@ -409,6 +470,46 @@ describe('extension pairing approved message', () => {
       reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
     })
   })
+
+  test('rejects a malformed successful acknowledgement instead of trusting its ok flag', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        pairingApprovalResponseDecoder.decode({
+          ok: true,
+          reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+  })
+
+  test('rejects conflicting reason and error responses instead of choosing one field', () => {
+    const decoded = Effect.runSync(
+      Effect.either(
+        pairingApprovalResponseDecoder.decode({
+          ok: false,
+          reason: ExtensionPairingRejectionReason.ExtensionRuntimeUnavailable,
+          error: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
+        }),
+      ),
+    )
+
+    expect(decoded._tag).toBe('Left')
+  })
+
+  test.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])(
+    'rejects invalid imported event count %s',
+    (eventCount) => {
+      const decoded = Effect.runSync(
+        Effect.either(
+          pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
+        ),
+      )
+
+      expect(decoded._tag).toBe('Left')
+    },
+  )
 
   test('accepts complete approved grants', () => {
     expect(

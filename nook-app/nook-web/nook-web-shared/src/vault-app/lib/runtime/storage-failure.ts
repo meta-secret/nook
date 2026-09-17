@@ -32,6 +32,7 @@ export enum VaultStorageFailureKind {
   LoggingCleanupFailed = "logging-cleanup-failed",
   ReloadFailed = "reload-failed",
   ExtensionPublicationFailed = "extension-publication-failed",
+  ExtensionApprovalContextChanged = "extension-approval-context-changed",
 }
 
 export class VaultStorageFailure {
@@ -68,6 +69,8 @@ export class VaultStorageFailure {
         return I18N_KEYS.ToastsErrorTimeout;
       case VaultStorageFailureKind.VaultSelectionFailed:
         return I18N_KEYS.ErrorsVaultSelectionFailed;
+      case VaultStorageFailureKind.ExtensionApprovalContextChanged:
+        return I18N_KEYS.ExtensionConsentApprovalFailed;
       case VaultStorageFailureKind.ExtensionPublicationFailed:
       case VaultStorageFailureKind.OperationFailed:
       case VaultStorageFailureKind.LockUnavailable:

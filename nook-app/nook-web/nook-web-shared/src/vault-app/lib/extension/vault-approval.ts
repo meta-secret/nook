@@ -133,7 +133,7 @@ class ExtensionVaultManagerContext {
               ? ok(current)
               : err(
                   new VaultStorageFailure(
-                    VaultStorageFailureKind.GenerationChanged,
+                    VaultStorageFailureKind.ExtensionApprovalContextChanged,
                   ),
                 ),
         );
@@ -201,7 +201,9 @@ export class ExtensionVaultApproval {
           return ok(this.authorizationState.authorization);
         case ExtensionVaultApprovalStateKind.Released:
           return err(
-            new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+            new VaultStorageFailure(
+              VaultStorageFailureKind.ExtensionApprovalContextChanged,
+            ),
           );
         case ExtensionVaultApprovalStateKind.AwaitingAuthorization: {
           const manager = this.managerContext.admit();
@@ -375,7 +377,9 @@ export class ExtensionVaultApproval {
       case ExtensionVaultApprovalStateKind.AwaitingAuthorization:
       case ExtensionVaultApprovalStateKind.Released:
         return err(
-          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+          new VaultStorageFailure(
+            VaultStorageFailureKind.ExtensionApprovalContextChanged,
+          ),
         );
       case ExtensionVaultApprovalStateKind.Authorized: {
         const { authorization } = this.authorizationState;

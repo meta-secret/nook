@@ -47,7 +47,7 @@
 
 <form id="aspnetForm" method="post" action="/auth/login" {onsubmit}>
   <header>
-    <div class="gb-dropdown__holder" style="display: none">
+    <div class="gb-dropdown__holder gb-is-opened signin-popover">
       <input
         id="header-username"
         name="LoginUserName"

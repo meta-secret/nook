@@ -33,6 +33,8 @@ import {
   isExtensionSessionLockMessage,
 } from '../src/background/service-worker/session-runtime-messages'
 import {
+  ExtensionPairingApprovedMessage,
+  ExtensionPairingApprovedMessageType,
   ExtensionIdentityHandoffRequestMessage,
   ExtensionPairedVaultIdentityDiscoveryMessage,
   ExtensionPairedVaultIdentityHandoffRequestMessage,
@@ -72,6 +74,29 @@ const routedGrant: StoredExtensionPairingGrant = {
   eventCount: 1,
   eventLogHeads: ['event-1'],
   lastLocalSyncAt: '2026-09-11T00:00:00.000Z',
+}
+
+const externalPairingMessage = {
+  type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+  payload: {
+    vaultType: routedGrant.vaultType,
+    vaultStoreId: routedGrant.vaultStoreId,
+    deviceId: routedGrant.deviceId,
+    devicePublicKey: routedGrant.devicePublicKey,
+    deviceSigningPublicKey: routedGrant.deviceSigningPublicKey,
+    vaultName: routedGrant.vaultName,
+    deviceLabel: routedGrant.deviceLabel,
+    approvedAt: routedGrant.approvedAt,
+    scopes: routedGrant.scopes,
+    providers: [],
+  },
+  eventLogRecords: [
+    {
+      eventId: 'event-1',
+      path: 'events/1',
+      event: { schema_version: 1 },
+    },
+  ],
 }
 
 // Obtain the generated outcome variants from Rust rather than mirroring them.
@@ -157,18 +182,18 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   createIdentityHandoff: unusedAsyncDependency,
   createPairedIdentityHandoff: unusedAsyncDependency,
   discoverPairedVaultIdentity: unusedAsyncDependency,
-  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
+  decodePairingApprovedMessage: ExtensionPairingApprovedMessage.decode,
   importPairingAfterCompanionReady: unusedAsyncDependency,
-  isExtensionIdentityHandoffRequestMessage:
-    ExtensionIdentityHandoffRequestMessage.is,
-  isExtensionPairedVaultIdentityDiscoveryMessage:
-    ExtensionPairedVaultIdentityDiscoveryMessage.is,
-  isExtensionPairedVaultIdentityHandoffRequestMessage:
-    ExtensionPairedVaultIdentityHandoffRequestMessage.is,
-  isExtensionPairedVaultUnlockRequestMessage:
-    ExtensionPairedVaultUnlockRequestMessage.is,
-  normalizeOpenCompanionLauncherMessage:
-    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+  decodeExtensionIdentityHandoffRequestMessage:
+    ExtensionIdentityHandoffRequestMessage.decode,
+  decodeExtensionPairedVaultIdentityDiscoveryMessage:
+    ExtensionPairedVaultIdentityDiscoveryMessage.decode,
+  decodeExtensionPairedVaultIdentityHandoffRequestMessage:
+    ExtensionPairedVaultIdentityHandoffRequestMessage.decode,
+  decodeExtensionPairedVaultUnlockRequestMessage:
+    ExtensionPairedVaultUnlockRequestMessage.decode,
+  decodeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.decode,
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
@@ -774,6 +799,75 @@ describe('service worker routing', () => {
     expect(openCompanionLauncher).not.toHaveBeenCalled()
   })
 
+  test('rejects an unauthorized malformed payload before decoding', async () => {
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const, eventCount: 1 }),
+    )
+    const decodePairingApprovedMessage = mock(
+      externalDependencies.decodePairingApprovedMessage,
+    )
+    const decodeExtensionIdentityHandoffRequestMessage = mock(
+      externalDependencies.decodeExtensionIdentityHandoffRequestMessage,
+    )
+    const decodeExtensionPairedVaultIdentityDiscoveryMessage = mock(
+      externalDependencies.decodeExtensionPairedVaultIdentityDiscoveryMessage,
+    )
+    const decodeExtensionPairedVaultIdentityHandoffRequestMessage = mock(
+      externalDependencies.decodeExtensionPairedVaultIdentityHandoffRequestMessage,
+    )
+    const decodeExtensionPairedVaultUnlockRequestMessage = mock(
+      externalDependencies.decodeExtensionPairedVaultUnlockRequestMessage,
+    )
+    const decodeOpenCompanionLauncherMessage = mock(
+      externalDependencies.decodeOpenCompanionLauncherMessage,
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      decodePairingApprovedMessage,
+      decodeExtensionIdentityHandoffRequestMessage,
+      decodeExtensionPairedVaultIdentityDiscoveryMessage,
+      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
+      decodeExtensionPairedVaultUnlockRequestMessage,
+      decodeOpenCompanionLauncherMessage,
+      importPairingAfterCompanionReady,
+    }
+    const routingRequest: ConstructorParameters<
+      typeof ExternalCompanionRouter
+    >[0] = {
+      dependencies,
+      message: { malformed: { payload: 'not-a-runtime-message' } },
+      sender: {
+        id: 'foreign-extension',
+        url: 'https://example.com/',
+      },
+      sendResponse,
+    }
+
+    expect(await new ExternalCompanionRouter(routingRequest).route()).toBe(
+      false,
+    )
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'forbidden-sender',
+    })
+    expect(decodePairingApprovedMessage).not.toHaveBeenCalled()
+    expect(decodeExtensionIdentityHandoffRequestMessage).not.toHaveBeenCalled()
+    expect(
+      decodeExtensionPairedVaultIdentityDiscoveryMessage,
+    ).not.toHaveBeenCalled()
+    expect(
+      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
+    ).not.toHaveBeenCalled()
+    expect(
+      decodeExtensionPairedVaultUnlockRequestMessage,
+    ).not.toHaveBeenCalled()
+    expect(decodeOpenCompanionLauncherMessage).not.toHaveBeenCalled()
+    expect(importPairingAfterCompanionReady).not.toHaveBeenCalled()
+  })
+
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =
@@ -807,7 +901,6 @@ describe('service worker routing', () => {
     const refresh = mock(() => Promise.resolve())
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
-      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady,
       refreshAuthenticationSurfaces: refresh,
     }
@@ -818,7 +911,7 @@ describe('service worker routing', () => {
     expect(
       await new ExternalCompanionRouter({
         dependencies,
-        message: { type: 'nook:extension-pairing-approved' },
+        message: externalPairingMessage,
         sender: {
           id: 'simple-vault',
           url: 'https://simple.example.test/',
@@ -837,7 +930,6 @@ describe('service worker routing', () => {
     const refresh = mock(() => Promise.reject(new Error('refresh unavailable')))
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
-      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady: () =>
         Promise.resolve({ ok: true as const, eventCount: 1 }),
       refreshAuthenticationSurfaces: refresh,
@@ -849,7 +941,7 @@ describe('service worker routing', () => {
     expect(
       await new ExternalCompanionRouter({
         dependencies,
-        message: { type: 'nook:extension-pairing-approved' },
+        message: externalPairingMessage,
         sender: {
           id: 'simple-vault',
           url: 'https://simple.example.test/',
@@ -875,7 +967,6 @@ describe('service worker routing', () => {
     )
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
-      hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType,
       importPairingAfterCompanionReady,
       refreshAuthenticationSurfaces: refresh,
     }
@@ -886,7 +977,7 @@ describe('service worker routing', () => {
     expect(
       await new ExternalCompanionRouter({
         dependencies,
-        message: { type: 'nook:extension-pairing-approved' },
+        message: externalPairingMessage,
         sender: {
           id: 'simple-vault',
           url: 'https://simple.example.test/',
