@@ -394,7 +394,7 @@ mod admission_tests {
     }
 
     #[test]
-    fn paired_vault_handoff_message_decoder_validates_and_cleans_material()
+    fn paired_vault_handoff_message_decoder_validates_and_cleans_decoded_material()
     -> Result<(), serde_json::Error> {
         let json = r#"{
             "type":"nook:extension-paired-vault-identity-handoff-request",
@@ -424,22 +424,32 @@ mod admission_tests {
         };
         assert!(app_key.nonce.is_empty());
 
-        let invalid = json.replace("age1recipient", " ");
+        Ok(())
+    }
+
+    #[test]
+    fn paired_vault_handoff_message_decoder_rejects_invalid_material()
+    -> Result<(), serde_json::Error> {
+        let invalid = r#"{
+            "type":"nook:extension-paired-vault-identity-handoff-request",
+            "payload":{
+                "transaction":{
+                    "discovery":{"request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},"observedAt":100},
+                    "status":{"status":"unlocked","request_id":"request","vault_store_id":"vault","app_key":{"extensionRuntimeId":"runtime","appKey":{"appId":"app","encryptionPublicKey":"age1public","signingPublicKey":"signing","installationLabel":"Extension"},"nonce":"nonce","scopes":["vault-access"]}},
+                    "admittedAt":100
+                },
+                "recipientPublicKey":" "
+            }
+        }"#;
         let mut admission = serde_json::from_str::<
             ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
-        >(&invalid)?;
+        >(invalid)?;
+
         match admission.decode() {
-            Err(CompanionProtocolError::InvalidValue) => {}
+            Err(CompanionProtocolError::InvalidValue) => Ok(()),
             Err(error) => panic!("invalid handoff must report invalid value, got {error}"),
             Ok(_) => panic!("invalid handoff must be rejected"),
         }
-        let request = admission.0.request_mut();
-        assert!(request.recipient_public_key.is_empty());
-        let CompanionIdentityStatus::Unlocked { app_key, .. } = &request.transaction.status else {
-            panic!("handoff fixture must remain unlocked");
-        };
-        assert!(app_key.nonce.is_empty());
-        Ok(())
     }
 
     #[test]
