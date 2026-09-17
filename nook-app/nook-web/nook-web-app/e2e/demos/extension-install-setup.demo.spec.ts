@@ -275,6 +275,10 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
   )
+  // This visible consent flow exercises the shared App -> AppSurface ->
+  // ExtensionConnectConsentWorkspace -> ExtensionConnectConsent path. The
+  // Sentinel build replaces that last surface with its intentionally hidden
+  // ExtensionConnectDisabled no-op and denies this route altogether.
   const consent = page.getByTestId('extension-connect-consent')
   await expect(consent).toBeVisible({ timeout: UI_TIMEOUT_MS })
 

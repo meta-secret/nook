@@ -16,6 +16,10 @@ enum WebsitePasskeyCeremony {
   Get = 'get',
 }
 
+enum SerializedCredentialType {
+  PublicKey = 'public-key',
+}
+
 type SerializedCredentialDescriptor = { id: string }
 
 type SerializedCreationOptions = {
@@ -40,7 +44,7 @@ type SerializedAssertionOptions = {
 type NookPublicCredentialJSON = {
   id: string
   rawId: string
-  type: 'public-key'
+  type: SerializedCredentialType.PublicKey
   authenticatorAttachment: 'cross-platform'
   clientExtensionResults: AuthenticationExtensionsClientOutputs
   response:
@@ -167,7 +171,7 @@ type NookPublicCredentialState = {
 }
 
 class NookPublicCredential implements Credential {
-  readonly type = 'public-key'
+  readonly type = SerializedCredentialType.PublicKey
   readonly authenticatorAttachment = 'cross-platform'
 
   readonly id: string

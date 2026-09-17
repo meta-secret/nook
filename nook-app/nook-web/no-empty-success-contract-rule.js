@@ -115,7 +115,9 @@ function hasTypeScriptPromiseSymbol(symbols) {
     if (symbol.getName() !== 'Promise' && symbol.getName() !== 'PromiseLike') {
       return false
     }
-    return (symbol.declarations ?? []).some((declaration) => {
+    const declarations = symbol.declarations
+    if (!declarations) return false
+    return declarations.some((declaration) => {
       const segments = resolve(declaration.getSourceFile().fileName).split(sep)
       const libIndex = segments.lastIndexOf('lib')
       return (

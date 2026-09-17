@@ -260,18 +260,36 @@ class AuthorizationCleanupLifecycle {
   }
 }
 
+enum AuthorizationCleanupMarkerLookupKind {
+  Resolved = 'resolved',
+  Rejected = 'rejected',
+}
+
+type AuthorizationCleanupMarkerLookup =
+  | {
+      readonly kind: AuthorizationCleanupMarkerLookupKind.Resolved
+      readonly pending: boolean
+    }
+  | { readonly kind: AuthorizationCleanupMarkerLookupKind.Rejected }
+
 export class InterruptedAuthorizationCleanupRecovery {
   constructor(
     private readonly dependencies: InterruptedAuthorizationCleanupRecoveryDependencies,
   ) {}
 
   async recover(): Promise<AuthorizationCleanupResult> {
-    const pendingLookup = this.dependencies
-      .accountPickerAuthorizationCleanupPending()
-      .then(
-        (pending) => ({ kind: 'resolved' as const, pending }),
-        () => ({ kind: 'rejected' as const }),
-      )
+    const pendingLookup: Promise<AuthorizationCleanupMarkerLookup> =
+      this.dependencies
+        .accountPickerAuthorizationCleanupPending()
+        .then(
+          (pending): AuthorizationCleanupMarkerLookup => ({
+            kind: AuthorizationCleanupMarkerLookupKind.Resolved,
+            pending,
+          }),
+          (): AuthorizationCleanupMarkerLookup => ({
+            kind: AuthorizationCleanupMarkerLookupKind.Rejected,
+          }),
+        )
     let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     try {
       cleanup = await this.dependencies.beginAccountPickerAuthorizationCleanup()
@@ -279,7 +297,7 @@ export class InterruptedAuthorizationCleanupRecovery {
       return err([AuthorizationCleanupFailureKind.Rejected])
     }
     const lookup = await pendingLookup
-    if (lookup.kind === 'rejected') {
+    if (lookup.kind === AuthorizationCleanupMarkerLookupKind.Rejected) {
       this.dependencies.releaseAccountPickerAuthorizationCleanup(
         cleanup.authorizationGeneration,
       )

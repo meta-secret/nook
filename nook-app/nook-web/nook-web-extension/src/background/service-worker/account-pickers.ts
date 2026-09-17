@@ -426,7 +426,7 @@ class AccountPickerSessions {
   }
 
   private sessionResponseAccounts(
-    response: ExtensionSessionResponse | undefined,
+    response: ExtensionSessionResponse,
   ): Array<WebsiteLoginAccountOption | WebsiteAuthenticatorOption> {
     if (
       !response ||

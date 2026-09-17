@@ -7,14 +7,19 @@
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+  import {
+    LoginPickerCancelMessageType,
+    LoginPickerQueryMessageType,
+    LoginPickerQueryResponse,
+    LoginPickerSelectMessageType,
+    type LoginPickerCancelMessage,
+    type LoginPickerQueryMessage,
+    type LoginPickerSelectMessage,
+  } from '../lib/login-picker-messages'
   type LoginPickerRuntimeMessage =
-    | { type: 'nook:login-picker-query'; payload: { requestId: string; query: string } }
-    | { type: 'nook:login-picker-select'; payload: { requestId: string; vaultStoreId: string; secretId: string } }
-    | { type: 'nook:login-picker-cancel'; payload: { requestId: string } }
-  type LoginPickerRuntimeResponse =
-    | { ok: true; origin: string; accounts?: WebsiteLoginAccountOption[] }
-    | { ok: true }
-    | { ok: false; reason?: string }
+    | LoginPickerQueryMessage
+    | LoginPickerSelectMessage
+    | LoginPickerCancelMessage
   import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
@@ -40,43 +45,17 @@
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
-  let searchInput = $state<HTMLInputElement>()
   let querySequence = 0
   let completed = false
 
   function sendRuntimeMessage(
     message: LoginPickerRuntimeMessage,
-  ): Promise<LoginPickerRuntimeResponse | undefined> {
+  ): Promise<unknown> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: LoginPickerRuntimeResponse | undefined) => {
+      chrome.runtime.sendMessage(message, (response: unknown) => {
         resolve(response)
       })
     })
-  }
-
-  function isOkResponse(
-    response: LoginPickerRuntimeResponse | undefined,
-  ): response is { ok: true } {
-    return Boolean(
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true,
-    )
-  }
-
-  function isAccountQueryResponse(
-    response: LoginPickerRuntimeResponse | undefined,
-  ): response is {
-    ok: true
-    origin: string
-    accounts?: WebsiteLoginAccountOption[]
-  } {
-    return (
-      isOkResponse(response) &&
-      'origin' in response &&
-      typeof response.origin === 'string'
-    )
   }
 
   function accountPrimaryLabel(account: WebsiteLoginAccountOption): string {
@@ -101,20 +80,20 @@
     loading = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:login-picker-query',
+      type: LoginPickerQueryMessageType.NookLoginPickerQuery,
       payload: { requestId, query: searchQuery },
     }
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!isAccountQueryResponse(response)) {
+    if (!LoginPickerQueryResponse.is(response)) {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
     destinationOrigin = response.origin
-    accounts = ((v) => (v ? v : []))(response.accounts)
+    accounts = response.accounts
   }
 
   async function choose(account: WebsiteLoginAccountOption): Promise<void> {
@@ -122,7 +101,7 @@
     busy = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:login-picker-select',
+      type: LoginPickerSelectMessageType.NookLoginPickerSelect,
       payload: {
         requestId,
         vaultStoreId: account.vaultStoreId,
@@ -130,7 +109,13 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (isOkResponse(response)) {
+    if (
+      response &&
+      typeof response === 'object' &&
+      !Array.isArray(response) &&
+      'ok' in response &&
+      response.ok === true
+    ) {
       completed = true
       window.close()
       return
@@ -144,12 +129,13 @@
   })
 
   onMount(() => {
-    searchInput?.focus()
+    const searchInput = document.getElementById('login-search')
+    if (searchInput instanceof HTMLInputElement) searchInput.focus()
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
       const message: LoginPickerRuntimeMessage = {
-        type: 'nook:login-picker-cancel',
+        type: LoginPickerCancelMessageType.NookLoginPickerCancel,
         payload: { requestId },
       }
       void chrome.runtime.sendMessage(message)
@@ -183,7 +169,6 @@
       id="login-search"
       data-testid="login-search"
       type="search"
-      bind:this={searchInput}
       bind:value={query}
       maxlength="200"
       autocomplete="off"

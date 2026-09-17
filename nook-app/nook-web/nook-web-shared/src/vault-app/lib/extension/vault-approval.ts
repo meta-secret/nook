@@ -32,15 +32,13 @@ import {
   type ExtensionPairingApprovedMessage,
 } from "$web-shared/extension/runtime-messages";
 
-export type ExtensionVaultAuthorization = NookExtensionDeviceApproval;
-
 export type ExtensionVaultCompletion = {
   readonly manager: NookVaultManager;
 };
 
 type ExtensionVaultAuthorizationCapabilityRequest = {
   readonly manager: NookVaultManager;
-  readonly authorization: ExtensionVaultAuthorization;
+  readonly authorization: NookExtensionDeviceApproval;
 };
 
 /** Holds the live manager and generated approval that authorize one grant. */
@@ -176,7 +174,7 @@ type ExtensionVaultApprovalState =
   | { readonly kind: ExtensionVaultApprovalStateKind.AwaitingAuthorization }
   | {
       readonly kind: ExtensionVaultApprovalStateKind.Authorized;
-      readonly authorization: ExtensionVaultAuthorization;
+      readonly authorization: NookExtensionDeviceApproval;
     }
   | { readonly kind: ExtensionVaultApprovalStateKind.Released };
 
@@ -195,7 +193,7 @@ export class ExtensionVaultApproval {
   }
 
   async authorize(): Promise<
-    Result<ExtensionVaultAuthorization, VaultStorageFailure>
+    Result<NookExtensionDeviceApproval, VaultStorageFailure>
   > {
     return this.vault.enqueueStorage(async () => {
       switch (this.authorizationState.kind) {

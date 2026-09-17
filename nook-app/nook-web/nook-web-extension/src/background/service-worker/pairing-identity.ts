@@ -308,7 +308,7 @@ class ExtensionPairingIdentity {
   sendSessionMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   async sendSessionMessage<
@@ -317,7 +317,7 @@ class ExtensionPairingIdentity {
   >(
     message: ExtensionSessionTransportRequest,
     decodeResponse?: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<
     | ExtensionSessionTransportResult<ExtensionSessionResponse>

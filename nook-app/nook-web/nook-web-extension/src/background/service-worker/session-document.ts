@@ -36,7 +36,7 @@ export interface ExtensionSessionTransport {
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
@@ -56,15 +56,18 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   sendMessage<Response, DecodeFailure>(
     message: ExtensionSessionTransportRequest,
     decodeResponse: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
     message: ExtensionSessionTransportRequest,
     decodeResponse?: (
-      response: ExtensionSessionResponse | undefined,
+      response: ExtensionSessionResponse,
     ) => Result<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
+  ): Promise<
+    | ExtensionSessionTransportResult<ExtensionSessionResponse>
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
         err(
@@ -77,39 +80,42 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
       try {
         chrome.runtime.sendMessage(
           message,
-          (response: ExtensionSessionResponse | undefined) => {
-          const nativeFailure = chrome.runtime.lastError
-          if (this.access === SessionDocumentAccess.Revoked) {
-            resolve(
-              err(
-                new ExtensionSessionTransportFailure(
-                  ExtensionSessionTransportFailureKind.Closed,
+          (response: ExtensionSessionResponse) => {
+            const nativeFailure = chrome.runtime.lastError
+            if (this.access === SessionDocumentAccess.Revoked) {
+              resolve(
+                err(
+                  new ExtensionSessionTransportFailure(
+                    ExtensionSessionTransportFailureKind.Closed,
+                  ),
                 ),
-              ),
-            )
-          } else if (nativeFailure) {
-            resolve(
-              err(
-                new ExtensionSessionTransportFailure(
-                  ExtensionSessionTransportFailureKind.DeliveryFailed,
+              )
+            } else if (nativeFailure) {
+              resolve(
+                err(
+                  new ExtensionSessionTransportFailure(
+                    ExtensionSessionTransportFailureKind.DeliveryFailed,
+                  ),
                 ),
-              ),
-            )
-          } else if (decodeResponse) {
-            resolve(
-              decodeResponse(response).mapErr((failure) => failure),
-            )
-          } else if (response instanceof Object) {
-            resolve(ok(response as Response))
-          } else {
-            resolve(
-              err(
-                new ExtensionSessionTransportFailure(
-                  ExtensionSessionTransportFailureKind.ResponseMissing,
+              )
+            } else if (
+              !response ||
+              typeof response !== 'object' ||
+              Array.isArray(response)
+            ) {
+              resolve(
+                err(
+                  new ExtensionSessionTransportFailure(
+                    ExtensionSessionTransportFailureKind.ResponseMissing,
+                  ),
                 ),
-              ),
-            )
-          }
+              )
+            } else if (decodeResponse) {
+              const decoded = decodeResponse(response)
+              resolve(decoded.mapErr((failure) => failure))
+            } else {
+              resolve(ok(response))
+            }
           },
         )
       } catch {

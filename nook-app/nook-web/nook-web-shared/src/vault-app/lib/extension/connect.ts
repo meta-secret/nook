@@ -11,26 +11,6 @@ type ExtensionMessageRequest = {
   readonly responseWait: ExtensionMessageResponseWait;
 };
 
-type ChromeExtensionRuntimeResponse =
-  | CompanionIdentityDiscoveryTransportResponse
-  | CompanionIdentityHandoffTransportResponse
-  | { readonly ok: true }
-  | {
-      readonly ok: false;
-      readonly reason?: string;
-      readonly error?: string;
-    }
-  | {
-      readonly ok: true;
-      readonly requestId: string;
-      readonly vaultStoreId: string;
-    }
-  | {
-      readonly ok: true;
-      readonly envelope: string;
-      readonly nextNonce: string;
-    };
-
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -45,10 +25,11 @@ type IdentityEnvelopeRequest = {
 };
 
 type ChromeRuntimeHost = {
+  // eslint-disable-next-line max-params -- Chrome owns this positional API.
   sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
-    callback: (response: ChromeExtensionRuntimeResponse | undefined) => void,
+    callback: (response: unknown) => void,
   ) => void;
 };
 
@@ -95,8 +76,6 @@ import {
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
   type RuntimeMessage,
-  type CompanionIdentityDiscoveryTransportResponse,
-  type CompanionIdentityHandoffTransportResponse,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
@@ -193,7 +172,7 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | {
       kind: ExtensionMessageDeliveryKind.Received;
-      response: ChromeExtensionRuntimeResponse;
+      response: unknown;
     };
 
 function isAcceptedIdentityHandoffResponse(value: unknown): value is {
@@ -428,7 +407,11 @@ class ExtensionConnectionBrowser {
           pending.unavailable();
           return;
         }
-        if (response === undefined) {
+        if (
+          !response ||
+          typeof response !== "object" ||
+          Array.isArray(response)
+        ) {
           pending.unavailable();
           return;
         }
