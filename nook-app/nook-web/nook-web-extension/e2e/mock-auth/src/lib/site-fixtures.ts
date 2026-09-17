@@ -252,11 +252,8 @@ class SiteFixtureCatalogAdmission {
       'data-qa',
       'data-testid',
     ] as const) {
-      const fieldValue = Object.entries(value).find(
-        ([candidate]) => candidate === key,
-      )
-      if (fieldValue) {
-        const entry = fieldValue[1]
+      if (key in value) {
+        const entry: unknown = Reflect.get(value, key)
         if (typeof entry !== 'string') {
           throw new TypeError(`fixture field ${key} must be a string`)
         }
@@ -296,11 +293,8 @@ class SiteFixtureCatalogAdmission {
       submit.type = value.type
     }
     for (const key of ['name', 'id', 'data-qa'] as const) {
-      const submitValue = Object.entries(value).find(
-        ([candidate]) => candidate === key,
-      )
-      if (submitValue) {
-        const entry = submitValue[1]
+      if (key in value) {
+        const entry: unknown = Reflect.get(value, key)
         if (typeof entry !== 'string') {
           throw new TypeError(`fixture submit ${key} must be a string`)
         }
