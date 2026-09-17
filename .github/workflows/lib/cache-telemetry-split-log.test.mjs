@@ -32,8 +32,10 @@ class SplitBuildLogFixture {
 }
 
 void test("aggregates sccache and exporter evidence from appended Phase A and Phase B plain logs", async () => {
-  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
-  const originalReadHistoryEvents = CacheTelemetry.readHistoryEvents;
+  const originalListBuildHistory =
+    CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
+  const originalReadHistoryEvents =
+    CacheTelemetry.readHistoryEvents.bind(CacheTelemetry);
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "nook-split-log-"));
   const rawLog = path.join(temporary, "nook-build-compile.raw.log");
   fs.writeFileSync(
@@ -105,8 +107,10 @@ void test("aggregates sccache and exporter evidence from appended Phase A and Ph
 });
 
 void test("reports unavailable bytes when a successful registry export emits no byte lines", async () => {
-  const originalListBuildHistory = CacheTelemetry.listBuildHistory;
-  const originalReadHistoryEvents = CacheTelemetry.readHistoryEvents;
+  const originalListBuildHistory =
+    CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
+  const originalReadHistoryEvents =
+    CacheTelemetry.readHistoryEvents.bind(CacheTelemetry);
   const temporary = fs.mkdtempSync(
     path.join(os.tmpdir(), "nook-export-no-bytes-"),
   );

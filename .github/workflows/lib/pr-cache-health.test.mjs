@@ -8,6 +8,7 @@ import {
   PrCacheHealth,
   SccacheExpectation,
 } from "./pr-cache-health.mjs";
+import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
 
@@ -33,6 +34,7 @@ const telemetry = (job, overrides = {}) => ({
       parent_scope_suffix: "",
       parent_ref: "",
     },
+    compile_phases: new CacheScopeTelemetry({}).record().compile_phases,
     imports: {
       probes_complete: true,
       failure_class: "none",

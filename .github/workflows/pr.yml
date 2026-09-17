@@ -662,6 +662,7 @@ jobs:
     name: Extension e2e
     if: >-
       always() &&
+      needs.verify.result == 'success' &&
       (inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
