@@ -18,7 +18,12 @@ const landingStructuredDataFields = {
   inLanguage: Schema.optional(Schema.String),
 } satisfies Schema.Struct.Fields
 
-const LandingStructuredDataSchema = Schema.Struct(landingStructuredDataFields)
+type LandingStructuredDataSchemaDefinition = Schema.Struct<
+  typeof landingStructuredDataFields
+>
+
+const LandingStructuredDataSchema: LandingStructuredDataSchemaDefinition =
+  Schema.Struct(landingStructuredDataFields)
 
 type LandingStructuredData = Schema.Schema.Type<
   typeof LandingStructuredDataSchema
