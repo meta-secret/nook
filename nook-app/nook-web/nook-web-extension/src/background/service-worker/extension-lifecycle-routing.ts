@@ -253,16 +253,21 @@ class AuthorizationCleanupLifecycle {
         releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
         return yield* Effect.fail(failures)
       }
-      const outcome = yield* Effect.tryPromise({
-        try: () =>
-          completeAccountPickerAuthorizationCleanup(
-            authorizationGeneration,
-            CleanupEvidence.Full,
-          ),
-        catch: (): readonly AuthorizationCleanupFailure[] => [
-          AuthorizationCleanupFailureKind.Rejected,
-        ],
-      })
+      const completion = yield* Effect.either(
+        Effect.tryPromise({
+          try: () =>
+            completeAccountPickerAuthorizationCleanup(
+              authorizationGeneration,
+              CleanupEvidence.Full,
+            ),
+          catch: () => AuthorizationCleanupFailureKind.Rejected,
+        }),
+      )
+      if (Either.isLeft(completion)) {
+        releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+        return yield* Effect.fail([completion.left])
+      }
+      const outcome = completion.right
       if ('error' in outcome) {
         return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
       }
