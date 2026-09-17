@@ -26,6 +26,7 @@ import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { unselectedVaultScope } from '$lib/auth/providers'
 import { RosterHydrationKind } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -72,8 +73,7 @@ class SentinelFinalizationFixture {
     }),
   )
   readonly ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () =>
-      ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+    async () => ok(ProviderSaveOutcome.Saved),
   )
   readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
     ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),

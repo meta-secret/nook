@@ -33,6 +33,7 @@ import type {
 import {
   ActiveProviderCredentialsActions,
   ProviderPersistenceActions,
+  ProviderSaveOutcome,
 } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
@@ -221,12 +222,7 @@ describe('provider save web adapter', () => {
       state,
     ).ensureProviderSaved()
 
-    expect(saved).toEqual(
-      ok({
-        providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],
-        activeVaultStoreId: activeVaultScope('vault-1'),
-      }),
-    )
+    expect(saved).toEqual(ok(ProviderSaveOutcome.Saved))
     expect(state.persistProviders).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],

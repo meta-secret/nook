@@ -19,7 +19,10 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
-import { OAuthRemoteReferenceSyncKind } from '$lib/vault/providers.svelte'
+import {
+  OAuthRemoteReferenceSyncKind,
+  ProviderSaveOutcome,
+} from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   OAuthTokenFreshnessKind,
@@ -99,11 +102,7 @@ function connectionScenario(
     ok({ kind: OAuthRemoteReferenceSyncKind.NotApplicable }),
   )
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () =>
-      ok({
-        providers: [provider],
-        activeVaultStoreId: activeVaultScope('joiner-store'),
-      }),
+    async () => ok(ProviderSaveOutcome.Saved),
   )
   state.loadProviders = vi.fn<VaultState['loadProviders']>(async () =>
     ok({

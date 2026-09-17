@@ -21,7 +21,10 @@ import type {
   ProviderSetupRequest,
   StorageProvider,
 } from "$lib/auth/providers";
-import type { ProviderRemovalOutcome } from "$lib/vault/providers.svelte";
+import type {
+  ProviderRemovalOutcome,
+  ProviderSaveOutcome,
+} from "$lib/vault/providers.svelte";
 import type {
   LocalVaultCatalog,
   LocalProviderLookup,
@@ -223,7 +226,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   connectAndSyncStagedProvider(): Promise<void>;
   dismissSuccess(): void;
   ensureProviderSaved(): Promise<
-    Result<AuthProvidersSnapshot, VaultStorageFailure>
+    Result<ProviderSaveOutcome, VaultStorageFailure>
   >;
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
@@ -454,7 +457,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     providerId: string,
   ): Promise<Result<ProviderRemovalOutcome, VaultStorageFailure>>;
   ensureProviderSaved(): Promise<
-    Result<AuthProvidersSnapshot, VaultStorageFailure>
+    Result<ProviderSaveOutcome, VaultStorageFailure>
   >;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;

@@ -152,6 +152,11 @@ export interface ProviderRemoval {
   readonly id: string;
 }
 
+/** Confirms provider persistence without exposing credential-bearing provider state. */
+export enum ProviderSaveOutcome {
+  Saved = "saved",
+}
+
 export enum OAuthRemoteReferenceSyncKind {
   NotApplicable = "not-applicable",
   Unchanged = "unchanged",
@@ -736,7 +741,7 @@ export class ProviderPersistenceActions {
   }
 
   async ensureProviderSaved(): Promise<
-    Result<AuthProvidersSnapshot, StorageOperationFailure>
+    Result<ProviderSaveOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const scope = await this.providerStoreIdForSave();
@@ -821,11 +826,7 @@ export class ProviderPersistenceActions {
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      const savedSnapshot: AuthProvidersSnapshot = {
-        providers: outcome.snapshot.providers,
-        activeVaultStoreId: request.snapshot.activeVaultStoreId,
-      };
-      return storageOk(savedSnapshot);
+      return storageOk(ProviderSaveOutcome.Saved);
     } finally {
       outcome.free();
     }
