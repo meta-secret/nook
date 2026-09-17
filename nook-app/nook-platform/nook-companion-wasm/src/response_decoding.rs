@@ -98,6 +98,11 @@ pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSession
 #[tsify(type = "unknown", from_wasm_abi)]
 pub struct ExtensionSessionRequestAdmission(nook_companion_core::ExtensionSessionRequestWire);
 
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionEventLogRecordAdmission(nook_companion_core::ExtensionEventLogRecord);
+
 #[cfg(test)]
 mod session_request_admission_tests {
     use super::*;
@@ -105,6 +110,10 @@ mod session_request_admission_tests {
     #[test]
     fn chrome_session_request_admission_is_unknown_and_schema_checked() {
         assert!(ExtensionSessionRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(
+            nook_companion_core::ExtensionSessionRequest::DECL
+                .contains("nook:extension-session-status")
+        );
         assert!(serde_json::from_str::<ExtensionSessionRequestAdmission>("null").is_err());
         assert!(
             serde_json::from_str::<ExtensionSessionRequestAdmission>(
@@ -112,6 +121,14 @@ mod session_request_admission_tests {
             )
             .is_err()
         );
+        let decoded: ExtensionSessionRequestAdmission = serde_json::from_str(
+            r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}}}"#,
+        )
+        .expect("valid status request");
+        assert!(matches!(
+            decode_extension_session_request(decoded),
+            nook_companion_core::ExtensionSessionRequest::Status(_)
+        ));
     }
 }
 
@@ -123,6 +140,24 @@ mod session_request_admission_tests {
     let ExtensionSessionRequestAdmission(request) = request;
     drop(request);
     nook_companion_core::ExtensionSessionRequestValidation::Accepted
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_request(
+    request: ExtensionSessionRequestAdmission,
+) -> nook_companion_core::ExtensionSessionRequest {
+    let ExtensionSessionRequestAdmission(request) = request;
+    request.decoded()
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_event_log_record(
+    record: ExtensionEventLogRecordAdmission,
+) -> nook_companion_core::ExtensionEventLogRecord {
+    let ExtensionEventLogRecordAdmission(record) = record;
+    record
 }
 
 #[wasm_bindgen]
@@ -285,6 +320,7 @@ mod admission_tests {
             AuthenticatorOptionsAdmission::DECL,
             AuthenticatorPreviewAdmission::DECL,
             ExtensionSessionStatusAdmission::DECL,
+            ExtensionEventLogRecordAdmission::DECL,
         ] {
             assert!(declaration.ends_with(" = unknown;"));
         }
@@ -306,6 +342,38 @@ mod admission_tests {
         assert!(serde_json::from_str::<AuthenticatorOptionsAdmission>("null").is_err());
         assert!(serde_json::from_str::<AuthenticatorPreviewAdmission>("null").is_err());
         assert!(serde_json::from_str::<ExtensionSessionStatusAdmission>("null").is_err());
+    }
+
+    #[test]
+    fn event_log_record_admission_decodes_the_complete_vault_event() -> Result<(), serde_json::Error>
+    {
+        assert!(ExtensionEventLogRecordAdmission::DECL.ends_with(" = unknown;"));
+        assert!(nook_companion_core::ExtensionEventLogRecord::DECL.contains("eventId"));
+        let valid = serde_json::json!({
+            "eventId": "event-1",
+            "path": "events/event-1.yaml",
+            "event": {
+                "schema_version": 2,
+                "store_id": "store_testtoken11",
+                "actor_id": format!("key_{}", "0".repeat(64)),
+                "actor_signing_public_key": "0".repeat(64),
+                "parents": [],
+                "created_at": "2026-08-10T00:00:00Z",
+                "key_epoch": "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+                "operations": [{"type":"vault-cleared"}],
+                "signature": format!("ed25519:{}", "0".repeat(128))
+            }
+        });
+        let admission: ExtensionEventLogRecordAdmission = serde_json::from_value(valid)?;
+        let decoded = decode_extension_event_log_record(admission);
+        assert_eq!(decoded.event_id, "event-1");
+        assert!(
+            serde_json::from_str::<ExtensionEventLogRecordAdmission>(
+                r#"{"eventId":"event-1","path":"events/event-1.yaml","event":{"schema_version":2}}"#
+            )
+            .is_err()
+        );
+        Ok(())
     }
 }
 

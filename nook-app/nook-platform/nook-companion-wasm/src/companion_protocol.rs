@@ -1,11 +1,11 @@
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionExtensionPresence, CompanionExtensionProtocol,
     CompanionHandoffResponseAdmission, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
-    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
-    CompanionIdentityUnlockRequest,
+    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
+    CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -36,6 +36,41 @@ pub struct CompanionIdentityHandoffStatusAdmission {
     request: CompanionIdentityHandoffRequest,
     observed_at: CompanionEpochMilliseconds,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum CompanionIdentityDiscoverySessionTransportRequest {
+    #[serde(rename = "nook:extension-session-discover-companion-identity")]
+    DiscoverCompanionIdentity {
+        presence: CompanionExtensionPresence,
+        discovery: CompanionIdentityDiscoveryObservation,
+    },
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityDiscoverySessionTransportAdmission(
+    CompanionIdentityDiscoverySessionTransportRequest,
+);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum CompanionIdentityHandoffSessionTransportRequest {
+    #[serde(rename = "nook:extension-session-authorize-companion-identity-handoff")]
+    AuthorizeCompanionIdentityHandoff {
+        authorization: CompanionIdentityHandoffAuthorization,
+    },
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityHandoffSessionTransportAdmission(
+    CompanionIdentityHandoffSessionTransportRequest,
+);
 
 #[wasm_bindgen]
 pub struct NookCompanionExtensionProtocol {
@@ -95,6 +130,24 @@ impl NookCompanionExtensionProtocol {
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_discovery_session_transport_request(
+    request: CompanionIdentityDiscoverySessionTransportAdmission,
+) -> CompanionIdentityDiscoverySessionTransportRequest {
+    let CompanionIdentityDiscoverySessionTransportAdmission(request) = request;
+    request
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_handoff_session_transport_request(
+    request: CompanionIdentityHandoffSessionTransportAdmission,
+) -> CompanionIdentityHandoffSessionTransportRequest {
+    let CompanionIdentityHandoffSessionTransportAdmission(request) = request;
+    request
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_identity_status(
     admission: CompanionIdentityHandoffStatusAdmission,
 ) -> Result<CompanionIdentityStatusAdmission, JsError> {
@@ -135,11 +188,29 @@ mod admission_tests {
         assert!(CompanionIdentityStatusRequestAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionHandoffResponseValueAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionIdentityHandoffStatusAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityDiscoverySessionTransportAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityHandoffSessionTransportAdmission::DECL.ends_with(" = unknown;"));
+        assert!(
+            CompanionIdentityDiscoverySessionTransportRequest::DECL
+                .contains("nook:extension-session-discover-companion-identity")
+        );
+        assert!(
+            CompanionIdentityHandoffSessionTransportRequest::DECL
+                .contains("nook:extension-session-authorize-companion-identity-handoff")
+        );
         assert!(serde_json::from_str::<CompanionIdentityDiscoveryAdmission>("null").is_err());
         assert!(serde_json::from_str::<CompanionExtensionPresenceAdmission>("null").is_err());
         assert!(serde_json::from_str::<CompanionIdentityStatusRequestAdmission>("null").is_err());
         assert!(serde_json::from_str::<CompanionHandoffResponseValueAdmission>("null").is_err());
         assert!(serde_json::from_str::<CompanionIdentityHandoffStatusAdmission>("null").is_err());
+        assert!(
+            serde_json::from_str::<CompanionIdentityDiscoverySessionTransportAdmission>("null")
+                .is_err()
+        );
+        assert!(
+            serde_json::from_str::<CompanionIdentityHandoffSessionTransportAdmission>("null")
+                .is_err()
+        );
     }
 
     #[test]
@@ -183,6 +254,72 @@ mod admission_tests {
             CompanionIdentityStatusAdmission::Accepted { .. }
         ));
         Ok(())
+    }
+
+    #[test]
+    fn session_transport_decoders_return_concrete_identity_variants()
+    -> Result<(), serde_json::Error> {
+        let discovery = r#"{
+            "type":"nook:extension-session-discover-companion-identity",
+            "payload":{
+                "presence":{"kind":"unavailable"},
+                "discovery":{
+                    "request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},
+                    "observedAt":100
+                }
+            }
+        }"#;
+        let discovery: CompanionIdentityDiscoverySessionTransportAdmission =
+            serde_json::from_str(discovery)?;
+        assert!(matches!(
+            decode_companion_identity_discovery_session_transport_request(discovery),
+            CompanionIdentityDiscoverySessionTransportRequest::DiscoverCompanionIdentity { .. }
+        ));
+
+        let handoff = r#"{
+            "type":"nook:extension-session-authorize-companion-identity-handoff",
+            "payload":{"authorization":{
+                "request":{
+                    "transaction":{
+                        "discovery":{
+                            "request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},
+                            "observedAt":100
+                        },
+                        "status":{"status":"unavailable","request_id":"request","vault_store_id":"vault"},
+                        "admittedAt":100
+                    },
+                    "recipientPublicKey":"age1recipient"
+                },
+                "observedAt":150,
+                "presence":{"kind":"unavailable"}
+            }}
+        }"#;
+        let handoff: CompanionIdentityHandoffSessionTransportAdmission =
+            serde_json::from_str(handoff)?;
+        assert!(matches!(
+            decode_companion_identity_handoff_session_transport_request(handoff),
+            CompanionIdentityHandoffSessionTransportRequest::AuthorizeCompanionIdentityHandoff { .. }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn session_transport_admissions_reject_wrong_tags_and_partial_payloads() {
+        assert!(
+            serde_json::from_str::<CompanionIdentityDiscoverySessionTransportAdmission>(
+                r#"{"type":"wrong","payload":{"presence":{"kind":"unavailable"}}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<CompanionIdentityDiscoverySessionTransportAdmission>(
+                r#"{"type":"nook:extension-session-discover-companion-identity","payload":{"presence":{"kind":"unavailable"},"discovery":{"request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},"observedAt":100},"unexpected":true}}"#
+            )
+            .is_err()
+        );
+        assert!(serde_json::from_str::<CompanionIdentityHandoffSessionTransportAdmission>(
+            r#"{"type":"nook:extension-session-authorize-companion-identity-handoff","payload":{}}"#
+        ).is_err());
     }
 }
 
