@@ -40,8 +40,7 @@ impl<'a> PrProducerCacheContract<'a> {
             "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
         );
         assert!(
-            pr.find("task ci:pr:rust-build-image")
-                < pr.find("  rust-ecosystem:\n"),
+            pr.find("task ci:pr:rust-build-image") < pr.find("  rust-ecosystem:\n"),
             "native cache production must precede the reusable ecosystem consumers"
         );
         assert!(

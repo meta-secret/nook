@@ -49,19 +49,32 @@ class DockerizedRustContract {
         ),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    const preview = workflow.jobs.preview;
-    const script = z.string().parse(preview?.steps?.[0]?.run);
-    expect(preview?.needs).toContain("wasm-node-test");
-    expect(preview?.needs).toContain("extension-e2e");
+    const preview = z
+      .object({
+        needs: z.array(z.string()),
+        steps: z.array(z.object({ run: z.string().optional() })).nonempty(),
+      })
+      .parse(workflow.jobs.preview);
+    const script = z.string().parse(preview.steps[0].run);
+    expect(preview.needs).toContain("wasm-node-test");
+    expect(preview.needs).toContain("extension-e2e");
     expect(Object.keys(workflow.jobs)).not.toContain(
       "auth-sensitive-extension-e2e",
     );
     expect(Object.keys(workflow.jobs)).not.toContain("full-extension-e2e");
-    const extension = workflow.jobs["extension-e2e"];
-    expect(extension?.if).toContain(
+    const extension = z
+      .object({
+        if: z.string(),
+        steps: z.array(
+          z.object({ if: z.string().optional(), run: z.string().optional() }),
+        ),
+      })
+      .parse(workflow.jobs["extension-e2e"]);
+    expect(extension.if).toContain("always()");
+    expect(extension.if).toContain(
       "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
     );
-    expect(extension?.steps).toEqual([
+    expect(extension.steps).toEqual([
       { if: "inputs.full_e2e_requested", run: "task _extension:test:e2e" },
       {
         if: "${{ !inputs.full_e2e_requested }}",
@@ -69,8 +82,11 @@ class DockerizedRustContract {
       },
     ]);
     for (const job of ["extension-e2e", "full-e2e-shard"]) {
-      expect(workflow.jobs[job]?.needs).not.toContain("wasm-node-test");
-      expect(workflow.jobs[job]?.needs).toContain("verify");
+      const dependent = z
+        .object({ needs: z.array(z.string()) })
+        .parse(workflow.jobs[job]);
+      expect(dependent.needs).not.toContain("wasm-node-test");
+      expect(dependent.needs).toContain("verify");
     }
     for (const full of ["true", "false"]) {
       for (const auth of ["true", "false"]) {
@@ -187,12 +203,24 @@ class DockerizedRustContract {
         ),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    const rustSteps = workflow.jobs.rust?.steps ?? [];
+    const rustJob = z
+      .object({
+        steps: z.array(
+          z.object({
+            if: z.string().optional(),
+            run: z.string().optional(),
+          }),
+        ),
+      })
+      .parse(workflow.jobs.rust);
+    const rustSteps = rustJob.steps;
     expect(
       rustSteps.filter(
         (step) =>
-          step.if?.includes("needs.rust-build.outputs.produced == 'true'") &&
-          /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run ?? ""),
+          typeof step.if === "string" &&
+          step.if.includes("needs.rust-build.outputs.produced == 'true'") &&
+          typeof step.run === "string" &&
+          /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
       ),
     ).toEqual([]);
     expect(rustSteps).toContainEqual(
@@ -220,9 +248,15 @@ class DockerizedRustContract {
     expect(bake).toContain(
       'pr-native-image = "docker-image://${DOCKER_RUST_IMAGE}"',
     );
-    const producer = dockerfile.split("FROM compile-native-source AS pr-native-build")[1]
-      ?.split("FROM pr-native-image AS pr-native-verify")[0];
-    expect(producer).toBeDefined();
+    const producerStart = dockerfile.indexOf(
+      "FROM compile-native-source AS pr-native-build",
+    );
+    const verifyStart = dockerfile.indexOf(
+      "FROM pr-native-image AS pr-native-verify",
+    );
+    expect(producerStart).toBeGreaterThanOrEqual(0);
+    expect(verifyStart).toBeGreaterThan(producerStart);
+    const producer = dockerfile.slice(producerStart, verifyStart);
     expect(producer).not.toContain("COPY . .");
     expect(producer).toContain("COPY nook-app nook-app");
   }
