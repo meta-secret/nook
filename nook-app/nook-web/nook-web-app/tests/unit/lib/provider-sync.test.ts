@@ -24,6 +24,7 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
+import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
@@ -72,7 +73,7 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   const syncResult = approvedSyncResult()
   const secretRefresh = vi.fn(async () =>
     authenticated
-      ? ok()
+      ? ok(SecretPageLoadOutcome.PageApplied)
       : err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
   )
 

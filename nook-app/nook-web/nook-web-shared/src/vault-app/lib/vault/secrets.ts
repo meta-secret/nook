@@ -30,6 +30,10 @@ export { VaultConnectionActions } from "$lib/vault/connection";
 
 const log = browserLogRuntime.createLogger("connect");
 
+export enum SecretPageLoadOutcome {
+  PageApplied = "page-applied",
+}
+
 interface VaultSecretAllocation {
   free(): void;
 }
@@ -560,7 +564,7 @@ export class VaultSecretActions {
   }
 
   async refreshSecretsFromSession(): Promise<
-    Result<VaultSecretsState["secrets"], StorageOperationFailure>
+    Result<SecretPageLoadOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager) {
@@ -588,7 +592,7 @@ export class VaultSecretActions {
     query,
     requestedOffset,
   }: SecretPageRequest): Promise<
-    Result<VaultSecretsState["secrets"], StorageOperationFailure>
+    Result<SecretPageLoadOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager)
@@ -689,7 +693,7 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk(state.secrets);
+    return storageOk(SecretPageLoadOutcome.PageApplied);
   }
 
   applyConnectedSecretPage({

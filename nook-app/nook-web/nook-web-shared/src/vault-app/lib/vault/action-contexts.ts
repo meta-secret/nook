@@ -8,6 +8,8 @@ import type { Result } from "neverthrow";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { OAuthTokenRefreshOutcome } from "$lib/vault/oauth";
+import type { ProviderPersistenceOutcome } from "$lib/vault/providers.svelte";
+import type { SecretPageLoadOutcome } from "$lib/vault/secrets";
 import type { NookStorageConnectArgs } from "$app-wasm";
 export type { NookStorageConnectArgs } from "$app-wasm";
 import type {
@@ -131,7 +133,9 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   clearUnlockedSession(resetManager?: boolean): void;
   connectAndSyncStagedProvider(): Promise<void>;
   dismissSuccess(): void;
-  ensureProviderSaved(): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ensureProviderSaved(): Promise<
+    Result<ProviderPersistenceOutcome, VaultStorageFailure>
+  >;
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure>>;
@@ -141,7 +145,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: ProviderPersistenceOptions,
-  ): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<
     Result<VaultSessionState["passwordEntries"], OAuthFailure | VaultStorageFailure>
@@ -325,7 +329,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(
     options: SyncProviderPersistenceOptions,
-  ): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ): Promise<Result<ProviderPersistenceOutcome, VaultStorageFailure>>;
   providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs;
   raceStorageTimeout<T, E = VaultStorageFailure>(
     request: StorageTimeoutRace<T, E>,
@@ -338,7 +342,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     Result<VaultSessionState["passwordEntries"], OAuthFailure | VaultStorageFailure>
   >;
   refreshReplacementConflicts(): Promise<Result<VaultProjectionConflictSnapshot, VaultStorageFailure>>;
-  refreshSecretsFromSession(): Promise<Result<VaultSecretsState["secrets"], VaultStorageFailure>>;
+  refreshSecretsFromSession(): Promise<
+    Result<SecretPageLoadOutcome, VaultStorageFailure>
+  >;
   runFanOutSyncAfterLocalSave(): Promise<VaultSynchronizationResult>;
   runFanOutSyncToProviders(
     visibility: ProviderSyncVisibility,
@@ -349,7 +355,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   removeProvider(
     providerId: string,
   ): Promise<Result<StorageProvider[], VaultStorageFailure>>;
-  ensureProviderSaved(): Promise<Result<StorageProvider[], VaultStorageFailure>>;
+  ensureProviderSaved(): Promise<
+    Result<ProviderPersistenceOutcome, VaultStorageFailure>
+  >;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
   stagedRemoteStorageArgs(): StagedRemoteStorage;

@@ -142,6 +142,16 @@ export interface ProviderRemoval {
   readonly id: string;
 }
 
+export enum OAuthRemoteReferenceSyncOutcome {
+  NotApplicable = "not-applicable",
+  Unchanged = "unchanged",
+  Updated = "updated",
+}
+
+export enum ProviderPersistenceOutcome {
+  Persisted = "persisted",
+}
+
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
@@ -282,7 +292,7 @@ export class VaultProviderActions {
   }
 
   syncOAuthRemoteRefFromManager(): Result<
-    ProviderActionsContext["oauthFileDraft"],
+    OAuthRemoteReferenceSyncOutcome,
     StorageOperationFailure
   > {
     const state = this.state;
@@ -291,7 +301,7 @@ export class VaultProviderActions {
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
     )
-      return storageOk(state.oauthFileDraft);
+      return storageOk(OAuthRemoteReferenceSyncOutcome.NotApplicable);
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -307,13 +317,13 @@ export class VaultProviderActions {
       let config: typeof draft.config;
       try {
         if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk(state.oauthFileDraft);
+          return storageOk(OAuthRemoteReferenceSyncOutcome.Unchanged);
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk(state.oauthFileDraft);
+      return storageOk(OAuthRemoteReferenceSyncOutcome.Updated);
     } finally {
       updated.free();
     }
@@ -465,7 +475,7 @@ export class VaultProviderActions {
   }
 
   async persistProviders({ opts }: ProviderPersistence): Promise<
-    Result<StorageProvider[], StorageOperationFailure>
+    Result<ProviderPersistenceOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const request: Parameters<
@@ -496,7 +506,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk(state.providers);
+    return storageOk(ProviderPersistenceOutcome.Persisted);
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
@@ -669,7 +679,7 @@ export class ProviderPersistenceActions {
   }
 
   async ensureProviderSaved(): Promise<
-    Result<StorageProvider[], StorageOperationFailure>
+    Result<ProviderPersistenceOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const scope = await this.providerStoreIdForSave();
@@ -747,7 +757,7 @@ export class ProviderPersistenceActions {
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      return storageOk(state.providers);
+      return storageOk(persistence.value);
     } finally {
       outcome.free();
     }

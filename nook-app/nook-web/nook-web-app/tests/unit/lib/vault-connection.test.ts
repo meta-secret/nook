@@ -18,7 +18,12 @@ import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
 import { OAuthTokenRefreshOutcome } from '$lib/vault/oauth'
+import {
+  OAuthRemoteReferenceSyncOutcome,
+  ProviderPersistenceOutcome,
+} from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
+import { SecretPageLoadOutcome } from '$lib/vault/secrets'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 type ConnectionScenario = {
@@ -79,10 +84,14 @@ function connectionScenario(
   state.syncProviderById = syncProviderById
   state.assessVaultConnectStatus = assessVaultConnectStatus
   state.handleRemoteVaultAssessStatus = vi.fn(async () => false)
-  state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () => ok())
-  state.syncOAuthRemoteRefFromManager = vi.fn(() => ok())
+  state.loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () =>
+    ok(SecretPageLoadOutcome.PageApplied),
+  )
+  state.syncOAuthRemoteRefFromManager = vi.fn(() =>
+    ok(OAuthRemoteReferenceSyncOutcome.NotApplicable),
+  )
   state.ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
-    async () => ok(),
+    async () => ok(ProviderPersistenceOutcome.Persisted),
   )
   state.loadProviders = vi.fn<VaultState['loadProviders']>(async () => ok())
   state.promoteSessionVaultToLocalIfNeeded = vi.fn(async () => ok())
