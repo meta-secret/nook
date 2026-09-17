@@ -26,7 +26,6 @@ import {
   activeVaultScope,
   AuthProviderPersistence,
   type AuthProvidersSnapshot,
-  unselectedVaultScope,
 } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
