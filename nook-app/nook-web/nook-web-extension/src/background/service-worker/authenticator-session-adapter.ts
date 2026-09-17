@@ -179,7 +179,9 @@ export class ExtensionAuthenticatorSession {
     }
     const delivery = await this.pairing.sendSessionMessage(
       message,
-      authenticatorResponseDecoder(decode_authenticator_preview_session_response),
+      authenticatorResponseDecoder(
+        decode_authenticator_preview_session_response,
+      ),
     )
     if (delivery.isErr()) return err(delivery.error)
     return ok(delivery.value)
@@ -246,7 +248,9 @@ export class ExtensionAuthenticatorSession {
     }
     const delivery = await this.pairing.sendSessionMessage(
       message,
-      authenticatorResponseDecoder(decode_authenticator_secret_session_response),
+      authenticatorResponseDecoder(
+        decode_authenticator_secret_session_response,
+      ),
     )
     if (delivery.isErr()) return err(delivery.error)
     return ok(delivery.value)

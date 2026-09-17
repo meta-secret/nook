@@ -233,16 +233,14 @@ function publicCredential({
     throw new DOMException('Invalid Nook response.', 'DataError')
   }
   const response: NookPublicCredentialResponse =
-    ceremony === WebsitePasskeyCeremony.Create &&
-    'attestationObject' in result
+    ceremony === WebsitePasskeyCeremony.Create && 'attestationObject' in result
       ? {
           clientDataJSON,
           attestationObject: bytes(result.attestationObject),
           getTransports: () => ['internal'],
           getPublicKeyAlgorithm: () => -7,
         }
-      : ceremony === WebsitePasskeyCeremony.Get &&
-          'authenticatorData' in result
+      : ceremony === WebsitePasskeyCeremony.Get && 'authenticatorData' in result
         ? {
             clientDataJSON,
             authenticatorData: bytes(result.authenticatorData),
