@@ -109,8 +109,7 @@ function providerConnectionScenario(
     stagedRemoteStorageArgs: () => ({
       kind: StagedRemoteStorageKind.Unavailable,
     }),
-    ensureProviderSaved: async () =>
-      ok(ProviderPersistenceOutcome.Persisted),
+    ensureProviderSaved: async () => ok(ProviderPersistenceOutcome.Persisted),
     flushRemoteEventOutboxNow,
     syncProviderById,
   } satisfies Pick<
