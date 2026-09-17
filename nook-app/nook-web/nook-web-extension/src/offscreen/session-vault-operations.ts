@@ -286,7 +286,6 @@ export async function importExtensionVaultWithDependencies({
               saveArgs,
             )
           }
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ ok: true, status })
         } catch {
           return err(
@@ -390,7 +389,6 @@ export async function flushPasskeyEventToProviders({
 > {
   try {
     const snapshot = await activeManager.load_auth_providers_snapshot()
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const providers = select_remote_event_flush_providers({
       snapshot,
       vaultStoreId,

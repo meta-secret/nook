@@ -74,6 +74,7 @@ tasks:
     cmds:
       - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh"
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts"
+      - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-cache-registry.test.ts"
 
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.

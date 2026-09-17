@@ -34,19 +34,16 @@ export class CloudKitTokenWait {
   private state = CloudKitTokenWaitState.Waiting;
   private readonly timeout: ReturnType<typeof setTimeout>;
   private readonly poll: ReturnType<typeof setInterval>;
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private resolve: (outcome: Result<string, OAuthFailure>) => void = () => {};
   readonly completion = new Promise<Result<string, OAuthFailure>>((resolve) => {
     this.resolve = resolve;
   });
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private readonly tokenListener = (outcome: Result<string, OAuthFailure>) =>
     this.finish(outcome);
   private readonly messageListener = (event: MessageEvent) => {
     const data: unknown = event.data;
     const token = this.request.owner.webAuthTokenFromMessageData(data);
     if (token.kind === WebAuthTokenLookupKind.Unavailable) return;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const stored = cloudKitRuntime.storeCloudKitWebAuthToken({
       containerIdentifier: ICLOUD_CONTAINER_ID,
       token,
@@ -95,7 +92,6 @@ export class CloudKitTokenWait {
     else if (token.value.kind === WebAuthTokenLookupKind.Available)
       this.finish(ok(token.value.token));
   }
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   private finish(outcome: Result<string, OAuthFailure>): void {
     if (this.state === CloudKitTokenWaitState.Settled) return;
     this.state = CloudKitTokenWaitState.Settled;
@@ -135,7 +131,6 @@ class CloudKitSignInBrowser {
         if (eq === -1) continue;
         const value = trimmed.slice(eq + 1);
         if (value)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({
             kind: WebAuthTokenLookupKind.Available,
             token: decodeURIComponent(value),
@@ -149,7 +144,6 @@ class CloudKitSignInBrowser {
   startStoredWebAuthTokenWait(
     timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
   ): CloudKitTokenWait {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new CloudKitTokenWait({
       browser: this.browser,
       owner: this,
@@ -160,7 +154,6 @@ class CloudKitSignInBrowser {
   startNativeCloudKitWebAuthTokenWait(
     timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
   ): CloudKitTokenWait {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new CloudKitTokenWait({
       browser: this.browser,
       owner: this,
@@ -178,7 +171,6 @@ class CloudKitSignInBrowser {
     try {
       const response = await fetch(
         `https://api.apple-cloudkit.com/database/1/${container}/${environment}/public/users/current?ckAPIToken=${apiToken}`,
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         { method: "GET", headers: { Accept: "application/json" } },
       );
       value = await response.json();
@@ -249,7 +241,6 @@ class CloudKitSignInBrowser {
       return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
     }
     if (!opened) return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const wait = new CloudKitTokenWait({
       browser: this.browser,
       owner: this,

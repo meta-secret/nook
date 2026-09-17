@@ -1,9 +1,19 @@
 /** @typedef {Record<string, unknown>} JsonRecord */
+export const BuildkitCacheExportByteMeasurementStatus = Object.freeze({
+  Measured: "measured",
+  Unavailable: "unavailable",
+});
+export const BuildkitCacheExportByteUnavailableReason = Object.freeze({
+  NotEmitted: "buildkit_did_not_emit_byte_count",
+});
+/** @typedef {{status: 'measured', bytes: number}} MeasuredCacheExportBytes */
+/** @typedef {{status: 'unavailable', reason: 'buildkit_did_not_emit_byte_count'}} UnavailableCacheExportBytes */
+/** @typedef {MeasuredCacheExportBytes | UnavailableCacheExportBytes} CacheExportByteMeasurement */
 /**
  * @typedef {object} CacheExportSummary
  * @property {number} attempts
  * @property {number} completed
- * @property {number} bytes
+ * @property {CacheExportByteMeasurement} byte_measurement
  * @property {number} duration_ms
  * @property {number} incomplete_failures
  */
@@ -19,12 +29,6 @@ export class BuildkitCacheExportTelemetry {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
-  /** @param {unknown} value @returns {number} */
-  nonNegativeInteger(value) {
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
-  }
-
   /** @returns {CacheExportSummary} */
   summary() {
     /** @type {Map<string, {started?: string, completed?: string, failed: boolean}>} */
@@ -33,7 +37,9 @@ export class BuildkitCacheExportTelemetry {
     const bytesByStatus = new Map();
     for (const event of this.events) {
       const historyReference =
-        typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
+        typeof event.nook_history_ref === "string"
+          ? event.nook_history_ref
+          : "";
       const vertexes = Array.isArray(event.vertexes) ? event.vertexes : [];
       for (const candidate of vertexes) {
         if (!this.isJsonRecord(candidate)) continue;
@@ -62,7 +68,9 @@ export class BuildkitCacheExportTelemetry {
     }
     for (const event of this.events) {
       const historyReference =
-        typeof event.nook_history_ref === "string" ? event.nook_history_ref : "";
+        typeof event.nook_history_ref === "string"
+          ? event.nook_history_ref
+          : "";
       const statuses = Array.isArray(event.statuses) ? event.statuses : [];
       const historyHasCacheExport = [...exportsByVertex.keys()].some((key) =>
         key.startsWith(`${historyReference}:`),
@@ -81,13 +89,29 @@ export class BuildkitCacheExportTelemetry {
               `${id} ${name}`,
             ));
         if (!belongsToCacheExport) continue;
-        // Completed BuildKit status records may retain only `total`, or reset
-        // `current` to zero after the transfer. Either is measured evidence.
-        const observedCurrent = this.nonNegativeInteger(candidate.current);
+        // Completed BuildKit status records may reset `current` to zero after
+        // the transfer, so retain a positive `total`. Zero-only counters are
+        // placeholders and do not prove that BuildKit emitted transfer bytes.
+        const currentValue = candidate.current;
+        const totalValue = candidate.total;
+        const currentIsMeasured =
+          typeof currentValue === "number" &&
+          Number.isInteger(currentValue) &&
+          currentValue >= 0;
+        const totalIsMeasured =
+          typeof totalValue === "number" &&
+          Number.isInteger(totalValue) &&
+          totalValue >= 0;
+        if (!currentIsMeasured && !totalIsMeasured) continue;
+        const observedCurrent = currentIsMeasured ? Number(currentValue) : 0;
+        const observedTotal = totalIsMeasured ? Number(totalValue) : 0;
         const current =
           observedCurrent > 0
             ? observedCurrent
-            : this.nonNegativeInteger(candidate.total);
+            : totalIsMeasured
+              ? observedTotal
+              : observedCurrent;
+        if (current <= 0) continue;
         const key = `${vertexKey}:${id}`;
         bytesByStatus.set(key, Math.max(bytesByStatus.get(key) || 0, current));
       }
@@ -106,12 +130,51 @@ export class BuildkitCacheExportTelemetry {
         }
       }
     }
+    /** @type {CacheExportByteMeasurement} */
+    const byteMeasurement =
+      bytesByStatus.size > 0
+        ? {
+            status: BuildkitCacheExportByteMeasurementStatus.Measured,
+            bytes: [...bytesByStatus.values()].reduce(
+              (sum, value) => sum + value,
+              0,
+            ),
+          }
+        : {
+            status: BuildkitCacheExportByteMeasurementStatus.Unavailable,
+            reason: BuildkitCacheExportByteUnavailableReason.NotEmitted,
+          };
     return {
       attempts: exportsByVertex.size,
       completed,
-      bytes: [...bytesByStatus.values()].reduce((sum, value) => sum + value, 0),
+      byte_measurement: byteMeasurement,
       duration_ms: durationMs,
       incomplete_failures: incompleteFailures,
     };
+  }
+}
+
+/** Owns precedence between structured and plain-progress export evidence. */
+export class BuildkitCacheExportReconciler {
+  /** @param {CacheExportSummary} structured */
+  constructor(structured) {
+    this.structured = structured;
+  }
+
+  /** @param {CacheExportSummary} plain @returns {CacheExportSummary} */
+  reconcile(plain) {
+    if (this.structured.attempts === 0) return plain;
+    if (
+      this.structured.byte_measurement.status ===
+        BuildkitCacheExportByteMeasurementStatus.Unavailable &&
+      plain.byte_measurement.status ===
+        BuildkitCacheExportByteMeasurementStatus.Measured
+    ) {
+      return {
+        ...this.structured,
+        byte_measurement: plain.byte_measurement,
+      };
+    }
+    return this.structured;
   }
 }

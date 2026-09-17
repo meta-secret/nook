@@ -55,7 +55,6 @@
   aria-label={vault.t(I18N_KEYS.HelpDiagramLabel)}
 >
   {#if svgHtml}
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html svgHtml}
   {/if}
 </div>

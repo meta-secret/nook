@@ -10,7 +10,7 @@ import { PrCacheHealth } from "./pr-cache-health.mjs";
 
 /** @param {string} job @param {Record<string, unknown>} [overrides] @returns {CacheTelemetryRecord} */
 const telemetry = (job, overrides = {}) => ({
-  schema_version: 1,
+  schema_version: 2,
   github: { run_id: "42", run_attempt: 1, job },
   cache_backend: {
     kind: "remote",
@@ -66,7 +66,10 @@ const telemetry = (job, overrides = {}) => ({
     cache_export: {
       attempts: 0,
       completed: 0,
-      bytes: 0,
+      byte_measurement: {
+        status: "unavailable",
+        reason: "buildkit_did_not_emit_byte_count",
+      },
       duration_ms: 0,
       incomplete_failures: 0,
     },
@@ -130,7 +133,7 @@ void test("fails missing telemetry, failed jobs, broken collection, and read-onl
       cache_export: {
         attempts: 1,
         completed: 1,
-        bytes: 20,
+        byte_measurement: { status: "measured", bytes: 20 },
         duration_ms: 2,
         incomplete_failures: 0,
       },
@@ -170,7 +173,10 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
           cache_export: {
             attempts: 0,
             completed: 0,
-            bytes: 0,
+            byte_measurement: {
+              status: "unavailable",
+              reason: "buildkit_did_not_emit_byte_count",
+            },
             duration_ms: 0,
             incomplete_failures: 0,
           },
@@ -352,9 +358,7 @@ void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fal
   });
 
   assert.equal(model.gate.verdict, "fail");
-  assert.ok(
-    model.gate.reasons.includes("wasm-node-test:sccache_unavailable"),
-  );
+  assert.ok(model.gate.reasons.includes("wasm-node-test:sccache_unavailable"));
   assert.ok(
     model.gate.reasons.includes(
       "wasm-node-test:sccache_fallback:credentials_unavailable",
@@ -392,7 +396,9 @@ void test("does not require sccache for the web-only verification job", () => {
     },
   });
   const model = new PrCacheHealth().evaluate({
-    jobs: [{ id: "verify", result: "success", buildExpected: true, readOnly: false }],
+    jobs: [
+      { id: "verify", result: "success", buildExpected: true, readOnly: false },
+    ],
     telemetry: [webOnly],
   });
 
@@ -509,11 +515,17 @@ void test("PR workflow covers every BuildKit-producing job without another build
     "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
     'require-sccache: "true"',
   ]) {
-    assert.match(wasmNodeJob, new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(
+      wasmNodeJob,
+      new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   }
   assert.match(
     productDockerfile,
     /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
   );
-  assert.match(productDockerfile, /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/);
+  assert.match(
+    productDockerfile,
+    /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/,
+  );
 });

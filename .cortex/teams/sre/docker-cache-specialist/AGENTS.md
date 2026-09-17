@@ -47,14 +47,32 @@ behavior for packets issued by SRE Team Gizmo.
   compiler objects for the next committed head.
 - Require authenticated registry reachability and access to each present
   current/parent cache manifest and every referenced blob before compilation.
-  The target exported through `cache_to` must retain the reusable dependency
-  and compiler ancestry consumed by ordinary builds. A missing exact current
-  or parent manifest is an expected miss; registry/authentication errors,
-  inaccessible referenced content, and export failure are terminal.
+  A missing exact current or parent manifest is an expected miss;
+  registry/authentication errors, inaccessible referenced content, and export
+  failure are terminal.
+- Run remote `build:compile` as two sequential BuildKit/Bake invocations.
+  Phase A builds a rooted dependency-foundation target from the current exact
+  head and first-parent imports. That target includes Cargo fetch, native and
+  WASM dependency compilation, and stable Node/web dependency roots where
+  feasible. When publication is authorized, Phase A is the sole current-head
+  `mode=max` registry exporter. Its completed export is portable before Phase
+  B starts, so a Phase B failure leaves a retryable foundation cache on a fresh
+  node.
+- Phase B imports the current-head cache (the Phase A publication when export
+  is authorized), then performs source-sensitive native/WASM, web,
+  repository-tooling, and Loom compile/type-check work. Phase B has no
+  `cache-to`; its failure cannot overwrite or invalidate Phase A's portable
+  export. Both invocations remain inside the single five-minute build-only job.
+- In a no-BuildKit-export invocation, Phase A still imports current and
+  first-parent refs and Phase B imports only the current-head ref; neither
+  phase exports registry cache. sccache access remains available when the
+  trusted credential pair exists.
 - Reject scratch, marker-only, or synthetic join targets that allow BuildKit to
   export a terminal result while orphaning intermediate cache records.
-- Keep dependency layers reusable across source changes and explicitly root
-  native, WASM, Node, and web dependency stages.
+- Keep dependency layers reusable across source changes. Root Cargo fetch,
+  native and WASM dependency compilation, and stable Node/web dependency stages
+  in the Phase A dependency graph; keep Loom and source-sensitive work in Phase
+  B.
 - Enforce semantic input-domain isolation for every compiler stage. Rust,
   WASM, Loom, and web stages must never broadly copy the repository root; each
   stage copies only the source, lockfiles, manifests, generated inputs, and
@@ -100,11 +118,13 @@ behavior for packets issued by SRE Team Gizmo.
   compiler vertices. Never encode cache availability or export authority in
   an ARG, ENV, target context, platform, output, or command shape that
   divides their BuildKit keys.
-- Use one rooted `mode=max` exact source-cache export so all source-free and
-  compiler vertices remain reachable; never pair it with a sibling export.
+- Use one rooted Phase A `mode=max` exact source-cache export so all intended
+  source-free dependency vertices remain reachable. Phase B must not export
+  registry cache, and neither phase may add a sibling cache exporter.
 - Configure finite per-operation exporter and transport timeouts, but never
   describe an exporter `timeout` as a total export-duration bound. Acceptance
-  is one export and completion of the whole GitHub job within five minutes.
+  is the Phase A export and completion of the whole GitHub job within five
+  minutes.
 - Preserve ordinary new-commit compiler reuse through sccache and stable
   source-free vertices in the rooted graph.
 - Maintain the canonical simulator and proof surfaces:
@@ -114,8 +134,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Author focused policy and regression tests for every cache defect.
 - Keep cache proofs bounded to genuine import/export wiring, structured cache
   artifacts, registry integrity, and actual Dockerfile syntax or build
-  behavior. Do not simulate source mutations to predict BuildKit's own
-  invalidation result.
+  behavior. Prove the Phase A/Phase B order, Phase A portability boundary, sole
+  exporter, and no-export mode without simulating source mutations to predict
+  BuildKit's own invalidation result.
 - Extend the simulator and proof with the remote `sccache` fault matrix.
   - Prove bounded fallback after startup failure.
   - Prove DNS or object-read failure opens one shared per-`RUN` circuit.
@@ -154,8 +175,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not equate manifest existence or import success with reachable reusable
   ancestry, or export a scratch/marker join that can orphan intermediate cache
   records.
-- Do not omit native, WASM, Loom, Node, or web dependency roots from
-  stable Docker layers, and do not run a separate source-free population job.
+- Do not omit native, WASM, Node, or web dependency roots from the Phase A
+  dependency graph, or Loom compile/type-check from Phase B. Do not run a
+  separate source-free population job.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic
   consumer.
@@ -166,6 +188,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not hide cache transport or export failures behind successful status.
   Ordinary absent exact refs may fall through to the first-parent lineage; a
   first-ever commit may cold-build and seed its exact ref.
+- Do not run tests, coverage, e2e, or preflight transitively from either
+  `build:compile` phase. Loom work in this build-only route is compile/type
+  checking, not `loom:verify`.
 - Do not retry remote `sccache` after its circuit opens in a Docker `RUN`.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
 - Do not execute GitHub, pull-request, publication, landing, or promotion

@@ -208,7 +208,6 @@ class ExtensionPairingIdentity {
   }
 
   setSessionStorage(items: ExtensionSessionStorageWrite): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.set(items, () => {
         const message = chrome.runtime.lastError?.message
@@ -219,7 +218,6 @@ class ExtensionPairingIdentity {
   }
 
   getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.get<ExtensionSessionStorageItems>(
         key,
@@ -233,7 +231,6 @@ class ExtensionPairingIdentity {
   }
 
   getAllSessionStorage(): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.get<ExtensionSessionStorageItems>((items) => {
         const message = chrome.runtime.lastError?.message
@@ -244,7 +241,6 @@ class ExtensionPairingIdentity {
   }
 
   removeSessionStorage(key: string): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.session.remove(key, () => {
         const message = chrome.runtime.lastError?.message
@@ -410,7 +406,6 @@ class ExtensionPairingIdentity {
     const stored = await this.getPairingStorage()
     const grant = stored[key]
     if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: 'unavailable' })
     }
     const selected = pairingPolicy.selectedPairingGrant(stored)
@@ -429,7 +424,6 @@ class ExtensionPairingIdentity {
       this.websiteSessionStatusTransport(statusResponse) !==
       ExtensionSessionStatusAvailability.Unlocked
     ) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: 'locked',
         vault_type: currentGrant.vaultType,
@@ -437,7 +431,6 @@ class ExtensionPairingIdentity {
         vault_name: currentGrant.vaultName,
       })
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({
       kind: 'unlocked',
       vault_type: currentGrant.vaultType,
@@ -693,7 +686,6 @@ class ExtensionPairingIdentity {
   }
 
   private readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.local.get<LegacyPairingStorageItems>((items) => {
         if (chrome.runtime.lastError) {
@@ -713,7 +705,6 @@ class ExtensionPairingIdentity {
   private removeLegacyPairingStorage(
     keys: LegacyPairingStorageKeys,
   ): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       chrome.storage.local.remove(keys, () => {
         if (chrome.runtime.lastError) {

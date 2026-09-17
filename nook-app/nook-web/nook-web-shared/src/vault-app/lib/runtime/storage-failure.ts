@@ -35,7 +35,6 @@ export enum VaultStorageFailureKind {
 }
 
 export class VaultStorageFailure {
-  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
   constructor(
     readonly kind: VaultStorageFailureKind,
     readonly recoveryKind = VaultRecoveryErrorKind.Other,
@@ -87,9 +86,9 @@ export class VaultStorageFailure {
 }
 
 /** Admits a native failure through Rust's compatibility classifier without retaining its message. */
-export class NativeVaultStorageFailure extends VaultStorageFailure {
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  constructor(cause: unknown) {
+export class NativeVaultStorageFailure<NativeCause = Error | string>
+  extends VaultStorageFailure {
+  constructor(cause: NativeCause) {
     super(
       VaultStorageFailureKind.OperationFailed,
       classify_vault_recovery_error(

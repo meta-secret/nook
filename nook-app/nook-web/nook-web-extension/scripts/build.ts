@@ -90,7 +90,6 @@ class ExtensionBuildDependencyLoader {
   ): Promise<TModule> {
     const resolved = requireFromWeb.resolve(specifier)
     // Resolution is constrained to the installed web dependency tree.
-    // eslint-disable-next-line no-unsanitized/method
     const imported: unknown = await import(pathToFileURL(resolved).href)
     if (!admits(imported)) {
       throw new Error(`Invalid web dependency: ${specifier}`)

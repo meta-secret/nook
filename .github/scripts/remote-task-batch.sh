@@ -55,9 +55,9 @@ run_task() {
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     # Keep the explicit no-export contract on the shorter budget. A publish
-    # solve owns one rooted mode=max BuildKit export, so give that exporter the
-    # measured headroom it needs while retaining the five-minute job boundary
-    # for cleanup and always-run raw-log/JSON telemetry collection.
+    # run completes the rooted Phase A mode=max export before Phase B source
+    # compilation, while the task and five-minute job boundaries retain room
+    # for always-run raw-log/JSON telemetry collection.
     build:compile)
       if [ "${REQUESTED_PUBLISH_COMPILE_CACHE:-true}" = "false" ]; then
         timeout --kill-after=10s 240s task build:compile
