@@ -346,7 +346,11 @@ class VaultStateSlicesImplementation {
         enumerable: true,
         get: () => {
           const value = state[key];
-          return typeof value === "function" ? value.bind(state) : value;
+          const delegatedValue: State[keyof State] =
+            typeof value === "function"
+              ? (value.bind(state) as State[keyof State])
+              : value;
+          return delegatedValue;
         },
         set: (value: State[keyof State]) => {
           Reflect.set(state, key, value);

@@ -34,15 +34,22 @@ export type ProviderVaultEvidence =
 
 export class ReadyProviderVaultEvidence {
   readonly kind = ProviderVaultEvidenceKind.Ready;
-  constructor(
-    readonly projection: NookProviderVaultDecisionProjection,
-    readonly identities: readonly NookProviderVaultIdentityProjection[],
-  ) {}
+  readonly projection: NookProviderVaultDecisionProjection;
+  readonly identities: readonly NookProviderVaultIdentityProjection[];
+  constructor(args: ReadyProviderVaultEvidenceArgs) {
+    this.projection = args.projection;
+    this.identities = args.identities;
+  }
   release(): void {
     for (const identity of this.identities) identity.free();
     this.projection.free();
   }
 }
+
+type ReadyProviderVaultEvidenceArgs = {
+  readonly projection: NookProviderVaultDecisionProjection;
+  readonly identities: readonly NookProviderVaultIdentityProjection[];
+};
 
 type LoadProviderVaultEvidenceRequest = {
   readonly manager: NookVaultManager;
@@ -63,9 +70,11 @@ export class ProviderVaultEvidenceReader {
       return err(new NativeVaultStorageFailure(failure));
     }
     try {
-      return ok(
-        new ReadyProviderVaultEvidence(projection, projection.identities),
-      );
+      const evidenceArgs: ReadyProviderVaultEvidenceArgs = {
+        projection,
+        identities: projection.identities,
+      };
+      return ok(new ReadyProviderVaultEvidence(evidenceArgs));
     } catch (failure) {
       projection.free();
       return err(new NativeVaultStorageFailure(failure));

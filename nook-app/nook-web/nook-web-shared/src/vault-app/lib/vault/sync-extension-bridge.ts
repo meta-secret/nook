@@ -50,11 +50,16 @@ export class ExtensionSyncPublication {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
+      const publicationRequest: Parameters<
+        typeof extensionEventLogPublisher.publishExtensionEventLogUpdate
+      >[0] = {
+        vaultStoreId: vaultStoreId.value,
+        eventLogRecords,
+      };
       const publication =
-        extensionEventLogPublisher.publishExtensionEventLogUpdate({
-          vaultStoreId: vaultStoreId.value,
-          eventLogRecords,
-        });
+        extensionEventLogPublisher.publishExtensionEventLogUpdate(
+          publicationRequest,
+        );
       if (publication.isErr()) {
         return storageErr(
           new VaultStorageFailure(
@@ -62,10 +67,11 @@ export class ExtensionSyncPublication {
           ),
         );
       }
-      return storageOk({
+      const snapshot: ExtensionEventLogPublicationSnapshot = {
         vaultStoreId: vaultStoreId.value,
         publishedRecordCount: eventLogRecords.length,
-      });
+      };
+      return storageOk(snapshot);
     } finally {
       records.value.free();
     }
