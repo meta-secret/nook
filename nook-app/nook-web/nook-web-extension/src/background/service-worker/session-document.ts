@@ -15,6 +15,16 @@ export enum ExtensionSessionTransportFailureKind {
 
 export class ExtensionSessionTransportFailure {
   constructor(readonly kind: ExtensionSessionTransportFailureKind) {}
+
+  toResult<Response, DecodeFailure = never>(): ExtensionSessionTransportResult<
+    Response,
+    DecodeFailure
+  > {
+    return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+      this,
+    )
+  }
+
   get response() {
     return { ok: false as const, reason: this.kind }
   }
@@ -70,11 +80,9 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   > {
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
-        err(
-          new ExtensionSessionTransportFailure(
-            ExtensionSessionTransportFailureKind.Closed,
-          ),
-        ),
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ).toResult<Response, DecodeFailure>(),
       )
     return new Promise((resolve) => {
       try {
@@ -84,19 +92,15 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
             const nativeFailure = chrome.runtime.lastError
             if (this.access === SessionDocumentAccess.Revoked) {
               resolve(
-                err(
-                  new ExtensionSessionTransportFailure(
-                    ExtensionSessionTransportFailureKind.Closed,
-                  ),
-                ),
+                new ExtensionSessionTransportFailure(
+                  ExtensionSessionTransportFailureKind.Closed,
+                ).toResult<Response, DecodeFailure>(),
               )
             } else if (nativeFailure) {
               resolve(
-                err(
-                  new ExtensionSessionTransportFailure(
-                    ExtensionSessionTransportFailureKind.DeliveryFailed,
-                  ),
-                ),
+                new ExtensionSessionTransportFailure(
+                  ExtensionSessionTransportFailureKind.DeliveryFailed,
+                ).toResult<Response, DecodeFailure>(),
               )
             } else if (
               !response ||
@@ -104,27 +108,36 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
               Array.isArray(response)
             ) {
               resolve(
-                err(
-                  new ExtensionSessionTransportFailure(
-                    ExtensionSessionTransportFailureKind.ResponseMissing,
-                  ),
-                ),
+                new ExtensionSessionTransportFailure(
+                  ExtensionSessionTransportFailureKind.ResponseMissing,
+                ).toResult<Response, DecodeFailure>(),
               )
             } else if (decodeResponse) {
               const decoded = decodeResponse(response)
-              resolve(decoded.mapErr((failure) => failure))
+              resolve(
+                decoded.match(
+                  (decodedResponse) =>
+                    ok<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(decodedResponse),
+                  (failure) =>
+                    err<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(failure),
+                ),
+              )
             } else {
-              resolve(ok(response))
+              resolve(ok<ExtensionSessionResponse, never>(response))
             }
           },
         )
       } catch {
         resolve(
-          err(
-            new ExtensionSessionTransportFailure(
-              ExtensionSessionTransportFailureKind.DeliveryFailed,
-            ),
-          ),
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ).toResult<Response, DecodeFailure>(),
         )
       }
     })
