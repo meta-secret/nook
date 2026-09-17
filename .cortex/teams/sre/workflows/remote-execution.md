@@ -35,12 +35,21 @@ committed branch head; the returned exact SHA is observational evidence only.
 - Do not substitute `rust:ci`, `web:verify`, or `loom:verify`.
 - Return positive compilation evidence for local integration.
 - The compile task checks authenticated registry transport and access to each
-  present current/parent manifest and its referenced blobs before work starts,
-  imports both unversioned exact `nook-build-compile` refs through BuildKit,
-  and exports only the current-head graph. A missing exact manifest is a
-  normal miss; API, authentication, referenced-content, and export failures
-  are terminal. The access check does not select cache reuse; BuildKit remains
-  authoritative. The five-minute timeout includes export.
+  present current/parent manifest and its referenced blobs before work starts.
+  Phase A imports both unversioned exact `nook-build-compile` refs through
+  BuildKit and builds a rooted dependency foundation containing Cargo fetch,
+  native/WASM dependency compilation, and stable Node/web dependency roots.
+  When publication is authorized, Phase A is the sole current-head `mode=max`
+  exporter. Phase B imports that current-head ref, performs source-sensitive
+  Rust/WASM and web/repository-tooling/Loom compile/type-check work, and has no
+  `cache-to`. The phases run sequentially inside one `build:compile` task; a
+  Phase B failure leaves the completed Phase A cache portable for a fresh-node
+  retry. No-export verification imports both refs in Phase A and the current
+  ref in Phase B, with no registry exporter and sccache still available. A
+  missing exact manifest is a normal miss; API, authentication,
+  referenced-content, and export failures are terminal. The access check does
+  not select cache reuse; BuildKit remains authoritative. The five-minute
+  timeout includes both phases and export.
 
 ## Slow dev PR validation
 

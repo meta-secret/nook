@@ -16,12 +16,15 @@ variable "GHA_CACHE_PARENT_SCOPE_SUFFIX" {
 
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
 compile_parent_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}:buildcache"
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : concat(
+compile_foundation_cache_from = GHA_CACHE_ENABLED == "" ? [] : concat(
   ["type=registry,ref=${compile_source_cache_ref}"],
   GHA_CACHE_PARENT_SCOPE_SUFFIX != "" && GHA_CACHE_PARENT_SCOPE_SUFFIX != GHA_CACHE_SCOPE_SUFFIX ? [
     "type=registry,ref=${compile_parent_cache_ref}",
   ] : [],
 )
+compile_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${compile_source_cache_ref}",
+]
 
 // Every entry point uses one solve contract. Bake applies CLI overrides after
 // inheritance, so callers also mirror overrides on each named target.
@@ -42,13 +45,32 @@ compile_solve_args = {
   NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
 }
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
-  // Export the rooted immutable exact-head graph once. sccache owns cross-head
-  // compiler objects, so serializing a second sibling dependency graph is
-  // redundant. The exporter timeout applies to each registry operation; the
-  // five-minute GitHub job timeout remains the end-to-end acceptance bound.
+compile_foundation_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
+  // Phase A is the sole current-head mode=max exporter. BuildKit retains every
+  // source-free dependency vertex rooted by the dependency-only target; Phase
+  // B imports this ref and never exports registry cache. The timeout applies
+  // per registry operation, while the five-minute GitHub job bounds both phases.
   "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,timeout=20s",
 ] : []
+
+target "build-compile-foundation" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  target     = "compile-web-extension-dependencies"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    // Context targets must be cache-I/O-free. Their component cache scopes are
+    // owned by the normal restore/publish workflows, while Phase A owns the
+    // exact-head foundation scope.
+    rust-base = "target:rust-base"
+    web-base  = "target:web-base"
+  }
+  args       = compile_solve_args
+  cache-from = compile_foundation_cache_from
+  cache-to   = compile_foundation_cache_to
+  output     = ["type=cacheonly"]
+}
 
 target "build-compile" {
   inherits   = ["_sccache"]
@@ -57,14 +79,10 @@ target "build-compile" {
   target     = "compile"
   platforms  = ["linux/amd64"]
   contexts = {
-    // Context targets must be cache-I/O-free. Their component cache scopes are
-    // owned by the normal restore/publish workflows, while this graph owns one
-    // complete compile scope below.
     rust-base = "target:rust-base"
     web-base  = "target:web-base"
   }
   args       = compile_solve_args
-  cache-from = compile_cache_from
-  cache-to   = compile_cache_to
+  cache-from = compile_source_cache_from
   output     = ["type=cacheonly"]
 }

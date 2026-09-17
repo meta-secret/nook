@@ -7,6 +7,7 @@ import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
+import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
 
 export { BuildkitCacheExportTelemetry };
 export { CacheScopeTelemetry };
@@ -880,42 +881,6 @@ export class CacheTelemetry {
     fs.writeFileSync(filename, `${JSON.stringify(value, replacer, 2)}\n`);
   }
 
-  /**
-   * @param {CacheTelemetryRecord} record
-   * @param {string} [filename]
-   * @returns {void}
-   */
-  static appendJobSummary(record, filename = process.env.GITHUB_STEP_SUMMARY) {
-    if (!filename) return;
-    const compilerRate = !Number.isFinite(record.sccache.hit_rate_percent)
-      ? "n/a (no executed cacheable compiler requests)"
-      : `${record.sccache.hit_rate_percent}%`;
-    const buildkitRate = !Number.isFinite(
-      record.buildkit.cache_hit_rate_percent,
-    )
-      ? "n/a (no completed Buildx steps)"
-      : `${record.buildkit.cache_hit_rate_percent}%`;
-    fs.appendFileSync(
-      filename,
-      [
-        "### Cache telemetry",
-        "",
-        `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
-        `- sccache authority: baked=\`${record.sccache.baked_runtime_mode}\`, effective=\`${record.sccache.runtime_mode}\`, source=\`${record.sccache.runtime_mode_source}\``,
-        `- sccache counters: \`${record.sccache.counter_reliability}\` (client-side=\`${record.sccache.client_side}\`)`,
-        `- sccache publication: \`${record.sccache.publication_status}\``,
-        `- sccache measurement: \`${record.sccache.measurement}\`; fallback=\`${record.sccache.fallback.state}\` (${record.sccache.fallback.reason})`,
-        `- sccache requests: ${record.sccache.compile_requests} received, ${record.sccache.requests_executed} executed, ${record.sccache.compile_failures} compile failures`,
-        `- sccache cache results: ${record.sccache.cache_hits} hits, ${record.sccache.cache_misses} misses, ${record.sccache.cache_writes} writes`,
-        `- sccache errors: ${record.sccache.cache_errors} cache operations, ${record.sccache.cache_write_errors} cache writes`,
-        `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
-        `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
-        `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
-        "",
-      ].join("\n"),
-    );
-  }
-
   /** @param {readonly string[]} arguments_ @param {string} name @returns {string} */
   static argumentValue(arguments_, name) {
     const index = arguments_.indexOf(name);
@@ -957,7 +922,7 @@ export class CacheTelemetry {
       });
       CacheTelemetry.validateTelemetryRecord(record);
       CacheTelemetry.writeJson(output, record);
-      CacheTelemetry.appendJobSummary(record);
+      new CacheTelemetryJobSummary(record).append();
       return;
     }
     if (command !== "collect") throw new Error("expected start or collect");
@@ -982,7 +947,7 @@ export class CacheTelemetry {
     });
     CacheTelemetry.validateTelemetryRecord(record);
     CacheTelemetry.writeJson(output, record);
-    CacheTelemetry.appendJobSummary(record);
+    new CacheTelemetryJobSummary(record).append();
   }
 }
 

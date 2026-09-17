@@ -21,9 +21,9 @@ inputs:
     default: "false"
   publish-compile-cache:
     description: >-
-      Build-only compile cache contract: true publishes the exact-head source cache;
-      false imports caches without exporting them. This input is valid only for
-      the remote build:compile task.
+      Build-only compile cache contract: true publishes the Phase A dependency
+      foundation to the exact-head source cache; false runs both phases without
+      registry export. This input is valid only for remote build:compile.
     required: false
     default: "true"
   monitor-buildkit-storage:
@@ -197,13 +197,16 @@ runs:
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           remote_compile_scope=1
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=0" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started" >> "$GITHUB_ENV"
           # Feature source output is exact-head scoped.
           if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
             && [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
-            echo "build:compile publication mode enables exact-head cache export"
+            echo "build:compile publication mode enables the Phase A exact-head foundation export"
           else
-            echo "build:compile read-only verification imports caches without registry export"
+            echo "build:compile read-only verification imports caches in both phases without registry export"
           fi
         elif [ "$publish_compile_cache" != "true" ]; then
           echo "publish-compile-cache=false requires the remote build:compile task" >&2
@@ -362,7 +365,7 @@ runs:
             for (const scopeSuffix of scopeSuffixes) {
               await this.verifyCacheRef(scopeSuffix);
             }
-            console.log("BuildKit cache refs and all referenced blobs are accessible");
+            console.log("Registry transport and every present Phase A cache manifest/blob are accessible; absent exact refs remain expected misses");
           }
 
           async verifyRegistryAvailability() {
@@ -397,7 +400,7 @@ runs:
           }
 
           async verifyCacheRef(scopeSuffix) {
-            // This checks access only; BuildKit receives both refs and owns reuse/validity.
+            // This checks access only; Phase A gives both refs to BuildKit, which owns reuse/validity.
             const repository = `nook/remote-buildcache/nook-build-compile${scopeSuffix}`;
             const visitedManifests = new Set();
             const blobDigests = new Set();
@@ -489,6 +492,7 @@ runs:
         const verifier = new BuildKitCacheAccessVerifier(process.env, fetch);
         await verifier.verify();
         NODE
+        echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=1" >> "$GITHUB_ENV"
 
     - name: Set CI environment
       shell: bash

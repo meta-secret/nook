@@ -241,9 +241,10 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Copy only the Bun and Node runtimes from web-base into a source-free lineage;
-# package manifests enter in the sequential dependency stages below.
-FROM rust-base AS compile-node-dependency-toolchain
+# Continue the rooted dependency foundation from the completed Cargo graph.
+# This keeps Cargo fetch, native/WASM dependencies, and all stable Node/web
+# dependency installs in one exportable ancestry without a synthetic join.
+FROM compile-wasm-dependencies AS compile-node-dependency-toolchain
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"

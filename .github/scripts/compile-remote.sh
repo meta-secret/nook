@@ -62,24 +62,29 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-web/nook-web-app/docker-bake.hcl"
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
-  --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
   # Stable value only: secret availability controls remote access and the
   # runtime secret preserves an identical compiler-vertex command shape.
   --set "rust-base.args.SCCACHE_S3_RW_MODE=READ_WRITE"
-  --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
-  --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
-  --set "build-compile.args.WASM_BUILD_MODE=${wasm_build_mode}"
-  --set "build-compile.args.VITE_BASE=${VITE_BASE:-/}"
-  --set "build-compile.args.VITE_SITE_URL=${VITE_SITE_URL:-}"
-  --set "build-compile.args.VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL:-}"
-  --set "build-compile.args.VITE_SIMPLE_APP_URL=${VITE_SIMPLE_APP_URL:-}"
-  --set "build-compile.args.VITE_SENTINEL_APP_URL=${VITE_SENTINEL_APP_URL:-}"
-  --set "build-compile.args.NOOK_SIMPLE_VAULT_URL=${NOOK_SIMPLE_VAULT_URL:-https://simple.nokey.sh/}"
-  --set "build-compile.args.NOOK_EXTENSION_CHANNEL=${NOOK_EXTENSION_CHANNEL:-production}"
-  --set "build-compile.args.NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}"
-  --set "build-compile.args.NOOK_EXTENSION_COMMIT=${extension_commit}"
-  --set "build-compile.args.NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"
 )
+compile_targets=(build-compile-foundation build-compile)
+for compile_target in "${compile_targets[@]}"; do
+  bake_args+=(
+    --set "${compile_target}.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
+    --set "${compile_target}.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+    --set "${compile_target}.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
+    --set "${compile_target}.args.WASM_BUILD_MODE=${wasm_build_mode}"
+    --set "${compile_target}.args.VITE_BASE=${VITE_BASE:-/}"
+    --set "${compile_target}.args.VITE_SITE_URL=${VITE_SITE_URL:-}"
+    --set "${compile_target}.args.VITE_PUBLIC_APP_URL=${VITE_PUBLIC_APP_URL:-}"
+    --set "${compile_target}.args.VITE_SIMPLE_APP_URL=${VITE_SIMPLE_APP_URL:-}"
+    --set "${compile_target}.args.VITE_SENTINEL_APP_URL=${VITE_SENTINEL_APP_URL:-}"
+    --set "${compile_target}.args.NOOK_SIMPLE_VAULT_URL=${NOOK_SIMPLE_VAULT_URL:-https://simple.nokey.sh/}"
+    --set "${compile_target}.args.NOOK_EXTENSION_CHANNEL=${NOOK_EXTENSION_CHANNEL:-production}"
+    --set "${compile_target}.args.NOOK_EXTENSION_VERSION=${NOOK_EXTENSION_VERSION:-1.0.0}"
+    --set "${compile_target}.args.NOOK_EXTENSION_COMMIT=${extension_commit}"
+    --set "${compile_target}.args.NOOK_EXTENSION_SITE_URL=${NOOK_EXTENSION_SITE_URL:-https://nokey.sh/}"
+  )
+done
 
 access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
 secret_key_file="${SCCACHE_S3_SECRET_KEY_FILE:-}"
@@ -100,8 +105,66 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   exit 2
 fi
 
-echo "BuildKit will import the available exact cache, execute the solve, and export when authorized"
-NOOK_BUILDKIT_RAW_LOG="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log" \
+raw_build_log="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log"
+: >"$raw_build_log"
+foundation_status=not_started
+source_status=not_started
+if [ -n "${GITHUB_ENV:-}" ]; then
+  printf '%s\n' \
+    'NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started' \
+    'NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started' >>"$GITHUB_ENV"
+fi
+mark_compile_interruption() {
+  signal_status="$1"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    if [ "$foundation_status" = running ]; then
+      echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=failed" >>"$GITHUB_ENV"
+    fi
+    if [ "$source_status" = running ]; then
+      echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=failed" >>"$GITHUB_ENV"
+    fi
+  fi
+  exit "$signal_status"
+}
+trap 'mark_compile_interruption 143' TERM
+trap 'mark_compile_interruption 130' INT
+
+echo "BuildKit Phase A: import current/first-parent caches, build dependency foundation, export current head when authorized"
+foundation_status=running
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=running" >>"$GITHUB_ENV"
+fi
+if NOOK_BUILDKIT_RAW_LOG="$raw_build_log" \
+  NOOK_BUILDKIT_RAW_LOG_APPEND=1 \
   bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
-  "build:compile source" \
-  "$docker_bin" buildx bake "${bake_args[@]}" build-compile
+  "build:compile Phase A dependency foundation" \
+  "$docker_bin" buildx bake "${bake_args[@]}" build-compile-foundation; then
+  foundation_status=completed
+else
+  bake_status=$?
+  foundation_status=failed
+fi
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=${foundation_status}" >>"$GITHUB_ENV"
+fi
+if [ "$foundation_status" = failed ]; then exit "$bake_status"; fi
+
+echo "BuildKit Phase B: import current-head cache and compile source-sensitive targets without registry export"
+source_status=running
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=running" >>"$GITHUB_ENV"
+fi
+if NOOK_BUILDKIT_RAW_LOG="$raw_build_log" \
+  NOOK_BUILDKIT_RAW_LOG_APPEND=1 \
+  bash "${repo_root}/.github/scripts/bake-with-frontend-flake-retry.sh" \
+  "build:compile Phase B source compilation" \
+  "$docker_bin" buildx bake "${bake_args[@]}" build-compile; then
+  source_status=completed
+else
+  bake_status=$?
+  source_status=failed
+fi
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=${source_status}" >>"$GITHUB_ENV"
+fi
+if [ "$source_status" = failed ]; then exit "$bake_status"; fi

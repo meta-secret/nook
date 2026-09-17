@@ -6,6 +6,8 @@ import test from "node:test";
 
 import {
   BuildkitCacheExportTelemetry,
+  CompilePhaseCacheExportMode,
+  CompilePhaseStatus,
   CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
@@ -34,6 +36,31 @@ void test("records the active compile scope without preselection state", () => {
         parent_scope_suffix: `-git-${"a".repeat(40)}`,
         parent_ref: `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile-git-${"a".repeat(40)}:buildcache`,
       },
+      compile_phases: {
+        foundation: {
+          requested: false,
+          target: "build-compile-foundation",
+          status: CompilePhaseStatus.NotRequested,
+          cache_from: [],
+          cache_to: {
+            enabled: false,
+            ref: "",
+            mode: CompilePhaseCacheExportMode.Disabled,
+          },
+          input_refs_access_verified: false,
+        },
+        source_compile: {
+          requested: false,
+          target: "build-compile",
+          status: CompilePhaseStatus.NotRequested,
+          cache_from: [],
+          cache_to: {
+            enabled: false,
+            ref: "",
+            mode: CompilePhaseCacheExportMode.Disabled,
+          },
+        },
+      },
       imports: {
         probes_complete: false,
         failure_class: "none",
@@ -41,6 +68,94 @@ void test("records the active compile scope without preselection state", () => {
       },
     },
   );
+});
+
+void test("records the two compile phases with the authorized exporter only in Phase A", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const parentSuffix = `-git-${"a".repeat(40)}`;
+  const compilePhases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_WRITE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    GHA_CACHE_PARENT_SCOPE_SUFFIX: parentSuffix,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_COMPILE_CACHE_MODE: "publish",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Running,
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+  }).record().compile_phases;
+  const currentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${currentSuffix}:buildcache`;
+  const parentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${parentSuffix}:buildcache`;
+
+  assert.deepEqual(compilePhases.foundation, {
+    requested: true,
+    target: "build-compile-foundation",
+    status: CompilePhaseStatus.Completed,
+    cache_from: [currentRef, parentRef],
+    cache_to: {
+      enabled: true,
+      ref: currentRef,
+      mode: CompilePhaseCacheExportMode.Max,
+    },
+    input_refs_access_verified: true,
+  });
+  assert.deepEqual(compilePhases.source_compile, {
+    requested: true,
+    target: "build-compile",
+    status: CompilePhaseStatus.Running,
+    cache_from: [currentRef],
+    cache_to: {
+      enabled: false,
+      ref: "",
+      mode: CompilePhaseCacheExportMode.Disabled,
+    },
+  });
+});
+
+void test("records both phases without registry exporters for no-export compile verification", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const currentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${currentSuffix}:buildcache`;
+  const compilePhases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_WRITE_ENABLED: "",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    GHA_CACHE_PARENT_SCOPE_SUFFIX: "",
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_COMPILE_CACHE_MODE: "read-only",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+  }).record().compile_phases;
+
+  assert.deepEqual(compilePhases.foundation.cache_from, [currentRef]);
+  assert.deepEqual(compilePhases.foundation.cache_to, {
+    enabled: false,
+    ref: "",
+    mode: CompilePhaseCacheExportMode.Disabled,
+  });
+  assert.deepEqual(compilePhases.source_compile.cache_from, [currentRef]);
+  assert.deepEqual(compilePhases.source_compile.cache_to, {
+    enabled: false,
+    ref: "",
+    mode: CompilePhaseCacheExportMode.Disabled,
+  });
+});
+
+void test("records a failed source phase after the foundation has completed", () => {
+  const phases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Failed,
+  }).record().compile_phases;
+
+  assert.equal(phases.foundation.status, CompilePhaseStatus.Completed);
+  assert.equal(phases.source_compile.status, CompilePhaseStatus.Failed);
+  assert.equal(phases.source_compile.cache_to.enabled, false);
 });
 
 void test("records transient optional probe failures without marking probes incomplete", () => {
