@@ -36,6 +36,10 @@ export type SentinelCardStackProperties = {
   onAddParticipant: (
     args: SentinelParticipation,
   ) => Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>>;
-  onFinalize: () => Promise<SentinelActionResult<SentinelGenesisFinalizationOutcome>>;
-  onCompleteDelivery: () => Promise<SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>>;
+  onFinalize: () => Promise<
+    SentinelActionResult<SentinelGenesisFinalizationOutcome>
+  >;
+  onCompleteDelivery: () => Promise<
+    SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>
+  >;
 };

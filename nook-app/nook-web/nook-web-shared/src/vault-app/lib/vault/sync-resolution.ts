@@ -206,7 +206,10 @@ export class SyncConflictActions {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk({ replacementConflictCount: 0, securityConflictCount: 0 });
+      return storageOk({
+        replacementConflictCount: 0,
+        securityConflictCount: 0,
+      });
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();

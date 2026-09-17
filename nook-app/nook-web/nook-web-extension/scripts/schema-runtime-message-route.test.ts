@@ -95,7 +95,9 @@ describe('ordered background runtime message router', () => {
       new RecordedRoute(secondRouteRequest),
       new RecordedRoute(thirdRouteRequest),
     ]
-    const admission = BrowserRuntimeMessage.from({ type: 'nook:test' })
+    const admission = BrowserRuntimeMessage.from({
+      type: MatchingRuntimeMessageType.Test,
+    })
     expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Accepted)
     if (admission.kind !== BrowserRuntimeMessageAdmissionKind.Accepted) return
     const request: BackgroundRuntimeMessageRoutingRequest = {

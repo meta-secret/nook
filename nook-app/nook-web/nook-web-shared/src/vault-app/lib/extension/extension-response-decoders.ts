@@ -61,7 +61,7 @@ export class ExtensionResponseDecodeFailure {
 
 export class IdentityHandoffResponseDecoder {
   decode(
-    value: ExtensionRuntimeResponseObject | undefined,
+    value?: ExtensionRuntimeResponseObject,
   ): Effect.Effect<
     AcceptedIdentityHandoffResponse,
     ExtensionResponseDecodeFailure
@@ -221,22 +221,18 @@ export class PairingApprovalResponseDecoder {
     const rejectedByReason = Schema.decodeUnknown(
       PairingRejectedReasonResponseSchema,
     )(value, strictDecodeOptions).pipe(
-      Effect.map(
-        ({ reason }): ExtensionPairingDelivery => ({
-          kind: ExtensionPairingDeliveryKind.Rejected,
-          reason,
-        }),
-      ),
+      Effect.map(({ reason }): ExtensionPairingDelivery => ({
+        kind: ExtensionPairingDeliveryKind.Rejected,
+        reason,
+      })),
     );
     const rejectedByError = Schema.decodeUnknown(
       PairingRejectedErrorResponseSchema,
     )(value, strictDecodeOptions).pipe(
-      Effect.map(
-        ({ error }): ExtensionPairingDelivery => ({
-          kind: ExtensionPairingDeliveryKind.Rejected,
-          reason: error,
-        }),
-      ),
+      Effect.map(({ error }): ExtensionPairingDelivery => ({
+        kind: ExtensionPairingDeliveryKind.Rejected,
+        reason: error,
+      })),
     );
     const rejected = Schema.decodeUnknown(PairingRejectedResponseSchema)(
       value,

@@ -107,9 +107,7 @@ export class ExtensionDeploymentMetadataDecoder {
     ExtensionDeploymentMetadata,
     ExtensionDeploymentMetadataDecodeFailure
   > {
-    return Schema.decodeUnknown(ExtensionDeploymentMetadataSchema)(
-      value,
-    ).pipe(
+    return Schema.decodeUnknown(ExtensionDeploymentMetadataSchema)(value).pipe(
       Effect.mapError(
         (cause) =>
           new ExtensionDeploymentMetadataDecodeFailure(

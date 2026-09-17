@@ -94,8 +94,7 @@ export enum NookDatabaseCleanupOutcome {
 }
 
 type BrowserDataCleanupOutcome =
-  | BrowserManagedStorageCleanupOutcome
-  | NookDatabaseCleanupOutcome;
+  BrowserManagedStorageCleanupOutcome | NookDatabaseCleanupOutcome;
 
 export enum LocalBrowserDataDeletionOutcome {
   Cleared = "cleared",
@@ -399,8 +398,10 @@ class BrowserDataLifecycle {
       if (message.type === LocalDataResetMessageType.Ready)
         ready.set(message.responderId, message.readiness);
     };
-    let outcome: Result<LocalDataRecoveryQuiescenceOutcome, VaultStorageFailure> =
-      ok(LocalDataRecoveryQuiescenceOutcome.Quiesced);
+    let outcome: Result<
+      LocalDataRecoveryQuiescenceOutcome,
+      VaultStorageFailure
+    > = ok(LocalDataRecoveryQuiescenceOutcome.Quiesced);
     try {
       try {
         channel.postMessage(request);

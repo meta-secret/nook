@@ -394,10 +394,7 @@ describe('extension pairing approved message', () => {
     vi.useFakeTimers()
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
-        window.setTimeout(
-          () => args[2]({ ok: true, eventCount: 1 }),
-          6_000,
-        )
+        window.setTimeout(() => args[2]({ ok: true, eventCount: 1 }), 6_000)
       },
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })

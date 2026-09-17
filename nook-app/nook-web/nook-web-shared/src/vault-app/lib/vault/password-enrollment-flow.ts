@@ -91,9 +91,7 @@ export enum OAuthFilePresetDecodeFailureKind {
 export class OAuthFilePresetDecoder {
   private constructor() {}
 
-  static decode(
-    value: string,
-  ): Effect.Effect<
+  static decode(value: string): Effect.Effect<
     OAuthFilePreset,
     {
       readonly kind: OAuthFilePresetDecodeFailureKind.Invalid;
@@ -101,10 +99,7 @@ export class OAuthFilePresetDecoder {
     }
   > {
     return Schema.decodeUnknown(
-      Schema.Literal(
-        GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-        ICLOUD_OAUTH_FILE_PRESET,
-      ),
+      Schema.Literal(GOOGLE_DRIVE_OAUTH_FILE_PRESET, ICLOUD_OAUTH_FILE_PRESET),
     )(value).pipe(
       Effect.mapError((cause) => ({
         kind: OAuthFilePresetDecodeFailureKind.Invalid,
@@ -402,11 +397,13 @@ export class PasswordEnrollmentActions {
                 StoredOAuthFileConfigurationDecodeKind.Configured
                   ? decodedExistingConfiguration.config
                   : (() => {
-                    const defaultOAuthFileConfigArgs3: Parameters<
-                      typeof defaultOAuthFileConfig
-                    >[0] = { preset: "icloud", fileName: "nook-events" };
-                    return defaultOAuthFileConfig(defaultOAuthFileConfigArgs3);
-                  })();
+                      const defaultOAuthFileConfigArgs3: Parameters<
+                        typeof defaultOAuthFileConfig
+                      >[0] = { preset: "icloud", fileName: "nook-events" };
+                      return defaultOAuthFileConfig(
+                        defaultOAuthFileConfigArgs3,
+                      );
+                    })();
               const existingCredential = oauth_access_token(existingConfig);
               let tokens: Result<ICloudOAuthTokens, OAuthFailure>;
               if (existingCredential.kind === "available") {
@@ -429,9 +426,8 @@ export class PasswordEnrollmentActions {
                   signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
                   clickSignInControl: true,
                 };
-                tokens = await iCloudOAuthSession.requestICloudWebAuthToken(
-                  request,
-                );
+                tokens =
+                  await iCloudOAuthSession.requestICloudWebAuthToken(request);
               }
               if (tokens.isErr()) {
                 state.errorMsg = state.t(tokens.error.translationKey);

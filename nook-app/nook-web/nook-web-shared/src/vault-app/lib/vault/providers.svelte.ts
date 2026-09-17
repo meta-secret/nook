@@ -117,7 +117,9 @@ export interface VaultConnectAssessmentRequest {
 }
 
 type VaultConnectStatusDiscoveryCompletion = {
-  readonly operation: Promise<Result<VaultAccessStatus, StorageOperationFailure>>;
+  readonly operation: Promise<
+    Result<VaultAccessStatus, StorageOperationFailure>
+  >;
   readonly releaseLateValue: (status: VaultAccessStatus) => void;
 };
 

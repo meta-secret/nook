@@ -158,12 +158,17 @@ function decodePagesWorker(value: unknown): PagesWorker {
     !('fetch' in value.default) ||
     typeof value.default.fetch !== 'function'
   ) {
-    throw new Error('Public site Pages Function has an invalid worker contract.')
+    throw new Error(
+      'Public site Pages Function has an invalid worker contract.',
+    )
   }
   const worker = value.default
   const fetchHandler = value.default.fetch
   return {
-    async fetch(request: Request, env: PagesWorkerEnvironment): Promise<Response> {
+    async fetch(
+      request: Request,
+      env: PagesWorkerEnvironment,
+    ): Promise<Response> {
       const response: unknown = await fetchHandler.call(worker, request, env)
       if (!(response instanceof Response)) {
         throw new TypeError('Pages Function did not return a Response.')

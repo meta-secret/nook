@@ -251,11 +251,13 @@ export class VaultInitializationActions {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
               // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              return (await setupDeviceProtection({
-                manager: manager.value,
-                passkeyLabel: "",
-                deviceMode: state.draftDeviceMode,
-              })).map(
+              return (
+                await setupDeviceProtection({
+                  manager: manager.value,
+                  passkeyLabel: "",
+                  deviceMode: state.draftDeviceMode,
+                })
+              ).map(
                 () => DeviceIdentityAuthorizationState.ProtectionConfigured,
               );
             },
@@ -659,9 +661,9 @@ class DeviceInitializationContinuation {
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
-    return new VaultInitializationActions(
-      this.state,
-    ).initDeviceIdentity(initialization);
+    return new VaultInitializationActions(this.state).initDeviceIdentity(
+      initialization,
+    );
   }
   async continue(): Promise<
     Result<

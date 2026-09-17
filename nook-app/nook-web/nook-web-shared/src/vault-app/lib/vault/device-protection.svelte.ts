@@ -381,11 +381,10 @@ export class DeviceProtectionActions {
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          const recovery =
-            await recoverExistingPasskeyProtection(manager.value);
-          return recovery.map(
-            () => DeviceProtectionCeremonyOutcome.Authorized,
+          const recovery = await recoverExistingPasskeyProtection(
+            manager.value,
           );
+          return recovery.map(() => DeviceProtectionCeremonyOutcome.Authorized);
         },
       );
       if (ceremony.isErr()) {
@@ -549,8 +548,7 @@ export class DeviceProtectionActions {
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          const authorization =
-            await authorizePasskeyProtection(manager.value);
+          const authorization = await authorizePasskeyProtection(manager.value);
           return authorization.map(
             () => DeviceProtectionCeremonyOutcome.Authorized,
           );

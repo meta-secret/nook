@@ -94,9 +94,7 @@ export class VaultLoginActions {
   }
 
   private enqueueStorageEffect<T, E>(request: {
-    readonly operation: () =>
-      | Result<T, E>
-      | Promise<Result<T, E>>;
+    readonly operation: () => Result<T, E> | Promise<Result<T, E>>;
   }): Effect.Effect<T, E | StorageOperationFailure> {
     return this.liftStorageResult({
       operation: () => this.state.enqueueStorage(request.operation),
@@ -304,9 +302,13 @@ export class VaultLoginActions {
       });
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
       return storeId;
-    }).pipe(Effect.ensuring(Effect.sync(() => {
-      state.isVerifying = false;
-    })));
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          state.isVerifying = false;
+        }),
+      ),
+    );
   }
 
   async prepareExistingVaultImportSlot(): Promise<

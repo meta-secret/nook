@@ -276,11 +276,11 @@ export class VaultState extends VaultRuntimeState {
   ): Promise<Result<StoreId, VaultStorageFailure | OAuthFailure>> {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const selection = await Effect.runPromise(
-      Effect.either(
-        this.localLoginActions.selectVaultForUnlock({ storeId }),
-      ),
+      Effect.either(this.localLoginActions.selectVaultForUnlock({ storeId })),
     );
-    return selection._tag === "Left" ? err(selection.left) : ok(selection.right);
+    return selection._tag === "Left"
+      ? err(selection.left)
+      : ok(selection.right);
   }
 
   async prepareExistingVaultImportSlot() {
@@ -466,7 +466,9 @@ export class VaultState extends VaultRuntimeState {
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
   async removeProvider(
     id: string,
-  ): Promise<Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>> {
+  ): Promise<
+    Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>
+  > {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,

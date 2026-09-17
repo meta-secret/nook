@@ -34,29 +34,28 @@ export class IdentityBridgePresentation {
     if (input.compact) {
       const identityY = 630;
       const vaultStartY = 920;
-      const vaultNodes = verifiedVaults.map(
-        (vault, index) =>
-          (() => {
-            const vaultDataArgs: ConstructorParameters<
-              typeof IdentityBridgeVaultPresentation
-            >[0] = {
-              vault,
-              input,
-              flow: IdentityBridgeFlow.Vertical,
-              portMode: IdentityBridgePortMode.Target,
-              lateralAccessPort: true,
-            };
-            const graphNodeArgs2: ConstructorParameters<
-              typeof IdentityBridgeGraphNodePresentation
-            >[0] = {
-              id: `vault-${vault.storeId}`,
-              data: new IdentityBridgeVaultPresentation(vaultDataArgs).data,
-              x: 20,
-              y: vaultStartY + index * 190,
-              width: 300,
-            };
-            return new IdentityBridgeGraphNodePresentation(graphNodeArgs2).node;
-          })(),
+      const vaultNodes = verifiedVaults.map((vault, index) =>
+        (() => {
+          const vaultDataArgs: ConstructorParameters<
+            typeof IdentityBridgeVaultPresentation
+          >[0] = {
+            vault,
+            input,
+            flow: IdentityBridgeFlow.Vertical,
+            portMode: IdentityBridgePortMode.Target,
+            lateralAccessPort: true,
+          };
+          const graphNodeArgs2: ConstructorParameters<
+            typeof IdentityBridgeGraphNodePresentation
+          >[0] = {
+            id: `vault-${vault.storeId}`,
+            data: new IdentityBridgeVaultPresentation(vaultDataArgs).data,
+            x: 20,
+            y: vaultStartY + index * 190,
+            width: 300,
+          };
+          return new IdentityBridgeGraphNodePresentation(graphNodeArgs2).node;
+        })(),
       );
       if (verifiedVaults.length === 0) {
         const graphNodeArgs3: ConstructorParameters<
@@ -258,29 +257,28 @@ export class IdentityBridgePresentation {
       0,
       identityY - ((verifiedVaults.length - 1) * gap) / 2,
     );
-    const vaultNodes = verifiedVaults.map(
-      (vault, index) =>
-        (() => {
-          const vaultDataArgs2: ConstructorParameters<
-            typeof IdentityBridgeVaultPresentation
-          >[0] = {
-            vault,
-            input,
-            flow: IdentityBridgeFlow.Horizontal,
-            portMode: IdentityBridgePortMode.Target,
-            lateralAccessPort: false,
-          };
-          const graphNodeArgs7: ConstructorParameters<
-            typeof IdentityBridgeGraphNodePresentation
-          >[0] = {
-            id: `vault-${vault.storeId}`,
-            data: new IdentityBridgeVaultPresentation(vaultDataArgs2).data,
-            x: 800,
-            y: vaultStartY + index * gap,
-            width: 350,
-          };
-          return new IdentityBridgeGraphNodePresentation(graphNodeArgs7).node;
-        })(),
+    const vaultNodes = verifiedVaults.map((vault, index) =>
+      (() => {
+        const vaultDataArgs2: ConstructorParameters<
+          typeof IdentityBridgeVaultPresentation
+        >[0] = {
+          vault,
+          input,
+          flow: IdentityBridgeFlow.Horizontal,
+          portMode: IdentityBridgePortMode.Target,
+          lateralAccessPort: false,
+        };
+        const graphNodeArgs7: ConstructorParameters<
+          typeof IdentityBridgeGraphNodePresentation
+        >[0] = {
+          id: `vault-${vault.storeId}`,
+          data: new IdentityBridgeVaultPresentation(vaultDataArgs2).data,
+          x: 800,
+          y: vaultStartY + index * gap,
+          width: 350,
+        };
+        return new IdentityBridgeGraphNodePresentation(graphNodeArgs7).node;
+      })(),
     );
     if (verifiedVaults.length === 0) {
       const graphNodeArgs8: ConstructorParameters<
