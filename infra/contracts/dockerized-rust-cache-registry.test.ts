@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 class DockerizedRustCacheRegistryContract {
   private readonly root = resolve(import.meta.dir, "../..");
@@ -116,41 +117,70 @@ class DockerizedRustCacheRegistryContract {
       };
       await import("data:text/javascript," + encodeURIComponent(process.env.CACHE_VERIFIER_SCRIPT));
     `;
-    for (const [registry, current, parent, blob, networkFailure, expected] of [
-      [200, 200, 200, 200, false, true],
-      [200, 404, 200, 200, false, true],
-      [200, 200, 404, 200, false, true],
-      [200, 404, 404, 200, false, true],
-      [401, 200, 200, 200, false, false],
-      [403, 200, 200, 200, false, false],
-      [404, 200, 200, 200, false, false],
-      [503, 200, 200, 200, false, false],
-      [200, 401, 200, 200, false, false],
-      [200, 403, 200, 200, false, false],
-      [200, 503, 200, 200, false, false],
-      [200, 200, 200, 404, false, false],
-      [200, 200, 200, 200, true, false],
-    ] as const) {
-      const result = spawnSync("node", ["--input-type=module", "-e", harness], {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          CACHE_VERIFIER_SCRIPT: registryGateScript,
-          CACHE_REGISTRY_STATUS: String(registry),
-          CACHE_ROOT_MANIFEST: rootManifest,
-          CACHE_NESTED_MANIFEST: nestedManifest,
-          CACHE_CURRENT_STATUS: String(current),
-          CACHE_PARENT_STATUS: String(parent),
-          CACHE_BLOB_STATUS: String(blob),
-          CACHE_FETCH_FAILURE: networkFailure ? "1" : "0",
-          GHA_CACHE_SCOPE_SUFFIX: "-git-current",
-          GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
-          REGISTRY_HOST: "registry.example.test",
-          REGISTRY_USERNAME: "sim-user",
-          REGISTRY_PASSWORD: "sim-password",
-        },
-      });
-      expect(result.status === 0, result.stderr || result.stdout).toBe(expected);
+    const temporary = mkdtempSync(join(tmpdir(), "nook-cache-registry-"));
+    try {
+      const githubEnvironmentFile = join(temporary, "github-env");
+      for (const [
+        registry,
+        current,
+        parent,
+        blob,
+        networkFailure,
+        expected,
+      ] of [
+        [200, 200, 200, 200, false, true],
+        [200, 404, 200, 200, false, true],
+        [200, 200, 404, 200, false, true],
+        [200, 404, 404, 200, false, true],
+        [401, 200, 200, 200, false, false],
+        [403, 200, 200, 200, false, false],
+        [404, 200, 200, 200, false, false],
+        [503, 200, 200, 200, false, false],
+        [200, 401, 200, 200, false, false],
+        [200, 403, 200, 200, false, false],
+        [200, 503, 200, 200, false, false],
+        [200, 200, 200, 404, false, false],
+        [200, 200, 200, 200, true, false],
+      ] as const) {
+        writeFileSync(githubEnvironmentFile, "");
+        const result = spawnSync(
+          "node",
+          ["--input-type=module", "-e", harness],
+          {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              CACHE_VERIFIER_SCRIPT: registryGateScript,
+              CACHE_REGISTRY_STATUS: String(registry),
+              CACHE_ROOT_MANIFEST: rootManifest,
+              CACHE_NESTED_MANIFEST: nestedManifest,
+              CACHE_CURRENT_STATUS: String(current),
+              CACHE_PARENT_STATUS: String(parent),
+              CACHE_BLOB_STATUS: String(blob),
+              CACHE_FETCH_FAILURE: networkFailure ? "1" : "0",
+              GHA_CACHE_SCOPE_SUFFIX: "-git-current",
+              GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
+              GITHUB_ENV: githubEnvironmentFile,
+              REGISTRY_HOST: "registry.example.test",
+              REGISTRY_USERNAME: "sim-user",
+              REGISTRY_PASSWORD: "sim-password",
+            },
+          },
+        );
+        expect(result.status === 0, result.stderr || result.stdout).toBe(
+          expected,
+        );
+        if (expected) {
+          const expectedCurrentAvailability = current === 200 ? "1" : "0";
+          const expectedParentAvailability = parent === 200 ? "1" : "0";
+          expect(readFileSync(githubEnvironmentFile, "utf8")).toBe(
+            `GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=${expectedCurrentAvailability}\n` +
+              `GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=${expectedParentAvailability}\n`,
+          );
+        }
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
     }
   }
 
