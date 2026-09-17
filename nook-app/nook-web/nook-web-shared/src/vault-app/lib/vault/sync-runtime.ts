@@ -54,9 +54,10 @@ export class VaultSyncRuntimeActions {
         for (const member of state.vaultMembers) member.free();
         state.pendingJoins = joins;
         state.vaultMembers = members;
-        return ok({
+        const outcome: VaultSyncApplicationOutcome = {
           kind: VaultSyncApplicationKind.AuthenticatedRosterApplied,
-        });
+        };
+        return ok(outcome);
       }
 
       let decision: UnauthenticatedSyncDecision;
@@ -90,12 +91,13 @@ export class VaultSyncRuntimeActions {
         case UnauthenticatedSyncDecision.Ignore:
           break;
       }
-      return ok({
+      const outcome: VaultSyncApplicationOutcome = {
         kind:
           decision === UnauthenticatedSyncDecision.MarkJoinPending
             ? VaultSyncApplicationKind.JoinApprovalMarkedPending
             : VaultSyncApplicationKind.UnauthenticatedUpdateIgnored,
-      });
+      };
+      return ok(outcome);
     } finally {
       result.free();
     }
@@ -118,13 +120,20 @@ export class VaultSyncRuntimeActions {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    if (!shouldConnect)
-      return ok({ kind: VaultSyncApplicationKind.AutoConnectNotRequired });
+    if (!shouldConnect) {
+      const outcome: VaultSyncApplicationOutcome = {
+        kind: VaultSyncApplicationKind.AutoConnectNotRequired,
+      };
+      return ok(outcome);
+    }
     log.info("scheduling auto-connect after join approval");
     setTimeout(() => {
       if (state.isAuthenticated || state.isVerifying) return;
       void state.loadDb();
     }, 0);
-    return ok({ kind: VaultSyncApplicationKind.AutoConnectScheduled });
+    const outcome: VaultSyncApplicationOutcome = {
+      kind: VaultSyncApplicationKind.AutoConnectScheduled,
+    };
+    return ok(outcome);
   }
 }

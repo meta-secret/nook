@@ -44,11 +44,17 @@ import {
   type CloudKitConfiguration,
   type CloudKitGlobal,
   type CloudKitRecordInfosResponse,
+  type CloudKitAuthSetupOptions,
+  type CloudKitRecord,
+  type CloudKitRecordSaveOptions,
+  type CloudKitSharePresentationOptions,
+  type CloudKitZoneID,
   cloudKitRuntime,
 } from "$lib/auth/icloud/cloudkit-runtime";
 import {
   CloudKitFailureDiagnostic,
   CloudKitSetupFailure,
+  type ExpectedCloudKitSignInFailureCheck,
 } from "$lib/auth/icloud/auth-errors";
 import {
   CloudKitAuthSetupKind,
@@ -92,6 +98,16 @@ type CloudKitSignInRequest = {
   readonly container: CloudKitContainer;
   readonly timeoutMs: number;
   readonly clickSignInControl: boolean;
+};
+
+type CloudKitIdentityResult = Result<CloudKitIdentity, OAuthFailure>;
+
+type CloudKitRecordLocation = {
+  readonly zoneID: {
+    readonly zoneName: string;
+    readonly ownerRecordName: string;
+  };
+  readonly rootRecordName: string;
 };
 
 export type ICloudOAuthConfigurationUpdate = {
@@ -233,20 +249,20 @@ class ICloudOAuthSession {
     container: CloudKitContainer,
   ): Promise<Result<CloudKitIdentity, OAuthFailure>> {
     try {
-      const identity = await container.setUpAuth({
+      const options: CloudKitAuthSetupOptions = {
         grabAuthToken: true,
         persist: true,
-      });
+      };
+      const identity = await container.setUpAuth(options);
       this.cloudKitIdentity = identity;
       return ok(identity);
     } catch (error) {
       this.cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
-      if (
-        new CloudKitSetupFailure({
-          diagnostic: new CloudKitFailureDiagnostic(error),
-          hasSignInControl: this.hasCloudKitSignInControl(),
-        }).expected
-      )
+      const failureCheck: ExpectedCloudKitSignInFailureCheck = {
+        diagnostic: new CloudKitFailureDiagnostic(error),
+        hasSignInControl: this.hasCloudKitSignInControl(),
+      };
+      if (new CloudKitSetupFailure(failureCheck).expected)
         return ok(this.cloudKitIdentity);
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
@@ -299,10 +315,11 @@ class ICloudOAuthSession {
     if (token.isErr()) return err(token.error);
     if (token.value.kind === WebAuthTokenLookupKind.Unavailable)
       return err(new OAuthFailure(OAuthFailureKind.TokenUnavailable));
-    return ok({
+    const tokens: ICloudOAuthTokens = {
       accessToken: token.value.token,
       accountName: new CloudKitAccountPresentation(identity).name,
-    });
+    };
+    return ok(tokens);
   }
   private normalizedICloudShortGuid(
     value: string,
@@ -331,13 +348,7 @@ class ICloudOAuthSession {
   }
   private requireCloudKitRecordInfo(
     response: CloudKitRecordInfosResponse,
-  ): Result<
-    {
-      zoneID: { zoneName: string; ownerRecordName: string };
-      rootRecordName: string;
-    },
-    OAuthFailure
-  > {
+  ): Result<CloudKitRecordLocation, OAuthFailure> {
     const info = response.results[0];
     const zoneID = info?.zoneID;
     const rootRecordName =
@@ -348,13 +359,14 @@ class ICloudOAuthSession {
       !rootRecordName
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
-    return ok({
+    const location: CloudKitRecordLocation = {
       zoneID: {
         zoneName: zoneID.zoneName,
         ownerRecordName: zoneID.ownerRecordName,
       },
       rootRecordName,
-    });
+    };
+    return ok(location);
   }
   private async previewCloudKitRecord({
     container,
@@ -362,13 +374,18 @@ class ICloudOAuthSession {
   }: CloudKitRecordPreviewRequest): Promise<
     Result<CloudKitRecordPreview, OAuthFailure>
   > {
-    if (!container.fetchRecordInfos)
-      return ok({ kind: CloudKitRecordPreviewKind.Unavailable });
+    if (!container.fetchRecordInfos) {
+      const preview: CloudKitRecordPreview = {
+        kind: CloudKitRecordPreviewKind.Unavailable,
+      };
+      return ok(preview);
+    }
     try {
-      return ok({
+      const preview: CloudKitRecordPreview = {
         kind: CloudKitRecordPreviewKind.Available,
         response: await container.fetchRecordInfos([shortGuid]),
-      });
+      };
+      return ok(preview);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
     }
@@ -419,29 +436,30 @@ class ICloudOAuthSession {
       const suffix = crypto.randomUUID();
       const zoneName = `nook-shared-${suffix}`;
       const rootRecordName = `nook-root-${suffix}`;
-      await database.saveRecordZones([{ zoneName }]);
-      const saved = await database.saveRecords(
-        {
-          recordType: "NookVault",
-          recordName: rootRecordName,
-          createShortGUID: true,
-          fields: { content: { value: "" } },
-        },
-        { zoneID: zoneName },
-      );
+      const zones: CloudKitZoneID[] = [{ zoneName }];
+      await database.saveRecordZones(zones);
+      const record: CloudKitRecord = {
+        recordType: "NookVault",
+        recordName: rootRecordName,
+        createShortGUID: true,
+        fields: { content: { value: "" } },
+      };
+      const saveOptions: CloudKitRecordSaveOptions = { zoneID: zoneName };
+      const saved = await database.saveRecords(record, saveOptions);
       const root = saved.records[0];
       const shortGuid = root?.shortGUID?.trim();
       if (!root || !shortGuid)
         return err(new OAuthFailure(OAuthFailureKind.SharedIdentifierMissing));
-      await database.shareWithUI({
+      const shareOptions: CloudKitSharePresentationOptions = {
         record: root,
         zoneID: zoneName,
         shareTitle: title.trim() || "Nook",
         shareType: "com.meta-secret.nook.vault",
         supportedAccess: [CloudKitShareAccess.Private],
         supportedPermissions: [CloudKitSharePermission.ReadWrite],
-      });
-      return ok({
+      };
+      await database.shareWithUI(shareOptions);
+      const storageTarget: ICloudSharedStorageTarget = {
         role: "owner",
         zoneName,
         ownerRecordName,
@@ -454,7 +472,8 @@ class ICloudOAuthSession {
           rootRecordName,
           shortGuid,
         ),
-      });
+      };
+      return ok(storageTarget);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedCreation));
     }
@@ -494,7 +513,7 @@ class ICloudOAuthSession {
     ) {
       try {
         const target = encodedTarget.target;
-        return ok({
+        const storageTarget: ICloudSharedStorageTarget = {
           ...target,
           role: "owner",
           storageTargetId: create_icloud_shared_storage_target(
@@ -504,14 +523,19 @@ class ICloudOAuthSession {
             target.rootRecordName,
             target.shortGuid,
           ),
-        });
+        };
+        return ok(storageTarget);
       } catch {
         return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
       }
     }
     if (!container.acceptShares || !container.fetchRecordInfos)
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
-    const preview = await this.previewCloudKitRecord({ container, shortGuid });
+    const previewRequest: CloudKitRecordPreviewRequest = {
+      container,
+      shortGuid,
+    };
+    const preview = await this.previewCloudKitRecord(previewRequest);
     if (preview.isErr()) return err(preview.error);
     let response: CloudKitRecordInfosResponse;
     if (
@@ -531,7 +555,7 @@ class ICloudOAuthSession {
     if (info.isErr()) return err(info.error);
     const { zoneID, rootRecordName } = info.value;
     try {
-      return ok({
+      const storageTarget: ICloudSharedStorageTarget = {
         role: "participant",
         zoneName: zoneID.zoneName,
         ownerRecordName: zoneID.ownerRecordName,
@@ -544,14 +568,15 @@ class ICloudOAuthSession {
           rootRecordName,
           shortGuid,
         ),
-      });
+      };
+      return ok(storageTarget);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
     }
   }
   private signInOutcome(
-    outcome: Result<CloudKitIdentity, OAuthFailure>,
-  ): Result<CloudKitIdentity, OAuthFailure> {
+    outcome: CloudKitIdentityResult,
+  ): CloudKitIdentityResult {
     if (outcome.isErr()) {
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
       this.cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
@@ -590,15 +615,19 @@ class ICloudOAuthSession {
           this.cloudKitIdentity = identity;
         return ok(identity);
       } catch (error) {
+        const failureCheck: ExpectedCloudKitSignInFailureCheck = {
+          diagnostic: new CloudKitFailureDiagnostic(error),
+          hasSignInControl: this.hasCloudKitSignInControl(),
+        };
         if (
           !clickSignInControl ||
-          new CloudKitSetupFailure({
-            diagnostic: new CloudKitFailureDiagnostic(error),
-            hasSignInControl: this.hasCloudKitSignInControl(),
-          }).expected
+          new CloudKitSetupFailure(failureCheck).expected
         ) {
           expectedFailure = true;
-          return ok({ kind: CloudKitIdentityKind.SignedOut });
+          const signedOut: CloudKitIdentity = {
+            kind: CloudKitIdentityKind.SignedOut,
+          };
+          return ok(signedOut);
         }
         return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
       }
@@ -644,11 +673,12 @@ class ICloudOAuthSession {
       return this.requireStoredWebAuthToken();
     const container = cloudKitRuntime.getDefaultCloudKitContainer();
     if (container.isErr()) return err(container.error);
-    const identity = await this.waitForCloudKitSignIn({
+    const signInRequest: CloudKitSignInRequest = {
       container: container.value,
       timeoutMs: request.signInTimeoutMs,
       clickSignInControl: request.clickSignInControl,
-    });
+    };
+    const identity = await this.waitForCloudKitSignIn(signInRequest);
     return identity.andThen((value) => this.requireStoredWebAuthToken(value));
   }
   async requestICloudWebAuthToken(
@@ -666,11 +696,12 @@ class ICloudOAuthSession {
       identity.value.kind === CloudKitIdentityKind.SignedOut &&
       stored.value.kind === WebAuthTokenLookupKind.Unavailable
     ) {
-      const signedIn = await this.waitForCloudKitSignIn({
+      const signInRequest: CloudKitSignInRequest = {
         container: container.value,
         timeoutMs: request.signInTimeoutMs,
         clickSignInControl: request.clickSignInControl,
-      });
+      };
+      const signedIn = await this.waitForCloudKitSignIn(signInRequest);
       if (signedIn.isErr()) return err(signedIn.error);
     }
     return this.requireStoredWebAuthToken();
@@ -698,16 +729,18 @@ class ICloudOAuthSession {
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
     if (oauth_access_token(config).kind === OAuthAccessTokenKind.Available)
       return ok(config);
-    const refreshed = await this.requestICloudWebAuthToken({
+    const tokenRequest: ICloudWebAuthTokenRequest = {
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
       clickSignInControl: true,
-    });
-    return refreshed.andThen((tokens) =>
-      this.oauthTokensToICloudConfig({
+    };
+    const refreshed = await this.requestICloudWebAuthToken(tokenRequest);
+    return refreshed.andThen((tokens) => {
+      const update: ICloudOAuthConfigurationUpdate = {
         tokens,
         existing: configuredOAuthFile(config),
-      }),
-    );
+      };
+      return this.oauthTokensToICloudConfig(update);
+    });
   }
 }
 export const iCloudOAuthSession = new ICloudOAuthSession();

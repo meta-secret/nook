@@ -100,29 +100,37 @@ class LoginPasskeyInteraction {
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
     const showFillFailure = () => {
-      workflowUi.setFlightProgress({
+      const flightProgressRequest1: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.ReadyLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      })
-      authenticationWorkflowUi.setStatus({
+      }
+      workflowUi.setFlightProgress(flightProgressRequest1)
+      const authenticationStatusRequest1: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetFillFailed,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest1)
       return false
     }
     let releasedObservationBinding: AuthenticationObservationBinding =
       RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
         approval.facts,
       )
-    const releaseOutcome = await new RevalidatedAuthenticationAction({
+    const revalidationRequest1: ConstructorParameters<
+      typeof RevalidatedAuthenticationAction
+    >[0] = {
       workflow,
       expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
       observationBinding: releasedObservationBinding,
@@ -134,12 +142,17 @@ class LoginPasskeyInteraction {
         }
         return { kind: RevalidatedAuthenticationActResultKind.Acted }
       },
-    }).execute()
+    }
+    const releaseOutcome = await new RevalidatedAuthenticationAction(
+      revalidationRequest1,
+    ).execute()
     if (
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     )
       return showFillFailure()
-    const delivery = await loginFillRuntimeTransport.sendLoginFillMessage({
+    const loginFillMessage1: Parameters<
+      typeof loginFillRuntimeTransport.sendLoginFillMessage
+    >[0] = {
       type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
       payload: {
         origin: location.origin,
@@ -147,7 +160,9 @@ class LoginPasskeyInteraction {
         secretId: account.secretId,
         authorizationGeneration: account.authorizationGeneration,
       },
-    })
+    }
+    const delivery =
+      await loginFillRuntimeTransport.sendLoginFillMessage(loginFillMessage1)
     if (delivery.kind === LoginFillDeliveryKind.Unavailable)
       return showFillFailure()
     const { response } = delivery
@@ -246,12 +261,17 @@ class LoginPasskeyInteraction {
                 approvedFillRequest,
               ),
           }
-          submission.result = passwordFormInteraction.submitLoginForm({
+          const loginSubmissionRequest1: Parameters<
+            typeof passwordFormInteraction.submitLoginForm
+          >[0] = {
             kind: PasswordFormQueryKind.Scoped,
             root: currentWorkflow.root,
             formScope: currentWorkflow.formScope,
             submissionApproval,
-          })
+          }
+          submission.result = passwordFormInteraction.submitLoginForm(
+            loginSubmissionRequest1,
+          )
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
       }
@@ -278,48 +298,60 @@ class LoginPasskeyInteraction {
         return showFillFailure()
       }
       if (submission.result === FormSubmissionResult.Rejected) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest2: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.FillingLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-        })
-        authenticationWorkflowUi.setStatus({
+        }
+        workflowUi.setFlightProgress(flightProgressRequest2)
+        const authenticationStatusRequest2: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetFillFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest2)
         continueButton.hidden = false
         return false
       }
       if (submission.result === FormSubmissionResult.NotObserved) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest3: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.FillingLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-        })
+        }
+        workflowUi.setFlightProgress(flightProgressRequest3)
         description.textContent = workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetFilledManual,
         )
         continueButton.hidden = true
         return true
       }
-      workflowUi.setFlightProgress({
+      const flightProgressRequest4: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.VerifyingLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
-      })
+      }
+      workflowUi.setFlightProgress(flightProgressRequest4)
       description.textContent = workflowUi.translatedMessage(
         BROWSER_MESSAGE_KEYS.WidgetSubmitted,
       )
@@ -340,90 +372,119 @@ class LoginPasskeyInteraction {
   }: OpenLoginPickerArgs): Promise<void> {
     if (pickerState.login.kind === LoginPickerKind.Open) return
 
+    const loginPickerMessage1: Parameters<
+      typeof authenticationRuntimeTransport.sendLoginPickerOpenRuntimeMessage
+    >[0] = {
+      type: WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
+      payload: { origin: location.origin },
+    }
     const delivery =
-      await authenticationRuntimeTransport.sendLoginPickerOpenRuntimeMessage({
-        type: WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
-        payload: { origin: location.origin },
-      })
+      await authenticationRuntimeTransport.sendLoginPickerOpenRuntimeMessage(
+        loginPickerMessage1,
+      )
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       delivery.response.kind === LoginPickerOpenResponseKind.Failed
     ) {
-      workflowUi.setFlightProgress({
+      const flightProgressRequest5: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.ReadyLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      })
-      authenticationWorkflowUi.setStatus({
+      }
+      workflowUi.setFlightProgress(flightProgressRequest5)
+      const authenticationStatusRequest3: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetFillFailed,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest3)
       return
     }
     const { response } = delivery
     if (response.kind === LoginPickerOpenResponseKind.Locked) {
-      workflowUi.setFlightProgress({
+      const flightProgressRequest6: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.ReadyLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      })
-      authenticationWorkflowUi.setStatus({
+      }
+      workflowUi.setFlightProgress(flightProgressRequest6)
+      const authenticationStatusRequest4: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest4)
       return
     }
     if (response.kind === LoginPickerOpenResponseKind.Unavailable) {
-      workflowUi.setFlightProgress({
+      const flightProgressRequest7: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.ReadyLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      })
-      authenticationWorkflowUi.setStatus({
+      }
+      workflowUi.setFlightProgress(flightProgressRequest7)
+      const authenticationStatusRequest5: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetConnectVault,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest5)
       return
     }
     if (!('expiresAt' in response) || !('requestId' in response)) return
     if (response.expiresAt <= Date.now()) {
-      workflowUi.setFlightProgress({
+      const flightProgressRequest8: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
         step,
         title,
         ...authentication_workflow_activity_progress(
           AuthenticationWorkflowActivity.ReadyLogin,
         ),
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      })
-      authenticationWorkflowUi.setStatus({
+      }
+      workflowUi.setFlightProgress(flightProgressRequest8)
+      const authenticationStatusRequest6: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetFillFailed,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest6)
       return
     }
     const requestId = response.requestId
@@ -446,14 +507,17 @@ class LoginPasskeyInteraction {
         const taken = pickerState.takeLogin(requestId)
         if (taken.kind !== PendingPickerTakeKind.Taken) return
         const pending = taken.request
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest7: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description: pending.description,
           continueButton: pending.continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetFillFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest7)
         if (
           pending.continueButton.isConnected &&
           !pending.continueButton.hidden
@@ -463,7 +527,7 @@ class LoginPasskeyInteraction {
       },
       Math.max(0, response.expiresAt - Date.now()),
     )
-    pickerState.openLogin({
+    const pendingLoginRequest1: Parameters<typeof pickerState.openLogin>[0] = {
       requestId,
       workflow,
       step,
@@ -475,30 +539,42 @@ class LoginPasskeyInteraction {
         workflowKey: approval.workflowKey,
         facts: approval.facts,
       },
-    })
-    workflowUi.setFlightProgress({
+    }
+    pickerState.openLogin(pendingLoginRequest1)
+    const flightProgressRequest9: Parameters<
+      typeof workflowUi.setFlightProgress
+    >[0] = {
       step,
       title,
       ...authentication_workflow_activity_progress(
         AuthenticationWorkflowActivity.FillingLogin,
       ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-    })
-    authenticationWorkflowUi.setStatus({
+    }
+    workflowUi.setFlightProgress(flightProgressRequest9)
+    const authenticationStatusRequest8: Parameters<
+      typeof authenticationWorkflowUi.setStatus
+    >[0] = {
       description,
       continueButton,
       text: workflowUi.translatedMessage(
         BROWSER_MESSAGE_KEYS.WidgetLoginPickerOpened,
       ),
       enableContinue: true,
-    })
+    }
+    authenticationWorkflowUi.setStatus(authenticationStatusRequest8)
   }
 
   private cancelLoginPickerRequest(requestId: string): void {
-    authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse({
+    const runtimeMessage1: Parameters<
+      typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
+    >[0] = {
       type: LoginPickerCancelMessageType.NookLoginPickerCancel,
       payload: { requestId },
-    })
+    }
+    authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse(
+      runtimeMessage1,
+    )
   }
 
   cancelPendingLoginPickerRequest(): void {
@@ -520,24 +596,35 @@ class LoginPasskeyInteraction {
     if (widgetState.busy) return
     widgetState.busy = true
     continueButton.disabled = true
-    const activity = project_password_workflow_activity({
+    const passwordWorkflowActivityRequest1: Parameters<
+      typeof project_password_workflow_activity
+    >[0] = {
       currentPasswordFieldCount: workflow.summary.currentPasswordFieldCount,
       newPasswordFieldCount: workflow.summary.newPasswordFieldCount,
-    })
-    workflowUi.setFlightProgress({
+    }
+    const activity = project_password_workflow_activity(
+      passwordWorkflowActivityRequest1,
+    )
+    const flightProgressRequest10: Parameters<
+      typeof workflowUi.setFlightProgress
+    >[0] = {
       step,
       title,
       ...activity.generationProgress,
       titleKey: WorkflowCopy.forKind(activity.kind).titleKey,
-    })
-    authenticationWorkflowUi.setStatus({
+    }
+    workflowUi.setFlightProgress(flightProgressRequest10)
+    const authenticationStatusRequest9: Parameters<
+      typeof authenticationWorkflowUi.setStatus
+    >[0] = {
       description,
       continueButton,
       text: workflowUi.translatedMessage(
         BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordWorking,
       ),
       enableContinue: false,
-    })
+    }
+    authenticationWorkflowUi.setStatus(authenticationStatusRequest9)
     const approvalIsActive = () =>
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
@@ -546,7 +633,9 @@ class LoginPasskeyInteraction {
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
-      const releaseApproved = await new RevalidatedAuthenticationAction({
+      const revalidationRequest2: ConstructorParameters<
+        typeof RevalidatedAuthenticationAction
+      >[0] = {
         workflow,
         expectedAction: AuthenticationWorkflowAction.GeneratePassword,
         observationBinding: releasedObservationBinding,
@@ -558,38 +647,50 @@ class LoginPasskeyInteraction {
           }
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
-      }).execute()
+      }
+      const releaseApproved = await new RevalidatedAuthenticationAction(
+        revalidationRequest2,
+      ).execute()
       if (
         releaseApproved.kind !==
         RevalidatedAuthenticationActionOutcomeKind.Acted
       ) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest10: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest10)
         return
       }
 
+      const generatePasswordMessage: Parameters<
+        typeof authenticationRuntimeTransport.sendGeneratePasswordRuntimeMessage
+      >[0] = {
+        type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
+        payload: { origin: location.origin },
+      }
       const delivery =
         await authenticationRuntimeTransport.sendGeneratePasswordRuntimeMessage(
-          {
-            type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
-            payload: { origin: location.origin },
-          },
+          generatePasswordMessage,
         )
       if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest11: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest11)
         return
       }
       const { response } = delivery
@@ -605,21 +706,26 @@ class LoginPasskeyInteraction {
         response.kind !== GeneratedPasswordResponseKind.Generated ||
         !('password' in response)
       ) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest12: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest12)
         return
       }
       const password = { value: response.password }
       response.password = ''
       const fillOutcome = await (async () => {
         try {
-          return await new RevalidatedAuthenticationAction({
+          const revalidationRequest3: ConstructorParameters<
+            typeof RevalidatedAuthenticationAction
+          >[0] = {
             workflow,
             expectedAction: AuthenticationWorkflowAction.GeneratePassword,
             observationBinding: releasedObservationBinding,
@@ -641,7 +747,10 @@ class LoginPasskeyInteraction {
                   : RevalidatedAuthenticationActResultKind.Failed,
               }
             },
-          }).execute()
+          }
+          return await new RevalidatedAuthenticationAction(
+            revalidationRequest3,
+          ).execute()
         } finally {
           password.value = ''
         }
@@ -649,24 +758,30 @@ class LoginPasskeyInteraction {
       if (
         fillOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
       ) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest13: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest13)
         return
       }
-      authenticationWorkflowUi.setStatus({
+      const authenticationStatusRequest14: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetGeneratedPasswordFilled,
         ),
         enableContinue: false,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest14)
       continueButton.hidden = true
     } finally {
       widgetState.busy = false
@@ -687,7 +802,9 @@ class LoginPasskeyInteraction {
       this.preparedPasskeyActuations.delete(continueButton)
       const actuationResult = preparedActuation()
       if (actuationResult !== RevalidatedAuthenticationActResultKind.Acted) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest15: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
@@ -697,23 +814,29 @@ class LoginPasskeyInteraction {
               : BROWSER_MESSAGE_KEYS.WidgetFillFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest15)
         return
       }
-      authenticationWorkflowUi.setStatus({
+      const authenticationStatusRequest16: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetPasskeyCeremonyStarted,
         ),
         enableContinue: false,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest16)
       continueButton.hidden = true
       return
     }
     widgetState.busy = true
     continueButton.disabled = true
-    authenticationWorkflowUi.setStatus({
+    const authenticationStatusRequest17: Parameters<
+      typeof authenticationWorkflowUi.setStatus
+    >[0] = {
       description,
       continueButton,
       text: workflowUi.translatedMessage(
@@ -722,7 +845,8 @@ class LoginPasskeyInteraction {
           : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
       ),
       enableContinue: false,
-    })
+    }
+    authenticationWorkflowUi.setStatus(authenticationStatusRequest17)
     const approvalIsActive = () =>
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
@@ -731,7 +855,9 @@ class LoginPasskeyInteraction {
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
-      const outcome = await new RevalidatedAuthenticationAction({
+      const revalidationRequest4: ConstructorParameters<
+        typeof RevalidatedAuthenticationAction
+      >[0] = {
         workflow,
         expectedAction: action,
         observationBinding,
@@ -770,9 +896,14 @@ class LoginPasskeyInteraction {
           this.preparedPasskeyActuations.set(continueButton, preparedActuation)
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
-      }).execute()
+      }
+      const outcome = await new RevalidatedAuthenticationAction(
+        revalidationRequest4,
+      ).execute()
       if (outcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted) {
-        authenticationWorkflowUi.setStatus({
+        const authenticationStatusRequest18: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
@@ -782,10 +913,13 @@ class LoginPasskeyInteraction {
               : BROWSER_MESSAGE_KEYS.WidgetFillFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest18)
         return
       }
-      authenticationWorkflowUi.setStatus({
+      const authenticationStatusRequest19: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
         description,
         continueButton,
         text: workflowUi.translatedMessage(
@@ -794,7 +928,8 @@ class LoginPasskeyInteraction {
             : BROWSER_MESSAGE_KEYS.WidgetCreatePasskey,
         ),
         enableContinue: true,
-      })
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest19)
     } finally {
       widgetState.busy = false
       continueButton.disabled = false
@@ -813,89 +948,118 @@ class LoginPasskeyInteraction {
       return
     widgetState.busy = true
     continueButton.disabled = true
-    workflowUi.setFlightProgress({
+    const flightProgressRequest11: Parameters<
+      typeof workflowUi.setFlightProgress
+    >[0] = {
       step,
       title,
       ...authentication_workflow_activity_progress(
         AuthenticationWorkflowActivity.FillingLogin,
       ),
       titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-    })
-    authenticationWorkflowUi.setStatus({
+    }
+    workflowUi.setFlightProgress(flightProgressRequest11)
+    const authenticationStatusRequest20: Parameters<
+      typeof authenticationWorkflowUi.setStatus
+    >[0] = {
       description,
       continueButton,
       text: workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetWorking),
       enableContinue: false,
-    })
+    }
+    authenticationWorkflowUi.setStatus(authenticationStatusRequest20)
 
     try {
+      const loginOptionsMessage1: Parameters<
+        typeof authenticationRuntimeTransport.sendLoginOptionsRuntimeMessage
+      >[0] = {
+        type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
+        payload: { origin: location.origin },
+      }
       const delivery =
-        await authenticationRuntimeTransport.sendLoginOptionsRuntimeMessage({
-          type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
-          payload: { origin: location.origin },
-        })
+        await authenticationRuntimeTransport.sendLoginOptionsRuntimeMessage(
+          loginOptionsMessage1,
+        )
 
       if (
         delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
         delivery.response.kind === WebsiteLoginOptionsKind.Rejected
       ) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest12: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.ReadyLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-        })
-        authenticationWorkflowUi.setStatus({
+        }
+        workflowUi.setFlightProgress(flightProgressRequest12)
+        const authenticationStatusRequest21: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetFillFailed,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest21)
         return
       }
       const { response } = delivery
 
       if (response.kind === WebsiteLoginOptionsKind.Locked) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest13: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.ReadyLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-        })
-        authenticationWorkflowUi.setStatus({
+        }
+        workflowUi.setFlightProgress(flightProgressRequest13)
+        const authenticationStatusRequest22: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest22)
         return
       }
 
       if (response.kind === WebsiteLoginOptionsKind.Unavailable) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest14: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.ReadyLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-        })
-        authenticationWorkflowUi.setStatus({
+        }
+        workflowUi.setFlightProgress(flightProgressRequest14)
+        const authenticationStatusRequest23: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetConnectVault,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest23)
         return
       }
 
@@ -903,28 +1067,34 @@ class LoginPasskeyInteraction {
 
       const accounts = response.accounts
       if (accounts.length === 0) {
-        workflowUi.setFlightProgress({
+        const flightProgressRequest15: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
           step,
           title,
           ...authentication_workflow_activity_progress(
             AuthenticationWorkflowActivity.ReadyLogin,
           ),
           titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-        })
-        authenticationWorkflowUi.setStatus({
+        }
+        workflowUi.setFlightProgress(flightProgressRequest15)
+        const authenticationStatusRequest24: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
           description,
           continueButton,
           text: workflowUi.translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetNoMatch,
           ),
           enableContinue: true,
-        })
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest24)
         return
       }
 
       const [account] = accounts
       if (accounts.length === 1 && account) {
-        await this.fillAndSubmitAccount({
+        const fillAccountRequest1: FillAndSubmitAccountArgs = {
           account: {
             ...account,
             authorizationGeneration: response.authorizationGeneration,
@@ -935,17 +1105,19 @@ class LoginPasskeyInteraction {
           title,
           description,
           continueButton,
-        })
+        }
+        await this.fillAndSubmitAccount(fillAccountRequest1)
         return
       }
-      await this.openLoginPicker({
+      const openLoginPickerRequest1: OpenLoginPickerArgs = {
         workflow,
         approval,
         step,
         title,
         description,
         continueButton,
-      })
+      }
+      await this.openLoginPicker(openLoginPickerRequest1)
     } finally {
       widgetState.busy = false
       if (

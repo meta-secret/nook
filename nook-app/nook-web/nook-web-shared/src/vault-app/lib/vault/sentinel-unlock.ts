@@ -418,7 +418,12 @@ export class SentinelUnlockActions {
     if (manager.isErr()) return storageErr(manager.error);
     try {
       const status = manager.value.sentinel_unlock_session_status();
-      this.replaceUnlockSession({ status });
+      const sessionReplacement: Parameters<
+        typeof this.replaceUnlockSession
+      >[0] = {
+        status,
+      };
+      this.replaceUnlockSession(sessionReplacement);
       if (!status.active) state.sentinelUnlockRequest = "";
       state.sentinelUnlockStatus = manager.value.sentinel_unlock_status();
     } catch (nativeFailure) {

@@ -333,8 +333,12 @@ export class VaultProviderActions {
     if (
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
-    )
-      return storageOk({ kind: OAuthRemoteReferenceSyncKind.NotApplicable });
+    ) {
+      const outcome: OAuthRemoteReferenceSyncOutcome = {
+        kind: OAuthRemoteReferenceSyncKind.NotApplicable,
+      };
+      return storageOk(outcome);
+    }
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -349,14 +353,21 @@ export class VaultProviderActions {
     try {
       let config: typeof draft.config;
       try {
-        if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk({ kind: OAuthRemoteReferenceSyncKind.Unchanged });
+        if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated) {
+          const outcome: OAuthRemoteReferenceSyncOutcome = {
+            kind: OAuthRemoteReferenceSyncKind.Unchanged,
+          };
+          return storageOk(outcome);
+        }
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk({ kind: OAuthRemoteReferenceSyncKind.Updated });
+      const outcome: OAuthRemoteReferenceSyncOutcome = {
+        kind: OAuthRemoteReferenceSyncKind.Updated,
+      };
+      return storageOk(outcome);
     } finally {
       updated.free();
     }
@@ -386,7 +397,10 @@ export class VaultProviderActions {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       })();
-      const timeout = new VaultDiscoveryTimeout({ timeoutMs: 30_000 });
+      const deadline: ConstructorParameters<typeof VaultDiscoveryTimeout>[0] = {
+        timeoutMs: 30_000,
+      };
+      const timeout = new VaultDiscoveryTimeout(deadline);
       const timeoutRequest: VaultConnectStatusDiscoveryCompletion = {
         operation,
         releaseLateValue: () => {},
@@ -651,13 +665,19 @@ export class VaultProviderActions {
   > {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target)
-      return storageOk({ kind: ProviderRemovalOutcomeKind.NotFound });
-    if (target.type === "local")
-      return storageOk({
+    if (!target) {
+      const outcome: ProviderRemovalOutcome = {
+        kind: ProviderRemovalOutcomeKind.NotFound,
+      };
+      return storageOk(outcome);
+    }
+    if (target.type === "local") {
+      const outcome: ProviderRemovalOutcome = {
         kind: ProviderRemovalOutcomeKind.LocalProviderRetained,
         provider: target,
-      });
+      };
+      return storageOk(outcome);
+    }
 
     const persistenceOptions: ProviderPersistenceOptions = {
       replace: true,
@@ -693,10 +713,11 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk({
+    const outcome: ProviderRemovalOutcome = {
       kind: ProviderRemovalOutcomeKind.Removed,
       providers: state.providers,
-    });
+    };
+    return storageOk(outcome);
   }
 }
 

@@ -75,6 +75,11 @@ interface StorageTimeoutRace<T, E> {
   readonly releaseLateValue: (value: T) => void;
 }
 
+interface StorageTimeoutCompletion<T, E> {
+  readonly operation: Promise<Result<T, E>>;
+  readonly releaseLateValue: (value: T) => void;
+}
+
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
   private localDataStorageGeneration =
@@ -208,9 +213,22 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     promise,
     releaseLateValue,
   }: StorageTimeoutRace<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
-    return new VaultDiscoveryTimeout({
+    const discoveryDeadline: ConstructorParameters<
+      typeof VaultDiscoveryTimeout
+    >[0] = {
       timeoutMs: this.storageOpTimeoutMs,
-    }).waitFor({ operation: promise, releaseLateValue });
+    };
+    const discoveryCompletion: StorageTimeoutRace<T, E> = {
+      promise,
+      releaseLateValue,
+    };
+    const timeoutCompletion: StorageTimeoutCompletion<T, E> = {
+      operation: discoveryCompletion.promise,
+      releaseLateValue: discoveryCompletion.releaseLateValue,
+    };
+    return new VaultDiscoveryTimeout(discoveryDeadline).waitFor(
+      timeoutCompletion,
+    );
   }
 
   wasmStorageArgs(): NookStorageConnectArgs {

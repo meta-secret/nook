@@ -87,8 +87,14 @@ enum AuthenticationControlIdentityComparison {
   Changed = 'changed',
 }
 
+type AuthenticationControlIdentityElements = Element[]
+
 class AuthenticationControlIdentitySnapshot {
-  private constructor(private readonly controls: Element[]) {}
+  private readonly controls: AuthenticationControlIdentityElements
+
+  private constructor(controls: AuthenticationControlIdentityElements) {
+    this.controls = controls
+  }
 
   static capture(
     workflow: PasswordFormObservation,

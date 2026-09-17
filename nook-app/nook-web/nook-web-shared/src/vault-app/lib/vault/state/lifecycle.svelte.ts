@@ -160,9 +160,15 @@ export class VaultLifecycleState extends VaultStateSlices {
 
   scheduleSync({ callback, intervalMs }: LifecycleSyncSchedule): void {
     this.stopScheduledSync();
+    const scheduleArgs: ConstructorParameters<
+      typeof ActiveVaultSyncSchedule
+    >[0] = {
+      callback,
+      intervalMs,
+    };
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,
-      schedule: new ActiveVaultSyncSchedule({ callback, intervalMs }),
+      schedule: new ActiveVaultSyncSchedule(scheduleArgs),
     };
   }
 

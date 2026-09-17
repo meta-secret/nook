@@ -1,4 +1,7 @@
-import { passwordFieldDiscovery } from "./password-form-fields";
+import {
+  type AutocompleteTokenMatchRequest,
+  passwordFieldDiscovery,
+} from "./password-form-fields";
 import { PasswordFormFieldQuery } from "./password-form-summary-state";
 import {
   PasswordFormQueryKind,
@@ -22,16 +25,18 @@ export class PasswordFormSummaryObservation {
       new PasswordFormFieldQuery(request).query,
     );
     const currentPasswordFieldCount = passwordFields.filter((field) => {
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const tokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "current-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(tokenRequest);
     }).length;
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const tokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "new-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(tokenRequest);
     }).length;
     const forms = new Set<HTMLFormElement>();
     for (const field of [

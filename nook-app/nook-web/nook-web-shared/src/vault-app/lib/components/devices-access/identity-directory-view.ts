@@ -82,6 +82,9 @@ export type IdentityDirectoryAccessView = {
   readonly access: DashboardView;
 };
 
+type DeviceVaultAccessEntries = NookDeviceVaultAccess[];
+type IdentityMemberEntries = NookIdentityMemberSnapshot[];
+
 type DevicesAccessDashboardReadyProjectionRequest = {
   readonly accessState: DashboardLoadState<DashboardView>;
   readonly directoryState: IdentityDirectoryLoadState;
@@ -156,7 +159,12 @@ export class IdentityDirectoryReader {
           : { kind: IdentityDirectorySelectionKind.Empty };
       const access = new NativeDeviceAccess(snapshot.device_access()).read();
       if (access.isErr()) return err(access.error);
-      return ok({ directory: { identities, selection }, access: access.value });
+      const directory: IdentityDirectoryView = { identities, selection };
+      const view: IdentityDirectoryAccessView = {
+        directory,
+        access: access.value,
+      };
+      return ok(view);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -184,7 +192,7 @@ class NativeIdentityMember {
   read(): Result<IdentityMemberView, VaultStorageFailure> {
     const member = this.member;
     try {
-      return ok({
+      const view: IdentityMemberView = {
         appId: member.appId,
         currentBrowser: member.currentBrowser,
         localProtection: member.localProtection,
@@ -192,7 +200,8 @@ class NativeIdentityMember {
           member.labelKind === NookIdentityMemberLabelKind.Known
             ? new KnownDashboardText(member.label())
             : new UnknownDashboardText(),
-      });
+      };
+      return ok(view);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -221,13 +230,18 @@ class NativeAccessTimestamp {
   read(): Result<DashboardTimestamp, VaultStorageFailure> {
     const value = this.value;
     try {
-      if (value.kind === NookPasskeyTimestampEvidenceKind.Known)
-        return ok({ kind: DashboardTimestampKind.Known, value: value.value() });
-      return ok(
+      if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
+        const timestamp: DashboardTimestamp = {
+          kind: DashboardTimestampKind.Known,
+          value: value.value(),
+        };
+        return ok(timestamp);
+      }
+      const timestamp: DashboardTimestamp =
         value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
           ? { kind: DashboardTimestampKind.NotYetObserved }
-          : { kind: DashboardTimestampKind.Unavailable },
-      );
+          : { kind: DashboardTimestampKind.Unavailable };
+      return ok(timestamp);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -244,13 +258,14 @@ class NativeVaultAccess {
       if (verifiedAt.isErr()) return err(verifiedAt.error);
       const updatedAt = new NativeAccessText(entry.lastLocalUpdateAt).read();
       if (updatedAt.isErr()) return err(updatedAt.error);
-      return ok({
+      const view: VaultAccessView = {
         storeId: entry.storeId,
         label: entry.label,
         verified: entry.accessState === NookDeviceVaultAccessState.Verified,
         verifiedAt: verifiedAt.value,
         lastLocalUpdateAt: updatedAt.value,
-      });
+      };
+      return ok(view);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -259,7 +274,7 @@ class NativeVaultAccess {
   }
 }
 class NativeVaultAccessList {
-  constructor(private readonly entries: NookDeviceVaultAccess[]) {}
+  constructor(private readonly entries: DeviceVaultAccessEntries) {}
   read(): Result<VaultAccessView[], VaultStorageFailure> {
     const projected: VaultAccessView[] = [];
     let consumed = 0;
@@ -277,7 +292,7 @@ class NativeVaultAccessList {
   }
 }
 class NativeIdentityMembers {
-  constructor(private readonly entries: NookIdentityMemberSnapshot[]) {}
+  constructor(private readonly entries: IdentityMemberEntries) {}
   read(): Result<IdentityMemberView[], VaultStorageFailure> {
     const projected: IdentityMemberView[] = [];
     let consumed = 0;
@@ -313,7 +328,7 @@ class NativeDeviceAccess {
       if (lastUsedAt.isErr()) return err(lastUsedAt.error);
       const vaults = new NativeVaultAccessList(snapshot.vaults()).read();
       if (vaults.isErr()) return err(vaults.error);
-      return ok({
+      const view: DashboardView = {
         protection: snapshot.protection,
         identityState: snapshot.identityState,
         deviceId: deviceId.value,
@@ -324,7 +339,8 @@ class NativeDeviceAccess {
         lastUsedAt: lastUsedAt.value,
         keeper: snapshot.keeper,
         vaults: vaults.value,
-      });
+      };
+      return ok(view);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {
@@ -341,13 +357,14 @@ class NativeDirectoryIdentity {
       if (members.isErr()) return err(members.error);
       const vaults = new NativeVaultAccessList(identity.vaults()).read();
       if (vaults.isErr()) return err(vaults.error);
-      return ok({
+      const view: IdentityDirectoryEntry = {
         identityId: identity.identityId,
         label: identity.label,
         localAccess: identity.localAccess,
         members: members.value,
         vaults: vaults.value,
-      });
+      };
+      return ok(view);
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     } finally {

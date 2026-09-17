@@ -149,77 +149,241 @@ export class WebsiteLoginCanceledMessage {
 
 const loginPickerNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
 
-const loginPickerQueryResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  origin: loginPickerNonEmptyStringSchema,
-  accounts: Schema.mutable(
-    Schema.Array(
-      Schema.Struct({
-        vaultStoreId: loginPickerNonEmptyStringSchema,
-        secretId: loginPickerNonEmptyStringSchema,
-        username: Schema.String,
-        websiteHost: Schema.String,
-        websiteUrl: Schema.String,
-        vaultName: Schema.String,
-      }),
+type LoginPickerQueryResponseAccountsSchemaFields = {
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  username: typeof Schema.String
+  websiteHost: typeof Schema.String
+  websiteUrl: typeof Schema.String
+  vaultName: typeof Schema.String
+}
+const loginPickerQueryResponseAccountsSchemaFields: LoginPickerQueryResponseAccountsSchemaFields =
+  {
+    vaultStoreId: loginPickerNonEmptyStringSchema,
+    secretId: loginPickerNonEmptyStringSchema,
+    username: Schema.String,
+    websiteHost: Schema.String,
+    websiteUrl: Schema.String,
+    vaultName: Schema.String,
+  }
+
+type LoginPickerQueryResponseSchemaFields = {
+  ok: Schema.Literal<[true]>
+  origin: Schema.filter<typeof Schema.String>
+  accounts: Schema.mutable<
+    Schema.Array$<
+      Schema.Struct<{
+        vaultStoreId: Schema.filter<typeof Schema.String>
+        secretId: Schema.filter<typeof Schema.String>
+        username: typeof Schema.String
+        websiteHost: typeof Schema.String
+        websiteUrl: typeof Schema.String
+        vaultName: typeof Schema.String
+      }>
+    >
+  >
+}
+const loginPickerQueryResponseSchemaFields: LoginPickerQueryResponseSchemaFields =
+  {
+    ok: Schema.Literal(true),
+    origin: loginPickerNonEmptyStringSchema,
+    accounts: Schema.mutable(
+      Schema.Array(Schema.Struct(loginPickerQueryResponseAccountsSchemaFields)),
     ),
-  ),
-}) satisfies Schema.Schema<LoginPickerQueryResponse>
+  }
 
-const loginPickerSelectResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-}) satisfies Schema.Schema<LoginPickerSelectResponse>
+const loginPickerQueryResponseSchema = Schema.Struct(
+  loginPickerQueryResponseSchemaFields,
+) satisfies Schema.Schema<LoginPickerQueryResponse>
 
-const websiteLoginPickerOpenMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
-  ),
-  payload: Schema.Struct({ origin: loginPickerNonEmptyStringSchema }),
-}) satisfies Schema.Schema<WebsiteLoginPickerOpenMessage>
+type LoginPickerSelectResponseSchemaFields = { ok: Schema.Literal<[true]> }
+const loginPickerSelectResponseSchemaFields: LoginPickerSelectResponseSchemaFields =
+  {
+    ok: Schema.Literal(true),
+  }
 
-const loginPickerQueryMessageSchema = Schema.Struct({
-  type: Schema.Literal(LoginPickerQueryMessageType.NookLoginPickerQuery),
-  payload: Schema.Struct({
+const loginPickerSelectResponseSchema = Schema.Struct(
+  loginPickerSelectResponseSchemaFields,
+) satisfies Schema.Schema<LoginPickerSelectResponse>
+
+type WebsiteLoginPickerOpenMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteLoginPickerOpenMessagePayloadSchemaFields: WebsiteLoginPickerOpenMessagePayloadSchemaFields =
+  { origin: loginPickerNonEmptyStringSchema }
+
+type WebsiteLoginPickerOpenMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginPickerOpenMessageType]>
+  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+}
+const websiteLoginPickerOpenMessageSchemaFields: WebsiteLoginPickerOpenMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
+    ),
+    payload: Schema.Struct(websiteLoginPickerOpenMessagePayloadSchemaFields),
+  }
+
+const websiteLoginPickerOpenMessageSchema = Schema.Struct(
+  websiteLoginPickerOpenMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginPickerOpenMessage>
+
+type LoginPickerQueryMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+  query: Schema.filter<typeof Schema.String>
+}
+const loginPickerQueryMessagePayloadSchemaFields: LoginPickerQueryMessagePayloadSchemaFields =
+  {
     requestId: loginPickerNonEmptyStringSchema,
     query: Schema.String.pipe(Schema.maxLength(MAX_LOGIN_SEARCH_LENGTH)),
-  }),
-}) satisfies Schema.Schema<LoginPickerQueryMessage>
+  }
 
-const loginPickerSelectMessageSchema = Schema.Struct({
-  type: Schema.Literal(LoginPickerSelectMessageType.NookLoginPickerSelect),
-  payload: Schema.Struct({
+type LoginPickerQueryMessageSchemaFields = {
+  type: Schema.Literal<[LoginPickerQueryMessageType]>
+  payload: Schema.Struct<{
+    requestId: Schema.filter<typeof Schema.String>
+    query: Schema.filter<typeof Schema.String>
+  }>
+}
+const loginPickerQueryMessageSchemaFields: LoginPickerQueryMessageSchemaFields =
+  {
+    type: Schema.Literal(LoginPickerQueryMessageType.NookLoginPickerQuery),
+    payload: Schema.Struct(loginPickerQueryMessagePayloadSchemaFields),
+  }
+
+const loginPickerQueryMessageSchema = Schema.Struct(
+  loginPickerQueryMessageSchemaFields,
+) satisfies Schema.Schema<LoginPickerQueryMessage>
+
+type LoginPickerSelectMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+}
+const loginPickerSelectMessagePayloadSchemaFields: LoginPickerSelectMessagePayloadSchemaFields =
+  {
     requestId: loginPickerNonEmptyStringSchema,
     vaultStoreId: loginPickerNonEmptyStringSchema,
     secretId: loginPickerNonEmptyStringSchema,
-  }),
-}) satisfies Schema.Schema<LoginPickerSelectMessage>
+  }
 
-const loginPickerCancelMessageSchema = Schema.Struct({
-  type: Schema.Literal(LoginPickerCancelMessageType.NookLoginPickerCancel),
-  payload: Schema.Struct({ requestId: loginPickerNonEmptyStringSchema }),
-}) satisfies Schema.Schema<LoginPickerCancelMessage>
+type LoginPickerSelectMessageSchemaFields = {
+  type: Schema.Literal<[LoginPickerSelectMessageType]>
+  payload: Schema.Struct<{
+    requestId: Schema.filter<typeof Schema.String>
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+  }>
+}
+const loginPickerSelectMessageSchemaFields: LoginPickerSelectMessageSchemaFields =
+  {
+    type: Schema.Literal(LoginPickerSelectMessageType.NookLoginPickerSelect),
+    payload: Schema.Struct(loginPickerSelectMessagePayloadSchemaFields),
+  }
 
-const websiteLoginSelectedMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected,
-  ),
-  payload: Schema.Struct({
+const loginPickerSelectMessageSchema = Schema.Struct(
+  loginPickerSelectMessageSchemaFields,
+) satisfies Schema.Schema<LoginPickerSelectMessage>
+
+type LoginPickerCancelMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+}
+const loginPickerCancelMessagePayloadSchemaFields: LoginPickerCancelMessagePayloadSchemaFields =
+  { requestId: loginPickerNonEmptyStringSchema }
+
+type LoginPickerCancelMessageSchemaFields = {
+  type: Schema.Literal<[LoginPickerCancelMessageType]>
+  payload: Schema.Struct<{ requestId: Schema.filter<typeof Schema.String> }>
+}
+const loginPickerCancelMessageSchemaFields: LoginPickerCancelMessageSchemaFields =
+  {
+    type: Schema.Literal(LoginPickerCancelMessageType.NookLoginPickerCancel),
+    payload: Schema.Struct(loginPickerCancelMessagePayloadSchemaFields),
+  }
+
+const loginPickerCancelMessageSchema = Schema.Struct(
+  loginPickerCancelMessageSchemaFields,
+) satisfies Schema.Schema<LoginPickerCancelMessage>
+
+type WebsiteLoginSelectedMessagePayloadAccountSchemaFields = {
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  authorizationGeneration: Schema.filter<typeof Schema.String>
+}
+const websiteLoginSelectedMessagePayloadAccountSchemaFields: WebsiteLoginSelectedMessagePayloadAccountSchemaFields =
+  {
+    vaultStoreId: loginPickerNonEmptyStringSchema,
+    secretId: loginPickerNonEmptyStringSchema,
+    authorizationGeneration: loginPickerNonEmptyStringSchema,
+  }
+
+type WebsiteLoginSelectedMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  requestId: Schema.filter<typeof Schema.String>
+  account: Schema.Struct<{
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+    authorizationGeneration: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginSelectedMessagePayloadSchemaFields: WebsiteLoginSelectedMessagePayloadSchemaFields =
+  {
     origin: loginPickerNonEmptyStringSchema,
     requestId: loginPickerNonEmptyStringSchema,
-    account: Schema.Struct({
-      vaultStoreId: loginPickerNonEmptyStringSchema,
-      secretId: loginPickerNonEmptyStringSchema,
-      authorizationGeneration: loginPickerNonEmptyStringSchema,
-    }),
-  }),
-}) satisfies Schema.Schema<WebsiteLoginSelectedMessage>
+    account: Schema.Struct(
+      websiteLoginSelectedMessagePayloadAccountSchemaFields,
+    ),
+  }
 
-const websiteLoginCanceledMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
-  ),
-  payload: Schema.Struct({
+type WebsiteLoginSelectedMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginSelectedMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    requestId: Schema.filter<typeof Schema.String>
+    account: Schema.Struct<{
+      vaultStoreId: Schema.filter<typeof Schema.String>
+      secretId: Schema.filter<typeof Schema.String>
+      authorizationGeneration: Schema.filter<typeof Schema.String>
+    }>
+  }>
+}
+const websiteLoginSelectedMessageSchemaFields: WebsiteLoginSelectedMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected,
+    ),
+    payload: Schema.Struct(websiteLoginSelectedMessagePayloadSchemaFields),
+  }
+
+const websiteLoginSelectedMessageSchema = Schema.Struct(
+  websiteLoginSelectedMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginSelectedMessage>
+
+type WebsiteLoginCanceledMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  requestId: Schema.filter<typeof Schema.String>
+}
+const websiteLoginCanceledMessagePayloadSchemaFields: WebsiteLoginCanceledMessagePayloadSchemaFields =
+  {
     origin: loginPickerNonEmptyStringSchema,
     requestId: loginPickerNonEmptyStringSchema,
-  }),
-}) satisfies Schema.Schema<WebsiteLoginCanceledMessage>
+  }
+
+type WebsiteLoginCanceledMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginCanceledMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    requestId: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginCanceledMessageSchemaFields: WebsiteLoginCanceledMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+    ),
+    payload: Schema.Struct(websiteLoginCanceledMessagePayloadSchemaFields),
+  }
+
+const websiteLoginCanceledMessageSchema = Schema.Struct(
+  websiteLoginCanceledMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginCanceledMessage>

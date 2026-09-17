@@ -50,27 +50,50 @@ import {
   OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
 } from "./lifecycle-runtime-messages";
 
-function decodeRuntimeMessage<A>(
-  schema: Schema.Schema<A>,
-  value: unknown,
-  kind: RuntimeMessageDecodeFailureKind,
-): Effect.Effect<A, RuntimeMessageDecodeFailure> {
-  return Schema.decodeUnknown(schema)(value).pipe(
-    Effect.mapError((cause) =>
-      RuntimeMessageDecodeFailure.fromParseError({ kind, cause }),
-    ),
+type RuntimeMessageDecodeRequest<DecodedMessage, WireMessage> = {
+  readonly schema: Schema.Schema<DecodedMessage>;
+  readonly value: WireMessage;
+  readonly kind: RuntimeMessageDecodeFailureKind;
+};
+
+type RuntimeDecodeAttempt<DecodedValue> = {
+  readonly try: () => DecodedValue;
+  readonly catch: <Cause>(cause: Cause) => RuntimeMessageDecodeFailure;
+};
+
+type UnboundedEffectConcurrency = {
+  readonly concurrency: "unbounded";
+};
+
+function decodeRuntimeMessage<DecodedMessage, WireMessage>(
+  request: RuntimeMessageDecodeRequest<DecodedMessage, WireMessage>,
+): Effect.Effect<DecodedMessage, RuntimeMessageDecodeFailure> {
+  return Schema.decodeUnknown(request.schema)(request.value).pipe(
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromParseError
+      >[0] = { kind: request.kind, cause };
+      return RuntimeMessageDecodeFailure.fromParseError(failureRequest);
+    }),
   );
 }
 
-function decodeAdmissionResult<A, E>(
-  result: Result<A, E>,
-  kind: RuntimeMessageDecodeFailureKind,
-): Effect.Effect<A, RuntimeMessageDecodeFailure> {
-  return result.isErr()
-    ? Effect.fail(
-        RuntimeMessageDecodeFailure.fromCause({ kind, cause: result.error }),
-      )
-    : Effect.succeed(result.value);
+type AdmissionResultDecodeRequest<DecodedValue, AdmissionFailure> = {
+  readonly result: Result<DecodedValue, AdmissionFailure>;
+  readonly kind: RuntimeMessageDecodeFailureKind;
+};
+
+function decodeAdmissionResult<DecodedValue, AdmissionFailure>(
+  request: AdmissionResultDecodeRequest<DecodedValue, AdmissionFailure>,
+): Effect.Effect<DecodedValue, RuntimeMessageDecodeFailure> {
+  if (request.result.isOk()) return Effect.succeed(request.result.value);
+  const failureRequest: Parameters<
+    typeof RuntimeMessageDecodeFailure.fromCause
+  >[0] = {
+    kind: request.kind,
+    cause: request.result.error,
+  };
+  return Effect.fail(RuntimeMessageDecodeFailure.fromCause(failureRequest));
 }
 
 export {
@@ -125,14 +148,20 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
     ExtensionPairingStorageProviderPayload,
     RuntimeMessageDecodeFailure
   > {
-    return Effect.try({
-      try: () => decode_extension_pairing_storage_provider(value),
-      catch: (cause) =>
-        RuntimeMessageDecodeFailure.fromCause({
-          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingStorageProvider,
-          cause,
-        }),
-    });
+    const attempt: RuntimeDecodeAttempt<ExtensionPairingStorageProviderPayload> =
+      {
+        try: () => decode_extension_pairing_storage_provider(value),
+        catch: (cause) => {
+          const failureRequest: Parameters<
+            typeof RuntimeMessageDecodeFailure.fromCause
+          >[0] = {
+            kind: RuntimeMessageDecodeFailureKind.ExtensionPairingStorageProvider,
+            cause,
+          };
+          return RuntimeMessageDecodeFailure.fromCause(failureRequest);
+        },
+      };
+    return Effect.try(attempt);
   }
 }
 
@@ -222,10 +251,14 @@ export class ExtensionPairingApprovedGrantAdmission {
   static decode(
     value: unknown,
   ): Effect.Effect<ExtensionPairingApprovedGrant, RuntimeMessageDecodeFailure> {
-    return decodeAdmissionResult(
-      ExtensionPairingApprovedGrantAdmission.parse(value),
-      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
-    );
+    const request: AdmissionResultDecodeRequest<
+      ExtensionPairingApprovedGrant,
+      ExtensionPairingApprovedMessageAdmissionFailure
+    > = {
+      result: ExtensionPairingApprovedGrantAdmission.parse(value),
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant,
+    };
+    return decodeAdmissionResult(request);
   }
 }
 
@@ -262,8 +295,13 @@ export class ExtensionStorageProviderPayloadAdmission {
       case ExtensionStorageProviderType.Local:
       case ExtensionStorageProviderType.LocalFolder:
       case ExtensionStorageProviderType.Github:
-      case ExtensionStorageProviderType.OAuthFile:
-        return ok({ id: provider.id, type: provider.type });
+      case ExtensionStorageProviderType.OAuthFile: {
+        const identity: ExtensionStorageProviderIdentity = {
+          id: provider.id,
+          type: provider.type,
+        };
+        return ok(identity);
+      }
       default:
         return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
@@ -286,22 +324,39 @@ export class ExtensionPairingApprovedMessage {
     ExtensionPairingApprovedMessage,
     RuntimeMessageDecodeFailure
   > {
-    const envelopeSchema = Schema.Struct({
-      type: Schema.Literal(
-        ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-      ),
+    const typeSchema = Schema.Literal(
+      ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+    );
+    const eventLogRecordsSchema = Schema.Array(Schema.Unknown).pipe(
+      Schema.minItems(1),
+    );
+    const envelopeFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: typeof Schema.Unknown;
+      readonly eventLogRecords: typeof eventLogRecordsSchema;
+    } = {
+      type: typeSchema,
       payload: Schema.Unknown,
-      eventLogRecords: Schema.Array(Schema.Unknown).pipe(Schema.minItems(1)),
-    });
-    return decodeRuntimeMessage(
-      envelopeSchema,
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
-    ).pipe(
-      Effect.flatMap(({ type, payload, eventLogRecords }) =>
-        Effect.all(eventLogRecords.map(ExtensionEventLogRecordSchema.decode), {
+      eventLogRecords: eventLogRecordsSchema,
+    };
+    const envelopeSchema = Schema.Struct(envelopeFields);
+    const decodeRequest: RuntimeMessageDecodeRequest<
+      Schema.Schema.Type<typeof envelopeSchema>,
+      typeof message
+    > = {
+      schema: envelopeSchema,
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
+    };
+    return decodeRuntimeMessage(decodeRequest).pipe(
+      Effect.flatMap(({ type, payload, eventLogRecords }) => {
+        const concurrencyOptions: UnboundedEffectConcurrency = {
           concurrency: "unbounded",
-        }).pipe(
+        } as const;
+        return Effect.all(
+          eventLogRecords.map(ExtensionEventLogRecordSchema.decode),
+          concurrencyOptions,
+        ).pipe(
           Effect.flatMap((decodedRecords) =>
             ExtensionPairingApprovedGrantAdmission.decode(payload).pipe(
               Effect.map((decodedPayload) => ({
@@ -311,8 +366,8 @@ export class ExtensionPairingApprovedMessage {
               })),
             ),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }
@@ -338,24 +393,40 @@ export class ExtensionIdentityHandoffRequestMessage {
     ExtensionIdentityHandoffRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(
-          ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-        ),
-        payload: Schema.Struct({
-          recipientPublicKey: Schema.String.pipe(Schema.minLength(1)),
-          nonce: Schema.String.pipe(Schema.minLength(1)),
-          expectedDeviceId: Schema.String.pipe(Schema.minLength(1)),
-          expectedDevicePublicKey: Schema.String.pipe(Schema.minLength(1)),
-          expectedDeviceSigningPublicKey: Schema.String.pipe(
-            Schema.minLength(1),
-          ),
-        }),
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
+    const nonEmptyString = Schema.String.pipe(Schema.minLength(1));
+    const payloadFields: {
+      readonly recipientPublicKey: typeof nonEmptyString;
+      readonly nonce: typeof nonEmptyString;
+      readonly expectedDeviceId: typeof nonEmptyString;
+      readonly expectedDevicePublicKey: typeof nonEmptyString;
+      readonly expectedDeviceSigningPublicKey: typeof nonEmptyString;
+    } = {
+      recipientPublicKey: nonEmptyString,
+      nonce: nonEmptyString,
+      expectedDeviceId: nonEmptyString,
+      expectedDevicePublicKey: nonEmptyString,
+      expectedDeviceSigningPublicKey: nonEmptyString,
+    };
+    const typeSchema = Schema.Literal(
+      ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
     );
+    const payloadSchema = Schema.Struct(payloadFields);
+    const messageFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: typeof payloadSchema;
+    } = {
+      type: typeSchema,
+      payload: payloadSchema,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      ExtensionIdentityHandoffRequestMessage,
+      typeof message
+    > = {
+      schema: Schema.Struct(messageFields),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 
@@ -374,16 +445,25 @@ export class ExtensionPairedVaultIdentityDiscoveryMessage {
     ExtensionPairedVaultIdentityDiscoveryMessage,
     RuntimeMessageDecodeFailure
   > {
-    return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(
-          ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-        ),
-        payload: Schema.Unknown,
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
+    const typeSchema = Schema.Literal(
+      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
     );
+    const messageFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: typeof Schema.Unknown;
+    } = {
+      type: typeSchema,
+      payload: Schema.Unknown,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      ExtensionPairedVaultIdentityDiscoveryMessage,
+      typeof message
+    > = {
+      schema: Schema.Struct(messageFields),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 
@@ -408,19 +488,34 @@ export class ExtensionPairedVaultUnlockRequestMessage {
     ExtensionPairedVaultUnlockRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(
-          ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-        ),
-        payload: Schema.Struct({
-          requestId: Schema.String.pipe(Schema.minLength(1)),
-          vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-        }),
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
+    const nonEmptyString = Schema.String.pipe(Schema.minLength(1));
+    const payloadFields: {
+      readonly requestId: typeof nonEmptyString;
+      readonly vaultStoreId: typeof nonEmptyString;
+    } = {
+      requestId: nonEmptyString,
+      vaultStoreId: nonEmptyString,
+    };
+    const typeSchema = Schema.Literal(
+      ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
     );
+    const payloadSchema = Schema.Struct(payloadFields);
+    const messageFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: typeof payloadSchema;
+    } = {
+      type: typeSchema,
+      payload: payloadSchema,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      ExtensionPairedVaultUnlockRequestMessage,
+      typeof message
+    > = {
+      schema: Schema.Struct(messageFields),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 
@@ -455,16 +550,25 @@ export class ExtensionPairedVaultIdentityHandoffRequestMessage {
     ExtensionPairedVaultIdentityHandoffRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    return decodeRuntimeMessage(
-      Schema.Struct({
-        type: Schema.Literal(
-          ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-        ),
-        payload: Schema.Unknown,
-      }),
-      message,
-      RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
+    const typeSchema = Schema.Literal(
+      ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
     );
+    const messageFields: {
+      readonly type: typeof typeSchema;
+      readonly payload: typeof Schema.Unknown;
+    } = {
+      type: typeSchema,
+      payload: Schema.Unknown,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      ExtensionPairedVaultIdentityHandoffRequestMessage,
+      typeof message
+    > = {
+      schema: Schema.Struct(messageFields),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 

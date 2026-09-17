@@ -19,6 +19,11 @@ export type AuthenticationOutcomeObservationView = {
 
 export type AuthenticationOutcomeVerdictView = AuthenticationOutcomeDecision
 
+export type AuthenticationOutcomeClassifyPayload = {
+  readonly observation: AuthenticationOutcomeObservationView
+  readonly timeoutMs: number
+}
+
 export enum AuthenticationOutcomeClassifyMessageType {
   NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',
 }
@@ -27,10 +32,7 @@ export enum AuthenticationOutcomeClassifyMessageType {
 export class AuthenticationOutcomeClassifyMessage {
   private constructor() {}
   declare readonly type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
-  declare readonly payload: {
-    observation: AuthenticationOutcomeObservationView
-    timeoutMs: number
-  }
+  declare readonly payload: AuthenticationOutcomeClassifyPayload
   static decode(message: unknown) {
     return Schema.decodeUnknown(authenticationOutcomeClassifyMessageSchema)(
       message,
@@ -38,28 +40,62 @@ export class AuthenticationOutcomeClassifyMessage {
   }
 }
 
-export const AuthenticationOutcomeObservationViewSchema = Schema.Struct({
-  navigatedAwayFromAuthPath: Schema.Boolean,
-  authFieldsPresent: Schema.Boolean,
-  successMarkerPresent: Schema.Boolean,
-  errorMarkerPresent: Schema.Boolean,
-  sameDocumentMutation: Schema.Boolean,
-  inIframe: Schema.Boolean,
-  elapsedMs: Schema.Number.pipe(
-    Schema.filter((elapsedMs) => Number.isFinite(elapsedMs)),
-    Schema.filter((elapsedMs) => elapsedMs >= 0),
-  ),
-}) satisfies Schema.Schema<AuthenticationOutcomeObservationView>
+type AuthenticationOutcomeObservationSchemaFields = {
+  readonly [Field in keyof AuthenticationOutcomeObservationView]: Schema.Schema<
+    AuthenticationOutcomeObservationView[Field]
+  >
+}
 
-const authenticationOutcomeClassifyMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
-  ),
-  payload: Schema.Struct({
+const authenticationOutcomeObservationSchemaFields: AuthenticationOutcomeObservationSchemaFields =
+  {
+    navigatedAwayFromAuthPath: Schema.Boolean,
+    authFieldsPresent: Schema.Boolean,
+    successMarkerPresent: Schema.Boolean,
+    errorMarkerPresent: Schema.Boolean,
+    sameDocumentMutation: Schema.Boolean,
+    inIframe: Schema.Boolean,
+    elapsedMs: Schema.Number.pipe(
+      Schema.filter((elapsedMs) => Number.isFinite(elapsedMs)),
+      Schema.filter((elapsedMs) => elapsedMs >= 0),
+    ),
+  }
+
+export const AuthenticationOutcomeObservationViewSchema = Schema.Struct(
+  authenticationOutcomeObservationSchemaFields,
+) satisfies Schema.Schema<AuthenticationOutcomeObservationView>
+
+type AuthenticationOutcomeClassifyPayloadSchemaFields = {
+  readonly [Field in keyof AuthenticationOutcomeClassifyPayload]: Schema.Schema<
+    AuthenticationOutcomeClassifyPayload[Field]
+  >
+}
+
+const authenticationOutcomeClassifyPayloadSchemaFields: AuthenticationOutcomeClassifyPayloadSchemaFields =
+  {
     observation: AuthenticationOutcomeObservationViewSchema,
     timeoutMs: Schema.Number.pipe(
       Schema.filter((timeoutMs) => Number.isFinite(timeoutMs)),
       Schema.filter((timeoutMs) => timeoutMs > 0),
     ),
-  }),
-}) satisfies Schema.Schema<AuthenticationOutcomeClassifyMessage>
+  }
+
+const authenticationOutcomeClassifyPayloadSchema = Schema.Struct(
+  authenticationOutcomeClassifyPayloadSchemaFields,
+)
+
+type AuthenticationOutcomeClassifyMessageSchemaFields = {
+  readonly type: Schema.Schema<AuthenticationOutcomeClassifyMessage['type']>
+  readonly payload: Schema.Schema<AuthenticationOutcomeClassifyPayload>
+}
+
+const authenticationOutcomeClassifyMessageSchemaFields: AuthenticationOutcomeClassifyMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
+    ),
+    payload: authenticationOutcomeClassifyPayloadSchema,
+  }
+
+const authenticationOutcomeClassifyMessageSchema = Schema.Struct(
+  authenticationOutcomeClassifyMessageSchemaFields,
+) satisfies Schema.Schema<AuthenticationOutcomeClassifyMessage>

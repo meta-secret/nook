@@ -58,13 +58,16 @@ export class RuntimeMessageDecodeFailure extends Error {
   static fromParseError(
     request: RuntimeMessageDecodeFailureRequest<ParseResult.ParseError>,
   ): RuntimeMessageDecodeFailure {
-    return new RuntimeMessageDecodeFailure({
-      kind: request.kind,
-      cause: {
-        kind: RuntimeMessageDecodeCauseKind.Parse,
-        error: request.cause,
-      },
-    });
+    const parseCause: RuntimeMessageDecodeCause = {
+      kind: RuntimeMessageDecodeCauseKind.Parse,
+      error: request.cause,
+    };
+    const failureRequest: RuntimeMessageDecodeFailureRequest<RuntimeMessageDecodeCause> =
+      {
+        kind: request.kind,
+        cause: parseCause,
+      };
+    return new RuntimeMessageDecodeFailure(failureRequest);
   }
 
   static fromCause<SourceCause>(
@@ -80,6 +83,11 @@ export class RuntimeMessageDecodeFailure extends Error {
             kind: RuntimeMessageDecodeCauseKind.ThrownValue,
             detail: String(request.cause),
           };
-    return new RuntimeMessageDecodeFailure({ kind: request.kind, cause });
+    const failureRequest: RuntimeMessageDecodeFailureRequest<RuntimeMessageDecodeCause> =
+      {
+        kind: request.kind,
+        cause,
+      };
+    return new RuntimeMessageDecodeFailure(failureRequest);
   }
 }

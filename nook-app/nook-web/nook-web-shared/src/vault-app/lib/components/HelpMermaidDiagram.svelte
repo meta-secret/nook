@@ -7,6 +7,7 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { MermaidTheme, mermaidRenderer } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
+  import SanitizedMarkup from './SanitizedMarkup.svelte'
 
   let {
     vault,
@@ -55,7 +56,7 @@
   aria-label={vault.t(I18N_KEYS.HelpDiagramLabel)}
 >
   {#if svgHtml}
-    {@html svgHtml}
+    <SanitizedMarkup html={svgHtml} />
   {/if}
 </div>
 {#if renderError}

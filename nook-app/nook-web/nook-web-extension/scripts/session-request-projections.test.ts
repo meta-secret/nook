@@ -94,26 +94,31 @@ describe('extension session request projections', () => {
       type: 'nook:extension-session-authorize-companion-identity-handoff',
       payload: { authorization },
     })
-    expect(
-      await Effect.runPromise(
-        Effect.either(
-          decodeCompanionIdentityHandoffSessionTransportRequest({
-            type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
-            payload: { request },
-          }),
+    const incompleteHandoff = {
+      type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+      payload: { request },
+    }
+    const handoffDecode = await Effect.runPromise(
+      Effect.either(
+        decodeCompanionIdentityHandoffSessionTransportRequest(
+          incompleteHandoff,
         ),
       ),
-    ).toEqual(expect.objectContaining({ _tag: 'Left' }))
-    expect(
-      await Effect.runPromise(
-        Effect.either(
-          decodeCompanionIdentityDiscoverySessionTransportRequest({
-            type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-            payload: { presence },
-          }),
+    )
+    expect(handoffDecode._tag).toBe('Left')
+
+    const incompleteDiscovery = {
+      type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+      payload: { presence },
+    }
+    const discoveryDecode = await Effect.runPromise(
+      Effect.either(
+        decodeCompanionIdentityDiscoverySessionTransportRequest(
+          incompleteDiscovery,
         ),
       ),
-    ).toEqual(expect.objectContaining({ _tag: 'Left' }))
+    )
+    expect(discoveryDecode._tag).toBe('Left')
   })
 
   test('removes stored-grant metadata from login reveal', () => {

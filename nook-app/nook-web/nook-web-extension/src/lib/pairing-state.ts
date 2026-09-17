@@ -23,11 +23,20 @@ export class ExtensionPairingStateQueryMessage {
   }
 }
 
-const extensionPairingStateQueryMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
-  ),
-}) satisfies Schema.Schema<ExtensionPairingStateQueryMessage>
+type ExtensionPairingStateQueryMessageSchemaFields = {
+  readonly type: Schema.Schema<ExtensionPairingStateQueryMessage['type']>
+}
+
+const extensionPairingStateQueryMessageSchemaFields: ExtensionPairingStateQueryMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+    ),
+  }
+
+const extensionPairingStateQueryMessageSchema = Schema.Struct(
+  extensionPairingStateQueryMessageSchemaFields,
+) satisfies Schema.Schema<ExtensionPairingStateQueryMessage>
 
 type ExtensionPairingStateLoaderPolicy = Pick<
   Awaited<typeof extensionPairingGrantPolicyReady>,

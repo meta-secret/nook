@@ -163,13 +163,16 @@ export class DeviceProtectionActions {
         }
       }
     }
-    const snapshot = $state.snapshot({
+    const providerSnapshot: Parameters<
+      typeof providers_visible_while_device_locked
+    >[0] = {
       providers: state.providers,
       activeVaultStoreId:
         state.activeVault.kind === ActiveVaultKind.Open
           ? activeVaultScope(state.activeVault.storeId)
           : unselectedVaultScope(),
-    });
+    };
+    const snapshot = $state.snapshot(providerSnapshot);
     // Publication stays denied even if the native visibility projection fails.
     state.providers = [];
     state.providersLoaded = false;
@@ -260,11 +263,14 @@ export class DeviceProtectionActions {
         > => {
           const manager = state.admitManager();
           if (manager.isErr()) return storageErr(manager.error);
-          const protection = await createPasskeyProtection({
+          const protectionRequest: Parameters<
+            typeof createPasskeyProtection
+          >[0] = {
             manager: manager.value,
             passkeyLabel: localizedPasskeyLabel,
             deviceMode,
-          });
+          };
+          const protection = await createPasskeyProtection(protectionRequest);
           return protection.map(
             () => DeviceProtectionCeremonyOutcome.Authorized,
           );
@@ -282,7 +288,10 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs,
       );
       if (initialized.isErr()) {
-        this.lockFailedAuthorization({ deviceIdentityUnlocked });
+        const failedAuthorization: FailedDeviceAuthorization = {
+          deviceIdentityUnlocked,
+        };
+        this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
       }
@@ -357,10 +366,11 @@ export class DeviceProtectionActions {
       if (failure.fallback === PasskeyFallback.OfferPin) {
         this.state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       }
-      this.logPasskeyCeremony({
+      const ceremonyLogEntry: PasskeyCeremonyLogEntry = {
         message: "passkey ceremony did not complete",
         data: failure.diagnostic,
-      });
+      };
+      this.logPasskeyCeremony(ceremonyLogEntry);
     }
     this.state.errorMsg = this.state.t(failure.translationKey);
   }
@@ -402,7 +412,10 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs2,
       );
       if (initialized.isErr()) {
-        this.lockFailedAuthorization({ deviceIdentityUnlocked });
+        const failedAuthorization: FailedDeviceAuthorization = {
+          deviceIdentityUnlocked,
+        };
+        this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
       }
@@ -509,7 +522,10 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs3,
       );
       if (initialized.isErr()) {
-        this.lockFailedAuthorization({ deviceIdentityUnlocked });
+        const failedAuthorization: FailedDeviceAuthorization = {
+          deviceIdentityUnlocked,
+        };
+        this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
       }
@@ -569,7 +585,10 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs4,
       );
       if (initialized.isErr()) {
-        this.lockFailedAuthorization({ deviceIdentityUnlocked });
+        const failedAuthorization: FailedDeviceAuthorization = {
+          deviceIdentityUnlocked,
+        };
+        this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
       }
@@ -644,7 +663,10 @@ export class DeviceProtectionActions {
         finishAuthorizedInitializationArgs5,
       );
       if (initialized.isErr()) {
-        this.lockFailedAuthorization({ deviceIdentityUnlocked });
+        const failedAuthorization: FailedDeviceAuthorization = {
+          deviceIdentityUnlocked,
+        };
+        this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
         return;
       }
@@ -778,7 +800,10 @@ export class DeviceProtectionRecoveryActions {
         state.errorMsg = state.t(I18N_KEYS.DeviceProtectionRecoveryFailed);
         return;
       }
-      this.applyPersistedProtectionStatus({ status: reset.value });
+      const persistedStatus: PersistedProtectionStatusRequest = {
+        status: reset.value,
+      };
+      this.applyPersistedProtectionStatus(persistedStatus);
       this.clearQuiescedRecoverySession();
       const recoveryCompleteKey =
         reset.value === DeviceProtectionStatus.Missing

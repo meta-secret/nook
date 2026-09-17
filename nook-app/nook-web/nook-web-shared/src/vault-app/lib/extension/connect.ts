@@ -25,6 +25,11 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
+type ExtensionIdentityEnvelope = {
+  readonly envelope: string;
+  readonly nextNonce: string;
+};
+
 enum IdentityHandoffAttemptKind {
   Pending = "pending",
   Consumed = "consumed",
@@ -68,12 +73,14 @@ type ChromeRuntimeResponseCallback = (
   response?: ChromeExtensionRuntimeResponse,
 ) => void;
 
+type ChromeRuntimeSendMessageRequest = readonly [
+  extensionId: string,
+  message: RuntimeMessage,
+  callback: ChromeRuntimeResponseCallback,
+];
+
 type ChromeRuntimeHost = {
-  readonly sendMessage: (
-    extensionId: string,
-    message: RuntimeMessage,
-    callback: ChromeRuntimeResponseCallback,
-  ) => void;
+  readonly sendMessage: (...request: ChromeRuntimeSendMessageRequest) => void;
 };
 
 enum ChromeRuntimeLastErrorStateKind {
@@ -88,9 +95,14 @@ type ChromeRuntimeLastErrorState =
       readonly message: string;
     };
 
-const ChromeRuntimeLastErrorSchema = Schema.Struct({
-  message: Schema.optional(Schema.String),
-});
+class ChromeRuntimeLastErrorFields {
+  static build() {
+    return { message: Schema.optional(Schema.String) };
+  }
+}
+const ChromeRuntimeLastErrorSchema = Schema.Struct(
+  ChromeRuntimeLastErrorFields.build(),
+);
 
 type ExtensionBrowserHost = typeof globalThis & {
   readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
@@ -712,7 +724,7 @@ class ExtensionConnectionBrowser {
     request,
     message,
   }: IdentityEnvelopeRequest): Promise<
-    Result<{ envelope: string; nextNonce: string }, VaultStorageFailure>
+    Result<ExtensionIdentityEnvelope, VaultStorageFailure>
   > {
     const runtimeAvailability = this.chromeRuntime();
     if (runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable)
@@ -744,7 +756,7 @@ class ExtensionConnectionBrowser {
             Effect.either(identityHandoffResponseDecoder.decode(response)),
           );
           if (decodedResponse._tag === "Right") {
-            const identityEnvelope = {
+            const identityEnvelope: ExtensionIdentityEnvelope = {
               envelope: decodedResponse.right.envelope,
               nextNonce: decodedResponse.right.nextNonce,
             };
@@ -885,7 +897,13 @@ class ExtensionConnectionBrowser {
         expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
       },
     };
-    const delivered = await this.requestIdentityEnvelope({ request, message });
+    const identityEnvelopeRequest: IdentityEnvelopeRequest = {
+      request,
+      message,
+    };
+    const delivered = await this.requestIdentityEnvelope(
+      identityEnvelopeRequest,
+    );
     if (delivered.isErr())
       return {
         kind: IdentityHandoffAttemptKind.Pending,
@@ -932,7 +950,10 @@ class ExtensionConnectionBrowser {
     if (request.source === ExtensionIdentityRequestSource.PairedVault) {
       const begin: CompanionWebsiteHandoffBegin = {
         transaction: request.protocolTransaction,
-        context: { kind: "paired-vault", vault_store_id: request.vaultStoreId },
+        context: {
+          kind: "paired-vault",
+          vault_store_id: request.vaultStoreId,
+        },
       };
       let handoff: ReturnType<typeof manager.begin_companion_identity_handoff>;
       try {
@@ -940,11 +961,14 @@ class ExtensionConnectionBrowser {
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
-      const attempt = await this.completePairedIdentityAdoption({
+      const pairedIdentityAdoptionAttempt: PairedIdentityAdoptionAttempt = {
         manager,
         request,
         handoff,
-      });
+      };
+      const attempt = await this.completePairedIdentityAdoption(
+        pairedIdentityAdoptionAttempt,
+      );
       if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
         try {
           handoff.cancel(manager);
@@ -964,11 +988,14 @@ class ExtensionConnectionBrowser {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    const attempt = await this.completeNewIdentityAdoption({
+    const newIdentityAdoptionAttempt: NewIdentityAdoptionAttempt = {
       manager,
       request,
       pending,
-    });
+    };
+    const attempt = await this.completeNewIdentityAdoption(
+      newIdentityAdoptionAttempt,
+    );
     if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
       try {
         pending.cancel(manager);

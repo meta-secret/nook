@@ -6,9 +6,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
@@ -35,7 +33,6 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
 )
@@ -60,7 +57,7 @@ const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 
 class ExtensionBuildDependencyLoader {
   async importVite(): Promise<Pick<typeof import('vite'), 'build'>> {
-    return this.decodeViteModule(await this.importResolved('vite'))
+    return import('vite')
   }
 
   async importSvelte(): Promise<
@@ -69,59 +66,7 @@ class ExtensionBuildDependencyLoader {
       'svelte' | 'vitePreprocess'
     >
   > {
-    return this.decodeSvelteModule(
-      await this.importResolved('@sveltejs/vite-plugin-svelte'),
-    )
-  }
-
-  private async importResolved(specifier: string): Promise<unknown> {
-    const resolved = requireFromWeb.resolve(specifier)
-    // Resolution is constrained to the installed web dependency tree.
-    // eslint-disable-next-line no-unsanitized/method
-    return import(pathToFileURL(resolved).href)
-  }
-
-  private decodeViteModule(
-    value: unknown,
-  ): Pick<typeof import('vite'), 'build'> {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('build' in value) ||
-      typeof value.build !== 'function'
-    ) {
-      throw new Error('Invalid web dependency: vite')
-    }
-    const buildFunction = value.build
-    const build: typeof import('vite').build = (...parameters) =>
-      Reflect.apply(buildFunction, value, parameters)
-    return { build }
-  }
-
-  private decodeSvelteModule(
-    value: unknown,
-  ): Pick<
-    typeof import('@sveltejs/vite-plugin-svelte'),
-    'svelte' | 'vitePreprocess'
-  > {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('svelte' in value) ||
-      typeof value.svelte !== 'function' ||
-      !('vitePreprocess' in value) ||
-      typeof value.vitePreprocess !== 'function'
-    ) {
-      throw new Error('Invalid web dependency: @sveltejs/vite-plugin-svelte')
-    }
-    const svelteFunction = value.svelte
-    const preprocessFunction = value.vitePreprocess
-    const svelte: typeof import('@sveltejs/vite-plugin-svelte').svelte = (
-      ...parameters
-    ) => Reflect.apply(svelteFunction, value, parameters)
-    const vitePreprocess: typeof import('@sveltejs/vite-plugin-svelte').vitePreprocess =
-      (...parameters) => Reflect.apply(preprocessFunction, value, parameters)
-    return { svelte, vitePreprocess }
+    return import('@sveltejs/vite-plugin-svelte')
   }
 }
 
@@ -383,30 +328,34 @@ type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
 
 class LocaleMessageSection<Key extends string> {
-  private readonly messages: object
+  private readonly messages: ReadonlyMap<string, string>
 
-  constructor(value: unknown, label: string) {
+  constructor({ value, label }: LocaleMessageSectionAdmission) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`${label} locale catalog has an invalid shape.`)
     }
-    this.messages = value
-    for (const message of Object.values(this.messages)) {
+    const messages = new Map<string, string>()
+    for (const [key, message] of Object.entries(value)) {
       if (typeof message !== 'string') {
         throw new Error(`${label} locale catalog has an invalid shape.`)
       }
+      messages.set(key, message)
     }
+    this.messages = messages
   }
 
   message(key: Key, label: string): string {
-    if (!(key in this.messages)) {
+    const message = this.messages.get(key)
+    if (!message) {
       throw new Error(`${label} locale catalog is missing ${key}.`)
-    }
-    const message: unknown = Reflect.get(this.messages, key)
-    if (typeof message !== 'string') {
-      throw new Error(`${label} locale catalog has an invalid message.`)
     }
     return message
   }
+}
+
+type LocaleMessageSectionAdmission = {
+  readonly value: unknown
+  readonly label: string
 }
 
 type NookLocaleCatalog = {
@@ -434,15 +383,21 @@ class ExtensionLocaleCatalogAdmission {
     ) {
       throw new Error(`Locale catalog ${locale} has an invalid shape.`)
     }
+    const widgetSectionAdmission: LocaleMessageSectionAdmission = {
+      value: value.extension.widget,
+      label: `${locale} widget`,
+    }
+    const passkeySectionAdmission: LocaleMessageSectionAdmission = {
+      value: value.extension.passkey,
+      label: `${locale} passkey`,
+    }
     return {
       extension: {
         widget: new LocaleMessageSection<WidgetLocaleMessageKey>(
-          value.extension.widget,
-          `${locale} widget`,
+          widgetSectionAdmission,
         ),
         passkey: new LocaleMessageSection<PasskeyLocaleMessageKey>(
-          value.extension.passkey,
-          `${locale} passkey`,
+          passkeySectionAdmission,
         ),
       },
     }

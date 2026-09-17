@@ -24,6 +24,8 @@ import {
   PasskeyCeremonyAction,
   PasskeyCeremonyFailure,
   PasskeyDeviceProtectionSuccess,
+  sanitizedPasskeyCeremonyData,
+  type PasskeyCeremonyFailureInput,
 } from '$lib/auth/passkey-device-protection'
 import {
   VaultStorageFailure,
@@ -116,13 +118,14 @@ describe('device protection actions', () => {
 
   test('offers PIN setup when passkey capability is unavailable', async () => {
     const state = DeviceProtectionTestState.create()
-    createPasskeyProtection.mockReturnValue(
-      err(
-        new PasskeyCeremonyFailure(
-          PasskeyCeremonyAction.Create,
-          new Error('PASSKEY_PRF_UNAVAILABLE'),
-        ),
+    const ceremonyFailureInput: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Create,
+      diagnostic: sanitizedPasskeyCeremonyData(
+        new Error('PASSKEY_PRF_UNAVAILABLE'),
       ),
+    }
+    createPasskeyProtection.mockReturnValue(
+      err(new PasskeyCeremonyFailure(ceremonyFailureInput)),
     )
 
     await new DeviceProtectionActions(state).setupDeviceProtection({

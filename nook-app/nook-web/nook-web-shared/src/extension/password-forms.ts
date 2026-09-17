@@ -14,7 +14,6 @@ import type {
   AuthenticationCredentialSubmissionObservation,
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
-  AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   PasskeyControlLookupKind,
@@ -26,7 +25,9 @@ import type {
   LocalOwnedLoginObservationRootsRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
+  PasswordFieldQuery,
   PasswordFormScope,
+  UnownedAuthContainerRequest,
 } from "./password-form-fields";
 import {
   AuthenticationSubmissionDestination,
@@ -37,13 +38,14 @@ import {
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
-  type FormSubmissionApproval,
   type PasswordFormScopeQuery,
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import {
+  type AppendIndependentPasskeyOnlyWorkflowsRequest,
   IndependentPasskeyWorkflows,
   PasskeyOnlyWorkflowSummary,
+  type SummarizePasskeyOnlyWorkflowFormsRequest,
 } from "./password-form-passkey-only-workflows";
 import {
   type LoginCredentialsFillRequest,
@@ -54,7 +56,6 @@ import {
   ApprovedImplicitAuthenticationSubmission,
   type ApprovedImplicitAuthenticationSubmitRequest,
   type OwnedAdvanceControlActivation,
-  type OwnedAuthenticationControlRequest,
 } from "./password-form-implicit-actuation";
 import {
   emptyPasswordFormSummary,
@@ -64,7 +65,19 @@ import {
   ApprovedPasswordFormKind,
   CredentialDisclosureRevalidation,
   type ApprovedPasswordForm,
+  type CredentialDisclosureRevalidationRequest,
 } from "./credential-disclosure-revalidation";
+import type {
+  AuthenticationObservationFactsRequest,
+  CompleteAuthenticationAdvanceControlObservation,
+  LoginFormSubmissionRequest,
+  OwnedAdvanceControlRequest,
+  PageControlObservationRequest,
+  PasskeyCandidateSafetyRequest,
+  PasswordFormObservation,
+  PasswordFormSummary,
+  SemanticSubmitControlPair,
+} from "./password-form-interaction-contracts";
 
 export {
   oneTimeCodeFieldSelectors,
@@ -91,6 +104,12 @@ export type {
 
 export { LoginCredentialsLookupKind } from "./password-form-field-actions";
 
+export type {
+  LoginFormSubmissionRequest,
+  PasswordFormObservation,
+  PasswordFormSummary,
+} from "./password-form-interaction-contracts";
+
 export {
   FormSubmissionResult,
   PasswordFormQueryKind,
@@ -111,68 +130,16 @@ const credentialSubmissionAbsent =
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 
-export type PasswordFormSummary = {
-  passwordFieldCount: number;
-  currentPasswordFieldCount: number;
-  newPasswordFieldCount: number;
-  genericPasswordFieldCount: number;
-  usernameFieldCount: number;
-  oneTimeCodeFieldCount: number;
-  manualCheckpointPresent: boolean;
-  passkeyControlPresent: boolean;
-  formCount: number;
-  observedAt: number;
-};
-
-export type PasswordFormObservation = {
-  root: ParentNode;
-  formScope: PasswordFormScope;
-  summary: PasswordFormSummary;
-};
-
-type AuthenticationObservationFactsRequest = {
-  observation: PasswordFormObservation;
-  authenticatorSetupHint: boolean;
-  backupCodesHint?: boolean;
-  backupCodesCopy?: string;
-};
-
-type SemanticSubmitControlPair = [LoginAdvanceControl, LoginAdvanceControl];
-
-type PageControlObservationRequest = {
-  observation: PasswordFormObservation;
-  control: HTMLElement;
-  authenticationUsername: AuthenticationUsernameEvidence;
-  semanticSubmitControlCount: number;
-  explicitlyLocallyScoped?: boolean;
-};
-
-type CompleteAuthenticationAdvanceControlObservation =
-  AuthenticationAdvanceControlObservation & {
-    readonly submissionMethod: PageControlSubmissionMethod;
-  };
-
-type PasskeyCandidateSafetyRequest = {
-  candidate: { control: HTMLElement; explicitlyMarked: boolean };
-  observation: PasswordFormObservation;
-};
-
-export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
-  submissionApproval?: FormSubmissionApproval;
-};
-
-type OwnedAdvanceControlRequest =
-  OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
-
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PasswordFormInteraction extends PasswordFormSummaryObservation {
   private passwordFormPriority(observation: PasswordFormObservation): number {
+    const factsRequest: AuthenticationObservationFactsRequest = {
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesCopy: "",
+    };
     return authentication_page_observation_facts_priority(
-      this.authenticationPageObservationFacts({
-        observation,
-        authenticatorSetupHint: false,
-        backupCodesCopy: "",
-      }),
+      this.authenticationPageObservationFacts(factsRequest),
     );
   }
 
@@ -228,6 +195,18 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       authenticationSubmissionControls.associatedAuthenticationForm(control);
     const owned = controlForm.kind === PasswordFormScopeKind.Owned;
 
+    const observedFormIdentityRequest: Parameters<
+      typeof authenticationSubmissionControls.observedFormIdentity
+    >[0] = {
+      root: observation.root,
+      formScope: observation.formScope,
+    };
+    const destinationIdentityRequest: Parameters<
+      typeof authenticationSubmissionControls.controlDestinationIdentity
+    >[0] = {
+      control,
+      formScope: observation.formScope,
+    };
     return {
       actionability: authenticationSubmissionControls.controlIsInert(control)
         ? "inert"
@@ -248,15 +227,13 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       sourceOrigin: this.browser.location.origin,
       formIdentity: owned
         ? authenticationSubmissionControls.ownedFormIdentity(controlForm.owner)
-        : authenticationSubmissionControls.observedFormIdentity({
-            root: observation.root,
-            formScope: observation.formScope,
-          }),
+        : authenticationSubmissionControls.observedFormIdentity(
+            observedFormIdentityRequest,
+          ),
       destinationIdentity:
-        authenticationSubmissionControls.controlDestinationIdentity({
-          control,
-          formScope: observation.formScope,
-        }),
+        authenticationSubmissionControls.controlDestinationIdentity(
+          destinationIdentityRequest,
+        ),
       label: authenticationSubmissionControls.controlLabel(control),
       machineIdentity:
         authenticationSubmissionControls.controlMachineIdentity(control),
@@ -271,12 +248,13 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     request: PageControlObservationRequest,
   ): AuthenticationAdvanceControlObservation[] {
     const observation = this.pageControlObservation(request);
-    if (
-      !authentication_control_transportable({
-        submissionMethod: observation.submissionMethod,
-        usernameFieldCount: request.observation.summary.usernameFieldCount,
-      })
-    )
+    const transportabilityRequest: Parameters<
+      typeof authentication_control_transportable
+    >[0] = {
+      submissionMethod: observation.submissionMethod,
+      usernameFieldCount: request.observation.summary.usernameFieldCount,
+    };
+    if (!authentication_control_transportable(transportabilityRequest))
       return [];
     return authenticationSubmissionControls.authenticationFactStringsAreTransportable(
       [
@@ -304,7 +282,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       observation.formScope.kind === PasswordFormScopeKind.Owned
         ? { control, owner: observation.formScope.owner }
         : false;
-    const [transported] = this.transportableControlObservation({
+    const transportRequest: PageControlObservationRequest = {
       observation,
       control,
       authenticationUsername:
@@ -320,24 +298,30 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           adjacencyRequest &&
           passwordFieldDiscovery.isLocallyAdjacentToOwnedForm(adjacencyRequest),
         ),
-    });
+    };
+    const [transported] =
+      this.transportableControlObservation(transportRequest);
     if (!transported) return false;
-    return authentication_passkey_control_candidate_is_safe({
+    const safetyObservation: Parameters<
+      typeof authentication_passkey_control_candidate_is_safe
+    >[0] = {
       kind: explicitlyMarked ? "explicitly-marked" : "labeled",
       observation: transported,
-    });
+    };
+    return authentication_passkey_control_candidate_is_safe(safetyObservation);
   }
 
   findWorkflowPasskeyControl(
     observation: PasswordFormObservation,
   ): PasskeyControlLookup {
+    const summaryRequest: PasswordFormScopeQuery = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: observation.root,
+      formScope: observation.formScope,
+    };
     const liveObservation: PasswordFormObservation = {
       ...observation,
-      summary: this.summarizeRoot({
-        kind: PasswordFormQueryKind.Scoped,
-        root: observation.root,
-        formScope: observation.formScope,
-      }),
+      summary: this.summarizeRoot(summaryRequest),
     };
     const candidate = passwordFieldDiscovery
       .findPasskeyControls(this.scopedControlRoot(liveObservation))
@@ -348,14 +332,14 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           root: liveObservation.root,
         };
 
+        const safetyRequest: PasskeyCandidateSafetyRequest = {
+          candidate: passkeyCandidate,
+          observation: liveObservation,
+        };
         return (
           passwordFieldDiscovery.controlAssociatesWithObservation(
             associationRequest,
-          ) &&
-          this.passkeyCandidateIsRustSafe({
-            candidate: passkeyCandidate,
-            observation: liveObservation,
-          })
+          ) && this.passkeyCandidateIsRustSafe(safetyRequest)
         );
       });
     return candidate
@@ -384,21 +368,25 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     const passkeyControls = passwordFieldDiscovery
       .findPasskeyControls(controlRoot)
       .filter(({ control }) => {
-        return passwordFieldDiscovery.controlAssociatesWithObservation({
+        const associationRequest: ControlObservationAssociationRequest = {
           control,
           formScope: observation.formScope,
           root: observation.root,
-        });
+        };
+        return passwordFieldDiscovery.controlAssociatesWithObservation(
+          associationRequest,
+        );
       });
 
+    const fieldQuery: PasswordFieldQuery = {
+      root: observation.root,
+      formScope: observation.formScope,
+    };
     const oneTimeCodeBoundRequest: Parameters<
       typeof authenticationSubmissionControls.boundAuthenticationControlObservations<string>
     >[0] = {
       candidates: passwordFieldDiscovery
-        .findOneTimeCodeFields({
-          root: observation.root,
-          formScope: observation.formScope,
-        })
+        .findOneTimeCodeFields(fieldQuery)
         .flatMap((field) =>
           ["oninput", "onchange"].flatMap((attribute) => {
             const handler = field.getAttribute(attribute);
@@ -418,22 +406,21 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       authenticationSubmissionControls.boundAuthenticationControlObservations(
         oneTimeCodeBoundRequest,
       );
-    const passwordFields = passwordFieldDiscovery.findPasswordFields({
-      root: observation.root,
-      formScope: observation.formScope,
-    });
+    const passwordFields =
+      passwordFieldDiscovery.findPasswordFields(fieldQuery);
     const readonlyPasswordFieldCount = passwordFields.filter(
       (field) => field.readOnly,
     ).length;
     let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
       { kind: PasskeyControlLookupKind.Absent };
     const advanceObservations = advanceControls.flatMap((control) => {
-      return this.transportableControlObservation({
+      const transportRequest: PageControlObservationRequest = {
         observation,
         control,
         authenticationUsername,
         semanticSubmitControlCount,
-      });
+      };
+      return this.transportableControlObservation(transportRequest);
     });
     const advanceBoundRequest: Parameters<
       typeof authenticationSubmissionControls.boundAuthenticationControlObservations<
@@ -463,7 +450,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           observation.formScope.kind === PasswordFormScopeKind.Owned
             ? { control, owner: observation.formScope.owner }
             : false;
-        return this.transportableControlObservation({
+        const transportRequest: PageControlObservationRequest = {
           observation,
           control,
           authenticationUsername,
@@ -477,7 +464,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
                 adjacencyRequest,
               ),
             ),
-        }).map(
+        };
+        return this.transportableControlObservation(transportRequest).map(
           (candidateObservation) =>
             ({
               kind: explicitlyMarked ? "explicitly-marked" : "labeled",
@@ -509,11 +497,16 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       };
     }
 
+    const formIdentityRequest: Parameters<
+      typeof authenticationSubmissionControls.observedFormIdentity
+    >[0] = {
+      root: observation.root,
+      formScope: observation.formScope,
+    };
     const contextFormIdentity =
-      authenticationSubmissionControls.observedFormIdentity({
-        root: observation.root,
-        formScope: observation.formScope,
-      });
+      authenticationSubmissionControls.observedFormIdentity(
+        formIdentityRequest,
+      );
     const contextDestinationIdentity =
       authenticationSubmissionControls.observedFormDestination(
         observation.formScope,
@@ -636,15 +629,13 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
 
   summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
     const root = this.browser.document;
-    const allPasswordFields = passwordFieldDiscovery.findPasswordFields({
-      root,
-    });
-    const allUsernameFields = passwordFieldDiscovery.findUsernameFields({
-      root,
-    });
-    const allOneTimeCodeFields = passwordFieldDiscovery.findOneTimeCodeFields({
-      root,
-    });
+    const documentFieldQuery: PasswordFieldQuery = { root };
+    const allPasswordFields =
+      passwordFieldDiscovery.findPasswordFields(documentFieldQuery);
+    const allUsernameFields =
+      passwordFieldDiscovery.findUsernameFields(documentFieldQuery);
+    const allOneTimeCodeFields =
+      passwordFieldDiscovery.findOneTimeCodeFields(documentFieldQuery);
     const authUsernameFields = allUsernameFields.filter(
       passwordFieldDiscovery.isAuthUsernameField.bind(passwordFieldDiscovery),
     );
@@ -652,13 +643,16 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       allPasswordFields.length +
       authUsernameFields.length +
       allOneTimeCodeFields.length;
-    const passkeyOnly = new PasskeyOnlyWorkflowSummary({
-      root,
-      summarizeRoot: this.summarizeRoot.bind(this),
-      observationPriority: this.passwordFormPriority.bind(this),
-      passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
-      emptySummary: emptyPasswordFormSummary,
-    }).observations;
+    const passkeyOnlyRequest: SummarizePasskeyOnlyWorkflowFormsRequest<PasswordFormSummary> =
+      {
+        root,
+        summarizeRoot: this.summarizeRoot.bind(this),
+        observationPriority: this.passwordFormPriority.bind(this),
+        passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
+        emptySummary: emptyPasswordFormSummary,
+      };
+    const passkeyOnly = new PasskeyOnlyWorkflowSummary(passkeyOnlyRequest)
+      .observations;
     if (authFieldCount === 0) {
       return passkeyOnly;
     }
@@ -669,20 +663,18 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         kind: PasswordFormScopeKind.Owned,
         owner: form,
       };
-      const summary = this.summarizeRoot({
+      const summaryRequest: PasswordFormScopeQuery = {
         kind: PasswordFormQueryKind.Scoped,
         root,
         formScope,
-      });
+      };
+      const summary = this.summarizeRoot(summaryRequest);
 
       return (
         summary.passwordFieldCount > 0 ||
         summary.oneTimeCodeFieldCount > 0 ||
         passwordFieldDiscovery
-          .findUsernameFields({
-            root,
-            formScope,
-          })
+          .findUsernameFields(summaryRequest)
           .some(
             passwordFieldDiscovery.isAuthUsernameField.bind(
               passwordFieldDiscovery,
@@ -707,15 +699,19 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           observationRootsRequest,
         );
 
-      return observationRoots.map((observationRoot) => ({
-        root: observationRoot,
-        formScope,
-        summary: this.summarizeRoot({
+      return observationRoots.map((observationRoot) => {
+        const summaryRequest: PasswordFormScopeQuery = {
           kind: PasswordFormQueryKind.Scoped,
           root: observationRoot,
           formScope,
-        }),
-      }));
+        };
+        const formObservation: PasswordFormObservation = {
+          root: observationRoot,
+          formScope,
+          summary: this.summarizeRoot(summaryRequest),
+        };
+        return formObservation;
+      });
     });
     const unownedFields = [
       ...allPasswordFields,
@@ -724,10 +720,12 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     ].filter((field) => !field.form);
     const unownedContainers = new Set(
       unownedFields.flatMap((field) => {
-        const container = passwordFieldDiscovery.nearestUnownedAuthContainer({
+        const containerRequest: UnownedAuthContainerRequest = {
           field,
           root,
-        });
+        };
+        const container =
+          passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
         return container === field ? [] : [container];
       }),
     );
@@ -735,22 +733,27 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       const formScope: PasswordFormScope = {
         kind: PasswordFormScopeKind.Unowned,
       };
-      observations.push({
+      const summaryRequest: PasswordFormScopeQuery = {
+        kind: PasswordFormQueryKind.Scoped,
         root: container,
         formScope,
-        summary: this.summarizeRoot({
-          kind: PasswordFormQueryKind.Scoped,
-          root: container,
-          formScope,
-        }),
-      });
+      };
+      const unownedObservation: PasswordFormObservation = {
+        root: container,
+        formScope,
+        summary: this.summarizeRoot(summaryRequest),
+      };
+      observations.push(unownedObservation);
     }
-    return new IndependentPasskeyWorkflows({
-      fieldBearing: observations,
-      passkeyOnly,
-      observationPriority: this.passwordFormPriority.bind(this),
-      passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
-    }).observations;
+    const independentWorkflowRequest: AppendIndependentPasskeyOnlyWorkflowsRequest<PasswordFormObservation> =
+      {
+        fieldBearing: observations,
+        passkeyOnly,
+        observationPriority: this.passwordFormPriority.bind(this),
+        passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
+      };
+    return new IndependentPasskeyWorkflows(independentWorkflowRequest)
+      .observations;
   }
 
   fillLoginCredentials(request: LoginCredentialsFillRequest): boolean {
@@ -789,13 +792,18 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     const approvedPasswordForm: ApprovedPasswordForm = passwordForm
       ? { kind: ApprovedPasswordFormKind.Available, form: passwordForm }
       : { kind: ApprovedPasswordFormKind.Unavailable };
-    const disclosureRevalidation = new CredentialDisclosureRevalidation({
+    const disclosureRequest: CredentialDisclosureRevalidationRequest = {
       passwordField,
       approvedPasswordForm,
       request,
-      selectedSubmitter: (form) =>
-        this.findApprovedOwnedAdvanceControl({ request, form }),
-    });
+      selectedSubmitter: (form: HTMLFormElement) => {
+        const selectionRequest: OwnedAdvanceControlRequest = { request, form };
+        return this.findApprovedOwnedAdvanceControl(selectionRequest);
+      },
+    };
+    const disclosureRevalidation = new CredentialDisclosureRevalidation(
+      disclosureRequest,
+    );
     if (disclosureRevalidation.blocks()) return false;
     if (usernameField) {
       const nookTypedArgs0_21: Parameters<
@@ -862,7 +870,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           .find((control) => {
             if (!authenticationSubmissionControls.isRenderedControl(control))
               return false;
-            const [transported] = this.transportableControlObservation({
+            const transportRequest: PageControlObservationRequest = {
               observation,
               control,
               authenticationUsername:
@@ -871,7 +879,9 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
                 authenticationSubmissionControls.countedSemanticSubmitControls(
                   this.scopedAdvanceControls(observation),
                 ),
-            });
+            };
+            const [transported] =
+              this.transportableControlObservation(transportRequest);
             if (!transported) return false;
             return authentication_advance_control_is_safe(transported);
           }),
@@ -883,7 +893,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     request,
     form,
   }: OwnedAdvanceControlRequest): OwnedAdvanceControlActivation {
-    const approved = this.findApprovedOwnedAdvanceControl({ request, form });
+    const selectionRequest: OwnedAdvanceControlRequest = { request, form };
+    const approved = this.findApprovedOwnedAdvanceControl(selectionRequest);
     if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
     if (!approved.matches(semanticSubmitControlSelector)) {
       approved.click();
@@ -934,10 +945,12 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     if (!anchor) return FormSubmissionResult.NotObserved;
     const form = anchor.form;
     if (form) {
-      const activation = this.activateApprovedOwnedAdvanceControl({
+      const activationRequest: OwnedAdvanceControlRequest = {
         request,
         form,
-      });
+      };
+      const activation =
+        this.activateApprovedOwnedAdvanceControl(activationRequest);
       if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
         return activation.result;
       }
@@ -948,12 +961,10 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     )
       return FormSubmissionResult.NotObserved;
     if ((!passwordField || !form) && usernameField) {
-      if (
-        authenticationSubmissionControls.clickAdvanceControl({
-          ...request,
-          usernameField,
-        })
-      )
+      const advanceRequest: Parameters<
+        typeof authenticationSubmissionControls.clickAdvanceControl
+      >[0] = { ...request, usernameField };
+      if (authenticationSubmissionControls.clickAdvanceControl(advanceRequest))
         return FormSubmissionResult.Submitted;
     }
     if (!form) return FormSubmissionResult.NotObserved;
@@ -963,10 +974,11 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         form,
         observations: this.summarizeAuthenticationWorkflowForms.bind(this),
         factsForObservation: (observation) => {
-          return this.authenticationPageObservationFacts({
+          const factsRequest: AuthenticationObservationFactsRequest = {
             observation,
             authenticatorSetupHint: false,
-          });
+          };
+          return this.authenticationPageObservationFacts(factsRequest);
         },
         hasAuthenticationUsername,
         hasAuthenticationPassword: Boolean(passwordField),

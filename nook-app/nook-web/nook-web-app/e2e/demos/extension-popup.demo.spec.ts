@@ -48,7 +48,7 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
         case session.queryMessageType:
           callback({ ok: false, reason: 'login-picker-expired' })
           return
-        case session.authenticatorQueryMessageType:
+        case session.authenticatorQueryMessageType: {
           const decodedQuery = Effect.runSync(
             Effect.either(AuthenticatorPickerQueryMessage.decode(message)),
           )
@@ -71,6 +71,7 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
                 : [],
           })
           return
+        }
         case AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect:
           callback({ ok: true })
           return
