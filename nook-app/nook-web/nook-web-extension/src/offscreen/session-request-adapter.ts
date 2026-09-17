@@ -610,7 +610,9 @@ export async function parseExtensionSessionRequest(
   }
   const envelope = ingressStage.envelope
   const deadline = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
-  let request: ExtensionSessionRequest | undefined
+  let parseResult: ExtensionSessionRequestParse = {
+    kind: ExtensionSessionRequestParseKind.Invalid,
+  }
   const readinessDeadline = new AbortController()
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
     const readinessTimer = setTimeout(
@@ -640,7 +642,7 @@ export async function parseExtensionSessionRequest(
     )
     if (decoded._tag === 'Left')
       return { kind: ExtensionSessionRequestParseKind.Invalid }
-    request = decoded.right
+    const request = decoded.right
     const queue = request.payload.queue
     const expiresAt =
       queue.kind === ExtensionSessionQueueKind.Deadline
@@ -650,6 +652,7 @@ export async function parseExtensionSessionRequest(
       clearExtensionSessionRequest(request)
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
+    parseResult = { kind: ExtensionSessionRequestParseKind.Parsed, request }
   } catch {
     clearRawExtensionSessionSecrets(envelope)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
@@ -657,11 +660,7 @@ export async function parseExtensionSessionRequest(
     clearRawExtensionSessionSecrets(envelope)
     readinessDeadline.abort()
   }
-  if (!request) return { kind: ExtensionSessionRequestParseKind.Invalid }
-  return {
-    kind: ExtensionSessionRequestParseKind.Parsed,
-    request,
-  }
+  return parseResult
 }
 
 function clearExtensionSessionRequest(request: ExtensionSessionRequest): void {

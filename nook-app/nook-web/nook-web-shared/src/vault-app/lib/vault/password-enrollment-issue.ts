@@ -192,17 +192,15 @@ export class PasswordEnrollmentIssue {
       const selectedOauthConfiguration = decodeStoredOAuthFileConfiguration(
         selectedProvider.oauthFile,
       );
-      const selectedOauth =
-        selectedOauthConfiguration.kind ===
-        StoredOAuthFileConfigurationDecodeKind.Configured
-          ? selectedOauthConfiguration.config
-          : undefined;
       const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
       const usesSharedProviderGrant =
         provider_onboarding_type(selectedProvider, state.vaultArchitecture) ===
         OnboardingType.SharedProviderGrant;
       const usesSharedICloud =
-        usesSharedProviderGrant && selectedOauth?.preset === "icloud";
+        usesSharedProviderGrant &&
+        selectedOauthConfiguration.kind ===
+          StoredOAuthFileConfigurationDecodeKind.Configured &&
+        selectedOauthConfiguration.config.preset === "icloud";
       log.info("enrollment provider selected");
       if (
         usesSharedProviderGrant &&

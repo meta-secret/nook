@@ -1,10 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { ok, type Result } from 'neverthrow'
 import { NookSecretTypeFilter, NookVaultManager } from '$app-wasm'
-import {
-  SecretPageLoadOutcome,
-  VaultSecretActions,
-} from '$lib/vault/secrets'
+import { SecretPageLoadOutcome, VaultSecretActions } from '$lib/vault/secrets'
 import { VaultState } from '$lib/vault.svelte'
 import { SecretComponentTestFixture } from '../components/secret-component-test-fixture'
 import type { VaultStorageFailure } from '$lib/runtime/storage-failure'

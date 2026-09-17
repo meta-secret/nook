@@ -4,16 +4,6 @@ export function parseJson(value: string): unknown {
   return parsed
 }
 
-export function requireValue<T>(
-  value: T | null | undefined,
-  label: string,
-): NonNullable<T> {
-  if (value === null || value === undefined) {
-    throw new Error(`${label} was not available.`)
-  }
-  return value
-}
-
 export function requireStringArray(value: unknown, label: string): string[] {
   if (!Array.isArray(value)) {
     throw new Error(`${label} was not an array.`)

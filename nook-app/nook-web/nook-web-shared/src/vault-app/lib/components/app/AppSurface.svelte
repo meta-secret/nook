@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-workflow'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
   import { ColorMode } from '$lib/app/theme'
   import {
     ExtensionConnectIntentKind,

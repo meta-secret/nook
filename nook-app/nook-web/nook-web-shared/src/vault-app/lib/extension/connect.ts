@@ -64,12 +64,10 @@ type PendingExtensionResponseRequest = {
   readonly resolve: (delivery: ExtensionMessageDelivery) => void;
 };
 
-type ChromeRuntimeResponseCallback = (
-  response: ChromeExtensionRuntimeResponse | undefined,
-) => void;
+type ChromeRuntimeResponseCallback = (response: unknown) => void;
 
 type ChromeRuntimeHost = {
-  readonly lastError: { readonly message?: string } | undefined;
+  readonly lastError: unknown;
   readonly sendMessage: (
     extensionId: string,
     message: RuntimeMessage,
@@ -133,10 +131,7 @@ import {
   companionResponseDecoder,
   identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
-  type ExtensionRuntimeResponseObject,
 } from "./extension-response-decoders";
-
-type ChromeExtensionRuntimeResponse = ExtensionRuntimeResponseObject;
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -228,7 +223,7 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | {
       kind: ExtensionMessageDeliveryKind.Received;
-      response: ChromeExtensionRuntimeResponse;
+      response: unknown;
     };
 
 enum ExtensionResponsePhase {
@@ -276,7 +271,7 @@ class PendingExtensionResponse {
     };
     this.settle(delivery);
   }
-  receive(response: ChromeExtensionRuntimeResponse): void {
+  receive(response: unknown): void {
     const delivery: ExtensionMessageDelivery = {
       kind: ExtensionMessageDeliveryKind.Received,
       response,
@@ -292,8 +287,7 @@ class ExtensionConnectionBrowser {
   private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
     const error = runtime.lastError;
     return (
-      typeof error === "object" &&
-      !!error &&
+      error instanceof Object &&
       "message" in error &&
       typeof error.message === "string" &&
       error.message.length > 0
@@ -434,17 +428,13 @@ class ExtensionConnectionBrowser {
           pending.unavailable();
           return;
         }
-        if (response === undefined) {
-          pending.unavailable();
-          return;
-        }
         pending.receive(response);
       });
     });
   }
 
   private pairingDeliveryFromResponse(
-    response: ChromeExtensionRuntimeResponse,
+    response: unknown,
   ): ExtensionPairingDelivery {
     const decoded = Effect.runSync(
       Effect.either(pairingApprovalResponseDecoder.decode(response)),

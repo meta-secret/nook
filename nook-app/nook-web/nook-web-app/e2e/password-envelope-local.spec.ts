@@ -21,7 +21,6 @@ import {
   parseJson,
   readStringProperty,
   requireRecord,
-  requireValue,
   openOnboardDevicePanel,
   reloadUnlockLocalVaultWithSync,
   UI_TIMEOUT_MS,
@@ -242,16 +241,16 @@ test.describe('vault password envelope (local)', () => {
     expect(Object.hasOwn(outer, 'provider')).toBe(false)
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
-    const srLink = requireValue(
-      await page.getByTestId('onboard-link').textContent(),
-      'onboarding link text',
-    )
+    const srLink = await page.getByTestId('onboard-link').textContent()
+    if (typeof srLink !== 'string') {
+      throw new Error('onboarding link text was not available.')
+    }
     expect(srLink).toBe(link)
-    expect(
-      decodeURIComponent(
-        requireValue(srLink.split('#enroll=')[1], 'enrollment link code'),
-      ),
-    ).toBe(code)
+    const enrollmentLinkCode = srLink.split('#enroll=')[1]
+    if (typeof enrollmentLinkCode !== 'string') {
+      throw new Error('enrollment link code was not available.')
+    }
+    expect(decodeURIComponent(enrollmentLinkCode)).toBe(code)
 
     // The UI surfaces the timestamp as audit info next to the QR.
     await expect(page.getByText('Issued')).toBeVisible()
@@ -319,10 +318,11 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'link-pass')
-    const link = requireValue(
-      await pageA.getByTestId('onboard-link').textContent(),
-      'onboarding link text',
-    ).trim()
+    const linkText = await pageA.getByTestId('onboard-link').textContent()
+    if (typeof linkText !== 'string') {
+      throw new Error('onboarding link text was not available.')
+    }
+    const link = linkText.trim()
     expect(link).toContain('#enroll=')
 
     const pageB = await context.newPage()
@@ -377,10 +377,11 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'manual-link-pass')
-    const link = requireValue(
-      await pageA.getByTestId('onboard-link').textContent(),
-      'onboarding link text',
-    ).trim()
+    const linkText = await pageA.getByTestId('onboard-link').textContent()
+    if (typeof linkText !== 'string') {
+      throw new Error('onboarding link text was not available.')
+    }
+    const link = linkText.trim()
     expect(link).toContain('#enroll=')
 
     // Fresh empty browser: deferred-passkey create landing must not win over

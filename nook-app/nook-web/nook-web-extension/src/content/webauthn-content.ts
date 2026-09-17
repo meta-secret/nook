@@ -57,13 +57,22 @@ enum PageRequestBodyDecodeKind {
   Decoded = 'decoded',
 }
 
+enum PageRequestBodyStringFieldKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type PageRequestBodyStringField =
+  | { kind: PageRequestBodyStringFieldKind.Absent }
+  | { kind: PageRequestBodyStringFieldKind.Present; value: string }
+
 type PageRequestBodyDecode =
   | { kind: PageRequestBodyDecodeKind.Rejected }
   | {
       kind: PageRequestBodyDecodeKind.Decoded
       requestJson: string
-      relyingPartyName?: string
-      rpId?: string
+      relyingPartyName: PageRequestBodyStringField
+      rpId: PageRequestBodyStringField
     }
 
 type PasskeyOption = {
@@ -357,8 +366,12 @@ class WebAuthnPageIngress {
     if (!requestJson || requestJson.length > 65_536) {
       return { kind: PageRequestBodyDecodeKind.Rejected }
     }
-    let relyingPartyName: string | undefined
-    let rpId: string | undefined
+    let relyingPartyName: PageRequestBodyStringField = {
+      kind: PageRequestBodyStringFieldKind.Absent,
+    }
+    let rpId: PageRequestBodyStringField = {
+      kind: PageRequestBodyStringFieldKind.Absent,
+    }
     if ('relyingParty' in value) {
       const relyingParty = value.relyingParty
       if (
@@ -367,17 +380,23 @@ class WebAuthnPageIngress {
         'name' in relyingParty &&
         typeof relyingParty.name === 'string'
       ) {
-        relyingPartyName = relyingParty.name
+        relyingPartyName = {
+          kind: PageRequestBodyStringFieldKind.Present,
+          value: relyingParty.name,
+        }
       }
     }
     if ('rpId' in value && typeof value.rpId === 'string') {
-      rpId = value.rpId
+      rpId = {
+        kind: PageRequestBodyStringFieldKind.Present,
+        value: value.rpId,
+      }
     }
     return {
       kind: PageRequestBodyDecodeKind.Decoded,
       requestJson,
-      ...(relyingPartyName !== undefined ? { relyingPartyName } : {}),
-      ...(rpId !== undefined ? { rpId } : {}),
+      relyingPartyName,
+      rpId,
     }
   }
 
@@ -429,10 +448,13 @@ class WebAuthnPageIngress {
       requestId,
       ceremony: message.ceremony,
       requestJson: requestBody.requestJson,
-      ...(requestBody.relyingPartyName !== undefined
-        ? { relyingPartyName: requestBody.relyingPartyName }
+      ...(requestBody.relyingPartyName.kind ===
+      PageRequestBodyStringFieldKind.Present
+        ? { relyingPartyName: requestBody.relyingPartyName.value }
         : {}),
-      ...(requestBody.rpId !== undefined ? { rpId: requestBody.rpId } : {}),
+      ...(requestBody.rpId.kind === PageRequestBodyStringFieldKind.Present
+        ? { rpId: requestBody.rpId.value }
+        : {}),
       expiresAt: message.expiresAt,
     }
     void handleRequest(request).catch(() => {
