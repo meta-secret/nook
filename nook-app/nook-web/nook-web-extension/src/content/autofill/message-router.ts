@@ -1,4 +1,8 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
   WebsiteAuthenticatorCanceledMessage as WebsiteAuthenticatorCanceledMessageSchema,
@@ -77,11 +81,16 @@ export const routeAutofillMessage: AutofillMessageListener =
         })
       return true
     }
+    const loginCanceled = runConcreteDecoder(
+      WebsiteLoginCanceledMessageSchema.decode,
+      message,
+    )
     if (
       sender.id === chrome.runtime.id &&
-      WebsiteLoginCanceledMessageSchema.is(message) &&
-      message.payload.origin === location.origin
+      loginCanceled.kind === ConcreteDecoderResultKind.Decoded &&
+      loginCanceled.value.payload.origin === location.origin
     ) {
+      const message = loginCanceled.value
       const taken = pickerState.takeLogin(message.payload.requestId)
       if (taken.kind !== PendingPickerTakeKind.Taken) return false
       const pending = taken.request
@@ -107,11 +116,16 @@ export const routeAutofillMessage: AutofillMessageListener =
       sendResponse(nookTypedArgs0_1)
       return false
     }
+    const loginSelected = runConcreteDecoder(
+      WebsiteLoginSelectedMessageSchema.decode,
+      message,
+    )
     if (
       sender.id === chrome.runtime.id &&
-      WebsiteLoginSelectedMessageSchema.is(message) &&
-      message.payload.origin === location.origin
+      loginSelected.kind === ConcreteDecoderResultKind.Decoded &&
+      loginSelected.value.payload.origin === location.origin
     ) {
+      const message = loginSelected.value
       const taken = pickerState.takeLogin(message.payload.requestId)
       if (taken.kind !== PendingPickerTakeKind.Taken) return false
       const pending = taken.request
@@ -144,11 +158,16 @@ export const routeAutofillMessage: AutofillMessageListener =
         })
       return false
     }
+    const authenticatorCanceled = runConcreteDecoder(
+      WebsiteAuthenticatorCanceledMessageSchema.decode,
+      message,
+    )
     if (
       sender.id === chrome.runtime.id &&
-      WebsiteAuthenticatorCanceledMessageSchema.is(message) &&
-      message.payload.origin === location.origin
+      authenticatorCanceled.kind === ConcreteDecoderResultKind.Decoded &&
+      authenticatorCanceled.value.payload.origin === location.origin
     ) {
+      const message = authenticatorCanceled.value
       const taken = pickerState.takeAuthenticator(message.payload.requestId)
       if (taken.kind !== PendingPickerTakeKind.Taken) return false
       const pending = taken.request
@@ -174,13 +193,18 @@ export const routeAutofillMessage: AutofillMessageListener =
       sendResponse(nookTypedArgs0_3)
       return false
     }
+    const authenticatorSelected = runConcreteDecoder(
+      WebsiteAuthenticatorSelectedMessageSchema.decode,
+      message,
+    )
     if (
       sender.id !== chrome.runtime.id ||
-      !WebsiteAuthenticatorSelectedMessageSchema.is(message) ||
-      message.payload.origin !== location.origin
+      authenticatorSelected.kind === ConcreteDecoderResultKind.Rejected ||
+      authenticatorSelected.value.payload.origin !== location.origin
     ) {
       return false
     }
+    const message = authenticatorSelected.value
     const taken = pickerState.takeAuthenticator(message.payload.requestId)
     if (taken.kind !== PendingPickerTakeKind.Taken) return false
     const pending = taken.request

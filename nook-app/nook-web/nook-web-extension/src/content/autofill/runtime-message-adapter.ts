@@ -148,7 +148,7 @@ export type {
 
 export type RuntimeMessageResponseDecoder<Response> = (
   response: unknown,
-) => response is Response
+) => Response
 
 export type DecodedRuntimeMessageArgs<Response> = {
   message: ExtensionRuntimeRequest
@@ -188,18 +188,19 @@ class AuthenticationRuntimeTransport {
   > {
     const delivery = await this.sendRuntimeMessage(message)
     if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response ||
-      typeof delivery.response !== 'object'
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable
     ) {
       return this.unavailable()
     }
-    return decode(delivery.response)
-      ? {
+    try {
+      const response = decode(delivery.response)
+      return {
           kind: RuntimeMessageDeliveryKind.Delivered,
-          response: delivery.response,
+          response,
         }
-      : this.unavailable()
+    } catch {
+      return this.unavailable()
+    }
   }
 
   private unavailable<Response>(): RuntimeMessageDelivery<Response> {

@@ -25,11 +25,16 @@ import {
   type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
-  isCompanionIdentityDiscoverySessionTransportRequest,
-  isCompanionIdentityHandoffSessionTransportRequest,
+  decodeCompanionIdentityDiscoverySessionTransportRequest,
+  decodeCompanionIdentityHandoffSessionTransportRequest,
   parseExtensionSessionRequest,
   stageExtensionSessionSensitiveRequest,
 } from './session-request-adapter'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -466,10 +471,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
       if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
-        if (
-          !serviceWorkerSender ||
-          !isCompanionIdentityDiscoverySessionTransportRequest(message)
-        ) {
+        if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
             error: 'Forbidden companion identity discovery request.',
@@ -477,19 +479,34 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityDiscovery(message).then((result) =>
-          result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
-            sendResponse({ ok: false, error: failure.message }),
-          ),
-        )
+        void companionWasmReady.then(() => {
+          const decoded = runConcreteDecoder(
+            decodeCompanionIdentityDiscoverySessionTransportRequest,
+            message,
+          )
+          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
+            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Forbidden companion identity discovery request.',
+            }
+            sendResponse(forbiddenResponse)
+            return
+          }
+          void this.enqueueCompanionIdentityDiscovery(decoded.value).then(
+            (result) =>
+              result.match(sendResponse, (failure) => {
+                const response: Parameters<typeof sendResponse>[0] = {
+                  ok: false,
+                  error: failure.message,
+                }
+                sendResponse(response)
+              }),
+          )
+        })
         return true
       }
       if (message.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE) {
-        if (
-          !serviceWorkerSender ||
-          !isCompanionIdentityHandoffSessionTransportRequest(message)
-        ) {
+        if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
             error: 'Forbidden companion identity handoff request.',
@@ -497,12 +514,30 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityHandoff(message).then((result) =>
-          result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
-            sendResponse({ ok: false, error: failure.message }),
-          ),
-        )
+        void companionWasmReady.then(() => {
+          const decoded = runConcreteDecoder(
+            decodeCompanionIdentityHandoffSessionTransportRequest,
+            message,
+          )
+          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
+            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Forbidden companion identity handoff request.',
+            }
+            sendResponse(forbiddenResponse)
+            return
+          }
+          void this.enqueueCompanionIdentityHandoff(decoded.value).then(
+            (result) =>
+              result.match(sendResponse, (failure) => {
+                const response: Parameters<typeof sendResponse>[0] = {
+                  ok: false,
+                  error: failure.message,
+                }
+                sendResponse(response)
+              }),
+          )
+        })
         return true
       }
       void parseExtensionSessionRequest(message).then((parsed) => {

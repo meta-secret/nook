@@ -1,12 +1,7 @@
 import { err, ok, type Result } from 'neverthrow'
 import type { ExtensionSessionTransportFailure } from './session-document'
+import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
-  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
-  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
-} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
-import {
-  OpenCompanionLauncherNormalizationKind,
   NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
 } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
@@ -25,6 +20,10 @@ import type * as AccountPickers from './account-pickers'
 import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
 import { CleanupEvidence } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -48,14 +47,18 @@ export type ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
-  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
+  decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
-  isExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.is
-  isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
-  isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
-  isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
+  decodeExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.decodeExtensionAuthenticationSurfacesRefreshMessage
+  decodeExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.decode
+  decodeExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.decodeExtensionSessionEnsureMessage
+  decodeExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.decodeExtensionSessionExpiryMessage
+  decodeExtensionSessionLockMessage: typeof SessionRuntimeMessages.decodeExtensionSessionLockMessage
+  decodeExtensionLocalEventLogUpdatedMessage: typeof RuntimeMessages.ExtensionLocalEventLogUpdatedMessage.decode
+  decodeOpenSimpleVaultMessage: typeof RuntimeMessages.OpenSimpleVaultMessage.decode
+  decodeBeginExtensionPairingMessage: typeof RuntimeMessages.BeginExtensionPairingMessage.decode
+  decodeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.decode
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.extensionPairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
@@ -255,14 +258,18 @@ export function routeExtensionLifecycleMessage({
     ensureExtensionSessionDocument,
     extensionSessionDocument,
     handlePairingStateQuery,
-    hasPairingApprovedType,
+    decodePairingApprovedMessage,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
-    isExtensionAuthenticationSurfacesRefreshMessage,
-    isExtensionPairingStateQueryMessage,
-    isExtensionSessionEnsureMessage,
-    isExtensionSessionExpiryMessage,
-    isExtensionSessionLockMessage,
+    decodeExtensionAuthenticationSurfacesRefreshMessage,
+    decodeExtensionPairingStateQueryMessage,
+    decodeExtensionSessionEnsureMessage,
+    decodeExtensionSessionExpiryMessage,
+    decodeExtensionSessionLockMessage,
+    decodeExtensionLocalEventLogUpdatedMessage,
+    decodeOpenSimpleVaultMessage,
+    decodeBeginExtensionPairingMessage,
+    decodeOpenCompanionLauncherMessage,
     openCompanionLauncher,
     openExtensionPairing,
     openSimpleVault,
@@ -270,7 +277,11 @@ export function routeExtensionLifecycleMessage({
     rebindStagedAuthenticatorEnrollmentsAuthorization,
     refreshAuthenticationSurfaces,
   } = dependencies
-  if (isExtensionPairingStateQueryMessage(message)) {
+  const pairingStateQuery = runConcreteDecoder(
+    decodeExtensionPairingStateQueryMessage,
+    message,
+  )
+  if (pairingStateQuery.kind === ConcreteDecoderResultKind.Decoded) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
       sender,
       sendResponse,
@@ -278,7 +289,8 @@ export function routeExtensionLifecycleMessage({
     return handlePairingStateQuery(queryContext)
   }
 
-  if (isExtensionSessionEnsureMessage(message)) {
+  const sessionEnsure = runConcreteDecoder(decodeExtensionSessionEnsureMessage, message)
+  if (sessionEnsure.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -291,7 +303,14 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionAuthenticationSurfacesRefreshMessage(message)) {
+  const refreshAuthenticationSurfacesMessage = runConcreteDecoder(
+    decodeExtensionAuthenticationSurfacesRefreshMessage,
+    message,
+  )
+  if (
+    refreshAuthenticationSurfacesMessage.kind ===
+    ConcreteDecoderResultKind.Decoded
+  ) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -302,7 +321,8 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionSessionLockMessage(message)) {
+  const sessionLock = runConcreteDecoder(decodeExtensionSessionLockMessage, message)
+  if (sessionLock.kind === ConcreteDecoderResultKind.Decoded) {
     const senderUrlAllowed =
       !('url' in sender) ||
       (typeof sender.url === 'string' &&
@@ -332,7 +352,8 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionSessionExpiryMessage(message)) {
+  const sessionExpiry = runConcreteDecoder(decodeExtensionSessionExpiryMessage, message)
+  if (sessionExpiry.kind === ConcreteDecoderResultKind.Decoded) {
     if (
       !isExtensionRuntimeSender(sender) ||
       !sender.url?.endsWith(`/${extensionSessionDocument}`)
@@ -361,12 +382,13 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (hasPairingApprovedType(message)) {
+  const pairingApproval = runConcreteDecoder(decodePairingApprovedMessage, message)
+  if (pairingApproval.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void importPairingAfterCompanionReady(message)
+    void importPairingAfterCompanionReady(pairingApproval.value)
       .then(async (response) => {
         if (response.ok) await refreshAuthenticationSurfaces()
         return response
@@ -375,7 +397,12 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (ExtensionLocalEventLogUpdatedMessageSchema.is(message)) {
+  const localEventLogUpdate = runConcreteDecoder(
+    decodeExtensionLocalEventLogUpdatedMessage,
+    message,
+  )
+  if (localEventLogUpdate.kind === ConcreteDecoderResultKind.Decoded) {
+    const decodedMessage = localEventLogUpdate.value
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -387,8 +414,8 @@ export function routeExtensionLifecycleMessage({
           return
         }
         const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
-          vaultStoreId: message.payload.vaultStoreId,
-          eventLogRecords: message.payload.eventLogRecords,
+          vaultStoreId: decodedMessage.payload.vaultStoreId,
+          eventLogRecords: decodedMessage.payload.eventLogRecords,
         }
         void beginAccountPickerAuthorizationCleanup()
           .then(async (cleanupStart) => {
@@ -461,7 +488,8 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (OpenSimpleVaultMessageSchema.is(message)) {
+  const openSimpleVault = runConcreteDecoder(decodeOpenSimpleVaultMessage, message)
+  if (openSimpleVault.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -472,29 +500,31 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  const launcherMessage =
-    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
-      message,
-    )
-  if (
-    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
-  ) {
+  const launcherMessage = runConcreteDecoder(
+    decodeOpenCompanionLauncherMessage,
+    message,
+  )
+  if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(launcherMessage.message.intent)
+    void openCompanionLauncher(launcherMessage.value.intent)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true
   }
 
-  if (BeginExtensionPairingMessageSchema.is(message)) {
+  const beginExtensionPairing = runConcreteDecoder(
+    decodeBeginExtensionPairingMessage,
+    message,
+  )
+  if (beginExtensionPairing.kind === ConcreteDecoderResultKind.Decoded) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openExtensionPairing(message.payload)
+    void openExtensionPairing(beginExtensionPairing.value.payload)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(pairingLaunchFailureResponse))
     return true

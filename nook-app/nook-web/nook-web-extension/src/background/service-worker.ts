@@ -1,11 +1,17 @@
 import {
   GeneratePasswordRequestType,
+  ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
   ExtensionPairedVaultIdentityHandoffRequestMessage as ExtensionPairedVaultIdentityHandoffRequestMessageSchema,
   ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
+import {
+  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
+  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
+} from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationWorkflowSnapshotIngress,
@@ -76,6 +82,10 @@ import {
 } from './service-worker/pairing-import'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageSchema } from '../lib/pairing-state'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
@@ -98,10 +108,10 @@ import {
   extensionSessionLifecycle,
 } from './service-worker/session-lifecycle'
 import {
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
 } from './service-worker/session-runtime-messages'
 import { backgroundVaultRuntime } from './vault-runtime'
 
@@ -133,17 +143,21 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
   extensionSessionDocument,
   handlePairingStateQuery,
-  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType.bind(
-    extensionPairingIdentity,
-  ),
+  decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
-  isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionPairingStateQueryMessage:
-    ExtensionPairingStateQueryMessageSchema.is,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
+  decodeExtensionAuthenticationSurfacesRefreshMessage,
+  decodeExtensionPairingStateQueryMessage:
+    ExtensionPairingStateQueryMessageSchema.decode,
+  decodeExtensionSessionEnsureMessage,
+  decodeExtensionSessionExpiryMessage,
+  decodeExtensionSessionLockMessage,
+  decodeExtensionLocalEventLogUpdatedMessage:
+    ExtensionLocalEventLogUpdatedMessageSchema.decode,
+  decodeOpenSimpleVaultMessage: OpenSimpleVaultMessageSchema.decode,
+  decodeBeginExtensionPairingMessage: BeginExtensionPairingMessageSchema.decode,
+  decodeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.decode,
   openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
     extensionSessionLifecycle,
   ),
@@ -187,21 +201,18 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       extensionPairingIdentity.discoverPairedVaultIdentity.bind(
         extensionPairingIdentity,
       ),
-    hasPairingApprovedType:
-      extensionPairingIdentity.hasPairingApprovedType.bind(
-        extensionPairingIdentity,
-      ),
+    decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
     importPairingAfterCompanionReady,
-    isExtensionIdentityHandoffRequestMessage:
-      ExtensionIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultIdentityDiscoveryMessage:
-      ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
-    isExtensionPairedVaultIdentityHandoffRequestMessage:
-      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
-    isExtensionPairedVaultUnlockRequestMessage:
-      ExtensionPairedVaultUnlockRequestMessageSchema.is,
-    normalizeOpenCompanionLauncherMessage:
-      NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+    decodeExtensionIdentityHandoffRequestMessage:
+      ExtensionIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityDiscoveryMessage:
+      ExtensionPairedVaultIdentityDiscoveryMessageSchema.decode,
+    decodeExtensionPairedVaultIdentityHandoffRequestMessage:
+      ExtensionPairedVaultIdentityHandoffRequestMessageSchema.decode,
+    decodeExtensionPairedVaultUnlockRequestMessage:
+      ExtensionPairedVaultUnlockRequestMessageSchema.decode,
+    decodeOpenCompanionLauncherMessage:
+      NormalizedOpenCompanionLauncherMessageSchema.decode,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
@@ -240,7 +251,9 @@ chrome.runtime.onMessage.addListener(
       return lifecycleResult
     }
 
-    if (WebsiteLoginPickerOpenMessageSchema.is(message)) {
+    const WebsiteLoginPickerOpenMessageDecoded = runConcreteDecoder(WebsiteLoginPickerOpenMessageSchema.decode, message)
+    if (WebsiteLoginPickerOpenMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginPickerOpenMessageDecoded.value
       const nookTypedArgs0_0: Parameters<typeof openWebsiteLoginPicker>[0] = {
         message,
         sender,
@@ -257,7 +270,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (LoginPickerQueryMessageSchema.is(message)) {
+    const LoginPickerQueryMessageDecoded = runConcreteDecoder(LoginPickerQueryMessageSchema.decode, message)
+    if (LoginPickerQueryMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = LoginPickerQueryMessageDecoded.value
       const nookTypedArgs0_1: Parameters<typeof queryLoginPicker>[0] = {
         message,
         sender,
@@ -274,7 +289,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (LoginPickerSelectMessageSchema.is(message)) {
+    const LoginPickerSelectMessageDecoded = runConcreteDecoder(LoginPickerSelectMessageSchema.decode, message)
+    if (LoginPickerSelectMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = LoginPickerSelectMessageDecoded.value
       const nookTypedArgs0_2: Parameters<typeof selectLoginPicker>[0] = {
         message,
         sender,
@@ -291,7 +308,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (LoginPickerCancelMessageSchema.is(message)) {
+    const LoginPickerCancelMessageDecoded = runConcreteDecoder(LoginPickerCancelMessageSchema.decode, message)
+    if (LoginPickerCancelMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = LoginPickerCancelMessageDecoded.value
       const nookTypedArgs0_3: Parameters<typeof cancelLoginPicker>[0] = {
         message,
         sender,
@@ -308,7 +327,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorPickerOpenMessageSchema.is(message)) {
+    const WebsiteAuthenticatorPickerOpenMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorPickerOpenMessageSchema.decode, message)
+    if (WebsiteAuthenticatorPickerOpenMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorPickerOpenMessageDecoded.value
       const nookTypedArgs0_4: Parameters<
         typeof authenticatorEnrollmentOperations.openWebsiteAuthenticatorPicker
       >[0] = { message, sender }
@@ -325,7 +346,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (AuthenticatorPickerQueryMessageSchema.is(message)) {
+    const AuthenticatorPickerQueryMessageDecoded = runConcreteDecoder(AuthenticatorPickerQueryMessageSchema.decode, message)
+    if (AuthenticatorPickerQueryMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = AuthenticatorPickerQueryMessageDecoded.value
       const nookTypedArgs0_5: Parameters<
         typeof authenticatorEnrollmentOperations.queryAuthenticatorPicker
       >[0] = {
@@ -345,7 +368,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (AuthenticatorPickerSelectMessageSchema.is(message)) {
+    const AuthenticatorPickerSelectMessageDecoded = runConcreteDecoder(AuthenticatorPickerSelectMessageSchema.decode, message)
+    if (AuthenticatorPickerSelectMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = AuthenticatorPickerSelectMessageDecoded.value
       const nookTypedArgs0_6: Parameters<
         typeof authenticatorEnrollmentOperations.selectAuthenticatorPicker
       >[0] = {
@@ -365,7 +390,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (AuthenticatorPickerCancelMessageSchema.is(message)) {
+    const AuthenticatorPickerCancelMessageDecoded = runConcreteDecoder(AuthenticatorPickerCancelMessageSchema.decode, message)
+    if (AuthenticatorPickerCancelMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = AuthenticatorPickerCancelMessageDecoded.value
       const nookTypedArgs0_7: Parameters<
         typeof authenticatorEnrollmentOperations.cancelAuthenticatorPicker
       >[0] = {
@@ -455,7 +482,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (AuthenticationOutcomeClassifyMessageSchema.is(message)) {
+    const AuthenticationOutcomeClassifyMessageDecoded = runConcreteDecoder(AuthenticationOutcomeClassifyMessageSchema.decode, message)
+    if (AuthenticationOutcomeClassifyMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = AuthenticationOutcomeClassifyMessageDecoded.value
       const nookTypedArgs0_3: Parameters<
         typeof backgroundVaultRuntime.classifyAuthenticationOutcome
       >[0] = {
@@ -528,7 +557,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsitePasskeyOptionsMessageSchema.is(message)) {
+    const WebsitePasskeyOptionsMessageDecoded = runConcreteDecoder(WebsitePasskeyOptionsMessageSchema.decode, message)
+    if (WebsitePasskeyOptionsMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsitePasskeyOptionsMessageDecoded.value
       const nookTypedArgs0_8: Parameters<
         typeof websitePasskeyRequests.websitePasskeyOptions
       >[0] = {
@@ -548,7 +579,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsitePasskeyPerformMessageSchema.is(message)) {
+    const WebsitePasskeyPerformMessageDecoded = runConcreteDecoder(WebsitePasskeyPerformMessageSchema.decode, message)
+    if (WebsitePasskeyPerformMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsitePasskeyPerformMessageDecoded.value
       const nookTypedArgs0_9: Parameters<
         typeof websitePasskeyRequests.performWebsitePasskey
       >[0] = {
@@ -568,7 +601,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsitePasskeyCancelMessageSchema.is(message)) {
+    const WebsitePasskeyCancelMessageDecoded = runConcreteDecoder(WebsitePasskeyCancelMessageSchema.decode, message)
+    if (WebsitePasskeyCancelMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsitePasskeyCancelMessageDecoded.value
       const nookTypedArgs0_10: Parameters<
         typeof websitePasskeyRequests.cancelWebsitePasskey
       >[0] = {
@@ -588,7 +623,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginOptionsMessageSchema.is(message)) {
+    const WebsiteLoginOptionsMessageDecoded = runConcreteDecoder(WebsiteLoginOptionsMessageSchema.decode, message)
+    if (WebsiteLoginOptionsMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginOptionsMessageDecoded.value
       const nookTypedArgs0_11: Parameters<
         typeof accountPickerSessions.websiteLoginOptions
       >[0] = {
@@ -608,7 +645,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginRevealMessageSchema.is(message)) {
+    const WebsiteLoginRevealMessageDecoded = runConcreteDecoder(WebsiteLoginRevealMessageSchema.decode, message)
+    if (WebsiteLoginRevealMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginRevealMessageDecoded.value
       const nookTypedArgs0_12: Parameters<typeof websiteLoginFill>[0] = {
         message,
         sender,
@@ -625,7 +664,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginSaveOfferMessageSchema.is(message)) {
+    const WebsiteLoginSaveOfferMessageDecoded = runConcreteDecoder(WebsiteLoginSaveOfferMessageSchema.decode, message)
+    if (WebsiteLoginSaveOfferMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginSaveOfferMessageDecoded.value
       const nookTypedArgs0_13: Parameters<typeof websiteLoginSaveOffer>[0] = {
         message,
         sender,
@@ -642,7 +683,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginSavePendingMessageSchema.is(message)) {
+    const WebsiteLoginSavePendingMessageDecoded = runConcreteDecoder(WebsiteLoginSavePendingMessageSchema.decode, message)
+    if (WebsiteLoginSavePendingMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginSavePendingMessageDecoded.value
       const nookTypedArgs0_14: Parameters<typeof websiteLoginSavePending>[0] = {
         message,
         sender,
@@ -659,7 +702,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginSaveCommitMessageSchema.is(message)) {
+    const WebsiteLoginSaveCommitMessageDecoded = runConcreteDecoder(WebsiteLoginSaveCommitMessageSchema.decode, message)
+    if (WebsiteLoginSaveCommitMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginSaveCommitMessageDecoded.value
       const nookTypedArgs0_15: Parameters<typeof websiteLoginSaveCommit>[0] = {
         message,
         sender,
@@ -676,7 +721,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteLoginSaveDismissMessageSchema.is(message)) {
+    const WebsiteLoginSaveDismissMessageDecoded = runConcreteDecoder(WebsiteLoginSaveDismissMessageSchema.decode, message)
+    if (WebsiteLoginSaveDismissMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteLoginSaveDismissMessageDecoded.value
       const nookTypedArgs0_16: Parameters<typeof websiteLoginSaveDismiss>[0] = {
         message,
         sender,
@@ -693,7 +740,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorOptionsMessageSchema.is(message)) {
+    const WebsiteAuthenticatorOptionsMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorOptionsMessageSchema.decode, message)
+    if (WebsiteAuthenticatorOptionsMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorOptionsMessageDecoded.value
       const nookTypedArgs0_17: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorOptions
       >[0] = { message, sender }
@@ -710,7 +759,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorFillMessageSchema.is(message)) {
+    const WebsiteAuthenticatorFillMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorFillMessageSchema.decode, message)
+    if (WebsiteAuthenticatorFillMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorFillMessageDecoded.value
       const nookTypedArgs0_18: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorFill
       >[0] = {
@@ -730,7 +781,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollPreviewMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollPreviewMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollPreviewMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollPreviewMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollPreviewMessageDecoded.value
       const nookTypedArgs0_19: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollPreview
       >[0] = { message, sender }
@@ -747,7 +800,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollStageMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollStageMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollStageMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollStageMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollStageMessageDecoded.value
       const nookTypedArgs0_20: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollStage
       >[0] = { message, sender }
@@ -764,7 +819,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollCodeMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollCodeMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollCodeMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollCodeMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollCodeMessageDecoded.value
       const nookTypedArgs0_21: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollCode
       >[0] = { message, sender }
@@ -781,7 +838,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollConfirmMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollConfirmMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollConfirmMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollConfirmMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollConfirmMessageDecoded.value
       const nookTypedArgs0_22: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollConfirm
       >[0] = { message, sender }
@@ -798,7 +857,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollDismissMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollDismissMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollDismissMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollDismissMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollDismissMessageDecoded.value
       const nookTypedArgs0_23: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollDismiss
       >[0] = { message, sender }
@@ -815,7 +876,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorEnrollPendingMessageSchema.is(message)) {
+    const WebsiteAuthenticatorEnrollPendingMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorEnrollPendingMessageSchema.decode, message)
+    if (WebsiteAuthenticatorEnrollPendingMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorEnrollPendingMessageDecoded.value
       const nookTypedArgs0_24: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollPending
       >[0] = { message, sender }
@@ -832,7 +895,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
-    if (WebsiteAuthenticatorBackupAttachMessageSchema.is(message)) {
+    const WebsiteAuthenticatorBackupAttachMessageDecoded = runConcreteDecoder(WebsiteAuthenticatorBackupAttachMessageSchema.decode, message)
+    if (WebsiteAuthenticatorBackupAttachMessageDecoded.kind === ConcreteDecoderResultKind.Decoded) {
+      const message = WebsiteAuthenticatorBackupAttachMessageDecoded.value
       const nookTypedArgs0_25: Parameters<
         typeof authenticatorEnrollmentOperations.websiteAuthenticatorBackupAttach
       >[0] = { message, sender }

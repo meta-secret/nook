@@ -1,19 +1,22 @@
+import { Effect, Schema } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
-  CompanionExtensionPresence,
-  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityDiscoverySessionTransportRequest as GeneratedCompanionIdentityDiscoverySessionTransportRequest,
+  CompanionIdentityHandoffSessionTransportRequest as GeneratedCompanionIdentityHandoffSessionTransportRequest,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import type { CompanionIdentityHandoffRequest } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
-  ExtensionSessionRequestValidation,
+  decode_companion_identity_discovery_session_transport_request,
+  decode_companion_identity_handoff_session_transport_request,
+  decode_extension_session_request,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
+  type ExtensionStorageProviderIdentity,
   type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
-  validate_extension_session_request,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
+import { ExtensionPairingStorageProviderPayloadDecoder } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 export const EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS = 5_000
 
@@ -105,55 +108,10 @@ export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
 export const COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE =
   'nook:extension-session-discover-companion-identity'
 
-export type CompanionIdentityDiscoverySessionTransportRequest = {
-  type: typeof COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE
-  payload: {
-    presence: CompanionExtensionPresence
-    discovery: CompanionIdentityDiscoveryObservation
-  }
-}
-
-export type CompanionIdentityHandoffAuthorization = {
-  readonly request: CompanionIdentityHandoffRequest
-  readonly observedAt: number
-  readonly presence: CompanionExtensionPresence
-}
-
-export type CompanionIdentityHandoffSessionTransportRequest = {
-  type: typeof COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE
-  payload: { authorization: CompanionIdentityHandoffAuthorization }
-}
-
-export function isCompanionIdentityDiscoverySessionTransportRequest(
-  value: unknown,
-): value is CompanionIdentityDiscoverySessionTransportRequest {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'type' in value &&
-    value.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE &&
-    'payload' in value &&
-    !!value.payload &&
-    typeof value.payload === 'object' &&
-    'presence' in value.payload &&
-    'discovery' in value.payload
-  )
-}
-
-export function isCompanionIdentityHandoffSessionTransportRequest(
-  value: unknown,
-): value is CompanionIdentityHandoffSessionTransportRequest {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'type' in value &&
-    value.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE &&
-    'payload' in value &&
-    !!value.payload &&
-    typeof value.payload === 'object' &&
-    'authorization' in value.payload
-  )
-}
+export type CompanionIdentityDiscoverySessionTransportRequest =
+  GeneratedCompanionIdentityDiscoverySessionTransportRequest
+export type CompanionIdentityHandoffSessionTransportRequest =
+  GeneratedCompanionIdentityHandoffSessionTransportRequest
 
 export type ParsedExtensionSessionTransportRequest = ExtensionSessionRequest
 type TypedExtensionSessionImportRequest = Extract<
@@ -181,6 +139,64 @@ export enum ExtensionSessionRequestParseKind {
   Parsed = 'parsed',
 }
 
+export enum ExtensionSessionRequestDecodeFailureKind {
+  RawEnvelope = 'raw-envelope-decode-failed',
+  SessionRequest = 'session-request-decode-failed',
+  CompanionIdentityDiscovery = 'companion-identity-discovery-decode-failed',
+  CompanionIdentityHandoff = 'companion-identity-handoff-decode-failed',
+  StorageProvider = 'storage-provider-decode-failed',
+  ImportProviders = 'import-providers-decode-failed',
+}
+
+export type ExtensionSessionRequestDecodeFailure = {
+  kind: ExtensionSessionRequestDecodeFailureKind
+  cause: unknown
+}
+
+type ExtensionSessionRawEnvelope = {
+  type: string
+  payload: unknown
+}
+
+const extensionSessionRawEnvelopeSchema = Schema.Struct({
+  type: Schema.String,
+  payload: Schema.Unknown,
+}) satisfies Schema.Schema<ExtensionSessionRawEnvelope>
+
+export function decodeExtensionSessionRawEnvelope(value: unknown) {
+  return Schema.decodeUnknown(extensionSessionRawEnvelopeSchema)(value)
+}
+
+export function decodeCompanionIdentityDiscoverySessionTransportRequest(
+  value: unknown,
+): Effect.Effect<
+  CompanionIdentityDiscoverySessionTransportRequest,
+  ExtensionSessionRequestDecodeFailure
+> {
+  return Effect.try({
+    try: () => decode_companion_identity_discovery_session_transport_request(value),
+    catch: (cause): ExtensionSessionRequestDecodeFailure => ({
+      kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityDiscovery,
+      cause,
+    }),
+  })
+}
+
+export function decodeCompanionIdentityHandoffSessionTransportRequest(
+  value: unknown,
+): Effect.Effect<
+  CompanionIdentityHandoffSessionTransportRequest,
+  ExtensionSessionRequestDecodeFailure
+> {
+  return Effect.try({
+    try: () => decode_companion_identity_handoff_session_transport_request(value),
+    catch: (cause): ExtensionSessionRequestDecodeFailure => ({
+      kind: ExtensionSessionRequestDecodeFailureKind.CompanionIdentityHandoff,
+      cause,
+    }),
+  })
+}
+
 export type ExtensionSessionRequestParse =
   | { kind: ExtensionSessionRequestParseKind.Invalid }
   | {
@@ -202,21 +218,16 @@ export type ExtensionSessionSensitiveStage =
       request: ExtensionSessionNonImportRequest
     }
 
-enum ExtensionSessionIngressStageKind {
-  Invalid = 'invalid',
-  Staged = 'staged',
-}
-
 enum CompanionWasmReadinessKind {
   Ready = 'ready',
   Expired = 'expired',
 }
 
 type ExtensionSessionIngressStage =
-  | { kind: ExtensionSessionIngressStageKind.Invalid }
+  | { kind: ExtensionSessionSensitiveStageKind.Invalid }
   | {
-      kind: ExtensionSessionIngressStageKind.Staged
-      request: ParsedExtensionSessionTransportRequest
+      kind: ExtensionSessionSensitiveStageKind.Staged
+      envelope: ExtensionSessionRawEnvelope
     }
 
 const sensitiveSessionFields: Readonly<
@@ -265,19 +276,14 @@ const sensitiveSessionFields: Readonly<
 }
 
 const safeReflect: {
-  get(
-    target: ExtensionSessionNonImportRequest['payload'],
-    propertyKey: PropertyKey,
-  ): unknown
-  set(
-    target: ExtensionSessionNonImportRequest['payload'],
-    propertyKey: PropertyKey,
-    value: unknown,
-  ): boolean
+  get(target: object, propertyKey: PropertyKey): unknown
+  set(target: object, propertyKey: PropertyKey, value: unknown): boolean
 } = Reflect
 
 function clearSensitiveFieldValue(value: unknown): void {
-  if (Array.isArray(value)) value.fill(0)
+  if (!Array.isArray(value)) return
+  if (value.every((entry) => typeof entry === 'string')) value.fill('')
+  else value.fill(0)
 }
 
 type ExtensionSessionSensitiveValue = string | number[] | string[]
@@ -347,7 +353,7 @@ export function stageExtensionSessionSensitiveRequest(
   if (fields.length === 0) {
     return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   }
-  const stagedPayload = { ...request.payload } as typeof request.payload
+  const stagedPayload: typeof request.payload = { ...request.payload }
   for (const field of fields) {
     const value = safeReflect.get(request.payload, field)
     const copiedValue = copyExtensionSessionSensitiveValue(value)
@@ -390,135 +396,121 @@ export function stageExtensionSessionSensitiveRequest(
   }
 }
 
-type ExtensionSessionQueueEnvelope = {
-  kind: string
-}
-
 class ExtensionSessionIngressAdmission {
   constructor(private readonly value: unknown) {}
 
-  private isExtensionSessionMessageType(
-    value: string,
-  ): value is ExtensionSessionMessageType {
-    return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
-  }
-
-  private isExtensionSessionQueueEnvelope(
-    value: unknown,
-  ): value is ExtensionSessionQueueEnvelope {
-    if (!value || typeof value !== 'object') return false
-    return 'kind' in value && typeof value.kind === 'string'
-  }
-
-  private hasExtensionSessionQueue(payload: unknown): boolean {
-    if (!payload || typeof payload !== 'object') return false
-    return (
-      'queue' in payload && this.isExtensionSessionQueueEnvelope(payload.queue)
+  private decodeEnvelope():
+    | { kind: ExtensionSessionSensitiveStageKind.Invalid }
+    | {
+        kind: ExtensionSessionSensitiveStageKind.Staged
+        envelope: ExtensionSessionRawEnvelope
+      } {
+    const decoded = Effect.runSync(
+      Effect.either(decodeExtensionSessionRawEnvelope(this.value)),
     )
-  }
-
-  private isParsedRequest(
-    value: unknown,
-  ): value is ParsedExtensionSessionTransportRequest {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('type' in value) ||
-      typeof value.type !== 'string' ||
-      !this.isExtensionSessionMessageType(value.type) ||
-      !('payload' in value) ||
-      !value.payload ||
-      typeof value.payload !== 'object'
-    ) {
-      return false
+    if (decoded._tag === 'Left') {
+      return { kind: ExtensionSessionSensitiveStageKind.Invalid }
     }
-    return true
+    return {
+      kind: ExtensionSessionSensitiveStageKind.Staged,
+      envelope: decoded.right,
+    }
   }
 
   stage(): ExtensionSessionIngressStage {
-    if (!this.isParsedRequest(this.value)) {
-      return { kind: ExtensionSessionIngressStageKind.Invalid }
-    }
-    const request = this.value
-    if (!this.hasExtensionSessionQueue(request.payload)) {
-      clearExtensionSessionIngressRequest(request)
-      return { kind: ExtensionSessionIngressStageKind.Invalid }
-    }
-    if (request.type === ExtensionSessionMessageType.ImportVault) {
-      const providers = request.payload.providers
-      if (!Array.isArray(providers)) {
-        request.payload.providers = []
-        return { kind: ExtensionSessionIngressStageKind.Invalid }
+    const decoded = this.decodeEnvelope()
+    if (decoded.kind === ExtensionSessionSensitiveStageKind.Invalid) return decoded
+    let stagedEnvelope: ExtensionSessionRawEnvelope
+    try {
+      const staged = structuredClone(this.value)
+      const stagedDecoded = Effect.runSync(
+        Effect.either(decodeExtensionSessionRawEnvelope(staged)),
+      )
+      if (stagedDecoded._tag === 'Left') {
+        clearRawExtensionSessionSecrets(decoded.envelope)
+        return { kind: ExtensionSessionSensitiveStageKind.Invalid }
       }
-      try {
-        const stagedProviders = structuredClone(providers)
-        new ProviderCredentialBuffer(providers).clear()
-        request.payload.providers = []
-        return {
-          kind: ExtensionSessionIngressStageKind.Staged,
-          request: {
-            ...request,
-            payload: { ...request.payload, providers: stagedProviders },
-          },
-        }
-      } catch {
-        new ProviderCredentialBuffer(providers).clear()
-        request.payload.providers = []
-        return { kind: ExtensionSessionIngressStageKind.Invalid }
-      }
+      stagedEnvelope = stagedDecoded.right
+    } catch {
+      clearRawExtensionSessionSecrets(decoded.envelope)
+      return { kind: ExtensionSessionSensitiveStageKind.Invalid }
     }
-
-    const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
-    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
-      return { kind: ExtensionSessionIngressStageKind.Invalid }
-    }
+    clearRawExtensionSessionSecrets(decoded.envelope)
     return {
-      kind: ExtensionSessionIngressStageKind.Staged,
-      request:
-        sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
-          ? sensitiveStage.request
-          : request,
+      kind: ExtensionSessionSensitiveStageKind.Staged,
+      envelope: stagedEnvelope,
     }
   }
 }
 
-function clearExtensionSessionIngressRequest(
-  request: ParsedExtensionSessionTransportRequest,
+function clearRawProviderCredentials(value: unknown): void {
+  if (!Array.isArray(value)) return
+  for (const provider of value) {
+    if (!provider || typeof provider !== 'object') continue
+    if ('githubPat' in provider) {
+      safeReflect.set(provider, 'githubPat', { state: 'missing' })
+    }
+    if ('oauthFile' in provider) {
+      const oauthFile = safeReflect.get(provider, 'oauthFile')
+      if (oauthFile && typeof oauthFile === 'object') {
+        if ('config' in oauthFile) {
+          const config = safeReflect.get(oauthFile, 'config')
+          if (config && typeof config === 'object') {
+            if ('accessToken' in config)
+              safeReflect.set(config, 'accessToken', { state: 'signedOut' })
+            if ('refreshToken' in config)
+              safeReflect.set(config, 'refreshToken', { state: 'notIssued' })
+          }
+        }
+        if ('accessToken' in oauthFile)
+          safeReflect.set(oauthFile, 'accessToken', '')
+        if ('refreshToken' in oauthFile)
+          safeReflect.set(oauthFile, 'refreshToken', '')
+      }
+    }
+  }
+}
+
+function clearRawExtensionSessionSecrets(
+  envelope: ExtensionSessionRawEnvelope,
 ): void {
-  if (request.type === ExtensionSessionMessageType.ImportVault) {
-    new ProviderCredentialBuffer(request.payload.providers).clear()
-    request.payload.providers = []
+  const payload = envelope.payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
+  if (envelope.type === ExtensionSessionMessageType.ImportVault) {
+    const providers = safeReflect.get(payload, 'providers')
+    clearRawProviderCredentials(providers)
+    safeReflect.set(payload, 'providers', [])
     return
   }
-  clearExtensionSessionSensitiveRequest(request)
+  const fields = Object.entries(sensitiveSessionFields).find(
+    ([type]) => type === envelope.type,
+  )?.[1]
+  if (!fields) return
+  for (const field of fields) {
+    const value = safeReflect.get(payload, field)
+    clearSensitiveFieldValue(value)
+    safeReflect.set(payload, field, typeof value === 'string' ? '' : [])
+  }
 }
 
 export async function parseExtensionSessionRequest(
   value: unknown,
 ): Promise<ExtensionSessionRequestParse> {
   const ingressStage = new ExtensionSessionIngressAdmission(value).stage()
-  if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
+  if (ingressStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
-  const request = ingressStage.request
-  const defaultExpiresAt = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
-  const queue = request.payload.queue
-  const expiresAt =
-    queue.kind === ExtensionSessionQueueKind.Deadline
-      ? Math.min(queue.expiresAt, defaultExpiresAt)
-      : defaultExpiresAt
-  if (expiresAt <= Date.now()) {
-    clearExtensionSessionIngressRequest(request)
-    return { kind: ExtensionSessionRequestParseKind.Invalid }
-  }
+  const envelope = ingressStage.envelope
+  const deadline = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
+  let request: ExtensionSessionRequest | undefined
   const readinessDeadline = new AbortController()
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
     const readinessTimer = setTimeout(
       () => {
-        clearExtensionSessionIngressRequest(request)
+        clearRawExtensionSessionSecrets(envelope)
         resolve(CompanionWasmReadinessKind.Expired)
       },
-      Math.max(0, expiresAt - Date.now()),
+      Math.max(0, deadline - Date.now()),
     )
     const abortListenerOptions: AddEventListenerOptions = { once: true }
     readinessDeadline.signal.addEventListener(
@@ -535,41 +527,126 @@ export async function parseExtensionSessionRequest(
     if (readiness === CompanionWasmReadinessKind.Expired) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
-    let validationRequest
-    if (request.type === ExtensionSessionMessageType.ImportVault) {
-      const identities = new ProviderCredentialBuffer(
-        request.payload.providers,
-      ).identities()
-      if (identities.isErr()) {
-        clearExtensionSessionIngressRequest(request)
-        return { kind: ExtensionSessionRequestParseKind.Invalid }
-      }
-      validationRequest = {
-        ...request,
-        payload: { ...request.payload, providers: identities.value },
-      }
-    } else {
-      validationRequest = request
-    }
-    const validationRequestArgs: GeneratedExtensionSessionRequest =
-      validationRequest
-    if (
-      validate_extension_session_request(validationRequestArgs) !==
-      ExtensionSessionRequestValidation.Accepted
-    ) {
-      clearExtensionSessionIngressRequest(request)
+    const decoded = Effect.runSync(
+      Effect.either(decodeExtensionSessionIngress(envelope)),
+    )
+    if (decoded._tag === 'Left') return { kind: ExtensionSessionRequestParseKind.Invalid }
+    request = decoded.right
+    const queue = request.payload.queue
+    const expiresAt =
+      queue.kind === ExtensionSessionQueueKind.Deadline
+        ? Math.min(queue.expiresAt, deadline)
+        : deadline
+    if (expiresAt <= Date.now()) {
+      clearExtensionSessionRequest(request)
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
   } catch {
-    clearExtensionSessionIngressRequest(request)
+    clearRawExtensionSessionSecrets(envelope)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   } finally {
+    clearRawExtensionSessionSecrets(envelope)
     readinessDeadline.abort()
   }
+  if (!request) return { kind: ExtensionSessionRequestParseKind.Invalid }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,
     request,
   }
+}
+
+function clearExtensionSessionRequest(request: ExtensionSessionRequest): void {
+  if (request.type === ExtensionSessionMessageType.ImportVault) {
+    new ProviderCredentialBuffer(request.payload.providers).clear()
+    return
+  }
+  clearExtensionSessionSensitiveRequest(request)
+}
+
+function decodeExtensionSessionIngress(
+  envelope: ExtensionSessionRawEnvelope,
+): Effect.Effect<ExtensionSessionRequest, ExtensionSessionRequestDecodeFailure> {
+  if (envelope.type !== ExtensionSessionMessageType.ImportVault) {
+    return Effect.try({
+      try: () => decode_extension_session_request(envelope),
+      catch: (cause): ExtensionSessionRequestDecodeFailure => ({
+        kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
+        cause,
+      }),
+    })
+  }
+  return Effect.gen(function* () {
+    const rawPayload = envelope.payload
+    if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+      return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
+        kind: ExtensionSessionRequestDecodeFailureKind.ImportProviders,
+        cause: rawPayload,
+      })
+    }
+    const rawProviders = safeReflect.get(rawPayload, 'providers')
+    if (!Array.isArray(rawProviders)) {
+      return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
+        kind: ExtensionSessionRequestDecodeFailureKind.ImportProviders,
+        cause: rawProviders,
+      })
+    }
+    const decodedProviders: StorageProvider[] = []
+    for (const provider of rawProviders) {
+      const decodedProvider = yield* Effect.either(
+        Effect.mapError(
+          ExtensionPairingStorageProviderPayloadDecoder.decode(provider),
+          (cause): ExtensionSessionRequestDecodeFailure => ({
+            kind: ExtensionSessionRequestDecodeFailureKind.StorageProvider,
+            cause,
+          }),
+        ),
+      )
+      if (decodedProvider._tag === 'Left') {
+        new ProviderCredentialBuffer(decodedProviders).clear()
+        return yield* Effect.fail(decodedProvider.left)
+      }
+      decodedProviders.push(decodedProvider.right)
+    }
+    const identities: ExtensionStorageProviderIdentity[] =
+      decodedProviders.map((provider) => ({
+        id: provider.id,
+        type: provider.type,
+      }))
+    if (!safeReflect.set(rawPayload, 'providers', identities)) {
+      new ProviderCredentialBuffer(decodedProviders).clear()
+      return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
+        kind: ExtensionSessionRequestDecodeFailureKind.ImportProviders,
+        cause: rawProviders,
+      })
+    }
+    const decodedRequest = yield* Effect.either(
+      Effect.try({
+        try: () => decode_extension_session_request(envelope),
+        catch: (cause): ExtensionSessionRequestDecodeFailure => ({
+          kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
+          cause,
+        }),
+      }),
+    )
+    if (decodedRequest._tag === 'Left') {
+      new ProviderCredentialBuffer(decodedProviders).clear()
+      return yield* Effect.fail(decodedRequest.left)
+    }
+    if (decodedRequest.right.type !== ExtensionSessionMessageType.ImportVault) {
+      new ProviderCredentialBuffer(decodedProviders).clear()
+      return yield* Effect.fail<ExtensionSessionRequestDecodeFailure>({
+        kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
+        cause: decodedRequest.right,
+      })
+    }
+    return {
+      ...decodedRequest.right,
+      payload: {
+        ...decodedRequest.right.payload,
+        providers: decodedProviders,
+      },
+    }
+  })
 }
 
 type ReplaceExtensionSessionRequestPayloadArgs<
@@ -584,6 +661,9 @@ export function replaceExtensionSessionRequestPayload<
 >({
   request,
   payload,
-}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Request {
-  return { ...request, payload } as Request
+}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Omit<
+  Request,
+  'payload'
+> & { payload: Request['payload'] } {
+  return { ...request, payload }
 }

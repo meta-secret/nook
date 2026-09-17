@@ -1,4 +1,9 @@
 import { err, ok, type Result } from 'neverthrow'
+import { Schema } from 'effect'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 import type { ExtensionSessionTransportFailure } from './session-document'
 import type { ExtensionSessionStorageValue } from './pairing-identity'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
@@ -47,6 +52,25 @@ export type PendingAuthenticatorPicker = {
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
+
+const pendingAuthenticatorPickerSchema = Schema.Struct({
+  requestId: Schema.String,
+  origin: Schema.String,
+  tabId: Schema.Number.pipe(
+    Schema.filter((value) => Number.isInteger(value) && value >= 0),
+  ),
+  frameId: Schema.Number.pipe(
+    Schema.filter((value) => Number.isInteger(value) && value >= 0),
+  ),
+  allowedVaultStoreIds: Schema.Array(
+    Schema.String.pipe(Schema.minLength(1)),
+  ),
+  expiresAt: Schema.Number.pipe(Schema.filter(Number.isFinite)),
+}) satisfies Schema.Schema<PendingAuthenticatorPicker>
+
+function decodePendingAuthenticatorPicker(value: unknown) {
+  return Schema.decodeUnknown(pendingAuthenticatorPickerSchema)(value)
+}
 
 export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
@@ -305,28 +329,38 @@ class AccountPickerSessions {
     for (const [key, value] of Object.entries(stored)) {
       if (key.startsWith(AUTHENTICATOR_PICKER_STORAGE_PREFIX)) {
         storageKeys.push(key)
-        if (this.isPendingAuthenticatorPicker(value)) {
+        const decoded = runConcreteDecoder(
+          decodePendingAuthenticatorPicker,
+          value,
+        )
+        if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
+          const request = decoded.value
           const cancellation: WebsiteAuthenticatorCanceledMessage = {
             type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
-            payload: { origin: value.origin, requestId: value.requestId },
+            payload: { origin: request.origin, requestId: request.requestId },
           }
           const targetedCancellation: AccountPickerCancellation = {
-            tabId: value.tabId,
-            frameId: value.frameId,
+            tabId: request.tabId,
+            frameId: request.frameId,
             message: cancellation,
           }
           cancellations.push(targetedCancellation)
         }
       } else if (key.startsWith(LOGIN_PICKER_STORAGE_PREFIX)) {
         storageKeys.push(key)
-        if (this.isPendingAuthenticatorPicker(value)) {
+        const decoded = runConcreteDecoder(
+          decodePendingAuthenticatorPicker,
+          value,
+        )
+        if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
+          const request = decoded.value
           const cancellation: WebsiteLoginCanceledMessage = {
             type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
-            payload: { origin: value.origin, requestId: value.requestId },
+            payload: { origin: request.origin, requestId: request.requestId },
           }
           const targetedCancellation: AccountPickerCancellation = {
-            tabId: value.tabId,
-            frameId: value.frameId,
+            tabId: request.tabId,
+            frameId: request.frameId,
             message: cancellation,
           }
           cancellations.push(targetedCancellation)
@@ -446,36 +480,6 @@ class AccountPickerSessions {
     return `${AUTHENTICATOR_PICKER_STORAGE_PREFIX}${requestId}`
   }
 
-  private isPendingAuthenticatorPicker(
-    value: unknown,
-  ): value is PendingAuthenticatorPicker {
-    return (
-      !!value &&
-      typeof value === 'object' &&
-      'requestId' in value &&
-      typeof value.requestId === 'string' &&
-      'origin' in value &&
-      typeof value.origin === 'string' &&
-      'tabId' in value &&
-      typeof value.tabId === 'number' &&
-      Number.isInteger(value.tabId) &&
-      value.tabId >= 0 &&
-      'frameId' in value &&
-      typeof value.frameId === 'number' &&
-      Number.isInteger(value.frameId) &&
-      value.frameId >= 0 &&
-      'allowedVaultStoreIds' in value &&
-      Array.isArray(value.allowedVaultStoreIds) &&
-      value.allowedVaultStoreIds.every(
-        (vaultStoreId) =>
-          typeof vaultStoreId === 'string' && vaultStoreId.length > 0,
-      ) &&
-      'expiresAt' in value &&
-      typeof value.expiresAt === 'number' &&
-      Number.isFinite(value.expiresAt)
-    )
-  }
-
   async storeAuthenticatorPicker({
     request,
     authorizationGeneration,
@@ -530,9 +534,13 @@ class AccountPickerSessions {
       const stored = (await extensionPairingIdentity.getSessionStorage(key))[
         key
       ]
+      const decoded = runConcreteDecoder(
+        decodePendingAuthenticatorPicker,
+        stored,
+      )
       if (
-        !this.isPendingAuthenticatorPicker(stored) ||
-        stored.requestId !== requestId
+        decoded.kind === ConcreteDecoderResultKind.Rejected ||
+        decoded.value.requestId !== requestId
       ) {
         if (stored) await extensionPairingIdentity.removeSessionStorage(key)
         return { kind: AuthenticatorPickerLoadKind.Unavailable }
@@ -540,7 +548,7 @@ class AccountPickerSessions {
       if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
         return { kind: AuthenticatorPickerLoadKind.Unavailable }
       }
-      request = stored
+      request = decoded.value
       this.pendingAuthenticatorPickers.set(requestId, request)
     }
     if (request.expiresAt <= Date.now()) {
@@ -881,10 +889,6 @@ class AccountPickerSessions {
     return `${LOGIN_PICKER_STORAGE_PREFIX}${requestId}`
   }
 
-  private isPendingLoginPicker(value: unknown): value is PendingLoginPicker {
-    return this.isPendingAuthenticatorPicker(value)
-  }
-
   async storeLoginPicker({
     request,
     authorizationGeneration,
@@ -937,9 +941,13 @@ class AccountPickerSessions {
       const stored = (await extensionPairingIdentity.getSessionStorage(key))[
         key
       ]
+      const decoded = runConcreteDecoder(
+        decodePendingAuthenticatorPicker,
+        stored,
+      )
       if (
-        !this.isPendingLoginPicker(stored) ||
-        stored.requestId !== requestId
+        decoded.kind === ConcreteDecoderResultKind.Rejected ||
+        decoded.value.requestId !== requestId
       ) {
         if (stored) await extensionPairingIdentity.removeSessionStorage(key)
         return { kind: LoginPickerLoadKind.Unavailable }
@@ -947,7 +955,7 @@ class AccountPickerSessions {
       if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
         return { kind: LoginPickerLoadKind.Unavailable }
       }
-      request = stored
+      request = decoded.value
       this.pendingLoginPickers.set(requestId, request)
     }
     if (request.expiresAt <= Date.now()) {

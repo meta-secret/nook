@@ -1,3 +1,5 @@
+import { Schema } from 'effect'
+
 import type {
   AuthenticationOutcomeDecision,
   AuthenticationOutcomeResponse,
@@ -29,46 +31,35 @@ export class AuthenticationOutcomeClassifyMessage {
     observation: AuthenticationOutcomeObservationView
     timeoutMs: number
   }
-  static is(message: unknown): message is AuthenticationOutcomeClassifyMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !==
-        AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify ||
-      !('payload' in message) ||
-      !message.payload ||
-      typeof message.payload !== 'object' ||
-      Array.isArray(message.payload)
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    if (!('observation' in payload)) return false
-    const observation = payload.observation
-    if (!observation || typeof observation !== 'object') return false
-    return (
-      'navigatedAwayFromAuthPath' in observation &&
-      typeof observation.navigatedAwayFromAuthPath === 'boolean' &&
-      'authFieldsPresent' in observation &&
-      typeof observation.authFieldsPresent === 'boolean' &&
-      'successMarkerPresent' in observation &&
-      typeof observation.successMarkerPresent === 'boolean' &&
-      'errorMarkerPresent' in observation &&
-      typeof observation.errorMarkerPresent === 'boolean' &&
-      'sameDocumentMutation' in observation &&
-      typeof observation.sameDocumentMutation === 'boolean' &&
-      'inIframe' in observation &&
-      typeof observation.inIframe === 'boolean' &&
-      'elapsedMs' in observation &&
-      typeof observation.elapsedMs === 'number' &&
-      Number.isFinite(observation.elapsedMs) &&
-      observation.elapsedMs >= 0 &&
-      'timeoutMs' in payload &&
-      typeof payload.timeoutMs === 'number' &&
-      Number.isFinite(payload.timeoutMs) &&
-      payload.timeoutMs > 0
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(authenticationOutcomeClassifyMessageSchema)(
+      message,
     )
   }
 }
+
+export const AuthenticationOutcomeObservationViewSchema = Schema.Struct({
+  navigatedAwayFromAuthPath: Schema.Boolean,
+  authFieldsPresent: Schema.Boolean,
+  successMarkerPresent: Schema.Boolean,
+  errorMarkerPresent: Schema.Boolean,
+  sameDocumentMutation: Schema.Boolean,
+  inIframe: Schema.Boolean,
+  elapsedMs: Schema.Number.pipe(
+    Schema.filter((elapsedMs) => Number.isFinite(elapsedMs)),
+    Schema.filter((elapsedMs) => elapsedMs >= 0),
+  ),
+}) satisfies Schema.Schema<AuthenticationOutcomeObservationView>
+
+const authenticationOutcomeClassifyMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
+  ),
+  payload: Schema.Struct({
+    observation: AuthenticationOutcomeObservationViewSchema,
+    timeoutMs: Schema.Number.pipe(
+      Schema.filter((timeoutMs) => Number.isFinite(timeoutMs)),
+      Schema.filter((timeoutMs) => timeoutMs > 0),
+    ),
+  }),
+}) satisfies Schema.Schema<AuthenticationOutcomeClassifyMessage>

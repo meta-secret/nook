@@ -3,6 +3,10 @@ import {
   type WebsiteLoginRevealMessage,
   WebsiteLoginOptionsMessage as WebsiteLoginOptionsMessageSchema,
 } from '../../lib/login-fill-messages'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 
 export enum LoginFillDeliveryKind {
   Delivered = 'delivered',
@@ -25,12 +29,18 @@ class LoginFillRuntimeTransport {
   ): Promise<LoginFillDelivery> {
     return new Promise((resolve) => {
       this.browser.chrome.runtime.sendMessage(message, (response: unknown) => {
-        if (
-          this.browser.chrome.runtime.lastError ||
-          !response ||
-          typeof response !== 'object' ||
-          !WebsiteLoginOptionsMessageSchema.isWebsiteLoginFillResponse(response)
-        ) {
+        if (this.browser.chrome.runtime.lastError) {
+          const unavailable: LoginFillDelivery = {
+            kind: LoginFillDeliveryKind.Unavailable,
+          }
+          resolve(unavailable)
+          return
+        }
+        const decoded = runConcreteDecoder(
+          WebsiteLoginOptionsMessageSchema.decodeWebsiteLoginFillResponse,
+          response,
+        )
+        if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
           const unavailable: LoginFillDelivery = {
             kind: LoginFillDeliveryKind.Unavailable,
           }
@@ -39,7 +49,7 @@ class LoginFillRuntimeTransport {
         }
         const delivered: LoginFillDelivery = {
           kind: LoginFillDeliveryKind.Delivered,
-          response,
+          response: decoded.value,
         }
         resolve(delivered)
       })

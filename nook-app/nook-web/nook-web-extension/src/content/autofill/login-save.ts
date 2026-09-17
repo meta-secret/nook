@@ -75,11 +75,6 @@ type StageSaveOfferRequest = {
   credentials: LoginCredentials
 }
 
-type CrossWorldSubmitEvent = Event & {
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Browser-world input is narrowed immediately by AuthenticationSubmitEvent.
-  readonly submitter: unknown
-}
-
 enum AuthenticationSubmitterKind {
   Absent = 'absent',
   Present = 'present',
@@ -106,31 +101,25 @@ type AuthenticationSubmitEventAdmission =
 
 /** Admits submit semantics without relying on page/isolated-world prototypes. */
 class AuthenticationSubmitEvent {
-  private static hasSubmitter(event: Event): event is CrossWorldSubmitEvent {
-    return 'submitter' in event
-  }
-
   static admit(event: Event): AuthenticationSubmitEventAdmission {
-    if (event.type !== 'submit' || !this.hasSubmitter(event)) {
+    if (event.type !== 'submit' || !('submitter' in event)) {
       return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
     }
-    if (!event.submitter) {
+    const submitter = event.submitter
+    if (!submitter) {
       return {
         kind: AuthenticationSubmitEventAdmissionKind.Admitted,
         submitter: { kind: AuthenticationSubmitterKind.Absent },
       }
     }
-    if (!(
-      event.submitter instanceof HTMLButtonElement ||
-      event.submitter instanceof HTMLInputElement
-    )) {
+    if (!(submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement)) {
       return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
     }
     return {
       kind: AuthenticationSubmitEventAdmissionKind.Admitted,
       submitter: {
         kind: AuthenticationSubmitterKind.Present,
-        control: event.submitter,
+        control: submitter,
       },
     }
   }

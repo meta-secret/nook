@@ -91,7 +91,4 @@ export class AuthenticationWorkflowSnapshotIngress {
   ): ReturnType<typeof admit_authentication_workflow_snapshot_message> {
     return admit_authentication_workflow_snapshot_message(value)
   }
-  static is(value: unknown): value is AuthenticationWorkflowSnapshotMessage {
-    return this.admit(value).kind === 'accepted'
-  }
 }

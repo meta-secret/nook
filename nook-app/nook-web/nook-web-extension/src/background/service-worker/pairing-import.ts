@@ -7,11 +7,15 @@ import {
 import {
   type ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
-  type ExtensionPairingApprovedMessageAdmissionFailure,
+  type RuntimeMessageDecodeFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ProviderCredentialBuffer } from '../../lib/provider-credential-staging'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -43,8 +47,7 @@ type PairingIngressAdmission =
     }
   | {
       readonly kind: PairingIngressAdmissionKind.Rejected
-      readonly reason:
-        PairingIngressFailure | ExtensionPairingApprovedMessageAdmissionFailure
+      readonly reason: PairingIngressFailure | RuntimeMessageDecodeFailure
     }
 
 export class ExtensionPairingIngress {
@@ -59,22 +62,19 @@ export class ExtensionPairingIngress {
         reason: PairingIngressFailure.RuntimeUnavailable,
       }
     }
-    try {
-      const admission = ExtensionPairingApprovedMessageSchema.parse(message)
-      return admission.isOk()
-        ? {
-            kind: PairingIngressAdmissionKind.Admitted,
-            message: admission.value,
-          }
-        : {
-            kind: PairingIngressAdmissionKind.Rejected,
-            reason: admission.error,
-          }
-    } catch {
+    const admission = runConcreteDecoder(
+      ExtensionPairingApprovedMessageSchema.decode,
+      message,
+    )
+    if (admission.kind === ConcreteDecoderResultKind.Rejected) {
       return {
         kind: PairingIngressAdmissionKind.Rejected,
-        reason: PairingIngressFailure.AdmissionFailed,
+        reason: admission.failure,
       }
+    }
+    return {
+      kind: PairingIngressAdmissionKind.Admitted,
+      message: admission.value,
     }
   }
 }
@@ -455,9 +455,13 @@ export async function importLocalEventLogUpdateWithDependencies({
       }
     }
     const setup = stored[setupStorageKey]
+    const setupDecode = runConcreteDecoder(
+      pairingPolicy.decodeExtensionReadySetupState,
+      setup,
+    )
     const select =
-      pairingPolicy.isExtensionReadySetupState(setup) &&
-      setup.selectedVaultStoreId === vaultStoreId
+      setupDecode.kind === ConcreteDecoderResultKind.Decoded &&
+      setupDecode.value.selectedVaultStoreId === vaultStoreId
     const pairingItemsArgs: Parameters<
       typeof pairingPolicy.extensionStoredPairingGrantStorageItems
     >[0] = { grant, imported, select }

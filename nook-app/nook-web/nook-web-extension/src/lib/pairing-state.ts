@@ -1,7 +1,12 @@
+import { Schema } from 'effect'
 import {
   extensionPairingGrantPolicyReady,
   type ExtensionReadySetupState,
 } from '../background/pairing-grants'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from './concrete-decoder'
 
 export enum ExtensionPairingStateQueryMessageType {
   NookExtensionPairingStateQuery = 'nook:extension-pairing-state-query',
@@ -11,20 +16,22 @@ export enum ExtensionPairingStateQueryMessageType {
 export class ExtensionPairingStateQueryMessage {
   private constructor() {}
   declare readonly type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
-  static is(message: unknown): message is ExtensionPairingStateQueryMessage {
-    return (
-      !!message &&
-      typeof message === 'object' &&
-      'type' in message &&
-      message.type ===
-        ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(extensionPairingStateQueryMessageSchema)(
+      message,
     )
   }
 }
 
+const extensionPairingStateQueryMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+  ),
+}) satisfies Schema.Schema<ExtensionPairingStateQueryMessage>
+
 type ExtensionPairingStateLoaderPolicy = Pick<
   Awaited<typeof extensionPairingGrantPolicyReady>,
-  'isExtensionReadySetupState'
+  'decodeExtensionReadySetupState'
 >
 
 export type ExtensionPairingStateLoaderArgs = {
@@ -51,9 +58,19 @@ export class ExtensionPairingStateLoader {
             typeof runtimeResponse !== 'object' ||
             !('ok' in runtimeResponse) ||
             runtimeResponse.ok !== true ||
-            !('setup' in runtimeResponse) ||
-            !pairingPolicy.isExtensionReadySetupState(runtimeResponse.setup)
+            !('setup' in runtimeResponse)
           ) {
+            const unavailable: ExtensionSetupLoad = {
+              kind: ExtensionSetupLoadKind.Unavailable,
+            }
+            resolve(unavailable)
+            return
+          }
+          const setup = runConcreteDecoder(
+            pairingPolicy.decodeExtensionReadySetupState,
+            runtimeResponse.setup,
+          )
+          if (setup.kind === ConcreteDecoderResultKind.Rejected) {
             const unavailable: ExtensionSetupLoad = {
               kind: ExtensionSetupLoadKind.Unavailable,
             }
@@ -62,7 +79,7 @@ export class ExtensionPairingStateLoader {
           }
           const ready: ExtensionSetupLoad = {
             kind: ExtensionSetupLoadKind.Ready,
-            setup: runtimeResponse.setup,
+            setup: setup.value,
           }
           resolve(ready)
         },

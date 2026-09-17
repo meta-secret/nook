@@ -1,4 +1,4 @@
-import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
+import { Schema } from 'effect'
 
 export enum WebsiteAuthenticatorEnrollPreviewMessageType {
   NookWebsiteAuthenticatorEnrollPreview = 'nook:website-authenticator-enroll-preview',
@@ -12,28 +12,13 @@ export class WebsiteAuthenticatorEnrollPreviewMessage {
     origin: string
     otpauthUri: string
   }
-  static isOtpauthTotpUri(value: string): value is string {
-    return typeof value === 'string' && value.startsWith('otpauth://totp/')
+  static decodeOtpauthTotpUri(value: unknown) {
+    return Schema.decodeUnknown(otpauthTotpUriSchema)(value)
   }
 
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollPreviewMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'otpauthUri' in payload &&
-      typeof payload.otpauthUri === 'string' &&
-      WebsiteAuthenticatorEnrollPreviewMessage.isOtpauthTotpUri(
-        payload.otpauthUri,
-      )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollPreviewMessageSchema)(
+      message,
     )
   }
 }
@@ -51,27 +36,9 @@ export class WebsiteAuthenticatorEnrollStageMessage {
     vaultStoreId: string
     otpauthUri: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollStageMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'vaultStoreId' in payload &&
-      typeof payload.vaultStoreId === 'string' &&
-      payload.vaultStoreId.length > 0 &&
-      'otpauthUri' in payload &&
-      typeof payload.otpauthUri === 'string' &&
-      WebsiteAuthenticatorEnrollPreviewMessage.isOtpauthTotpUri(
-        payload.otpauthUri,
-      )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollStageMessageSchema)(
+      message,
     )
   }
 }
@@ -88,22 +55,9 @@ export class WebsiteAuthenticatorEnrollCodeMessage {
     origin: string
     stageId: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollCodeMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'stageId' in payload &&
-      typeof payload.stageId === 'string' &&
-      payload.stageId.length > 0
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorEnrollCodeMessageSchema)(
+      message,
     )
   }
 }
@@ -121,26 +75,10 @@ export class WebsiteAuthenticatorEnrollConfirmMessage {
     vaultStoreId: string
     stageId: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollConfirmMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'vaultStoreId' in payload &&
-      typeof payload.vaultStoreId === 'string' &&
-      payload.vaultStoreId.length > 0 &&
-      'stageId' in payload &&
-      typeof payload.stageId === 'string' &&
-      payload.stageId.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(
+      websiteAuthenticatorEnrollConfirmMessageSchema,
+    )(message)
   }
 }
 
@@ -156,23 +94,10 @@ export class WebsiteAuthenticatorEnrollDismissMessage {
     origin: string
     stageId: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollDismissMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'stageId' in payload &&
-      typeof payload.stageId === 'string' &&
-      payload.stageId.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(
+      websiteAuthenticatorEnrollDismissMessageSchema,
+    )(message)
   }
 }
 
@@ -187,14 +112,10 @@ export class WebsiteAuthenticatorEnrollPendingMessage {
   declare readonly payload: {
     origin: string
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorEnrollPendingMessage {
-    return (
-      OriginRuntimeMessageSchema.is(message) &&
-      message.type ===
-        WebsiteAuthenticatorEnrollPendingMessageType.NookWebsiteAuthenticatorEnrollPending
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(
+      websiteAuthenticatorEnrollPendingMessageSchema,
+    )(message)
   }
 }
 
@@ -220,33 +141,96 @@ export class WebsiteAuthenticatorBackupAttachMessage {
       | WebsiteAuthenticatorBackupAttachMessageMode.Replace
       | WebsiteAuthenticatorBackupAttachMessageMode.Merge
   }
-  static is(
-    message: unknown,
-  ): message is WebsiteAuthenticatorBackupAttachMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'vaultStoreId' in payload &&
-      typeof payload.vaultStoreId === 'string' &&
-      payload.vaultStoreId.length > 0 &&
-      'secretId' in payload &&
-      typeof payload.secretId === 'string' &&
-      payload.secretId.length > 0 &&
-      'codes' in payload &&
-      Array.isArray(payload.codes) &&
-      payload.codes.every((code) => typeof code === 'string') &&
-      'mode' in payload &&
-      (payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Replace ||
-        payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Merge)
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorBackupAttachMessageSchema)(
+      message,
     )
   }
 }
+
+const enrollmentNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+
+const enrollmentOriginSchema = Schema.Struct({
+  origin: enrollmentNonEmptyStringSchema,
+})
+
+const otpauthTotpUriSchema = Schema.String.pipe(
+  Schema.filter((value) => value.startsWith('otpauth://totp/')),
+)
+
+const websiteAuthenticatorEnrollPreviewMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    otpauthUri: otpauthTotpUriSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollPreviewMessage>
+
+const websiteAuthenticatorEnrollStageMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    vaultStoreId: enrollmentNonEmptyStringSchema,
+    otpauthUri: otpauthTotpUriSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollStageMessage>
+
+const websiteAuthenticatorEnrollCodeMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    stageId: enrollmentNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollCodeMessage>
+
+const websiteAuthenticatorEnrollConfirmMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    vaultStoreId: enrollmentNonEmptyStringSchema,
+    stageId: enrollmentNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollConfirmMessage>
+
+const websiteAuthenticatorEnrollDismissMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    stageId: enrollmentNonEmptyStringSchema,
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollDismissMessage>
+
+const websiteAuthenticatorEnrollPendingMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorEnrollPendingMessageType.NookWebsiteAuthenticatorEnrollPending,
+  ),
+  payload: enrollmentOriginSchema,
+}) satisfies Schema.Schema<WebsiteAuthenticatorEnrollPendingMessage>
+
+const websiteAuthenticatorBackupAttachMessageSchema = Schema.Struct({
+  type: Schema.Literal(
+    WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach,
+  ),
+  payload: Schema.Struct({
+    ...enrollmentOriginSchema.fields,
+    vaultStoreId: enrollmentNonEmptyStringSchema,
+    secretId: enrollmentNonEmptyStringSchema,
+    codes: Schema.Array(Schema.String),
+    mode: Schema.Literal(
+      WebsiteAuthenticatorBackupAttachMessageMode.Replace,
+      WebsiteAuthenticatorBackupAttachMessageMode.Merge,
+    ),
+  }),
+}) satisfies Schema.Schema<WebsiteAuthenticatorBackupAttachMessage>
 
 export type { AuthenticatorEnrollmentPreview as OtpauthEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'

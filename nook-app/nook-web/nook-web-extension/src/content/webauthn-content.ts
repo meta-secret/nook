@@ -1,3 +1,4 @@
+import { Schema } from 'effect'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -20,13 +21,16 @@ import type {
   WebsitePasskeyOptionsResponse,
   WebsitePasskeyPerformMessage,
   WebsitePasskeyPerformResponse,
-  WebsitePasskeyRequest,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,
   websitePasskeyOptionsDisposition,
   WebsitePasskeyOptionsDispositionKind,
 } from './webauthn-options-response'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
 
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
@@ -42,9 +46,25 @@ type PageRequest = {
   type: PageRequestType.Request
   requestId: string
   ceremony: WebsitePasskeyCeremony
-  request: WebsitePasskeyRequest['value']
+  requestJson: string
+  relyingPartyName?: string
+  rpId?: string
   expiresAt: number
 }
+
+enum PageRequestBodyDecodeKind {
+  Rejected = 'rejected',
+  Decoded = 'decoded',
+}
+
+type PageRequestBodyDecode =
+  | { kind: PageRequestBodyDecodeKind.Rejected }
+  | {
+      kind: PageRequestBodyDecodeKind.Decoded
+      requestJson: string
+      relyingPartyName?: string
+      rpId?: string
+    }
 
 type PasskeyOption = {
   vaultStoreId: string
@@ -115,20 +135,33 @@ class WebAuthnRuntimeTransport<T> {
   }
 }
 
-function isPasskeyOption(value: unknown): value is PasskeyOption {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'vaultStoreId' in value &&
-    typeof value.vaultStoreId === 'string' &&
-    'vaultName' in value &&
-    typeof value.vaultName === 'string'
-  )
+const passkeyOptionSchema = Schema.Struct({
+  vaultStoreId: Schema.String,
+  vaultName: Schema.String,
+  account: Schema.optionalWith(
+    Schema.Struct({
+      credentialId: Schema.String,
+      userName: Schema.String,
+      userDisplayName: Schema.String,
+    }),
+    { as: 'Option' },
+  ),
+}) satisfies Schema.Schema<PasskeyOption>
+
+function decodePasskeyOption(value: unknown) {
+  return Schema.decodeUnknown(passkeyOptionSchema)(value)
 }
 
 function validOptions(value: unknown): PasskeyOption[] {
   if (!Array.isArray(value)) return []
-  return value.filter(isPasskeyOption)
+  const options: PasskeyOption[] = []
+  for (const candidate of value) {
+    const decoded = runConcreteDecoder(decodePasskeyOption, candidate)
+    if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
+      options.push(decoded.value)
+    }
+  }
+  return options
 }
 
 function removePrompt(requestId: string): void {
@@ -169,13 +202,9 @@ function chooseOption({
     heading.textContent = t(nookTypedArgs0_0)
     const detail = document.createElement('p')
     const rp =
-      request.ceremony === WebsitePasskeyCeremony.Create &&
-      'relyingParty' in request.request &&
-      'name' in request.request.relyingParty
-        ? request.request.relyingParty.name
-        : 'rpId' in request.request
-          ? request.request.rpId
-          : location.hostname
+      request.ceremony === WebsitePasskeyCeremony.Create
+        ? request.relyingPartyName
+        : request.rpId
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
     const choices = document.createElement('div')
     for (const option of options) {
@@ -230,7 +259,7 @@ function chooseOption({
 }
 
 async function handleRequest(request: PageRequest): Promise<void> {
-  const requestJson = JSON.stringify(request.request)
+  const requestJson = request.requestJson
   const nookTypedArgs0_4: WebsitePasskeyOptionsMessage = {
     type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
     payload: {
@@ -316,14 +345,41 @@ async function handleRequest(request: PageRequest): Promise<void> {
 
 /** Admits the page message envelope before Rust validates its serialized payload. */
 class WebAuthnPageIngress {
-  private static isRequestBody(
-    value: unknown,
-  ): value is PageRequest['request'] {
-    return (
-      !!value &&
-      typeof value === 'object' &&
-      JSON.stringify(value).length <= 65_536
-    )
+  private static decodeRequestBody(value: unknown): PageRequestBodyDecode {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { kind: PageRequestBodyDecodeKind.Rejected }
+    }
+    let requestJson: string
+    try {
+      requestJson = JSON.stringify(value)
+    } catch {
+      return { kind: PageRequestBodyDecodeKind.Rejected }
+    }
+    if (!requestJson || requestJson.length > 65_536) {
+      return { kind: PageRequestBodyDecodeKind.Rejected }
+    }
+    let relyingPartyName: string | undefined
+    let rpId: string | undefined
+    if ('relyingParty' in value) {
+      const relyingParty = value.relyingParty
+      if (
+        relyingParty &&
+        typeof relyingParty === 'object' &&
+        'name' in relyingParty &&
+        typeof relyingParty.name === 'string'
+      ) {
+        relyingPartyName = relyingParty.name
+      }
+    }
+    if ('rpId' in value && typeof value.rpId === 'string') {
+      rpId = value.rpId
+    }
+    return {
+      kind: PageRequestBodyDecodeKind.Decoded,
+      requestJson,
+      ...(relyingPartyName !== undefined ? { relyingPartyName } : {}),
+      ...(rpId !== undefined ? { rpId } : {}),
+    }
   }
 
   static receive(event: MessageEvent): void {
@@ -363,16 +419,21 @@ class WebAuthnPageIngress {
       typeof message.expiresAt !== 'number' ||
       !Number.isFinite(message.expiresAt) ||
       message.expiresAt <= Date.now() ||
-      !('request' in message) ||
-      !WebAuthnPageIngress.isRequestBody(message.request)
+      !('request' in message)
     )
       return
+    const requestBody = WebAuthnPageIngress.decodeRequestBody(message.request)
+    if (requestBody.kind === PageRequestBodyDecodeKind.Rejected) return
     const request: PageRequest = {
       source: REQUEST_SOURCE,
       type: PageRequestType.Request,
       requestId,
       ceremony: message.ceremony,
-      request: message.request,
+      requestJson: requestBody.requestJson,
+      ...(requestBody.relyingPartyName !== undefined
+        ? { relyingPartyName: requestBody.relyingPartyName }
+        : {}),
+      ...(requestBody.rpId !== undefined ? { rpId: requestBody.rpId } : {}),
       expiresAt: message.expiresAt,
     }
     void handleRequest(request).catch(() => {

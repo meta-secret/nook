@@ -51,7 +51,7 @@ type MatchingPasskeyAvailabilityForOriginArgs = {
 }
 
 type WebsitePasskeyOptionsArgs = {
-  message: Parameters<typeof WebsitePasskeyOptionsMessageSchema.is>[0] & {
+  message: Parameters<typeof WebsitePasskeyOptionsMessageSchema.decode>[0] & {
     payload: {
       requestId: string
       ceremony: WebsitePasskeyCeremony
@@ -73,7 +73,7 @@ export type WebsitePasskeyOptionsDependencies = {
 }
 
 type PerformWebsitePasskeyArgs = {
-  message: Parameters<typeof WebsitePasskeyPerformMessageSchema.is>[0] & {
+  message: Parameters<typeof WebsitePasskeyPerformMessageSchema.decode>[0] & {
     payload: {
       requestId: string
       ceremony: WebsitePasskeyCeremony
@@ -87,7 +87,7 @@ type PerformWebsitePasskeyArgs = {
 }
 
 type CancelWebsitePasskeyArgs = {
-  message: Parameters<typeof WebsitePasskeyCancelMessageSchema.is>[0] & {
+  message: Parameters<typeof WebsitePasskeyCancelMessageSchema.decode>[0] & {
     payload: { requestId: string }
   }
   sender: chrome.runtime.MessageSender

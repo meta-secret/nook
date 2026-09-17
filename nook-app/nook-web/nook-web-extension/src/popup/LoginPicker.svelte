@@ -15,6 +15,14 @@
     | { ok: true; origin: string; accounts?: WebsiteLoginAccountOption[] }
     | { ok: true }
     | { ok: false; reason?: string }
+  type LoginPickerAccountQueryResponse = Extract<
+    LoginPickerRuntimeResponse,
+    { ok: true; origin: string }
+  >
+  type LoginPickerRuntimeResponseDecode =
+    | { kind: 'account-query'; response: LoginPickerAccountQueryResponse }
+    | { kind: 'success'; response: { ok: true } }
+    | { kind: 'rejected' }
   import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
@@ -54,29 +62,21 @@
     })
   }
 
-  function isOkResponse(
+  function decodeLoginPickerRuntimeResponse(
     response: LoginPickerRuntimeResponse | undefined,
-  ): response is { ok: true } {
-    return Boolean(
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true,
-    )
-  }
-
-  function isAccountQueryResponse(
-    response: LoginPickerRuntimeResponse | undefined,
-  ): response is {
-    ok: true
-    origin: string
-    accounts?: WebsiteLoginAccountOption[]
-  } {
-    return (
-      isOkResponse(response) &&
-      'origin' in response &&
-      typeof response.origin === 'string'
-    )
+  ): LoginPickerRuntimeResponseDecode {
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true
+    ) {
+      return { kind: 'rejected' }
+    }
+    if ('origin' in response && typeof response.origin === 'string') {
+      return { kind: 'account-query', response }
+    }
+    return { kind: 'success', response }
   }
 
   function accountPrimaryLabel(account: WebsiteLoginAccountOption): string {
@@ -107,14 +107,15 @@
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!isAccountQueryResponse(response)) {
+    const responseDecode = decodeLoginPickerRuntimeResponse(response)
+    if (responseDecode.kind !== 'account-query') {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
-    destinationOrigin = response.origin
-    accounts = ((v) => (v ? v : []))(response.accounts)
+    destinationOrigin = responseDecode.response.origin
+    accounts = ((v) => (v ? v : []))(responseDecode.response.accounts)
   }
 
   async function choose(account: WebsiteLoginAccountOption): Promise<void> {
@@ -130,7 +131,7 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (isOkResponse(response)) {
+    if (decodeLoginPickerRuntimeResponse(response).kind !== 'rejected') {
       completed = true
       window.close()
       return

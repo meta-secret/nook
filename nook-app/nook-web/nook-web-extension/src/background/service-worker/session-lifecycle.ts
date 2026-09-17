@@ -1,3 +1,4 @@
+import { Schema } from 'effect'
 import {
   ExtensionSessionDocumentOwner,
   ExtensionSessionDocumentStateKind,
@@ -9,6 +10,7 @@ import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
+import { ConcreteDecoderResultKind, runConcreteDecoder } from '../../lib/concrete-decoder'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
@@ -18,6 +20,16 @@ type AuthenticationSurfaceNotification = {
 
 type AuthenticationSurfaceRefreshSuccess = { ok: true }
 type AuthenticationSurfaceRefreshResponse = { ok?: boolean }
+
+const authenticationSurfaceRefreshSuccessSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+}) satisfies Schema.Schema<AuthenticationSurfaceRefreshSuccess>
+
+function decodeAuthenticationSurfaceRefreshSuccess(response: unknown) {
+  return Schema.decodeUnknown(authenticationSurfaceRefreshSuccessSchema)(
+    response,
+  )
+}
 
 type AuthenticationSurfaceDeliveryRequest = {
   tabId: number
@@ -62,17 +74,6 @@ export class ExtensionSessionLifecycle {
     await chrome.tabs.create(nookTypedArgs0_1)
   }
 
-  private authenticationSurfaceRefreshSucceeded(
-    response: unknown,
-  ): response is AuthenticationSurfaceRefreshSuccess {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true
-    )
-  }
-
   private async authenticationSurfaceTabId(
     tab: chrome.tabs.Tab,
   ): Promise<number | false> {
@@ -104,7 +105,11 @@ export class ExtensionSessionLifecycle {
       chrome.tabs.sendMessage(targetTabId, targetMessage)
     const request: AuthenticationSurfaceDeliveryRequest = { tabId, message }
     const response = await sendTabMessage(request)
-    if (!this.authenticationSurfaceRefreshSucceeded(response)) {
+    const decoded = runConcreteDecoder(
+      decodeAuthenticationSurfaceRefreshSuccess,
+      response,
+    )
+    if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
       throw new Error('authentication surface refresh rejected')
     }
   }

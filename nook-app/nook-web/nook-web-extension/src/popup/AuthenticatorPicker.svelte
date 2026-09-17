@@ -15,6 +15,14 @@
     | { ok: true; origin: string; accounts?: WebsiteAuthenticatorOption[] }
     | { ok: true }
     | { ok: false; reason?: string }
+  type AuthenticatorPickerAccountQueryResponse = Extract<
+    AuthenticatorPickerRuntimeResponse,
+    { ok: true; origin: string }
+  >
+  type AuthenticatorPickerRuntimeResponseDecode =
+    | { kind: 'account-query'; response: AuthenticatorPickerAccountQueryResponse }
+    | { kind: 'success'; response: { ok: true } }
+    | { kind: 'rejected' }
   import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
@@ -54,29 +62,21 @@
     })
   }
 
-  function isOkResponse(
+  function decodeAuthenticatorPickerRuntimeResponse(
     response: AuthenticatorPickerRuntimeResponse | undefined,
-  ): response is { ok: true } {
-    return Boolean(
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true,
-    )
-  }
-
-  function isAccountQueryResponse(
-    response: AuthenticatorPickerRuntimeResponse | undefined,
-  ): response is {
-    ok: true
-    origin: string
-    accounts?: WebsiteAuthenticatorOption[]
-  } {
-    return (
-      isOkResponse(response) &&
-      'origin' in response &&
-      typeof response.origin === 'string'
-    )
+  ): AuthenticatorPickerRuntimeResponseDecode {
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true
+    ) {
+      return { kind: 'rejected' }
+    }
+    if ('origin' in response && typeof response.origin === 'string') {
+      return { kind: 'account-query', response }
+    }
+    return { kind: 'success', response }
   }
 
   function destinationLabel(origin: string): string {
@@ -99,14 +99,15 @@
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!isAccountQueryResponse(response)) {
+    const responseDecode = decodeAuthenticatorPickerRuntimeResponse(response)
+    if (responseDecode.kind !== 'account-query') {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
       return
     }
-    destinationOrigin = response.origin
-    accounts = ((v) => (v ? v : []))(response.accounts)
+    destinationOrigin = responseDecode.response.origin
+    accounts = ((v) => (v ? v : []))(responseDecode.response.accounts)
   }
 
   async function choose(account: WebsiteAuthenticatorOption): Promise<void> {
@@ -122,7 +123,9 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (isOkResponse(response)) {
+    if (
+      decodeAuthenticatorPickerRuntimeResponse(response).kind !== 'rejected'
+    ) {
       completed = true
       window.close()
       return

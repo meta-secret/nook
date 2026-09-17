@@ -1,16 +1,22 @@
+import { Schema } from 'effect'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import { ExtensionSessionLifecycleMessageType } from '../../lib/extension-session-lifecycle-message-type'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 
-type ExtensionSessionRuntimeMessage = {
-  type:
-    | ExtensionRuntimeRequestType.EnsureRuntime
-    | ExtensionSessionLifecycleMessageType.Expired
-    | ExtensionSessionMessageType.Lock
+export type ExtensionSessionEnsureMessage = {
+  type: ExtensionRuntimeRequestType.EnsureRuntime
 }
 
-type AuthenticationSurfacesRefreshMessage = {
+export type ExtensionAuthenticationSurfacesRefreshMessage = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
+export type ExtensionSessionExpiryMessage = {
+  type: ExtensionSessionLifecycleMessageType.Expired
+}
+
+export type ExtensionSessionLockMessage = {
+  type: ExtensionSessionMessageType.Lock
 }
 
 export type ExtensionSessionRuntimeMessageInput = {
@@ -29,46 +35,38 @@ export type ExtensionSessionRuntimeMessageValue =
   | number
   | boolean
 
-export function isExtensionSessionEnsureMessage(
-  message: ExtensionSessionRuntimeMessageValue,
-): message is ExtensionSessionRuntimeMessage {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionRuntimeRequestType.EnsureRuntime
-  )
+const extensionSessionEnsureMessageSchema = Schema.Struct({
+  type: Schema.Literal(ExtensionRuntimeRequestType.EnsureRuntime),
+}) satisfies Schema.Schema<ExtensionSessionEnsureMessage>
+
+const extensionAuthenticationSurfacesRefreshMessageSchema = Schema.Struct({
+  type: Schema.Literal(ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces),
+}) satisfies Schema.Schema<ExtensionAuthenticationSurfacesRefreshMessage>
+
+const extensionSessionExpiryMessageSchema = Schema.Struct({
+  type: Schema.Literal(ExtensionSessionLifecycleMessageType.Expired),
+}) satisfies Schema.Schema<ExtensionSessionExpiryMessage>
+
+const extensionSessionLockMessageSchema = Schema.Struct({
+  type: Schema.Literal(ExtensionSessionMessageType.Lock),
+}) satisfies Schema.Schema<ExtensionSessionLockMessage>
+
+export function decodeExtensionSessionEnsureMessage(message: unknown) {
+  return Schema.decodeUnknown(extensionSessionEnsureMessageSchema)(message)
 }
 
-export function isExtensionAuthenticationSurfacesRefreshMessage(
-  message: ExtensionSessionRuntimeMessageValue,
-): message is AuthenticationSurfacesRefreshMessage {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
-  )
+export function decodeExtensionAuthenticationSurfacesRefreshMessage(
+  message: unknown,
+) {
+  return Schema.decodeUnknown(
+    extensionAuthenticationSurfacesRefreshMessageSchema,
+  )(message)
 }
 
-export function isExtensionSessionExpiryMessage(
-  message: ExtensionSessionRuntimeMessageValue,
-): message is ExtensionSessionRuntimeMessage {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionSessionLifecycleMessageType.Expired
-  )
+export function decodeExtensionSessionExpiryMessage(message: unknown) {
+  return Schema.decodeUnknown(extensionSessionExpiryMessageSchema)(message)
 }
 
-export function isExtensionSessionLockMessage(
-  message: ExtensionSessionRuntimeMessageValue,
-): message is ExtensionSessionRuntimeMessage {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionSessionMessageType.Lock
-  )
+export function decodeExtensionSessionLockMessage(message: unknown) {
+  return Schema.decodeUnknown(extensionSessionLockMessageSchema)(message)
 }
