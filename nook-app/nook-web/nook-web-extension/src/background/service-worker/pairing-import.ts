@@ -206,7 +206,7 @@ async function importDecodedApprovedPairing(
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
       const importMessage: {
-        type: ExtensionSessionMessageType.ImportVault
+        type: typeof ExtensionSessionMessageType.ImportVault
         payload: {
           vaultStoreId: string
           deviceId: string
