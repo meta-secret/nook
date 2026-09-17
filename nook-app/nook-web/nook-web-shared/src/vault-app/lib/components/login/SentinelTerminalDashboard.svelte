@@ -95,7 +95,6 @@
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   );
   const policyDraft = $derived(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     evaluate_sentinel_policy_draft({
       participants: participantCount,
       threshold,
@@ -151,7 +150,6 @@
 
   function chooseTotal(value: number) {
     participantCount = value;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const choices = evaluate_sentinel_policy_draft({
       participants: value,
       threshold,

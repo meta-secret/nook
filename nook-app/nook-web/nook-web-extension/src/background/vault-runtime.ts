@@ -235,7 +235,6 @@ class BackgroundVaultRuntime {
   }
 
   async decodeExtensionStorageProviders(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the WASM boundary directly.
     providers: StorageProvider[],
   ): Promise<StorageProvider[]> {
     await this.ensureExtensionWasm()

@@ -233,7 +233,6 @@ class ICloudOAuthSession {
     container: CloudKitContainer,
   ): Promise<Result<CloudKitIdentity, OAuthFailure>> {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const identity = await container.setUpAuth({
         grabAuthToken: true,
         persist: true,
@@ -243,7 +242,6 @@ class ICloudOAuthSession {
     } catch (error) {
       this.cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
       if (
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         new CloudKitSetupFailure({
           diagnostic: new CloudKitFailureDiagnostic(error),
           hasSignInControl: this.hasCloudKitSignInControl(),
@@ -299,7 +297,6 @@ class ICloudOAuthSession {
     if (token.isErr()) return err(token.error);
     if (token.value.kind === WebAuthTokenLookupKind.Unavailable)
       return err(new OAuthFailure(OAuthFailureKind.TokenUnavailable));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({
       accessToken: token.value.token,
       accountName: new CloudKitAccountPresentation(identity).name,
@@ -349,7 +346,6 @@ class ICloudOAuthSession {
       !rootRecordName
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({
       zoneID: {
         zoneName: zoneID.zoneName,
@@ -365,10 +361,8 @@ class ICloudOAuthSession {
     Result<CloudKitRecordPreview, OAuthFailure>
   > {
     if (!container.fetchRecordInfos)
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: CloudKitRecordPreviewKind.Unavailable });
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: CloudKitRecordPreviewKind.Available,
         response: await container.fetchRecordInfos([shortGuid]),
@@ -425,21 +419,18 @@ class ICloudOAuthSession {
       const rootRecordName = `nook-root-${suffix}`;
       await database.saveRecordZones([{ zoneName }]);
       const saved = await database.saveRecords(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         {
           recordType: "NookVault",
           recordName: rootRecordName,
           createShortGUID: true,
           fields: { content: { value: "" } },
         },
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         { zoneID: zoneName },
       );
       const root = saved.records[0];
       const shortGuid = root?.shortGUID?.trim();
       if (!root || !shortGuid)
         return err(new OAuthFailure(OAuthFailureKind.SharedIdentifierMissing));
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       await database.shareWithUI({
         record: root,
         zoneID: zoneName,
@@ -448,7 +439,6 @@ class ICloudOAuthSession {
         supportedAccess: [CloudKitShareAccess.Private],
         supportedPermissions: [CloudKitSharePermission.ReadWrite],
       });
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         role: "owner",
         zoneName,
@@ -502,7 +492,6 @@ class ICloudOAuthSession {
     ) {
       try {
         const target = encodedTarget.target;
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return ok({
           ...target,
           role: "owner",
@@ -520,7 +509,6 @@ class ICloudOAuthSession {
     }
     if (!container.acceptShares || !container.fetchRecordInfos)
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const preview = await this.previewCloudKitRecord({ container, shortGuid });
     if (preview.isErr()) return err(preview.error);
     let response: CloudKitRecordInfosResponse;
@@ -541,7 +529,6 @@ class ICloudOAuthSession {
     if (info.isErr()) return err(info.error);
     const { zoneID, rootRecordName } = info.value;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         role: "participant",
         zoneName: zoneID.zoneName,
@@ -561,7 +548,6 @@ class ICloudOAuthSession {
     }
   }
   private signInOutcome(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     outcome: Result<CloudKitIdentity, OAuthFailure>,
   ): Result<CloudKitIdentity, OAuthFailure> {
     if (outcome.isErr()) {
@@ -604,14 +590,12 @@ class ICloudOAuthSession {
       } catch (error) {
         if (
           !clickSignInControl ||
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           new CloudKitSetupFailure({
             diagnostic: new CloudKitFailureDiagnostic(error),
             hasSignInControl: this.hasCloudKitSignInControl(),
           }).expected
         ) {
           expectedFailure = true;
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           return ok({ kind: CloudKitIdentityKind.SignedOut });
         }
         return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
@@ -658,7 +642,6 @@ class ICloudOAuthSession {
       return this.requireStoredWebAuthToken();
     const container = cloudKitRuntime.getDefaultCloudKitContainer();
     if (container.isErr()) return err(container.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const identity = await this.waitForCloudKitSignIn({
       container: container.value,
       timeoutMs: request.signInTimeoutMs,
@@ -681,7 +664,6 @@ class ICloudOAuthSession {
       identity.value.kind === CloudKitIdentityKind.SignedOut &&
       stored.value.kind === WebAuthTokenLookupKind.Unavailable
     ) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const signedIn = await this.waitForCloudKitSignIn({
         container: container.value,
         timeoutMs: request.signInTimeoutMs,
@@ -714,13 +696,11 @@ class ICloudOAuthSession {
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
     if (oauth_access_token(config).kind === OAuthAccessTokenKind.Available)
       return ok(config);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const refreshed = await this.requestICloudWebAuthToken({
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
       clickSignInControl: true,
     });
     return refreshed.andThen((tokens) =>
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.oauthTokensToICloudConfig({
         tokens,
         existing: configuredOAuthFile(config),

@@ -19,7 +19,6 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
 
-// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
 export type OpenSettingsRequest = SettingsNavigationRequest & {};
 
 type SettingsViewSelection = {

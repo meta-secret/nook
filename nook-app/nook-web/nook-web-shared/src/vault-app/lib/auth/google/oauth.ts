@@ -72,7 +72,6 @@ type GoogleTokenClientConfig = {
   client_id: string;
   scope: string;
   callback: (response: GoogleTokenResponse) => void;
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
   error_callback: (failure: { type: string }) => void;
 };
 
@@ -124,7 +123,6 @@ type TokenRequest =
   | { kind: TokenRequestKind.Idle }
   | {
       kind: TokenRequestKind.AwaitingResponse;
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       resolve: (response: Result<GoogleOAuthTokens, OAuthFailure>) => void;
     };
 
@@ -180,9 +178,7 @@ class GoogleOAuthSession {
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
         if (existing) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("load", loaded, { once: true });
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
           existing.addEventListener("error", failed, { once: true });
           return;
         }
@@ -223,7 +219,6 @@ class GoogleOAuthSession {
     if (existing) return ok(existing);
     const oauth = window.google?.accounts.oauth2;
     if (!oauth) return err(new OAuthFailure(OAuthFailureKind.GoogleScript));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const complete = (outcome: Result<GoogleOAuthTokens, OAuthFailure>) => {
       const current = this.tokenClients.get(key);
       if (current?.request.kind !== TokenRequestKind.AwaitingResponse) return;
@@ -289,7 +284,6 @@ class GoogleOAuthSession {
     try {
       const expiresIn =
         typeof response.expires_in === "number" ? response.expires_in : 3600;
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         accessToken: response.access_token,
         expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
@@ -309,7 +303,6 @@ class GoogleOAuthSession {
     return new Promise((resolve) => {
       slot.request = { kind: TokenRequestKind.AwaitingResponse, resolve };
       try {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         slot.client.requestAccessToken({ prompt: request.prompt });
       } catch {
         slot.request = { kind: TokenRequestKind.Idle };
@@ -320,7 +313,6 @@ class GoogleOAuthSession {
   requestGoogleDriveSharedAccess(
     request: GoogleSharedDriveAccessRequest,
   ): Promise<Result<GoogleOAuthTokens, OAuthFailure>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return this.requestGoogleAccessToken({
       prompt: request.prompt,
       scope: GoogleDriveOAuthScope.Shared,
@@ -354,10 +346,8 @@ class GoogleOAuthSession {
   async ensureValidOAuthFileConfig(
     config: OAuthFileConfig,
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     if (!this.isOAuthAccessTokenExpired({ config, skewMs: 60_000 }))
       return ok(config);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     const refreshed = await this.requestGoogleAccessToken({
       prompt: GoogleOAuthPrompt.Default,
       scope:
@@ -366,7 +356,6 @@ class GoogleOAuthSession {
           : GoogleDriveOAuthScope.AppData,
     });
     return refreshed.andThen((tokens) =>
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       this.oauthTokensToConfig({
         tokens,
         existing: configuredOAuthFile(config),
@@ -380,7 +369,6 @@ class GoogleOAuthSession {
     try {
       const response = await fetch(
         "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       if (!response.ok)
@@ -390,18 +378,15 @@ class GoogleOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
     }
     if (!payload || typeof payload !== "object" || !("user" in payload))
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: GoogleAccountIdentityKind.Unavailable });
     const user = payload.user;
     if (!user || typeof user !== "object")
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({ kind: GoogleAccountIdentityKind.Unavailable });
     if (
       "emailAddress" in user &&
       typeof user.emailAddress === "string" &&
       user.emailAddress.trim()
     )
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: GoogleAccountIdentityKind.Available,
         label: user.emailAddress,
@@ -411,12 +396,10 @@ class GoogleOAuthSession {
       typeof user.displayName === "string" &&
       user.displayName.trim()
     )
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return ok({
         kind: GoogleAccountIdentityKind.Available,
         label: user.displayName,
       });
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return ok({ kind: GoogleAccountIdentityKind.Unavailable });
   }
 }

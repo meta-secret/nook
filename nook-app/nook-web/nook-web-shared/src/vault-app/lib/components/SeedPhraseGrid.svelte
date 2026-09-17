@@ -54,7 +54,6 @@
   let {
     vault,
     value = $bindable(''),
-    // eslint-disable-next-line no-useless-assignment -- parent bind:valid output
     valid = $bindable(false),
     readonly = false,
     revealed = true,

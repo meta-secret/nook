@@ -190,7 +190,6 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<OpenExtensionSessionDocument>
   > {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       await chrome.offscreen.createDocument({
         url: extensionSessionDocument,
         reasons: [chrome.offscreen.Reason.WORKERS],
@@ -323,7 +322,6 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const contexts = await chrome.runtime.getContexts({
         contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
         documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],

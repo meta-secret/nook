@@ -11,7 +11,6 @@
 </script>
 
 <div class="markdown-body nook-markdown {className}" data-testid={testId}>
-  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
   {@html html}
 </div>
 

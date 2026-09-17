@@ -155,7 +155,6 @@ export class VaultSecretActions {
       }
       log.info(sourceName + " import completed");
       state.showSuccess(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         state.t({
           key: successKey,
           replacements: { count: String(imported.value.imported) },
@@ -202,7 +201,6 @@ export class VaultSecretActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
         return state.raceStorageTimeout({
           promise: operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
@@ -742,7 +740,6 @@ export class VaultSecretActions {
     });
     if (result.isErr()) return storageErr(result.error);
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       return storageOk({
         code: result.value.code,
         secondsRemaining: result.value.secondsRemaining,

@@ -104,7 +104,6 @@ class WebAuthnRuntimeTransport<T> {
   constructor(private readonly message: WebsitePasskeyRuntimeMessage) {}
 
   send(): Promise<T> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     return new Promise((resolve, reject) => {
       void chrome.runtime.sendMessage(this.message, (response: T) => {
         const error = chrome.runtime.lastError?.message

@@ -30,12 +30,10 @@ const log = browserLogRuntime.createLogger("vault-password");
 
 type E2ePasswordManager = {
   // Generated wasm-bindgen methods are positional host bindings.
-  // eslint-disable-next-line max-params
   add_vault_password_for_e2e?: (
     label: string,
     password: string,
   ) => Promise<void>;
-  // eslint-disable-next-line max-params
   update_vault_password_entry_for_e2e?: (
     entryId: string,
     password: string,

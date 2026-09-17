@@ -8,7 +8,6 @@ export enum OpenSimpleVaultMessageType {
 export class OpenSimpleVaultMessage {
   private constructor() {}
   declare readonly type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(message: unknown): message is OpenSimpleVaultMessage {
     return (
       RuntimeMessageEnvelope.hasRuntimeMessageType(message) &&
@@ -31,7 +30,6 @@ export class BeginExtensionPairingMessage {
     deviceSigningPublicKey: string;
     deviceLabel: string;
   };
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(message: unknown): message is BeginExtensionPairingMessage {
     if (
       !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
@@ -65,7 +63,6 @@ export class BeginExtensionPairingMessage {
 export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
 export class ExtensionEventLogRecordAdmission {
   private constructor() {}
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(value: unknown): value is ExtensionEventLogRecord {
     if (!value || typeof value !== "object") return false;
     return (
@@ -96,7 +93,6 @@ export class ExtensionLocalEventLogUpdatedMessage {
     vaultStoreId: string;
     eventLogRecords: ExtensionEventLogRecord[];
   };
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(message: unknown): message is ExtensionLocalEventLogUpdatedMessage {
     if (
       !RuntimeMessageEnvelope.hasRuntimeMessageType(message) ||
@@ -125,7 +121,6 @@ export class ExtensionLocalEventLogUpdatedMessage {
 export class RuntimeMessageEnvelope {
   private constructor() {}
   declare readonly type: string;
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static hasRuntimeMessageType(message: unknown): message is { type: string } {
     return (
       !!message &&

@@ -1,5 +1,4 @@
 <script lang="ts">
-  /* eslint-disable nook-typed-api/no-raw-object-arguments -- Existing call shapes are preserved for this lint-only fix. */
   import { err } from 'neverthrow'
   import {
     VaultStorageFailure,

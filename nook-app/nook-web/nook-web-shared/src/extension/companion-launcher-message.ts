@@ -14,7 +14,6 @@ export class OpenCompanionLauncherMessage {
   declare readonly payload?: {
     intent: OpenCompanionLauncherIntent.Pair;
   };
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(message: unknown): message is OpenCompanionLauncherMessage {
     return (
       NormalizedOpenCompanionLauncherMessage.normalizeOpenCompanionLauncherMessage(
@@ -30,7 +29,6 @@ export class NormalizedOpenCompanionLauncherMessage {
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly intent: OpenCompanionLauncherIntent;
   static normalizeOpenCompanionLauncherMessage(
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
     message: unknown,
   ): OpenCompanionLauncherNormalization {
     if (
