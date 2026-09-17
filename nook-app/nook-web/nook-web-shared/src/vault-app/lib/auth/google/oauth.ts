@@ -68,11 +68,15 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 
+type GoogleTokenClientFailure = {
+  readonly type: string;
+};
+
 type GoogleTokenClientConfig = {
   client_id: string;
   scope: string;
   callback: (response: GoogleTokenResponse) => void;
-  error_callback: (failure: { type: string }) => void;
+  error_callback: (failure: GoogleTokenClientFailure) => void;
 };
 
 export type GoogleTokenPromptRequest = {
@@ -102,6 +106,8 @@ export type GoogleOAuthExpiryAssessment = {
   readonly skewMs: number;
 };
 
+type GoogleTokenCompletion = Result<GoogleOAuthTokens, OAuthFailure>;
+
 declare global {
   interface Window {
     google?: {
@@ -123,7 +129,7 @@ type TokenRequest =
   | { kind: TokenRequestKind.Idle }
   | {
       kind: TokenRequestKind.AwaitingResponse;
-      resolve: (response: Result<GoogleOAuthTokens, OAuthFailure>) => void;
+      resolve: (response: GoogleTokenCompletion) => void;
     };
 
 enum GoogleIdentityServicesKind {
@@ -190,8 +196,11 @@ class GoogleOAuthSession {
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
         if (existing) {
-          existing.addEventListener("load", loaded, { once: true });
-          existing.addEventListener("error", failed, { once: true });
+          const oneTimeListenerOptions: AddEventListenerOptions = {
+            once: true,
+          };
+          existing.addEventListener("load", loaded, oneTimeListenerOptions);
+          existing.addEventListener("error", failed, oneTimeListenerOptions);
           return;
         }
         const script = document.createElement("script");
@@ -233,11 +242,12 @@ class GoogleOAuthSession {
     if (existing) return ok(existing);
     const oauth = window.google?.accounts.oauth2;
     if (!oauth) return err(new OAuthFailure(OAuthFailureKind.GoogleScript));
-    const complete = (outcome: Result<GoogleOAuthTokens, OAuthFailure>) => {
+    const complete = (outcome: GoogleTokenCompletion) => {
       const current = this.tokenClients.get(key);
       if (current?.request.kind !== TokenRequestKind.AwaitingResponse) return;
       const pending = current.request;
-      current.request = { kind: TokenRequestKind.Idle };
+      const idleRequest: TokenRequest = { kind: TokenRequestKind.Idle };
+      current.request = idleRequest;
       pending.resolve(outcome);
     };
     const config: GoogleTokenClientConfig = {
@@ -302,10 +312,11 @@ class GoogleOAuthSession {
     try {
       const expiresIn =
         typeof response.expires_in === "number" ? response.expires_in : 3600;
-      return ok({
+      const tokens: GoogleOAuthTokens = {
         accessToken: response.access_token,
         expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-      });
+      };
+      return ok(tokens);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.GoogleResponse));
     }
@@ -319,11 +330,19 @@ class GoogleOAuthSession {
     if (slot.request.kind === TokenRequestKind.AwaitingResponse)
       return err(new OAuthFailure(OAuthFailureKind.RequestInProgress));
     return new Promise((resolve) => {
-      slot.request = { kind: TokenRequestKind.AwaitingResponse, resolve };
+      const pendingRequest: TokenRequest = {
+        kind: TokenRequestKind.AwaitingResponse,
+        resolve,
+      };
+      slot.request = pendingRequest;
       try {
-        slot.client.requestAccessToken({ prompt: request.prompt });
+        const promptRequest: GoogleTokenPromptRequest = {
+          prompt: request.prompt,
+        };
+        slot.client.requestAccessToken(promptRequest);
       } catch {
-        slot.request = { kind: TokenRequestKind.Idle };
+        const idleRequest: TokenRequest = { kind: TokenRequestKind.Idle };
+        slot.request = idleRequest;
         resolve(err(new OAuthFailure(OAuthFailureKind.GoogleRequest)));
       }
     });
@@ -331,10 +350,11 @@ class GoogleOAuthSession {
   requestGoogleDriveSharedAccess(
     request: GoogleSharedDriveAccessRequest,
   ): Promise<Result<GoogleOAuthTokens, OAuthFailure>> {
-    return this.requestGoogleAccessToken({
+    const accessRequest: GoogleAccessTokenRequest = {
       prompt: request.prompt,
       scope: GoogleDriveOAuthScope.Shared,
-    });
+    };
+    return this.requestGoogleAccessToken(accessRequest);
   }
   oauthTokensToConfig({
     tokens,
@@ -364,30 +384,37 @@ class GoogleOAuthSession {
   async ensureValidOAuthFileConfig(
     config: OAuthFileConfig,
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
-    if (!this.isOAuthAccessTokenExpired({ config, skewMs: 60_000 }))
-      return ok(config);
-    const refreshed = await this.requestGoogleAccessToken({
+    const expiryAssessment: GoogleOAuthExpiryAssessment = {
+      config,
+      skewMs: 60_000,
+    };
+    if (!this.isOAuthAccessTokenExpired(expiryAssessment)) return ok(config);
+    const accessRequest: GoogleAccessTokenRequest = {
       prompt: GoogleOAuthPrompt.Default,
       scope:
         config.driveMode === "shared" || config.folderId.state === "folderId"
           ? GoogleDriveOAuthScope.Shared
           : GoogleDriveOAuthScope.AppData,
-    });
-    return refreshed.andThen((tokens) =>
-      this.oauthTokensToConfig({
+    };
+    const refreshed = await this.requestGoogleAccessToken(accessRequest);
+    return refreshed.andThen((tokens) => {
+      const update: GoogleOAuthConfigurationUpdate = {
         tokens,
         existing: configuredOAuthFile(config),
-      }),
-    );
+      };
+      return this.oauthTokensToConfig(update);
+    });
   }
   async fetchGoogleAccountEmail(
     accessToken: string,
   ): Promise<Result<GoogleAccountIdentity, OAuthFailure>> {
     let payload: unknown;
     try {
+      const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` };
+      const requestInit: RequestInit = { headers };
       const response = await fetch(
         "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+        requestInit,
       );
       if (!response.ok)
         return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
@@ -396,29 +423,37 @@ class GoogleOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
     }
     if (!payload || typeof payload !== "object" || !("user" in payload))
-      return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+      return ok(this.unavailableAccountIdentity());
     const user = payload.user;
     if (!user || typeof user !== "object")
-      return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+      return ok(this.unavailableAccountIdentity());
     if (
       "emailAddress" in user &&
       typeof user.emailAddress === "string" &&
       user.emailAddress.trim()
-    )
-      return ok({
+    ) {
+      const identity: GoogleAccountIdentity = {
         kind: GoogleAccountIdentityKind.Available,
         label: user.emailAddress,
-      });
+      };
+      return ok(identity);
+    }
     if (
       "displayName" in user &&
       typeof user.displayName === "string" &&
       user.displayName.trim()
-    )
-      return ok({
+    ) {
+      const identity: GoogleAccountIdentity = {
         kind: GoogleAccountIdentityKind.Available,
         label: user.displayName,
-      });
-    return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+      };
+      return ok(identity);
+    }
+    return ok(this.unavailableAccountIdentity());
+  }
+
+  private unavailableAccountIdentity(): GoogleAccountIdentity {
+    return { kind: GoogleAccountIdentityKind.Unavailable };
   }
 }
 

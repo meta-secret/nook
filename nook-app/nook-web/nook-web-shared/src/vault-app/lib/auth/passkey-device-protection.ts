@@ -114,14 +114,19 @@ export enum PasskeyDeviceProtectionSuccess {
   Recovered = "recovered",
 }
 
+export type PasskeyCeremonyFailureInput = {
+  readonly action: PasskeyCeremonyAction;
+  readonly diagnostic: ReturnType<typeof sanitizedPasskeyCeremonyData>;
+};
+
 /** Admits a foreign ceremony failure without retaining its error or credential data. */
 export class PasskeyCeremonyFailure {
   readonly diagnostic: ReturnType<typeof sanitizedPasskeyCeremonyData>;
-  constructor(
-    private readonly action: PasskeyCeremonyAction,
-    failure: unknown,
-  ) {
-    this.diagnostic = sanitizedPasskeyCeremonyData(failure);
+  private readonly action: PasskeyCeremonyAction;
+
+  constructor(input: PasskeyCeremonyFailureInput) {
+    this.action = input.action;
+    this.diagnostic = input.diagnostic;
   }
   get fallback(): PasskeyFallback {
     if (this.action === PasskeyCeremonyAction.Unlock)
@@ -183,9 +188,11 @@ export async function setupDeviceProtection({
     );
     return ok(PasskeyDeviceProtectionSuccess.Configured);
   } catch (failure) {
-    return err(
-      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Create, failure),
-    );
+    const input: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Create,
+      diagnostic: sanitizedPasskeyCeremonyData(failure),
+    };
+    return err(new PasskeyCeremonyFailure(input));
   }
 }
 
@@ -196,9 +203,11 @@ export async function unlockDeviceProtection(
     await manager.unlock_device_protection_with_passkey(location.hostname);
     return ok(PasskeyDeviceProtectionSuccess.Unlocked);
   } catch (failure) {
-    return err(
-      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Unlock, failure),
-    );
+    const input: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Unlock,
+      diagnostic: sanitizedPasskeyCeremonyData(failure),
+    };
+    return err(new PasskeyCeremonyFailure(input));
   }
 }
 
@@ -209,8 +218,10 @@ export async function recoverDeviceProtectionWithPasskey(
     await manager.recover_device_protection_with_passkey(location.hostname);
     return ok(PasskeyDeviceProtectionSuccess.Recovered);
   } catch (failure) {
-    return err(
-      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Recover, failure),
-    );
+    const input: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Recover,
+      diagnostic: sanitizedPasskeyCeremonyData(failure),
+    };
+    return err(new PasskeyCeremonyFailure(input));
   }
 }
