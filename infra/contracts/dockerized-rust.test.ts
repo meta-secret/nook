@@ -52,10 +52,12 @@ class DockerizedRustContract {
     const preview = z
       .object({
         needs: z.array(z.string()),
-        steps: z.array(z.object({ run: z.string().optional() })).nonempty(),
+        steps: z
+          .tuple([z.object({ run: z.string() })])
+          .rest(z.object({ run: z.string().optional() })),
       })
       .parse(workflow.jobs.preview);
-    const script = z.string().parse(preview.steps[0].run);
+    const script = preview.steps[0].run;
     expect(preview.needs).toContain("wasm-node-test");
     expect(preview.needs).toContain("extension-e2e");
     expect(Object.keys(workflow.jobs)).not.toContain(
@@ -223,14 +225,25 @@ class DockerizedRustContract {
           /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
       ),
     ).toEqual([]);
-    expect(rustSteps).toContainEqual(
-      expect.objectContaining({
-        if: "needs.rust-build.outputs.produced == 'true'",
-        run: expect.stringContaining(
-          "task docker:ci:rust:verify-built-buildkit",
+    const buildKitVerifySteps = z
+      .array(
+        z.object({
+          if: z.literal("needs.rust-build.outputs.produced == 'true'"),
+          run: z.string(),
+        }),
+      )
+      .parse(
+        rustSteps.filter(
+          (step) =>
+            step.if === "needs.rust-build.outputs.produced == 'true'" &&
+            typeof step.run === "string",
         ),
-      }),
-    );
+      );
+    expect(
+      buildKitVerifySteps.some((step) =>
+        step.run.includes("task docker:ci:rust:verify-built-buildkit"),
+      ),
+    ).toBe(true);
 
     const dockerTasks = this.read(
       "nook-app/nook-platform/docker/Taskfile.yml",
