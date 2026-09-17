@@ -49,7 +49,9 @@ function authenticatorProps(
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
+    onDeleteSecret: vi.fn(async () =>
+      ok<SecretMutationOutcome.Deleted, never>(SecretMutationOutcome.Deleted),
+    ),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,
@@ -81,7 +83,9 @@ function renderLogin(item: NookSecretListItem) {
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
-    onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
+    onDeleteSecret: vi.fn(async () =>
+      ok<SecretMutationOutcome.Deleted, never>(SecretMutationOutcome.Deleted),
+    ),
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,

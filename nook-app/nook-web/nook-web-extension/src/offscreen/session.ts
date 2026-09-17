@@ -349,11 +349,21 @@ async function handleCompanionIdentityDiscovery(
 
 type SessionSuccess<T> =
   T extends Result<infer Value, SessionOperationFailure> ? Value : never
-export type ExtensionSessionResponse = SessionSuccess<
-  | Awaited<ReturnType<typeof handleMessage>>
-  | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
-  | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
->
+type WebsitePasskeyAccountsSessionResponse = {
+  readonly ok: true
+  readonly accounts: readonly {
+    readonly credentialId: string
+    readonly userName: string
+    readonly userDisplayName: string
+  }[]
+}
+export type ExtensionSessionResponse =
+  | SessionSuccess<
+      | Awaited<ReturnType<typeof handleMessage>>
+      | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
+      | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
+    >
+  | WebsitePasskeyAccountsSessionResponse
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {

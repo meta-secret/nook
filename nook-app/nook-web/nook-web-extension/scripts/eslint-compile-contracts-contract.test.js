@@ -26,7 +26,13 @@ class CompileContractsConfigTestHarness {
     const filePath = join(fixtureDirectory, `contract${extension}`)
     try {
       writeFileSync(filePath, source)
-      return new Linter().verify(source, compileContractsEslintConfig, filePath)
+      return new Linter().verify(
+        source,
+        /** @type {import('eslint').Linter.Config[]} */ (
+          compileContractsEslintConfig
+        ),
+        filePath,
+      )
     } finally {
       rmSync(fixtureDirectory, { recursive: true, force: true })
     }
@@ -38,7 +44,11 @@ class CompileContractsConfigTestHarness {
       ...compileContractsEslintConfig,
       { rules: { 'nook-typed-api/no-empty-success-contract': 'off' } },
     ]
-    return new Linter().verify(source, adapterConfig, adapterFilePath)
+    return new Linter().verify(
+      source,
+      /** @type {import('eslint').Linter.Config[]} */ (adapterConfig),
+      adapterFilePath,
+    )
   }
 }
 

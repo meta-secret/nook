@@ -13,13 +13,15 @@ type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
 >[0]
 
+export type ExternalCompanionValue =
+  | string
+  | number
+  | boolean
+  | ExternalCompanionMessage
+  | ExternalCompanionValue[]
+
 export type ExternalCompanionMessage = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | ExternalCompanionMessage
-    | ExternalCompanionMessage[]
+  [key: string]: ExternalCompanionValue
 }
 
 export type ExternalCompanionRoutingRequest = {

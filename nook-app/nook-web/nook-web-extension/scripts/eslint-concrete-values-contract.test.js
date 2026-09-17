@@ -26,7 +26,10 @@ function lint(args) {
     },
     rules: args.rules,
   }
-  return new Linter().verify(args.source, config)
+  return new Linter().verify(
+    args.source,
+    /** @type {import('eslint').Linter.Config & typeof config} */ (config),
+  )
 }
 
 /** @param {ConcreteRuleSet} rules */
@@ -192,7 +195,10 @@ describe('typed API concrete values', () => {
         type ComponentState = Promise<ReadonlyArray<{ payload: unknown }>>
       </script>
     `
-    const messages = new Linter().verify(source, config)
+    const messages = new Linter().verify(
+      source,
+      /** @type {import('eslint').Linter.Config & typeof config} */ (config),
+    )
 
     expect(messages.map((message) => message.ruleId)).toContain(
       '@typescript-eslint/no-restricted-types',

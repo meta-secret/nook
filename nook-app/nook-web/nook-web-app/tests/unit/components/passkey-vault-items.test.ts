@@ -17,7 +17,9 @@ vi.spyOn(vault, 'resolveErrorMessage').mockImplementation((message) => message)
 
 describe('passkey item discovery', () => {
   test('shows the website ceremony path without a manual credential form', async () => {
-    const onAddSecret = vi.fn(async () => ok(SecretMutationOutcome.Added))
+    const onAddSecret = vi.fn(async () =>
+      ok<SecretMutationOutcome.Added, never>(SecretMutationOutcome.Added),
+    )
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
@@ -49,7 +51,9 @@ describe('passkey item discovery', () => {
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),
-      onDeleteSecret: vi.fn(async () => ok(SecretMutationOutcome.Deleted)),
+      onDeleteSecret: vi.fn(async () =>
+        ok<SecretMutationOutcome.Deleted, never>(SecretMutationOutcome.Deleted),
+      ),
       onCopyToClipboard: vi.fn(async () => {}),
       onCopySecret: vi.fn(async () => {}),
       vault,

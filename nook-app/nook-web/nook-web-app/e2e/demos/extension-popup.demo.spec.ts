@@ -1,4 +1,5 @@
 import { expect, test, type Route } from '../fixtures'
+import { Effect } from 'effect'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
@@ -48,22 +49,26 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
           callback({ ok: false, reason: 'login-picker-expired' })
           return
         case session.authenticatorQueryMessageType:
+          const decodedQuery = Effect.runSync(
+            Effect.either(AuthenticatorPickerQueryMessage.decode(message)),
+          )
           callback({
             ok: true,
             origin: 'https://accounts.example.test',
-            accounts: AuthenticatorPickerQueryMessage.is(message)
-              ? message.payload.query.trim().length === 0
-                ? [
-                    {
-                      vaultStoreId: 'popup-demo-store',
-                      vaultName: 'Personal vault',
-                      secretId: 'popup-demo-authenticator',
-                      issuer: 'Example',
-                      account: 'demo@example.test',
-                    },
-                  ]
-                : []
-              : [],
+            accounts:
+              decodedQuery._tag === 'Right'
+                ? decodedQuery.right.payload.query.trim().length === 0
+                  ? [
+                      {
+                        vaultStoreId: 'popup-demo-store',
+                        vaultName: 'Personal vault',
+                        secretId: 'popup-demo-authenticator',
+                        issuer: 'Example',
+                        account: 'demo@example.test',
+                      },
+                    ]
+                  : []
+                : [],
           })
           return
         case AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect:

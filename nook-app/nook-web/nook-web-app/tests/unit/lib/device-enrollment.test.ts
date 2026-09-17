@@ -1,13 +1,14 @@
 // @vitest-environment node
 
 import { describe, expect, test, vi } from 'vitest'
+import type { Locator } from '@playwright/test'
 import {
   isJoinerVaultReady,
   tryJoinerQuickConnect,
 } from '../../../e2e/helpers/device-enrollment'
 
 type FakeLocator = {
-  click: ReturnType<typeof vi.fn>
+  click: Locator['click']
   first: () => FakeLocator
   isVisible: () => Promise<boolean>
 }
