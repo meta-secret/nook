@@ -5,7 +5,7 @@ import { err as storageErr, ok as storageOk } from "neverthrow";
 import { VaultRecoveryErrorKind } from "$app-wasm";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
-import type { VaultState } from "$lib/vault.svelte";
+import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { VaultAccessStatus, type NookSecretRecord } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -39,7 +39,7 @@ type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
 
 /** Owns browser orchestration for one connection context. */
 export class VaultConnectionActions {
-  constructor(private readonly state: VaultState) {}
+  constructor(private readonly state: SyncActionsContext) {}
 
   private freeSecretRecords(records: SecretRecordCollection) {
     for (const record of records) record.free();

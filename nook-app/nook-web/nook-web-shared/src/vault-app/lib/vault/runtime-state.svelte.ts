@@ -41,7 +41,10 @@ import {
   TranslationMessage,
   type TranslationRequest,
 } from "$lib/vault/translation";
-import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+import type {
+  OAuthTokenFreshnessOutcome,
+  ProviderActionsContext,
+} from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
 
 export type VaultEditRestriction =
@@ -251,7 +254,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   > {
     return new oauthActions.VaultOAuthActions(
       this.completeVaultState(),

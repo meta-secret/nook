@@ -9,7 +9,6 @@ import {
 import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import type { LocalVaultCatalogRefreshSnapshot } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   get_active_vault_selection,

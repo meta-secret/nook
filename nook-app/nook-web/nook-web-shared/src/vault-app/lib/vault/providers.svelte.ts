@@ -116,6 +116,11 @@ export interface VaultConnectAssessmentRequest {
   readonly args: NookStorageConnectArgs;
 }
 
+type VaultConnectStatusDiscoveryCompletion = {
+  readonly operation: Promise<Result<VaultAccessStatus, StorageOperationFailure>>;
+  readonly releaseLateValue: (status: VaultAccessStatus) => void;
+};
+
 export interface RemoteVaultAssessmentHandling {
   readonly accessStatus: VaultAccessStatus;
 }
@@ -364,7 +369,9 @@ export class VaultProviderActions {
     return state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
-      const operation = (async () => {
+      const operation: Promise<
+        Result<VaultAccessStatus, StorageOperationFailure>
+      > = (async () => {
         try {
           return storageOk(
             await admitted.value.assess_vault_connect(
@@ -378,11 +385,13 @@ export class VaultProviderActions {
         }
       })();
       const timeout = new VaultDiscoveryTimeout({ timeoutMs: 30_000 });
-      const timeoutRequest: Parameters<typeof timeout.waitFor>[0] = {
+      const timeoutRequest: VaultConnectStatusDiscoveryCompletion = {
         operation,
         releaseLateValue: () => {},
       };
-      return timeout.waitFor(timeoutRequest);
+      return timeout.waitFor<VaultAccessStatus, StorageOperationFailure>(
+        timeoutRequest,
+      );
     });
   }
 

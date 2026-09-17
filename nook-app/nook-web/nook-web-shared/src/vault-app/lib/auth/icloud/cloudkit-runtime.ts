@@ -313,15 +313,19 @@ export class CloudKitUserIdentityDecoder {
 }
 
 const CloudKitUserIdentitySchema = Schema.Struct({
-  userRecordName: Schema.optional(Schema.String),
-  nameComponents: Schema.optional(
+  userRecordName: Schema.optionalWith(Schema.String, { exact: true }),
+  nameComponents: Schema.optionalWith(
     Schema.Struct({
-      givenName: Schema.optional(Schema.String),
-      familyName: Schema.optional(Schema.String),
+      givenName: Schema.optionalWith(Schema.String, { exact: true }),
+      familyName: Schema.optionalWith(Schema.String, { exact: true }),
     }),
+    { exact: true },
   ),
-  lookupInfo: Schema.optional(
-    Schema.Struct({ emailAddress: Schema.optional(Schema.String) }),
+  lookupInfo: Schema.optionalWith(
+    Schema.Struct({
+      emailAddress: Schema.optionalWith(Schema.String, { exact: true }),
+    }),
+    { exact: true },
   ),
 });
 
