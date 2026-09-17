@@ -48,7 +48,7 @@ export const namedSuccessContractBaseline = [
   { file: 'nook-web-shared/src/vault-app/lib/vault/login-unlock-capabilities.ts', gitBlobSha1: '23c173550f97b0017608511f7c806959414c890b' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/oauth.ts', gitBlobSha1: 'fd804456ab0daf203b0d8278963c502f2c5b0da8' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts', gitBlobSha1: '8ebb17c2f2be5123da7e1f86f38cae3199952d79' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/provider-sync.svelte.ts', gitBlobSha1: '09309bdd0fbb469f2d1735883c2de10d5f45a07c' },
+  { file: 'nook-web-shared/src/vault-app/lib/vault/provider-sync.svelte.ts', gitBlobSha1: '80609c2910e213a47683a2244f789b030607ad3d' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/multi-device.ts', gitBlobSha1: 'b45565a0721c49d24fff4cab4331f3e0ff85d657' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/password-enrollment-flow.ts', gitBlobSha1: '802549fa8b82170d9f60c3e519e23eb6bd580071' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/password-enrollment-issue.ts', gitBlobSha1: 'b1a60427ce71c6c46092819358cf521d7f4c3005' },
@@ -62,7 +62,7 @@ export const namedSuccessContractBaseline = [
   { file: 'nook-web-shared/src/vault-app/lib/vault/sync-resolution.ts', gitBlobSha1: 'ac0cb81e465477242c12d2c21c829c1605676f78' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/sync-extension-bridge.ts', gitBlobSha1: '78324f74811d90b6eead4ae509eba549851f6cfb' },
   { file: 'nook-web-shared/src/vault-app/lib/vault/sync-runtime.ts', gitBlobSha1: '2b2df3b90a39975b31a3241ed3a1f8f053390e76' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/sync.svelte.ts', gitBlobSha1: 'b77178b4e4ed11a80823aab6833b864539803fbc' },
-  { file: 'nook-web-shared/src/vault-app/lib/vault/ui.ts', gitBlobSha1: '6db95100474a94fb3c3d37fa6a0558209b57aa48' },
+  { file: 'nook-web-shared/src/vault-app/lib/vault/sync.svelte.ts', gitBlobSha1: '7e8a4af81b5c00694fbcf68ee0686197a1577801' },
+  { file: 'nook-web-shared/src/vault-app/lib/vault/ui.ts', gitBlobSha1: '6a8ba87e12276bdc94128a11d0d7a188b882cc99' },
   { file: 'nook-web-shared/src/vault-app/main.ts', gitBlobSha1: '6e0d9a3acb0a9d6e7b904d44c086261c0d93884d' },
 ]
