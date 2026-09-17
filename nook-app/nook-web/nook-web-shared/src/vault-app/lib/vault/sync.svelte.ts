@@ -9,9 +9,16 @@ import {
 
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type {
+  EventOutboxFlushOutcome,
+  LocalSaveFanOutOutcome,
+  RosterHydrationOutcome,
   SyncActionsContext,
   SyncFromProvidersRequest,
   NookStorageConnectArgs,
+} from "$lib/vault/action-contexts";
+import {
+  EventOutboxFlushKind,
+  RosterHydrationKind,
 } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -37,6 +44,7 @@ import {
 } from "$app-wasm";
 import {
   activeVaultScope,
+  type AuthProvidersSnapshot,
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   unselectedVaultScope,
@@ -118,7 +126,7 @@ type StorageSyncExecution = {
 export { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
 
 export type RosterHydrationResult = Result<
-  void,
+  RosterHydrationOutcome,
   StorageOperationFailure | OAuthFailure
 >;
 
@@ -128,7 +136,8 @@ export class VaultSyncActions {
 
   async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
     const state = this.state;
-    if (!state.hasManager || !state.isAuthenticated) return storageOk();
+    if (!state.hasManager || !state.isAuthenticated)
+      return storageOk({ kind: RosterHydrationKind.Skipped });
     const mergedJoins: JoinRequest[] = [];
     try {
       for (const provider of state.syncProviders) {
@@ -202,7 +211,12 @@ export class VaultSyncActions {
       if (passwordRefresh1.isErr()) {
         return storageErr(passwordRefresh1.error);
       }
-      return storageOk();
+      return storageOk({
+        kind: RosterHydrationKind.Hydrated,
+        pendingJoinCount: state.pendingJoins.length,
+        vaultMemberCount: state.vaultMembers.length,
+        passwordEntryCount: passwordRefresh.value.entries.length,
+      });
     } finally {
       for (const join of mergedJoins) join.free();
     }
@@ -284,28 +298,42 @@ export class VaultSyncActions {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<LocalSaveFanOutOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     const publication = await new ExtensionSyncPublication(
       state,
     ).publishExtensionEventLogUpdateForVault();
     if (publication.isErr()) return storageErr(publication.error);
-    if (!state.deviceProtectionReady) return storageOk();
+    if (!state.deviceProtectionReady)
+      return storageOk({
+        publishedEventRecordCount: publication.value.publishedRecordCount,
+        outboxFlushes: [],
+      });
     if (state.syncProviders.length === 0) {
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return state.flushRemoteEventOutboxNow({
+      const flush = await state.flushRemoteEventOutboxNow({
         kind: EventOutboxRequestKind.Default,
       });
+      if (flush.isErr()) return storageErr(flush.error);
+      return storageOk({
+        publishedEventRecordCount: publication.value.publishedRecordCount,
+        outboxFlushes: [flush.value],
+      });
     }
+    const outboxFlushes: EventOutboxFlushOutcome[] = [];
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) break;
       const flushed = await state.flushRemoteEventOutboxNow(
         new ProviderEventOutbox(provider).request(),
       );
       if (flushed.isErr()) return storageErr(flushed.error);
+      outboxFlushes.push(flushed.value);
     }
-    return storageOk();
+    return storageOk({
+      publishedEventRecordCount: publication.value.publishedRecordCount,
+      outboxFlushes,
+    });
   }
 
   eventOutboxTarget({
@@ -348,7 +376,9 @@ export class VaultSyncActions {
 
   async flushRemoteEventOutboxNow({
     request,
-  }: RemoteEventOutboxFlush): Promise<Result<void, StorageOperationFailure>> {
+  }: RemoteEventOutboxFlush): Promise<
+    Result<EventOutboxFlushOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const admitted = state.admitManager();
     if (admitted.isErr()) return storageErr(admitted.error);
@@ -361,9 +391,14 @@ export class VaultSyncActions {
       ).syncLocalFolderProvider({
         provider: target.provider,
       });
-      return synced;
+      if (synced.isErr()) return storageErr(synced.error);
+      return storageOk({
+        kind: EventOutboxFlushKind.LocalFolderSynchronized,
+        outcome: synced.value,
+      });
     }
-    if (target.kind === EventOutboxTargetKind.Unavailable) return storageOk();
+    if (target.kind === EventOutboxTargetKind.Unavailable)
+      return storageOk({ kind: EventOutboxFlushKind.Unavailable });
     const flushed = await state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
@@ -373,7 +408,10 @@ export class VaultSyncActions {
           target.args.pat,
           target.args.repo,
         );
-        return storageOk();
+        return storageOk({
+          kind: EventOutboxFlushKind.RemoteOutboxFlushed,
+          requestKind: request.kind,
+        });
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -386,7 +424,7 @@ export class VaultSyncActions {
     yaml,
     revision,
   }: ProviderSyncMetadataUpdate): Promise<
-    Result<void, StorageOperationFailure>
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -436,7 +474,7 @@ export class VaultSyncActions {
         providers: updated.value.providers,
       });
       if (persisted.isErr()) return storageErr(persisted.error);
-      return storageOk();
+      return storageOk(persisted.value);
     } finally {
       revision.free();
     }

@@ -1,9 +1,13 @@
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { err as storageErr, ok as storageOk } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure as StorageOperationFailure,
+} from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type { ProjectionConflictRefreshSnapshot } from "$lib/vault/action-contexts";
 import {
   import_named_local_vault_blob,
   DeviceProtectionStatus,
@@ -192,11 +196,13 @@ export class SyncConflictActions {
     }
   }
 
-  async refreshReplacementConflicts() {
+  async refreshReplacementConflicts(): Promise<
+    Result<ProjectionConflictRefreshSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk();
+      return storageOk({ replacementConflictCount: 0, securityConflictCount: 0 });
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -224,7 +230,10 @@ export class SyncConflictActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.replaceProjectionConflicts(snapshot.value);
-    return storageOk();
+    return storageOk({
+      replacementConflictCount: snapshot.value.replacementConflicts.length,
+      securityConflictCount: snapshot.value.securityConflicts.length,
+    });
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {

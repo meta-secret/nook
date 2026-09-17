@@ -22,6 +22,10 @@ import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
 import { VaultEditDecision } from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
+import type {
+  PasswordEntriesRefreshSnapshot,
+  SecretPageRefreshSnapshot,
+} from "$lib/vault/action-contexts";
 
 export { VaultConnectionActions } from "$lib/vault/connection";
 
@@ -516,12 +520,15 @@ export class VaultSecretActions {
   }
 
   async refreshPasswordEntriesList(): Promise<
-    Result<void, OAuthFailure | StorageOperationFailure>
+    Result<
+      PasswordEntriesRefreshSnapshot,
+      OAuthFailure | StorageOperationFailure
+    >
   > {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return storageOk();
+      return storageOk({ entries: state.passwordEntries });
     }
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
@@ -553,11 +560,11 @@ export class VaultSecretActions {
       for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
     }
-    return storageOk();
+    return storageOk({ entries: entries.value });
   }
 
   async refreshSecretsFromSession(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager) {
@@ -584,7 +591,9 @@ export class VaultSecretActions {
   async loadSecretPage({
     query,
     requestedOffset,
-  }: SecretPageRequest): Promise<Result<void, StorageOperationFailure>> {
+  }: SecretPageRequest): Promise<
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -684,7 +693,12 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk();
+    return storageOk({
+      displayedSecretCount: state.secrets.length,
+      totalSecretCount: state.secretTotal,
+      pageOffset: state.secretPageOffset,
+      query: state.secretQuery,
+    });
   }
 
   applyConnectedSecretPage({

@@ -42,6 +42,103 @@ import type {
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
 import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
+import type { NookLocalVaultEntry, NookPasswordEntrySummary } from "$app-wasm";
+
+export type LocalVaultCatalogRefreshSnapshot = {
+  readonly vaults: readonly NookLocalVaultEntry[];
+  readonly activeVaultPresent: boolean;
+};
+
+export type PasswordEntriesRefreshSnapshot = {
+  readonly entries: readonly NookPasswordEntrySummary[];
+};
+
+export type SecretPageRefreshSnapshot = {
+  readonly displayedSecretCount: number;
+  readonly totalSecretCount: number;
+  readonly pageOffset: number;
+  readonly query: string;
+};
+
+export type ProjectionConflictRefreshSnapshot = {
+  readonly replacementConflictCount: number;
+  readonly securityConflictCount: number;
+};
+
+export type DeviceIdentityInitializationSnapshot = {
+  readonly deviceId: string;
+  readonly devicePublicKey: string;
+};
+
+export enum OAuthTokenFreshnessKind {
+  NotConfigured = "not-configured",
+  AlreadyFresh = "already-fresh",
+  Refreshed = "refreshed",
+}
+
+export type OAuthTokenFreshnessOutcome =
+  | { readonly kind: OAuthTokenFreshnessKind.NotConfigured }
+  | { readonly kind: OAuthTokenFreshnessKind.AlreadyFresh }
+  | { readonly kind: OAuthTokenFreshnessKind.Refreshed };
+
+export enum RosterHydrationKind {
+  Skipped = "skipped",
+  Hydrated = "hydrated",
+}
+
+export type RosterHydrationOutcome =
+  | { readonly kind: RosterHydrationKind.Skipped }
+  | {
+      readonly kind: RosterHydrationKind.Hydrated;
+      readonly pendingJoinCount: number;
+      readonly vaultMemberCount: number;
+      readonly passwordEntryCount: number;
+    };
+
+export enum EventOutboxFlushKind {
+  Unavailable = "unavailable",
+  LocalFolderSynchronized = "local-folder-synchronized",
+  RemoteOutboxFlushed = "remote-outbox-flushed",
+}
+
+export type EventOutboxFlushOutcome =
+  | { readonly kind: EventOutboxFlushKind.Unavailable }
+  | {
+      readonly kind: EventOutboxFlushKind.LocalFolderSynchronized;
+      readonly outcome: ProviderSyncOutcome;
+    }
+  | {
+      readonly kind: EventOutboxFlushKind.RemoteOutboxFlushed;
+      readonly requestKind: EventOutboxRequest["kind"];
+    };
+
+export type LocalSaveFanOutOutcome = {
+  readonly publishedEventRecordCount: number;
+  readonly outboxFlushes: readonly EventOutboxFlushOutcome[];
+};
+
+export enum VaultSyncApplicationKind {
+  AuthenticatedRosterApplied = "authenticated-roster-applied",
+  AutoConnectScheduled = "auto-connect-scheduled",
+  AutoConnectNotRequired = "auto-connect-not-required",
+  JoinApprovalMarkedPending = "join-approval-marked-pending",
+  UnauthenticatedUpdateIgnored = "unauthenticated-update-ignored",
+}
+
+export type VaultSyncApplicationOutcome = {
+  readonly kind: VaultSyncApplicationKind;
+};
+
+export type ExtensionEventLogPublicationSnapshot = {
+  readonly vaultStoreId: string;
+  readonly publishedRecordCount: number;
+};
+
+export type VaultArchitectureRefreshSnapshot = {
+  readonly deviceMode: VaultArchitecture["device_mode"];
+  readonly vaultType: VaultArchitecture["vault_type"];
+  readonly replicationType: VaultArchitecture["replication_type"];
+};
 
 type ProviderStateFields = Pick<
   VaultProviderState,
@@ -130,7 +227,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   >;
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
-  ): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<EventOutboxFlushOutcome, VaultStorageFailure>>;
   handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
@@ -140,7 +237,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<PasswordEntriesRefreshSnapshot, OAuthFailure | VaultStorageFailure>
   >;
   showSuccess(message: string): void;
   stageStagedProviderSyncIssue(
@@ -296,7 +393,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   readonly syncProviders: StorageProvider[];
   applyVaultSyncResult(
     result: NookVaultSyncResult,
-  ): Result<void, VaultStorageFailure>;
+  ): Result<VaultSyncApplicationOutcome, VaultStorageFailure>;
   clearPendingSyncConflict(): void;
   clearLocalFolderMultipleVaultsIssue(): void;
   clearSyncingProvider(): void;
@@ -306,7 +403,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   beginProviderSetup(request: ProviderSetupRequest): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   >;
   ensureProviderSavedAfterConflict(
     conflict: NookSyncConflictReview,
@@ -316,9 +413,11 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): void;
   hasRemoteCredentials(): boolean;
   hydrateMultiDeviceState(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<RosterHydrationOutcome, OAuthFailure | VaultStorageFailure>
   >;
-  initDeviceIdentity(): Promise<Result<void, VaultStorageFailure>>;
+  initDeviceIdentity(): Promise<
+    Result<DeviceIdentityInitializationSnapshot, VaultStorageFailure>
+  >;
   loadDb(): Promise<void>;
   persistProviders(
     options: SyncProviderPersistenceOptions,
@@ -334,17 +433,23 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     Result<LocalVaultCatalog, VaultStorageFailure>
   >;
   refreshPasswordEntriesList(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<PasswordEntriesRefreshSnapshot, OAuthFailure | VaultStorageFailure>
   >;
-  refreshReplacementConflicts(): Promise<Result<void, VaultStorageFailure>>;
-  refreshSecretsFromSession(): Promise<Result<void, VaultStorageFailure>>;
-  runFanOutSyncAfterLocalSave(): Promise<Result<void, VaultStorageFailure>>;
+  refreshReplacementConflicts(): Promise<
+    Result<ProjectionConflictRefreshSnapshot, VaultStorageFailure>
+  >;
+  refreshSecretsFromSession(): Promise<
+    Result<SecretPageRefreshSnapshot, VaultStorageFailure>
+  >;
+  runFanOutSyncAfterLocalSave(): Promise<
+    Result<LocalSaveFanOutOutcome, VaultStorageFailure>
+  >;
   runFanOutSyncToProviders(
     visibility: ProviderSyncVisibility,
   ): Promise<VaultSynchronizationResult>;
   flushRemoteEventOutboxNow(
     request: EventOutboxRequest,
-  ): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<EventOutboxFlushOutcome, VaultStorageFailure>>;
   removeProvider(
     providerId: string,
   ): Promise<Result<ProviderRemovalOutcome, VaultStorageFailure>>;
@@ -370,7 +475,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure | OAuthFailure>>;
   updateProviderSyncMetadata(
     request: ProviderSyncMetadataRequest,
-  ): Promise<Result<void, VaultStorageFailure>>;
+  ): Promise<Result<AuthProvidersSnapshot, VaultStorageFailure>>;
   wasmStorageArgs(): NookStorageConnectArgs;
 }
 
@@ -455,9 +560,12 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>;
     publishExtensionEventLogUpdate(): Promise<
-      Result<void, VaultStorageFailure>
+      Result<ExtensionEventLogPublicationSnapshot, VaultStorageFailure>
     >;
-    refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure>;
+    refreshVaultArchitectureFromManager(): Result<
+      VaultArchitectureRefreshSnapshot,
+      VaultStorageFailure
+    >;
     resetVaultSessionState(resetManager?: boolean): void;
     stopIdleSessionTracking(): void;
     stopVaultSync(): void;

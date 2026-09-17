@@ -17,6 +17,7 @@ import {
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
+import type { DeviceIdentityInitializationSnapshot } from "$lib/vault/action-contexts";
 import { VaultManagerRuntime } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -320,7 +321,7 @@ export class VaultInitializationActions {
   async initDeviceIdentity({
     mode,
   }: DeviceIdentityInitialization): Promise<
-    Result<void, StorageOperationFailure>
+    Result<DeviceIdentityInitializationSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (
@@ -351,7 +352,7 @@ export class VaultInitializationActions {
     if (identity.isErr()) return storageErr(identity.error);
     state.deviceId = identity.value.deviceId;
     state.devicePublicKey = identity.value.devicePublicKey;
-    return storageOk();
+    return storageOk(identity.value);
   }
 
   async authorizeWithExternalDeviceIdentity({

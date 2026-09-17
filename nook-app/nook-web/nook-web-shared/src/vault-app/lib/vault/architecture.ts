@@ -4,7 +4,10 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import { err, ok, type Result } from "neverthrow";
-import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ArchitectureActionsContext,
+  VaultArchitectureRefreshSnapshot,
+} from "$lib/vault/action-contexts";
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
@@ -65,7 +68,10 @@ export class VaultArchitectureActions {
     return ok();
   }
 
-  refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
+  refreshVaultArchitectureFromManager(): Result<
+    VaultArchitectureRefreshSnapshot,
+    VaultStorageFailure
+  > {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return err(manager.error);
@@ -104,7 +110,7 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok();
+    return ok({ deviceMode, vaultType, replicationType });
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<

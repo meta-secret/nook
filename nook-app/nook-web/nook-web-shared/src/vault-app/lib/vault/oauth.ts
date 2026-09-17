@@ -11,6 +11,10 @@ import {
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
+  OAuthTokenFreshnessKind,
+  type OAuthTokenFreshnessOutcome,
+} from "$lib/vault/action-contexts";
+import {
   bind_google_drive_shared_folder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
@@ -111,14 +115,14 @@ export class VaultOAuthActions {
   constructor(private readonly state: VaultState) {}
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   > {
     const state = this.state;
     if (
       state.storageMode !== "oauth-file" ||
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
     ) {
-      return ok();
+      return ok({ kind: OAuthTokenFreshnessKind.NotConfigured });
     }
     const oauthFile = state.oauthFileDraft.config;
     log.info("oauth token freshness check started");
@@ -166,7 +170,7 @@ export class VaultOAuthActions {
           refreshed.expiresAt.value === oauthFile.expiresAt.value))
     ) {
       log.info("oauth token freshness check kept existing token");
-      return ok();
+      return ok({ kind: OAuthTokenFreshnessKind.AlreadyFresh });
     }
     if (providerToRefresh.state === "duplicate") {
       const providers = state.providers.map((provider) =>
@@ -183,7 +187,7 @@ export class VaultOAuthActions {
     }
     state.configureOauthFile(refreshed);
     log.info("oauth token freshness check refreshed provider");
-    return ok();
+    return ok({ kind: OAuthTokenFreshnessKind.Refreshed });
   }
 
   private bindSharedICloudTarget({

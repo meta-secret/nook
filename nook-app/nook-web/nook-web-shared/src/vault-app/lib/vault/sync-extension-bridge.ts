@@ -6,6 +6,7 @@ import {
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type { ExtensionEventLogPublicationSnapshot } from "$lib/vault/action-contexts";
 import { extensionEventLogPublisher } from "$web-shared/extension/event-log-bridge";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 
@@ -14,7 +15,7 @@ export class ExtensionSyncPublication {
   constructor(private readonly state: SyncActionsContext) {}
 
   async publishExtensionEventLogUpdateForVault(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<ExtensionEventLogPublicationSnapshot, VaultStorageFailure>
   > {
     const state = this.state;
     const admitted = state.admitManager();
@@ -62,7 +63,10 @@ export class ExtensionSyncPublication {
           ),
         );
       }
-      return storageOk();
+      return storageOk({
+        vaultStoreId: vaultStoreId.value,
+        publishedRecordCount: eventLogRecords.length,
+      });
     } finally {
       records.value.free();
     }
