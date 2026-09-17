@@ -33,39 +33,8 @@ export class AuthenticatorPickerQueryResponse {
   declare readonly origin: string
   declare readonly accounts: WebsiteAuthenticatorOption[]
 
-  static is(response: unknown): response is AuthenticatorPickerQueryResponse {
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      Array.isArray(response) ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('origin' in response) ||
-      typeof response.origin !== 'string' ||
-      response.origin.length === 0 ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      return false
-    }
-    return response.accounts.every((account: unknown) => {
-      if (!account || typeof account !== 'object' || Array.isArray(account))
-        return false
-      return (
-        'vaultStoreId' in account &&
-        typeof account.vaultStoreId === 'string' &&
-        account.vaultStoreId.length > 0 &&
-        'secretId' in account &&
-        typeof account.secretId === 'string' &&
-        account.secretId.length > 0 &&
-        'issuer' in account &&
-        typeof account.issuer === 'string' &&
-        'account' in account &&
-        typeof account.account === 'string' &&
-        'vaultName' in account &&
-        typeof account.vaultName === 'string'
-      )
-    })
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerQueryResponseSchema)(response)
   }
 }
 
@@ -107,14 +76,8 @@ export class AuthenticatorPickerSelectResponse {
   private constructor() {}
   declare readonly ok: true
 
-  static is(response: unknown): response is AuthenticatorPickerSelectResponse {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
-    )
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(authenticatorPickerSelectResponseSchema)(response)
   }
 }
 
@@ -198,6 +161,26 @@ export class WebsiteAuthenticatorCanceledMessage {
 const authenticatorPickerNonEmptyStringSchema = Schema.String.pipe(
   Schema.minLength(1),
 )
+
+const authenticatorPickerQueryResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  origin: authenticatorPickerNonEmptyStringSchema,
+  accounts: Schema.mutable(
+    Schema.Array(
+      Schema.Struct({
+        vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+        secretId: authenticatorPickerNonEmptyStringSchema,
+        issuer: Schema.String,
+        account: Schema.String,
+        vaultName: Schema.String,
+      }),
+    ),
+  ),
+}) satisfies Schema.Schema<AuthenticatorPickerQueryResponse>
+
+const authenticatorPickerSelectResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+}) satisfies Schema.Schema<AuthenticatorPickerSelectResponse>
 
 const websiteAuthenticatorPickerOpenMessageSchema = Schema.Struct({
   type: Schema.Literal(

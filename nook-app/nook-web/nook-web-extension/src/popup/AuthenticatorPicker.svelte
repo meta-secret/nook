@@ -8,6 +8,10 @@
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
   import {
+    ConcreteDecoderResultKind,
+    runConcreteDecoder,
+  } from '../lib/concrete-decoder'
+  import {
     AuthenticatorPickerCancelMessageType,
     AuthenticatorPickerQueryMessageType,
     AuthenticatorPickerQueryResponse,
@@ -61,18 +65,26 @@
           message.type ===
           AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery
         ) {
+          const decoded = runConcreteDecoder(
+            AuthenticatorPickerQueryResponse.decode,
+            response,
+          )
           resolve(
-            AuthenticatorPickerQueryResponse.is(response)
+            decoded.kind === ConcreteDecoderResultKind.Decoded
               ? {
                   kind: AuthenticatorPickerRuntimeResponseKind.Query,
-                  response,
+                  response: decoded.value,
                 }
               : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
           )
           return
         }
+        const decoded = runConcreteDecoder(
+          AuthenticatorPickerSelectResponse.decode,
+          response,
+        )
         resolve(
-          AuthenticatorPickerSelectResponse.is(response)
+          decoded.kind === ConcreteDecoderResultKind.Decoded
             ? { kind: AuthenticatorPickerRuntimeResponseKind.Selected }
             : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
         )

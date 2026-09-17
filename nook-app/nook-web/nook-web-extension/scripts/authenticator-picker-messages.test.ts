@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   MAX_AUTHENTICATOR_SEARCH_LENGTH,
   AuthenticatorPickerCancelMessage as AuthenticatorPickerCancelMessageSchema,
@@ -66,7 +67,7 @@ describe('authenticator picker messages', () => {
 
   test('admits only complete authenticator query responses', () => {
     expect(
-      AuthenticatorPickerQueryResponseSchema.is({
+      Effect.runSync(Effect.either(AuthenticatorPickerQueryResponseSchema.decode({
         ok: true,
         origin: 'https://accounts.example.test',
         accounts: [
@@ -78,14 +79,14 @@ describe('authenticator picker messages', () => {
             account: 'alice@example.test',
           },
         ],
-      }),
+      })))._tag === 'Right',
     ).toBe(true)
     expect(
-      AuthenticatorPickerQueryResponseSchema.is({
+      Effect.runSync(Effect.either(AuthenticatorPickerQueryResponseSchema.decode({
         ok: true,
         origin: 'https://accounts.example.test',
         accounts: [{ vaultStoreId: 'vault-1' }],
-      }),
+      })))._tag === 'Right',
     ).toBe(false)
   })
 

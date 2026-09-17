@@ -8,6 +8,10 @@
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
   import {
+    ConcreteDecoderResultKind,
+    runConcreteDecoder,
+  } from '../lib/concrete-decoder'
+  import {
     LoginPickerCancelMessageType,
     LoginPickerQueryMessageType,
     LoginPickerQueryResponse,
@@ -58,18 +62,26 @@
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(message, (response: unknown) => {
         if (message.type === LoginPickerQueryMessageType.NookLoginPickerQuery) {
+          const decoded = runConcreteDecoder(
+            LoginPickerQueryResponse.decode,
+            response,
+          )
           resolve(
-            LoginPickerQueryResponse.is(response)
+            decoded.kind === ConcreteDecoderResultKind.Decoded
               ? {
                   kind: LoginPickerRuntimeResponseKind.Query,
-                  response,
+                  response: decoded.value,
                 }
               : { kind: LoginPickerRuntimeResponseKind.Rejected },
           )
           return
         }
+        const decoded = runConcreteDecoder(
+          LoginPickerSelectResponse.decode,
+          response,
+        )
         resolve(
-          LoginPickerSelectResponse.is(response)
+          decoded.kind === ConcreteDecoderResultKind.Decoded
             ? { kind: LoginPickerRuntimeResponseKind.Selected }
             : { kind: LoginPickerRuntimeResponseKind.Rejected },
         )

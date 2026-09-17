@@ -31,39 +31,8 @@ export class LoginPickerQueryResponse {
   declare readonly origin: string
   declare readonly accounts: WebsiteLoginAccountOption[]
 
-  static is(response: unknown): response is LoginPickerQueryResponse {
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      Array.isArray(response) ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('origin' in response) ||
-      typeof response.origin !== 'string' ||
-      response.origin.length === 0 ||
-      !('accounts' in response) ||
-      !Array.isArray(response.accounts)
-    ) {
-      return false
-    }
-    return response.accounts.every((account: unknown) => {
-      if (!account || typeof account !== 'object' || Array.isArray(account))
-        return false
-      return (
-        'vaultStoreId' in account &&
-        typeof account.vaultStoreId === 'string' &&
-        account.vaultStoreId.length > 0 &&
-        'secretId' in account &&
-        typeof account.secretId === 'string' &&
-        account.secretId.length > 0 &&
-        'username' in account &&
-        typeof account.username === 'string' &&
-        'websiteHost' in account &&
-        typeof account.websiteHost === 'string' &&
-        'vaultName' in account &&
-        typeof account.vaultName === 'string'
-      )
-    })
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(loginPickerQueryResponseSchema)(response)
   }
 }
 
@@ -103,14 +72,8 @@ export class LoginPickerSelectResponse {
   private constructor() {}
   declare readonly ok: true
 
-  static is(response: unknown): response is LoginPickerSelectResponse {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      !Array.isArray(response) &&
-      'ok' in response &&
-      response.ok === true
-    )
+  static decode(response: unknown) {
+    return Schema.decodeUnknown(loginPickerSelectResponseSchema)(response)
   }
 }
 
@@ -186,6 +149,26 @@ export class WebsiteLoginCanceledMessage {
 }
 
 const loginPickerNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+
+const loginPickerQueryResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  origin: loginPickerNonEmptyStringSchema,
+  accounts: Schema.mutable(
+    Schema.Array(
+      Schema.Struct({
+        vaultStoreId: loginPickerNonEmptyStringSchema,
+        secretId: loginPickerNonEmptyStringSchema,
+        username: Schema.String,
+        websiteHost: Schema.String,
+        vaultName: Schema.String,
+      }),
+    ),
+  ),
+}) satisfies Schema.Schema<LoginPickerQueryResponse>
+
+const loginPickerSelectResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+}) satisfies Schema.Schema<LoginPickerSelectResponse>
 
 const websiteLoginPickerOpenMessageSchema = Schema.Struct({
   type: Schema.Literal(
