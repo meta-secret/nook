@@ -5,6 +5,8 @@
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
 # non-build validation as part of their dependency warm-up.
 
+ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:local
+
 FROM rust-base AS compile-platform-manifests
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
@@ -186,8 +188,10 @@ RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
     fi
 
 # Trusted ARC consumers have a remote BuildKit API but no container runtime.
-# Import the producer's exact Zot image as a named context, execute validation
-# as a normal solve vertex, then expose only the small validation handoff.
+# Resolve the producer's exact Zot image as a normal solve stage, execute
+# validation as a normal solve vertex, then expose only the small handoff.
+FROM ${PR_NATIVE_IMAGE} AS pr-native-image
+
 FROM pr-native-image AS pr-native-verify
 
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
