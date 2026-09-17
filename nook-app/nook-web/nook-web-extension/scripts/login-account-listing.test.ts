@@ -120,6 +120,11 @@ describe('login account listing failure handling', () => {
             ExtensionSessionTransportFailureKind.DeliveryFailed,
           ),
         ),
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
       ],
     })
     const unavailableRequest: Parameters<

@@ -112,7 +112,10 @@ export default [
     languageOptions: {
       parserOptions: {
         parser: ts.parser,
-        project: "./tsconfig.eslint.json",
+        project: [
+          "./tsconfig.eslint.json",
+          "./nook-web-extension/tsconfig.json",
+        ],
         extraFileExtensions: [".svelte"],
         tsconfigRootDir: import.meta.dirname,
       },

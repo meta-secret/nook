@@ -61,7 +61,7 @@ function iCloudTokensWithAccountName(
 }
 
 function mockPendingCloudKitSignIn(
-  setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity(),
+  setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity(),
 ) {
   let resolveSignIn: (value: CloudKitUserIdentity) => void = () => {}
   const signInPromise = new Promise<CloudKitUserIdentity>((resolve) => {
@@ -191,9 +191,10 @@ describe('icloud-oauth', () => {
     it('keeps an absent current identity signed out', async () => {
       const saveRecordZones = vi.fn()
       ICloudOAuthTestFixture.useContainer({
-        setUpAuth: ICloudOAuthTestFixture.resolvedUserIdentity(),
+        setUpAuth: ICloudOAuthTestFixture.resolvedSignedOutIdentity(),
         whenUserSignsIn: vi.fn(),
-        fetchCurrentUserIdentity: ICloudOAuthTestFixture.resolvedUserIdentity(),
+        fetchCurrentUserIdentity:
+          ICloudOAuthTestFixture.resolvedSignedOutIdentity(),
         privateCloudDatabase: {
           saveRecordZones,
           saveRecords: vi.fn(),
@@ -361,7 +362,7 @@ describe('icloud-oauth', () => {
       const signInPromise = new Promise<CloudKitUserIdentity>((resolve) => {
         resolveSignIn = resolve
       })
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -390,7 +391,7 @@ describe('icloud-oauth', () => {
     })
 
     it('resolves from the CloudKit token store when the sign-in callback hangs', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -484,7 +485,7 @@ describe('icloud-oauth', () => {
       )
       const clickSpy = vi.fn()
       signInButton?.addEventListener('click', clickSpy)
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -519,7 +520,7 @@ describe('icloud-oauth', () => {
       const signInButton = document.querySelector<HTMLButtonElement>(
         '#apple-sign-in-button button',
       )
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -550,7 +551,7 @@ describe('icloud-oauth', () => {
     })
 
     it('keeps waiting for the token when CloudKit wraps the auth challenge as UNKNOWN_ERROR', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
@@ -579,7 +580,7 @@ describe('icloud-oauth', () => {
     })
 
     it('falls back to CloudKit web auth redirect when CloudKit JS hides the auth challenge', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
@@ -637,7 +638,7 @@ describe('icloud-oauth', () => {
         configurable: true,
         value: {},
       })
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         serverErrorCode: 'AUTHENTICATION_REQUIRED',
         reason: 'request needs authorization',
@@ -684,7 +685,7 @@ describe('icloud-oauth', () => {
         configurable: true,
         value: {},
       })
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn()
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -742,7 +743,7 @@ describe('icloud-oauth', () => {
     })
 
     it('surfaces an invalid CloudKit API token from the direct auth challenge', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
@@ -776,7 +777,7 @@ describe('icloud-oauth', () => {
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -880,7 +881,7 @@ describe('icloud-oauth', () => {
     })
 
     it('detects tokens stored directly in session storage via polling fallback', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -906,7 +907,7 @@ describe('icloud-oauth', () => {
     })
 
     it('normalizes tokens with webAuthToken key', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -932,7 +933,7 @@ describe('icloud-oauth', () => {
     })
 
     it('allows retry after a sign-in timeout by resetting auth state', async () => {
-      const setUpAuth = ICloudOAuthTestFixture.resolvedUserIdentity()
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       ICloudOAuthTestFixture.useContainer({
         setUpAuth,
@@ -951,7 +952,7 @@ describe('icloud-oauth', () => {
         resolveSignIn = resolve
       })
       ICloudOAuthTestFixture.useContainer({
-        setUpAuth: ICloudOAuthTestFixture.resolvedUserIdentity(),
+        setUpAuth: ICloudOAuthTestFixture.resolvedSignedOutIdentity(),
         whenUserSignsIn: vi.fn().mockReturnValue(signInPromise),
       })
 

@@ -50,9 +50,19 @@ import {
   ExtensionPairedVaultIdentityHandoffRequestMessage,
   ExtensionPairedVaultUnlockRequestMessage,
 } from '../../nook-web-shared/src/extension/runtime-messages'
+import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+})
+
+await initNookWasm({
+  module_or_path: await Bun.file(
+    new URL(
+      '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+      import.meta.url,
+    ),
+  ).arrayBuffer(),
 })
 Object.assign(globalThis, {
   chrome: {
@@ -72,7 +82,7 @@ const {
 
 const routedGrant: StoredExtensionPairingGrant = {
   vaultType: 'simple',
-  vaultStoreId: 'vault-1',
+  vaultStoreId: 'store_abcdefghijk',
   deviceId: 'device-1',
   devicePublicKey: 'device-public-key',
   deviceSigningPublicKey: 'device-signing-public-key',
@@ -84,6 +94,18 @@ const routedGrant: StoredExtensionPairingGrant = {
   eventCount: 1,
   eventLogHeads: ['event-1'],
   lastLocalSyncAt: '2026-09-11T00:00:00.000Z',
+}
+
+const routedVaultEvent = {
+  schema_version: 2,
+  store_id: 'store_testtoken11',
+  actor_id: `key_${'0'.repeat(64)}`,
+  actor_signing_public_key: '0'.repeat(64),
+  parents: [],
+  created_at: '2026-08-10T00:00:00Z',
+  key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+  operations: [{ type: 'vault-cleared' as const }],
+  signature: `ed25519:${'0'.repeat(128)}`,
 }
 
 const externalPairingMessage: ExternalCompanionMessage = {
@@ -104,7 +126,7 @@ const externalPairingMessage: ExternalCompanionMessage = {
     {
       eventId: 'event-1',
       path: 'events/1',
-      event: { schema_version: 1 },
+      event: routedVaultEvent,
     },
   ],
 }
@@ -226,6 +248,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
 async function flushResponses(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+  await Bun.sleep(0)
 }
 
 async function routeDecodedLocalUpdate(
@@ -280,7 +303,7 @@ async function routeDecodedLocalUpdate(
             {
               eventId: 'event-1',
               path: 'events/1',
-              event: { schema_version: 1 },
+              event: routedVaultEvent,
             },
           ],
         },
@@ -615,12 +638,12 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',
                 path: 'events/1',
-                event: { schema_version: 1 },
+                event: routedVaultEvent,
               },
             ],
           },
@@ -693,12 +716,12 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',
                 path: 'events/1',
-                event: { schema_version: 1 },
+                event: routedVaultEvent,
               },
             ],
           },
@@ -732,12 +755,12 @@ describe('service worker routing', () => {
         message: {
           type: 'nook:extension-local-event-log-updated',
           payload: {
-            vaultStoreId: 'vault-1',
+            vaultStoreId: 'store_abcdefghijk',
             eventLogRecords: [
               {
                 eventId: 'event-1',
                 path: 'events/1',
-                event: { schema_version: 1 },
+                event: routedVaultEvent,
               },
             ],
           },
