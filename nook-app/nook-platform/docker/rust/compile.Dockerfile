@@ -309,7 +309,7 @@ RUN mkdir -p \
     && rm -rf /tmp/nook-wasm-handoff
 
 RUN cd nook-app/nook-web \
-    && node_modules/.bin/eslint --config eslint.named-success.config.js \
+    && node_modules/.bin/eslint --config eslint.compile-contracts.config.js \
       "nook-web-extension/src/**/*.{ts,svelte}" \
       "nook-web-shared/src/**/*.{ts,svelte}" \
       "nook-web-app/src/**/*.{ts,svelte}" \
