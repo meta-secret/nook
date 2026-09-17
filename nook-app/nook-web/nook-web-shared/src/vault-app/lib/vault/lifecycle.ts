@@ -60,6 +60,12 @@ type DeviceIdentityInitialization = {
   readonly mode: DeviceIdentityInitializationMode;
 };
 
+enum DeviceIdentityAuthorizationState {
+  NotStarted,
+  PasskeyUnlocked,
+  ProtectionConfigured,
+}
+
 type ExternalDeviceIdentityAuthorization = {
   readonly adopt: (
     manager: NookVaultManager,
@@ -91,7 +97,8 @@ export class VaultInitializationActions {
     const state = this.state;
     log.info("app init started");
     state.isInitializing = true;
-    let deviceIdentityUnlocked = false;
+    let deviceIdentityAuthorization =
+      DeviceIdentityAuthorizationState.NotStarted;
     if (!state.isVerifying) state.errorMsg = "";
     try {
       const savedLocale = new VaultLocaleActions(state).savedAppLocale();
@@ -209,18 +216,23 @@ export class VaultInitializationActions {
         if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
           const authorization = await state.enqueueStorage(
             async (): Promise<
-              Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+              Result<
+                DeviceIdentityAuthorizationState,
+                PasskeyCeremonyFailure | StorageOperationFailure
+              >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              return unlockDeviceProtection(manager.value);
+              return unlockDeviceProtection(manager.value).map(
+                () => DeviceIdentityAuthorizationState.PasskeyUnlocked,
+              );
             },
           );
           if (authorization.isErr()) {
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
-          deviceIdentityUnlocked = true;
+          deviceIdentityAuthorization = authorization.value;
           state.deviceAuthorizationInProgress = true;
         } else if (
           state.deviceProtectionStatus === DeviceProtectionStatus.Pin
@@ -231,7 +243,10 @@ export class VaultInitializationActions {
           // key is not on the roster, and backup-password recovery would fail.
           const authorization = await state.enqueueStorage(
             async (): Promise<
-              Result<void, PasskeyCeremonyFailure | StorageOperationFailure>
+              Result<
+                DeviceIdentityAuthorizationState,
+                PasskeyCeremonyFailure | StorageOperationFailure
+              >
             > => {
               const manager = state.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
@@ -240,19 +255,25 @@ export class VaultInitializationActions {
                 manager: manager.value,
                 passkeyLabel: "",
                 deviceMode: state.draftDeviceMode,
-              });
+              }).map(
+                () => DeviceIdentityAuthorizationState.ProtectionConfigured,
+              );
             },
           );
           if (authorization.isErr()) {
             state.errorMsg = state.t(authorization.error.translationKey);
             return;
           }
-          deviceIdentityUnlocked = true;
+          deviceIdentityAuthorization = authorization.value;
           state.deviceAuthorizationInProgress = true;
         }
       }
 
-      if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {
+      if (
+        !state.deviceProtectionReady &&
+        deviceIdentityAuthorization ===
+          DeviceIdentityAuthorizationState.NotStarted
+      ) {
         const enrollment = state.enrollmentLinkState;
         if (enrollment.kind === EnrollmentLinkKind.Pending) {
           state.clearPendingEnrollmentFromUrl();
@@ -275,7 +296,10 @@ export class VaultInitializationActions {
       }
       const continued = await this.continueInitializationAfterDeviceUnlock();
       if (continued.isErr()) {
-        if (deviceIdentityUnlocked) {
+        if (
+          deviceIdentityAuthorization !==
+          DeviceIdentityAuthorizationState.NotStarted
+        ) {
           const locked = await state.lockDeviceProtection();
           if (locked.isErr()) {
             state.errorMsg = state.t(locked.error.translationKey);
@@ -289,7 +313,8 @@ export class VaultInitializationActions {
     } catch (error) {
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
-        deviceIdentityUnlocked
+        deviceIdentityAuthorization !==
+          DeviceIdentityAuthorizationState.NotStarted
       ) {
         void state.lockDeviceProtection().then((locked) => {
           if (locked.isErr())
@@ -311,7 +336,10 @@ export class VaultInitializationActions {
   }
 
   async continueInitializationAfterDeviceUnlock(): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
+    Result<
+      DeviceIdentityInitializationSnapshot,
+      StorageOperationFailure | OAuthFailure
+    >
   > {
     const continuation = DeviceInitializationContinuation.admit(this.state);
     if (continuation.isErr()) return storageErr(continuation.error);
@@ -613,7 +641,9 @@ class DeviceInitializationContinuation {
       new DeviceInitializationContinuation({ state, manager: manager.value }),
     );
   }
-  private requireCurrentManager(): Result<void, StorageOperationFailure> {
+  private async initializeCurrentDeviceIdentity(): Promise<
+    Result<DeviceIdentityInitializationSnapshot, StorageOperationFailure>
+  > {
     const manager = this.state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     if (
@@ -626,20 +656,21 @@ class DeviceInitializationContinuation {
           StorageOperationFailureKind.DeviceAuthorizationRequired,
         ),
       );
-    return storageOk();
-  }
-  async continue(): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
-  > {
-    const state = this.state;
-    const current = this.requireCurrentManager();
-    if (current.isErr()) return storageErr(current.error);
     const initialization: DeviceIdentityInitialization = {
       mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
     };
-    const initialized = await new VaultInitializationActions(
-      state,
+    return new VaultInitializationActions(
+      this.state,
     ).initDeviceIdentity(initialization);
+  }
+  async continue(): Promise<
+    Result<
+      DeviceIdentityInitializationSnapshot,
+      StorageOperationFailure | OAuthFailure
+    >
+  > {
+    const state = this.state;
+    const initialized = await this.initializeCurrentDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const pending = await state.enqueueStorage(async () => {
       const admittedManager = state.admitManager();
@@ -757,6 +788,6 @@ class DeviceInitializationContinuation {
       state.startVaultSync();
     }
     log.info("app init finished");
-    return storageOk();
+    return storageOk(initialized.value);
   }
 }

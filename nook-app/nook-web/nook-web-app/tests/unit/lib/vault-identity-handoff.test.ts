@@ -165,6 +165,15 @@ describe('external browser identity handoff commit ownership', () => {
         await fixture.lifecycle.continueInitializationAfterDeviceUnlock()
 
       expect(continued.isOk()).toBe(true)
+      expect(
+        continued.match(
+          (snapshot) => snapshot,
+          (failure) => failure,
+        ),
+      ).toEqual({
+        deviceId: fixture.state.deviceId,
+        devicePublicKey: fixture.state.devicePublicKey,
+      })
       expect(refreshDeviceState).not.toHaveBeenCalled()
       expect(fixture.state.enrollmentFromUrlPending).toBe(true)
       expect(fixture.state.prefillEnrollmentCode).toBe('pending-enrollment')
