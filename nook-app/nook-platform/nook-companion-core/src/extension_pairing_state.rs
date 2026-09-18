@@ -877,7 +877,7 @@ mod tests {
         }
 
         fn other_store() -> StoreId {
-            Self::valid_store("store_lmnopqrst")
+            Self::valid_store("store_lmnopqrstuv")
         }
 
         fn newer_store() -> StoreId {
