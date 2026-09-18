@@ -103,88 +103,60 @@ fi
 
 body="$(mktemp)"
 headers="$(mktemp)"
-verified=false
-for attempt in $(seq 1 60); do
-  site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
-  retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
-  site_ok=false
-  if [ "$site_status" = "200" ] \
-    && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
-    && grep -Fq "$simple_url/" "$body" \
-    && grep -Fq "$sentinel_url/" "$body" \
-    && [ "$retired_status" = "404" ] \
-    && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
-    site_ok=true
-  fi
+site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
+retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
+site_ok=false
+if [ "$site_status" = "200" ] \
+  && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
+  && grep -Fq "$simple_url/" "$body" \
+  && grep -Fq "$sentinel_url/" "$body" \
+  && [ "$retired_status" = "404" ] \
+  && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
+  site_ok=true
+fi
 
-  simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
-  simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
-  simple_ok=false
-  if [ "$simple_status" = "200" ] \
-    && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
-    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-    && [ "$simple_extension" = "200" ]; then
-    simple_ok=true
-  fi
+simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
+simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
+simple_ok=false
+if [ "$simple_status" = "200" ] \
+  && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
+  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+  && [ "$simple_extension" = "200" ]; then
+  simple_ok=true
+fi
 
-  sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
-  sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
-  sentinel_ok=false
-  if [ "$sentinel_status" = "200" ] \
-    && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
-    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-    && [ "$sentinel_extension" = "404" ]; then
-    sentinel_ok=true
-  fi
+sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
+sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
+sentinel_ok=false
+if [ "$sentinel_status" = "200" ] \
+  && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
+  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+  && [ "$sentinel_extension" = "404" ]; then
+  sentinel_ok=true
+fi
 
-  if [ "$site_ok" = true ] && [ "$simple_ok" = true ] && [ "$sentinel_ok" = true ]; then
-    verified=true
-    break
-  fi
-  echo "Waiting for isolated aliases (attempt $attempt/60; site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
-  sleep 2
-done
-if [ "$verified" != true ]; then
-  echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
+if [ "$site_ok" != true ] || [ "$simple_ok" != true ] || [ "$sentinel_ok" != true ]; then
+  echo "::error::Isolated Pages aliases failed verification (site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
   exit 1
 fi
-extension_verified=false
-last_extension_output=''
-for attempt in $(seq 1 30); do
-  set +e
-  last_extension_output="$(
-    EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
-    EXTENSION_CACHE_BUST="$HEAD_SHA-$attempt" \
-    EXPECTED_EXTENSION_CHANNEL="development" \
-    EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
-    EXPECTED_EXTENSION_SITE_URL="$site_url/" \
-    EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
-    EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
-      bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh 2>&1
-  )"
-  extension_status=$?
-  set -e
-  if [ "$extension_status" -eq 0 ]; then
-    printf '%s\n' "$last_extension_output"
-    extension_verified=true
-    break
-  fi
-  echo "Waiting for exact-head extension metadata (attempt $attempt/30)"
-  sleep 2
-done
-if [ "$extension_verified" != true ]; then
-  printf '%s\n' "$last_extension_output" >&2
-  echo "::error::Extension metadata did not converge to the exact PR head"
-  exit 1
-fi
+expected_extension_channel="pr-$deployment_tag"
+extension_archive="nook-passwords-${expected_extension_channel}.zip"
+EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
+EXTENSION_CACHE_BUST="$HEAD_SHA" \
+EXPECTED_EXTENSION_CHANNEL="$expected_extension_channel" \
+EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
+EXPECTED_EXTENSION_SITE_URL="$site_url/" \
+EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
+EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
+  bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "preview_url=$preview_url"
     echo "site_url=$site_url"
     echo "simple_url=$simple_url"
     echo "sentinel_url=$sentinel_url"
-    echo "extension_url=$site_url/downloads/nook-passwords-dev.zip"
+    echo "extension_url=$site_url/downloads/$extension_archive"
   } >> "$GITHUB_OUTPUT"
 fi

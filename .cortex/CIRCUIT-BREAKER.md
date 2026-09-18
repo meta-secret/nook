@@ -131,6 +131,15 @@ evidence, or validation results.
   - This prohibition applies only to Rust, application, or other custom code
     that computes cache keys, invalidates dependencies, selects caches, or
     decides layer reuse without invoking Docker or BuildKit.
+- **Job-to-job and exact-head metadata polling**
+  - Do not poll or retry while waiting for another workflow job, deployment
+    metadata, or exact-head evidence to appear.
+  - Model ordering through ordinary workflow dependencies and pass immutable
+    artifacts or outputs directly between jobs.
+  - After a deployment command completes, perform each required exact-head
+    verification once and fail immediately with its real diagnostic output.
+  - Do not hide a deterministic contract mismatch behind convergence retries,
+    cache-busting attempt counters, or generic timeout errors.
 - **Preservation**
   - Never preserve a prohibited system merely because another document or
     existing implementation describes it.
