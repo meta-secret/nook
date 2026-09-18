@@ -60,7 +60,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not perform team-owned implementation as Gizmo.
 - Do not execute local tests, including Loom tests.
 - Do not run local product compilation, Docker work, coverage, or preflight.
-- Do not run tests, checks, coverage, e2e, or preflight remotely in the feature stage.
+- Do not run remote tests, coverage, e2e, or preflight in the feature stage.
+- Do not request any remote check other than the required `build:compile` and
+  `type:check` gates.
 - Do not discover or preflight the remote `type:check` selector.
 - Do not mock, simulate, or execute remote `type:check` locally.
 - Do not use `type:check` as a replacement for the required `build:compile` gate.
@@ -150,7 +152,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
      the separately authorized focused browser selector. Neither is the
      feature-stage aggregate build-only path or replaces `build:compile` in
      this stage. The exact feature-stage type-safety selector is `type:check`.
-   - Do not request tests, checks, coverage, e2e, or preflight in that stage.
+   - Do not request remote tests, coverage, e2e, or preflight in that stage.
+   - Do not request any remote check other than the required `build:compile` and
+     `type:check` gates.
    - Fast agents review code and required security boundaries.
    - Route complete repair waves to the responsible teams before repeating the
      affected remote gates.
