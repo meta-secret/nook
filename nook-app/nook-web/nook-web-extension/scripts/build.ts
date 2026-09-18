@@ -64,9 +64,14 @@ type ResolvedSvelteModule = {
   readonly vitePreprocess: typeof import('@sveltejs/vite-plugin-svelte').vitePreprocess
 }
 
+enum ExtensionBuildDependencySpecifier {
+  Vite = 'vite',
+  Svelte = '@sveltejs/vite-plugin-svelte',
+}
+
 class ExtensionBuildDependencyLoader {
   async importVite(): Promise<Pick<typeof import('vite'), 'build'>> {
-    return this.importResolved('vite')
+    return this.importResolved(ExtensionBuildDependencySpecifier.Vite)
   }
 
   async importSvelte(): Promise<
@@ -75,20 +80,22 @@ class ExtensionBuildDependencyLoader {
       'svelte' | 'vitePreprocess'
     >
   > {
-    return this.importResolved('@sveltejs/vite-plugin-svelte')
+    return this.importResolved(ExtensionBuildDependencySpecifier.Svelte)
   }
 
-  private importResolved(specifier: 'vite'): Promise<ResolvedViteModule>
   private importResolved(
-    specifier: '@sveltejs/vite-plugin-svelte',
+    specifier: ExtensionBuildDependencySpecifier.Vite,
+  ): Promise<ResolvedViteModule>
+  private importResolved(
+    specifier: ExtensionBuildDependencySpecifier.Svelte,
   ): Promise<ResolvedSvelteModule>
   private importResolved(
-    specifier: 'vite' | '@sveltejs/vite-plugin-svelte',
+    specifier: ExtensionBuildDependencySpecifier,
   ): Promise<ResolvedViteModule | ResolvedSvelteModule> {
     switch (specifier) {
-      case 'vite':
+      case ExtensionBuildDependencySpecifier.Vite:
         return import('vite')
-      case '@sveltejs/vite-plugin-svelte':
+      case ExtensionBuildDependencySpecifier.Svelte:
         return import('@sveltejs/vite-plugin-svelte')
     }
   }
