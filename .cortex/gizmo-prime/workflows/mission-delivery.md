@@ -3,7 +3,8 @@
 ## Outcome
 
 Each feature Gizmo owns one feature branch, parent worktree, and Team Agent
-children. Feature delivery ends only after remote compilation, required review,
+children. Feature delivery ends only after required review, remote
+`build:compile`, one remote `type:check` result for the same committed head,
 serialized local dev integration, and proof that canonical local `dev` contains
 the accepted feature commit. The manually run dev manager owns publication,
 slow PR checks, and main promotion.
@@ -37,9 +38,11 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
   Prime authorizes the canonical feature branch name, which is the workflow
   authority. Observed base and head SHAs are evidence only and are not
   required packet fields. Delivery re-fetches and resolves the latest
-  committed branch head before every remote dispatch, review, or landing
-  operation. If the branch advances, follow the latest head and rerun
-  affected evidence. Team Gizmos and leaves keep temporary branches private.
+  stable committed branch head before every remote dispatch, review, or landing
+  operation. If the branch advances, invalidate review, `build:compile`, and
+  `type:check` evidence bound to the older head. Resolve the latest head and
+  rerun affected evidence. Team Gizmos and leaves keep temporary branches
+  private.
 - Preserve functional ownership and required security verdicts.
 - Use the active harness for Team Gizmo and internal Team Agent communication.
 - Keep every writer within its issued child worktree and explicit file scope.
@@ -58,6 +61,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not execute local tests, including Loom tests.
 - Do not run local product compilation, Docker work, coverage, or preflight.
 - Do not run tests, checks, coverage, e2e, or preflight remotely in the feature stage.
+- Do not discover or preflight the remote `type:check` selector.
+- Do not mock, simulate, or execute remote `type:check` locally.
+- Do not use `type:check` as a replacement for the required `build:compile` gate.
 - Do not push dev or main from a feature task.
 - Do not introduce a Team Agent lifecycle service, scheduler, or Git-state machinery.
 - Do not introduce a persistent Delivery Pipeline or PR Lifecycle Agent
@@ -117,23 +123,39 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Parent feature integration is distinct from shared local dev landing.
    - Require handoffs listing each iteration SHA, outcome, evidence, and blockers.
    - Have later iterations inspect the last one or two relevant commits and diffs.
-6. **Compile and review.**
-   - Have Delivery Pipeline Team Gizmo route PR Lifecycle Agent's remote
-     build-only execution packet for the canonical branch.
-   - PR Lifecycle re-fetches and resolves the latest committed branch head
-     before pushing or dispatching. A branch advance follows the latest head
-     and reruns compilation or review as needed.
-   - Run only `task remote TASK_NAME=build:compile` for feature-stage remote execution.
+6. **Review, compile, and type-check.**
+   - Have Delivery Pipeline Team Gizmo route PR Lifecycle Agent's feature-stage
+     remote packet for the canonical branch.
+   - PR Lifecycle re-fetches and resolves a stable committed branch head before
+     pushing or dispatching.
+   - Complete required review for that head.
+   - Run remote `task remote TASK_NAME=build:compile` for that head.
+   - Without a branch advance, run exactly one remote
+     `task remote TASK_NAME=type:check` request for the same unchanged head.
+   - Use the natural terminal remote `type:check` result as evidence.
+   - Consume `remote-type-check-<run-id>-<attempt>/report.yaml` and every raw
+     log referenced by its diagnostics.
+   - If `type:check` fails, inventory every diagnostic before repair. Group the
+     full inventory by owning team and coherent competence area.
+   - Send one consolidated repair packet per competence area. Do not send one
+     agent per diagnostic.
+   - Integrate the entire repair wave before one new `type:check` request. Do
+     not notify, repair, or rerun after an individual diagnostic.
+   - A branch advance invalidates older review, `build:compile`, and
+     `type:check` evidence. Resolve the latest committed head and repeat the
+     affected gates.
    - `task remote TASK_NAME=web:build` remains the branch-authorized focused
      direct-Pod web-build selector, and `task remote TASK_NAME=web:e2e` remains
      the separately authorized focused browser selector. Neither is the
      feature-stage aggregate build-only path or replaces `build:compile` in
-     this stage.
+     this stage. The exact feature-stage type-safety selector is `type:check`.
    - Do not request tests, checks, coverage, e2e, or preflight in that stage.
    - Fast agents review code and required security boundaries.
-   - Route fixes to the responsible team and repeat compilation after each push.
+   - Route complete repair waves to the responsible teams before repeating the
+     affected remote gates.
 7. **Land the accepted feature commit.**
-   - Require positive compilation evidence for the current branch head.
+   - Require positive `build:compile` and `type:check` evidence for the current
+     branch head.
    - Require resolved review findings and required security acceptance.
    - Authorize Delivery Pipeline Team Gizmo's bounded local-integration packet
      to PR Lifecycle Agent for `dev:land`.
@@ -194,7 +216,10 @@ rather than present authored or committed changes as successful delivery.
   A branch advance is followed or rerun rather than rejected as stale.
 - Dirty changes remained attributed and unrelated changes were preserved.
 - Parent integration and shared local dev integration were serialized.
-- The current branch head has passing remote build-only evidence.
+- The current branch head has passing remote `build:compile` evidence.
+- The same unchanged head has one passing remote `type:check` result.
+- The handoff names the `remote-type-check-<run-id>-<attempt>/report.yaml`
+  artifact and the raw logs referenced by its diagnostics.
 - Required review and security findings are resolved.
 - Tests were authored for execution in the manager's slow stage.
 - The accepted feature is present in local dev.

@@ -52,9 +52,11 @@ post-synchronization `refs/heads/dev` cannot be proved, the run fails closed.
 The base is preserved after feature creation. Prime authorizes the canonical
 feature branch name, which is the workflow authority. Observed base and head
 SHAs are evidence only, not required packet fields. Delivery re-fetches and
-resolves the latest committed branch head before every remote dispatch, review,
-or landing operation. If the branch advances, follow the latest head and rerun
-affected evidence. Team Gizmos and leaves keep temporary branches private.
+resolves a stable committed branch head before every remote dispatch, review,
+or landing operation. If the branch advances, invalidate review,
+`build:compile`, and `type:check` evidence bound to the older head. Follow the
+latest head and rerun affected evidence. Team Gizmos and leaves keep temporary
+branches private.
 
 ```mermaid
 sequenceDiagram
@@ -147,7 +149,7 @@ receives a separate issued child worktree. Disjoint specialists may run in paral
 Team Gizmo integrates their committed results into its team feature branch and
 reports one synthesized branch-head result or blocker to Gizmo Prime. The Delivery Pipeline Team Gizmo handles
 Level 1 delivery-pipeline orchestration, commit handoffs, and remote
-build-only task packets. Its `pr-lifecycle` agent handles only packetized
+feature-stage gate packets. Its `pr-lifecycle` agent handles only packetized
 external GitHub, PR, check, review, status, and bounded dev mechanics.
 
 ## Dynamic harness capacity
@@ -182,7 +184,7 @@ flowchart LR
     Feature["Feature Gizmos<br/>feature owners and Team Agents"]
     Pipeline["Delivery Pipeline Team Gizmo<br/>Level 1 routing"]
     Steward["PR Lifecycle Agent<br/>bounded mechanics"]
-    Checks["Remote build-only evidence"]
+    Checks["Remote build:compile and type:check evidence"]
     Parallel["Parallel Feature Gizmos"]
     Dev["Local dev integration"]
     Validation["Dev Manager<br/>validation and promotion policy"]
@@ -199,9 +201,9 @@ Gizmo Prime owns the mission/root delivery decision. The Feature Gizmo remains
 the feature owner for planning, functional delegation, review, team-commit
 integration, and feedback routing. Each team's Team Gizmo handles only its
 team's delivery mechanics, including commit-level handoffs and remote
-build-only task packets. Internal Team Agents work in isolated child
-worktrees. Code review and remote type safety appear here as one external-check
-boundary.
+feature-stage gate packets. Internal Team Agents work in isolated child
+worktrees. Code review, remote compilation, and remote type safety appear here
+as one external-check boundary.
 
 ### Flow
 
@@ -212,10 +214,11 @@ previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`,
 or another alternate base is invalid. The base is preserved after feature
 creation. The branch name is the workflow authority. Workers keep temporary
 branches private. Base and head SHAs may be recorded as observational
-evidence, but are not packet authority. Delivery re-fetches and resolves the
-latest committed branch head before remote work, review, or landing. A branch
-advance follows the latest head and reruns affected evidence. No
-implementation worker creates work from `origin/main` or `origin/dev`.
+evidence, but are not packet authority. Delivery re-fetches and resolves a
+stable committed branch head before remote work, review, or landing. A branch
+advance invalidates review, `build:compile`, and `type:check` evidence bound to
+the older head. Delivery follows the latest head and reruns affected evidence.
+An implementation worker never creates work from `origin/main` or `origin/dev`.
 
 ```mermaid
 flowchart LR
@@ -225,14 +228,15 @@ flowchart LR
     Teams["Team Agents"]
     GizmoManagement["Feature Gizmo:<br/>reviews and integrates commits"]
     Pipeline["Delivery Pipeline Team Gizmo:<br/>Level 1 orchestration"]
-    Steward["PR Lifecycle Agent:<br/>remote build-only packet"]
-    Checks["Remote build-only evidence"]
+    Steward["PR Lifecycle Agent:<br/>remote gate packet"]
+    Build["Remote build:compile evidence"]
+    TypeCheck["One remote type:check evidence"]
     Green{"Green?"}
     Feedback["Gizmo Prime:<br/>routes feature feedback"]
     Ready([Feature ready])
 
     Request --> Prime --> GizmoPlan --> Teams --> GizmoManagement
-    GizmoManagement --> Prime --> Pipeline --> Steward --> Checks --> Pipeline --> Green
+    GizmoManagement --> Prime --> Pipeline --> Steward --> Build --> TypeCheck --> Pipeline --> Green
     Green -- No --> Feedback --> GizmoPlan
     Green -- Yes --> Ready
 ```
@@ -260,7 +264,8 @@ sequenceDiagram
     end
 
     box External checks
-        participant Checks as external:feature-checks
+        participant Build as remote:build-compile
+        participant TypeCheck as remote:type-check
     end
 
     Prime->>Prime: Fetch, synchronize main and dev, then record latest refs/heads/dev as pinnedLocalDevSha evidence
@@ -282,16 +287,18 @@ sequenceDiagram
     Gizmo->>Prime: Integrated branch state and review disposition
     Prime->>Pipeline: Authorize canonical branch name
     Pipeline->>Steward: Forward unchanged feature packet
-    Steward->>Feature: Re-fetch and push latest committed branch head
-    Steward->>Checks: Invoke build-only remote task for latest head
-    Checks-->>Steward: Green result or diagnostics
+    Steward->>Feature: Re-fetch and push stable committed branch head
+    Steward->>Build: Invoke remote build:compile for latest head
+    Build-->>Steward: Terminal build result or diagnostics
+    Steward->>TypeCheck: Invoke remote type:check exactly once for the same unchanged head
+    TypeCheck-->>Steward: Natural terminal result and report artifact
     Steward-->>Pipeline: Observed-head evidence or blocker
     Pipeline-->>Prime: Synthesized evidence or blocker
     Prime-->>Gizmo: Green result or feedback
 
     Note over Prime,Pipeline: Team Gizmo is a child orchestrator, not a second Prime
-    Note over Pipeline,Checks: Feature-stage remote execution is build-only
-    Note over Gizmo,Checks: Failed checks restart the Level 1 flow
+    Note over Pipeline,TypeCheck: Feature-stage remote gates exclude tests, coverage, e2e, and preflight
+    Note over Gizmo,TypeCheck: A failed type-check report starts one consolidated repair wave
 ```
 
 ## Level 2: Remote task under Delivery Pipeline
@@ -299,14 +306,23 @@ sequenceDiagram
 This level expands `external:feature-checks` through Delivery Pipeline Team
 Gizmo and its `pr-lifecycle` agent. Gizmo Prime authorizes the canonical feature
 branch name. Team Gizmo forwards that packet unchanged, and PR Lifecycle
-re-fetches and resolves the latest committed branch head before pushing or
-invoking the remote task. Review and remote compilation are separate checks
-internally, but they return branch-head observations through Team Gizmo to
-Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
-run tests, coverage, e2e, or preflight.
+re-fetches and resolves a stable committed branch head before pushing or
+invoking a remote task. Required review comes first. Remote `build:compile`
+remains required. One remote `type:check` request follows for the same
+unchanged head. The natural terminal remote result is evidence.
+The remote gates do not run tests, coverage, e2e, or preflight.
+
+The `type:check` selector is exact. Do not discover, preflight, mock, simulate,
+or execute it locally. A failed report requires the complete diagnostic
+inventory before repair. Group the inventory by owning team and coherent
+competence area. Send one consolidated repair packet per area. Integrate the
+full repair wave before one new `type:check` request. Do not emit a
+per-diagnostic notification or repair stream.
 
 The Delivery Pipeline packet carries the branch name, not a pinned feature
-head. A branch advance follows the latest head and reruns affected evidence.
+head. A branch advance invalidates review, `build:compile`, and `type:check`
+evidence bound to the older head. Follow the latest head and rerun affected
+evidence.
 
 ### Flow
 
@@ -316,8 +332,10 @@ flowchart LR
     Gizmo["Feature Gizmo:<br/>submits canonical branch"]
     Review["Code review"]
     Accepted{"Accepted?"}
-    TypeSafety["Remote type-safety check"]
-    Green{"Green?"}
+    Build["Remote build:compile"]
+    BuildGreen{"build:compile green?"}
+    TypeCheck["Remote type:check<br/>exact selector"]
+    Green{"type:check green?"}
     Pipeline["Delivery Pipeline Team Gizmo:<br/>forwards Prime packet"]
     Steward["PR Lifecycle Agent:<br/>pushes canonical ref and dispatches"]
     Feedback["Gizmo Prime and Feature Gizmo:<br/>receive feedback"]
@@ -325,7 +343,9 @@ flowchart LR
 
     Prime --> Gizmo --> Review --> Accepted
     Accepted -- No --> Feedback --> Gizmo
-    Accepted -- Yes --> Pipeline --> Steward --> TypeSafety --> Green
+    Accepted -- Yes --> Pipeline --> Steward --> Build --> BuildGreen
+    BuildGreen -- No --> Feedback
+    BuildGreen -- Yes --> TypeCheck --> Green
     Green -- No --> Feedback
     Green -- Yes --> Pipeline --> Prime --> Ready
 ```
@@ -352,6 +372,7 @@ sequenceDiagram
         participant Pipeline as delivery-pipeline:team-gizmo
         participant Steward as delivery-pipeline:pr-lifecycle
         participant Build as remote:build-compile
+        participant TypeCheck as remote:type-check
     end
 
     box Feature verification
@@ -359,21 +380,23 @@ sequenceDiagram
     end
 
     Prime->>Feature: Route mission with canonical branch name and bootstrap evidence
-    Feature->>Review: Review latest committed branch head
+    Feature->>Review: Review stable committed branch head
     Review-->>Feature: Accepted head observation or findings
     Feature->>Prime: Accepted branch state
     Prime->>Pipeline: Authorize canonical branch name
-    Pipeline->>Steward: Forward unchanged build:compile packet
-    Steward->>Feature: Re-fetch and push latest committed branch head
-    Steward->>Build: Dispatch build-only task for latest head
-    Build-->>Steward: Observed-head compilation result
-    Steward-->>Pipeline: Green evidence or diagnostics
+    Pipeline->>Steward: Forward unchanged feature-gate packet
+    Steward->>Feature: Re-fetch and push stable committed branch head
+    Steward->>Build: Dispatch remote build:compile for latest head
+    Build-->>Steward: Terminal build result or diagnostics
+    Steward->>TypeCheck: Dispatch remote type:check once for the same unchanged head
+    TypeCheck-->>Steward: Natural terminal result and report artifact
+    Steward-->>Pipeline: Green evidence or complete diagnostics
     Pipeline-->>Prime: Synthesized branch-head result
     Prime-->>Feature: Green evidence or feedback
-    Feature->>Verification: Record green branch head
+    Feature->>Verification: Record build and type-check evidence for the head
 
     Note over Prime,Steward: Prime authorizes the canonical branch name; PR Lifecycle resolves the latest head before push and dispatch
-    Note over Feature,Build: Any failure returns to Level 1
+    Note over Feature,TypeCheck: A branch advance invalidates older evidence; a failed report starts one consolidated repair wave
 ```
 
 ## Level 3: Parallel feature development
@@ -710,20 +733,28 @@ sequenceDiagram
   preserved after feature creation.
 - The canonical branch name is the workflow authority. Observed SHAs are run
   evidence only. Before remote dispatch, review, or landing, delivery re-fetches
-  and resolves the latest committed branch head. A branch advance follows the
-  latest head and reruns affected evidence. Missing or unprovable
-  branch/bootstrap evidence fails closed.
+  and resolves a stable committed branch head. A branch advance invalidates
+  review, `build:compile`, and `type:check` evidence bound to the older head.
+  Delivery follows the latest head and reruns affected evidence. Missing or
+  unprovable branch/bootstrap evidence fails closed.
 - Delivery Pipeline is the operational team for CI, PR lifecycle, dev
   publication, workflow execution, local landing, evidence, and guarded
   promotion. Its Team Gizmo routes `pr-lifecycle` packets.
 - Team Gizmos and Team Agents never create or update pull requests, decide
   functional ownership, readiness, promotion, or final delivery, or replace
   the active harness.
-- A Feature Gizmo exits Level 1 only with resolved required review findings and
-  green remote compilation evidence for the current canonical branch head;
-  the observed SHA is associated with that run only.
-- Feature-stage remote execution is build-only. Full tests belong only to the
+- A Feature Gizmo exits Level 1 only with resolved required review findings,
+  green remote `build:compile` evidence, and one green remote `type:check`
+  result for the same current canonical branch head.
+- Feature-stage remote execution requires `build:compile` followed by one
+  `type:check` request for the unchanged head. Full tests belong only to the
   Dev Manager's dev-to-main PR.
+- A failed `type:check` consumes
+  `remote-type-check-<run-id>-<attempt>/report.yaml` and every raw log
+  referenced by its diagnostics. Prime inventories all diagnostics before
+  repairs, groups them by owning team and coherent competence area, sends one
+  consolidated packet per area, and integrates the full repair wave before one
+  new `type:check` request.
 - Team Agents mutate isolated child worktrees and return committed iterations.
 - PR Lifecycle Agent performs only packetized external GitHub, PR, check,
   review, status, and bounded dev mechanics under Team Gizmo and controller
