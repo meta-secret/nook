@@ -1,5 +1,5 @@
 use nook_core::StoreId;
-use wasm_bindgen::{prelude::wasm_bindgen, JsError};
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub(crate) enum StoreIdPresenceError {
@@ -95,8 +95,8 @@ mod tests {
     }
 
     #[test]
-    fn absent_store_id_returns_a_typed_error_without_constructing_a_js_error(
-    ) -> Result<(), StoreIdPresenceError> {
+    fn absent_store_id_returns_a_typed_error_without_constructing_a_js_error()
+    -> Result<(), StoreIdPresenceError> {
         let presence = NookStoreIdPresence::from_raw("")?;
         assert_eq!(presence.state(), NookStoreIdPresenceState::Absent);
         assert!(matches!(

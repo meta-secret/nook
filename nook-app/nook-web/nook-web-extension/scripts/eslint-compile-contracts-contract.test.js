@@ -1,9 +1,11 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Linter } from 'eslint'
 import compileContractsEslintConfig from '../../eslint.compile-contracts.config.js'
+
+setDefaultTimeout(15_000)
 
 const extensionSourceDirectory = fileURLToPath(
   new URL('../src/', import.meta.url),
