@@ -139,7 +139,7 @@ describe('extension deployment archive', () => {
         archivePath: join(sourceDirectory, 'extension.zip'),
       }
       const archiveResult = makeDeterministicZip(missingManifestArchiveRequest)
-      await expect(archiveResult).rejects.toThrow('manifest.json at its root')
+      expect(archiveResult).rejects.toThrow('manifest.json at its root')
     } finally {
       await rm(sourceDirectory, { recursive: true, force: true })
     }
@@ -157,7 +157,7 @@ describe('extension deployment archive', () => {
         archivePath: join(sourceDirectory, 'missing', 'extension.zip'),
       }
       const archiveResult = makeDeterministicZip(failedArchiveRequest)
-      await expect(archiveResult).rejects.toThrow()
+      expect(archiveResult).rejects.toThrow()
     } finally {
       await rm(sourceDirectory, { recursive: true, force: true })
     }

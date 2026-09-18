@@ -208,6 +208,8 @@ type WebsiteAuthenticatorFillMessagePayloadSchemaFields = {
     { exact: true }
   >
 }
+type ExactSchemaPropertyOptions = { readonly exact: true }
+const exactSchemaPropertyOptions: ExactSchemaPropertyOptions = { exact: true }
 const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFillMessagePayloadSchemaFields =
   {
     origin: nonEmptyStringSchema,

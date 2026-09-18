@@ -226,7 +226,7 @@ class AuthorizationCleanupLifecycle {
               ),
             )
           : Effect.succeed(moduleSucceedRequest)
-      type ModuleAllRequest = { concurrency: 'unbounded' } | undefined
+      type ModuleAllRequest = { concurrency: 'unbounded' }
       const moduleAllRequest: ModuleAllRequest = { concurrency: 'unbounded' }
       const [cleanupResult, closeResult] = yield* Effect.all(
         [Effect.either(cleanupOperation), Effect.either(closeOperation)],
@@ -356,7 +356,7 @@ export function recoverInterruptedAuthorizationCleanup(
       catch: () => AuthorizationCleanupFailureKind.Rejected,
     }
     const cleanupStart = Effect.tryPromise(moduleTryPromiseRequest7)
-    type ModuleAllRequest2 = { concurrency: 'unbounded' } | undefined
+    type ModuleAllRequest2 = { concurrency: 'unbounded' }
     const moduleAllRequest2: ModuleAllRequest2 = { concurrency: 'unbounded' }
     const [lookupResult, cleanupResult] = yield* Effect.all(
       [Effect.either(pendingLookup), Effect.either(cleanupStart)],
