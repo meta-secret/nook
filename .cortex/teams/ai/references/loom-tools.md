@@ -240,7 +240,7 @@ task loom:pr-land CONFIG=path/to/validate-request.yaml
 
 `prLand.status` reports the current pull-request state. `prLand.validate`
 dispatches hosted validation and directs the caller to return the resulting
-repository-owned check evidence to the dev manager.
+repository-owned check evidence to the Feature Gizmo.
 
 ### toolsCall
 

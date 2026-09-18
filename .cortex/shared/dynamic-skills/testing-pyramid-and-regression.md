@@ -96,7 +96,7 @@ Test execution follows [dev delivery](../../gizmo-prime/architecture/dev-deliver
    - Identify the buggy revision, fixed revision, and focused test selection.
    - Review why the original-failure assertion detects the defect.
    - Record execution evidence as pending until authorized runs establish it.
-6. In the dev manager's authorized slow PR stage, verify regression sensitivity.
+6. In the Feature Gizmo's authorized slow PR stage, verify regression sensitivity.
    - Verify the original-failure test fails without the fix for the expected
      behavioral reason.
    - Verify the regression set and applicable suite pass with the fix.
@@ -110,9 +110,9 @@ Test execution follows [dev delivery](../../gizmo-prime/architecture/dev-deliver
 - Do not replace domain unit tests with integration or e2e coverage alone.
 - Do not weaken assertions or accept unrelated failures as reproduction.
 - Do not claim test authorship, semantic review, or compilation proves a pass.
-- Do not run local tests or feature-stage remote tests to obtain evidence.
+- Do not run local tests or feature PR tests to obtain evidence.
 - Do not create a new execution route to bypass delivery-stage restrictions.
-- Do not require slow-stage results before normal feature landing into local dev.
+- Run the required test evidence in the feature pull request before merge.
 
 ### Unit-first browser failure loop
 
@@ -145,7 +145,7 @@ Use this procedure for a failing web or extension e2e scenario.
    - For a browser-only defect, cover the closest deterministic unit contract
      and retain the browser-level regression.
    - Unit evidence narrows the repair loop. It does not replace e2e acceptance.
-   - The dev manager requests applicable browser gates through the dev PR.
+   - The Feature Gizmo requests applicable browser gates through the dev PR.
    - Diagnose returned failing-job evidence before the next repair.
    - Author the applicable unit regressions before changing that repair's code.
 
@@ -199,7 +199,7 @@ Does not apply to:
 Follow [dev delivery](../../gizmo-prime/architecture/dev-delivery.md) for execution
 authority. Feature workers author tests and review their behavior coverage.
 Remote feature compilation is build-only. Tests, coverage, and browser gates
-execute through the dev manager's slow PR validation path.
+execute through the Feature Gizmo's slow PR validation path.
 
 - Record failing-without-fix evidence for the original regression assertion.
 - Record passing-with-fix evidence for the regression set and applicable suite.

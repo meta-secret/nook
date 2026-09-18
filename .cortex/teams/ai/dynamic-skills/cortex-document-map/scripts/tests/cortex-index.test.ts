@@ -151,7 +151,7 @@ Model text.
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
-  expect(markdown).not.toContain('teams/dev-manager-gizmo/');
+  expect(markdown).not.toContain('teams/pr-lifecycle-gizmo/');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
@@ -170,13 +170,10 @@ Model text.
   );
   const normalized = CortexContextRouterScenario.normalizeMarkdown(markdown);
   expect(normalized).toContain(
-    'Only after both synchronizations, Prime resolves the latest committed `refs/heads/dev^{commit}`.',
+    'Prime resolves the exact fetched `origin/main` commit as `originMainSha`.',
   );
   expect(normalized).toContain(
-    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
-  );
-  expect(normalized).toContain(
-    'A previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another alternate base is invalid.',
+    'Every new feature mission, feature branch, and worktree uses that exact commit as its base.',
   );
   expect(normalized).toContain('The base is preserved after feature creation.');
   expect(normalized).toContain(
@@ -189,7 +186,7 @@ Model text.
   expect(markdown).not.toContain('#overview');
 });
 
-test('requires every fresh-base authority to use the post-sync local dev head', () => {
+test('requires every fresh-base authority to use fresh origin/main', () => {
   const required = [
     'feature branch',
     'latest committed',
@@ -206,9 +203,7 @@ test('requires every fresh-base authority to use the post-sync local dev head', 
     expect(markdown).not.toContain(
       'unless the user explicitly selects another base',
     );
-    expect(markdown).not.toContain(
-      'creates feature work from `pinnedLocalDevSha`',
-    );
+    expect(markdown).toContain('origin/main');
   }
 
   for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
@@ -216,8 +211,7 @@ test('requires every fresh-base authority to use the post-sync local dev head', 
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
     expect(markdown).toContain('git fetch --prune origin');
-    expect(markdown).toContain('canonical local `main`');
-    expect(markdown).toContain('synchroniz');
+    expect(markdown).toContain('origin/main');
     expect(markdown).toContain('canonical local `dev`');
     expect(markdown).toContain('fails closed');
   }
@@ -550,7 +544,7 @@ test('keeps Delivery Pipeline direct-child ownership in its parent graph', () =>
     '- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
-    '- [Dev Manager knowledge graph](dev-manager/knowledge-graph.md)',
+    '- [Feature Gizmo knowledge graph](pr-lifecycle/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
     '- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)',

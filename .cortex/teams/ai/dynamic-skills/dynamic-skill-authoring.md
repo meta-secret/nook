@@ -11,8 +11,8 @@ maintenance. Gizmo owns feature delivery state when a card is applied. Route
 feature, remote validation, review, Workbench, and promotion mechanics through
 Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Team
 Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
-create or update PRs or decide policy. The Dev Manager remains the policy owner
-and sole invoker of `dev:pr-manager`.
+create or update PRs or decide policy. The Feature Gizmo remains the policy owner
+and sole invoker of `feature PR lifecycle`.
 
 ## Problem Pattern
 
@@ -97,4 +97,4 @@ formatters or inexpensive diagnostics. Commit every resulting mutation in the
 allowed paths and return the exact scoped commit to Gizmo. Do not run a local
 pre-push or broad validation gate. Gizmo routes the hosted build-only packet
 through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
-The Dev Manager owns later CI validation.
+The Feature Gizmo owns later CI validation.

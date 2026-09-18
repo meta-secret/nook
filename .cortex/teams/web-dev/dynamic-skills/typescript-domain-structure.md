@@ -261,8 +261,8 @@ Does not apply to:
 - `task preflight:typescript-state`
 - Loom: `bun run verify` in `agentic-ai/loom`
 - The owning worker authors behavior tests and returns a scoped commit.
-- Execute the checks above in the dev manager's slow PR stage.
-- Feature feedback requires remote build-only capability.
+- Execute the checks above in the feature pull request's required-check stage.
+- Feature feedback requires required PR-check capability.
 - Keep local feedback limited to bounded inexpensive TS diagnostics or formatting.
 - Preserve required browser and security evidence in the slow stage.
 - AI owns Loom changes; this skill does not transfer implementation ownership.

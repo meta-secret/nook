@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
-feature compilation and the manually run dev manager's slow PR cycle.
+feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks.
 
@@ -586,7 +586,7 @@ The Playwright project catalog and command grouping live in
 
 ## Task commands
 
-Product checks run remotely in the dev manager's slow PR cycle. Feature
+Product checks run remotely in the Feature Gizmo's slow PR cycle. Feature
 feedback requires a separate build-only capability. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
@@ -769,9 +769,9 @@ authenticator-domain to 90 percent.
 - Ordinary Team Agents format every changed file in their allowed scope and
   return coherent exact committed handoffs. They do not push, dispatch remote
   work, or operate external PR/check state.
-- Feature Gizmos request repeatable remote build-only evidence.
+- Feature Gizmos request repeatable required PR-check evidence.
 - The build-only command contract must be integrated before feature acceptance.
-- Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
+- Only the Feature Gizmo's feature pull-request cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.
 - Focused tasks are optional for that head and never replace complete
   validation.

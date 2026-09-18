@@ -121,16 +121,16 @@ test('allows every child graph to reference the root circuit breaker read-only',
   ).toEqual([]);
 });
 
-test('indexes Dev Manager documents only through their owning graph', () => {
+test('indexes Feature Gizmo documents only through their owning graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
-  const policyPath = '.cortex/teams/delivery-pipeline/dev-manager/policy.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+  const policyPath = '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md';
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: managerGraphPath,
-      content: '# Dev Manager Knowledge Graph\n',
+      content: '# Feature Gizmo Knowledge Graph\n',
     }),
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: policyPath,
@@ -157,7 +157,7 @@ test('indexes Dev Manager documents only through their owning graph', () => {
     document.relativePath === '.cortex/gizmo-prime/knowledge-graph.md'
       ? {
           ...document,
-          content: `${document.content}\n- [Dev policy](../teams/delivery-pipeline/dev-manager/policy.md)\n`,
+          content: `${document.content}\n- [Dev policy](../teams/delivery-pipeline/pr-lifecycle/policy.md)\n`,
         }
       : document,
   );
@@ -291,7 +291,7 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
 
 test('rejects sibling same-team child authority from a child graph', () => {
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
   const siblingGraphPath =
     '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
   const documents =
@@ -317,7 +317,7 @@ test('rejects sibling same-team child authority from a child graph', () => {
 
 test('admits a same-team sibling AGENTS authority as read-only', () => {
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
   const siblingAuthorityPath =
     '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md';
   const documents = [

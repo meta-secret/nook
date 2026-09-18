@@ -39,7 +39,7 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`.
   - Development Core uses `teams/dev-core/rust-core-developer/` and
     `teams/dev-core/rust-auth2-developer/`.
   - Delivery Pipeline uses `teams/delivery-pipeline/gizmo/`,
-    `teams/delivery-pipeline/dev-manager/`, and
+    `teams/delivery-pipeline/pr-lifecycle/`, and
     `teams/delivery-pipeline/pr-lifecycle/`.
 
 Any commit SHA is observational evidence, not workflow authority.
@@ -54,22 +54,15 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
 
 - Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
   `git fetch --prune origin`; a fetch failure fails the run closed.
-  Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
-  `origin/main` and brings canonical local `dev` onto or including that main
-  baseline under the dev-delivery workflow. If either synchronization cannot
-  be proved, the run fails closed. Only after both synchronizations, Prime
-  resolves the latest committed `refs/heads/dev^{commit}`. It records that
-  exact post-synchronization commit as `pinnedLocalDevSha` for bootstrap
-  evidence. Every new feature mission, feature branch, and worktree must use
-  that exact latest committed canonical local `dev` commit as its base. A
-  previously pinned or otherwise older local-dev SHA, `origin/dev`,
-  `origin/main`, or another alternate base is invalid. If equality between
-  `pinnedLocalDevSha` and the post-synchronization `refs/heads/dev` cannot be
-  proved, the run fails closed. The base is preserved after feature creation.
+  Prime resolves the exact fetched `origin/main` commit as `originMainSha`.
+  Every new feature mission, feature branch, and worktree uses that exact
+  commit as its base. A delivery `dev` branch, an older main observation, or
+  another alternate base is invalid. The base is preserved after feature
+  creation.
   Prime authorizes the canonical feature branch name, which is the workflow
   authority for feature publication and remote work. Observed base and head
   SHAs are evidence only and are not required packet fields.
-  Before every remote dispatch, review, or landing operation, Delivery
+  Before every remote dispatch, review, PR mutation, or merge, Delivery
   re-fetches and resolves the latest committed head of that canonical branch.
   If the branch advances, the operation follows the latest head or reruns its
   evidence. It does not fail because an earlier observed SHA is stale. Team
@@ -83,8 +76,8 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
     Team Gizmo reports branch/head evidence and blockers to Gizmo Prime for
     verification and serialized integration.
 - Gizmo Prime must route pull-request operations through Delivery Pipeline's
-  PR Lifecycle Agent or Dev Manager path. Internal agents never create or
-  update pull requests; only the Dev Manager invokes `dev:pr-manager`.
+  PR Lifecycle Agent. The owning Feature Gizmo authorizes the full cycle and
+  may merge its own pull request after required checks pass.
 
 ### Prohibited actions
 
@@ -111,9 +104,7 @@ fields required by the owning workflow.
    - Follow-ups remain with the existing Gizmo owner.
    - Gizmo Prime interprets scope and routes bounded work through the owning
      Team Gizmo.
-   - Gizmo routes manually requested dev operations through Delivery Pipeline
-     to the Dev Manager.
-   - The manager retains publication, slow-validation, and promotion authority.
+   - Gizmo routes GitHub mechanics through Delivery Pipeline to PR Lifecycle.
 4. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
    - Every team and leaf entry inherits this first-read rule through its
      Prime-issued packet.
@@ -137,15 +128,14 @@ read-only task does not authorize implementation or require feature landing.
 ## Mandatory delivery architecture
 
 Before acting in any feature implementation, delegation, review, external
-check, local landing, dev validation, repair, pull-request operation, or main
-promotion stage, read the complete
+check, repair, pull-request operation, merge, or branch-cleanup stage, read the complete
 [multiagent delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md).
 It is the primary end-to-end explanation of the delivery system. Identify the
 current level, owning actor, incoming artifact, feedback path, and terminal
 handoff before taking action.
 
 This mandatory read applies to Gizmo Prime, Team Gizmos, Team Agents,
-reviewers, the PR Lifecycle Agent, the Dev Manager, and repair Gizmos. After
+reviewers, the PR Lifecycle Agent, and repair Gizmos. After
 reading it, load only the
 detailed authority required for the selected stage. The
 [dev delivery contract](gizmo-prime/architecture/dev-delivery.md) supplies those
@@ -154,19 +144,16 @@ detailed authorization, evidence, and failure rules.
 ## Context routes
 
 - [Gizmo Prime](gizmo-prime/AGENTS.md) owns mission planning, delegation,
-  feature-branch sequencing, feature review and acceptance, local landing
-  requests, and feature Workbench state.
+  feature-branch sequencing, feature review and acceptance, pull-request
+  delivery, and feature Workbench state.
   - New Prime, Team Gizmo, and leaf branches follow the [branch naming
     contract](gizmo-prime/dynamic-skills/branch-naming.md).
 - [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md) owns authorized
-  delivery mechanics across CI, pull-request lifecycle, dev publication,
-  workflow execution, local landing, evidence, and guarded promotion. Its
+  delivery mechanics across CI, pull-request lifecycle, workflow execution,
+  squash merge, evidence, and branch cleanup. Its
   [Team Gizmo](teams/delivery-pipeline/gizmo/AGENTS.md) reports to Gizmo Prime,
   owns one team worktree, and dispatches the
   [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
-  The [Dev Manager](teams/delivery-pipeline/dev-manager/AGENTS.md) owns
-  publication, invokes `dev:pr-manager`, and controls slow evidence,
-  readiness, and promotion.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -328,8 +315,8 @@ the authorities relevant to its authored surface and reports a missing
 foreign-team authority to Gizmo Prime.
 
 Each concurrent feature has its own Gizmo delivery owner and isolated team
-worktrees. The manually run [Dev Manager](teams/delivery-pipeline/dev-manager/AGENTS.md) owns
-publication and promotion. Start with the mandatory
+worktrees. That owner carries the feature through merge and cleanup. Start
+with the mandatory
 [multiagent delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md),
 then follow the detailed
 [dev delivery contract](gizmo-prime/architecture/dev-delivery.md) for the current
@@ -390,15 +377,15 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Team Gizmo preserves the packet's controller and canonical branch target while it
     decomposes only team mechanics and synthesizes child evidence.
   - Team Gizmo is not a second Prime and never decides functional ownership,
-    readiness, promotion, or final delivery.
+    readiness, or final delivery.
 - **Parent and worker ownership**
   - Parent-owned Gizmo control operations remain with Gizmo Prime:
     - planning and shared-branch sequencing;
     - feature authorization packets and feature review-finding disposition;
     - functional-team routing and shared-branch ownership;
     - feature Workbench completion and the feature delivery verdict.
-  - Dev PR creation/update, slow evidence, readiness, and promotion remain
-    under Dev Manager control. The PR Lifecycle Agent performs only manager-authorized mechanics.
+  - The owning Feature Gizmo controls readiness and final delivery. PR
+    Lifecycle Agent performs only routed GitHub mechanics.
   - Delivery Pipeline's PR Lifecycle Agent owns only explicitly authorized
     external mechanics:
     - repository discovery, authentication checks, and run-log queries;
@@ -407,18 +394,18 @@ The active harness owns dynamic admission capacity and actual spawn results.
     - pull-request review, metadata observation, and status verification;
     - review and comment collection;
     - current-branch validation retriggers and bounded waits;
-    - readiness evidence collection; and
-    - authorized fast-forward promotion and remote PR-state verification.
-  - The PR Lifecycle Agent must never decide readiness or promotion itself.
-  - It requires the owning Gizmo or dev manager's explicit operation packet.
+    - readiness evidence collection;
+    - authorized squash merge and remote PR-state verification; and
+    - remote feature-branch deletion.
+  - The PR Lifecycle Agent must never decide readiness itself.
+  - It requires the owning Feature Gizmo's explicit operation packet.
   - Team workers implement changes and author tests in an isolated child
     worktree created from the parent feature worktree's current commit.
   - Gizmo Prime controls mission-level child-worktree allocation, write waves,
     commit turns, and parent integration. A Team Gizmo coordinates issued
     internal child worktrees and commit handoffs within its packet. PR Lifecycle
-    Agent may observe or perform only the named review, check, status, and
-    bounded dev mechanics; it never creates or updates pull-request identity
-    or metadata.
+    Agent may perform only the named PR, review, check, merge, status, and
+    cleanup mechanics.
   - Write-capable Team Agents may run concurrently only when their explicit
     file scopes are disjoint and they have no unresolved dependency.
   - Tasks with overlapping scopes or provider-consumer dependencies run in
@@ -452,16 +439,13 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Only scoped rustfmt and bounded inexpensive TS diagnostics or formatting
     are permitted local feedback.
   - Gizmo Prime authorizes the canonical feature branch name for publication
-    and remote build-only execution.
+    and complete PR validation.
   - Delivery Pipeline's PR Lifecycle Agent re-fetches and resolves that branch's
     latest committed head before each packetized push and remote invocation.
     A branch advance follows the latest head and reruns affected evidence.
-  - Accepted feature changes enter local dev through serialized local
-    integration.
-  - Feature completion requires containment evidence after that integration.
-    Resolve canonical local `dev` after `dev:land` and verify that its commit
-    contains the accepted feature commit.
-  - The dev manager alone publishes dev and requests full slow PR validation.
+  - Accepted feature changes enter `main` only through the feature pull request.
+  - Feature completion requires green required checks, actual squash-merged PR
+    state, the squash result on `origin/main`, and deleted remote feature branch.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
   - Web code receives public typed projections.
@@ -469,11 +453,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - See
     [agent feature ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md).
 - **Delivery controls**
-  - The manager-only `dev:pr-manager` command/workflow is the sole path that
-    creates or updates the aggregate `dev` to `main` pull request. It is not
-    part of feature-agent publication and is not delegated to a Team Agent.
-  - Gizmo owns feature review and acceptance for the returned head.
-  - The dev manager owns subsequent dev PR readiness and promotion.
+  - Each canonical feature branch has one pull request into `main`.
+  - Gizmo owns feature review, acceptance, readiness, and merge authorization.
+  - Reviews and approvals are optional. Required checks are mandatory.
   - The PR Lifecycle Agent performs only the owning controller's authorized
     mechanics.
 - **Repository constraints**
@@ -502,8 +484,7 @@ The active harness owns dynamic admission capacity and actual spawn results.
 - **Parent and worker ownership**
   - Parent-owned policy and control decisions do not create functional Team
     Agent work. The bounded Delivery Pipeline operation is the sole operational
-    exception and remains a child of Team Gizmo under the owning feature Gizmo
-    or dev manager.
+    exception and remains a child of Team Gizmo under the owning Feature Gizmo.
 - **Validation and delivery**
   - Gizmo Prime, Team Agents, and subagents must not run product compilation or
     full repository validation locally, whether directly or through a Task
@@ -532,18 +513,14 @@ The active harness owns dynamic admission capacity and actual spawn results.
 ### Required actions
 
 - Delivery Pipeline's PR Lifecycle Agent executes every live-agent GitHub
-  operation under the owning Gizmo or dev manager's packet, issued by Team
-  Gizmo.
+  operation under the owning Feature Gizmo's packet, issued by Team Gizmo.
 - This includes all `gh` commands, including read-only queries, authentication
   checks, version checks, repository discovery, and log collection.
 - A functional Team Agent needing PR information sends a request to Gizmo
   through the active harness. Include the known target, needed evidence, and
   work that depends on it.
-- Gizmo routes dev PR requests to the dev manager.
-  The dev manager authorizes the PR Lifecycle Agent's evidence collection
-  through Team Gizmo. Gizmo may authorize
-  feature compilation evidence and local landing requests. Return the evidence
-  or blocker to the worker.
+- Gizmo routes feature PR requests through Delivery Pipeline Team Gizmo. Return
+  the evidence or blocker to the owning Feature Gizmo.
 - Only the PR Lifecycle Agent monitors PR state, checks, reviews, and workflow
   runs.
   This includes event subscriptions, bounded waits, and permitted polling.
@@ -557,11 +534,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
   that branch before pushing it or invoking its remote task. A branch advance
   follows the latest head and reruns affected evidence. It must not push a
   temporary leaf branch or dispatch while checked out on one.
-- The PR Lifecycle Agent also has a narrow local Git exception: it may
-  mechanically invoke bounded local integration, snapshot publication, or
-  fast-forward promotion under the owning controller's packet. Gizmo
-  authorizes local integration; the dev manager authorizes publication and
-  promotion. This grants no general shared-branch Git authority.
+- The PR Lifecycle Agent may perform the bounded Git operations needed to
+  publish the feature branch, squash-merge the PR, and delete the remote
+  feature branch. This grants no general shared-branch Git authority.
 - Functional teams diagnose evidence returned by the PR Lifecycle Agent.
 - Each controller authors its stage's Workbench records and decides outcomes.
   The PR Lifecycle Agent publishes only the issuing controller's exact content
@@ -575,9 +550,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
 
 ### Prohibited actions
 
-- Gizmo, the dev manager, and functional Team Agents must not execute `gh`, even for read-only
+- Gizmo and functional Team Agents must not execute `gh`, even for read-only
   inspection, authentication, or version checks.
-- Feature Gizmos, Team Gizmos, the Dev Manager, and functional Team Agents must
+- Feature Gizmos, Team Gizmos, and functional Team Agents must
   not push the canonical feature branch or invoke its remote task. They return
   typed readiness or evidence packets to Gizmo Prime.
 - A read-only worker assignment does not authorize `gh pr view` or monitoring.
@@ -594,9 +569,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
 
 Remote Task dispatch follows the [Agent Derailment Circuit
 Breaker](CIRCUIT-BREAKER.md). This section owns stage and actor routing only.
-It is not a selector catalog or a preflight contract. The current feature stage
-uses only remote build-only execution. The dev manager requests slow checks
-through the dev PR. Follow [dev delivery](gizmo-prime/architecture/dev-delivery.md).
+It is not a selector catalog or a preflight contract. Required product checks
+run through the feature pull request. Follow [feature pull-request
+delivery](gizmo-prime/architecture/dev-delivery.md).
 
 Run hosted validation from a clean, committed non-main branch:
 
@@ -623,10 +598,8 @@ valid source for publication or dispatch.
 the correct runner image.
 When a task requires a current base:
 
-  - The feature base is the exact latest committed canonical local `dev`
-    commit resolved after mandatory fetch and synchronization.
-  - A previously captured or pinned local-dev SHA is invalid when it is older
-    than the post-synchronization canonical local `dev` commit.
+  - The feature base is the exact freshly fetched `origin/main` commit.
+  - A previously captured or older main SHA is invalid.
   - It preserves that exact base after the feature branch is created.
   - It re-fetches the canonical branch and resolves its latest committed head
     immediately before dispatch.
@@ -635,7 +608,7 @@ When a task requires a current base:
   - A later branch advance follows the latest head and reruns the affected
     operation; it is not a stale-authority failure.
   - Readiness must still confirm mergeability, required checks, deployment, and
-    clean review state for the current branch state.
+    resolution of known correctness or security findings.
 
 ## No fallback or speculative recovery
 
@@ -763,45 +736,38 @@ temporary notes optional and requires cleanup before readiness.
 ### Mission workflow
 
 The delivery workflow is mandatory. Follow
-[mission delivery](gizmo-prime/workflows/mission-delivery.md) through feature landing
-and the manager handoff. A worker commit is not feature completion.
+[mission delivery](gizmo-prime/workflows/mission-delivery.md) through feature
+pull-request merge and branch cleanup. A worker commit is not feature completion.
 Before declaring a capability unavailable, follow that workflow's bounded
 blocker-verification procedure. A missing tool name alone is not evidence
 that the canonical operation is unavailable.
 
 An implementation request defaults to complete delivery. Complete delivery
-passes through reviewed, remotely compiled changes merging into local dev,
-followed by the dev manager's slow validation and promotion process. Only an
+passes through the feature pull request, all required checks, squash merge to
+`main`, and remote feature-branch deletion. Only an
 explicit user instruction such as `stop at PR` selects an intermediate
 handoff. Silence about
 merge is not an intermediate selection.
 
 ### Delivery completion
 
-Feature delivery completes after reviewed, remotely compiled changes merge
-into canonical local `dev` through local integration and containment is
-verified. Resolve both commits after `dev:land`, then require
-`git merge-base --is-ancestor <accepted-feature-commit> <resulting-dev-commit>`
-to succeed. No agent may call a feature complete, done, delivered, successful,
-or an equivalent terminal outcome before that proof. Review, compilation,
-acceptance, a worker commit, parent integration, or a successful `dev:land`
-invocation may describe only its own intermediate stage until containment is
-proved. The manually run dev manager owns the slow delivery stage through
-snapshot publication, full dev PR validation, and guarded fast-forward
-promotion. Delivery Pipeline Team Gizmo routes authorized mechanics to the PR
-Lifecycle Agent for the owning controller. Promotion fast-forwards main to the
-tested dev SHA. Every change passes through dev.
+Feature delivery completes only after every required PR check is green for the
+current feature head, GitHub reports the PR squash-merged, `origin/main`
+contains the squash result, and the remote feature branch is deleted. No agent
+may call a feature complete before that evidence. Review, a worker commit,
+parent integration, a pushed branch, or a green subset of checks is only an
+intermediate result.
 
 ### Failed validation waves
 
-When a dev PR validation wave fails, the terminal evidence must include every
+When a feature PR validation wave fails, the terminal evidence must include every
 failed or cancelled required GitHub Actions job before repair begins. Gizmo
 Prime groups the complete diagnostics by owning team and coherent competence
 area, then dispatches affected Team Gizmos in parallel. Team Gizmos give one
 agent each consolidated area list and batch all known test, compiler, and
 static-analysis fixes into one iteration. Prime integrates all team clusters
-into local dev before one new snapshot is published and full validation is
-rerun once. No individual fix may trigger a push or validation rerun.
+into the canonical feature branch before one push and full PR validation rerun.
+No individual fix may trigger a push or validation rerun.
 
 ### Scheduled-task and PR scope
 
@@ -817,9 +783,8 @@ rerun once. No individual fix may trigger a push or validation rerun.
 - A request to test, monitor, and merge a PR when ready remains one active
   delivery task. Have Delivery Pipeline Team Gizmo route bounded observation
   to the PR Lifecycle Agent.
-  The Dev Manager controls dev PR observation, readiness, and promotion in
-  that task. The PR Lifecycle Agent executes each mechanical operation under a
-  manager packet.
+  The owning Feature Gizmo controls readiness and merge authorization. The PR
+  Lifecycle Agent executes each mechanical operation under its packet.
 - The target PR is the delivery scope. Consult `origin/main` only when the PR
   workflow requires base freshness. Do not monitor, diagnose, or repair the
   Main workflow or unrelated default-branch health unless the user explicitly

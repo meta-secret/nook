@@ -122,8 +122,8 @@ rejected.
 
 When an accepted fix or failed-check repair changes the head, Gizmo continues
 from the verified commit, commits the complete repair, and pushes the result.
-It then obtains replacement-head remote build-only evidence through the
-Delivery Pipeline. Full validation remains in the Dev Manager's later CI
+It then obtains replacement-head required PR-check evidence through the
+Delivery Pipeline. Full validation remains in the Feature Gizmo's later CI
 cycle. A batch with no accepted fix or failed-check repair does not create
 replacement-head work. Gizmo then applies the handling rule for the feedback
 target:
@@ -170,7 +170,7 @@ Does not apply to:
   commit/context before resolving.
 - Non-actionable summaries, praise, or status-only bot messages.
 - Reviews or comments from optional services that have not arrived. No external
-  reviewer is a required exception.
+  reviewer is required.
 
 ## Examples
 
@@ -227,8 +227,8 @@ Does not apply to:
 - [ ] Only confirmed security and authority violations trigger fail-closed
       action.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo pushes verified repair commits and requests remote build-only execution.
-- [ ] The dev manager requests complete slow validation after local dev
+- [ ] Gizmo pushes verified repair commits and requests required PR-check execution.
+- [ ] The Feature Gizmo requests complete PR validation after the repair wave
       integration and publication of the replacement snapshot.
 - [ ] Gizmo pushes changed code or documentation only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create

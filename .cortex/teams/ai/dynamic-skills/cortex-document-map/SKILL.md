@@ -17,15 +17,14 @@ owner graphs, and shared knowledge.
 
 - The root graph selects Gizmo Prime, Delivery Pipeline, AI, development core,
   security, SRE, web development, or shared context.
-- The Delivery Pipeline graph routes its direct `gizmo`, `dev-manager`, and
-  `pr-lifecycle` child contexts.
-- The Delivery Pipeline `dev-manager` child owns dev publication, dev PR
-  creation/update, slow evidence, readiness, and fast-forward promotion policy.
-- Gizmo Prime owns feature delivery and local landing requests.
+- The Delivery Pipeline graph routes its direct `gizmo` and `pr-lifecycle`
+  child contexts.
+- The Delivery Pipeline `pr-lifecycle` child owns bounded feature PR mechanics.
+- Gizmo Prime owns end-to-end feature delivery.
 - The six engineering/operational owner graphs index documents owned by their
   teams: Delivery Pipeline, AI, development core, security, SRE, and web
   development.
-- Dev Manager is a manually operated controller, not an engineering team graph
+- Feature Gizmo is a manually operated controller, not an engineering team graph
   or a Loom child team.
 - The shared graph indexes genuinely cross-team documents.
 - Every document has exactly one owning graph.
@@ -81,18 +80,18 @@ they own centralized navigation.
 
 ## Application procedure
 
-1. Determine whether the document belongs to Dev Manager, Gizmo, Delivery
+1. Determine whether the document belongs to Feature Gizmo, Gizmo, Delivery
    Pipeline, AI, development core, security, SRE, web development, or shared
    knowledge.
 2. Place it under the owning context.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.
 5. Update direct callers and the canonical skill catalog.
-6. Defer executable audits to the dev-manager slow PR stage.
+6. Defer executable audits to the pr-lifecycle slow PR stage.
 
 ## Validation
 
-Only in the dev-manager remote slow PR stage, run:
+Only in the pr-lifecycle remote slow PR stage, run:
 
 ```bash
 task loom:cortex-audit
@@ -111,7 +110,7 @@ Loom enforces:
 - graphs contain no fragment-link duplication.
 
 Vale rejects exact `## Relationships` and `## Document map` headings in
-individual Cortex documents. `task vale:cortex` belongs only to the dev-manager
+individual Cortex documents. `task vale:cortex` belongs only to the pr-lifecycle
 remote slow PR stage, not local or feature validation.
 
 The co-located read-only TypeScript application owns deterministic graph

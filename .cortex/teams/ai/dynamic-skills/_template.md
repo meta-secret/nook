@@ -41,6 +41,6 @@ Does not apply to:
 ## Validation
 
 Author meaningful tests and commit the complete scoped iteration. The feature
-Gizmo requests remote build-only evidence. Tests and mechanical Cortex checks
-execute in the dev manager's slow PR stage. Local feedback is limited by the
+Gizmo requests required PR-check evidence. Tests and mechanical Cortex checks
+execute in the feature pull request's required-check stage. Local feedback is limited by the
 [dev contract](../../../gizmo-prime/architecture/dev-delivery.md).

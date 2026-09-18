@@ -35,8 +35,8 @@ For every submitted annotation, the agent must:
    and
 5. apply only permitted lightweight formatting or diagnostics;
 6. commit the scoped fix and authored regression tests;
-7. return the commit to Gizmo for remote build-only evidence;
-8. execute tests and browser proof in the dev manager's slow PR stage;
+7. return the commit to Gizmo for required PR-check evidence;
+8. execute tests and browser proof in the feature pull request's required-check stage;
 9. preserve required security and review verdicts before promotion.
 
 The agent may stop without a code fix only when:

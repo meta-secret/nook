@@ -57,7 +57,7 @@ completion and sets issue lifecycle state. For feature build or check
 mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
 Gizmo Prime authorizes Delivery Pipeline Team Gizmo. The Team Gizmo dispatches
 PR Lifecycle Agent through the active harness and returns the evidence. The
-dev manager authorizes manager-stage publication, slow checks, and promotion
+Feature Gizmo authorizes manager-stage publication, slow checks, and promotion
 through the same route.
 
 For Workbench publication, Feature Gizmo approves the exact feature summary or
@@ -157,4 +157,4 @@ When applying a skill to code:
    pre-push or broad validation gate. For applicable feature build or check
    mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
    Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
-   remote build-only task. The Dev Manager owns later CI validation.
+   required PR-check task. The Feature Gizmo owns later CI validation.

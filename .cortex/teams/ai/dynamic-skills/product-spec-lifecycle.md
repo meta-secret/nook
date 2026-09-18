@@ -101,7 +101,7 @@ Before:
 
 - User explains in chat that secure notes must support search by custom tags.
 - Agent adds the tag search in code and tests, then returns the exact feature
-  branch to Gizmo for remote compilation and local dev landing.
+  branch to Gizmo for remote compilation and feature pull-request delivery.
 - `.cortex/teams/dev-core/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
@@ -142,6 +142,6 @@ After:
   inexpensive diagnostics and commit the coherent handoff. Include every
   formatter mutation in allowed source or Cortex paths. Return the exact commit
   and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
-  Gizmo immediately dispatches the relevant remote build-only task through
-  Delivery Pipeline Team Gizmo and PR Lifecycle Agent. The Dev Manager owns
+  Gizmo immediately dispatches the relevant required PR-check task through
+  Delivery Pipeline Team Gizmo and PR Lifecycle Agent. The Feature Gizmo owns
   complete exact-head CI validation when the snapshot is ready.

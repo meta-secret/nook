@@ -61,7 +61,7 @@ universal vault startup.
 
 **Rust quality capabilities**
 
-The dev-to-main slow validation stage supplements Clippy, unit tests, and
+The feature-to-main slow validation stage supplements Clippy, unit tests, and
 coverage with:
 
 - cargo-deny and RustSec dependency policy;

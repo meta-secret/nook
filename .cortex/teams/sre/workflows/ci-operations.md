@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
-feature compilation and the manually run dev manager's slow PR cycle.
+feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Runtime workflow details below document current CI operations; they do not
 grant permission to run local tests or restore superseded delivery stages.
 
@@ -173,11 +173,11 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
 - Feature teams author tests and return scoped commits.
-- Feature Gizmos request only the required remote build-only capability.
-- The dev manager alone requests the full slow dev-to-main PR checks.
+- Feature Gizmos request only the required required PR-check capability.
+- The Feature Gizmo alone requests the full slow feature pull request checks.
 - Local tests, Docker work, product compilation, and broad pre-push are prohibited.
 - Missing build-only tooling is a visible runtime prerequisite.
-- Repairs return through the feature path and serialized local dev integration.
+- Repairs return through the feature path and serialized feature pull-request delivery.
 
 ## Agent checklist when touching CI or e2e
 
@@ -196,8 +196,8 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Main runs the same local-provider and extension **e2e**.
    - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.
-     - The repair follows the feature path into local dev.
-     - The dev manager controls slow checks and fast-forward promotion.
+     - The repair follows the feature path into the canonical feature branch.
+     - The Feature Gizmo controls slow checks and fast-forward promotion.
      - Incident completion retains replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.

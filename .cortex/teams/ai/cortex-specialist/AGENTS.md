@@ -25,16 +25,15 @@ packet.
   and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md),
   plus [TypeScript Effect Workflows](../../web-dev/dynamic-skills/typescript-effect.md).
   Record those authorities in the acceptance handoff.
-- For an authored TypeScript, JavaScript, or Svelte scope, require the manager's
-  authorized slow-stage acceptance evidence for `task loom:verify`, `task preflight:typescript-state`, and
+- For an authored TypeScript, JavaScript, or Svelte scope, require the feature
+  PR acceptance evidence for `task loom:verify`, `task preflight:typescript-state`, and
   `task preflight:source-architecture`, plus focused function-ownership
   review. A missing authority, command, result, or review finding is a P1 and
   fails closed.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Consume the Prime-issued canonical feature branch name and bootstrap
   evidence. `originMainSha` identifies the freshly fetched `origin/main` and
-  `pinnedLocalDevSha` identifies the synchronized local-dev feature base;
-  `originMainSha` must be its ancestor. The branch name is the workflow
+  is the feature base. The branch name is the workflow
   authority. Resolve its latest committed head before this stage and start
   from the current parent frontier. If the branch advances, follow the latest
   head and rerun affected evidence. Do not use stale local refs or resolve or
