@@ -201,7 +201,8 @@ For a terminal feature `type:check` failure or dev-validation failure, Prime
 receives the complete diagnostic inventory before repairs begin. A
 `type:check` inventory consumes
 `remote-type-check-<run-id>-<attempt>/report.yaml`. Prime inventories every
-diagnostic from that report and reads every raw log named by its `rawLog` field.
+diagnostic found in `report.yaml` and every diagnostic found in its referenced
+`rawLog` files.
 A first-failure-only report is incomplete.
 Prime groups the full inventory by owning team and coherent competence area.
 Prime sends one consolidated repair packet per competence area. It does not
@@ -271,8 +272,9 @@ worker boundary.
    - Without a branch advance, invoke remote `type:check` exactly once for the
      same head. The natural terminal remote result is the evidence.
    - If `type:check` fails, consume its named report artifact and referenced raw
-     logs, inventory every diagnostic, and dispatch one consolidated repair
-     packet per owning competence area.
+     logs. Inventory every diagnostic found in `report.yaml` and every
+     diagnostic found in its referenced `rawLog` files. Dispatch one
+     consolidated repair packet per owning competence area.
    - Integrate the complete repair wave before one new `type:check` request.
    - A branch advance invalidates older review, `build:compile`, and `type:check`
      evidence.

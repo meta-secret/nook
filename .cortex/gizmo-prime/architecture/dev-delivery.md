@@ -99,8 +99,8 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     execution.
   - Consume the artifact
     `remote-type-check-<run-id>-<attempt>/report.yaml`.
-  - Inventory every diagnostic from `report.yaml` before deciding whether repair
-    is needed.
+  - Inventory every diagnostic found in `report.yaml` and every diagnostic found
+    in its referenced `rawLog` files before deciding whether repair is needed.
   - Read every raw log named by a `rawLog` field in `report.yaml`.
   - If the branch advances, invalidate the older head's review,
     `build:compile`, and `type:check` evidence. Resolve the latest committed
@@ -281,8 +281,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
      A first-failure-only report is incomplete.
    - For a failed feature `type:check`, consume
      `remote-type-check-<run-id>-<attempt>/report.yaml`.
-   - Inventory every diagnostic from that report and read every raw log named
-     by a `rawLog` field before repair.
+   - Inventory every diagnostic found in that report and every diagnostic found
+     in its referenced `rawLog` files before repair.
+   - Read every raw log named by a `rawLog` field before repair.
    - Forward the complete diagnostic inventory to Gizmo Prime. Prime groups
      diagnostics by owning team and coherent competence area.
    - Prime dispatches affected Team Gizmos in parallel through the active

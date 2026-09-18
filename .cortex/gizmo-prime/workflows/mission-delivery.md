@@ -135,9 +135,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Use the natural terminal remote `type:check` result as evidence.
    - Consume `remote-type-check-<run-id>-<attempt>/report.yaml`.
    - Read every raw log named by a `rawLog` field in `report.yaml`.
-   - If `type:check` fails, inventory every diagnostic from the report before
-     repair. Group the full inventory by owning team and coherent competence
-     area.
+   - If `type:check` fails, inventory every diagnostic found in `report.yaml` and
+     every diagnostic found in its referenced `rawLog` files before repair.
+     Group the full inventory by owning team and coherent competence area.
    - Send one consolidated repair packet per competence area. Do not send one
      agent per diagnostic.
    - Integrate the entire repair wave before one new `type:check` request. Do

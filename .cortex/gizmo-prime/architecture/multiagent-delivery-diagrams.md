@@ -313,9 +313,10 @@ unchanged head. The natural terminal remote result is evidence.
 The remote gates do not run tests, coverage, e2e, or preflight.
 
 The `type:check` selector is exact. Do not discover, preflight, mock, simulate,
-or execute it locally. A failed report requires the complete diagnostic
-inventory before repair. Group the inventory by owning team and coherent
-competence area. Send one consolidated repair packet per area. Integrate the
+or execute it locally. A failed report requires inventory of every diagnostic
+found in `report.yaml` and every diagnostic found in its referenced `rawLog`
+files before repair. Group the inventory by owning team and coherent competence
+area. Send one consolidated repair packet per area. Integrate the
 full repair wave before one new `type:check` request. Do not emit a
 per-diagnostic notification or repair stream.
 
@@ -751,8 +752,9 @@ sequenceDiagram
   Dev Manager's dev-to-main PR.
 - A failed `type:check` consumes
   `remote-type-check-<run-id>-<attempt>/report.yaml`. Prime inventories every
-  diagnostic from that report and reads every raw log named by a `rawLog` field.
-  Prime then groups diagnostics by owning team and coherent competence area,
+  diagnostic found in `report.yaml` and every diagnostic found in its referenced
+  `rawLog` files. Prime then groups diagnostics by owning team and coherent
+  competence area,
   sends one consolidated packet per area, and integrates the full repair wave
   before one new `type:check` request.
 - Team Agents mutate isolated child worktrees and return committed iterations.
