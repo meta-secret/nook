@@ -796,6 +796,35 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
   });
 });
 
+void test("a healthy terminal snapshot supersedes stale credential fallback history", () => {
+  const report = {
+    stage: "compile-native-dependencies",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 339,
+    requests_executed: 279,
+    cache_hits: 275,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+    remote_writes: 0,
+    compile_failures: 0,
+  };
+  assert.deepEqual(
+    resolveSccacheFallback(
+      [report],
+      { state: "active", reason: "none" },
+      { state: "fallback", reason: "credentials_unavailable" },
+    ),
+    { state: "active", reason: "none" },
+  );
+});
+
 void test("a real raw fallback remains active despite healthy terminal evidence", () => {
   /** @type {SccacheReport} */
   const report = {

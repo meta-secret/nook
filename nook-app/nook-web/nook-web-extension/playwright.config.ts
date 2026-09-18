@@ -7,7 +7,10 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.spec.ts',
   forbidOnly: isCi,
-  retries: 0,
+  // Retry only the failed browser case once in CI. This is substantially
+  // cheaper than restarting the complete multi-job validation pipeline for a
+  // transient browser race, while a repeated failure remains terminal.
+  retries: isCi ? 1 : 0,
   ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
   // The full smoke owns several headed pages and persistent contexts. Hosted
   // runners cannot reliably sustain it beside the other extension workers.

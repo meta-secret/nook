@@ -45,9 +45,8 @@ function rawFallbackReason(text) {
 
 /**
  * A raw-log fallback is current-solve evidence and always wins. A historical
- * circuit-open marker may be stale from a reused vertex, but only a healthy
+ * fallback marker may be stale from a reused vertex, but only a healthy
  * authoritative terminal report from the same raw collection can supersede it.
- * Other fallback reasons remain fail-closed.
  *
  * @param {readonly SccacheReport[]} rawReports
  * @param {FallbackState} rawFallback
@@ -69,11 +68,7 @@ export function resolveSccacheFallback(
     };
   }
   if (rawFallback.state === "fallback") return rawFallback;
-  if (
-    historyFallback.state !== "fallback" ||
-    historyFallback.reason !== "cache_circuit_open"
-  )
-    return historyFallback;
+  if (historyFallback.state !== "fallback") return historyFallback;
   const hasHealthyTerminal = rawReports.some(
     (report) =>
       report.counter_reliability === "authoritative" &&
