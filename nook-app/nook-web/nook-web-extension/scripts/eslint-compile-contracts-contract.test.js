@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
@@ -11,6 +11,9 @@ const extensionSourceDirectory = fileURLToPath(
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const adapterFilePath = fileURLToPath(
   new URL('../src/lib/nook-wasm.ts', import.meta.url),
+)
+const extensionPackagePath = fileURLToPath(
+  new URL('../package.json', import.meta.url),
 )
 
 class CompileContractsConfigTestHarness {
@@ -54,6 +57,13 @@ class CompileContractsConfigTestHarness {
 }
 
 describe('focused compile-contract ESLint config', () => {
+  test('extension lint ignores transient compile-contract fixtures', () => {
+    const packageSource = readFileSync(extensionPackagePath, 'utf8')
+    expect(packageSource).toContain(
+      "--ignore-pattern '**/__compile-contracts-*/**'",
+    )
+  })
+
   test('rejects TypeScript type predicates in authored TypeScript', () => {
     const messages = CompileContractsConfigTestHarness.lintTemporarySource(
       `
