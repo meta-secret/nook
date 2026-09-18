@@ -144,9 +144,10 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
     ExtensionPairingStorageProviderPayload,
     RuntimeMessageDecodeFailure
   > {
-    const decodeAttempt: Parameters<typeof Effect.try>[0] = {
-      try: () => decode_extension_pairing_storage_provider(value),
-      catch: (cause) => {
+    return Effect.try(() =>
+      decode_extension_pairing_storage_provider(value),
+    ).pipe(
+      Effect.mapError((cause) => {
         const failureRequest: Parameters<
           typeof RuntimeMessageDecodeFailure.fromCause
         >[0] = {
@@ -154,9 +155,8 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
           cause,
         };
         return RuntimeMessageDecodeFailure.fromCause(failureRequest);
-      },
-    };
-    return Effect.try(decodeAttempt);
+      }),
+    );
   }
 }
 
@@ -343,8 +343,11 @@ export class ExtensionPairingApprovedMessage {
     ExtensionPairingApprovedMessage,
     RuntimeMessageDecodeFailure
   > {
+    type ExtensionPairingApprovedMessageEnvelope = Schema.Schema.Type<
+      typeof extensionPairingApprovedMessageSchema
+    >;
     const request: RuntimeMessageDecodeRequest<
-      ExtensionPairingApprovedMessage,
+      ExtensionPairingApprovedMessageEnvelope,
       typeof message
     > = {
       schema: extensionPairingApprovedMessageSchema,
@@ -393,24 +396,52 @@ export class ExtensionIdentityHandoffRequestMessage {
     ExtensionIdentityHandoffRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    const identityHandoffPayloadFields: Schema.Struct.Fields = {
-      recipientPublicKey: Schema.String.pipe(Schema.minLength(1)),
-      nonce: Schema.String.pipe(Schema.minLength(1)),
-      expectedDeviceId: Schema.String.pipe(Schema.minLength(1)),
-      expectedDevicePublicKey: Schema.String.pipe(Schema.minLength(1)),
-      expectedDeviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
+    const recipientPublicKeySchema = Schema.String.pipe(Schema.minLength(1));
+    const nonceSchema = Schema.String.pipe(Schema.minLength(1));
+    const expectedDeviceIdSchema = Schema.String.pipe(Schema.minLength(1));
+    const expectedDevicePublicKeySchema = Schema.String.pipe(
+      Schema.minLength(1),
+    );
+    const expectedDeviceSigningPublicKeySchema = Schema.String.pipe(
+      Schema.minLength(1),
+    );
+    const identityHandoffPayloadFields: {
+      readonly recipientPublicKey: typeof recipientPublicKeySchema;
+      readonly nonce: typeof nonceSchema;
+      readonly expectedDeviceId: typeof expectedDeviceIdSchema;
+      readonly expectedDevicePublicKey: typeof expectedDevicePublicKeySchema;
+      readonly expectedDeviceSigningPublicKey: typeof expectedDeviceSigningPublicKeySchema;
+    } = {
+      recipientPublicKey: recipientPublicKeySchema,
+      nonce: nonceSchema,
+      expectedDeviceId: expectedDeviceIdSchema,
+      expectedDevicePublicKey: expectedDevicePublicKeySchema,
+      expectedDeviceSigningPublicKey: expectedDeviceSigningPublicKeySchema,
     };
-    const identityHandoffMessageFields: Schema.Struct.Fields = {
-      type: Schema.Literal(
-        ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-      ),
-      payload: Schema.Struct(identityHandoffPayloadFields),
+    const identityHandoffPayloadSchema = Schema.Struct(
+      identityHandoffPayloadFields,
+    );
+    const identityHandoffTypeSchema = Schema.Literal(
+      ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
+    );
+    const identityHandoffMessageFields: {
+      readonly type: typeof identityHandoffTypeSchema;
+      readonly payload: typeof identityHandoffPayloadSchema;
+    } = {
+      type: identityHandoffTypeSchema,
+      payload: identityHandoffPayloadSchema,
     };
+    const identityHandoffMessageSchema = Schema.Struct(
+      identityHandoffMessageFields,
+    );
+    type IdentityHandoffEnvelope = Schema.Schema.Type<
+      typeof identityHandoffMessageSchema
+    >;
     const identityHandoffRequest: RuntimeMessageDecodeRequest<
-      ExtensionIdentityHandoffRequestMessage,
+      IdentityHandoffEnvelope,
       typeof message
     > = {
-      schema: Schema.Struct(identityHandoffMessageFields),
+      schema: identityHandoffMessageSchema,
       value: message,
       kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
     };
@@ -433,17 +464,23 @@ export class ExtensionPairedVaultIdentityDiscoveryMessage {
     ExtensionPairedVaultIdentityDiscoveryMessage,
     RuntimeMessageDecodeFailure
   > {
-    const discoveryMessageFields: Schema.Struct.Fields = {
-      type: Schema.Literal(
-        ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-      ),
+    const discoveryTypeSchema = Schema.Literal(
+      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
+    );
+    const discoveryMessageFields: {
+      readonly type: typeof discoveryTypeSchema;
+      readonly payload: typeof Schema.Unknown;
+    } = {
+      type: discoveryTypeSchema,
       payload: Schema.Unknown,
     };
+    const discoveryMessageSchema = Schema.Struct(discoveryMessageFields);
+    type DiscoveryEnvelope = Schema.Schema.Type<typeof discoveryMessageSchema>;
     const discoveryRequest: RuntimeMessageDecodeRequest<
-      ExtensionPairedVaultIdentityDiscoveryMessage,
+      DiscoveryEnvelope,
       typeof message
     > = {
-      schema: Schema.Struct(discoveryMessageFields),
+      schema: discoveryMessageSchema,
       value: message,
       kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
     };
@@ -472,21 +509,33 @@ export class ExtensionPairedVaultUnlockRequestMessage {
     ExtensionPairedVaultUnlockRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    const unlockPayloadFields: Schema.Struct.Fields = {
-      requestId: Schema.String.pipe(Schema.minLength(1)),
-      vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
+    const unlockRequestIdSchema = Schema.String.pipe(Schema.minLength(1));
+    const unlockVaultStoreIdSchema = Schema.String.pipe(Schema.minLength(1));
+    const unlockPayloadFields: {
+      readonly requestId: typeof unlockRequestIdSchema;
+      readonly vaultStoreId: typeof unlockVaultStoreIdSchema;
+    } = {
+      requestId: unlockRequestIdSchema,
+      vaultStoreId: unlockVaultStoreIdSchema,
     };
-    const unlockMessageFields: Schema.Struct.Fields = {
-      type: Schema.Literal(
-        ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
-      ),
-      payload: Schema.Struct(unlockPayloadFields),
+    const unlockPayloadSchema = Schema.Struct(unlockPayloadFields);
+    const unlockTypeSchema = Schema.Literal(
+      ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
+    );
+    const unlockMessageFields: {
+      readonly type: typeof unlockTypeSchema;
+      readonly payload: typeof unlockPayloadSchema;
+    } = {
+      type: unlockTypeSchema,
+      payload: unlockPayloadSchema,
     };
+    const unlockMessageSchema = Schema.Struct(unlockMessageFields);
+    type UnlockEnvelope = Schema.Schema.Type<typeof unlockMessageSchema>;
     const unlockRequest: RuntimeMessageDecodeRequest<
-      ExtensionPairedVaultUnlockRequestMessage,
+      UnlockEnvelope,
       typeof message
     > = {
-      schema: Schema.Struct(unlockMessageFields),
+      schema: unlockMessageSchema,
       value: message,
       kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
     };
@@ -525,17 +574,23 @@ export class ExtensionPairedVaultIdentityHandoffRequestMessage {
     ExtensionPairedVaultIdentityHandoffRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    const handoffMessageFields: Schema.Struct.Fields = {
-      type: Schema.Literal(
-        ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-      ),
+    const handoffTypeSchema = Schema.Literal(
+      ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
+    );
+    const handoffMessageFields: {
+      readonly type: typeof handoffTypeSchema;
+      readonly payload: typeof Schema.Unknown;
+    } = {
+      type: handoffTypeSchema,
       payload: Schema.Unknown,
     };
+    const handoffMessageSchema = Schema.Struct(handoffMessageFields);
+    type HandoffEnvelope = Schema.Schema.Type<typeof handoffMessageSchema>;
     const handoffRequest: RuntimeMessageDecodeRequest<
-      ExtensionPairedVaultIdentityHandoffRequestMessage,
+      HandoffEnvelope,
       typeof message
     > = {
-      schema: Schema.Struct(handoffMessageFields),
+      schema: handoffMessageSchema,
       value: message,
       kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
     };
