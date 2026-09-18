@@ -348,6 +348,7 @@ class VaultStateSlicesImplementation {
         >[2] = {
           configurable: true,
           enumerable: true,
+          writable: true,
           value: member.bind(state),
         };
         Object.defineProperty(target, key, defineOwnedMethodArgs);
