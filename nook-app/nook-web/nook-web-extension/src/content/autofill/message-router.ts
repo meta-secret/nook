@@ -3,6 +3,7 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
   WebsiteAuthenticatorCanceledMessage as WebsiteAuthenticatorCanceledMessageSchema,
@@ -41,7 +42,11 @@ async function clearAuthenticationSurface(): Promise<void> {
 type AutofillMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0]
-type AutofillMessageDelivery = Parameters<AutofillMessageListener>
+type AutofillMessageDelivery = [
+  runtimeMessage: BrowserRuntimeMessageValue,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: Parameters<AutofillMessageListener>[2],
+]
 
 export const routeAutofillMessage: AutofillMessageListener = (
   ...[runtimeMessage, sender, sendResponse]: AutofillMessageDelivery

@@ -6,9 +6,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
@@ -35,7 +33,6 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
 )
@@ -85,11 +82,15 @@ class ExtensionBuildDependencyLoader {
   private importResolved(
     specifier: '@sveltejs/vite-plugin-svelte',
   ): Promise<ResolvedSvelteModule>
-  private async importResolved(specifier: string): Promise<unknown> {
-    const resolved = requireFromWeb.resolve(specifier)
-    // Resolution is constrained to the installed web dependency tree.
-    // eslint-disable-next-line no-unsanitized/method
-    return import(pathToFileURL(resolved).href)
+  private importResolved(
+    specifier: 'vite' | '@sveltejs/vite-plugin-svelte',
+  ): Promise<ResolvedViteModule | ResolvedSvelteModule> {
+    switch (specifier) {
+      case 'vite':
+        return import('vite')
+      case '@sveltejs/vite-plugin-svelte':
+        return import('@sveltejs/vite-plugin-svelte')
+    }
   }
 }
 

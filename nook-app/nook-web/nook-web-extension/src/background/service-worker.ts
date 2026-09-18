@@ -15,6 +15,7 @@ import {
 import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
+  type BrowserRuntimeMessageValue,
 } from '../lib/browser-runtime-message'
 import {
   ConcreteDecoderResultKind,
@@ -423,6 +424,11 @@ const orderedSchemaRuntimeMessageRouter =
 type BackgroundRuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0]
+type BackgroundRuntimeMessageListenerArguments = [
+  runtimeMessage: BrowserRuntimeMessageValue,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: Parameters<BackgroundRuntimeMessageListener>[2],
+]
 
 type BackgroundRuntimeMessageRoutingRequest = {
   readonly runtimeMessage: BrowserRuntimeMessage
@@ -624,7 +630,7 @@ class BackgroundRuntimeMessageRouter {
 }
 
 const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
-  ...listenerArguments
+  ...listenerArguments: BackgroundRuntimeMessageListenerArguments
 ) => {
   const [runtimeMessage, sender, sendResponse] = listenerArguments
   const admission = BrowserRuntimeMessage.from(runtimeMessage)
