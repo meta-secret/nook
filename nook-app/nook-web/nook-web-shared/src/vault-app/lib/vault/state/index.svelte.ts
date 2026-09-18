@@ -341,6 +341,18 @@ class VaultStateSlicesImplementation {
     keys,
   }: VaultStateDelegation<State>): void {
     for (const key of keys) {
+      const member = state[key];
+      if (typeof member === "function") {
+        const defineOwnedMethodArgs: Parameters<
+          typeof Object.defineProperty
+        >[2] = {
+          configurable: true,
+          enumerable: true,
+          value: member.bind(state),
+        };
+        Object.defineProperty(target, key, defineOwnedMethodArgs);
+        continue;
+      }
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
         configurable: true,
         enumerable: true,
