@@ -385,20 +385,45 @@ class ArcManifestContract {
       "type: Unconfined",
       "[worker.oci]",
       "gc = true",
-      'reservedSpace = "8GB"',
       'maxUsedSpace = "112GB"',
-      'minFreeSpace = "16GB"',
       'mirrors = ["registry.dev.nokey.sh"]',
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
-    const gcPolicyContract = buildkit.requireAll([
-      "[[worker.oci.gcpolicy]]",
-      'keepDuration = "48h"',
-      'filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]',
-      'keepDuration = "336h"',
-      "all = true",
-    ]);
-    if (gcPolicyContract.isErr()) return err(gcPolicyContract.error);
+    const gcInitialPolicyContract = buildkit.require(
+      `    [[worker.oci.gcpolicy]]
+      filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+      keepDuration = "48h"
+      maxUsedSpace = "512MB"`,
+    );
+    if (gcInitialPolicyContract.isErr())
+      return err(gcInitialPolicyContract.error);
+    const gcLongLivedPolicyContract = buildkit.require(
+      `    [[worker.oci.gcpolicy]]
+      keepDuration = "336h"
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"`,
+    );
+    if (gcLongLivedPolicyContract.isErr())
+      return err(gcLongLivedPolicyContract.error);
+    const gcBroadPolicyContract = buildkit.require(
+      `    [[worker.oci.gcpolicy]]
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"`,
+    );
+    if (gcBroadPolicyContract.isErr()) return err(gcBroadPolicyContract.error);
+    const gcTerminalPolicyContract = buildkit.require(
+      `    [[worker.oci.gcpolicy]]
+      all = true
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
+
+    [registry."docker.io"]`,
+    );
+    if (gcTerminalPolicyContract.isErr())
+      return err(gcTerminalPolicyContract.error);
     const gcPolicyCount = buildkit.count({
       fragment: "    [[worker.oci.gcpolicy]]",
       expected: 4,
@@ -406,24 +431,25 @@ class ArcManifestContract {
     if (gcPolicyCount.isErr()) return err(gcPolicyCount.error);
     const gcReservedSpaceCount = buildkit.count({
       fragment: '      reservedSpace = "8GB"',
-      expected: 5,
+      expected: 4,
     });
     if (gcReservedSpaceCount.isErr()) return err(gcReservedSpaceCount.error);
     const gcMaxUsedSpaceCount = buildkit.count({
       fragment: '      maxUsedSpace = "112GB"',
-      expected: 5,
+      expected: 4,
     });
     if (gcMaxUsedSpaceCount.isErr()) return err(gcMaxUsedSpaceCount.error);
     const gcMinFreeSpaceCount = buildkit.count({
       fragment: '      minFreeSpace = "16GB"',
-      expected: 5,
+      expected: 4,
     });
     if (gcMinFreeSpaceCount.isErr()) return err(gcMinFreeSpaceCount.error);
-    const gcTerminalPolicyOrder = buildkit.requireBefore({
-      first: "keepDuration = \"336h\"",
-      second: "all = true",
+    const gcShortLivedMaxUsedSpaceCount = buildkit.count({
+      fragment: '      maxUsedSpace = "512MB"',
+      expected: 1,
     });
-    if (gcTerminalPolicyOrder.isErr()) return err(gcTerminalPolicyOrder.error);
+    if (gcShortLivedMaxUsedSpaceCount.isErr())
+      return err(gcShortLivedMaxUsedSpaceCount.error);
     const admittedContract12 = buildkit.forbidAll([
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
