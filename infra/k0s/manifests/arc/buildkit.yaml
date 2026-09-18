@@ -196,6 +196,7 @@ spec:
                   app.kubernetes.io/name: nook-buildkit
       automountServiceAccountToken: false
       enableServiceLinks: false
+      shareProcessNamespace: true
       terminationGracePeriodSeconds: 120
       securityContext:
         fsGroup: 1000
