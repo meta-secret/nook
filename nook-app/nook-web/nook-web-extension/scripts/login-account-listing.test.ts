@@ -1,6 +1,8 @@
-import { err, ok, type Result } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import {
+  type DecodedExtensionSessionTransportDelivery,
   type ExtensionSessionTransport,
+  type ExtensionSessionTransportDelivery,
   type ExtensionSessionTransportResult,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -21,32 +23,37 @@ class QueuedSessionTransportFixture implements ExtensionSessionTransport {
   constructor(private readonly args: QueuedSessionTransportFixtureArgs) {}
 
   sendMessage(
-    message: ExtensionSessionTransportRequest,
+    delivery: ExtensionSessionTransportDelivery,
   ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   async sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
-    _message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery:
+      | ExtensionSessionTransportDelivery
+      | DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<
     | ExtensionSessionTransportResult<ExtensionSessionResponse>
     | ExtensionSessionTransportResult<Response, DecodeFailure>
   > {
     this.deliveryCount += 1
-    const delivery = this.args.deliveries.shift()
-    if (!delivery) throw new Error('login account fixture delivery exhausted')
-    if (delivery.isErr())
+    const queuedDelivery = this.args.deliveries.shift()
+    if (!queuedDelivery)
+      throw new Error('login account fixture delivery exhausted')
+    if (queuedDelivery.isErr())
       return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
-        delivery.error,
+        queuedDelivery.error,
       )
-    if (!decodeResponse) return delivery
-    return decodeResponse(delivery.value).mapErr((failure) => failure)
+    if (!('decodeResponse' in delivery)) return queuedDelivery
+    const decoded = delivery.decodeResponse(queuedDelivery.value)
+    return decoded.match(
+      (value) =>
+        ok<Response, ExtensionSessionTransportFailure | DecodeFailure>(value),
+      (failure) =>
+        err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+          failure,
+        ),
+    )
   }
 }
 
@@ -78,7 +85,11 @@ describe('login account listing failure handling', () => {
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const interactiveTransport = new QueuedSessionTransportFixture({
       deliveries: [
-        ok({ ok: false, reason: 'session-list-failed' }),
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
         ok({
           ok: true,
           accounts: [
@@ -97,7 +108,8 @@ describe('login account listing failure handling', () => {
     >[0] = {
       grants,
       origin: 'https://example.test',
-      sendMessage: interactiveTransport.sendMessage.bind(interactiveTransport),
+      sendMessage: (message: ExtensionSessionTransportRequest) =>
+        interactiveTransport.sendMessage({ message }),
     }
     expect(
       await accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
@@ -132,14 +144,21 @@ describe('login account listing failure handling', () => {
     >[0] = {
       grants,
       origin: 'https://example.test',
-      sendMessage: unavailableTransport.sendMessage.bind(unavailableTransport),
+      sendMessage: (message: ExtensionSessionTransportRequest) =>
+        unavailableTransport.sendMessage({ message }),
     }
     expect(
       await accountPickerSessions.loginAccountsForOrigin(unavailableRequest),
     ).toEqual([])
 
     const passiveTransport = new QueuedSessionTransportFixture({
-      deliveries: [ok({ ok: false, reason: 'session-list-failed' })],
+      deliveries: [
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ],
     })
     const passiveRequest: Parameters<
       typeof accountPickerSessions.loginAccountAvailabilityForOrigin
@@ -147,7 +166,8 @@ describe('login account listing failure handling', () => {
       grants,
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
-      sendMessage: passiveTransport.sendMessage.bind(passiveTransport),
+      sendMessage: (message: ExtensionSessionTransportRequest) =>
+        passiveTransport.sendMessage({ message }),
     }
     expect(
       await accountPickerSessions.loginAccountAvailabilityForOrigin(
@@ -243,14 +263,15 @@ describe('login account listing failure handling', () => {
       grants: [grant('malformed-vault')],
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
-      sendMessage: mock(() =>
-        Promise.resolve(
-          ok({
-            ok: true,
-            accounts: [{ secretId: 'login-1' }],
-          }),
-        ),
-      ),
+      sendMessage: mock(() => {
+        const malformedAccountResponse: ExtensionSessionResponse = { ok: true }
+        Object.assign(malformedAccountResponse, {
+          accounts: [
+            { secretId: 'login-1', issuer: 'issuer', account: 'name' },
+          ],
+        })
+        return Promise.resolve(ok(malformedAccountResponse))
+      }),
     }
     expect(
       await accountPickerSessions.loginAccountAvailabilityForOrigin(

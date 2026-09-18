@@ -1,5 +1,5 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test'
-import { err, ok, type Result } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { Effect } from 'effect'
 import {
   decode_extension_grant_authority_response,
@@ -15,6 +15,8 @@ import {
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
+  type DecodedExtensionSessionTransportDelivery,
+  type ExtensionSessionTransportDelivery,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
   type ExtensionSessionTransport,
@@ -56,31 +58,35 @@ class PairingSessionTransportFixture implements ExtensionSessionTransport {
   constructor(private readonly args: PairingSessionTransportFixtureArgs) {}
 
   sendMessage(
-    message: ExtensionSessionTransportRequest,
+    delivery: ExtensionSessionTransportDelivery,
   ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   async sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery:
+      | ExtensionSessionTransportDelivery
+      | DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<
     | ExtensionSessionTransportResult<ExtensionSessionResponse>
     | ExtensionSessionTransportResult<Response, DecodeFailure>
   > {
     this.deliveryCount += 1
-    const delivery = await this.args.deliver(message)
-    if (delivery.isErr())
+    const queuedDelivery = await this.args.deliver(delivery.message)
+    if (queuedDelivery.isErr())
       return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
-        delivery.error,
+        queuedDelivery.error,
       )
-    if (!decodeResponse) return delivery
-    return decodeResponse(delivery.value)
+    if (!('decodeResponse' in delivery)) return queuedDelivery
+    const decoded = delivery.decodeResponse(queuedDelivery.value)
+    return decoded.match(
+      (value) =>
+        ok<Response, ExtensionSessionTransportFailure | DecodeFailure>(value),
+      (failure) =>
+        err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+          failure,
+        ),
+    )
   }
 }
 
@@ -213,7 +219,8 @@ describe('extension pairing grant transport', () => {
         persistPairingStorage: async () => {
           events.push('persist')
         },
-        sendSession: session.sendMessage.bind(session),
+        sendSession: (message: ExtensionSessionTransportRequest) =>
+          session.sendMessage({ message }),
       })
       expect(events).toEqual(
         receiver === 'created'
@@ -271,7 +278,8 @@ describe('extension pairing grant transport', () => {
           heads: ['event-1'],
         }),
         persistPairingStorage: async () => {},
-        sendSession: session.sendMessage.bind(session),
+        sendSession: (message: ExtensionSessionTransportRequest) =>
+          session.sendMessage({ message }),
       })
 
       expect(response).toEqual({
@@ -311,7 +319,8 @@ describe('extension pairing grant transport', () => {
         throw new Error('decoder must reject before import')
       },
       persistPairingStorage: async () => {},
-      sendSession: session.sendMessage.bind(session),
+      sendSession: (message: ExtensionSessionTransportRequest) =>
+        session.sendMessage({ message }),
     })
 
     expect(response).toEqual({
@@ -345,7 +354,8 @@ describe('extension pairing grant transport', () => {
         heads: ['event-1'],
       }),
       persistPairingStorage: async () => {},
-      sendSession: session.sendMessage.bind(session),
+      sendSession: (message: ExtensionSessionTransportRequest) =>
+        session.sendMessage({ message }),
     })
 
     expect(response).toEqual({
@@ -505,7 +515,8 @@ describe('extension pairing grant transport', () => {
             ? Promise.reject(new Error('policy unavailable'))
             : extensionPairingGrantPolicyReady,
         importEventLog: unusedOperation,
-        sendSession: session.sendMessage.bind(session),
+        sendSession: (message: ExtensionSessionTransportRequest) =>
+          session.sendMessage({ message }),
       })
       expect(response).toEqual({
         ok: false,

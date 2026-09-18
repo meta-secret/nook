@@ -6,6 +6,8 @@ import {
   ExtensionSessionDocumentStateKind,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
+  type DecodedExtensionSessionTransportDelivery,
+  type ExtensionSessionTransportDelivery,
 } from '../src/background/service-worker/session-document'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
@@ -294,10 +296,11 @@ describe('extension session document ownership', () => {
     if (opened.isErr()) throw new Error('document creation must succeed')
 
     const decodeResponse = mock((response: unknown) => ok(response))
-    const delivery = opened.value.sendMessage(
-      fixtureSessionRequest,
-      decodeResponse,
-    )
+    const decodedDelivery: DecodedExtensionSessionTransportDelivery<
+      unknown,
+      never
+    > = { message: fixtureSessionRequest, decodeResponse }
+    const delivery = opened.value.sendMessage(decodedDelivery)
     expect(fixture.respond(false)).toEqual(ok())
     expect(await delivery).toEqual(
       err(
@@ -334,9 +337,12 @@ describe('extension session document ownership', () => {
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
     if (opened.isErr()) throw new Error('document creation must succeed')
-    const delivery = opened.value.sendMessage(fixtureSessionRequest)
+    const deliveryRequest: ExtensionSessionTransportDelivery = {
+      message: fixtureSessionRequest,
+    }
+    const delivery = opened.value.sendMessage(deliveryRequest)
     const closing = fixture.owner.close()
-    expect(await opened.value.sendMessage(fixtureSessionRequest)).toEqual(
+    expect(await opened.value.sendMessage(deliveryRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,
@@ -372,7 +378,10 @@ describe('extension session document ownership', () => {
     )
     expect(await fixture.owner.close()).toEqual(failure)
     expect(await fixture.owner.open()).toEqual(failure)
-    expect(await opened.value.sendMessage(fixtureSessionRequest)).toEqual(
+    const deliveryRequest: ExtensionSessionTransportDelivery = {
+      message: fixtureSessionRequest,
+    }
+    expect(await opened.value.sendMessage(deliveryRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,

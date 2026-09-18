@@ -10,6 +10,7 @@ import {
   routeDecodedLocalUpdate,
   routedGrant,
 } from './service-worker-routing-test-support'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
 
 describe('local event-log update routing', () => {
   test('keeps the decoded local-update session usable for a subsequent authenticator request', async () => {
@@ -22,19 +23,25 @@ describe('local event-log update routing', () => {
       }
       if (message.type === ExtensionSessionMessageType.ClassifyGrantAuthority) {
         delivered.push(ExtensionSessionMessageType.ClassifyGrantAuthority)
-        return ok({ kind: 'Authorized' as const, grant: routedGrant })
+        const response: ExtensionSessionResponse = {
+          kind: 'Authorized',
+          grant: routedGrant,
+        }
+        return ok(response)
       }
       if (message.type === ExtensionSessionMessageType.UpdateVault) {
         delivered.push(ExtensionSessionMessageType.UpdateVault)
-        return ok({ ok: true })
+        const response: ExtensionSessionResponse = { ok: true }
+        return ok(response)
       }
       if (message.type === ExtensionSessionMessageType.AuthenticatorCode) {
         delivered.push(ExtensionSessionMessageType.AuthenticatorCode)
-        return ok({
-          ok: true,
+        const response: ExtensionSessionResponse = { ok: true }
+        Object.assign(response, {
           code: '012345',
           expiresAt: Date.now() + 30_000,
         })
+        return ok(response)
       }
       return err(
         new ExtensionSessionTransportFailure(

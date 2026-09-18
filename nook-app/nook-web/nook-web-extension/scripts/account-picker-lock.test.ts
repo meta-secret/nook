@@ -191,18 +191,28 @@ describe('account picker authorization cleanup', () => {
       await accountPickers.accountPickerSessions.loadLoginPicker(
         'persisted-request',
       )
+    const cleanupCompletion: Parameters<
+      typeof accountPickers.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await accountPickers.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
+      cleanupCompletion,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const overlapCompletion: Parameters<
+      typeof accountPickers.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await accountPickers.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Full,
+      overlapCompletion,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
@@ -219,10 +229,14 @@ describe('account picker authorization cleanup', () => {
     const storage = new AuthorizationStorageFixture()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
     const removal = storage.holdRemoval()
-    const completing = authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
-    )
+    const completion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
+    const completing =
+      authorization.completeAccountPickerAuthorizationCleanup(completion)
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
     storage.finishRemoval(callback)
@@ -232,9 +246,14 @@ describe('account picker authorization cleanup', () => {
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const overlapCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Full,
+      overlapCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -249,18 +268,27 @@ describe('account picker authorization cleanup', () => {
     const storage = new AuthorizationStorageFixture()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
     const removal = storage.holdRemoval()
-    const completing = authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
-    )
+    const completion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
+    const completing =
+      authorization.completeAccountPickerAuthorizationCleanup(completion)
     const rejected = completing.catch((error: Error) => error)
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
     storage.failRemoval(callback)
     expect(await rejected).toEqual(new Error('removal denied'))
+    const overlapCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Partial,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Partial,
+      overlapCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -269,9 +297,14 @@ describe('account picker authorization cleanup', () => {
     ).toBe(false)
     const fullCleanup =
       await authorization.beginAccountPickerAuthorizationCleanup()
+    const fullCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: fullCleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      fullCleanup.authorizationGeneration,
-      CleanupEvidence.Full,
+      fullCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -286,10 +319,15 @@ describe('account picker authorization cleanup', () => {
     new AuthorizationStorageFixture()
     const old = await authorization.accountPickerAuthorizationGeneration()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
+    const staleCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: old,
+      evidence: CleanupEvidence.Full,
+    }
     const rejected =
       await authorization.completeAccountPickerAuthorizationCleanup(
-        old,
-        CleanupEvidence.Full,
+        staleCompletion,
       )
     expect(rejected).toHaveProperty('error')
     authorization.releaseAccountPickerAuthorizationCleanup(old)
@@ -298,9 +336,14 @@ describe('account picker authorization cleanup', () => {
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const cleanupCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Partial,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Partial,
+      cleanupCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(

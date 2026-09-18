@@ -27,7 +27,6 @@ import {
   extensionPairingGrantPolicyReady,
   type StoredExtensionPairingGrant,
 } from '../src/background/pairing-grants'
-import { extensionPairingIdentity } from '../src/background/service-worker/pairing-identity'
 import { ExtensionPairingStateQueryMessage } from '../src/lib/pairing-state'
 import {
   decodeExtensionAuthenticationSurfacesRefreshMessage,
@@ -148,9 +147,9 @@ const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
 )
 const unusedSessionTransport: ExtensionSessionTransport = {
-  sendMessage: extensionPairingIdentity.sendSessionMessage.bind(
-    extensionPairingIdentity,
-  ),
+  sendMessage: async () => {
+    throw new Error('routing fixture session transport must not send directly')
+  },
 }
 const ensureExtensionSessionDocument = mock(() =>
   Promise.resolve(ok(unusedSessionTransport)),

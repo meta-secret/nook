@@ -4,6 +4,7 @@ import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-
 import type { extensionAuthenticatorSession } from '../src/background/service-worker/authenticator-session-adapter'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
 
 function pairingGrant(): Parameters<
   typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
@@ -77,12 +78,13 @@ describe('authenticator session adapter', () => {
         ) {
           observedCodes.push([...request.payload.codes])
         }
-        return ok({
-          ok: true,
+        const response: ExtensionSessionResponse = { ok: true }
+        Object.assign(response, {
           secretId: 'secret-1',
           backupCodesVerified: true,
           reviewedInputPersisted: true,
         })
+        return ok(response)
       },
     })
     const codes = ['A1B2-C3D4', 'E5F6-G7H8']
@@ -117,7 +119,10 @@ describe('authenticator session adapter', () => {
     } =
       await import('../src/background/service-worker/authenticator-session-adapter')
     const session = new ExtensionAuthenticatorSession({
-      sendSessionMessage: async () => ok({ ok: true, secretId: 'secret-1' }),
+      sendSessionMessage: async () => {
+        const response: ExtensionSessionResponse = { ok: true }
+        return ok(response)
+      },
     })
     const args: Parameters<
       typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession

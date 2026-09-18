@@ -1,4 +1,4 @@
-import { err, ok, type Result } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import type { WebsitePasskeyOptionsDependencies } from '../src/background/service-worker/passkey-operations'
@@ -9,7 +9,9 @@ import {
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { WebsitePasskeyRequestContext } from '../src/background/service-worker/pairing-identity'
 import type {
+  DecodedExtensionSessionTransportDelivery,
   ExtensionSessionTransport,
+  ExtensionSessionTransportDelivery,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportResult,
 } from '../src/background/service-worker/session-document'
@@ -38,19 +40,15 @@ class PasskeySessionTransportFixture implements ExtensionSessionTransport {
   constructor(private readonly args: PasskeySessionTransportFixtureArgs) {}
 
   sendMessage(
-    message: ExtensionSessionTransportRequest,
+    delivery: ExtensionSessionTransportDelivery,
   ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   async sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
-    _message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery:
+      | ExtensionSessionTransportDelivery
+      | DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<
     | ExtensionSessionTransportResult<ExtensionSessionResponse>
     | ExtensionSessionTransportResult<Response, DecodeFailure>
@@ -58,18 +56,19 @@ class PasskeySessionTransportFixture implements ExtensionSessionTransport {
     this.deliveryCount += 1
     const response = this.args.responses.shift()
     if (!response) throw new Error('passkey session fixture exhausted')
-    if (!decodeResponse)
+    if (!('decodeResponse' in delivery))
       return ok<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
         response,
       )
-    const decoded = decodeResponse(response)
-    return decoded.isErr()
-      ? err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
-          decoded.error,
-        )
-      : ok<Response, ExtensionSessionTransportFailure | DecodeFailure>(
-          decoded.value,
-        )
+    const decoded = delivery.decodeResponse(response)
+    return decoded.match(
+      (value) =>
+        ok<Response, ExtensionSessionTransportFailure | DecodeFailure>(value),
+      (failure) =>
+        err<Response, ExtensionSessionTransportFailure | DecodeFailure>(
+          failure,
+        ),
+    )
   }
 }
 
@@ -146,7 +145,8 @@ describe('website passkey options', () => {
           },
         }),
       ),
-      sendSessionMessage: sessionTransport.sendMessage.bind(sessionTransport),
+      sendSessionMessage: (message: ExtensionSessionTransportRequest) =>
+        sessionTransport.sendMessage({ message }),
     }
     const args: Parameters<
       typeof websitePasskeyRequests.websitePasskeyOptions

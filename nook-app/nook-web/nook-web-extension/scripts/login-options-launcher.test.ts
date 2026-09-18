@@ -1,8 +1,12 @@
-import { ok } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
 
 type GrantAccessResponse =
   | {
@@ -183,7 +187,13 @@ describe('websiteLoginOptions', () => {
     expect(failedPassiveResponse).toEqual({ kind: 'unavailable' })
 
     const failedSessionList = mock(() =>
-      Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
+      Promise.resolve(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ),
     )
     const failedListRequest: Parameters<
       typeof loginAccountAvailabilityForOrigin

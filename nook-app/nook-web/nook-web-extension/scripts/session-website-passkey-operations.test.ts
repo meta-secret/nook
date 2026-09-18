@@ -51,6 +51,7 @@ type MockPasskeyManager = Pick<
     attestationObject: string
     transports: string[]
     free: () => void
+    [Symbol.dispose]: () => void
   }>
   assert_website_passkey: (
     request: Parameters<NookVaultManager['assert_website_passkey']>[0],
@@ -62,6 +63,7 @@ type MockPasskeyManager = Pick<
     signature: string
     userHandle: string
     free: () => void
+    [Symbol.dispose]: () => void
   }>
 }
 
@@ -85,6 +87,9 @@ class WebsitePasskeyOperationsScenario {
           free: () => {
             this.state.registrationFreed = true
           },
+          [Symbol.dispose]: () => {
+            this.state.registrationFreed = true
+          },
         }
       },
       assert_website_passkey: async (_request, shouldContinue) => {
@@ -96,6 +101,9 @@ class WebsitePasskeyOperationsScenario {
           signature: 'assertion-signature',
           userHandle: 'assertion-user-handle',
           free: () => {
+            this.state.assertionFreed = true
+          },
+          [Symbol.dispose]: () => {
             this.state.assertionFreed = true
           },
         }
