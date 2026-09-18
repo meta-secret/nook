@@ -776,11 +776,21 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
     else {
         panic!("nook-wasm build stage must be delimited by the next Docker stage");
     };
+    let Some((nook_compile, nook_packaging)) = nook_build.split_once("\nRUN case") else {
+        panic!("nook-wasm compile and packaging must use separate Docker RUN vertices");
+    };
     assert!(
         nook_build.contains("nook-wasm/.wasm-source-sha256")
+            && nook_compile.contains("--mount=type=secret,id=sccache_s3_access_key")
+            && nook_compile.contains(
+                "cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm"
+            )
+            && nook_compile.contains("nook-sccache-report wasm-build-nook-wasm")
+            && nook_packaging.contains("RUSTC_WRAPPER= wasm-pack build nook-wasm")
+            && !nook_packaging.contains("mount=type=secret")
             && !nook_build.contains("nook-companion-wasm/.wasm-source-sha256")
             && !nook_build.contains("-p nook-companion-wasm"),
-        "nook-wasm build stamps must remain package-specific"
+        "nook-wasm compile must own credentials while packaging stays mount-free and package-specific"
     );
 
     let Some(companion_build) = dockerfile
@@ -789,11 +799,22 @@ fn wasm_compiler_cache_graphs_are_package_specific() {
     else {
         panic!("companion WASM build stage must be delimited by the next Docker stage");
     };
+    let Some((companion_compile, companion_packaging)) = companion_build.split_once("\nRUN case")
+    else {
+        panic!("companion WASM compile and packaging must use separate Docker RUN vertices");
+    };
     assert!(
         companion_build.contains("nook-companion-wasm/.wasm-source-sha256")
+            && companion_compile.contains("--mount=type=secret,id=sccache_s3_access_key")
+            && companion_compile.contains(
+                "cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm"
+            )
+            && companion_compile.contains("nook-sccache-report wasm-build-companion-wasm")
+            && companion_packaging.contains("RUSTC_WRAPPER= wasm-pack build nook-companion-wasm")
+            && !companion_packaging.contains("mount=type=secret")
             && !companion_build.contains("nook-wasm/.wasm-source-sha256")
             && !companion_build.contains("-p nook-wasm"),
-        "companion WASM build stamps must remain package-specific"
+        "companion WASM compile must own credentials while packaging stays mount-free and package-specific"
     );
 }
 

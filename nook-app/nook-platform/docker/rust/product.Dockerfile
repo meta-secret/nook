@@ -711,13 +711,17 @@ FROM builder-nook-wasm-source AS builder-nook-wasm-build
 # Emit nook-wasm independently; the companion package has its own source and compiler leaf below.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    case "$WASM_BUILD_MODE" in \
+    cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
+    && nook-sccache-report wasm-build-nook-wasm
+
+# Keep wasm-pack's packaging-only compiler probes in a separate, mount-free vertex.
+RUN case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
     && mkdir -p ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
-    && wasm-pack build nook-wasm --target web \
+    && RUSTC_WRAPPER= wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
@@ -737,8 +741,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
          && echo "$stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook-wasm-build-mode \
          && mkdir -p /opt/nook/wasm-handoff \
-         && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ ) \
-    && nook-sccache-report wasm-build-nook-wasm
+         && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ )
 ARG NOOK_SCCACHE_TELEMETRY_REPLAY
 RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-nook-wasm; fi
 
@@ -748,13 +751,17 @@ ARG WASM_BUILD_MODE=dev
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    case "$WASM_BUILD_MODE" in \
+    cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
+    && nook-sccache-report wasm-build-companion-wasm
+
+# Match the mount-free nook-wasm packaging boundary above.
+RUN case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
     && mkdir -p ../nook-web/nook-web-shared/src/extension/nook-companion-wasm \
-    && wasm-pack build nook-companion-wasm --target web \
+    && RUSTC_WRAPPER= wasm-pack build nook-companion-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
          --out-name nook_companion_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
@@ -768,8 +775,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
          && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
          && cp -a ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
-              /opt/nook/wasm-handoff/nook-companion-wasm/ ) \
-    && nook-sccache-report wasm-build-companion-wasm
+              /opt/nook/wasm-handoff/nook-companion-wasm/ )
 ARG NOOK_SCCACHE_TELEMETRY_REPLAY
 RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-companion-wasm; fi
 
