@@ -63,7 +63,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         root.read("nook-app/nook-web/typed-api-rules.js")
     );
     for required in [
-        "import { typedApiRules } from './typed-api-rules.js'",
+        "typedApiRules,",
+        "} from \"./typed-api-rules.js\";",
         "untrustedInputAdapterRules",
         "concreteObjectTypeRules",
         "rules: typedApiRules",

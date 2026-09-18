@@ -88,7 +88,7 @@ impl PrProducerSteps {
     fn cache_contract(&self, pr: &str) -> anyhow::Result<bool> {
         Ok(self.rust_publish < self.rust_verify
             && pr
-                .get(self.rust_publish..self.rust_verify)
+                .get(..self.rust_publish)
                 .context("PR Rust publication-to-verification section must have valid boundaries")?
                 .contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
             && pr.contains("nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}")

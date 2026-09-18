@@ -171,6 +171,7 @@ fn assert_docker_setup_contract(root: &Path) {
 
 fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let pr = (root).read(".github/workflows/pr.yml");
+    let validation_handoff = (root).read(".github/workflows/pr-validation-handoff.yml");
     for required in [
         "name: Native Rust verification",
         "name: WASM build and artifact",
@@ -219,7 +220,6 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "workflowPath === '.github/workflows/pr-validation-handoff.yml'",
         "steps.trusted-wasm.outputs.found != 'true'",
         "'.github/actions/nook-cache-connect/**'",
-        "'preflight/**'",
         "'nook-app/nook-platform/nook-app-common/**'",
         "'nook-app/nook-platform/nook-companion-core/**'",
         "'nook-app/nook-platform/nook-companion-wasm/**'",
@@ -239,6 +239,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             "PR CI must keep its normal split gate and legacy label-selected feature e2e contract: {required}"
         );
     }
+    assert!(
+        validation_handoff.contains("'preflight/**'"),
+        "the trusted validation handoff key must include repository preflight sources"
+    );
     assert!(pr.contains("source_sha:"));
 
     assert_pr_cache_health_runtime_contract(root);
