@@ -37,15 +37,10 @@ const FRESH_BASE_AUTHORITIES = [
 
 const FRESH_BASE_BOOTSTRAP_AUTHORITIES = [
   '.cortex/AGENTS.md',
-  '.cortex/knowledge-graph.md',
   '.cortex/gizmo-prime/AGENTS.md',
-  '.cortex/gizmo-prime/knowledge-graph.md',
   '.cortex/gizmo-prime/architecture/dev-delivery.md',
   '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
   '.cortex/gizmo-prime/workflows/mission-delivery.md',
-  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
-  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
-  '.cortex/gizmo-prime/workflows/team-oriented-development.md',
 ] as const;
 
 const AI_TYPESCRIPT_POLICY_ROUTES = [
@@ -187,23 +182,18 @@ Model text.
 });
 
 test('requires every fresh-base authority to use fresh origin/main', () => {
-  const required = [
-    'feature branch',
-    'latest committed',
-    'fails closed',
-  ] as const;
-
   for (const relativePath of FRESH_BASE_AUTHORITIES) {
     const markdown = CortexContextRouterScenario.normalizeMarkdown(
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
-    for (const phrase of required) {
-      expect(markdown).toContain(phrase);
-    }
+    expect(markdown).toContain('feature branch');
     expect(markdown).not.toContain(
       'unless the user explicitly selects another base',
     );
     expect(markdown).toContain('origin/main');
+    expect(markdown).not.toContain('canonical local `dev`');
+    expect(markdown).not.toContain('refs/heads/dev');
+    expect(markdown).not.toContain('origin/dev');
   }
 
   for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
@@ -212,8 +202,7 @@ test('requires every fresh-base authority to use fresh origin/main', () => {
     );
     expect(markdown).toContain('git fetch --prune origin');
     expect(markdown).toContain('origin/main');
-    expect(markdown).toContain('canonical local `dev`');
-    expect(markdown).toContain('fails closed');
+    expect(markdown).toContain('originMainSha');
   }
 });
 
@@ -229,36 +218,33 @@ test('renders the complete canonical Cortex context router', () => {
   );
 
   const requiredSections = [
-    '## Entry contract',
+    '## Required entry',
+    '## Delivery',
     '## Owning contexts',
-    '## Shared dependency route',
   ];
   for (const section of requiredSections) {
     expect(markdown).toContain(section);
   }
 
   const teamOwnershipContracts = [
-    '[Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,',
-    'Its owner graph routes delivery architecture and branch naming.',
-    'feature review, feature acceptance, local landing requests, and Workbench.',
-    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
-    '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
-    '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
-    '[Security](teams/security/knowledge-graph.md): security architecture,',
-    '[SRE](teams/sre/knowledge-graph.md): CI/CD, clusters, deployments, runners,',
-    '[Web development](teams/web-dev/knowledge-graph.md): TypeScript, Svelte,',
+    '[Gizmo Prime](gizmo-prime/AGENTS.md)',
+    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
+    '[AI](teams/ai/knowledge-graph.md)',
+    '[Development Core](teams/dev-core/knowledge-graph.md)',
+    '[Security](teams/security/knowledge-graph.md)',
+    '[SRE](teams/sre/knowledge-graph.md)',
+    '[Web Development](teams/web-dev/knowledge-graph.md)',
   ];
   for (const contract of teamOwnershipContracts) {
     expect(markdown).toContain(contract);
   }
 
-  expect(markdown).toContain('return to the selected owning context');
+  expect(markdown).toContain('Every feature starts from freshly fetched `origin/main`');
   expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
-    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
+    'The owning Feature Gizmo carries the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
   );
-  expect(markdown).toContain('Every new feature mission');
-  expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
-  expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
+  expect(markdown).toContain('Reviews and approvals are optional.');
+  expect(markdown).not.toContain('canonical local `dev`');
 });
 
 test('routes every AI TypeScript leaf through the minimal policy authorities', () => {

@@ -107,7 +107,7 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
       },
       {
         relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
-        content: '# Dev Publication Policy\n',
+        content: '# Feature Delivery Policy\n',
       },
       {
         relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',

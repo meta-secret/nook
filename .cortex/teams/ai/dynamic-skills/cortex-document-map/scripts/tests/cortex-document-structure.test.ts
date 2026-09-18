@@ -134,7 +134,7 @@ test('indexes Feature Gizmo documents only through their owning graph', () => {
     }),
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: policyPath,
-      content: '# Dev Publication Policy\n',
+      content: '# Feature Delivery Policy\n',
     }),
   );
   const findings =
