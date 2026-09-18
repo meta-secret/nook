@@ -391,6 +391,39 @@ class ArcManifestContract {
       'mirrors = ["registry.dev.nokey.sh"]',
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
+    const gcPolicyContract = buildkit.requireAll([
+      "[[worker.oci.gcpolicy]]",
+      'keepDuration = "48h"',
+      'filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]',
+      'keepDuration = "336h"',
+      "all = true",
+    ]);
+    if (gcPolicyContract.isErr()) return err(gcPolicyContract.error);
+    const gcPolicyCount = buildkit.count({
+      fragment: "    [[worker.oci.gcpolicy]]",
+      expected: 4,
+    });
+    if (gcPolicyCount.isErr()) return err(gcPolicyCount.error);
+    const gcReservedSpaceCount = buildkit.count({
+      fragment: '      reservedSpace = "8GB"',
+      expected: 5,
+    });
+    if (gcReservedSpaceCount.isErr()) return err(gcReservedSpaceCount.error);
+    const gcMaxUsedSpaceCount = buildkit.count({
+      fragment: '      maxUsedSpace = "112GB"',
+      expected: 5,
+    });
+    if (gcMaxUsedSpaceCount.isErr()) return err(gcMaxUsedSpaceCount.error);
+    const gcMinFreeSpaceCount = buildkit.count({
+      fragment: '      minFreeSpace = "16GB"',
+      expected: 5,
+    });
+    if (gcMinFreeSpaceCount.isErr()) return err(gcMinFreeSpaceCount.error);
+    const gcTerminalPolicyOrder = buildkit.requireBefore({
+      first: "keepDuration = \"336h\"",
+      second: "all = true",
+    });
+    if (gcTerminalPolicyOrder.isErr()) return err(gcTerminalPolicyOrder.error);
     const admittedContract12 = buildkit.forbidAll([
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
