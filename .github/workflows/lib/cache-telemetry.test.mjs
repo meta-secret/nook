@@ -582,6 +582,50 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
   });
 });
 
+void test("aggregates reports across equivalent runtime authority sources", () => {
+  const environmentReport = {
+    stage: "wasm-source",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "environment",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 2,
+    requests_executed: 2,
+    cache_hits: 2,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+    remote_writes: 0,
+    compile_failures: 0,
+  };
+  const runtimeSecretReport = {
+    ...environmentReport,
+    stage: "wasm-build",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    compile_requests: 1,
+    requests_executed: 1,
+    cache_hits: 1,
+  };
+
+  const summary = CacheTelemetry.summarizeSccache([
+    CacheTelemetry.normalizeSccacheReport(environmentReport),
+    CacheTelemetry.normalizeSccacheReport(runtimeSecretReport),
+  ]);
+
+  assert.equal(summary.report_count, 2);
+  assert.equal(summary.runtime_mode, "READ_WRITE");
+  assert.equal(summary.runtime_mode_source, "runtime_secret");
+  assert.equal(summary.client_side, true);
+  assert.equal(summary.counter_reliability, "backend_incomplete");
+  assert.equal(summary.compile_requests, 3);
+  assert.equal(summary.cache_hits, 3);
+});
+
 void test("extracts zero-based sccache snapshots from a cancelled raw build log", () => {
   const raw =
     'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"remote_writes":2,"compile_failures":0}\ncancelled\n';

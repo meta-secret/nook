@@ -320,9 +320,6 @@ export class CacheTelemetry {
       for (const field of /** @type {const} */ ([
         "baked_runtime_mode",
         "runtime_mode",
-        "runtime_mode_source",
-        "client_side",
-        "counter_reliability",
       ])) {
         if (report[field] !== summary[field]) {
           throw new Error(
@@ -341,6 +338,17 @@ export class CacheTelemetry {
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
+      summary.runtime_mode_source = terminalReports.some(
+        (report) => report.runtime_mode_source === "runtime_secret",
+      )
+        ? "runtime_secret"
+        : "environment";
+      summary.client_side = terminalReports.some((report) => report.client_side);
+      summary.counter_reliability = terminalReports.every(
+        (report) => report.counter_reliability === "authoritative",
+      )
+        ? "authoritative"
+        : "backend_incomplete";
       summary.publication_status =
         summary.client_side &&
         summary.cache_errors === 0 &&

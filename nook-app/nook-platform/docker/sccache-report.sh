@@ -23,7 +23,7 @@ if [ "$stage" = --replay ]; then
   replay_file="$report_dir/$replay_stage.json"
   if [ ! -s "$replay_file" ]; then
     printf 'nook-sccache-report: persisted report is unavailable for %s\n' "$replay_stage" >&2
-    exit 1
+    exit 0
   fi
   printf 'NOOK_SCCACHE_STATS '
   cat "$replay_file"
