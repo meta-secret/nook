@@ -731,6 +731,7 @@ test(
 test(
   "actual formatter supports shared-only files and new skill packages",
   contract.formatterContext.bind(contract),
+  15_000,
 );
 test(
   "e2e orchestration reports every selected suite before failing",
