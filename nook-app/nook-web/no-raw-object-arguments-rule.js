@@ -630,7 +630,7 @@ export const noRawObjectArgumentsRule = {
     function expressionProducesObject(args) {
       const { expression, seenVariables } = args;
       const unwrapped = unwrapResultExpression(expression);
-      if (unwrapped.type === "ObjectExpression") return true;
+      if (unwrapped.type === 'ObjectExpression') return true;
       if (unwrapped.type === "AssignmentExpression") {
         return expressionProducesObject({
           expression: unwrapped.right,
