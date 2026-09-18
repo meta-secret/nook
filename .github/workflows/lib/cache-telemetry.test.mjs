@@ -797,6 +797,7 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
 });
 
 void test("a healthy terminal snapshot supersedes stale credential fallback history", () => {
+  /** @type {SccacheReport} */
   const report = {
     stage: "compile-native-dependencies",
     baked_runtime_mode: "READ_WRITE",
