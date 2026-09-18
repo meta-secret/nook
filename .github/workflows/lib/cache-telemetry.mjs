@@ -12,6 +12,7 @@ import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
+import { BuildHistoryBaseline } from "./cache-telemetry-baseline.mjs";
 
 export { BuildkitCacheExportTelemetry, CacheScopeTelemetry };
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
@@ -34,7 +35,6 @@ const HistoryLogCollectionKind = Object.freeze({
 /** @typedef {import("./cache-telemetry-contracts.mjs").RawJsonProgress} RawJsonProgress */
 /** @typedef {import("./cache-telemetry-contracts.mjs").TelemetryIdentityExpectation} TelemetryIdentityExpectation */
 /** @typedef {import("./cache-telemetry-contracts.mjs").CollectTelemetryRequest} CollectTelemetryRequest */
-/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaseline */
 /** @typedef {{line: string, marker: string}} MarkedTelemetryJsonRequest */
 /**
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
@@ -70,18 +70,6 @@ export class CacheTelemetry {
       throw new Error("telemetry marker has no complete JSON object");
     }
     return payload.slice(objectStart, objectEnd + 1);
-  }
-
-  /** @param {string} text @returns {BuildHistoryBaseline} */
-  static parseBuildHistoryBaseline(text) {
-    const parsed = CacheTelemetry.parseJsonRecord(text);
-    const refs = Array.isArray(parsed.refs)
-      ? parsed.refs.filter((ref) => typeof ref === "string")
-      : [];
-    const warnings = Array.isArray(parsed.warnings)
-      ? parsed.warnings.filter((warning) => typeof warning === "string")
-      : [];
-    return { refs, warnings };
   }
 
   /** @param {unknown} value @returns {string} */
@@ -186,7 +174,7 @@ export class CacheTelemetry {
     const [status = ""] = [statusRaw];
     const completedSteps = CacheTelemetry.nonNegativeInteger(completedStepsRaw);
     const cachedSteps = CacheTelemetry.nonNegativeInteger(cachedStepsRaw);
-    const startedAtRaw = record.created_at || record.StartedAt;
+    const startedAtRaw = record.created_at || record.StartedAt || record.started_at;
     const completedAtRaw = record.completed_at || record.CompletedAt;
     return {
       ref: String(ref),
@@ -703,6 +691,7 @@ export class CacheTelemetry {
   /** @param {CollectTelemetryRequest} request @returns {Promise<CacheTelemetryRecord>} */
   static async collectTelemetry({
     baselineRefs,
+    baselineRecords = [],
     baselineWarnings = [],
     job = "",
     runId = "",
@@ -720,8 +709,15 @@ export class CacheTelemetry {
     let records = [];
     try {
       const baseline = new Set(baselineRefs);
+      const baselineIdentities = new Set(
+        baselineRecords.map((record) => BuildHistoryBaseline.identity(record)),
+      );
       const candidates = CacheTelemetry.listBuildHistory().filter(
-        (record) => record.ref && !baseline.has(record.ref),
+        (record) =>
+          record.ref &&
+          (baselineRecords.length === 0
+            ? !baseline.has(record.ref)
+            : !baselineIdentities.has(BuildHistoryBaseline.identity(record))),
       );
       const selection = CacheTelemetry.selectBuildRecords(
         candidates,
@@ -932,8 +928,11 @@ export class CacheTelemetry {
       const warnings = [];
       /** @type {string[]} */
       let refs = [];
+      /** @type {BuildHistoryRecord[]} */
+      let records = [];
       try {
-        refs = CacheTelemetry.listBuildHistory()
+        records = CacheTelemetry.listBuildHistory();
+        refs = records
           .map((record) => record.ref)
           .filter(Boolean);
       } catch (error) {
@@ -941,7 +940,7 @@ export class CacheTelemetry {
           `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
-      CacheTelemetry.writeJson(output, { schema_version: 1, refs, warnings });
+      CacheTelemetry.writeJson(output, { schema_version: 2, refs, records, warnings });
       return;
     }
     if (command === "unavailable") {
@@ -962,15 +961,14 @@ export class CacheTelemetry {
     }
     if (command !== "collect") throw new Error("expected start or collect");
 
-    const baseline = CacheTelemetry.parseBuildHistoryBaseline(
-      fs.readFileSync(
-        CacheTelemetry.argumentValue(arguments_, "--baseline"),
-        "utf8",
-      ),
-    );
-    const { refs: baselineRefs, warnings: baselineWarnings } = baseline;
+    const baseline = BuildHistoryBaseline.parse({
+      text: fs.readFileSync(CacheTelemetry.argumentValue(arguments_, "--baseline"), "utf8"),
+      normalize: CacheTelemetry.normalizeBuildRecord,
+    });
+    const { refs: baselineRefs, records: baselineRecords, warnings: baselineWarnings } = baseline;
     const record = await CacheTelemetry.collectTelemetry({
       baselineRefs,
+      baselineRecords,
       baselineWarnings,
       ...(process.env.GITHUB_JOB ? { job: process.env.GITHUB_JOB } : {}),
       ...(process.env.GITHUB_RUN_ID
