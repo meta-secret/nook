@@ -1,9 +1,14 @@
 import { vi } from 'vitest'
+import type { CloudKitUserIdentity } from '$lib/auth/icloud/cloudkit-runtime'
 
 /** Owns checked access to the optional CloudKit host installed by these tests. */
 export class ICloudOAuthTestFixture {
   static resolvedSignedOutIdentity() {
-    return vi.fn(async (): Promise<boolean> => false)
+    const identity: CloudKitUserIdentity = {}
+    Object.defineProperty(identity, 'userRecordName', {
+      value: Symbol('invalid CloudKit user record name'),
+    })
+    return vi.fn(async () => identity)
   }
 
   static cloudKit(): NonNullable<typeof window.CloudKit> {
