@@ -1,10 +1,14 @@
 import { err, ok, type Result } from 'neverthrow'
-import { Schema } from 'effect'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
 import type { ExtensionSessionTransportFailure } from './session-document'
+import {
+  accountPickerSessionCodec,
+  type PendingAuthenticatorPicker,
+  type SessionAccount,
+} from './account-picker-session-codec'
 import type { ExtensionSessionStorageValue } from './pairing-identity'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
@@ -42,100 +46,12 @@ import {
 } from './session-lifecycle'
 import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
 
-export type PendingAuthenticatorPicker = {
-  requestId: string
-  origin: string
-  tabId: number
-  frameId: number
-  allowedVaultStoreIds: readonly string[]
-  expiresAt: number
-}
+export type {
+  PendingAuthenticatorPicker,
+  SessionAccount,
+} from './account-picker-session-codec'
 
 type PendingLoginPicker = PendingAuthenticatorPicker
-
-type SessionAuthenticatorAccount = {
-  readonly secretId: string
-  readonly issuer: string
-  readonly account: string
-}
-
-type SessionLoginAccount = {
-  readonly secretId: string
-  readonly username: string
-  readonly websiteUrl: string
-  readonly websiteHost: string
-}
-
-type SessionAccount = SessionAuthenticatorAccount | SessionLoginAccount
-
-type SessionAuthenticatorAccountSchemaFields = {
-  readonly secretId: typeof Schema.String
-  readonly issuer: typeof Schema.String
-  readonly account: typeof Schema.String
-}
-
-const sessionAuthenticatorAccountSchemaFields: SessionAuthenticatorAccountSchemaFields =
-  {
-    secretId: Schema.String,
-    issuer: Schema.String,
-    account: Schema.String,
-  }
-const sessionAuthenticatorAccountSchema = Schema.Struct(
-  sessionAuthenticatorAccountSchemaFields,
-) satisfies Schema.Schema<SessionAuthenticatorAccount>
-
-type SessionLoginAccountSchemaFields = {
-  readonly secretId: typeof Schema.String
-  readonly username: typeof Schema.String
-  readonly websiteUrl: typeof Schema.String
-  readonly websiteHost: typeof Schema.String
-}
-
-const sessionLoginAccountSchemaFields: SessionLoginAccountSchemaFields = {
-  secretId: Schema.String,
-  username: Schema.String,
-  websiteUrl: Schema.String,
-  websiteHost: Schema.String,
-}
-const sessionLoginAccountSchema = Schema.Struct(
-  sessionLoginAccountSchemaFields,
-) satisfies Schema.Schema<SessionLoginAccount>
-
-const sessionAccountsSchema = Schema.Array(
-  Schema.Union(sessionAuthenticatorAccountSchema, sessionLoginAccountSchema),
-) satisfies Schema.Schema<readonly SessionAccount[]>
-
-function decodeSessionAccounts(value: unknown) {
-  return Schema.decodeUnknown(sessionAccountsSchema)(value)
-}
-
-type ModuleStructRequest = {
-  requestId: typeof Schema.String
-  origin: typeof Schema.String
-  tabId: Schema.filter<typeof Schema.Number>
-  frameId: Schema.filter<typeof Schema.Number>
-  allowedVaultStoreIds: Schema.Array$<Schema.filter<typeof Schema.String>>
-  expiresAt: Schema.filter<typeof Schema.Number>
-}
-const moduleStructRequest: ModuleStructRequest = {
-  requestId: Schema.String,
-  origin: Schema.String,
-  tabId: Schema.Number.pipe(
-    Schema.filter((value) => Number.isInteger(value) && value >= 0),
-  ),
-  frameId: Schema.Number.pipe(
-    Schema.filter((value) => Number.isInteger(value) && value >= 0),
-  ),
-  allowedVaultStoreIds: Schema.Array(Schema.String.pipe(Schema.minLength(1))),
-  expiresAt: Schema.Number.pipe(Schema.filter(Number.isFinite)),
-}
-const pendingAuthenticatorPickerSchema = Schema.Struct(
-  moduleStructRequest,
-) satisfies Schema.Schema<PendingAuthenticatorPicker>
-
-function decodePendingAuthenticatorPicker(value: unknown) {
-  return Schema.decodeUnknown(pendingAuthenticatorPickerSchema)(value)
-}
 
 export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
@@ -385,7 +301,9 @@ class AccountPickerSessions {
       if (key.startsWith(AUTHENTICATOR_PICKER_STORAGE_PREFIX)) {
         storageKeys.push(key)
         const decoded = runConcreteDecoder(
-          decodePendingAuthenticatorPicker,
+          accountPickerSessionCodec.decodePendingAuthenticatorPicker.bind(
+            accountPickerSessionCodec,
+          ),
           value,
         )
         if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
@@ -404,7 +322,9 @@ class AccountPickerSessions {
       } else if (key.startsWith(LOGIN_PICKER_STORAGE_PREFIX)) {
         storageKeys.push(key)
         const decoded = runConcreteDecoder(
-          decodePendingAuthenticatorPicker,
+          accountPickerSessionCodec.decodePendingAuthenticatorPicker.bind(
+            accountPickerSessionCodec,
+          ),
           value,
         )
         if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
@@ -523,8 +443,12 @@ class AccountPickerSessions {
     ) {
       return []
     }
-    const wireAccounts: unknown = response.accounts
-    const decoded = runConcreteDecoder(decodeSessionAccounts, wireAccounts)
+    const decoded = runConcreteDecoder(
+      accountPickerSessionCodec.decodeSessionAccounts.bind(
+        accountPickerSessionCodec,
+      ),
+      response.accounts,
+    )
     return decoded.kind === ConcreteDecoderResultKind.Decoded
       ? decoded.value
       : []
@@ -588,11 +512,17 @@ class AccountPickerSessions {
       request = cachedRequest
     } else {
       const key = this.authenticatorPickerStorageKey(requestId)
-      const stored = (await extensionPairingIdentity.getSessionStorage(key))[
-        key
-      ]
+      const storedEntry = Object.entries(
+        await extensionPairingIdentity.getSessionStorage(key),
+      ).find(([storedKey]) => storedKey === key)
+      if (!storedEntry) {
+        return { kind: AuthenticatorPickerLoadKind.Unavailable }
+      }
+      const stored = storedEntry[1]
       const decoded = runConcreteDecoder(
-        decodePendingAuthenticatorPicker,
+        accountPickerSessionCodec.decodePendingAuthenticatorPicker.bind(
+          accountPickerSessionCodec,
+        ),
         stored,
       )
       if (
@@ -999,11 +929,17 @@ class AccountPickerSessions {
       request = cachedRequest
     } else {
       const key = this.loginPickerStorageKey(requestId)
-      const stored = (await extensionPairingIdentity.getSessionStorage(key))[
-        key
-      ]
+      const storedEntry = Object.entries(
+        await extensionPairingIdentity.getSessionStorage(key),
+      ).find(([storedKey]) => storedKey === key)
+      if (!storedEntry) {
+        return { kind: LoginPickerLoadKind.Unavailable }
+      }
+      const stored = storedEntry[1]
       const decoded = runConcreteDecoder(
-        decodePendingAuthenticatorPicker,
+        accountPickerSessionCodec.decodePendingAuthenticatorPicker.bind(
+          accountPickerSessionCodec,
+        ),
         stored,
       )
       if (

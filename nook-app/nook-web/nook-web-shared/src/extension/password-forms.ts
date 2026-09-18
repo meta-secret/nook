@@ -1,6 +1,10 @@
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import { companionWasmReady } from "./companion-ready";
 import {
+  PasswordAuthenticationWorkflowFormSummary,
+  type PasswordAuthenticationWorkflowFormSummaryDependencies,
+} from "./password-authentication-workflow-form-summary";
+import {
   authentication_advance_control_is_safe,
   authentication_control_transportable,
   authentication_page_observation_facts_priority,
@@ -23,12 +27,9 @@ import {
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
-  LocalOwnedLoginObservationRootsRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
-  PasswordFieldQuery,
   PasswordFormScope,
-  UnownedAuthContainerRequest,
 } from "./password-form-fields";
 import {
   AuthenticationSubmissionDestination,
@@ -45,12 +46,6 @@ import {
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import {
-  IndependentPasskeyWorkflows,
-  PasskeyOnlyWorkflowSummary,
-  type AppendIndependentPasskeyOnlyWorkflowsRequest,
-  type SummarizePasskeyOnlyWorkflowFormsRequest,
-} from "./password-form-passkey-only-workflows";
-import {
   type LoginCredentialsFillRequest,
   passwordFormCredentialInteraction,
 } from "./password-form-field-actions";
@@ -61,10 +56,7 @@ import {
   type OwnedAdvanceControlActivation,
   type OwnedAuthenticationControlRequest,
 } from "./password-form-implicit-actuation";
-import {
-  emptyPasswordFormSummary,
-  PasswordFormFieldQuery,
-} from "./password-form-summary-state";
+import { PasswordFormFieldQuery } from "./password-form-summary-state";
 import {
   ApprovedPasswordFormKind,
   CredentialDisclosureRevalidation,
@@ -669,131 +661,16 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
   }
 
   summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
-    const root = this.browser.document;
-    const rootFieldQuery: PasswordFieldQuery = { root };
-    const allPasswordFields =
-      passwordFieldDiscovery.findPasswordFields(rootFieldQuery);
-    const allUsernameFields =
-      passwordFieldDiscovery.findUsernameFields(rootFieldQuery);
-    const allOneTimeCodeFields =
-      passwordFieldDiscovery.findOneTimeCodeFields(rootFieldQuery);
-    const authUsernameFields = allUsernameFields.filter(
-      passwordFieldDiscovery.isAuthUsernameField.bind(passwordFieldDiscovery),
-    );
-    const authFieldCount =
-      allPasswordFields.length +
-      authUsernameFields.length +
-      allOneTimeCodeFields.length;
-    const passkeyOnlyRequest: SummarizePasskeyOnlyWorkflowFormsRequest<PasswordFormSummary> =
+    const summaryRequest: PasswordAuthenticationWorkflowFormSummaryDependencies =
       {
-        root,
+        browser: this.browser,
         summarizeRoot: this.summarizeRoot.bind(this),
         observationPriority: this.passwordFormPriority.bind(this),
         passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
-        emptySummary: emptyPasswordFormSummary,
       };
-    const passkeyOnly = new PasskeyOnlyWorkflowSummary(passkeyOnlyRequest)
-      .observations;
-    if (authFieldCount === 0) {
-      return passkeyOnly;
-    }
-    const forms = Array.from(
-      root.querySelectorAll<HTMLFormElement>("form"),
-    ).filter((form) => {
-      const formScope: PasswordFormScope = {
-        kind: PasswordFormScopeKind.Owned,
-        owner: form,
-      };
-      const formScopeQuery: PasswordFormScopeQuery = {
-        kind: PasswordFormQueryKind.Scoped,
-        root,
-        formScope,
-      };
-      const summary = this.summarizeRoot(formScopeQuery);
-
-      return (
-        summary.passwordFieldCount > 0 ||
-        summary.oneTimeCodeFieldCount > 0 ||
-        passwordFieldDiscovery
-          .findUsernameFields(formScopeQuery)
-          .some(
-            passwordFieldDiscovery.isAuthUsernameField.bind(
-              passwordFieldDiscovery,
-            ),
-          )
-      );
-    });
-    const observations: PasswordFormObservation[] = forms.flatMap((form) => {
-      const formScope: PasswordFormScope = {
-        kind: PasswordFormScopeKind.Owned,
-        owner: form,
-      };
-
-      const observationRootsRequest: LocalOwnedLoginObservationRootsRequest = {
-        owner: form,
-        passwordFields: allPasswordFields,
-        usernameFields: authUsernameFields,
-        oneTimeCodeFields: allOneTimeCodeFields,
-      };
-      const observationRoots =
-        passwordFieldDiscovery.localOwnedLoginObservationRoots(
-          observationRootsRequest,
-        );
-
-      return observationRoots.map((observationRoot) => {
-        const observationRootQuery: PasswordFormScopeQuery = {
-          kind: PasswordFormQueryKind.Scoped,
-          root: observationRoot,
-          formScope,
-        };
-        return {
-          root: observationRoot,
-          formScope,
-          summary: this.summarizeRoot(observationRootQuery),
-        };
-      });
-    });
-    const unownedFields = [
-      ...allPasswordFields,
-      ...authUsernameFields,
-      ...allOneTimeCodeFields,
-    ].filter((field) => !field.form);
-    const unownedContainers = new Set(
-      unownedFields.flatMap((field) => {
-        const containerRequest: UnownedAuthContainerRequest = {
-          field,
-          root,
-        };
-        const container =
-          passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
-        return container === field ? [] : [container];
-      }),
-    );
-    for (const container of unownedContainers) {
-      const formScope: PasswordFormScope = {
-        kind: PasswordFormScopeKind.Unowned,
-      };
-      const unownedObservationQuery: PasswordFormScopeQuery = {
-        kind: PasswordFormQueryKind.Scoped,
-        root: container,
-        formScope,
-      };
-      const unownedObservation: PasswordFormObservation = {
-        root: container,
-        formScope,
-        summary: this.summarizeRoot(unownedObservationQuery),
-      };
-      observations.push(unownedObservation);
-    }
-    const independentWorkflowsRequest: AppendIndependentPasskeyOnlyWorkflowsRequest<PasswordFormObservation> =
-      {
-        fieldBearing: observations,
-        passkeyOnly,
-        observationPriority: this.passwordFormPriority.bind(this),
-        passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
-      };
-    return new IndependentPasskeyWorkflows(independentWorkflowsRequest)
-      .observations;
+    return new PasswordAuthenticationWorkflowFormSummary(
+      summaryRequest,
+    ).summarize();
   }
 
   fillLoginCredentials(request: LoginCredentialsFillRequest): boolean {
