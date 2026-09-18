@@ -9,10 +9,10 @@ Every repository implementation and delivery mission starts under Gizmo
 Prime. Select its owner graph below, then read the complete delivery diagrams
 before acting.
 
-Every feature starts from freshly fetched `origin/main`. The owning Feature
-Gizmo carries the full cycle through all required PR checks, squash merge to
-`main`, actual merged-state verification, and remote feature-branch deletion.
-Reviews and approvals are optional.
+Every feature branch starts from freshly fetched `origin/main`. Gizmo Prime
+owns the full cycle through all required PR checks, squash merge to `main`,
+actual merged-state verification, and remote feature-branch deletion. Reviews
+and approvals are optional.
 
 ## Owning contexts
 
@@ -25,5 +25,4 @@ Reviews and approvals are optional.
 - [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)
 - [Shared knowledge](shared/knowledge-graph.md)
 
-Delivery Pipeline routes bounded GitHub mechanics to PR Lifecycle Agent. There
-is no Feature Gizmo authority or delivery `dev` branch.
+Delivery Pipeline routes bounded GitHub mechanics to PR Lifecycle Agent.

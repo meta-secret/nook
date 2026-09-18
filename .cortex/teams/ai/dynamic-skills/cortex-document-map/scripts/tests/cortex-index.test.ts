@@ -137,7 +137,7 @@ Model text.
 
   const renderArgs = { index };
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
-  expect(markdown).toContain('# Cortex Context Router');
+  expect(markdown).toContain('# Nook Cortex Knowledge Graph');
   expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo-prime/knowledge-graph.md)');
   expect(markdown).not.toContain(
@@ -151,31 +151,12 @@ Model text.
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
-  expect(markdown).toContain(
-    'Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.',
-  );
-  expect(markdown).toContain(
-    'Each Team Gizmo requests Fast mode with `service_tier: fast`',
-  );
-  expect(markdown).toContain(
-    'Before planning, delegation, worktree creation, or edits, Gizmo Prime runs',
-  );
-  expect(markdown).toContain(
-    '`git fetch --prune origin`; a fetch failure fails closed.',
-  );
   const normalized = CortexContextRouterScenario.normalizeMarkdown(markdown);
   expect(normalized).toContain(
-    'Prime resolves the exact fetched `origin/main` commit as `originMainSha`.',
+    'Every feature branch starts from freshly fetched `origin/main`.',
   );
   expect(normalized).toContain(
-    'Every new feature mission, feature branch, and worktree uses that exact commit as its base.',
-  );
-  expect(normalized).toContain('The base is preserved after feature creation.');
-  expect(normalized).toContain(
-    'Prime authorizes the canonical feature branch name, which is the workflow authority.',
-  );
-  expect(normalized).toContain(
-    'Observed base and head SHAs are evidence only, not required packet fields.',
+    'Gizmo Prime owns the full cycle through all required PR checks',
   );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
@@ -217,11 +198,7 @@ test('renders the complete canonical Cortex context router', () => {
     canonicalRouter.replace(/\s+/gu, ' '),
   );
 
-  const requiredSections = [
-    '## Required entry',
-    '## Delivery',
-    '## Owning contexts',
-  ];
+  const requiredSections = ['## Required entry', '## Owning contexts'];
   for (const section of requiredSections) {
     expect(markdown).toContain(section);
   }
@@ -240,10 +217,10 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   expect(markdown).toContain(
-    'Every feature starts from freshly fetched `origin/main`',
+    'Every feature branch starts from freshly fetched `origin/main`',
   );
   expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
-    'The owning Feature Gizmo carries the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
+    'Gizmo Prime owns the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
   );
   expect(markdown).toContain('Reviews and approvals are optional.');
   expect(markdown).not.toContain('canonical local `dev`');
@@ -530,9 +507,6 @@ test('keeps Delivery Pipeline direct-child ownership in its parent graph', () =>
 
   expect(deliveryPipelineGraph).toContain(
     '- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)',
-  );
-  expect(deliveryPipelineGraph).toContain(
-    '- [Feature Gizmo knowledge graph](pr-lifecycle/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
     '- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)',

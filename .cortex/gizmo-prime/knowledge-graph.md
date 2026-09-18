@@ -10,9 +10,9 @@ Read the complete [multiagent delivery visual
 model](architecture/multiagent-delivery-diagrams.md), then use
 [feature pull-request delivery](architecture/dev-delivery.md).
 
-Every feature starts from freshly fetched `origin/main`. The owning Feature
-Gizmo carries the full cycle through required PR checks, squash merge to
-`main`, and remote feature-branch deletion.
+Every feature branch starts from freshly fetched `origin/main`. Gizmo Prime
+owns the full cycle through required PR checks, squash merge to `main`, and
+remote feature-branch deletion.
 
 ## Team reporting
 

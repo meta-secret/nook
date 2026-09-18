@@ -6,6 +6,8 @@ Delivery Pipeline Team Gizmo is the delivery team's child orchestrator under
 Gizmo Prime. It routes bounded feature pull-request mechanics to PR Lifecycle
 Agent.
 
+Read the [Delivery Pipeline team contract](../AGENTS.md) before acting.
+
 ## Required actions
 
 - Accept only a Prime-issued feature-delivery packet.

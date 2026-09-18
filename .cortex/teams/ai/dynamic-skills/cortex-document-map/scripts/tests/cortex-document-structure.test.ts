@@ -121,20 +121,21 @@ test('allows every child graph to reference the root circuit breaker read-only',
   ).toEqual([]);
 });
 
-test('indexes Feature Gizmo documents only through their owning graph', () => {
+test('indexes PR Lifecycle Agent documents only through their owning graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const managerGraphPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
-  const policyPath = '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md';
+  const policyPath =
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: managerGraphPath,
-      content: '# Feature Gizmo Knowledge Graph\n',
+      content: '# Delivery Pipeline PR Lifecycle Knowledge Graph\n',
     }),
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: policyPath,
-      content: '# Feature Delivery Policy\n',
+      content: '# PR Lifecycle Policy\n',
     }),
   );
   const findings =
@@ -147,7 +148,10 @@ test('indexes Feature Gizmo documents only through their owning graph', () => {
   });
   const indexedDocuments = documents.map((document) =>
     document.relativePath === managerGraphPath
-      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
+      ? {
+          ...document,
+          content: `${document.content}\n- [Policy](workflows/policy.md)\n`,
+        }
       : document,
   );
   expect(
@@ -157,7 +161,7 @@ test('indexes Feature Gizmo documents only through their owning graph', () => {
     document.relativePath === '.cortex/gizmo-prime/knowledge-graph.md'
       ? {
           ...document,
-          content: `${document.content}\n- [Dev policy](../teams/delivery-pipeline/pr-lifecycle/policy.md)\n`,
+          content: `${document.content}\n- [PR lifecycle policy](../teams/delivery-pipeline/pr-lifecycle/workflows/policy.md)\n`,
         }
       : document,
   );

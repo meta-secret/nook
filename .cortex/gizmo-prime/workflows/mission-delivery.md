@@ -1,5 +1,23 @@
 # Mission Delivery
 
+Apply the
+[self-improvement authority](../../teams/ai/dynamic-skills/self-improvement.md)
+throughout the delivery cycle. Treat every other active task as read-only.
+
+## Ownership boundaries
+
+- Use the explicit parent feature/integration worktree.
+- Create one child worktree per Team Agent task from the parent frontier.
+- Preserve the bounded task/attempt identity.
+- Require a committed handoff before parent integration.
+- Keep parent-owned integration/PR policy with Gizmo Prime.
+- Preserve dependency order across assigned work.
+- Grant one commit turn at a time for shared integration state.
+- Do not create Team Agent lifecycle service, scheduler, or Git-state
+  machinery.
+- Do not create a persistent Delivery Pipeline or PR Lifecycle Agent service,
+  scheduler, or notification journal.
+
 ## Outcome
 
 A feature starts from freshly fetched `origin/main`, completes implementation

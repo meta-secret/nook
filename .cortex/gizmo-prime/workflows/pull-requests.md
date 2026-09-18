@@ -1,5 +1,13 @@
 # Pull Requests
 
+Complete the
+[self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md)
+before readiness. No promotion is required when the evidence does not support
+one.
+
+Another active task's branch and pull request are read-only without an
+explicit handoff.
+
 ## Required actions
 
 - Create one pull request from each canonical feature branch into `main`.
