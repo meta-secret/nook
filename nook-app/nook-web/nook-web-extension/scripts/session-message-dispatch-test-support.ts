@@ -1,4 +1,5 @@
 import { beforeAll } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
@@ -20,6 +21,7 @@ import {
 } from '../src/lib/browser-runtime-message'
 
 beforeAll(async () => {
+  await companionWasmReady
   await initNookWasm({
     module_or_path: await Bun.file(
       new URL(

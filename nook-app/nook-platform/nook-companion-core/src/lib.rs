@@ -50,6 +50,8 @@ mod website_login_save_offer_response;
 mod website_passkey_account_list;
 mod website_passkey_proposal;
 
+pub use nook_auth2::StoreId;
+
 pub use account_picker_authorization::{
     AccountPickerAuthorizationLifecycle, AccountPickerAuthorizationTransition, CleanupEvidence,
     CleanupTransitionError, CleanupTransitionOutcome,

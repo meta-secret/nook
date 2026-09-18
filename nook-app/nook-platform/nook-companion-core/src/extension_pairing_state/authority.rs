@@ -30,13 +30,13 @@ impl From<String> for PairingStorageJson {
 }
 
 /// The canonical vault identifier, re-exported under the pairing vocabulary.
-pub use nook_auth2::StoreId as PairingVaultId;
+pub use nook_auth2::{StoreId, StoreId as PairingVaultId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ActiveExtensionVault {
-    pub vault_store_id: PairingVaultId,
+    pub vault_store_id: StoreId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
@@ -47,10 +47,12 @@ pub enum ExtensionActiveVaultScope {
     Active(ActiveExtensionVault),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
+#[tsify(from_wasm_abi)]
 pub struct ExtensionGrantAuthorityRequest {
     pub stored_json: PairingStorageJson,
-    pub vault_store_id: PairingVaultId,
+    pub vault_store_id: StoreId,
     pub active_vault: ExtensionActiveVaultScope,
 }
 

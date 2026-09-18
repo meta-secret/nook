@@ -4,6 +4,7 @@ import { Effect } from 'effect'
 import {
   decode_extension_grant_authority_response,
   NookPairingVaultId,
+  type ExtensionActiveVaultScope,
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -388,7 +389,7 @@ describe('extension pairing grant transport', () => {
 
   test('propagates manager projection failure without substituting no active vault', () => {
     const manager = {
-      classify_extension_grant_authority: () => {
+      active_extension_vault_scope: () => {
         throw new Error('projection unavailable')
       },
     }
@@ -403,28 +404,51 @@ describe('extension pairing grant transport', () => {
       }),
     ).toThrow('projection unavailable')
   })
-  test.each([
-    { kind: 'NoMatchingAuthority' },
-    { kind: 'MissingActiveAuthority' },
-    { kind: 'InvalidStoredAuthority' },
-    { kind: 'Authorized', grant: storedGrant },
-  ] satisfies ExtensionGrantAuthority[])(
-    'transports manager authority %j',
-    async (authority) => {
-      await extensionPairingGrantPolicyReady
-      const classify = mock(() => authority)
+  test('classifies each authority from the typed manager scope projection', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const grantKey = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+    const scenarios = [
+      {
+        storedJson: '{}',
+        scope: { kind: 'NoActiveVault' as const },
+        authority: { kind: 'NoMatchingAuthority' as const },
+      },
+      {
+        storedJson: '{}',
+        scope: {
+          kind: 'Active' as const,
+          vault_store_id: storedGrant.vaultStoreId,
+        },
+        authority: { kind: 'MissingActiveAuthority' as const },
+      },
+      {
+        storedJson: 'invalid',
+        scope: { kind: 'NoActiveVault' as const },
+        authority: { kind: 'InvalidStoredAuthority' as const },
+      },
+      {
+        storedJson: JSON.stringify({ [grantKey]: storedGrant }),
+        scope: { kind: 'NoActiveVault' as const },
+        authority: { kind: 'Authorized' as const, grant: storedGrant },
+      },
+    ] satisfies Array<{
+      storedJson: string
+      scope: ExtensionActiveVaultScope
+      authority: ExtensionGrantAuthority
+    }>
+
+    for (const scenario of scenarios) {
       const manager = {
-        classify_extension_grant_authority: classify,
+        active_extension_vault_scope: () => scenario.scope,
       }
       const result = classifySessionGrantAuthority({
         manager,
         payload: {
-          stored_json: '{}',
+          stored_json: scenario.storedJson,
           vault_store_id: storedGrant.vaultStoreId,
           queue: { kind: 'message-default' },
         },
       })
-      expect(classify).toHaveBeenCalledWith('{}', storedGrant.vaultStoreId)
       const requested = new NookPairingVaultId(storedGrant.vaultStoreId)
       try {
         expect(
@@ -432,12 +456,12 @@ describe('extension pairing grant transport', () => {
             JSON.stringify(result),
             requested,
           ),
-        ).toEqual(authority)
+        ).toEqual(scenario.authority)
       } finally {
         requested.free()
       }
-    },
-  )
+    }
+  })
   test.each([
     'absent',
     'malformed',

@@ -12,7 +12,6 @@ import {
   decodeProviders,
   parseExtensionSessionRequest,
   sessionMessageWireFixture,
-  type NookVaultManager,
 } from './session-message-dispatch-test-support'
 
 describe('ExtensionSessionMessageDispatcher control ingress', () => {
@@ -24,7 +23,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     const blocked = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
     const events: string[] = []
-    const classifiedInputs: { stored: string; vault: string }[] = []
     Object.assign(globalThis, {
       chrome: {
         runtime: {
@@ -40,22 +38,14 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     const { classifySessionGrantAuthority } =
       await import('../src/offscreen/session-operations')
     const manager = {
-      classify_extension_grant_authority: (
-        stored: Parameters<
-          NookVaultManager['classify_extension_grant_authority']
-        >[0],
-        vault: Parameters<
-          NookVaultManager['classify_extension_grant_authority']
-        >[1],
-      ) => {
+      active_extension_vault_scope: () => {
         expect(events).toEqual([
           'block-started',
           'block-finished',
           'interactive',
         ])
-        classifiedInputs.push({ stored, vault: String(vault) })
         events.push('classified')
-        return { kind: 'NoMatchingAuthority' as const }
+        return { kind: 'NoActiveVault' as const }
       },
     }
     const stagedPayloads: { stored_json: string }[] = []
@@ -148,9 +138,6 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     ])
     expect(payload.stored_json).toBe('')
     expect(stagedPayloads).toHaveLength(1)
-    expect(classifiedInputs).toEqual([
-      { stored: '{}', vault: 'store_abcdefghijk' },
-    ])
     const [stagedPayload] = stagedPayloads
     if (!stagedPayload) throw new Error('dispatcher must stage one payload')
     expect(stagedPayload.stored_json).toBe('')

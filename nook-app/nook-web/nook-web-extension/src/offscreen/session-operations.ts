@@ -16,6 +16,7 @@ import {
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { classify_extension_grant_authority } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import { handleAuthenticatorEnrollmentMessage } from './authenticator-enrollment-session'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import { type ExtensionSessionRequest } from './session-request-adapter'
@@ -198,7 +199,7 @@ export type HandleSessionMessageArgs = {
 }
 
 type ClassifySessionGrantAuthorityArgs = {
-  manager: Pick<NookVaultManager, 'classify_extension_grant_authority'>
+  manager: Pick<NookVaultManager, 'active_extension_vault_scope'>
   payload: Extract<
     ExtensionSessionRequest,
     {
@@ -211,9 +212,12 @@ export function classifySessionGrantAuthority({
   manager,
   payload,
 }: ClassifySessionGrantAuthorityArgs) {
-  return manager.classify_extension_grant_authority(
-    payload.stored_json,
-    payload.vault_store_id,
+  return classify_extension_grant_authority(
+    {
+      stored_json: payload.stored_json,
+      vault_store_id: payload.vault_store_id,
+      active_vault: manager.active_extension_vault_scope(),
+    },
   )
 }
 

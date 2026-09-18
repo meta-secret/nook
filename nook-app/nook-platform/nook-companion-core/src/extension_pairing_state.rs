@@ -20,7 +20,6 @@ use std::collections::{HashMap, HashSet};
 pub use value_types::*;
 
 use crate::{ExtensionEventCount, ExtensionSyncProviderCount};
-use nook_auth2::StoreId;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 

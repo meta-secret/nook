@@ -6,6 +6,7 @@ use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
 use crate::ExtensionVaultEventPayload;
+use nook_auth2::StoreId;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -120,7 +121,7 @@ pub struct EmptyPayload {
 #[serde(deny_unknown_fields)]
 pub struct ClassifyGrantAuthorityPayload {
     stored_json: crate::PairingStorageJson,
-    vault_store_id: crate::PairingVaultId,
+    vault_store_id: StoreId,
     queue: MessageDefaultQueueDisposition,
 }
 

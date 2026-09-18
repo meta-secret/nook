@@ -19,12 +19,6 @@ impl From<StoreId> for NookStoreId {
     }
 }
 
-impl NookStoreId {
-    pub(crate) fn as_core(&self) -> &StoreId {
-        &self.0
-    }
-}
-
 #[wasm_bindgen]
 impl NookStoreId {
     #[wasm_bindgen(getter)]
