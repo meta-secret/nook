@@ -1,5 +1,5 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
-import type { NookVaultArchitecture } from '$app-wasm'
+import { NookVaultArchitecture } from '$app-wasm'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
@@ -77,7 +77,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
     if (admission.isErr()) return admission.error.translationKey
     const manager = admission.value
     const current = manager.vaultArchitecture
-    const Architecture = current.constructor
+    const Architecture = NookVaultArchitecture
     if (
       typeof Architecture !== 'function' ||
       !('sentinel' in Architecture) ||
@@ -90,18 +90,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
     }
     const sentinelFactory = Architecture.sentinel
     const simpleFactory = Architecture.simple
-    const oppositeArchitecture: NookVaultArchitecture = simpleApp
-      ? Reflect.apply(sentinelFactory, Architecture, [
-          current.device_mode,
-          current.replication_type,
-          2,
-          3,
-          0,
-        ])
-      : Reflect.apply(simpleFactory, Architecture, [
-          current.device_mode,
-          current.replication_type,
-        ])
+    const oppositeArchitecture = simpleApp
+      ? sentinelFactory(current.device_mode, current.replication_type, 2, 3, 0)
+      : simpleFactory(current.device_mode, current.replication_type)
     try {
       manager.set_vault_architecture(oppositeArchitecture)
       return ''

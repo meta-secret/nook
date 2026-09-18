@@ -49,9 +49,27 @@ import {
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 import type { ExtensionPairingApprovedMessage } from '$web-shared/extension/runtime-messages'
+import { ExtensionPairingApprovedMessageType } from '$web-shared/extension/runtime-messages'
 import type { NookExtensionConsentPhase } from '$app-wasm'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { VaultSynchronizationResult } from '$lib/vault/sync.svelte'
+
+const approvedMessage = {
+  type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+  payload: {
+    vaultType: 'simple',
+    deviceId: 'device-1',
+    devicePublicKey: 'device-key',
+    deviceSigningPublicKey: 'signing-key',
+    deviceLabel: 'Nook Extension',
+    vaultStoreId: 'store-1',
+    vaultName: 'Nook Vault',
+    approvedAt: 1,
+    scopes: [ExtensionConnectScope.VaultAccess],
+    providers: [],
+  },
+  eventLogRecords: [],
+} satisfies ExtensionPairingApprovedMessage
 
 function createHarness() {
   const vault = VaultStateTestFixture.create()
@@ -101,9 +119,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
   approvalPort.authorize.mockResolvedValue(ok())
-  approvalPort.prepareAuthorizedGrant.mockResolvedValue(
-    ok({} as ExtensionPairingApprovedMessage),
-  )
+  approvalPort.prepareAuthorizedGrant.mockResolvedValue(ok(approvedMessage))
   approvalPort.deliver.mockResolvedValue(
     ok({ kind: ExtensionPairingDeliveryKind.Delivered, eventCount: 1 }),
   )
@@ -541,6 +557,7 @@ describe('extension consent web workflow', () => {
           approvalPort.admitCompletion.mockReturnValueOnce(err(failure))
           break
         case ExtensionConsentWorkflowFailureKind.Authorization:
+        case ExtensionConsentWorkflowFailureKind.NonDeliveryOutcome:
         case ExtensionConsentWorkflowFailureKind.ProviderTransition:
           throw new Error('Scenario must fail after durable approval.')
       }
@@ -590,7 +607,7 @@ describe('extension consent web workflow', () => {
     approvalPort.prepareAuthorizedGrant.mockImplementationOnce(async () => {
       preparationStarted.resume(true)
       await releasePreparation.promise
-      return ok({} as ExtensionPairingApprovedMessage)
+      return ok(approvedMessage)
     })
 
     const trackedPhases = new Set<NookExtensionConsentPhase>()
