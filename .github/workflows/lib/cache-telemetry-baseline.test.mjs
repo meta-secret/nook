@@ -31,10 +31,10 @@ void test("publishes Buildx record identities in the telemetry baseline", async 
     await CacheTelemetry.main(["start", "--output", output]);
     const baseline = BuildHistoryBaseline.parse({
       text: fs.readFileSync(output, "utf8"),
-      normalize: CacheTelemetry.normalizeBuildRecord,
+      normalize: (record) => CacheTelemetry.normalizeBuildRecord(record),
     });
     const [baselineRecord] = baseline.records;
-    assert.ok(baselineRecord);
+    if (!baselineRecord) throw new Error("baseline record missing");
     assert.equal(
       BuildHistoryBaseline.identity(baselineRecord),
       BuildHistoryBaseline.identity(historyRecord),

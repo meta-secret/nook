@@ -174,7 +174,8 @@ export class CacheTelemetry {
     const [status = ""] = [statusRaw];
     const completedSteps = CacheTelemetry.nonNegativeInteger(completedStepsRaw);
     const cachedSteps = CacheTelemetry.nonNegativeInteger(cachedStepsRaw);
-    const startedAtRaw = record.created_at || record.StartedAt || record.started_at;
+    const startedAtRaw =
+      record.created_at || record.StartedAt || record.started_at;
     const completedAtRaw = record.completed_at || record.CompletedAt;
     return {
       ref: String(ref),
@@ -932,15 +933,18 @@ export class CacheTelemetry {
       let records = [];
       try {
         records = CacheTelemetry.listBuildHistory();
-        refs = records
-          .map((record) => record.ref)
-          .filter(Boolean);
+        refs = records.map((record) => record.ref).filter(Boolean);
       } catch (error) {
         warnings.push(
           `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
-      CacheTelemetry.writeJson(output, { schema_version: 2, refs, records, warnings });
+      CacheTelemetry.writeJson(output, {
+        schema_version: 2,
+        refs,
+        records,
+        warnings,
+      });
       return;
     }
     if (command === "unavailable") {
@@ -962,10 +966,17 @@ export class CacheTelemetry {
     if (command !== "collect") throw new Error("expected start or collect");
 
     const baseline = BuildHistoryBaseline.parse({
-      text: fs.readFileSync(CacheTelemetry.argumentValue(arguments_, "--baseline"), "utf8"),
-      normalize: CacheTelemetry.normalizeBuildRecord,
+      text: fs.readFileSync(
+        CacheTelemetry.argumentValue(arguments_, "--baseline"),
+        "utf8",
+      ),
+      normalize: (record) => CacheTelemetry.normalizeBuildRecord(record),
     });
-    const { refs: baselineRefs, records: baselineRecords, warnings: baselineWarnings } = baseline;
+    const {
+      refs: baselineRefs,
+      records: baselineRecords,
+      warnings: baselineWarnings,
+    } = baseline;
     const record = await CacheTelemetry.collectTelemetry({
       baselineRefs,
       baselineRecords,

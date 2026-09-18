@@ -453,9 +453,8 @@ class DockerizedRustBuildKitContract {
     const dockerSetup = dylintJob.indexOf(
       "uses: ./.github/actions/nook-docker-setup",
     );
-    expect(nodeProvision).toBeGreaterThanOrEqual(0);
-    expect(nodeProvision).toBeLessThan(dockerSetup);
-    expect(dylintJob).toContain('node-version: "24.19.0"');
+    expect(nodeProvision).toBe(-1);
+    expect(dockerSetup).toBeGreaterThanOrEqual(0);
     expect(
       this.read(".github/actions/nook-cache-telemetry/action.yml"),
     ).not.toContain("skipping cache telemetry");

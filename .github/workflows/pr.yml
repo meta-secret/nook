@@ -446,6 +446,7 @@ jobs:
         run: >-
           node --test
           .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs
+          .github/workflows/lib/cache-telemetry-baseline.test.mjs
           .github/workflows/lib/cache-telemetry.test.mjs
           .github/workflows/lib/cache-telemetry-split-log.test.mjs
           .github/workflows/lib/compile-only-dockerfile.test.mjs

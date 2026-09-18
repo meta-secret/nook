@@ -4,10 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  PrCacheHealth,
-  SccacheExpectation,
-} from "./pr-cache-health.mjs";
+import { PrCacheHealth, SccacheExpectation } from "./pr-cache-health.mjs";
 import {
   CompilePhaseCacheExportMode,
   CompilePhaseStatus,
@@ -571,8 +568,12 @@ void test("defers incomplete client-side writes but keeps changed-head zero hits
   });
 
   assert.equal(coldModel.gate.verdict, "pass");
-  assert.ok(coldModel.warnings.includes("rust:publication_pending_verification"));
-  assert.ok(!coldModel.gate.reasons.includes("rust:sccache_remote_writes_missing"));
+  assert.ok(
+    coldModel.warnings.includes("rust:publication_pending_verification"),
+  );
+  assert.ok(
+    !coldModel.gate.reasons.includes("rust:sccache_remote_writes_missing"),
+  );
 
   const changedHeadModel = new PrCacheHealth().evaluate({
     jobs: [
@@ -588,8 +589,14 @@ void test("defers incomplete client-side writes but keeps changed-head zero hits
   });
 
   assert.equal(changedHeadModel.gate.verdict, "fail");
-  assert.ok(changedHeadModel.gate.reasons.includes("rust:sccache_next_head_zero_hits"));
-  assert.ok(!changedHeadModel.gate.reasons.includes("rust:sccache_remote_writes_missing"));
+  assert.ok(
+    changedHeadModel.gate.reasons.includes("rust:sccache_next_head_zero_hits"),
+  );
+  assert.ok(
+    !changedHeadModel.gate.reasons.includes(
+      "rust:sccache_remote_writes_missing",
+    ),
+  );
 });
 
 void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fallback telemetry", () => {
@@ -833,7 +840,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   }
   assert.match(
     productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
+    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\n(?:#.*\n|\n)*RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
   );
   assert.match(
     productDockerfile,

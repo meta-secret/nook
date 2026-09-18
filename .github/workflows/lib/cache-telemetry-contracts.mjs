@@ -18,7 +18,7 @@
 /** @typedef {{objects: readonly JsonRecord[], diagnostics: readonly string[]}} RawJsonProgress */
 /** @typedef {{runId?: string | number, runAttempt?: string | number}} TelemetryIdentityExpectation */
 /** @typedef {{baselineRefs: readonly string[], baselineRecords?: readonly BuildHistoryRecord[], baselineWarnings?: readonly string[], job?: string, runId?: string | number, runAttempt?: string | number, environment?: NodeJS.ProcessEnv}} CollectTelemetryRequest */
-/** @typedef {{refs: readonly string[], records?: readonly BuildHistoryRecord[], warnings: readonly string[]}} BuildHistoryBaseline */
+/** @typedef {{refs: readonly string[], records: readonly BuildHistoryRecord[], warnings: readonly string[]}} BuildHistoryBaseline */
 /** @typedef {{warning: string, job?: string, runId?: string | number, runAttempt?: string | number, environment?: NodeJS.ProcessEnv}} UnavailableTelemetryRequest */
 
 export {};
