@@ -111,6 +111,30 @@ data:
       maxUsedSpace = "112GB"
       minFreeSpace = "16GB"
 
+    [[worker.oci.gcpolicy]]
+      filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+      keepDuration = "48h"
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
+
+    [[worker.oci.gcpolicy]]
+      keepDuration = "336h"
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
+
+    [[worker.oci.gcpolicy]]
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
+
+    [[worker.oci.gcpolicy]]
+      all = true
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
+
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]
 ---
