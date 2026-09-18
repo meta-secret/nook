@@ -8,11 +8,13 @@
 
 mod approval_timestamp;
 mod authority;
+mod imported_event_log;
 mod legacy;
 mod value_types;
 
 pub use approval_timestamp::*;
 pub use authority::*;
+pub use imported_event_log::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 pub use value_types::*;
@@ -65,16 +67,6 @@ pub struct ExtensionPairingGrantApproval {
     pub approved_at: ExtensionPairingApprovalEpochMilliseconds,
     pub scopes: Vec<ExtensionConnectScope>,
     pub sync_provider_count: ExtensionSyncProviderCount,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct ImportedExtensionEventLog {
-    pub vault_store_id: StoreId,
-    pub event_count: ExtensionEventCount,
-    pub heads: Vec<String>,
-    pub access_granted: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
@@ -404,37 +396,6 @@ impl StoredExtensionPairingGrant {
     #[must_use]
     pub fn storage_key_for(vault_store_id: &StoreId) -> String {
         format!("{EXTENSION_GRANT_KEY_PREFIX}{}", vault_store_id.as_str())
-    }
-
-    fn from_import(
-        grant: ExtensionPairingGrantApproval,
-        imported: ImportedExtensionEventLog,
-        observed_at: String,
-    ) -> Result<StoredExtensionPairingGrant, ExtensionPairingStateError> {
-        if imported.vault_store_id != grant.vault_store_id {
-            return Err(ExtensionPairingStateError::ImportedVaultMismatch);
-        }
-        if matches!(
-            ImportedExtensionAccess::from(imported.access_granted),
-            ImportedExtensionAccess::Denied
-        ) {
-            return Err(ExtensionPairingStateError::ImportedAccessDenied);
-        }
-        Ok(StoredExtensionPairingGrant {
-            vault_type: grant.vault_type,
-            device_id: grant.device_id,
-            device_public_key: grant.device_public_key,
-            device_signing_public_key: grant.device_signing_public_key,
-            device_label: grant.device_label,
-            vault_store_id: grant.vault_store_id,
-            vault_name: grant.vault_name,
-            approved_at: grant.approved_at,
-            scopes: grant.scopes,
-            sync_provider_count: grant.sync_provider_count,
-            event_count: imported.event_count,
-            event_log_heads: imported.heads,
-            last_local_sync_at: observed_at,
-        })
     }
 
     pub fn validate_json(value: &str) -> Result<(), ExtensionPairingStateError> {
@@ -982,28 +943,3 @@ impl From<bool> for PairingSelection {
         }
     }
 }
-enum ImportedExtensionAccess {
-    Denied,
-    Granted,
-}
-impl From<bool> for ImportedExtensionAccess {
-    fn from(granted: bool) -> Self {
-        if granted { Self::Granted } else { Self::Denied }
-    }
-}
-
-impl ImportedExtensionEventLog {
-    pub fn admit(self) -> Result<Self, ImportedExtensionEventLogError> {
-        if matches!(
-            ImportedExtensionAccess::from(self.access_granted),
-            ImportedExtensionAccess::Granted
-        ) && (self.event_count.is_zero() || self.heads.is_empty())
-        {
-            return Err(ImportedExtensionEventLogError);
-        }
-        Ok(self)
-    }
-}
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("imported extension event-log evidence is inconsistent")]
-pub struct ImportedExtensionEventLogError;
