@@ -33,20 +33,25 @@ export type ExtensionSessionTransportResult<
   DecodeFailure = never,
 > = Result<T, ExtensionSessionTransportFailure | DecodeFailure>
 
-export type ExtensionSessionTransportDelivery<
-  Response = ExtensionSessionResponse,
-  DecodeFailure = never,
-> = {
+export type ExtensionSessionTransportDelivery = {
   readonly message: ExtensionSessionTransportRequest
-  readonly decodeResponse?: (
-    response: ExtensionSessionResponse,
-  ) => Result<Response, DecodeFailure>
 }
+
+export type DecodedExtensionSessionTransportDelivery<Response, DecodeFailure> =
+  {
+    readonly message: ExtensionSessionTransportRequest
+    readonly decodeResponse: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>
+  }
 
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
+  sendMessage(
+    delivery: ExtensionSessionTransportDelivery,
+  ): Promise<ExtensionSessionTransportResult>
   sendMessage<Response, DecodeFailure>(
-    delivery: ExtensionSessionTransportDelivery<Response, DecodeFailure>,
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
 
@@ -59,10 +64,21 @@ enum SessionDocumentAccess {
 class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
+  sendMessage(
+    delivery: ExtensionSessionTransportDelivery,
+  ): Promise<ExtensionSessionTransportResult>
+  sendMessage<Response, DecodeFailure>(
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
-    delivery: ExtensionSessionTransportDelivery<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
-    const { message, decodeResponse } = delivery
+    delivery:
+      | ExtensionSessionTransportDelivery
+      | DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<
+    | ExtensionSessionTransportResult
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
+    const { message } = delivery
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
         new ExtensionSessionTransportFailure(
@@ -97,8 +113,8 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
                   ExtensionSessionTransportFailureKind.ResponseMissing,
                 ).toResult<Response, DecodeFailure>(),
               )
-            } else if (decodeResponse) {
-              const decoded = decodeResponse(response)
+            } else if ('decodeResponse' in delivery) {
+              const decoded = delivery.decodeResponse(response)
               resolve(
                 decoded.match(
                   (decodedResponse) =>
@@ -114,7 +130,11 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
                 ),
               )
             } else {
-              resolve(ok<ExtensionSessionResponse, never>(response))
+              resolve(
+                ok<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
+                  response,
+                ),
+              )
             }
           },
         )

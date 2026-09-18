@@ -1,6 +1,8 @@
 import { err, ok, type Result } from 'neverthrow'
 import { Effect } from 'effect'
 import type {
+  DecodedExtensionSessionTransportDelivery,
+  ExtensionSessionTransportDelivery,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportResult,
 } from './session-document'
@@ -19,6 +21,7 @@ import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/ext
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
   admit_companion_handoff_identity_status,
+  admit_companion_identity_status,
   decode_companion_identity_discovery_observation,
   decode_companion_identity_handoff_request,
   decode_extension_paired_vault_identity_handoff_request_message,
@@ -185,6 +188,10 @@ export enum WebsitePasskeyRequestContextKind {
   Validated = 'validated',
 }
 
+enum CompanionIdentityDiscoveryDecodeFailureKind {
+  InvalidResponse = 'companion-identity-discovery-response-invalid',
+}
+
 export type WebsitePasskeyRequestContext =
   | { kind: WebsitePasskeyRequestContextKind.Rejected }
   | {
@@ -324,9 +331,15 @@ class ExtensionPairingIdentity {
         document.error,
       )
     }
-    return decodeResponse
-      ? document.value.sendMessage(message, decodeResponse)
-      : document.value.sendMessage(message)
+    if (decodeResponse) {
+      const delivery: DecodedExtensionSessionTransportDelivery<
+        Response,
+        DecodeFailure
+      > = { message, decodeResponse }
+      return document.value.sendMessage(delivery)
+    }
+    const delivery: ExtensionSessionTransportDelivery = { message }
+    return document.value.sendMessage(delivery)
   }
 
   async createIdentityHandoff(
@@ -438,8 +451,10 @@ class ExtensionPairingIdentity {
       grant,
     )
     if (grantDecode.kind === ConcreteDecoderResultKind.Rejected) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({ kind: 'unavailable' })
+      const unavailablePresence: CompanionExtensionPresence = {
+        kind: 'unavailable',
+      }
+      return ok(unavailablePresence)
     }
     const decodedGrant = grantDecode.value
     const selected = pairingPolicy.selectedPairingGrant(stored)
@@ -459,16 +474,18 @@ class ExtensionPairingIdentity {
       this.websiteSessionStatusTransport(statusResponse) !==
       ExtensionSessionStatusAvailability.Unlocked
     ) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      const lockedPresence: CompanionExtensionPresence = {
         kind: 'locked',
         vault_type: currentGrant.vaultType,
         vault_store_id: currentGrant.vaultStoreId,
         vault_name: currentGrant.vaultName,
-      })
+      }
+      return ok(lockedPresence)
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return ok({
+    const unlockedPresence: Extract<
+      CompanionExtensionPresence,
+      CompanionUnlockedPresenceShape
+    > = {
       kind: 'unlocked',
       vault_type: currentGrant.vaultType,
       vault_store_id: currentGrant.vaultStoreId,
@@ -484,7 +501,8 @@ class ExtensionPairingIdentity {
         nonce,
         scopes: currentGrant.scopes,
       },
-    })
+    }
+    return ok(unlockedPresence)
   }
 
   async createPairedIdentityHandoff(
@@ -569,25 +587,55 @@ class ExtensionPairingIdentity {
       return { ok: false }
     }
     const observation = observationDecode.value
-    const discover = async (presence: CompanionExtensionPresence) => {
+    const discover = async (
+      presence: CompanionExtensionPresence,
+    ): Promise<CompanionIdentityDiscoveryTransportResponse> => {
       const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest =
         {
           type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
           payload: { presence, discovery: observation },
         }
-      const delivery = await this.sendSessionMessage(sessionRequest)
-      if (delivery.isErr()) return delivery.error.response
-      const response = delivery.value
-      if (
-        !!response &&
-        typeof response === 'object' &&
-        'ok' in response &&
-        response.ok === true &&
-        'status' in response
-      ) {
-        return { ok: true as const, status: response.status }
+      const decodeResponse = (
+        response: ExtensionSessionResponse,
+      ): Result<
+        CompanionIdentityDiscoveryTransportResponse,
+        CompanionIdentityDiscoveryDecodeFailureKind
+      > => {
+        if (
+          !('ok' in response) ||
+          response.ok !== true ||
+          !('status' in response)
+        ) {
+          return err(
+            CompanionIdentityDiscoveryDecodeFailureKind.InvalidResponse,
+          )
+        }
+        const statusAdmission: Parameters<
+          typeof admit_companion_identity_status
+        >[0] = {
+          discovery: observation,
+          status: response.status,
+          observedAt: Date.now(),
+        }
+        const admission = admit_companion_identity_status(statusAdmission)
+        if (admission.kind !== 'accepted') {
+          return err(
+            CompanionIdentityDiscoveryDecodeFailureKind.InvalidResponse,
+          )
+        }
+        const decodedResponse: CompanionIdentityDiscoveryTransportResponse = {
+          ok: true,
+          status: admission.transaction.status,
+        }
+        return ok(decodedResponse)
       }
-      return { ok: false as const }
+      const sessionMessage: DecodedSessionMessageRequest<
+        CompanionIdentityDiscoveryTransportResponse,
+        CompanionIdentityDiscoveryDecodeFailureKind
+      > = [sessionRequest, decodeResponse]
+      const delivery = await this.sendSessionMessage(...sessionMessage)
+      if (delivery.isErr()) return { ok: false }
+      return delivery.value
     }
     const unavailablePresence: CompanionExtensionPresence = {
       kind: 'unavailable',
