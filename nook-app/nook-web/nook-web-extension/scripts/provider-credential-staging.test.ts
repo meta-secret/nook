@@ -56,6 +56,24 @@ class ProviderStagingFixture {
       decode: async (candidate) => admit_extension_storage_providers(candidate),
     })
   }
+
+  runtimeValue(provider: StorageProvider): BrowserRuntimeMessageValue {
+    if (provider.githubPat.state !== 'token') {
+      throw new Error('GitHub staging fixture requires a token')
+    }
+    return {
+      id: provider.id,
+      type: provider.type,
+      label: provider.label,
+      githubPat: { state: 'token', value: provider.githubPat.value },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: provider.createdAt,
+    }
+  }
 }
 
 const providerStagingFixture = new ProviderStagingFixture()
@@ -297,7 +315,9 @@ describe('provider credential staging', () => {
 
   test('preserves valid provider metadata through canonical admission', async () => {
     const provider = providerStagingFixture.github()
-    const parsed = await parseProviderImport([provider])
+    const parsed = await parseProviderImport([
+      providerStagingFixture.runtimeValue(provider),
+    ])
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
     expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)

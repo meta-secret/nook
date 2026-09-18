@@ -13,7 +13,6 @@ import {
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
-  unselectedVaultScope,
   type StorageProvider,
 } from '$lib/auth/providers'
 import { VaultStorageSynchronization } from '$lib/nook'
@@ -25,6 +24,7 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
+import { ProviderSyncMetadataUpdateOutcome } from '$lib/vault/sync.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
@@ -104,10 +104,7 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
     ok({ replacementConflictCount: 0, securityConflictCount: 0 }),
   )
   state.updateProviderSyncMetadata = vi.fn(async () =>
-    ok({
-      providers: state.providers,
-      activeVaultStoreId: unselectedVaultScope(),
-    }),
+    ok(ProviderSyncMetadataUpdateOutcome.Updated),
   )
   state.hydrateMultiDeviceState = vi.fn<VaultState['hydrateMultiDeviceState']>(
     async () => ok({ kind: RosterHydrationKind.Skipped }),
