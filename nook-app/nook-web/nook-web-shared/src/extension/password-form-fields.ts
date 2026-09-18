@@ -209,16 +209,17 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     usernameFields,
     oneTimeCodeFields,
   }: LocalOwnedLoginObservationRootsRequest): ParentNode[] {
-    const {
-      passwordFields: ownedPasswordFields,
-      usernameFields: ownedUsernameFields,
-      oneTimeCodeFields: ownedOneTimeCodeFields,
-    } = authenticationFieldIndexCatalog.fields({
+    const fieldIndexRequest: LocalOwnedLoginObservationRootsRequest = {
       owner,
       passwordFields,
       usernameFields,
       oneTimeCodeFields,
-    });
+    };
+    const {
+      passwordFields: ownedPasswordFields,
+      usernameFields: ownedUsernameFields,
+      oneTimeCodeFields: ownedOneTimeCodeFields,
+    } = authenticationFieldIndexCatalog.fields(fieldIndexRequest);
     if (
       ownedPasswordFields.length === 0 ||
       ownedUsernameFields.length === 0 ||
@@ -463,10 +464,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   authenticationUsernameEvidence(
     field: HTMLInputElement,
   ): AuthenticationUsernameEvidence {
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: this.hasLoginContext(field),
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return authentication_username_evidence(observation);
     } finally {
@@ -477,10 +479,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeUsernameField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: this.hasLoginContext(field),
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return looks_like_username_field(observation);
     } finally {
@@ -491,10 +494,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: false,
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return looks_like_one_time_code_field(observation);
     } finally {
@@ -585,15 +589,17 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
+    const usernameTokenRequest: AutocompleteTokenMatchRequest = {
+      field,
+      expected: "username",
+    };
+    const emailTokenRequest: AutocompleteTokenMatchRequest = {
+      field,
+      expected: "email",
+    };
     return (
-      this.hasAutocompleteToken({
-        field,
-        expected: "username",
-      }) ||
-      this.hasAutocompleteToken({
-        field,
-        expected: "email",
-      }) ||
+      this.hasAutocompleteToken(usernameTokenRequest) ||
+      this.hasAutocompleteToken(emailTokenRequest) ||
       this.looksLikeUsernameField(field)
     );
   }

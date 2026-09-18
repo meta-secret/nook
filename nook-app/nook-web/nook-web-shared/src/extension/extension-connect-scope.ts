@@ -63,10 +63,12 @@ class ExtensionConnectScopeCatalog {
     value: unknown,
   ): Effect.Effect<ExtensionConnectScope, ExtensionConnectScopeDecodeFailure> {
     switch (this.scopeRuntimeState.kind) {
-      case ExtensionConnectScopeRuntimeStateKind.Unconfigured:
-        return Effect.fail({
+      case ExtensionConnectScopeRuntimeStateKind.Unconfigured: {
+        const failure: ExtensionConnectScopeDecodeFailure = {
           kind: ExtensionConnectScopeDecodeFailureKind.RuntimeUnavailable,
-        });
+        };
+        return Effect.fail(failure);
+      }
       case ExtensionConnectScopeRuntimeStateKind.Configured: {
         const runtime = this.scopeRuntimeState.runtime;
         const schema = Schema.Union(
