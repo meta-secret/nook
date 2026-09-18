@@ -79,6 +79,12 @@ describe('focused compile-contract ESLint config', () => {
     expect(namedSuccessContractTestSource).toContain(
       "join(sourceDirectory, '__compile-contracts-named-success-')",
     )
+    expect(namedSuccessContractTestSource).toContain(
+      'const typeAwareSvelteMessages = SvelteNamedSuccessContractTestHarness.lint(`',
+    )
+    expect(namedSuccessContractTestSource).not.toMatch(
+      /test\('uses type-aware parser services for Svelte scripts',[\s\S]*?SvelteNamedSuccessContractTestHarness\.lint\(`/,
+    )
   })
 
   test('rejects TypeScript type predicates in authored TypeScript', () => {

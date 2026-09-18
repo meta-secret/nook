@@ -76,6 +76,20 @@ function gitBlobSha1(source) {
     .digest('hex')
 }
 
+// Type-aware Svelte parser bootstrap can exceed Bun's per-test timeout on a
+// cold, contended runner. Keep that initialization in module setup so the test
+// measures the contract assertions, while the overall suite still fails if
+// parser setup or linting fails.
+const typeAwareSvelteMessages = SvelteNamedSuccessContractTestHarness.lint(`
+  <script lang="ts">
+    import { ok as succeed, type Result } from 'neverthrow'
+    type StorageFailure = { readonly kind: 'storage' }
+    export function save(): Promise<Result<void, StorageFailure>> {
+      return Promise.resolve(succeed())
+    }
+  </script>
+`)
+
 describe('nook-typed-api/no-empty-success-contract', () => {
   test('rejects a zero-argument neverthrow ok call', () => {
     const messages = NamedSuccessContractTestHarness.lint(`
@@ -200,18 +214,8 @@ describe('nook-typed-api/no-empty-success-contract', () => {
   })
 
   test('uses type-aware parser services for Svelte scripts', () => {
-    const messages = SvelteNamedSuccessContractTestHarness.lint(`
-      <script lang="ts">
-        import { ok as succeed, type Result } from 'neverthrow'
-        type StorageFailure = { readonly kind: 'storage' }
-        export function save(): Promise<Result<void, StorageFailure>> {
-          return Promise.resolve(succeed())
-        }
-      </script>
-    `)
-
-    expectMessage(messages, 'emptySuccessCall')
-    expectMessage(messages, 'emptySuccessType')
+    expectMessage(typeAwareSvelteMessages, 'emptySuccessCall')
+    expectMessage(typeAwareSvelteMessages, 'emptySuccessType')
   })
 
   test('dedicated config enables only the named-success gate', () => {
