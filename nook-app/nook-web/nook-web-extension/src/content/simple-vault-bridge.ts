@@ -14,20 +14,23 @@ void companionWasmReady.then(() => {
       return
 
     const data: unknown = event.data
-    const wireSnapshot = SerializedWireValueAdapter.snapshot(data)
-    if (!wireSnapshot) return
+    const eventLogRecordsSnapshot =
+      SerializedWireValueAdapter.snapshotEventLogRecords(data)
+    if (!eventLogRecordsSnapshot) return
     const message = runConcreteDecoder(
       ExtensionLocalEventLogUpdatedMessageSchema.decode,
       data,
     )
     if (message.kind === ConcreteDecoderResultKind.Decoded) {
-      const preservedMessage =
-        SerializedWireValueAdapter.restore<typeof message.value>(wireSnapshot)
+      const preservedEventLogRecords =
+        SerializedWireValueAdapter.restoreEventLogRecords<
+          typeof message.value.payload.eventLogRecords
+        >(eventLogRecordsSnapshot)
       const deliveryMessage: typeof message.value = {
         ...message.value,
         payload: {
           ...message.value.payload,
-          eventLogRecords: preservedMessage.payload.eventLogRecords,
+          eventLogRecords: preservedEventLogRecords,
         },
       }
       chrome.runtime.sendMessage(deliveryMessage, () => {

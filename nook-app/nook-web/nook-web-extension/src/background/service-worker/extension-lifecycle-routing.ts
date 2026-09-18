@@ -440,7 +440,8 @@ export function routeExtensionLifecycleMessage({
   sender,
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
-  const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
+  const eventLogRecordsSnapshot =
+    SerializedWireValueAdapter.snapshotEventLogRecords(message)
   const {
     beginAccountPickerAuthorizationCleanup,
     clearPendingAccountPickers,
@@ -598,14 +599,15 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    if (!wireSnapshot) return ExtensionLifecycleRoutingResult.Unhandled
-    const preservedPairingApproval =
-      SerializedWireValueAdapter.restore<typeof pairingApproval.value>(
-        wireSnapshot,
-      )
+    if (!eventLogRecordsSnapshot)
+      return ExtensionLifecycleRoutingResult.Unhandled
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        typeof pairingApproval.value.eventLogRecords
+      >(eventLogRecordsSnapshot)
     const importMessage: typeof pairingApproval.value = {
       ...pairingApproval.value,
-      eventLogRecords: preservedPairingApproval.eventLogRecords,
+      eventLogRecords: preservedEventLogRecords,
     }
     void importPairingAfterCompanionReady(importMessage)
       .then(async (response) => {
@@ -622,9 +624,12 @@ export function routeExtensionLifecycleMessage({
   )
   if (localEventLogUpdate.kind === ConcreteDecoderResultKind.Decoded) {
     const decodedMessage = localEventLogUpdate.value
-    if (!wireSnapshot) return ExtensionLifecycleRoutingResult.Unhandled
-    const preservedMessage =
-      SerializedWireValueAdapter.restore<typeof decodedMessage>(wireSnapshot)
+    if (!eventLogRecordsSnapshot)
+      return ExtensionLifecycleRoutingResult.Unhandled
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        typeof decodedMessage.payload.eventLogRecords
+      >(eventLogRecordsSnapshot)
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -637,7 +642,7 @@ export function routeExtensionLifecycleMessage({
         }
         const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
           vaultStoreId: decodedMessage.payload.vaultStoreId,
-          eventLogRecords: preservedMessage.payload.eventLogRecords,
+          eventLogRecords: preservedEventLogRecords,
         }
         void beginAccountPickerAuthorizationCleanup()
           .then(async (cleanupStart) => {

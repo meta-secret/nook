@@ -64,13 +64,8 @@ export class ExtensionPairingIngress {
         reason: PairingIngressFailure.RuntimeUnavailable,
       }
     }
-    const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
-    if (!wireSnapshot) {
-      return {
-        kind: PairingIngressAdmissionKind.Rejected,
-        reason: PairingIngressFailure.AdmissionFailed,
-      }
-    }
+    const eventLogRecordsSnapshot =
+      SerializedWireValueAdapter.snapshotEventLogRecords(message)
     const admission = runConcreteDecoder(
       ExtensionPairingApprovedMessageSchema.decode,
       message,
@@ -81,14 +76,20 @@ export class ExtensionPairingIngress {
         reason: admission.failure,
       }
     }
-    const preservedMessage =
-      SerializedWireValueAdapter.restore<ExtensionPairingApprovedMessage>(
-        wireSnapshot,
-      )
+    if (!eventLogRecordsSnapshot) {
+      return {
+        kind: PairingIngressAdmissionKind.Rejected,
+        reason: PairingIngressFailure.AdmissionFailed,
+      }
+    }
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        ExtensionPairingApprovedMessage['eventLogRecords']
+      >(eventLogRecordsSnapshot)
     return {
       kind: PairingIngressAdmissionKind.Admitted,
       message: admission.value,
-      sessionEventLogRecords: preservedMessage.eventLogRecords,
+      sessionEventLogRecords: preservedEventLogRecords,
     }
   }
 }

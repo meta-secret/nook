@@ -68,7 +68,8 @@ export class ExternalCompanionRouter {
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
-    const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
+    const eventLogRecordsSnapshot =
+      SerializedWireValueAdapter.snapshotEventLogRecords(message)
     if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -164,17 +165,17 @@ export class ExternalCompanionRouter {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
-    if (!wireSnapshot) {
+    if (!eventLogRecordsSnapshot) {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
-    const preservedPairingApproval =
-      SerializedWireValueAdapter.restore<typeof pairingApproval.value>(
-        wireSnapshot,
-      )
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        typeof pairingApproval.value.eventLogRecords
+      >(eventLogRecordsSnapshot)
     const importMessage: typeof pairingApproval.value = {
       ...pairingApproval.value,
-      eventLogRecords: preservedPairingApproval.eventLogRecords,
+      eventLogRecords: preservedEventLogRecords,
     }
     void importPairingAfterCompanionReady(importMessage)
       .then(async (response) => {
