@@ -18,6 +18,9 @@ const extensionPackagePath = fileURLToPath(
 const i18nGeneratorPath = fileURLToPath(
   new URL('../../nook-web-app/scripts/generate-i18n-keys.mjs', import.meta.url),
 )
+const namedSuccessContractTestPath = fileURLToPath(
+  new URL('./eslint-named-success-contract.test.js', import.meta.url),
+)
 
 class CompileContractsConfigTestHarness {
   /** @param {import('eslint').Linter.LintMessage[]} messages */
@@ -68,6 +71,13 @@ describe('focused compile-contract ESLint config', () => {
     const i18nGeneratorSource = readFileSync(i18nGeneratorPath, 'utf8')
     expect(i18nGeneratorSource).toContain(
       "entry.name.startsWith('__compile-contracts-')",
+    )
+    const namedSuccessContractTestSource = readFileSync(
+      namedSuccessContractTestPath,
+      'utf8',
+    )
+    expect(namedSuccessContractTestSource).toContain(
+      "join(sourceDirectory, '__compile-contracts-named-success-')",
     )
   })
 

@@ -19,7 +19,9 @@ class NamedSuccessContractTestHarness {
   /** @param {string} source */
   static lint(source) {
     const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url))
-    const root = mkdtempSync(join(sourceDirectory, 'named-success-contract-'))
+    const root = mkdtempSync(
+      join(sourceDirectory, '__compile-contracts-named-success-'),
+    )
     try {
       const filePath = join(root, 'contract.ts')
       writeFileSync(filePath, source)

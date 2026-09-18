@@ -192,6 +192,12 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         i18n_generator.contains("entry.name.startsWith('__compile-contracts-')"),
         "the parallel i18n scanner must exclude transient compile-contract fixtures"
     );
+    let named_success_contract_test = root
+        .read("nook-app/nook-web/nook-web-extension/scripts/eslint-named-success-contract.test.js");
+    assert!(
+        named_success_contract_test.contains("__compile-contracts-named-success-"),
+        "every in-tree ESLint fixture must use the reserved transient namespace"
+    );
 
     let typed_api_tests =
         root.read("nook-app/nook-web/nook-web-extension/scripts/eslint-typed-api-contract.test.js");
