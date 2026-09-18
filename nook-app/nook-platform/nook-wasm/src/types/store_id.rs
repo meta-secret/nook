@@ -90,7 +90,7 @@ mod tests {
         let Ok(store_id) = presence.store_id_result() else {
             panic!("present store identity must expose its typed value");
         };
-        assert_eq!(store_id.as_core().as_str(), StoreIdValueScenario::valid());
+        assert_eq!(store_id.value(), StoreIdValueScenario::valid());
         Ok(())
     }
 
