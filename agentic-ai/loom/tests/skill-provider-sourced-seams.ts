@@ -182,7 +182,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '8d064bc6020e97d0d47ebe4ae68fd450c54f7a7882df825733cde88f2ae3ecdb',
+    'a5a057e319ed9d0247400dd64a6b96f98540c95652b01a46e65d018ccc6aa32a',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',
