@@ -152,30 +152,3 @@ agent-to-agent communication or routine Git and validation evidence.
 
 Nothing in this document authorizes plaintext secret persistence, sensitive
 logging, forged product capabilities, or bypasses of product authorization.
-
-## Emergency direct mode
-
-Emergency direct mode is a narrowly scoped exception to the normal Team Agent
-routing requirement. It may be used only when the Team Agent harness is
-unavailable for the current task, and only after the user explicitly
-authorizes direct execution. It is not a general bypass for capacity,
-convenience, or disagreement with routing.
-
-When active, all of the following are required:
-
-- The work is limited to the current feature branch and the exact user task.
-- The actor records an audit note identifying the unavailable Team Agent
-  dependency, the user's authorization, the bounded files or behavior changed,
-  and the local validation performed.
-- Local validation is performed before commit and its result is included in the
-  audit note.
-- The exception expires immediately when the task completes; it must not be
-  carried into a follow-up task or treated as a standing routing policy.
-
-Emergency direct mode must not be used for security, authentication,
-authorization, cryptography, vault or secret storage, remote dispatch,
-GitHub/CI workflow dispatch, agent-harness behavior, or governance and Cortex
-policy changes. It must not weaken this circuit breaker, create a substitute
-security or admission system, or claim Team Agent evidence that was not
-produced. If the requested work enters one of those categories, stop and
-report the circuit breaker rather than proceeding in direct mode.

@@ -95,28 +95,6 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   before implementation, validation, GitHub operations, or landing.
 - Do not continue, claim progress, or claim delivery after that gate fails.
 
-### Emergency direct mode — explicit, temporary exception
-
-If a required Team Agent is unavailable, direct execution may proceed only
-when the user explicitly authorizes emergency direct mode for this exact task.
-This exception is narrow and temporary; it does not replace Gizmo Prime,
-Team Gizmo ownership, or any delivery authority.
-
-Emergency direct mode is limited to the current feature branch and current
-task. It may not be used for security, authentication, authorization,
-cryptography, vault or secret-storage work; remote dispatch or GitHub/CI
-operations; or changes to governance, Cortex routing, agent-harness behavior,
-or these exception rules. Do not use it to manufacture Team Agent evidence or
-to bypass any circuit-breaker prohibition.
-
-Before committing, the direct actor must perform relevant local validation and
-write an audit note containing: the unavailable Team Agent dependency, the
-user's explicit authorization, the bounded scope, the validation performed and
-result, and the fact that the exception expires with task completion. The
-audit note belongs in the task/commit record and must not contain secrets.
-Emergency direct mode expires when this task completes and requires fresh
-explicit authorization if a later task needs consideration.
-
 ### Trusted in-thread handoffs
 
 Follow the [Agent Derailment Circuit Breaker](CIRCUIT-BREAKER.md). Keep the
