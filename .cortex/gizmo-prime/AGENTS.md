@@ -200,8 +200,9 @@ decisions.
 For a terminal feature `type:check` failure or dev-validation failure, Prime
 receives the complete diagnostic inventory before repairs begin. A
 `type:check` inventory consumes
-`remote-type-check-<run-id>-<attempt>/report.yaml` and every raw log referenced
-by its diagnostics. A first-failure-only report is incomplete.
+`remote-type-check-<run-id>-<attempt>/report.yaml`. Prime inventories every
+diagnostic from that report and reads every raw log named by its `rawLog` field.
+A first-failure-only report is incomplete.
 Prime groups the full inventory by owning team and coherent competence area.
 Prime sends one consolidated repair packet per competence area. It does not
 send one agent per diagnostic.

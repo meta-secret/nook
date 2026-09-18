@@ -133,10 +133,11 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Without a branch advance, run exactly one remote
      `task remote TASK_NAME=type:check` request for the same unchanged head.
    - Use the natural terminal remote `type:check` result as evidence.
-   - Consume `remote-type-check-<run-id>-<attempt>/report.yaml` and every raw
-     log referenced by its diagnostics.
-   - If `type:check` fails, inventory every diagnostic before repair. Group the
-     full inventory by owning team and coherent competence area.
+   - Consume `remote-type-check-<run-id>-<attempt>/report.yaml`.
+   - Read every raw log named by a `rawLog` field in `report.yaml`.
+   - If `type:check` fails, inventory every diagnostic from the report before
+     repair. Group the full inventory by owning team and coherent competence
+     area.
    - Send one consolidated repair packet per competence area. Do not send one
      agent per diagnostic.
    - Integrate the entire repair wave before one new `type:check` request. Do
@@ -219,7 +220,7 @@ rather than present authored or committed changes as successful delivery.
 - The current branch head has passing remote `build:compile` evidence.
 - The same unchanged head has one passing remote `type:check` result.
 - The handoff names the `remote-type-check-<run-id>-<attempt>/report.yaml`
-  artifact and the raw logs referenced by its diagnostics.
+  artifact and every raw log named by its `rawLog` fields.
 - Required review and security findings are resolved.
 - Tests were authored for execution in the manager's slow stage.
 - The accepted feature is present in local dev.

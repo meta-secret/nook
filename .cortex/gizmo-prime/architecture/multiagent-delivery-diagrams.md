@@ -750,11 +750,11 @@ sequenceDiagram
   `type:check` request for the unchanged head. Full tests belong only to the
   Dev Manager's dev-to-main PR.
 - A failed `type:check` consumes
-  `remote-type-check-<run-id>-<attempt>/report.yaml` and every raw log
-  referenced by its diagnostics. Prime inventories all diagnostics before
-  repairs, groups them by owning team and coherent competence area, sends one
-  consolidated packet per area, and integrates the full repair wave before one
-  new `type:check` request.
+  `remote-type-check-<run-id>-<attempt>/report.yaml`. Prime inventories every
+  diagnostic from that report and reads every raw log named by a `rawLog` field.
+  Prime then groups diagnostics by owning team and coherent competence area,
+  sends one consolidated packet per area, and integrates the full repair wave
+  before one new `type:check` request.
 - Team Agents mutate isolated child worktrees and return committed iterations.
 - PR Lifecycle Agent performs only packetized external GitHub, PR, check,
   review, status, and bounded dev mechanics under Team Gizmo and controller
