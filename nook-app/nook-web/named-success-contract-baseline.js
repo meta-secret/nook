@@ -15,10 +15,6 @@
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
   {
-    file: "nook-web-shared/src/extension/event-log-bridge.ts",
-    gitBlobSha1: "9c0ba97f5d2c67831846d56a250ec3daba854aac",
-  },
-  {
     file: "nook-web-shared/src/vault-app/lib/app/workspace-route.ts",
     gitBlobSha1: "facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f",
   },

@@ -17,6 +17,11 @@ export enum ExtensionPublicationFailure {
   BrowserDelivery = "browser-delivery",
 }
 
+export enum ExtensionPublicationOutcome {
+  NotRequired = "not-required",
+  Published = "published",
+}
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionEventLogPublisher {
   constructor(private readonly browser: typeof globalThis) {}
@@ -25,11 +30,11 @@ class ExtensionEventLogPublisher {
     vaultStoreId,
     eventLogRecords,
   }: PublishExtensionEventLogUpdateArgs): Result<
-    void,
+    ExtensionPublicationOutcome,
     ExtensionPublicationFailure
   > {
     if (!("window" in this.browser) || eventLogRecords.length === 0)
-      return ok();
+      return ok(ExtensionPublicationOutcome.NotRequired);
     const message: ExtensionLocalEventLogUpdatedMessage = {
       type: ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
       payload: { vaultStoreId, eventLogRecords },
@@ -39,7 +44,7 @@ class ExtensionEventLogPublisher {
         message,
         this.browser.window.location.origin,
       );
-      return ok();
+      return ok(ExtensionPublicationOutcome.Published);
     } catch {
       return err(ExtensionPublicationFailure.BrowserDelivery);
     }
