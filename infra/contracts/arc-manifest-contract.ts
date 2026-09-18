@@ -481,11 +481,57 @@ class ArcManifestContract {
     if (admittedContract17.isErr()) return err(admittedContract17.error);
     const admittedContract18 = buildkit.forbidAll([
       "runtimeClassName:",
+      "hostPID:",
       "privileged: true",
       "docker.sock",
       "containerd.sock",
+      "hostPath:",
     ]);
     if (admittedContract18.isErr()) return err(admittedContract18.error);
+    const buildkitProcessNamespaceCount = buildkit.count({
+      fragment: "      shareProcessNamespace: true",
+      expected: 1,
+    });
+    if (buildkitProcessNamespaceCount.isErr())
+      return err(buildkitProcessNamespaceCount.error);
+    const buildkitProcessNamespaceAssociation = buildkit.require(
+      `kind: StatefulSet
+metadata:
+  name: nook-buildkit
+  namespace: arc-runners
+spec:
+  serviceName: nook-buildkit-headless
+  podManagementPolicy: Parallel
+  replicas: 4
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nook-buildkit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nook-buildkit
+        nook.nokey.sh/role: arc-buildkit
+    spec:
+      nodeSelector:
+        nook.nokey.sh/arc-build: "true"
+      tolerations:
+        - key: nook.nokey.sh/arc-build
+          operator: Equal
+          value: preparing
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: nook-buildkit
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      shareProcessNamespace: true`,
+    );
+    if (buildkitProcessNamespaceAssociation.isErr())
+      return err(buildkitProcessNamespaceAssociation.error);
 
     const admittedContract19 = network.requireAll([
       "name: arc-runner-default-deny-ingress",
