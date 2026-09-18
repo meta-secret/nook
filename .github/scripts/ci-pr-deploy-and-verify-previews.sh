@@ -94,6 +94,20 @@ wait_for_deploy "$site_pid" "Site" "$deploy_dir/site.log"
 wait_for_deploy "$simple_pid" "Simple" "$deploy_dir/simple.log"
 wait_for_deploy "$sentinel_pid" "Sentinel" "$deploy_dir/sentinel.log"
 
+deployment_url_from_log() {
+  local log="$1"
+  sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$log" \
+    | grep -oE 'Deployment complete! Take a peek over at https://[^ ]+' \
+    | sed 's/Deployment complete! Take a peek over at //' \
+    | tail -1
+}
+
+site_deployment_url="$(deployment_url_from_log "$deploy_dir/site.log")"
+if [[ ! "$site_deployment_url" =~ ^https://[0-9a-f]{8}\.nokey-sh\.pages\.dev$ ]]; then
+  echo "::error::Site preview deploy did not emit a canonical immutable nokey-sh deployment URL"
+  exit 1
+fi
+
 clean="$(sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$deploy_dir/unified.log")"
 preview_url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
 if [ -z "$preview_url" ]; then
@@ -143,7 +157,8 @@ if [ "$site_ok" != true ] || [ "$simple_ok" != true ] || [ "$sentinel_ok" != tru
 fi
 expected_extension_channel="pr-$deployment_tag"
 extension_archive="nook-passwords-${expected_extension_channel}.zip"
-EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
+EXTENSION_METADATA_URL="$site_deployment_url/downloads/extension.json" \
+EXTENSION_FETCH_ORIGIN_URL="$site_deployment_url/" \
 EXTENSION_CACHE_BUST="$HEAD_SHA" \
 EXPECTED_EXTENSION_CHANNEL="$expected_extension_channel" \
 EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \

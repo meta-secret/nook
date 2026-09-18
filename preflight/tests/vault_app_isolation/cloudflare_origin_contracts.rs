@@ -214,6 +214,12 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         "PR extension verification must use one exact-head cache key"
     );
     assert!(
+        pr_deploy_script.contains("EXTENSION_FETCH_ORIGIN_URL=\"$site_deployment_url/\"")
+            && pr_deploy_script.contains("deployment_url_from_log()")
+            && pr_deploy_script.contains("^https://[0-9a-f]{8}\\.nokey-sh\\.pages\\.dev$"),
+        "PR extension verification must read the immutable deployment rather than race the alias"
+    );
+    assert!(
         !pr_deploy_script.contains("Waiting for exact-head extension metadata")
             && !pr_deploy_script.contains("Waiting for isolated aliases"),
         "PR deployment must fail directly instead of polling exact-head evidence"
@@ -235,8 +241,8 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
     for required in [
         "cache_busted_url()",
         "fetch_from_selected_origin \"$(cache_busted_url \"$EXTENSION_METADATA_URL\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$download_url\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$checksum_url\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"${fetch_site_url}${download_url#\"$site_url\"}\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"${fetch_site_url}${checksum_url#\"$site_url\"}\")\"",
         "Extension deployment verification failed at line $LINENO",
     ] {
         assert!(

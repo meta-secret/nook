@@ -24,16 +24,18 @@ if [ "${1:-}" = "$NOOK_TEST_HOST_HELPER" ]; then
   if [ "${CF_PAGES_PROJECT_NAME:-}" = 'nook' ]; then
     printf 'NOOK_PREVIEW_URL=https://%s.nokey-sh.pages.dev\n' "$CF_PAGES_BRANCH"
   fi
+  printf 'Deployment complete! Take a peek over at https://deadbeef.%s.pages.dev\n' "$CF_PAGES_PROJECT_NAME"
   exit 0
 fi
 if [ "${1:-}" = "$NOOK_TEST_VERIFY_DEPLOYMENT" ]; then
-  printf '%s|%s|%s|%s|%s|%s\n' \
+  printf '%s|%s|%s|%s|%s|%s|%s\n' \
     "$EXPECTED_EXTENSION_CHANNEL" \
     "$EXPECTED_EXTENSION_COMMIT" \
     "$EXPECTED_EXTENSION_SITE_URL" \
     "$EXPECTED_SIMPLE_VAULT_URL" \
     "$EXPECTED_SENTINEL_VAULT_URL" \
-    "$EXTENSION_METADATA_URL" >> "$NOOK_TEST_VERIFICATION_CALLS"
+    "$EXTENSION_METADATA_URL" \
+    "$EXTENSION_FETCH_ORIGIN_URL" >> "$NOOK_TEST_VERIFICATION_CALLS"
   exit 0
 fi
 exec "$NOOK_TEST_REAL_BASH" "$@"
@@ -190,7 +192,7 @@ else
   exit 1
 fi
 grep -Fxq \
-  'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://pr-preview-branch.nokey-sh.pages.dev/downloads/extension.json' \
+  'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://deadbeef.nokey-sh.pages.dev/downloads/extension.json|https://deadbeef.nokey-sh.pages.dev/' \
   "$verification_calls" \
   || { echo 'preview deploy extension contract test: verifier did not receive the isolated PR channel and exact aliases' >&2; exit 1; }
 grep -Fxq 'extension_url=https://pr-preview-branch.nokey-sh.pages.dev/downloads/nook-passwords-pr-preview-branch.zip' "$github_output" \

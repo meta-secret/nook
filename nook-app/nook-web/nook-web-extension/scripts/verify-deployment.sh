@@ -14,6 +14,13 @@ trap 'echo "Extension deployment verification failed at line $LINENO" >&2' ERR
 metadata="$tmp_dir/extension.json"
 archive="$tmp_dir/extension.zip"
 site_url="${EXPECTED_EXTENSION_SITE_URL%/}/"
+fetch_site_url="${EXTENSION_FETCH_ORIGIN_URL:-$EXPECTED_EXTENSION_SITE_URL}"
+fetch_site_url="${fetch_site_url%/}/"
+if [ -n "${EXTENSION_FETCH_ORIGIN_URL:-}" ] \
+  && [[ ! "$fetch_site_url" =~ ^https://[0-9a-f]{8}\.nokey-sh\.pages\.dev/$ ]]; then
+  echo "EXTENSION_FETCH_ORIGIN_URL must be a canonical immutable nokey-sh deployment origin" >&2
+  exit 1
+fi
 cache_bust="${EXTENSION_CACHE_BUST:-$EXPECTED_EXTENSION_COMMIT}"
 
 if [[ ! "$cache_bust" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -39,7 +46,7 @@ fetch_from_selected_origin() {
       -fsSL --output "$output" --write-out '%{url_effective}' "$url"
   )"
   case "$effective_url" in
-    "$site_url"*) ;;
+    "$fetch_site_url"*) ;;
     *)
       echo "Extension artifact redirected outside selected origin: $effective_url" >&2
       return 1
@@ -52,7 +59,7 @@ fetch_from_selected_origin "$(cache_busted_url "$EXTENSION_METADATA_URL")" "$met
 simple_vault_url="${EXPECTED_SIMPLE_VAULT_URL%/}/"
 sentinel_vault_match="${EXPECTED_SENTINEL_VAULT_URL%/}/*"
 production_sentinel_match='https://sentinel.nokey.sh/*'
-jq -e \
+if ! jq -e \
   --arg channel "$EXPECTED_EXTENSION_CHANNEL" \
   --arg commit "$EXPECTED_EXTENSION_COMMIT" \
   --arg simple "$simple_vault_url" \
@@ -69,7 +76,16 @@ jq -e \
       .install_method == "manual_zip"
       and .install_url == .download_url
     end)' \
-  "$metadata" >/dev/null
+  "$metadata" >/dev/null; then
+  echo "Extension metadata contract mismatch" >&2
+  jq -c \
+    --arg expected_channel "$EXPECTED_EXTENSION_CHANNEL" \
+    --arg expected_commit "$EXPECTED_EXTENSION_COMMIT" \
+    --arg expected_simple "$simple_vault_url" \
+    '{actual: {schema_version, channel, commit, simple_vault_url, extension_id, sha256, install_method, install_url, download_url}, expected: {schema_version: 2, channel: $expected_channel, commit: $expected_commit, simple_vault_url: $expected_simple}}' \
+    "$metadata" >&2
+  exit 1
+fi
 
 download_url="$(jq -er '.download_url' "$metadata")"
 archive_name="$(jq -er '.archive' "$metadata")"
@@ -79,7 +95,7 @@ if [ "$download_url" != "$expected_download_url" ]; then
   exit 1
 fi
 
-fetch_from_selected_origin "$(cache_busted_url "$download_url")" "$archive"
+fetch_from_selected_origin "$(cache_busted_url "${fetch_site_url}${download_url#"$site_url"}")" "$archive"
 expected_sha256="$(jq -er '.sha256' "$metadata")"
 printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum -c - >/dev/null
 
@@ -127,7 +143,11 @@ metadata_extension_id="$(jq -er '.extension_id' "$metadata")"
 test "$manifest_extension_id" = "$metadata_extension_id"
 
 checksum_url="$(jq -er '.checksum_url' "$metadata")"
-fetch_from_selected_origin "$(cache_busted_url "$checksum_url")" "$tmp_dir/checksum"
+if [[ "$checksum_url" != "$site_url"* ]]; then
+  echo "Extension checksum URL is outside selected public origin: $checksum_url" >&2
+  exit 1
+fi
+fetch_from_selected_origin "$(cache_busted_url "${fetch_site_url}${checksum_url#"$site_url"}")" "$tmp_dir/checksum"
 grep -Fxq "$expected_sha256  $archive_name" "$tmp_dir/checksum"
 
 printf 'Verified %s (%s) for %s\n' \
