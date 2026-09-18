@@ -60,3 +60,11 @@ tasks:
         task tooling:static || failed=1
         task web:static || failed=1
         exit "$failed"
+
+  type:check:
+    desc: Run every repository typing/static type-safety group and retain every failure.
+    preconditions:
+      - sh: test "${GITHUB_ACTIONS:-}" = "true"
+        msg: "type:check is hosted-only; invoke it through `task remote TASK_NAME=type:check`."
+    cmds:
+      - task: static:check
