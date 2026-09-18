@@ -202,9 +202,7 @@ type ExternalCloudKitContainer = Omit<
   CloudKitContainer,
   "setUpAuth" | "fetchCurrentUserIdentity"
 > & {
-  setUpAuth: (
-    options?: ExternalCloudKitAuthSetupOptions,
-  ) => Promise<unknown>;
+  setUpAuth: (options?: ExternalCloudKitAuthSetupOptions) => Promise<unknown>;
   fetchCurrentUserIdentity?: () => Promise<unknown>;
 };
 
