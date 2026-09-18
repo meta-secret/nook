@@ -399,7 +399,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_status_details>
     > = {
       message: request,
-      decode: decode_extension_session_status_details,
+      decode: (response) => decode_extension_session_status_details(response),
     }
     const status = await this.sessionResponse(statusResponseRequest)
     const deviceStatus = status.status
@@ -438,7 +438,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_status_details>
     > = {
       message: request,
-      decode: decode_extension_session_status_details,
+      decode: (response) => decode_extension_session_status_details(response),
     }
     const status = await this.sessionResponse(statusResponseRequest)
     if (status.kind === 'inactive') {
@@ -463,7 +463,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_passkey_setup_material_response>
     > = {
       message: beginRequest,
-      decode: decode_passkey_setup_material_response,
+      decode: (response) => decode_passkey_setup_material_response(response),
     }
     const setup = await this.sessionResponse(setupResponseRequest)
     const creationOptions = build_passkey_creation_options(
@@ -495,7 +495,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_device_response>
     > = {
       message: finishRequest,
-      decode: decode_extension_session_device_response,
+      decode: (response) => decode_extension_session_device_response(response),
     }
     const finishResponse = await this.sessionResponse(finishResponseRequest)
     return finishResponse.device
@@ -518,7 +518,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_device_response>
     > = {
       message: request,
-      decode: decode_extension_session_device_response,
+      decode: (response) => decode_extension_session_device_response(response),
     }
     const response = await this.sessionResponse(recoveryResponseRequest)
     return response.device
@@ -534,7 +534,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_passkey_unlock_material_response>
     > = {
       message: optionsRequest,
-      decode: decode_passkey_unlock_material_response,
+      decode: (response) => decode_passkey_unlock_material_response(response),
     }
     const material = await this.sessionResponse(materialResponseRequest)
     const options = build_passkey_prf_request_options(
@@ -554,7 +554,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_device_response>
     > = {
       message: request,
-      decode: decode_extension_session_device_response,
+      decode: (response) => decode_extension_session_device_response(response),
     }
     const response = await this.sessionResponse(unlockResponseRequest)
     return response.device
@@ -569,7 +569,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_device_response>
     > = {
       message: request,
-      decode: decode_extension_session_device_response,
+      decode: (response) => decode_extension_session_device_response(response),
     }
     const response = await this.sessionResponse(createPinResponseRequest)
     return response.device
@@ -584,7 +584,7 @@ class ExtensionWasmRuntime {
       ReturnType<typeof decode_extension_session_device_response>
     > = {
       message: request,
-      decode: decode_extension_session_device_response,
+      decode: (response) => decode_extension_session_device_response(response),
     }
     const response = await this.sessionResponse(unlockPinResponseRequest)
     return response.device
