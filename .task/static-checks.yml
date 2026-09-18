@@ -67,4 +67,4 @@ tasks:
       - sh: test "${GITHUB_ACTIONS:-}" = "true"
         msg: "type:check is hosted-only; invoke it through `task remote TASK_NAME=type:check`."
     cmds:
-      - task: static:check
+      - bash .github/scripts/type-check-report.sh

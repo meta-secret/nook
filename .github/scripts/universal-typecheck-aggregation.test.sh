@@ -16,9 +16,9 @@ type_check_body="$(awk '
 ' "$static_checks")"
 
 case "$type_check_body" in
-  *"- task: static:check"*) ;;
+  *"bash .github/scripts/type-check-report.sh"*) ;;
   *)
-    echo "type:check must delegate to static:check" >&2
+    echo "type:check must invoke the hosted report script" >&2
     exit 1
     ;;
 esac

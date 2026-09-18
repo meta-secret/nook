@@ -176,6 +176,8 @@ jobs:
         shell: bash
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
+          TYPE_CHECK_REPORT_DIR: ${{ runner.temp }}/nook-type-check-report
+          TYPE_CHECK_ARTIFACT_NAME: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
           DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && inputs.deployment_tag || '' }}
           HEAD_SHA: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && (inputs.source_sha || github.sha) || '' }}
           CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_PAGES_TOKEN || '' }}
@@ -192,6 +194,14 @@ jobs:
         with:
           name: remote-e2e-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/nook-e2e-artifacts
+          if-no-files-found: warn
+          retention-days: 15
+      - name: Preserve hosted type-check report
+        if: always() && (inputs.tasks || inputs.task) == 'type:check'
+        uses: actions/upload-artifact@v7
+        with:
+          name: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-type-check-report
           if-no-files-found: warn
           retention-days: 15
 
