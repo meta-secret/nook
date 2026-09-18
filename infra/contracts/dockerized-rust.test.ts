@@ -21,6 +21,29 @@ const tasksSchema = z.object({
   }),
 });
 
+enum WorkflowStepKind {
+  Command = "command",
+  Action = "action",
+}
+
+type WorkflowStep =
+  | { readonly kind: WorkflowStepKind.Command; readonly command: string }
+  | { readonly kind: WorkflowStepKind.Action };
+
+const workflowStepSchema = z.union([
+  z
+    .object({ run: z.string() })
+    .passthrough()
+    .transform(({ run }): WorkflowStep => ({
+      kind: WorkflowStepKind.Command,
+      command: run,
+    })),
+  z
+    .object({ uses: z.string() })
+    .passthrough()
+    .transform((): WorkflowStep => ({ kind: WorkflowStepKind.Action })),
+]);
+
 interface GitFixtureCommand {
   cwd: string;
   args: string[];
@@ -209,29 +232,33 @@ class DockerizedRustContract {
                 .object({ image: z.string() })
                 .passthrough()
                 .optional(),
-              steps: z
-                .array(z.object({ run: z.string().optional() }).passthrough())
-                .optional(),
+              steps: z.array(workflowStepSchema).default([]),
             }),
           ),
         })
         .parse(Bun.YAML.parse(source));
       for (const [jobName, job] of Object.entries(workflow.jobs)) {
-        const rustToolSteps = (job.steps ?? []).filter(
-          ({ run }) =>
-            run !== undefined &&
-            /(?:^|\n)\s*(?:cargo|rustup|rustfmt)\s/m.test(run),
+        const rustToolCommands = job.steps.flatMap((step) =>
+          step.kind === WorkflowStepKind.Command &&
+          /(?:^|\n)\s*(?:cargo|rustup|rustfmt)\s/m.test(step.command)
+            ? [step.command]
+            : [],
         );
-        if (rustToolSteps.length === 0) continue;
+        if (rustToolCommands.length === 0) continue;
         containerOwnedRustJobs += 1;
         expect(jobName).toBe("pages-preview");
         expect(job.container?.image).toMatch(
           /^registry\.dev\.nokey\.sh\/library\/rust:1\.97-trixie@sha256:[0-9a-f]{64}$/,
         );
-        expect(rustToolSteps.map(({ run }) => run)).toEqual([
-          expect.stringContaining("cargo install wasm-pack --version 0.15.0"),
-          expect.stringContaining("rustup target add wasm32-unknown-unknown"),
-        ]);
+        const [wasmPackCommand, wasmTargetCommand] = z
+          .tuple([z.string(), z.string()])
+          .parse(rustToolCommands);
+        expect(wasmPackCommand).toContain(
+          "cargo install wasm-pack --version 0.15.0",
+        );
+        expect(wasmTargetCommand).toContain(
+          "rustup target add wasm32-unknown-unknown",
+        );
       }
     }
     expect(containerOwnedRustJobs).toBe(1);
