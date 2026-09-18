@@ -4,7 +4,10 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
-import { SerializedWireValueAdapter } from '../lib/serialized-wire-value-adapter'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../lib/serialized-wire-value-adapter'
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 
@@ -16,7 +19,8 @@ void companionWasmReady.then(() => {
     const data: unknown = event.data
     const eventLogRecordsSnapshot =
       SerializedWireValueAdapter.snapshotEventLogRecords(data)
-    if (!eventLogRecordsSnapshot) return
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing)
+      return
     const message = runConcreteDecoder(
       ExtensionLocalEventLogUpdatedMessageSchema.decode,
       data,
@@ -25,7 +29,7 @@ void companionWasmReady.then(() => {
       const preservedEventLogRecords =
         SerializedWireValueAdapter.restoreEventLogRecords<
           typeof message.value.payload.eventLogRecords
-        >(eventLogRecordsSnapshot)
+        >(eventLogRecordsSnapshot.value)
       const deliveryMessage: typeof message.value = {
         ...message.value,
         payload: {

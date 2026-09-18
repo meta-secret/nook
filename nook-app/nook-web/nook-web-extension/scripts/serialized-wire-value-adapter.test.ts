@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { SerializedWireValueAdapter } from '../src/lib/serialized-wire-value-adapter'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../src/lib/serialized-wire-value-adapter'
 
 describe('serialized wire event-log ownership', () => {
   test('never copies pairing provider credentials into the snapshot', () => {
@@ -21,9 +24,12 @@ describe('serialized wire event-log ownership', () => {
 
     const snapshot = SerializedWireValueAdapter.snapshotEventLogRecords(message)
 
-    expect(snapshot).toBe('[{"event":{"type":"vault-created"}}]')
-    expect(snapshot).not.toContain(personalAccessToken)
-    expect(snapshot).not.toContain(oauthAccessToken)
+    expect(snapshot.kind).toBe(SerializedWireSnapshotKind.Available)
+    if (snapshot.kind === SerializedWireSnapshotKind.Available) {
+      expect(snapshot.value).toBe('[{"event":{"type":"vault-created"}}]')
+      expect(snapshot.value).not.toContain(personalAccessToken)
+      expect(snapshot.value).not.toContain(oauthAccessToken)
+    }
   })
 
   test('snapshots nested local-update records without sibling payload fields', () => {
@@ -38,8 +44,11 @@ describe('serialized wire event-log ownership', () => {
 
     const snapshot = SerializedWireValueAdapter.snapshotEventLogRecords(message)
 
-    expect(snapshot).toBe('[{"event":{"type":"vault-updated"}}]')
-    expect(snapshot).not.toContain('must-not-be-copied')
-    expect(snapshot).not.toContain('vault-store-id')
+    expect(snapshot.kind).toBe(SerializedWireSnapshotKind.Available)
+    if (snapshot.kind === SerializedWireSnapshotKind.Available) {
+      expect(snapshot.value).toBe('[{"event":{"type":"vault-updated"}}]')
+      expect(snapshot.value).not.toContain('must-not-be-copied')
+      expect(snapshot.value).not.toContain('vault-store-id')
+    }
   })
 })

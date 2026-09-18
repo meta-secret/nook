@@ -16,7 +16,10 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
-import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../../lib/serialized-wire-value-adapter'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -76,7 +79,7 @@ export class ExtensionPairingIngress {
         reason: admission.failure,
       }
     }
-    if (!eventLogRecordsSnapshot) {
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
       return {
         kind: PairingIngressAdmissionKind.Rejected,
         reason: PairingIngressFailure.AdmissionFailed,
@@ -85,7 +88,7 @@ export class ExtensionPairingIngress {
     const preservedEventLogRecords =
       SerializedWireValueAdapter.restoreEventLogRecords<
         ExtensionPairingApprovedMessage['eventLogRecords']
-      >(eventLogRecordsSnapshot)
+      >(eventLogRecordsSnapshot.value)
     return {
       kind: PairingIngressAdmissionKind.Admitted,
       message: admission.value,

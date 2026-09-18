@@ -22,7 +22,10 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
-import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -599,12 +602,12 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    if (!eventLogRecordsSnapshot)
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing)
       return ExtensionLifecycleRoutingResult.Unhandled
     const preservedEventLogRecords =
       SerializedWireValueAdapter.restoreEventLogRecords<
         typeof pairingApproval.value.eventLogRecords
-      >(eventLogRecordsSnapshot)
+      >(eventLogRecordsSnapshot.value)
     const importMessage: typeof pairingApproval.value = {
       ...pairingApproval.value,
       eventLogRecords: preservedEventLogRecords,
@@ -624,12 +627,12 @@ export function routeExtensionLifecycleMessage({
   )
   if (localEventLogUpdate.kind === ConcreteDecoderResultKind.Decoded) {
     const decodedMessage = localEventLogUpdate.value
-    if (!eventLogRecordsSnapshot)
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing)
       return ExtensionLifecycleRoutingResult.Unhandled
     const preservedEventLogRecords =
       SerializedWireValueAdapter.restoreEventLogRecords<
         typeof decodedMessage.payload.eventLogRecords
-      >(eventLogRecordsSnapshot)
+      >(eventLogRecordsSnapshot.value)
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false

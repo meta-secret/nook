@@ -8,7 +8,10 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
-import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
@@ -165,14 +168,14 @@ export class ExternalCompanionRouter {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
-    if (!eventLogRecordsSnapshot) {
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
     const preservedEventLogRecords =
       SerializedWireValueAdapter.restoreEventLogRecords<
         typeof pairingApproval.value.eventLogRecords
-      >(eventLogRecordsSnapshot)
+      >(eventLogRecordsSnapshot.value)
     const importMessage: typeof pairingApproval.value = {
       ...pairingApproval.value,
       eventLogRecords: preservedEventLogRecords,
