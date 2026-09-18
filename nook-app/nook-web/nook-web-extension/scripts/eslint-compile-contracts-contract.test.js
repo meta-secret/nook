@@ -15,6 +15,9 @@ const adapterFilePath = fileURLToPath(
 const extensionPackagePath = fileURLToPath(
   new URL('../package.json', import.meta.url),
 )
+const i18nGeneratorPath = fileURLToPath(
+  new URL('../../nook-web-app/scripts/generate-i18n-keys.mjs', import.meta.url),
+)
 
 class CompileContractsConfigTestHarness {
   /** @param {import('eslint').Linter.LintMessage[]} messages */
@@ -61,6 +64,10 @@ describe('focused compile-contract ESLint config', () => {
     const packageSource = readFileSync(extensionPackagePath, 'utf8')
     expect(packageSource).toContain(
       "--ignore-pattern '**/__compile-contracts-*/**'",
+    )
+    const i18nGeneratorSource = readFileSync(i18nGeneratorPath, 'utf8')
+    expect(i18nGeneratorSource).toContain(
+      "entry.name.startsWith('__compile-contracts-')",
     )
   })
 

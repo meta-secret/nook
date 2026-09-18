@@ -187,6 +187,11 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         ),
         "the extension lint command must retain its complete authored and shared source trees while excluding only transient compile-contract fixtures"
     );
+    let i18n_generator = root.read("nook-app/nook-web/nook-web-app/scripts/generate-i18n-keys.mjs");
+    assert!(
+        i18n_generator.contains("entry.name.startsWith('__compile-contracts-')"),
+        "the parallel i18n scanner must exclude transient compile-contract fixtures"
+    );
 
     let typed_api_tests =
         root.read("nook-app/nook-web/nook-web-extension/scripts/eslint-typed-api-contract.test.js");
