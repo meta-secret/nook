@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -6,12 +6,6 @@ import {
   NativeVaultStorageFailure,
 } from "$lib/runtime/storage-failure";
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
-type ExtensionMessageRequest = {
-  readonly extensionId: string;
-  readonly message: RuntimeMessage;
-  readonly responseWait: ExtensionMessageResponseWait;
-};
-
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -63,63 +57,6 @@ type NewIdentityAdoptionAttempt = ExtensionIdentityAdoption & {
   >;
 };
 
-type PendingExtensionResponseRequest = {
-  readonly browser: typeof globalThis;
-  readonly wait: ExtensionMessageResponseWait;
-  readonly resolve: (delivery: ExtensionMessageDelivery) => void;
-};
-
-type ChromeRuntimeResponseCallback = (
-  response?: ChromeExtensionRuntimeResponse,
-) => void;
-
-type ChromeRuntimeSendMessageRequest = readonly [
-  extensionId: string,
-  message: RuntimeMessage,
-  callback: ChromeRuntimeResponseCallback,
-];
-
-type ChromeRuntimeHost = {
-  readonly sendMessage: (...request: ChromeRuntimeSendMessageRequest) => void;
-};
-
-enum ChromeRuntimeLastErrorStateKind {
-  Absent = "absent",
-  Present = "present",
-}
-
-type ChromeRuntimeLastErrorState =
-  | { readonly kind: ChromeRuntimeLastErrorStateKind.Absent }
-  | {
-      readonly kind: ChromeRuntimeLastErrorStateKind.Present;
-      readonly message: string;
-    };
-
-class ChromeRuntimeLastErrorFields {
-  static build() {
-    return { message: Schema.optional(Schema.String) };
-  }
-}
-const ChromeRuntimeLastErrorSchema = Schema.Struct(
-  ChromeRuntimeLastErrorFields.build(),
-);
-
-type ExtensionBrowserHost = typeof globalThis & {
-  readonly chrome?: { readonly runtime?: ChromeRuntimeHost };
-};
-
-enum ChromeRuntimeAvailabilityKind {
-  Unavailable = "unavailable",
-  Available = "available",
-}
-
-type ChromeRuntimeAvailability =
-  | { readonly kind: ChromeRuntimeAvailabilityKind.Unavailable }
-  | {
-      readonly kind: ChromeRuntimeAvailabilityKind.Available;
-      readonly runtime: ChromeRuntimeHost;
-    };
-
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
   admit_companion_handoff_response,
@@ -144,7 +81,6 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
-  type RuntimeMessage,
 } from "$web-shared/extension/runtime-messages";
 import {
   ExtensionIdentityRequestSource,
@@ -160,10 +96,17 @@ import {
   companionResponseDecoder,
   identityHandoffResponseDecoder,
   pairingApprovalResponseDecoder,
-  type ExtensionRuntimeResponseObject,
 } from "./extension-response-decoders";
-
-type ChromeExtensionRuntimeResponse = ExtensionRuntimeResponseObject;
+import {
+  EXTENSION_MESSAGE_TIMEOUT_MS,
+  ExtensionMessageChannel,
+  ExtensionMessageDeliveryKind,
+  ExtensionMessageResponseWaitKind,
+  type ChromeExtensionRuntimeResponse,
+  type ExtensionBrowserHost,
+  type ExtensionMessageDelivery,
+  type ExtensionMessageRequest,
+} from "./extension-message-channel";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -218,138 +161,14 @@ export type InstalledExtensionRuntime =
 
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
 
-const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
-
 const PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS = 150;
-
-enum ExtensionMessageResponseWaitKind {
-  BrowserChannel = "browser-channel",
-  Bounded = "bounded",
-}
-
-type ExtensionMessageResponseWait =
-  | { readonly kind: ExtensionMessageResponseWaitKind.BrowserChannel }
-  | {
-      readonly kind: ExtensionMessageResponseWaitKind.Bounded;
-      readonly timeoutMs: number;
-    };
-
-enum ExtensionMessageResponseTimerKind {
-  NotScheduled = "not-scheduled",
-  Scheduled = "scheduled",
-}
-
-type ExtensionMessageResponseTimer =
-  | { readonly kind: ExtensionMessageResponseTimerKind.NotScheduled }
-  | {
-      readonly kind: ExtensionMessageResponseTimerKind.Scheduled;
-      readonly handle: number;
-    };
-
-enum ExtensionMessageDeliveryKind {
-  Unavailable = "unavailable",
-  Received = "received",
-}
-
-type ExtensionMessageDelivery =
-  | { kind: ExtensionMessageDeliveryKind.Unavailable }
-  | {
-      kind: ExtensionMessageDeliveryKind.Received;
-      response: ChromeExtensionRuntimeResponse;
-    };
-
-enum ExtensionResponsePhase {
-  Pending = "pending",
-  Settled = "settled",
-}
-type ExtensionResponseState =
-  | {
-      kind: ExtensionResponsePhase.Pending;
-      timer: ExtensionMessageResponseTimer;
-    }
-  | { kind: ExtensionResponsePhase.Settled };
-
-/** Only a pending response owns timer completion; native callback aliases are invalidated. */
-class PendingExtensionResponse {
-  private state: ExtensionResponseState = {
-    kind: ExtensionResponsePhase.Pending,
-    timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
-  };
-  constructor(private readonly request: PendingExtensionResponseRequest) {
-    if (request.wait.kind === ExtensionMessageResponseWaitKind.Bounded) {
-      this.state = {
-        kind: ExtensionResponsePhase.Pending,
-        timer: {
-          kind: ExtensionMessageResponseTimerKind.Scheduled,
-          handle: request.browser.window.setTimeout(
-            () => this.unavailable(),
-            request.wait.timeoutMs,
-          ),
-        },
-      };
-    }
-  }
-  private settle(delivery: ExtensionMessageDelivery): void {
-    const pending = this.state;
-    if (pending.kind !== ExtensionResponsePhase.Pending) return;
-    this.state = { kind: ExtensionResponsePhase.Settled };
-    if (pending.timer.kind === ExtensionMessageResponseTimerKind.Scheduled)
-      this.request.browser.window.clearTimeout(pending.timer.handle);
-    this.request.resolve(delivery);
-  }
-  unavailable(): void {
-    const delivery: ExtensionMessageDelivery = {
-      kind: ExtensionMessageDeliveryKind.Unavailable,
-    };
-    this.settle(delivery);
-  }
-  receive(response: ChromeExtensionRuntimeResponse): void {
-    const delivery: ExtensionMessageDelivery = {
-      kind: ExtensionMessageDeliveryKind.Received,
-      response,
-    };
-    this.settle(delivery);
-  }
-}
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
-  constructor(private readonly browser: ExtensionBrowserHost) {}
+  private readonly messageChannel: ExtensionMessageChannel;
 
-  private chromeRuntimeLastError(
-    runtime: ChromeRuntimeHost,
-  ): ChromeRuntimeLastErrorState {
-    if (!("lastError" in runtime)) {
-      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
-    }
-    const decoded = Effect.runSync(
-      Effect.either(
-        Schema.decodeUnknown(ChromeRuntimeLastErrorSchema)(
-          Reflect.get(runtime, "lastError"),
-        ),
-      ),
-    );
-    if (decoded._tag === "Left" || !decoded.right.message) {
-      return { kind: ChromeRuntimeLastErrorStateKind.Absent };
-    }
-    return {
-      kind: ChromeRuntimeLastErrorStateKind.Present,
-      message: decoded.right.message,
-    };
-  }
-
-  private chromeRuntime(): ChromeRuntimeAvailability {
-    const chromeHost = this.browser.chrome;
-    if (!chromeHost?.runtime) {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
-    if (typeof chromeHost.runtime.sendMessage !== "function") {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
-    return {
-      kind: ChromeRuntimeAvailabilityKind.Available,
-      runtime: chromeHost.runtime,
-    };
+  constructor(private readonly browser: ExtensionBrowserHost) {
+    this.messageChannel = new ExtensionMessageChannel(browser);
   }
 
   isExtensionConnectPath(pathname: string): boolean {
@@ -444,46 +263,6 @@ class ExtensionConnectionBrowser {
       : { kind: InstalledExtensionRuntimeKind.NotInstalled };
   }
 
-  private sendExtensionMessage({
-    extensionId,
-    message,
-    responseWait,
-  }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
-    return new Promise((resolve) => {
-      const runtimeAvailability = this.chromeRuntime();
-      if (
-        runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable
-      ) {
-        const resolveArgs: Parameters<typeof resolve>[0] = {
-          kind: ExtensionMessageDeliveryKind.Unavailable,
-        };
-        resolve(resolveArgs);
-        return;
-      }
-      const { runtime } = runtimeAvailability;
-      const pendingRequest: PendingExtensionResponseRequest = {
-        browser: this.browser,
-        wait: responseWait,
-        resolve,
-      };
-      const pending = new PendingExtensionResponse(pendingRequest);
-      runtime.sendMessage(extensionId, message, (response) => {
-        if (
-          this.chromeRuntimeLastError(runtime).kind ===
-          ChromeRuntimeLastErrorStateKind.Present
-        ) {
-          pending.unavailable();
-          return;
-        }
-        if (!response) {
-          pending.unavailable();
-          return;
-        }
-        pending.receive(response);
-      });
-    });
-  }
-
   private pairingDeliveryFromResponse(
     response: ChromeExtensionRuntimeResponse,
   ): ExtensionPairingDelivery {
@@ -499,12 +278,12 @@ class ExtensionConnectionBrowser {
     request,
     message,
   }: ExtensionPairingApprovalDelivery): Promise<ExtensionPairingDelivery> {
-    const sendArgs: Parameters<typeof this.sendExtensionMessage>[0] = {
+    const sendArgs: Parameters<ExtensionMessageChannel["send"]>[0] = {
       extensionId: request.extensionRuntimeId,
       message,
       responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
     };
-    const delivery = await this.sendExtensionMessage(sendArgs);
+    const delivery = await this.messageChannel.send(sendArgs);
     return delivery.kind === ExtensionMessageDeliveryKind.Received
       ? this.pairingDeliveryFromResponse(delivery.response)
       : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
@@ -523,7 +302,7 @@ class ExtensionConnectionBrowser {
       payload: { intent: OpenCompanionLauncherIntent.Pair },
     };
     const sendExtensionMessageArgs: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -532,7 +311,7 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
       Effect.either(companionResponseDecoder.decodeLauncher(delivery.response)),
@@ -572,7 +351,7 @@ class ExtensionConnectionBrowser {
     };
 
     const sendExtensionMessageArgs2: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -581,7 +360,7 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs2);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs2);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
       return delivery;
     const decoded = Effect.runSync(
@@ -699,7 +478,7 @@ class ExtensionConnectionBrowser {
       payload: { requestId: unlockRequestId, vaultStoreId },
     };
     const sendExtensionMessageArgs3: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -708,7 +487,7 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs3);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs3);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
       Effect.either(companionResponseDecoder.decodeUnlock(delivery.response)),
@@ -726,61 +505,44 @@ class ExtensionConnectionBrowser {
   }: IdentityEnvelopeRequest): Promise<
     Result<ExtensionIdentityEnvelope, VaultStorageFailure>
   > {
-    const runtimeAvailability = this.chromeRuntime();
-    if (runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable)
-      return Promise.resolve(
+    const sendArgs: ExtensionMessageRequest = {
+      extensionId: request.extensionRuntimeId,
+      message,
+      responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
+    };
+    return this.messageChannel.send(sendArgs).then(
+      (delivery) => {
+        if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
+          return err(
+            new VaultStorageFailure(
+              VaultStorageFailureKind.IdentityHandoffUnavailable,
+            ),
+          );
+        const decodedResponse = Effect.runSync(
+          Effect.either(
+            identityHandoffResponseDecoder.decode(delivery.response),
+          ),
+        );
+        if (decodedResponse._tag === "Right") {
+          const identityEnvelope: ExtensionIdentityEnvelope = {
+            envelope: decodedResponse.right.envelope,
+            nextNonce: decodedResponse.right.nextNonce,
+          };
+          return ok(identityEnvelope);
+        }
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffRejected,
+          ),
+        );
+      },
+      () =>
         err(
           new VaultStorageFailure(
             VaultStorageFailureKind.IdentityHandoffUnavailable,
           ),
         ),
-      );
-    const { runtime } = runtimeAvailability;
-    return new Promise((resolve) => {
-      try {
-        runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
-          if (
-            this.chromeRuntimeLastError(runtime).kind ===
-            ChromeRuntimeLastErrorStateKind.Present
-          ) {
-            resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.IdentityHandoffRejected,
-                ),
-              ),
-            );
-            return;
-          }
-          const decodedResponse = Effect.runSync(
-            Effect.either(identityHandoffResponseDecoder.decode(response)),
-          );
-          if (decodedResponse._tag === "Right") {
-            const identityEnvelope: ExtensionIdentityEnvelope = {
-              envelope: decodedResponse.right.envelope,
-              nextNonce: decodedResponse.right.nextNonce,
-            };
-            resolve(ok(identityEnvelope));
-            return;
-          }
-          resolve(
-            err(
-              new VaultStorageFailure(
-                VaultStorageFailureKind.IdentityHandoffRejected,
-              ),
-            ),
-          );
-        });
-      } catch {
-        resolve(
-          err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffUnavailable,
-            ),
-          ),
-        );
-      }
-    });
+    );
   }
 
   private async completePairedIdentityAdoption({
@@ -811,7 +573,7 @@ class ExtensionConnectionBrowser {
     };
     let delivery: ExtensionMessageDelivery;
     try {
-      delivery = await this.sendExtensionMessage(sendArgs);
+      delivery = await this.messageChannel.send(sendArgs);
     } catch (failure) {
       return {
         kind: IdentityHandoffAttemptKind.Pending,

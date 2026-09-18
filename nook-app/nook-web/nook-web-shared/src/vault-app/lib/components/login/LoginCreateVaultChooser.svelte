@@ -9,6 +9,7 @@
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
   import type { SentinelParticipation } from "./sentinel-card-stack-contract";
+  import type { SentinelDashboardSurfaceProps } from "./sentinel-dashboard-surface-contract";
   import type {
     SentinelActionResult,
     SentinelGenesisParticipantResponseOutcome,
@@ -28,11 +29,10 @@
     Users,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import SentinelCardStackDashboard from "$lib/components/login/SentinelCardStackDashboard.svelte";
-  import SentinelTerminalDashboard from "$lib/components/login/SentinelTerminalDashboard.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
   import VaultSecurityOrbit from "$lib/components/login/VaultSecurityOrbit.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
+  import SentinelDashboardSurface from "$lib/components/login/SentinelDashboardSurface.svelte";
   import {
     SentinelDashboard,
     SentinelDashboardChoiceKind,
@@ -100,6 +100,22 @@
       props.onReceiveShare = onReceiveSentinelGenesisShare;
     if (onAcceptSentinelOnboardingPackage)
       props.onAcceptOnboardingPackage = onAcceptSentinelOnboardingPackage;
+    return props;
+  });
+
+  type DashboardOptionalProps = Partial<
+    Pick<
+      SentinelDashboardSurfaceProps,
+      "onFinalizeSentinelGenesis" | "onCompleteSentinelGenesisDelivery"
+    >
+  >;
+  const dashboardOptionalProps = $derived.by(() => {
+    const props: DashboardOptionalProps = {};
+    if (onFinalizeSentinelGenesis)
+      props.onFinalizeSentinelGenesis = onFinalizeSentinelGenesis;
+    if (onCompleteSentinelGenesisDelivery)
+      props.onCompleteSentinelGenesisDelivery =
+        onCompleteSentinelGenesisDelivery;
     return props;
   });
 
@@ -463,8 +479,9 @@
   }}
 >
   {#if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
-    <SentinelCardStackDashboard
+    <SentinelDashboardSurface
       {vault}
+      dashboard={SentinelDashboard.CardStack}
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
@@ -479,62 +496,31 @@
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={addCardParticipant}
-      onFinalize={() =>
-        onFinalizeSentinelGenesis
-          ? onFinalizeSentinelGenesis()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
-      onCompleteDelivery={() =>
-        onCompleteSentinelGenesisDelivery
-          ? onCompleteSentinelGenesisDelivery()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
+      onAddCardParticipant={addCardParticipant}
+      onAddTerminalParticipant={addTerminalParticipant}
+      {...dashboardOptionalProps}
     />
   {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.Terminal)}
-    <SentinelTerminalDashboard
+    <SentinelDashboardSurface
       {vault}
+      dashboard={SentinelDashboard.Terminal}
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisPhase}
       request={sentinelGenesisInvitationLink}
+      participantResponse=""
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
+      initiatorFingerprint=""
+      initiatorKeyLoading={false}
+      onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={addTerminalParticipant}
-      onFinalize={() =>
-        onFinalizeSentinelGenesis
-          ? onFinalizeSentinelGenesis()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
-      onCompleteDelivery={() =>
-        onCompleteSentinelGenesisDelivery
-          ? onCompleteSentinelGenesisDelivery()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
+      onAddCardParticipant={addCardParticipant}
+      onAddTerminalParticipant={addTerminalParticipant}
+      {...dashboardOptionalProps}
     />
   {:else}
     <section
