@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow'
+import { ok } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../../../nook-web-extension/src/offscreen/session-request-adapter'
 import { ExtensionSessionMessageType } from '../../../../nook-web-extension/src/offscreen/session-message-dispatch'
@@ -27,7 +27,6 @@ vi.mock(
 
 import {
   extensionAuthenticatorSession,
-  AuthenticatorSessionFailure,
   AuthenticatorSessionFailureKind,
 } from '../../../../nook-web-extension/src/background/service-worker/authenticator-session-adapter'
 import { handleAuthenticatorEnrollmentMessage } from '../../../../nook-web-extension/src/offscreen/authenticator-enrollment-session'
@@ -65,15 +64,15 @@ describe('authenticator code expiry transport', () => {
         },
       }
 
-    await expect(
-      handleAuthenticatorEnrollmentMessage(request),
-    ).resolves.toEqual(
-      ok({
+    const result = await handleAuthenticatorEnrollmentMessage(request)
+    expect(result.isOk()).toBe(true)
+    if (result.isOk()) {
+      expect(result.value).toEqual({
         ok: true,
         code: '123456',
         expiresAt: 1_725_000_030_000,
-      }),
-    )
+      })
+    }
     expect(free).toHaveBeenCalledOnce()
   })
 
@@ -87,17 +86,18 @@ describe('authenticator code expiry transport', () => {
       }),
     )
 
-    await expect(
-      extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
+    const result =
+      await extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
         'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
-      ),
-    ).resolves.toEqual(
-      ok({
+      )
+    expect(result.isOk()).toBe(true)
+    if (result.isOk()) {
+      expect(result.value).toEqual({
         ok: true,
         code: '123456',
         expiresAt,
-      }),
-    )
+      })
+    }
   })
 
   test('rejects an expired staged code at the service-worker boundary', async () => {
@@ -109,16 +109,15 @@ describe('authenticator code expiry transport', () => {
       }),
     )
 
-    await expect(
-      extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
+    const result =
+      await extensionAuthenticatorSession.stagedAuthenticatorCodeFromSession(
         'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
-      ),
-    ).resolves.toEqual(
-      err(
-        new AuthenticatorSessionFailure(
-          AuthenticatorSessionFailureKind.ExpiredCode,
-        ),
-      ),
-    )
+      )
+    expect(result.isErr()).toBe(true)
+    if (result.isErr()) {
+      expect(result.error.kind).toBe(
+        AuthenticatorSessionFailureKind.ExpiredCode,
+      )
+    }
   })
 })
