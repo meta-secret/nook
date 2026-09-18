@@ -58,8 +58,7 @@ export class ApprovedImplicitAuthenticationSubmission<
   execute(): FormSubmissionResult {
     const request = this.request;
     const actuationIsSafe = (): boolean => {
-      const observation =
-        this.currentOwnedAuthenticationFormObservation();
+      const observation = this.currentOwnedAuthenticationFormObservation();
       return Boolean(
         observation &&
         new AuthenticationImplicitActuationEvidence(

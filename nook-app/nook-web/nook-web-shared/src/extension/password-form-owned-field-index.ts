@@ -108,4 +108,5 @@ class AuthenticationFieldIndexCatalog {
   }
 }
 
-export const authenticationFieldIndexCatalog = new AuthenticationFieldIndexCatalog();
+export const authenticationFieldIndexCatalog =
+  new AuthenticationFieldIndexCatalog();

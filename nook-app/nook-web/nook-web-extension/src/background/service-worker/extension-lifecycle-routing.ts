@@ -183,7 +183,9 @@ class AuthorizationCleanupLifecycle {
         readonly try: (
           signal: AbortSignal,
         ) => PromiseLike<AccountPickers.AccountPickerAuthorizationCleanupStart>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryPromiseRequest: ModuleTryPromiseRequest = {
         try: () => beginAccountPickerAuthorizationCleanup(),
@@ -203,7 +205,9 @@ class AuthorizationCleanupLifecycle {
         readonly try: (
           signal: AbortSignal,
         ) => ReturnType<typeof closeExtensionSessionDocument>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryPromiseRequest2: ModuleTryPromiseRequest2 = {
         try: () => closeExtensionSessionDocument(),
@@ -245,7 +249,9 @@ class AuthorizationCleanupLifecycle {
       if (Either.isLeft(closeResult)) failures.push(closeResult.left)
       type ModuleTryRequest = {
         readonly try: () => void
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryRequest: ModuleTryRequest = {
         try: () => clearStagedAuthenticatorEnrollments(),
@@ -258,7 +264,9 @@ class AuthorizationCleanupLifecycle {
         failures.push(firstStagedCleanup.left)
       type ModuleTryPromiseRequest3 = {
         readonly try: (signal: AbortSignal) => PromiseLike<void>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryPromiseRequest3: ModuleTryPromiseRequest3 = {
         try: () => clearPendingAccountPickers(),
@@ -271,7 +279,9 @@ class AuthorizationCleanupLifecycle {
         failures.push(firstPickerCleanup.left)
       type ModuleTryPromiseRequest4 = {
         readonly try: (signal: AbortSignal) => PromiseLike<void>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryPromiseRequest4: ModuleTryPromiseRequest4 = {
         try: () => clearPendingAccountPickers(),
@@ -284,7 +294,9 @@ class AuthorizationCleanupLifecycle {
         failures.push(secondPickerCleanup.left)
       type ModuleTryRequest2 = {
         readonly try: () => void
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const moduleTryRequest2: ModuleTryRequest2 = {
         try: () => clearStagedAuthenticatorEnrollments(),
@@ -303,7 +315,9 @@ class AuthorizationCleanupLifecycle {
         readonly try: (
           signal: AbortSignal,
         ) => ReturnType<typeof completeAccountPickerAuthorizationCleanup>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+        readonly catch: (
+          error: EffectThrownError,
+        ) => AuthorizationCleanupFailureKind
       }
       const completionRequest: Parameters<
         typeof completeAccountPickerAuthorizationCleanup
@@ -340,7 +354,9 @@ export function recoverInterruptedAuthorizationCleanup(
   return Effect.gen(function* () {
     type ModuleTryPromiseRequest6 = {
       readonly try: (signal: AbortSignal) => PromiseLike<boolean>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+      readonly catch: (
+        error: EffectThrownError,
+      ) => AuthorizationCleanupFailureKind
     }
     const moduleTryPromiseRequest6: ModuleTryPromiseRequest6 = {
       try: () => dependencies.accountPickerAuthorizationCleanupPending(),
@@ -351,7 +367,9 @@ export function recoverInterruptedAuthorizationCleanup(
       readonly try: (
         signal: AbortSignal,
       ) => PromiseLike<AccountPickers.AccountPickerAuthorizationCleanupStart>
-        readonly catch: (error: EffectThrownError) => AuthorizationCleanupFailureKind
+      readonly catch: (
+        error: EffectThrownError,
+      ) => AuthorizationCleanupFailureKind
     }
     const moduleTryPromiseRequest7: ModuleTryPromiseRequest7 = {
       try: () => dependencies.beginAccountPickerAuthorizationCleanup(),
