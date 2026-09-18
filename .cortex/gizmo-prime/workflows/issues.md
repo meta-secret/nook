@@ -190,5 +190,5 @@ Agents must not:
 - store credentials, secrets, vault data, private user information,
   environment values, or raw logs in an issue.
 
-When an issue overlaps another active owner, report the finding without
-changing that owner's issue.
+Related scope does not transfer ownership. When an issue overlaps another
+active owner, report the finding without changing that owner's issue.
