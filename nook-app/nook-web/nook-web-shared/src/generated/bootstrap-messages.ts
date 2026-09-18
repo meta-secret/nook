@@ -2,15 +2,13 @@
 // The Rust-owned locale catalogs are the source of truth.
 export const BOOTSTRAP_MESSAGES = {
   en: {
-    loading: "Loading engine…",
-    unavailable:
-      "Vault engine is not available. Refresh the page and try again.",
+    loading: 'Loading engine…',
+    unavailable: 'Vault engine is not available. Refresh the page and try again.',
   },
   ru: {
-    loading: "Загрузка движка…",
-    unavailable:
-      "Движок сейфа недоступен. Обновите страницу и повторите попытку.",
+    loading: 'Загрузка движка…',
+    unavailable: 'Движок сейфа недоступен. Обновите страницу и повторите попытку.',
   },
-} as const;
+} as const
 
-export type BootstrapLocale = keyof typeof BOOTSTRAP_MESSAGES;
+export type BootstrapLocale = keyof typeof BOOTSTRAP_MESSAGES
