@@ -1,5 +1,9 @@
 # Gizmo Prime Knowledge Graph
 
+## Prime authority
+
+- [Gizmo Prime contract](AGENTS.md)
+
 ## Delivery contract
 
 Read the complete [multiagent delivery visual
@@ -18,8 +22,10 @@ Gizmo carries the full cycle through required PR checks, squash merge to
 
 ## Dynamic skills
 
+- [Agent feature ownership](dynamic-skills/agent-feature-ownership.md)
 - [Code review comments](dynamic-skills/code-review-comments.md)
 - [Efficient PR delivery](dynamic-skills/efficient-pr-delivery.md)
+- [Feature issue planning](dynamic-skills/feature-issue-planning.md)
 - [Issue scope management](dynamic-skills/issue-scope-management.md)
 - [Team-oriented development](dynamic-skills/team-oriented-development.md)
 

@@ -3,6 +3,7 @@
 ## Required context
 
 - [Team Gizmo contract](AGENTS.md)
+- [Activation prompt](activation-prompt.md)
 - [Delivery Pipeline contract](../AGENTS.md)
 - [PR Lifecycle Agent](../pr-lifecycle/AGENTS.md)
 - [Multiagent delivery diagrams](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)

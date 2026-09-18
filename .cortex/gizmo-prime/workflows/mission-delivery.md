@@ -17,6 +17,11 @@ through bounded Team Agents, passes every required PR check, squash-merges into
 7. Route GitHub mechanics through Delivery Pipeline and PR Lifecycle.
 8. Push the feature branch and create or update one PR into `main`.
 9. Run every required PR check for the current head.
+   When direct remote execution is needed, approved examples are
+   `task remote TASK_NAME=web:build` and
+   `task remote TASK_NAME=web:e2e`. Forward the requested selector directly;
+   do not discover, validate, or preflight it locally. The terminal GitHub
+   Actions outcome is the execution evidence.
 10. Repair complete terminal failure waves until all required checks are green.
 11. Re-fetch main and the feature head.
 12. Update from a changed main frontier and rerun invalidated checks.

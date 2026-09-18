@@ -4,6 +4,11 @@
 
 - Create one pull request from each canonical feature branch into `main`.
 - Run every required PR check for the current feature head.
+- For direct remote execution, approved examples are
+  `task remote TASK_NAME=web:build` and `task remote TASK_NAME=web:e2e`.
+  Forward the requested selector directly without discovery, existence
+  validation, or local preflight; use the terminal GitHub Actions outcome as
+  execution evidence.
 - Wait for the complete terminal check wave.
 - Return every failed or cancelled required job before repair.
 - Treat reviews and approvals as optional.

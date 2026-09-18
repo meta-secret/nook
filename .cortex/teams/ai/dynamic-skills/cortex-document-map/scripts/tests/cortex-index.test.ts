@@ -239,7 +239,9 @@ test('renders the complete canonical Cortex context router', () => {
     expect(markdown).toContain(contract);
   }
 
-  expect(markdown).toContain('Every feature starts from freshly fetched `origin/main`');
+  expect(markdown).toContain(
+    'Every feature starts from freshly fetched `origin/main`',
+  );
   expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
     'The owning Feature Gizmo carries the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
   );
