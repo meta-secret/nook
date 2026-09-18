@@ -420,8 +420,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
 
     let remote = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     let remote_compiler_jobs = [
-        ("task batch", "\n  batch:\n", "\n  web-verify:\n"),
-        ("Pages preview", "\n  pages-preview:\n", "\n  web-verify:\n"),
+        ("task batch", "\n  batch:\n", "\n  pages-preview:\n"),
         (
             "web verification",
             "\n  web-verify:\n",
@@ -459,10 +458,45 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
             );
         }
     }
+    let pages_preview = remote
+        .split_once("\n  pages-preview:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  web-verify:\n"))
+        .map(|(job, _)| job)
+        .context("remote workflow must keep the Pages preview compiler job")?;
+    assert!(
+        pages_preview.contains("runs-on: nook-k0s-container"),
+        "trusted Pages preview compiler job must remain on its containerized private ARC runner"
+    );
+    assert!(
+        pages_preview.contains("container:\n")
+            && pages_preview
+                .contains("image: registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:"),
+        "trusted Pages preview compiler job must keep its pinned containerized Rust boundary"
+    );
+    assert!(
+        pages_preview.contains("run: node .github/actions/nook-cache-connect/main.js"),
+        "trusted Pages preview compiler job must connect host sccache before compiling"
+    );
+    for credential in remote_compiler_credentials {
+        assert!(
+            pages_preview.contains(credential),
+            "trusted Pages preview compiler job must receive {credential}"
+        );
+    }
+    assert!(
+        pages_preview.contains("cargo install wasm-pack --version 0.15.0")
+            && pages_preview.contains("rustup target add wasm32-unknown-unknown"),
+        "trusted Pages preview compiler job must keep its host Rust tooling steps"
+    );
+    assert!(
+        pages_preview.contains("name: Preserve preview sccache telemetry")
+            && pages_preview.contains("pages-preview-sccache-"),
+        "trusted Pages preview compiler job must preserve its sccache telemetry artifact"
+    );
     for credential in remote_compiler_credentials {
         assert_eq!(
             remote.matches(credential).count(),
-            remote_compiler_jobs.len(),
+            remote_compiler_jobs.len() + 1,
             "only enumerated trusted remote compiler jobs may receive {credential}"
         );
     }
