@@ -65,16 +65,17 @@ test('rejects top-level await when compiling the classic autofill format', async
   try {
     const entrypoint = resolve(fixtureRoot, 'entry.ts')
     await writeFile(entrypoint, 'await Promise.resolve()', 'utf8')
-    const built = await Bun.build({
-      entrypoints: [entrypoint],
-      target: 'browser',
-      format: extensionEntrypointBuildPolicy.format({
-        entrypoint: 'src/content/autofill.ts',
+    expect(() =>
+      Bun.build({
+        entrypoints: [entrypoint],
+        target: 'browser',
+        format: extensionEntrypointBuildPolicy.format({
+          entrypoint: 'src/content/autofill.ts',
+        }),
+        minify: false,
+        splitting: false,
       }),
-      minify: false,
-      splitting: false,
-    })
-    expect(built.success).toBe(false)
+    ).toThrow()
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true })
   }
