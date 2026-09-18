@@ -43,28 +43,22 @@ for spec in "simple.nokey.sh:nokey-simple" "sentinel.nokey.sh:nokey-sentinel"; d
   elif [ "$(printf '%s' "$records" | jq -r --arg content "$pages_host" '.result[0].type == "CNAME" and .result[0].content == $content and .result[0].proxied == true')" != true ]; then
     api_json -X PUT --data "$payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null
   fi
-  verified=false
-  for attempt in $(seq 1 30); do
-    headers="$(mktemp)"
-    body="$(mktemp)"
-    if curl -fsSL -D "$headers" -o "$body" "https://$domain/" &&
-      grep -Fq "name=\"nook-app-kind\" content=\"$app_kind\"" "$body" &&
-      grep -Fiq 'content-security-policy:' "$headers" &&
-      grep -Fiq 'x-content-type-options: nosniff' "$headers"; then
-      release_commit="$(curl -fsSL "https://$domain/release.json" | jq -er '.commit')"
-      if [ "$release_commit" = "$RELEASE_SHA" ]; then
-        verified=true
-        rm -f "$headers" "$body"
-        break
-      fi
-    fi
-    rm -f "$headers" "$body"
-    sleep 10
-  done
-  if [ "$verified" != true ]; then
-    echo "$domain did not serve the expected $app_kind artifact, security headers, and release commit" >&2
+  headers="$(mktemp)"
+  body="$(mktemp)"
+  root_status="$(curl -sS -L -D "$headers" -o "$body" -w '%{http_code}' "https://$domain/" || true)"
+  release_status="$(curl -sS -L -o "$body.release" -w '%{http_code}' "https://$domain/release.json" || true)"
+  release_commit="$(jq -r '.commit // empty' "$body.release" 2>/dev/null || true)"
+  if [ "$root_status" != 200 ] \
+    || ! grep -Fq "name=\"nook-app-kind\" content=\"$app_kind\"" "$body" \
+    || ! grep -Fiq 'content-security-policy:' "$headers" \
+    || ! grep -Fiq 'x-content-type-options: nosniff' "$headers" \
+    || [ "$release_status" != 200 ] \
+    || [ "$release_commit" != "$RELEASE_SHA" ]; then
+    rm -f "$headers" "$body" "$body.release"
+    echo "$domain failed release verification (root=$root_status, release=$release_status, commit=${release_commit:-missing}, expected=$RELEASE_SHA)" >&2
     exit 1
   fi
+  rm -f "$headers" "$body" "$body.release"
   extension_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://$domain/extension-connect")"
   if [ "$app_kind" = simple ] && [ "$extension_status" != 200 ]; then
     echo "Simple Vault extension route returned HTTP $extension_status" >&2

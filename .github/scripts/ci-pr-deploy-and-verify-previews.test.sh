@@ -15,7 +15,7 @@ github_output="$fixture_root/github-output"
 mkdir -p "$fixture_bin"
 
 cat > "$fixture_bin/bash" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 if [ "${1:-}" = "$NOOK_TEST_HOST_HELPER" ]; then
   printf '%s\n' "$*" >> "$NOOK_TEST_HELPER_CALLS"
   if [ -z "${NOOK_TEST_VERIFY_DEPLOYMENT:-}" ]; then
@@ -38,17 +38,17 @@ if [ "${1:-}" = "$NOOK_TEST_VERIFY_DEPLOYMENT" ]; then
 fi
 exec "$NOOK_TEST_REAL_BASH" "$@"
 EOF
-cat > "$fixture_bin/bunx" <<'EOF
-#!/usr/bin/env bash
+cat > "$fixture_bin/npx" <<'EOF'
+#!/bin/bash
 printf 'wrangler fixture\n'
 EOF
 cat > "$fixture_bin/task" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 printf '%s\n' "$*" >> "$NOOK_TEST_TASK_CALLS"
 exit 99
 EOF
 cat > "$fixture_bin/curl" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 output=''
 headers=''
@@ -91,13 +91,13 @@ case "$url" in
     ;;
   https://*.nokey-simple.pages.dev/)
     body='<meta name="nook-app-kind" content="simple">'
-    response_headers=$'content-security-policy: default-src '\''self'\''\r\nx-content-type-options: nosniff\r\n'
+    response_headers=$'content-security-policy: default-src self\r\nx-content-type-options: nosniff\r\n'
     ;;
   https://*.nokey-simple.pages.dev/extension-connect)
     ;;
   https://*.nokey-sentinel.pages.dev/)
     body='<meta name="nook-app-kind" content="sentinel">'
-    response_headers=$'content-security-policy: default-src '\''self'\''\r\nx-content-type-options: nosniff\r\n'
+    response_headers=$'content-security-policy: default-src self\r\nx-content-type-options: nosniff\r\n'
     ;;
   https://*.nokey-sentinel.pages.dev/extension-connect)
     status=404
@@ -114,7 +114,7 @@ if [ "$write_format" = '%{http_code}' ]; then
   printf '%s' "$status"
 fi
 EOF
-chmod +x "$fixture_bin/bash" "$fixture_bin/bunx" "$fixture_bin/task"
+chmod +x "$fixture_bin/bash" "$fixture_bin/npx" "$fixture_bin/task"
 chmod +x "$fixture_bin/curl"
 
 if output="$(env -u PR_NUMBER -u HEAD_SHA DEPLOYMENT_TAG=preview-branch bash "$script" 2>&1)"; then
@@ -170,7 +170,7 @@ if output="$(
     PATH="$fixture_bin:$PATH" \
     NOOK_TEST_REAL_BASH="$real_bash" \
     NOOK_TEST_HOST_HELPER="$repo_root/.github/scripts/ci-pr-host-pages-deploy.sh" \
-    NOOK_TEST_VERIFY_DEPLOYMENT="$repo_root/nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh" \
+    NOOK_TEST_VERIFY_DEPLOYMENT="nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh" \
     NOOK_TEST_HELPER_CALLS="$helper_calls" \
     NOOK_TEST_TASK_CALLS="$task_calls" \
     NOOK_TEST_VERIFICATION_CALLS="$verification_calls" \
@@ -190,14 +190,10 @@ else
   exit 1
 fi
 grep -Fxq \
-  'development|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://pr-preview-branch.nokey-sh.pages.dev/downloads/extension.json' \
+  'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://pr-preview-branch.nokey-sh.pages.dev/downloads/extension.json' \
   "$verification_calls" \
-  || { echo 'preview deploy extension contract test: verifier did not receive development channel and exact aliases' >&2; exit 1; }
-grep -Fxq 'extension_url=https://pr-preview-branch.nokey-sh.pages.dev/downloads/nook-passwords-dev.zip' "$github_output" \
-  || { echo 'preview deploy extension contract test: output did not expose the development archive' >&2; exit 1; }
-if grep -Fq 'nook-passwords-pr-preview-branch.zip' "$github_output"; then
-  echo 'preview deploy extension contract test: output still exposes a tag-named archive' >&2
-  exit 1
-fi
+  || { echo 'preview deploy extension contract test: verifier did not receive the isolated PR channel and exact aliases' >&2; exit 1; }
+grep -Fxq 'extension_url=https://pr-preview-branch.nokey-sh.pages.dev/downloads/nook-passwords-pr-preview-branch.zip' "$github_output" \
+  || { echo 'preview deploy extension contract test: output did not expose the isolated PR archive' >&2; exit 1; }
 
 echo 'preview deploy input test: ok'

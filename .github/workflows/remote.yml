@@ -252,10 +252,8 @@ jobs:
           printf '%s  %s\n' "$node_sha256" "$node_archive" | sha256sum -c -
           tar -xzf "$node_archive" -C "$node_root" --strip-components=1 --no-same-owner
           rm -f "$node_archive"
-          node_bin="$node_root/bin/node"
-          test -x "$node_bin"
-          echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"
-          "$node_bin" --version
+          test -x "$node_root/bin/node"
+          echo "$node_root/bin" >> "$GITHUB_PATH"
       - name: Validate exact remote source
         env:
           REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
@@ -310,7 +308,7 @@ jobs:
           export CI=1
           export GIT_COMMIT_ID="$HEAD_SHA"
           export NOOK_EXTENSION_COMMIT="$HEAD_SHA"
-          export NOOK_EXTENSION_CHANNEL="development"
+          export NOOK_EXTENSION_CHANNEL="pr-$DEPLOYMENT_TAG"
           export NOOK_EXTENSION_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev/"
           export NOOK_SIMPLE_VAULT_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
           export VITE_BASE=/
@@ -348,7 +346,6 @@ jobs:
           install -m 0755 "$jq_archive" "$jq_root/jq"
           rm -f "$jq_archive"
           echo "$jq_root" >> "$GITHUB_PATH"
-          "$jq_root/jq" --version
       - name: Deploy and verify Pages previews
         id: deploy-all
         env:
