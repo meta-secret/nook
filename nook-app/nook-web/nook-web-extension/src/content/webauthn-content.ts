@@ -145,16 +145,29 @@ class WebAuthnRuntimeTransport<T> {
   }
 }
 
-const passkeyAccountSchemaFields: Schema.Struct.Fields = {
+type PasskeyAccountSchemaFields = {
+  credentialId: typeof Schema.String
+  userName: typeof Schema.String
+  userDisplayName: typeof Schema.String
+}
+const passkeyAccountSchemaFields: PasskeyAccountSchemaFields = {
   credentialId: Schema.String,
   userName: Schema.String,
   userDisplayName: Schema.String,
 }
-const passkeyAccountSchema: Schema.Schema<PasskeyAccount> = Schema.Struct(
+const passkeyAccountSchema = Schema.Struct(
   passkeyAccountSchemaFields,
-)
+) satisfies Schema.Schema<PasskeyAccount>
 const passkeyAccountSchemaOptions: ExactSchemaPropertyOptions = { exact: true }
-const passkeyOptionSchemaFields: Schema.Struct.Fields = {
+type PasskeyOptionSchemaFields = {
+  vaultStoreId: typeof Schema.String
+  vaultName: typeof Schema.String
+  account: Schema.optionalWith<
+    typeof passkeyAccountSchema,
+    ExactSchemaPropertyOptions
+  >
+}
+const passkeyOptionSchemaFields: PasskeyOptionSchemaFields = {
   vaultStoreId: Schema.String,
   vaultName: Schema.String,
   account: Schema.optionalWith(
@@ -162,9 +175,9 @@ const passkeyOptionSchemaFields: Schema.Struct.Fields = {
     passkeyAccountSchemaOptions,
   ),
 }
-const passkeyOptionSchema: Schema.Schema<PasskeyOption> = Schema.Struct(
+const passkeyOptionSchema = Schema.Struct(
   passkeyOptionSchemaFields,
-)
+) satisfies Schema.Schema<PasskeyOption>
 
 function decodePasskeyOption(value: unknown) {
   return Schema.decodeUnknown(passkeyOptionSchema)(value)

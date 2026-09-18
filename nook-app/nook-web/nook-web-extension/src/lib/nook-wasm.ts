@@ -211,21 +211,24 @@ class ExtensionWasmRuntime {
   private runtimeMessage<Response>(
     request: ExtensionRuntimeMessageRequest<Response>,
   ): Promise<Response> {
-    const deferred = Promise.withResolvers<Response>()
-    chrome.runtime.sendMessage(request.message, (runtimeResponse: unknown) => {
-      if (chrome.runtime.lastError?.message) {
-        deferred.reject(new Error(chrome.runtime.lastError.message))
-        return
-      }
-      try {
-        deferred.resolve(request.decode(runtimeResponse))
-      } catch {
-        deferred.reject(
-          new Error('Extension session returned a malformed response.'),
-        )
-      }
+    return new Promise<Response>((...[resolve, reject]) => {
+      chrome.runtime.sendMessage(
+        request.message,
+        (runtimeResponse: unknown) => {
+          if (chrome.runtime.lastError?.message) {
+            reject(new Error(chrome.runtime.lastError.message))
+            return
+          }
+          try {
+            resolve(request.decode(runtimeResponse))
+          } catch {
+            reject(
+              new Error('Extension session returned a malformed response.'),
+            )
+          }
+        },
+      )
     })
-    return deferred.promise
   }
 
   private async sessionResponse<Response>(

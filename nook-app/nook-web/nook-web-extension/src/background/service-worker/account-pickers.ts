@@ -472,15 +472,15 @@ class AccountPickerSessions {
     })
     const removals = await Promise.allSettled(
       pickerSurfaceTabIds.map((tabId) => {
-        const removal = Promise.withResolvers<void>()
-        const removed = () => {
-          const error = chrome.runtime.lastError
-          if (error) removal.reject(new Error(error.message))
-          else removal.resolve()
-        }
-        const removeArgs: AccountPickerSurfaceRemovalArgs = [tabId, removed]
-        chrome.tabs.remove(...removeArgs)
-        return removal.promise
+        return new Promise<void>((...[resolve, reject]) => {
+          const removed = () => {
+            const error = chrome.runtime.lastError
+            if (error) reject(new Error(error.message))
+            else resolve()
+          }
+          const removeArgs: AccountPickerSurfaceRemovalArgs = [tabId, removed]
+          chrome.tabs.remove(...removeArgs)
+        })
       }),
     )
     if (removals.some((result) => result.status === 'rejected')) {
