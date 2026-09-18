@@ -31,10 +31,9 @@ function browserTab(
 class AuthorizationStorageFixture {
   readonly runtime = {}
   readonly session = {
-    get: (_key: string, callback: (items: Record<string, unknown>) => void) =>
-      callback({}),
-    set: (_items: Record<string, unknown>, callback: () => void) => callback(),
-    remove: (_key: string, callback: () => void) => callback(),
+    get: () => Promise.resolve({}),
+    set: () => Promise.resolve(),
+    remove: () => Promise.resolve(),
   }
 
   constructor() {
@@ -46,21 +45,23 @@ class AuthorizationStorageFixture {
     })
   }
 
-  holdRemoval(): Promise<() => void> {
+  holdRemoval(): Promise<(failure?: Error) => void> {
     return new Promise((resolve) => {
-      this.session.remove = (_key, callback) => resolve(callback)
+      this.session.remove = () =>
+        new Promise<void>((complete, reject) =>
+          resolve((failure) => (failure ? reject(failure) : complete())),
+        )
     })
   }
 
-  finishRemoval(callback: () => void): void {
-    this.session.remove = (_key, complete) => complete()
+  finishRemoval(callback: (failure?: Error) => void): void {
+    this.session.remove = () => Promise.resolve()
     callback()
   }
 
-  failRemoval(callback: () => void): void {
-    Object.assign(this.runtime, { lastError: { message: 'removal denied' } })
-    this.finishRemoval(callback)
-    Reflect.deleteProperty(this.runtime, 'lastError')
+  failRemoval(callback: (failure?: Error) => void): void {
+    this.session.remove = () => Promise.resolve()
+    callback(new Error('removal denied'))
   }
 }
 
@@ -360,10 +361,10 @@ describe('account picker authorization cleanup', () => {
         runtime: {},
         storage: {
           session: {
-            get: (
-              _key: string,
-              callback: (items: Record<string, boolean>) => void,
-            ) => callback({ 'nook.extension.account-picker-cleanup': true }),
+            get: () =>
+              Promise.resolve({
+                'nook.extension.account-picker-cleanup': true,
+              }),
           },
         },
       },
@@ -388,12 +389,11 @@ describe('account picker authorization cleanup', () => {
         runtime,
         storage: {
           session: {
-            get: (callback: (items: Record<string, boolean>) => void) => {
+            get: () => {
               if (rejectStorage) {
-                Object.assign(runtime, { lastError: { message: 'denied' } })
+                return Promise.reject(new Error('denied'))
               }
-              callback({})
-              Reflect.deleteProperty(runtime, 'lastError')
+              return Promise.resolve({})
             },
           },
         },

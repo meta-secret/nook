@@ -117,7 +117,7 @@ describe('extension pairing grant transport', () => {
     )
   })
 
-  test('admits only complete structured-cloneable provider payloads', () => {
+  test('admits only provider identities from richer transport payloads', () => {
     const complete = {
       id: 'github',
       type: 'github',
@@ -127,25 +127,23 @@ describe('extension pairing grant transport', () => {
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-08-10T00:00:00Z',
     }
 
     expect(
       new ExtensionStorageProviderPayloadAdmission(complete).parse().isOk(),
     ).toBe(true)
-    const missingCreatedAt = Object.fromEntries(
-      Object.entries(complete).filter(([key]) => key !== 'createdAt'),
+    const missingIdentity = Object.fromEntries(
+      Object.entries(complete).filter(([key]) => key !== 'id'),
     )
     expect(
-      new ExtensionStorageProviderPayloadAdmission(missingCreatedAt)
+      new ExtensionStorageProviderPayloadAdmission(missingIdentity)
         .parse()
         .isErr(),
     ).toBe(true)
     expect(
-      new ExtensionStorageProviderPayloadAdmission({
-        ...complete,
-        githubPat: () => 'not cloneable',
-      })
+      new ExtensionStorageProviderPayloadAdmission({ ...complete, type: 'ftp' })
         .parse()
         .isErr(),
     ).toBe(true)
