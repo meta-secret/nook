@@ -107,16 +107,12 @@ data:
   buildkitd.toml: |
     [worker.oci]
       gc = true
-      reservedSpace = "8GB"
       maxUsedSpace = "112GB"
-      minFreeSpace = "16GB"
 
     [[worker.oci.gcpolicy]]
       filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
       keepDuration = "48h"
-      reservedSpace = "8GB"
-      maxUsedSpace = "112GB"
-      minFreeSpace = "16GB"
+      maxUsedSpace = "512MB"
 
     [[worker.oci.gcpolicy]]
       keepDuration = "336h"
