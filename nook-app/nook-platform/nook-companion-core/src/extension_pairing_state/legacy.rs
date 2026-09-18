@@ -367,7 +367,7 @@ mod tests {
 
     impl Fixture {
         const STORE: &'static str = "store_abcdefghijk";
-        const OTHER_STORE: &'static str = "store_lmnopqrst";
+        const OTHER_STORE: &'static str = "store_lmnopqrstuv";
 
         fn grant() -> StoredExtensionPairingGrant {
             StoredExtensionPairingGrant {

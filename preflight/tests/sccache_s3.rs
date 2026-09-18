@@ -421,6 +421,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     let remote = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     let remote_compiler_jobs = [
         ("task batch", "\n  batch:\n", "\n  web-verify:\n"),
+        ("Pages preview", "\n  pages-preview:\n", "\n  web-verify:\n"),
         (
             "web verification",
             "\n  web-verify:\n",

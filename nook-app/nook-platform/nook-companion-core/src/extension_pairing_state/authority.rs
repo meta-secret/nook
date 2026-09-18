@@ -175,7 +175,7 @@ mod tests {
                 ExtensionGrantAuthority::MissingActiveAuthority,
             ),
             (
-                PairingVaultId::parse("store_lmnopqrst")?,
+                PairingVaultId::parse("store_lmnopqrstuv")?,
                 ExtensionGrantAuthority::NoMatchingAuthority,
             ),
         ] {
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn rejects_mismatched_key_and_incomplete_grant() -> anyhow::Result<()> {
         let mut mismatched = Fixture::grant();
-        mismatched.vault_store_id = PairingVaultId::parse("store_lmnopqrst")?;
+        mismatched.vault_store_id = PairingVaultId::parse("store_lmnopqrstuv")?;
         let mut incomplete = Fixture::grant();
         incomplete.scopes.clear();
         for grant in [mismatched, incomplete] {
@@ -270,7 +270,7 @@ mod tests {
         );
         assert!(
             GrantAuthorityResponseJson::from(response)
-                .decode(&PairingVaultId::parse("store_lmnopqrst")?)
+                .decode(&PairingVaultId::parse("store_lmnopqrstuv")?)
                 .is_err()
         );
         Ok(())

@@ -35,7 +35,7 @@ impl RepositoryFixture {
 }
 
 #[test]
-fn remote_workflow_uses_only_scoped_external_cache_credentials() {
+fn remote_workflow_uses_only_scoped_external_credentials() {
     let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     for required in [
         "registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}",
@@ -44,10 +44,12 @@ fn remote_workflow_uses_only_scoped_external_cache_credentials() {
         "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
         "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
         "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
+        "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}",
+        "CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}",
     ] {
         assert!(
             workflow.contains(required),
-            "missing cache boundary: {required}"
+            "missing external credential boundary: {required}"
         );
     }
     let secret_refs = workflow.matches("${{ secrets.").count();
@@ -60,7 +62,13 @@ fn remote_workflow_uses_only_scoped_external_cache_credentials() {
         + workflow.matches("secrets.NOOK_SCCACHE_ACCESS_KEY").count()
         + workflow.matches("secrets.NOOK_SCCACHE_SECRET_KEY").count()
         + workflow.matches("secrets.NOOK_SCCACHE_ENDPOINT").count()
-        + workflow.matches("secrets.NOOK_SCCACHE_BUCKET").count();
+        + workflow.matches("secrets.NOOK_SCCACHE_BUCKET").count()
+        + workflow
+            .matches("${{ secrets.CLOUD_FLARE_PAGES_TOKEN")
+            .count()
+        + workflow
+            .matches("${{ secrets.CLOUD_FLARE_ACCOUNT_ID")
+            .count();
     assert_eq!(secret_refs, allowed_secret_refs);
     assert!(!workflow.contains("${{ inputs.command }}"));
 }
