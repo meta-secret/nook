@@ -400,21 +400,28 @@ class ExtensionWasmRuntime {
     }
     const status = await this.sessionResponse(statusResponseRequest)
     const deviceStatus = status.status
+    if (typeof deviceStatus !== 'number') {
+      throw new Error('Extension device protection status is unavailable.')
+    }
 
-    switch (deviceStatus) {
-      case ExtensionSessionDeviceProtectionStatusWire.Missing:
-      case ExtensionSessionDeviceProtectionStatusWire.Plaintext:
-      case ExtensionSessionDeviceProtectionStatusWire.Passkey:
-      case ExtensionSessionDeviceProtectionStatusWire.Pin:
-      case ExtensionSessionDeviceProtectionStatusWire.Unlocked:
-        return deviceStatus
-      case ExtensionSessionDeviceProtectionStatusWire.Loading:
-      case ExtensionSessionDeviceProtectionStatusWire.PinSetup:
-      case ExtensionSessionDeviceProtectionStatusWire.Error:
-      case ExtensionSessionDeviceProtectionStatusWire.Unknown:
-        throw new Error(
-          `Unsupported extension device protection status: ${deviceStatus}`,
-        )
+    if (
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Missing ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Plaintext ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Passkey ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Pin ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Unlocked
+    ) {
+      return deviceStatus
+    }
+    if (
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Loading ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.PinSetup ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Error ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Unknown
+    ) {
+      throw new Error(
+        `Unsupported extension device protection status: ${deviceStatus}`,
+      )
     }
     throw new Error('Unsupported extension device protection status.')
   }

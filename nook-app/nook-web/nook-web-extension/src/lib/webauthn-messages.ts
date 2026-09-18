@@ -183,13 +183,16 @@ type WebsitePasskeyPerformMessagePayloadSchemaFields = {
   requestJson: Schema.filter<Schema.filter<typeof Schema.String>>
   expiresAt: Schema.filter<Schema.filter<typeof Schema.Number>>
 }
+type ExactSchemaPropertyOptions = { readonly exact: true }
+const exactSchemaPropertyOptions: ExactSchemaPropertyOptions = { exact: true }
 const websitePasskeyPerformMessagePayloadSchemaFields: WebsitePasskeyPerformMessagePayloadSchemaFields =
   {
     ...websitePasskeyOptionsPayloadSchema.fields,
     vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-    credentialId: Schema.optionalWith(Schema.String.pipe(Schema.minLength(1)), {
-      exact: true,
-    }),
+    credentialId: Schema.optionalWith(
+      Schema.String.pipe(Schema.minLength(1)),
+      exactSchemaPropertyOptions,
+    ),
   }
 
 type WebsitePasskeyPerformMessageSchemaFields = {

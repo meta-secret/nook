@@ -56,14 +56,6 @@ const manualWorkflowCopy: WorkflowCopyProjection = {
   titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
   descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
 }
-const workflowCopyProjection = {
-  login: loginWorkflowCopy,
-  signup: signupWorkflowCopy,
-  passwordChange: passwordChangeWorkflowCopy,
-  authenticator: authenticatorWorkflowCopy,
-  manual: manualWorkflowCopy,
-} satisfies Record<string, WorkflowCopyProjection>
-
 export class WorkflowCopy {
   readonly titleKey: BrowserMessageKey
   readonly descriptionKey: BrowserMessageKey
@@ -74,16 +66,16 @@ export class WorkflowCopy {
   static forKind(kind: AuthenticationWorkflowKind): WorkflowCopy {
     switch (kind) {
       case AuthenticationWorkflowKind.Login:
-        return new WorkflowCopy(workflowCopyProjection.login)
+        return new WorkflowCopy(loginWorkflowCopy)
       case AuthenticationWorkflowKind.Signup:
-        return new WorkflowCopy(workflowCopyProjection.signup)
+        return new WorkflowCopy(signupWorkflowCopy)
       case AuthenticationWorkflowKind.PasswordChange:
-        return new WorkflowCopy(workflowCopyProjection.passwordChange)
+        return new WorkflowCopy(passwordChangeWorkflowCopy)
       case AuthenticationWorkflowKind.TotpChallenge:
-        return new WorkflowCopy(workflowCopyProjection.authenticator)
+        return new WorkflowCopy(authenticatorWorkflowCopy)
       case AuthenticationWorkflowKind.TotpEnrollment:
       case AuthenticationWorkflowKind.Manual:
-        return new WorkflowCopy(workflowCopyProjection.manual)
+        return new WorkflowCopy(manualWorkflowCopy)
     }
   }
 }

@@ -87,10 +87,12 @@ enum AuthenticationControlIdentityComparison {
   Changed = 'changed',
 }
 
-class AuthenticationControlIdentitySnapshot {
-  private readonly controls: Element[]
+type AuthenticationControlList = Element[]
 
-  private constructor(controls: Element[]) {
+class AuthenticationControlIdentitySnapshot {
+  private readonly controls: AuthenticationControlList
+
+  private constructor(controls: AuthenticationControlList) {
     this.controls = controls
   }
 

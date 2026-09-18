@@ -120,31 +120,58 @@ export type ExtensionPairingStateDecodeFailure = {
 function decodeStoredExtensionPairingGrant(value: unknown) {
   const result = transportJson(value)
   if (result.kind === TransportJsonResultKind.SerializationFailed) {
-    return Effect.fail<ExtensionPairingStateDecodeFailure>({
-      kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
-    })
+    type DecodeStoredExtensionPairingGrantFailRequest =
+      ExtensionPairingStateDecodeFailure
+    const decodeStoredExtensionPairingGrantFailRequest: DecodeStoredExtensionPairingGrantFailRequest =
+      {
+        kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
+      }
+    return Effect.fail<ExtensionPairingStateDecodeFailure>(
+      decodeStoredExtensionPairingGrantFailRequest,
+    )
   }
-  return Effect.try({
-    try: () => decode_stored_extension_pairing_grant_json(result.json),
-    catch: (): ExtensionPairingStateDecodeFailure => ({
-      kind: ExtensionPairingStateDecodeFailureKind.StoredGrant,
-    }),
-  })
+  type DecodeStoredExtensionPairingGrantTryRequest = {
+    readonly try: () => ReturnType<
+      typeof decode_stored_extension_pairing_grant_json
+    >
+
+    readonly catch: (error: unknown) => ExtensionPairingStateDecodeFailure
+  }
+  const decodeStoredExtensionPairingGrantTryRequest: DecodeStoredExtensionPairingGrantTryRequest =
+    {
+      try: () => decode_stored_extension_pairing_grant_json(result.json),
+      catch: (): ExtensionPairingStateDecodeFailure => ({
+        kind: ExtensionPairingStateDecodeFailureKind.StoredGrant,
+      }),
+    }
+  return Effect.try(decodeStoredExtensionPairingGrantTryRequest)
 }
 
 function decodeExtensionReadySetupState(value: unknown) {
   const result = transportJson(value)
   if (result.kind === TransportJsonResultKind.SerializationFailed) {
-    return Effect.fail<ExtensionPairingStateDecodeFailure>({
-      kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
-    })
+    type DecodeExtensionReadySetupStateFailRequest =
+      ExtensionPairingStateDecodeFailure
+    const decodeExtensionReadySetupStateFailRequest: DecodeExtensionReadySetupStateFailRequest =
+      {
+        kind: ExtensionPairingStateDecodeFailureKind.SerializationFailed,
+      }
+    return Effect.fail<ExtensionPairingStateDecodeFailure>(
+      decodeExtensionReadySetupStateFailRequest,
+    )
   }
-  return Effect.try({
-    try: () => decode_extension_ready_setup_json(result.json),
-    catch: (): ExtensionPairingStateDecodeFailure => ({
-      kind: ExtensionPairingStateDecodeFailureKind.ReadySetup,
-    }),
-  })
+  type DecodeExtensionReadySetupStateTryRequest = {
+    readonly try: () => ReturnType<typeof decode_extension_ready_setup_json>
+    readonly catch: (error: unknown) => ExtensionPairingStateDecodeFailure
+  }
+  const decodeExtensionReadySetupStateTryRequest: DecodeExtensionReadySetupStateTryRequest =
+    {
+      try: () => decode_extension_ready_setup_json(result.json),
+      catch: (): ExtensionPairingStateDecodeFailure => ({
+        kind: ExtensionPairingStateDecodeFailureKind.ReadySetup,
+      }),
+    }
+  return Effect.try(decodeExtensionReadySetupStateTryRequest)
 }
 
 type ExtensionPairingGrantStorageItemsArgs = {

@@ -26,23 +26,53 @@ export type ExtensionSessionRuntimeMessageInput = {
 
 export type ExtensionSessionRuntimeMessageValue = BrowserRuntimeMessageValue
 
-const extensionSessionEnsureMessageSchema = Schema.Struct({
-  type: Schema.Literal(ExtensionRuntimeRequestType.EnsureRuntime),
-}) satisfies Schema.Schema<ExtensionSessionEnsureMessage>
+type ExtensionSessionEnsureMessageSchemaFields = {
+  readonly type: Schema.Schema<ExtensionSessionEnsureMessage['type']>
+}
+const extensionSessionEnsureMessageSchemaFields: ExtensionSessionEnsureMessageSchemaFields =
+  {
+    type: Schema.Literal(ExtensionRuntimeRequestType.EnsureRuntime),
+  }
+const extensionSessionEnsureMessageSchema = Schema.Struct(
+  extensionSessionEnsureMessageSchemaFields,
+) satisfies Schema.Schema<ExtensionSessionEnsureMessage>
 
-const extensionAuthenticationSurfacesRefreshMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-  ),
-}) satisfies Schema.Schema<ExtensionAuthenticationSurfacesRefreshMessage>
+type ExtensionAuthenticationSurfacesRefreshMessageSchemaFields = {
+  readonly type: Schema.Schema<
+    ExtensionAuthenticationSurfacesRefreshMessage['type']
+  >
+}
+const extensionAuthenticationSurfacesRefreshMessageSchemaFields: ExtensionAuthenticationSurfacesRefreshMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+    ),
+  }
+const extensionAuthenticationSurfacesRefreshMessageSchema = Schema.Struct(
+  extensionAuthenticationSurfacesRefreshMessageSchemaFields,
+) satisfies Schema.Schema<ExtensionAuthenticationSurfacesRefreshMessage>
 
-const extensionSessionExpiryMessageSchema = Schema.Struct({
-  type: Schema.Literal(ExtensionSessionLifecycleMessageType.Expired),
-}) satisfies Schema.Schema<ExtensionSessionExpiryMessage>
+type ExtensionSessionExpiryMessageSchemaFields = {
+  readonly type: Schema.Schema<ExtensionSessionExpiryMessage['type']>
+}
+const extensionSessionExpiryMessageSchemaFields: ExtensionSessionExpiryMessageSchemaFields =
+  {
+    type: Schema.Literal(ExtensionSessionLifecycleMessageType.Expired),
+  }
+const extensionSessionExpiryMessageSchema = Schema.Struct(
+  extensionSessionExpiryMessageSchemaFields,
+) satisfies Schema.Schema<ExtensionSessionExpiryMessage>
 
-const extensionSessionLockMessageSchema = Schema.Struct({
-  type: Schema.Literal(ExtensionSessionMessageType.Lock),
-}) satisfies Schema.Schema<ExtensionSessionLockMessage>
+type ExtensionSessionLockMessageSchemaFields = {
+  readonly type: Schema.Schema<ExtensionSessionLockMessage['type']>
+}
+const extensionSessionLockMessageSchemaFields: ExtensionSessionLockMessageSchemaFields =
+  {
+    type: Schema.Literal(ExtensionSessionMessageType.Lock),
+  }
+const extensionSessionLockMessageSchema = Schema.Struct(
+  extensionSessionLockMessageSchemaFields,
+) satisfies Schema.Schema<ExtensionSessionLockMessage>
 
 export function decodeExtensionSessionEnsureMessage(
   message: ExtensionSessionRuntimeMessageValue,

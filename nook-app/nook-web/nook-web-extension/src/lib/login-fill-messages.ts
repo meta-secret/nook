@@ -213,9 +213,10 @@ const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFi
     origin: nonEmptyStringSchema,
     vaultStoreId: nonEmptyStringSchema,
     secretId: nonEmptyStringSchema,
-    authorizationGeneration: Schema.optionalWith(nonEmptyStringSchema, {
-      exact: true,
-    }),
+    authorizationGeneration: Schema.optionalWith(
+      nonEmptyStringSchema,
+      exactSchemaPropertyOptions,
+    ),
   }
 
 type WebsiteAuthenticatorFillMessageSchemaFields = {
