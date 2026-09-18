@@ -121,10 +121,11 @@ mod session_request_admission_tests {
             )
             .is_err()
         );
-        let decoded: ExtensionSessionRequestAdmission = serde_json::from_str(
+        let Ok(decoded) = serde_json::from_str::<ExtensionSessionRequestAdmission>(
             r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}}}"#,
-        )
-        .expect("valid status request");
+        ) else {
+            panic!("valid status request must decode");
+        };
         assert!(matches!(
             decode_extension_session_request(decoded),
             nook_companion_core::ExtensionSessionRequest::Status(_)

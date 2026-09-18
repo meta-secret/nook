@@ -489,8 +489,9 @@ mod admission_tests {
         let unlock = AdmissionFixture::decode::<CompanionIdentityUnlockRequestAdmission>(
             r#"{"requestId":"request","vaultStoreId":"vault"}"#,
         )?;
-        let decoded = decode_companion_identity_unlock_request(unlock)
-            .expect("valid unlock payload must decode");
+        let Ok(decoded) = decode_companion_identity_unlock_request(unlock) else {
+            panic!("valid unlock payload must decode");
+        };
         assert_eq!(decoded.request_id, "request");
 
         let empty = AdmissionFixture::decode::<CompanionIdentityUnlockRequestAdmission>(
