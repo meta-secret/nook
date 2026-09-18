@@ -41,7 +41,7 @@ if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
   # Complete the pinned Wrangler install before four deploy processes share the
   # Bun cache. A cold concurrent install can expose Miniflare before all of its
   # dependencies are present.
-  bunx "wrangler@${NOOK_WRANGLER_VERSION}" --version >/dev/null
+  npx --yes "wrangler@${NOOK_WRANGLER_VERSION}" --version >/dev/null
 fi
 
 deploy_pages() {
