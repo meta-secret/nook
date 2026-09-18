@@ -183,9 +183,9 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     let extension_manifest = root.read("nook-app/nook-web/nook-web-extension/package.json");
     assert!(
         extension_manifest.contains(
-            "eslint --config eslint.config.js nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated"
+            "eslint --config eslint.config.js --ignore-pattern '**/__compile-contracts-*/**' nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated"
         ),
-        "the extension lint command must retain its complete authored and shared source trees"
+        "the extension lint command must retain its complete authored and shared source trees while excluding only transient compile-contract fixtures"
     );
 
     let typed_api_tests =
