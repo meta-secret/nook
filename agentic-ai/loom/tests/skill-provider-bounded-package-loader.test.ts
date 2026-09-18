@@ -5,7 +5,7 @@ import { SkillProviderBoundedPackageLoaderScenario } from './skill-provider-boun
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
-test('specializes only closed finite external package loaders', async () => {
+test('leaves direct finite external package loaders unchanged', async () => {
   const path = 'nook-app/nook-web/nook-web-extension/scripts/build.ts';
   const packagePath = 'nook-app/nook-web/nook-web-app/package.json';
   const sources = new Map<string, string>([
@@ -23,8 +23,7 @@ test('specializes only closed finite external package loaders', async () => {
     SkillProviderBoundedPackageLoaderScenario.specializeBoundedPackageLoaders(
       inspection,
     );
-  expect(specialized).toContain("from 'bounded-package-loader'");
-  expect(specialized).toContain('await Promise.resolve(false)');
+  expect(specialized).toBe(defaulted1);
   const sourceInspection = {
     allowUnprovenComputedDataAccess: true as const,
     filePath: path,

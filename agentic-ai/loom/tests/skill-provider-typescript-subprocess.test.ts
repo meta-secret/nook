@@ -101,6 +101,27 @@ test('pins the writable cache connector as an exact audited source', async () =>
   ).toThrow('Audited runtime source has drifted');
 });
 
+test('pins the hosted type-check task fanout as an exact audited source', async () => {
+  const path = '.github/scripts/type-check-report.sh';
+  const source = await Bun.file(
+    resolve(import.meta.dir, '../../..', path),
+  ).text();
+  const inspection: AuditedRuntimeSourceRequest = { path, source };
+
+  expect(
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(inspection),
+  ).toBe(true);
+  expect(() =>
+    SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+      ...inspection,
+      source: source.replace(
+        'task "$task_name"',
+        'task "$task_name" --verbose',
+      ),
+    }),
+  ).toThrow(`Audited runtime source has drifted: ${path}`);
+});
+
 test('fails closed for dynamic executables but permits benign maintenance args', () => {
   const [dynamic] = SkillProviderTypescriptSubprocessFixture.extract(
     "Bun.spawn(['bun', input + '/cli.ts']);",

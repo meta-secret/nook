@@ -133,11 +133,11 @@ const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
-    'f578ca1ba257c11bbdf5eb9401cd2acc2aabd084d595eb9f8e55d7f6ef7bb59c',
+    'a74a8e8f2571709c36efe485b19c51cc5c20d7d0d894e2efceff586064b2aac6',
   ],
   [
     '.github/workflows/remote.yml:"$jq_root/jq"',
-    'f578ca1ba257c11bbdf5eb9401cd2acc2aabd084d595eb9f8e55d7f6ef7bb59c',
+    'a74a8e8f2571709c36efe485b19c51cc5c20d7d0d894e2efceff586064b2aac6',
   ],
 ]);
 
@@ -218,7 +218,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    '7795bfb3c91d6ddf158e9c3d202fb2ed169a09644b8d66e2104cfd22abf13358',
+    'eb0719f3f0974d2a31564b55c4008438e0af81afbddc2dcc263904978e06f2ac',
+  ],
+  [
+    '.github/scripts/type-check-report.sh',
+    'fa0dd42fd4b83f590f8878a00682da6136e549ca104ca20aa15863772e601f10',
   ],
   [
     '.github/scripts/ci-pr-native-pages-build.sh',
