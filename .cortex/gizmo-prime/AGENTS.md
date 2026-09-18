@@ -72,6 +72,8 @@ required checks remain blockers.
 Functional Team Gizmos and Team Agents do not execute GitHub delivery
 mechanics. They return scoped commits and evidence to the Feature Gizmo.
 
+#### Prohibited ownership
+
 Gizmo does not:
 
 - implement or repair team-owned work;
