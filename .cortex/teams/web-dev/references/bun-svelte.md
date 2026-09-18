@@ -83,7 +83,7 @@ and `preflight` sources. Unused-code ownership is split as follows:
   a coherent scoped handoff. Local feedback permits only bounded inexpensive
   diagnostics or formatting. Browser and behavior tests execute in the dev
   manager's slow PR stage against the published SHA.
-- Gizmo pushes feature commits and requests remote build-only evidence.
+- Gizmo pushes feature commits and requests required PR-check evidence.
 - Tests and required browser E2E execute in the manager's slow dev PR stage.
 - Web development owns browser acceptance requirements.
 - The manager owns snapshot publication and promotion.

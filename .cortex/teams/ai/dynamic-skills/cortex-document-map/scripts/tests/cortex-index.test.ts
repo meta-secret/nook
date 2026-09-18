@@ -37,15 +37,10 @@ const FRESH_BASE_AUTHORITIES = [
 
 const FRESH_BASE_BOOTSTRAP_AUTHORITIES = [
   '.cortex/AGENTS.md',
-  '.cortex/knowledge-graph.md',
   '.cortex/gizmo-prime/AGENTS.md',
-  '.cortex/gizmo-prime/knowledge-graph.md',
   '.cortex/gizmo-prime/architecture/dev-delivery.md',
   '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
   '.cortex/gizmo-prime/workflows/mission-delivery.md',
-  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
-  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
-  '.cortex/gizmo-prime/workflows/team-oriented-development.md',
 ] as const;
 
 const AI_TYPESCRIPT_POLICY_ROUTES = [
@@ -142,7 +137,7 @@ Model text.
 
   const renderArgs = { index };
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
-  expect(markdown).toContain('# Cortex Context Router');
+  expect(markdown).toContain('# Nook Cortex Knowledge Graph');
   expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo-prime/knowledge-graph.md)');
   expect(markdown).not.toContain(
@@ -151,64 +146,35 @@ Model text.
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
-  expect(markdown).not.toContain('teams/dev-manager-gizmo/');
+  expect(markdown).not.toContain('teams/pr-lifecycle-gizmo/');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
-  expect(markdown).toContain(
-    'Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.',
-  );
-  expect(markdown).toContain(
-    'Each Team Gizmo requests Fast mode with `service_tier: fast`',
-  );
-  expect(markdown).toContain(
-    'Before planning, delegation, worktree creation, or edits, Gizmo Prime runs',
-  );
-  expect(markdown).toContain(
-    '`git fetch --prune origin`; a fetch failure fails closed.',
-  );
   const normalized = CortexContextRouterScenario.normalizeMarkdown(markdown);
   expect(normalized).toContain(
-    'Only after both synchronizations, Prime resolves the latest committed `refs/heads/dev^{commit}`.',
+    'Every feature branch starts from freshly fetched `origin/main`.',
   );
   expect(normalized).toContain(
-    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
-  );
-  expect(normalized).toContain(
-    'A previously pinned or otherwise older local-dev SHA, `origin/dev`, `origin/main`, or another alternate base is invalid.',
-  );
-  expect(normalized).toContain('The base is preserved after feature creation.');
-  expect(normalized).toContain(
-    'Prime authorizes the canonical feature branch name, which is the workflow authority.',
-  );
-  expect(normalized).toContain(
-    'Observed base and head SHAs are evidence only, not required packet fields.',
+    'Gizmo Prime owns the full cycle through all required PR checks',
   );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });
 
-test('requires every fresh-base authority to use the post-sync local dev head', () => {
-  const required = [
-    'feature branch',
-    'latest committed',
-    'fails closed',
-  ] as const;
-
+test('requires every fresh-base authority to use fresh origin/main', () => {
   for (const relativePath of FRESH_BASE_AUTHORITIES) {
     const markdown = CortexContextRouterScenario.normalizeMarkdown(
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
-    for (const phrase of required) {
-      expect(markdown).toContain(phrase);
-    }
+    expect(markdown).toContain('feature branch');
     expect(markdown).not.toContain(
       'unless the user explicitly selects another base',
     );
-    expect(markdown).not.toContain(
-      'creates feature work from `pinnedLocalDevSha`',
-    );
+    expect(markdown).toContain('origin/main');
+    expect(markdown).not.toContain('canonical local `dev`');
+    expect(markdown).not.toContain('refs/heads/dev');
+    expect(markdown).not.toContain('origin/dev');
   }
 
   for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
@@ -216,10 +182,8 @@ test('requires every fresh-base authority to use the post-sync local dev head', 
       readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
     );
     expect(markdown).toContain('git fetch --prune origin');
-    expect(markdown).toContain('canonical local `main`');
-    expect(markdown).toContain('synchroniz');
-    expect(markdown).toContain('canonical local `dev`');
-    expect(markdown).toContain('fails closed');
+    expect(markdown).toContain('origin/main');
+    expect(markdown).toContain('originMainSha');
   }
 });
 
@@ -234,37 +198,32 @@ test('renders the complete canonical Cortex context router', () => {
     canonicalRouter.replace(/\s+/gu, ' '),
   );
 
-  const requiredSections = [
-    '## Entry contract',
-    '## Owning contexts',
-    '## Shared dependency route',
-  ];
+  const requiredSections = ['## Required entry', '## Owning contexts'];
   for (const section of requiredSections) {
     expect(markdown).toContain(section);
   }
 
   const teamOwnershipContracts = [
-    '[Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,',
-    'Its owner graph routes delivery architecture and branch naming.',
-    'feature review, feature acceptance, local landing requests, and Workbench.',
-    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
-    '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
-    '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
-    '[Security](teams/security/knowledge-graph.md): security architecture,',
-    '[SRE](teams/sre/knowledge-graph.md): CI/CD, clusters, deployments, runners,',
-    '[Web development](teams/web-dev/knowledge-graph.md): TypeScript, Svelte,',
+    '[Gizmo Prime](gizmo-prime/knowledge-graph.md)',
+    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
+    '[AI](teams/ai/knowledge-graph.md)',
+    '[Development Core](teams/dev-core/knowledge-graph.md)',
+    '[Security](teams/security/knowledge-graph.md)',
+    '[SRE](teams/sre/knowledge-graph.md)',
+    '[Web Development](teams/web-dev/knowledge-graph.md)',
   ];
   for (const contract of teamOwnershipContracts) {
     expect(markdown).toContain(contract);
   }
 
-  expect(markdown).toContain('return to the selected owning context');
-  expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
-    'Every new feature mission, feature branch, and worktree must use that exact latest committed canonical local `dev` commit as its base.',
+  expect(markdown).toContain(
+    'Every feature branch starts from freshly fetched `origin/main`',
   );
-  expect(markdown).toContain('Every new feature mission');
-  expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
-  expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
+  expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
+    'Gizmo Prime owns the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
+  );
+  expect(markdown).toContain('Reviews and approvals are optional.');
+  expect(markdown).not.toContain('canonical local `dev`');
 });
 
 test('routes every AI TypeScript leaf through the minimal policy authorities', () => {
@@ -548,9 +507,6 @@ test('keeps Delivery Pipeline direct-child ownership in its parent graph', () =>
 
   expect(deliveryPipelineGraph).toContain(
     '- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)',
-  );
-  expect(deliveryPipelineGraph).toContain(
-    '- [Dev Manager knowledge graph](dev-manager/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
     '- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)',

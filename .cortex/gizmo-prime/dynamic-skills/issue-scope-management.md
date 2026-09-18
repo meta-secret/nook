@@ -63,11 +63,11 @@ to generate bookkeeping.
 8. Re-open Workbench `main` and verify links and state.
 
 Independent features may proceed concurrently. Land accepted feature commits
-through serialized local dev integration under
+through serialized feature pull-request delivery under
 [dev delivery](../architecture/dev-delivery.md). Feature completion still
 requires post-landing containment evidence.
 
 ## Validation
 
-Run record validation in the manager's slow stage. PR Lifecycle Agent inspects published
+Run record validation in the feature pull request's required-check stage. PR Lifecycle Agent inspects published
 records under an explicit packet. Full workflow: [issues](../workflows/issues.md).

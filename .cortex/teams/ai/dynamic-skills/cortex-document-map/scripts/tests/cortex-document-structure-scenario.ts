@@ -167,7 +167,6 @@ ${args.rootExtra}`,
             ...document,
             content: `${document.content}
 - [Team Gizmo](gizmo/knowledge-graph.md)
-- [Dev Manager](dev-manager/knowledge-graph.md)
 - [PR Lifecycle Agent](pr-lifecycle/knowledge-graph.md)
 `,
           }
@@ -182,15 +181,6 @@ ${args.rootExtra}`,
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/gizmo/policy.md',
         content: '# Team Gizmo Policy\n',
-      }),
-      this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
-        content:
-          '# Delivery Pipeline Dev Manager Knowledge Graph\n\n- [Policy](policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
-      }),
-      this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/dev-manager/policy.md',
-        content: '# Dev Manager Policy\n',
       }),
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',

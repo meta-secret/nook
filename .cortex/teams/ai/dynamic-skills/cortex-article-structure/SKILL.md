@@ -204,7 +204,7 @@ also exposes its validated audit action through strict YAML.
 1. Review changed articles for purpose, hierarchy, action order, and outcomes.
 2. Preserve repeated fields as enclosed structured lists.
 3. Return the scoped documentation commit to the feature Gizmo.
-4. Execute Loom structure, link, and provider checks in the manager's slow PR stage.
+4. Execute Loom structure, link, and provider checks in the feature pull request's required-check stage.
 
 Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 Do not run local audits, tests, or preflight. A semantic reading is not

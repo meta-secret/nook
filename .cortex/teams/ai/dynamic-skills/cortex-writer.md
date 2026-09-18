@@ -164,11 +164,13 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
+Every feature branch starts from freshly fetched `origin/main`.
+
 - It compares the working branch with the merge base of the canonical feature
   branch resolved at audit time. The packet may carry `originMainSha` and
-  `pinnedLocalDevSha` as bootstrap evidence; require the former to be an
+  `originMainSha` as bootstrap evidence; require the former to be an
   ancestor of the latter. Prime creates every feature branch and worktree from
-  the current committed local-dev feature base and preserves it. The branch
+  the current committed fresh-main feature base and preserves it. The branch
   name is the workflow authority. Resolve its latest committed head before the
   audit. If the branch advances, follow the latest head and rerun the audit.
   Missing or unprovable bootstrap/branch evidence fails closed; observed SHAs

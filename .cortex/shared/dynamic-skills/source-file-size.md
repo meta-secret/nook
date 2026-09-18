@@ -114,8 +114,8 @@ An exclusion must describe data provenance, not excuse authored source.
 - [ ] Preserve or add behavior-focused unit and integration tests at their
       correct boundaries.
 - [ ] Return a verified committed handoff with the focused worker proof.
-- [ ] Have Gizmo obtain remote build-only evidence and review the decomposition.
-- [ ] Execute the source-size scanner in the dev manager's full slow PR stage.
+- [ ] Have Gizmo obtain required PR-check evidence and review the decomposition.
+- [ ] Execute the source-size scanner in the Feature Gizmo's full slow PR stage.
 
 ## Static Enforcement
 
@@ -133,5 +133,5 @@ scanner diagnostics; code review verifies the actual decomposition seam.
 
 Workers return scoped commits with authored tests and review evidence.
 Feature compilation requires build-only remote capability. The source-size
-scanner executes in the manager's slow PR stage. The 1,000-line source limit
+scanner executes in the feature pull request's required-check stage. The 1,000-line source limit
 remains mandatory even though feature tests are deferred.

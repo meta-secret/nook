@@ -65,7 +65,7 @@ Does not apply to:
 ## Validation
 
 Development-core workers author syntax-aware preflight and focused behavior
-tests. Execute them in the dev manager's slow PR stage. Local feedback is
+tests. Execute them in the feature pull request's required-check stage. Local feedback is
 limited to scoped rustfmt and bounded diagnostics allowed by the root contract.
-Return a scoped commit to Gizmo. Feature work requires remote build-only
+Return a scoped commit to Gizmo. Feature work requires required PR-check
 evidence; missing tooling blocks that stage.

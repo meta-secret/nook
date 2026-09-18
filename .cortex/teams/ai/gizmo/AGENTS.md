@@ -38,10 +38,9 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
   TypeScript ownership.
 - Consume the canonical feature branch name and bootstrap evidence issued by
   Gizmo Prime for the team worktree and every leaf. `originMainSha` identifies
-  the freshly fetched `origin/main`; `pinnedLocalDevSha` identifies the
-  synchronized local-dev feature base, and `originMainSha` must be its
-  ancestor. Prime creates the feature branch and worktree from that current
-  committed base and preserves it. The branch name is the workflow authority.
+  the freshly fetched `origin/main` and is the feature base. Prime creates the
+  feature branch and worktree from that commit and preserves it. The branch
+  name is the workflow authority.
   Resolve the latest committed branch head before each stage. If the branch
   advances, follow the latest head and rerun affected evidence. Child worktrees
   start from the current parent frontier. Never use stale local refs or resolve

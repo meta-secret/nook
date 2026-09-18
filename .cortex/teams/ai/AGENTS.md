@@ -51,10 +51,8 @@ concurrency cap.
 AI Team Gizmo and its leaves consume the canonical feature branch name and the
 bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
 before planning, delegation, worktree creation, or edits. It records
-`originMainSha` for the exact freshly fetched `origin/main` and
-`pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized;
-`originMainSha` must be an ancestor of `pinnedLocalDevSha`. Prime creates the
-feature branch and worktree from that current committed local-dev feature base
+`originMainSha` for the exact freshly fetched `origin/main`. Prime creates the
+feature branch and worktree from that exact commit
 and preserves it. The branch name is the workflow authority. Before each
 stage, delivery resolves the latest committed branch head. A branch advance
 follows the latest head and reruns affected evidence. SHAs observed during the
@@ -168,9 +166,9 @@ Gizmo.
 
 ## Validation
 
-Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
-Author meaningful tests in feature work, but execute them only in the manager's
-slow PR stage. Feature validation is remote build-only execution only. Local
+Apply the [feature pull-request delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
+Author meaningful tests in feature work, but execute them only in the feature
+pull request's required-check stage. Local
 feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
 or formatting. Older instructions to run Loom tests, audits, preflight, or
 broad pre-push commands are not local or feature-stage permissions.
@@ -192,7 +190,7 @@ packet must name the authoritative checks below:
 
 The acceptance record must not claim that `task loom:verify` alone proves
 authored-absence or TypeScript function ownership. Deferred checks execute only
-in the manager's authorized remote slow stage.
+in the feature pull request's required-check stage.
 
 Prove semantic policy with focused review. Prove deterministic invariants with
 Loom or preflight tests. Markdown must never become executable workflow state.

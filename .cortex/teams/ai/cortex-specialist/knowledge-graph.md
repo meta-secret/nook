@@ -22,9 +22,7 @@ Load only the authority needed for the assigned Cortex packet.
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
 The packet names the canonical feature branch and may carry bootstrap evidence:
-`originMainSha` for the freshly fetched `origin/main` and `pinnedLocalDevSha`
-for the synchronized local-dev feature base. Require the former to be an
-ancestor of the latter. Use the current parent frontier for the specialist
+`originMainSha` for the freshly fetched `origin/main`. Use the current parent frontier for the specialist
 worktree. Resolve the latest committed branch head before each stage; a branch
 advance follows the latest head and reruns affected evidence. SHAs observed in
 packets or results are run evidence only, not feature authority. Reject missing

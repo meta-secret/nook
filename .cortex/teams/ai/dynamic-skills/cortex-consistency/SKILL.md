@@ -139,7 +139,7 @@ After:
 2. Resolve conflicting current instructions in the same scoped change.
 3. Report any runtime contract that must change alongside the documentation.
 4. Commit the complete scoped iteration and return it to the feature Gizmo.
-5. Run mechanical link, index, and contract audits in the manager's slow PR stage.
+5. Run mechanical link, index, and contract audits in the feature pull request's required-check stage.
 
 Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 Do not run local audits, tests, or broad pre-push commands. Do not present a
@@ -160,7 +160,7 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Only in the dev manager's remote slow PR stage, run the compiler through the
+Only in the feature pull request's required-check stage, run the compiler through the
 Cortex consistency command below. Never invoke it locally or in feature work.
 
 ```bash
@@ -170,7 +170,7 @@ task loom:cortex-audit
 The command reports failures in `contractFindings`.
 
 The co-located application is also a discoverable executable skill. These
-invocations are likewise restricted to the manager's remote slow PR stage:
+invocations are likewise restricted to the feature pull request's required-check stage:
 
 ```bash
 task skills:tools-list

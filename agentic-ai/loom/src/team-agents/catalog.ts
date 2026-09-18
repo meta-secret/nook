@@ -132,7 +132,6 @@ export enum TeamInternalAgentKey {
   CloudNative = 'cloud-native',
   TypeScriptSpecialist = 'typescript-specialist',
   SvelteSpecialist = 'svelte-specialist',
-  DevManager = 'dev-manager',
   PrLifecycle = 'pr-lifecycle',
 }
 
@@ -548,29 +547,11 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {
-      key: TeamInternalAgentKey.DevManager,
-      team: TeamKey.DeliveryPipeline,
-      identity: 'Dev Manager',
-      description:
-        'Executes bounded development-manager snapshot, validation-evidence, readiness, and promotion mechanics under Delivery Pipeline ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
-      contextPaths: [
-        '.cortex/teams/delivery-pipeline/dev-manager/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
-      ],
-      parent: TeamGizmoKey.DeliveryPipeline,
-      reportingBoundary:
-        'Reports bounded manager-cycle evidence and blockers to Delivery Pipeline Team Gizmo.',
-      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
-    },
-    {
       key: TeamInternalAgentKey.PrLifecycle,
       team: TeamKey.DeliveryPipeline,
       identity: 'PR Lifecycle',
       description:
-        'Executes explicitly authorized pull-request observation, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
+        'Executes explicitly authorized pull-request publication, required-check observation, squash merge, and remote feature-branch cleanup for Delivery Pipeline.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       serviceTier: 'fast',
@@ -580,7 +561,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       ],
       parent: TeamGizmoKey.DeliveryPipeline,
       reportingBoundary:
-        'Reports bounded PR lifecycle evidence and blockers to Delivery Pipeline Team Gizmo, which forwards policy-owned evidence to the issuing controller.',
+        'Reports bounded PR lifecycle evidence and blockers to Delivery Pipeline Team Gizmo, which forwards it to the owning Feature Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
   ] as const;

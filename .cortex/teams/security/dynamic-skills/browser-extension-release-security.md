@@ -66,8 +66,8 @@ Does not apply to:
 7. Security reviews the exact functional-owner handoff, formats and commits
    only its allowed security-owned Cortex changes, and returns a pending
    acceptance verdict to Gizmo.
-8. Gizmo pushes the reviewed feature and obtains remote build-only evidence.
-9. The dev manager's slow PR stage executes security-required focused extension
+8. Gizmo pushes the reviewed feature and obtains required PR-check evidence.
+9. The Feature Gizmo's slow PR stage executes security-required focused extension
    checks and applicable deployment verification.
 10. Return the exact SHA, deployed channel, origin, checksum, and packaged
     manifest evidence to Security. Promotion remains blocked until Security

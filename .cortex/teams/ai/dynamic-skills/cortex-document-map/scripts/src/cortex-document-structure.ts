@@ -29,7 +29,7 @@ const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
   ],
   ['sre', ['gizmo', 'provisioning', 'cloud-native']],
   ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
-  ['delivery-pipeline', ['gizmo', 'dev-manager', 'pr-lifecycle']],
+  ['delivery-pipeline', ['gizmo', 'pr-lifecycle']],
 ]);
 const CORTEX_CHILD_DIRECTORY_PATTERN =
   /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;

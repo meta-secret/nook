@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
-feature compilation and the manually run dev manager's slow PR cycle.
+feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks.
 
@@ -465,9 +465,9 @@ Use this workflow for quality, CI, and deployment changes.
 
 11. **GitHub Actions agent execution:**
     - Feature teams author tests and return scoped commits.
-    - Feature feedback requires remote build-only capability.
+    - Feature feedback requires required PR-check capability.
     - Missing capability is a blocker, not permission for slow feature checks.
-    - The manually run dev manager owns the full slow dev-to-main PR cycle.
+    - The manually run Feature Gizmo owns the full slow feature pull request cycle.
     - Local tests, Docker work, compilation, and broad pre-push are prohibited.
     - See [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 12. After a slow-stage failure, delegate repair through the normal feature path.

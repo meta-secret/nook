@@ -488,7 +488,7 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 Development-core workers author focused Rust domain tests and typed bridge
 tests when the WASM contract changes. Browser E2E does not replace domain proof.
-Execute these tests in the dev manager's slow stage. Return a scoped commit
+Execute these tests in the Feature Gizmo's slow stage. Return a scoped commit
 after permitted lightweight feedback. Feature acceptance requires remote
 build-only evidence and code/security review.
 

@@ -19,12 +19,12 @@ commits to its feature Gizmo. The worker does not publish or promote branches.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Commit the complete scoped iteration.
 10. Return authored tests and interface evidence to Gizmo.
-11. Have Gizmo push the feature and request remote build-only execution through
+11. Have Gizmo push the feature and request required PR-check execution through
     the PR Lifecycle Agent.
 12. Route corrections through the responsible team and repeat compilation.
 13. After acceptance, Gizmo authorizes the PR Lifecycle Agent's serialized local
     integration.
-14. Hand publication, full slow checks, and promotion to the dev manager.
+14. Hand publication, full slow checks, and promotion to the Feature Gizmo.
 
 ## Package boundaries
 

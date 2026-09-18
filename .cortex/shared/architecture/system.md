@@ -3,7 +3,7 @@
 ## Agent delivery applicability
 
 Follow the [dev delivery contract](../../gizmo-prime/architecture/dev-delivery.md) for
-feature compilation and the manually run dev manager's slow PR cycle.
+feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks.
 

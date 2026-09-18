@@ -11,7 +11,8 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ## Universal rules
 
-- Follow [dev delivery](dev-delivery.md) for feature and manager stages.
+- Follow [feature pull-request delivery](dev-delivery.md) for the complete
+  feature cycle.
 - Each concurrent feature has a separate Gizmo Prime and isolated Team Agent
   children.
 - Every team has one Team Gizmo. Team Gizmo receives a high-level packet from
@@ -19,8 +20,7 @@ coordinates delivery but does not redefine a team's technical contract.
   Agents through the active harness, synthesizes exact-SHA evidence and
   blockers, and reports the high-level result to Prime.
 - Team Gizmo is not a second Prime and never decides functional ownership,
-  readiness, promotion, or final delivery.
-- The manually run dev manager owns dev publication and main promotion.
+  readiness, or final delivery.
 - Every Team Agent task has exactly one team identity. Delivery Pipeline's PR
   Lifecycle Agent is an operational Team Agent for bounded pull-request
   observation and review mechanics.
@@ -38,12 +38,11 @@ coordinates delivery but does not redefine a team's technical contract.
 - A scope overlap blocks dispatch unless the exact changes are handed off or
   attributed to the proposed task.
 - Gizmo Prime owns mission-level child-worktree allocation, write-wave
-  coordination, parent integration, feature acceptance, and local landing
-  authorization. Team Gizmo coordinates issued internal child worktrees and
-  commit handoffs within its packet.
-- PR Lifecycle performs only explicitly authorized pull-request
-  observation, review, and status mechanics; the manager-only `dev:pr-manager`
-  command owns PR creation and updates.
+  coordination, parent integration, feature acceptance, and pull-request
+  delivery authorization. Team Gizmo coordinates issued internal child
+  worktrees and commit handoffs within its packet.
+- PR Lifecycle performs explicitly authorized pull-request creation, update,
+  check observation, squash merge, and remote branch cleanup mechanics.
 
 ## Teams
 
@@ -85,7 +84,7 @@ subagent concurrency cap is encoded, inferred, or repeated.
   - Team Agents: `typescript-specialist`, `svelte-specialist`
 - **Delivery Pipeline**
   - Team Gizmo: `teams/delivery-pipeline/gizmo`
-  - Team Agents: `dev-manager`, `pr-lifecycle`
+  - Team Agent: `pr-lifecycle`
 
 ### Gizmo Prime and Team Gizmo delivery control
 
@@ -94,22 +93,21 @@ Gizmo Prime owns:
 - mission scope and task routing;
 - write-wave coordination and shared-branch commit turns;
 - shared-file coordination;
-- feature compilation and local landing authorization;
+- feature pull-request authorization;
 - technical review-finding disposition;
 - feature acceptance verdicts;
 - Workbench state; and
 - the feature delivery verdict.
 
-The Dev Manager controls dev PR creation/update through `dev:pr-manager`, plus
-slow evidence, readiness, and promotion. PR Lifecycle observes the PR
-and performs only these other mechanics under a manager packet issued through
-Delivery Pipeline Team Gizmo.
+The owning Feature Gizmo controls readiness and final delivery. PR Lifecycle
+performs bounded GitHub mechanics under a packet routed through Delivery
+Pipeline Team Gizmo.
 
 Team Gizmo routes its team's authorized mechanics to internal Team Agents. The
 Delivery Pipeline Team Gizmo coordinates the current PR Lifecycle Agent for
-pull-request metadata, review and check observation, exact-head validation
-retriggers, readiness evidence collection, bounded dev tasks, guarded
-fast-forward publication, and remote PR-state verification. PR Lifecycle is
+pull-request creation and update, review and check observation, exact-head
+validation retriggers, squash merge, branch cleanup, and remote PR-state
+verification. PR Lifecycle is
 not a functional engineering team and does not own technical
 findings.
 
@@ -120,23 +118,21 @@ when a Team Gizmo is unavailable.
 ### Delivery Pipeline
 
 Delivery Pipeline is the operational team name. It is more precise than CI
-because it covers CI, pull-request lifecycle, dev publication, workflow
-execution, local landing, evidence, and guarded promotion.
+because it covers CI, pull-request lifecycle, workflow execution, merge
+evidence, and branch cleanup.
 
 Its current internal agents are:
 
 - Delivery Pipeline Team Gizmo, which handles Level 1 delivery-pipeline
-  orchestration, commit handoffs, and remote build-only task packets under
+  orchestration, commit handoffs, and required PR-check task packets under
   Gizmo Prime's packet; and
 - the PR Lifecycle Agent, which performs packetized external GitHub, PR,
-  check, review, and status mechanics plus bounded dev tasks.
+  check, review, squash-merge, status, and cleanup mechanics.
 
 Delivery Pipeline executes authorized mechanics only. Team Gizmo and PR
-Lifecycle never create or update pull requests, invoke the manager-only
-`dev:pr-manager`, replace the active harness, or decide readiness, promotion,
-or final delivery. The Dev Manager remains policy owner for dev snapshots,
-validation, readiness, promotion, and `dev:pr-manager`. Feature Gizmos remain
-feature owners.
+Lifecycle never replace the active harness or decide functional readiness.
+Feature Gizmos remain end-to-end feature owners and may merge their own pull
+requests after all required checks are green.
 
 ### Development core
 
@@ -241,10 +237,9 @@ Within its assigned scope, a team owns:
 - validation fixes caused by its change.
 
 Team Gizmo coordinates internal Team Agents and reports evidence. Gizmo Prime
-owns feature acceptance and the local landing request. The dev manager owns
-dev PR policy, invokes `dev:pr-manager`, and owns promotion. PR Lifecycle Agent
-observes the PR and executes only review, check, status, and promotion actions
-after the manager's authorization.
+owns feature acceptance and pull-request delivery authorization. PR Lifecycle
+Agent executes only routed GitHub mechanics. The owning Feature Gizmo carries
+delivery through squash merge and branch cleanup.
 
 ## Validation
 

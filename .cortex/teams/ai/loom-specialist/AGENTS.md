@@ -25,7 +25,7 @@ It handles only AI-owned Loom work named in the packet.
   Record those authorities in the acceptance handoff.
 - Consume the Prime-issued canonical feature branch name and bootstrap
   evidence. `originMainSha` identifies the freshly fetched `origin/main` and
-  `pinnedLocalDevSha` identifies the synchronized local-dev feature base;
+  `originMainSha` identifies the synchronized fresh-main feature base;
   `originMainSha` must be its ancestor. The branch name is the workflow
   authority. Resolve its latest committed head before this stage and start
   from the current parent frontier. If the branch advances, follow the latest

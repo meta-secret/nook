@@ -38,7 +38,7 @@ The child form must contain both the team and role segments.
   - **SRE (`sre`):** `gizmo`, `provisioning`, or `cloud-native`.
   - **Web Development (`web-dev`):** `gizmo`, `typescript-specialist`, or
     `svelte-specialist`.
-  - **Delivery Pipeline (`delivery-pipeline`):** `gizmo`, `dev-manager`, or
+  - **Delivery Pipeline (`delivery-pipeline`):** `gizmo`, `pr-lifecycle`, or
     `pr-lifecycle`.
 - **Role:** The `role` segment is `gizmo` or the canonical leaf role listed in
   the registry for the selected team.
@@ -61,7 +61,7 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Do not create an empty commit, an empty merge, or a commit with
   `--allow-empty`.
 - Do not integrate with `--no-ff`.
-- Do not squash, rebase, or force-push a feature or child branch.
+- Do not force-push a feature or child branch.
 
 ## Ownership and integration
 
@@ -98,21 +98,18 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
 - Prime authorizes the canonical feature branch name. The branch name is the
   workflow authority for publication and remote work.
-- After the mandatory fetch and synchronization, Prime resolves the latest
-  committed `refs/heads/dev^{commit}`. Every new feature mission, feature
-  branch, and worktree must use that exact latest committed canonical local
-  `dev` commit as its base.
-  A previously pinned or otherwise older local-dev SHA, `origin/dev`,
-  `origin/main`, or another alternate base is invalid. If the
-  post-synchronization equality cannot be proved, creation fails closed. The
-  base is preserved after feature creation. Base and head SHAs are
-  observational evidence only and are not required packet fields.
+- After the mandatory fetch, Prime resolves exact `origin/main`. Every new
+  feature mission, feature branch, and worktree uses that fresh commit as its
+  base. An older main observation or another branch is invalid. The base is
+  preserved after feature creation.
 - Delivery re-fetches and resolves the latest committed branch head before
-  remote dispatch, review, or landing. If the branch advances, follow the
+  remote dispatch, PR mutation, or merge. If the branch advances, follow the
   latest head and rerun affected evidence instead of failing on stale SHA
   observations.
 - Temporary Team Gizmo and leaf branches are private. Only the canonical
   feature branch is published or used as a remote workflow ref.
+- After every required PR check is green, squash-merge the canonical feature
+  branch into `main` and delete the remote feature branch.
 
 Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
 worktree, and integration sequencing.
