@@ -58,13 +58,13 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 ## Prohibited actions
 
 - Do not perform team-owned implementation as Gizmo.
-- Remote checks are authoritative and preferred by default. Local checks are not
-  routine prerequisites.
-- Run a local check only under explicit bounded controller authorization for
-  the current operation. This includes local tests, product compilation,
+- Do not treat local checks as routine prerequisites. Remote checks remain
+  authoritative and preferred by default.
+- Do not run a local check without explicit bounded controller authorization
+  for the current operation. This includes local tests, product compilation,
   Docker work, coverage, and preflight.
-- A one-off local authorization applies only to that operation. It creates no
-  precedent, and later agents must not infer it as a requirement.
+- Do not infer a precedent or later requirement from a prior one-off local
+  authorization. It applies only to that operation.
 - Do not run remote tests, coverage, e2e, or preflight in the feature stage.
 - Do not request any remote check other than the required `build:compile` and
   `type:check` gates.
