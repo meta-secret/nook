@@ -69,25 +69,25 @@
             AuthenticatorPickerQueryResponse.decode,
             response,
           )
-          resolve(
+          const queryResponse: AuthenticatorPickerRuntimeResponse =
             decoded.kind === ConcreteDecoderResultKind.Decoded
               ? {
                   kind: AuthenticatorPickerRuntimeResponseKind.Query,
                   response: decoded.value,
                 }
-              : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
-          )
+              : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
+          resolve(queryResponse)
           return
         }
         const decoded = runConcreteDecoder(
           AuthenticatorPickerSelectResponse.decode,
           response,
         )
-        resolve(
+        const selectionResponse: AuthenticatorPickerRuntimeResponse =
           decoded.kind === ConcreteDecoderResultKind.Decoded
             ? { kind: AuthenticatorPickerRuntimeResponseKind.Selected }
-            : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected },
-        )
+            : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
+        resolve(selectionResponse)
       })
     })
   }

@@ -84,6 +84,8 @@ type PasskeyOption = {
     userDisplayName: string
   }
 }
+type PasskeyAccount = NonNullable<PasskeyOption['account']>
+type ExactSchemaPropertyOptions = { readonly exact: true }
 
 enum PasskeyOptionChoiceKind {
   BrowserFallback = 'browser-fallback',
@@ -133,7 +135,7 @@ class WebAuthnRuntimeTransport<T> {
   constructor(private readonly message: WebsitePasskeyRuntimeMessage) {}
 
   send(): Promise<T> {
-    return new Promise((resolve, reject) => {
+    return new Promise((...[resolve, reject]) => {
       void chrome.runtime.sendMessage(this.message, (response: T) => {
         const error = chrome.runtime.lastError?.message
         if (error) reject(new Error(error))
@@ -143,18 +145,26 @@ class WebAuthnRuntimeTransport<T> {
   }
 }
 
-const passkeyOptionSchema = Schema.Struct({
+const passkeyAccountSchemaFields: Schema.Struct.Fields = {
+  credentialId: Schema.String,
+  userName: Schema.String,
+  userDisplayName: Schema.String,
+}
+const passkeyAccountSchema: Schema.Schema<PasskeyAccount> = Schema.Struct(
+  passkeyAccountSchemaFields,
+)
+const passkeyAccountSchemaOptions: ExactSchemaPropertyOptions = { exact: true }
+const passkeyOptionSchemaFields: Schema.Struct.Fields = {
   vaultStoreId: Schema.String,
   vaultName: Schema.String,
   account: Schema.optionalWith(
-    Schema.Struct({
-      credentialId: Schema.String,
-      userName: Schema.String,
-      userDisplayName: Schema.String,
-    }),
-    { exact: true },
+    passkeyAccountSchema,
+    passkeyAccountSchemaOptions,
   ),
-}) satisfies Schema.Schema<PasskeyOption>
+}
+const passkeyOptionSchema: Schema.Schema<PasskeyOption> = Schema.Struct(
+  passkeyOptionSchemaFields,
+)
 
 function decodePasskeyOption(value: unknown) {
   return Schema.decodeUnknown(passkeyOptionSchema)(value)

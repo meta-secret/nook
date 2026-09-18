@@ -46,12 +46,15 @@ export class NormalizedOpenCompanionLauncherMessage {
     return Schema.decodeUnknown(NormalizedOpenCompanionLauncherMessageSchema)(
       message,
     ).pipe(
-      Effect.mapError((cause) =>
-        RuntimeMessageDecodeFailure.fromParseError({
+      Effect.mapError((cause) => {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromParseError
+        >[0] = {
           kind: RuntimeMessageDecodeFailureKind.OpenCompanionLauncher,
           cause,
-        }),
-      ),
+        };
+        return RuntimeMessageDecodeFailure.fromParseError(failureRequest);
+      }),
       Effect.map(({ type, payload }) => ({
         type,
         intent:
@@ -63,13 +66,36 @@ export class NormalizedOpenCompanionLauncherMessage {
   }
 }
 
-const NormalizedOpenCompanionLauncherMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-  ),
-  payload: Schema.optional(
-    Schema.Struct({
-      intent: Schema.Literal(OpenCompanionLauncherIntent.Pair),
-    }),
-  ),
-});
+const normalizedCompanionLauncherIntentSchema = Schema.Literal(
+  OpenCompanionLauncherIntent.Pair,
+);
+type NormalizedCompanionLauncherPayloadFields = {
+  readonly intent: typeof normalizedCompanionLauncherIntentSchema;
+};
+const normalizedCompanionLauncherPayloadFields: NormalizedCompanionLauncherPayloadFields =
+  {
+    intent: normalizedCompanionLauncherIntentSchema,
+  };
+
+const normalizedCompanionLauncherTypeSchema = Schema.Literal(
+  OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+);
+const normalizedCompanionLauncherPayloadSchema = Schema.Struct(
+  normalizedCompanionLauncherPayloadFields,
+);
+const normalizedCompanionLauncherOptionalPayloadSchema = Schema.optional(
+  normalizedCompanionLauncherPayloadSchema,
+);
+type NormalizedCompanionLauncherMessageFields = {
+  readonly type: typeof normalizedCompanionLauncherTypeSchema;
+  readonly payload: typeof normalizedCompanionLauncherOptionalPayloadSchema;
+};
+const normalizedCompanionLauncherMessageFields: NormalizedCompanionLauncherMessageFields =
+  {
+    type: normalizedCompanionLauncherTypeSchema,
+    payload: normalizedCompanionLauncherOptionalPayloadSchema,
+  };
+
+const NormalizedOpenCompanionLauncherMessageSchema = Schema.Struct(
+  normalizedCompanionLauncherMessageFields,
+);

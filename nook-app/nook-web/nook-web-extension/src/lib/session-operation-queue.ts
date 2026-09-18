@@ -36,7 +36,7 @@ export const DEFAULT_SESSION_OPERATION_OPTIONS: SessionOperationOptions = {
   cleanup: { kind: SessionOperationCleanupKind.None },
 }
 
-export type EnqueueSessionOperationArgs<T> = {
+export type EnqueueSessionOperationRequest<T> = {
   operation: () => Promise<Result<T, SessionOperationFailure>>
   options: SessionOperationOptions
 }
@@ -93,10 +93,12 @@ interface QueuedOperation {
   cancel(error: SessionOperationFailure): void
 }
 
+type SessionOperationResult<T> = Result<T, SessionOperationFailure>
+
 type QueuedSessionOperationConfiguration<T> = {
   readonly sequence: number
-  readonly request: EnqueueSessionOperationArgs<T>
-  readonly resolve: (value: Result<T, SessionOperationFailure>) => void
+  readonly request: EnqueueSessionOperationRequest<T>
+  readonly resolve: (result: SessionOperationResult<T>) => void
   readonly remove: (entry: QueuedOperation) => void
 }
 
@@ -236,32 +238,45 @@ export class SessionOperationQueue {
   }
 
   enqueue<T>(
-    request: EnqueueSessionOperationArgs<T>,
+    request: EnqueueSessionOperationRequest<T>,
   ): Promise<Result<T, SessionOperationFailure>> {
     return new Promise<Result<T, SessionOperationFailure>>((resolve) => {
-      const entry = new QueuedSessionOperation({
+      const configuration: QueuedSessionOperationConfiguration<T> = {
         sequence: this.sequence++,
         request,
         resolve,
         remove: (expired) => this.remove(expired),
-      })
+      }
+      const entry = new QueuedSessionOperation(configuration)
       if (this.state.kind === QueueStateKind.Closed) {
         entry.cancel(this.state.error)
         return
       }
-      this.entries.push(entry)
+      this.insert(entry)
       entry.scheduleExpiry()
-      this.entries.sort(
-        (left, right) =>
-          priorityOrder[left.priority] - priorityOrder[right.priority] ||
-          left.sequence - right.sequence,
-      )
       void this.drain()
     })
   }
 
   private remove(entry: QueuedOperation): void {
     this.entries = this.entries.filter((candidate) => candidate !== entry)
+  }
+
+  private insert(entry: QueuedOperation): void {
+    const entryPriority = priorityOrder[entry.priority]
+    let insertionIndex = this.entries.length
+    for (const [index, candidate] of this.entries.entries()) {
+      const candidatePriority = priorityOrder[candidate.priority]
+      if (
+        entryPriority < candidatePriority ||
+        (entryPriority === candidatePriority &&
+          entry.sequence < candidate.sequence)
+      ) {
+        insertionIndex = index
+        break
+      }
+    }
+    this.entries.splice(insertionIndex, 0, entry)
   }
 
   private async drain(): Promise<void> {

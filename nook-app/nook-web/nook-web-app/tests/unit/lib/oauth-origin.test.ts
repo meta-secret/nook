@@ -11,17 +11,14 @@ type OAuthLocationFixtureRequest = {
   hostname: string
 }
 
-class OAuthLocationFixture {
-  private readonly browserLocation = window.location
+type OAuthLocation = Pick<Location, 'origin' | 'hostname'>
 
-  create(request: OAuthLocationFixtureRequest): Location {
-    return new Proxy(this.browserLocation, {
-      get: (target, property, receiver) => {
-        if (property === 'origin') return request.origin
-        if (property === 'hostname') return request.hostname
-        return Reflect.get(target, property, receiver)
-      },
-    })
+class OAuthLocationFixture {
+  create(request: OAuthLocationFixtureRequest): OAuthLocation {
+    return {
+      origin: request.origin,
+      hostname: request.hostname,
+    }
   }
 }
 

@@ -168,11 +168,14 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   }
 
   function resetSelectedVaultForIdentity(): void {
-    selectedVault = new IdentityVaultSelection({
+    const resetRequest: ConstructorParameters<
+      typeof IdentityVaultSelection
+    >[0] = {
       loadState,
       directoryLoadState,
       selectedVault,
-    }).reset();
+    };
+    selectedVault = new IdentityVaultSelection(resetRequest).reset();
   }
 
   async function renamePasskey(name: string): Promise<boolean> {

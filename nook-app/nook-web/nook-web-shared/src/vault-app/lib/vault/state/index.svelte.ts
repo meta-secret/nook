@@ -344,10 +344,7 @@ class VaultStateSlicesImplementation {
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
         configurable: true,
         enumerable: true,
-        get: () => {
-          const value = state[key];
-          return typeof value === "function" ? value.bind(state) : value;
-        },
+        get: () => state[key],
         set: (value: State[keyof State]) => {
           Reflect.set(state, key, value);
         },

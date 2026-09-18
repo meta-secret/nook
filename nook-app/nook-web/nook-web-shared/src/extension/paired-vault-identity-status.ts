@@ -1,18 +1,18 @@
-import type { CompanionIdentityStatus } from './nook-companion-wasm/nook_companion_wasm.js'
+import type { CompanionIdentityStatus } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export type ExtensionPairedVaultIdentityStatusMessageStatus =
-  CompanionIdentityStatus['status']
+  CompanionIdentityStatus["status"];
 
 const extensionPairedVaultIdentityStatusMessageStatusValues = {
-  Unavailable: 'unavailable',
-  Locked: 'locked',
-  DifferentVault: 'different-vault',
-  Unlocked: 'unlocked',
-} satisfies Record<string, ExtensionPairedVaultIdentityStatusMessageStatus>
+  Unavailable: "unavailable",
+  Locked: "locked",
+  DifferentVault: "different-vault",
+  Unlocked: "unlocked",
+} satisfies Record<string, ExtensionPairedVaultIdentityStatusMessageStatus>;
 
 const extensionPairedVaultIdentityStatusMessageStatus: typeof extensionPairedVaultIdentityStatusMessageStatusValues =
-  extensionPairedVaultIdentityStatusMessageStatusValues
+  extensionPairedVaultIdentityStatusMessageStatusValues;
 
 export const ExtensionPairedVaultIdentityStatusMessageStatus = Object.freeze(
   extensionPairedVaultIdentityStatusMessageStatus,
-)
+);

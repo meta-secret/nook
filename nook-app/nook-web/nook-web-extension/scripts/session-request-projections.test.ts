@@ -103,7 +103,7 @@ describe('extension session request projections', () => {
           }),
         ),
       ),
-    ).toEqual(expect.objectContaining({ _tag: 'Left' }))
+    ).toHaveProperty('_tag', 'Left')
     expect(
       await Effect.runPromise(
         Effect.either(
@@ -113,7 +113,7 @@ describe('extension session request projections', () => {
           }),
         ),
       ),
-    ).toEqual(expect.objectContaining({ _tag: 'Left' }))
+    ).toHaveProperty('_tag', 'Left')
   })
 
   test('removes stored-grant metadata from login reveal', () => {

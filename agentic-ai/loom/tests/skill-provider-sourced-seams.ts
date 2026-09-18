@@ -131,6 +131,14 @@ const AUDITED_DYNAMIC_EXECUTABLES = new Map([
     '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
     'f1f5ccdf4018460774b17dc012b4e7fb197bcaf578be2834fd44ca30f1786151',
   ],
+  [
+    '.github/workflows/remote.yml:"$node_bin"',
+    'f578ca1ba257c11bbdf5eb9401cd2acc2aabd084d595eb9f8e55d7f6ef7bb59c',
+  ],
+  [
+    '.github/workflows/remote.yml:"$jq_root/jq"',
+    'f578ca1ba257c11bbdf5eb9401cd2acc2aabd084d595eb9f8e55d7f6ef7bb59c',
+  ],
 ]);
 
 const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
@@ -174,7 +182,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'df702e54a1f1aafd0e76b16ae982b89a8ef034164e78b962967d55add9b0b425',
+    '8d064bc6020e97d0d47ebe4ae68fd450c54f7a7882df825733cde88f2ae3ecdb',
+  ],
+  [
+    'infra/contracts/dockerized-rust-cache-registry.test.ts',
+    '828dcbf75a64cb042f183ef0ca7d8e3c81235b30bbaf0f7cb44f1520f04624ce',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -206,7 +218,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    '48fe5a012b1abd144a53a1b5fd94a90d2d583d2fb6499a5630df1c6f9482b254',
+    '7795bfb3c91d6ddf158e9c3d202fb2ed169a09644b8d66e2104cfd22abf13358',
+  ],
+  [
+    '.github/scripts/ci-pr-native-pages-build.sh',
+    'e6731f208ba0e58d59b221aa70f800ac67f8fc29299a1010deb2cd44782769c2',
   ],
   [
     'infra/operator-ssh.ts',
@@ -218,7 +234,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    '64551645ae8b751d33bee882b8f742227799013ab071d76b4594091d21d2f6e7',
+    '63d4d81f964a15fdb81529a7894501fef993a5fce9ebee94630d39aa282c3c6c',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',

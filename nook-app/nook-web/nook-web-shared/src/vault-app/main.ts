@@ -1,4 +1,4 @@
-import { mount } from "svelte";
+import { mount, type Component, type MountOptions } from "svelte";
 import { err, ok, type Result } from "neverthrow";
 import "./app.css";
 import { configured_vault_application, type VaultApplication } from "$app-wasm";
@@ -22,7 +22,10 @@ class VaultAppMount {
   async mount(): Promise<Result<VaultMountOutcome, VaultMountFailure>> {
     const target = document.getElementById("app");
     if (!target) return err(VaultMountFailure.MissingTarget);
-    const startupShell = new VaultStartupShell({ target });
+    const startupShellRequest: ConstructorParameters<
+      typeof VaultStartupShell
+    >[0] = { target };
+    const startupShell = new VaultStartupShell(startupShellRequest);
     const ready = await vaultApplicationRuntime.ensureAppWasm(this.application);
     if (ready.isErr()) {
       startupShell.showUnavailable();
@@ -37,7 +40,8 @@ class VaultAppMount {
       }
       if (!target.isConnected || document.getElementById("app") !== target)
         return err(VaultMountFailure.DetachedTarget);
-      mount(App, { target });
+      const mountOptions: MountOptions<Record<PropertyKey, never>> = { target };
+      mount(App as Component<Record<PropertyKey, never>>, mountOptions);
       startupShell.remove();
       return ok(VaultMountOutcome.Mounted);
     } catch {

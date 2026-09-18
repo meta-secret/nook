@@ -37,6 +37,13 @@ interface VaultSecretAllocation {
 
 type VaultSecretAllocationCollection = ReadonlyArray<VaultSecretAllocation>;
 
+interface SecretMutationTimeoutRequest {
+  readonly promise: Promise<
+    Result<VaultSecretAllocationCollection, StorageOperationFailure>
+  >;
+  readonly releaseLateValue: (records: VaultSecretAllocationCollection) => void;
+}
+
 interface PasswordManagerImportExecution {
   readonly importFromManager: (
     manager: NookVaultManager,
@@ -165,12 +172,11 @@ export class VaultSecretActions {
         return storageErr(refreshed.error);
       }
       log.info(sourceName + " import completed");
-      state.showSuccess(
-        state.t({
-          key: successKey,
-          replacements: { count: String(imported.value.imported) },
-        }),
-      );
+      const successTranslation: Parameters<typeof state.t>[0] = {
+        key: successKey,
+        replacements: { count: String(imported.value.imported) },
+      };
+      state.showSuccess(state.t(successTranslation));
       return imported;
     } finally {
       state.isSaving = false;
@@ -216,10 +222,11 @@ export class VaultSecretActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        return state.raceStorageTimeout({
+        const timeoutRequest: SecretMutationTimeoutRequest = {
           promise: operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
-        });
+        };
+        return state.raceStorageTimeout(timeoutRequest);
       });
       if (added.isErr()) {
         return storageErr(added.error);
@@ -541,7 +548,10 @@ export class VaultSecretActions {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return storageOk({ entries: state.passwordEntries });
+      const snapshot: PasswordEntriesRefreshSnapshot = {
+        entries: state.passwordEntries,
+      };
+      return storageOk(snapshot);
     }
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
@@ -573,7 +583,8 @@ export class VaultSecretActions {
       for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
     }
-    return storageOk({ entries: entries.value });
+    const snapshot: PasswordEntriesRefreshSnapshot = { entries: entries.value };
+    return storageOk(snapshot);
   }
 
   async refreshSecretsFromSession(): Promise<
@@ -706,12 +717,13 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk({
+    const snapshot: SecretPageRefreshSnapshot = {
       displayedSecretCount: state.secrets.length,
       totalSecretCount: state.secretTotal,
       pageOffset: state.secretPageOffset,
       query: state.secretQuery,
-    });
+    };
+    return storageOk(snapshot);
   }
 
   applyConnectedSecretPage({
@@ -769,12 +781,13 @@ export class VaultSecretActions {
     });
     if (result.isErr()) return storageErr(result.error);
     try {
-      return storageOk({
+      const codeView: AuthenticatorCodeView = {
         code: result.value.code,
         secondsRemaining: result.value.secondsRemaining,
         period: result.value.period,
         expiresAtUnixSeconds: result.value.expiresAtUnixSeconds,
-      });
+      };
+      return storageOk(codeView);
     } finally {
       result.value.free();
     }

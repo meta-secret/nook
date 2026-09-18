@@ -3,7 +3,7 @@ import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationCleanupKind,
-  type EnqueueSessionOperationArgs,
+  type EnqueueSessionOperationRequest,
   SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
@@ -218,7 +218,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       clearExtensionSessionSensitiveRequest(payloadResidency.request)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    const nookNamedArgs1_0: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs1_0: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           return err(
@@ -284,7 +284,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     new ProviderCredentialBuffer(providerCandidate).clear()
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
-    const nookNamedArgs1_1: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs1_1: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: async () => {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
@@ -351,7 +351,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private enqueueCompanionIdentityHandoff(
     message: CompanionIdentityHandoffSessionTransportRequest,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
+    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityHandoff(message),
       options: {
         priority: SessionOperationPriority.Interactive,
@@ -368,7 +368,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private enqueueCompanionIdentityDiscovery(
     message: CompanionIdentityDiscoverySessionTransportRequest,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
+    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityDiscovery(message),
       options: {
         priority: SessionOperationPriority.Probe,
@@ -429,7 +429,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }
 
-    const nookNamedArgs0_5: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs0_5: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleMessage(message),
       options: {
         priority,

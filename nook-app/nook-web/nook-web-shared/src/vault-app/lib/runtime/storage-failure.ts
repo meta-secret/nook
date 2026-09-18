@@ -35,11 +35,27 @@ export enum VaultStorageFailureKind {
   ExtensionApprovalContextChanged = "extension-approval-context-changed",
 }
 
+export type VaultStorageFailureRequest = {
+  readonly kind: VaultStorageFailureKind;
+  readonly recoveryKind: VaultRecoveryErrorKind;
+};
+
+type VaultStorageFailureInput =
+  VaultStorageFailureKind | VaultStorageFailureRequest;
+
 export class VaultStorageFailure {
-  constructor(
-    readonly kind: VaultStorageFailureKind,
-    readonly recoveryKind = VaultRecoveryErrorKind.Other,
-  ) {}
+  readonly kind: VaultStorageFailureKind;
+  readonly recoveryKind: VaultRecoveryErrorKind;
+
+  constructor(input: VaultStorageFailureInput) {
+    if (typeof input === "string") {
+      this.kind = input;
+      this.recoveryKind = VaultRecoveryErrorKind.Other;
+      return;
+    }
+    this.kind = input.kind;
+    this.recoveryKind = input.recoveryKind;
+  }
   get translationKey() {
     switch (this.kind) {
       case VaultStorageFailureKind.IdentityHandoffRejected:
@@ -93,11 +109,12 @@ export class NativeVaultStorageFailure<
   NativeCause = Error | string,
 > extends VaultStorageFailure {
   constructor(cause: NativeCause) {
-    super(
-      VaultStorageFailureKind.OperationFailed,
-      classify_vault_recovery_error(
+    const request: VaultStorageFailureRequest = {
+      kind: VaultStorageFailureKind.OperationFailed,
+      recoveryKind: classify_vault_recovery_error(
         cause instanceof Error ? cause.message : String(cause),
       ),
-    );
+    };
+    super(request);
   }
 }

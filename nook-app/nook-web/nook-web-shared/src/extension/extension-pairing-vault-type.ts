@@ -50,9 +50,7 @@ class ExtensionPairingVaultTypeCatalog {
       case ExtensionPairingVaultTypeRuntimeStateKind.Configured:
         try {
           return ok(
-            this.runtimeState.runtime.admit_extension_pairing_vault_type(
-              value,
-            ),
+            this.runtimeState.runtime.admit_extension_pairing_vault_type(value),
           );
         } catch {
           return err(ExtensionPairingVaultTypeAdmissionFailure.Unsupported);
@@ -61,5 +59,4 @@ class ExtensionPairingVaultTypeCatalog {
   }
 }
 
-export const extensionPairingVaultType =
-  new ExtensionPairingVaultTypeCatalog();
+export const extensionPairingVaultType = new ExtensionPairingVaultTypeCatalog();

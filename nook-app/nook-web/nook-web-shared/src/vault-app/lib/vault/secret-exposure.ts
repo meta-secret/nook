@@ -73,7 +73,10 @@ export class SecretExposure {
       if (concurrent) loaded.free();
       else active.records[id] = loaded;
     }
-    return ok({ ...active.records });
+    const recordsSnapshot: Record<string, NookSecretRecord> = {
+      ...active.records,
+    };
+    return ok(recordsSnapshot);
   }
   async withRecord<T>({
     id,

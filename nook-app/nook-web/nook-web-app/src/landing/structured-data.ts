@@ -6,17 +6,42 @@ export enum LandingLocale {
   Russian = 'ru',
 }
 
-const LandingStructuredDataSchema = Schema.Struct({
-  '@context': Schema.optional(Schema.String),
-  '@type': Schema.optional(Schema.String),
-  name: Schema.optional(Schema.String),
-  url: Schema.optional(Schema.String),
+const landingContextSchema = Schema.optional(Schema.String)
+const landingTypeSchema = Schema.optional(Schema.String)
+const landingNameSchema = Schema.optional(Schema.String)
+const landingUrlSchema = Schema.optional(Schema.String)
+const landingApplicationCategorySchema = Schema.optional(Schema.String)
+const landingOperatingSystemSchema = Schema.optional(Schema.String)
+const landingAccessibilitySchema = Schema.optional(Schema.Boolean)
+const landingLanguageSchema = Schema.optional(Schema.String)
+
+type LandingStructuredDataSchemaFields = {
+  readonly '@context': typeof landingContextSchema
+  readonly '@type': typeof landingTypeSchema
+  readonly name: typeof landingNameSchema
+  readonly url: typeof landingUrlSchema
+  readonly description: typeof Schema.String
+  readonly applicationCategory: typeof landingApplicationCategorySchema
+  readonly operatingSystem: typeof landingOperatingSystemSchema
+  readonly isAccessibleForFree: typeof landingAccessibilitySchema
+  readonly inLanguage: typeof landingLanguageSchema
+}
+
+const landingStructuredDataSchemaFields: LandingStructuredDataSchemaFields = {
+  '@context': landingContextSchema,
+  '@type': landingTypeSchema,
+  name: landingNameSchema,
+  url: landingUrlSchema,
   description: Schema.String,
-  applicationCategory: Schema.optional(Schema.String),
-  operatingSystem: Schema.optional(Schema.String),
-  isAccessibleForFree: Schema.optional(Schema.Boolean),
-  inLanguage: Schema.optional(Schema.String),
-})
+  applicationCategory: landingApplicationCategorySchema,
+  operatingSystem: landingOperatingSystemSchema,
+  isAccessibleForFree: landingAccessibilitySchema,
+  inLanguage: landingLanguageSchema,
+}
+
+const LandingStructuredDataSchema = Schema.Struct(
+  landingStructuredDataSchemaFields,
+)
 
 type LandingStructuredData = Schema.Schema.Type<
   typeof LandingStructuredDataSchema
@@ -30,41 +55,48 @@ export enum LandingStructuredDataDecodeFailureKind {
 export class LandingStructuredDataDecodeFailure extends Error {
   readonly _tag = 'LandingStructuredDataDecodeFailure'
 
-  private constructor(
-    readonly kind: LandingStructuredDataDecodeFailureKind,
-    override readonly cause: Error | ParseResult.ParseError,
-  ) {
-    super(kind)
+  private constructor(request: LandingStructuredDataDecodeFailureRequest) {
+    super(request.kind)
+    this.kind = request.kind
+    this.cause = request.cause
   }
 
-  static invalidJson(cause: Error): LandingStructuredDataDecodeFailure {
-    return new LandingStructuredDataDecodeFailure(
-      LandingStructuredDataDecodeFailureKind.InvalidJson,
+  readonly kind: LandingStructuredDataDecodeFailureKind
+  override readonly cause: Error | ParseResult.ParseError
+
+  static invalidJson(
+    cause: Error | ParseResult.ParseError,
+  ): LandingStructuredDataDecodeFailure {
+    const request: LandingStructuredDataDecodeFailureRequest = {
+      kind: LandingStructuredDataDecodeFailureKind.InvalidJson,
       cause,
-    )
+    }
+    return new LandingStructuredDataDecodeFailure(request)
   }
 
   static invalidStructuredData(
     cause: ParseResult.ParseError,
   ): LandingStructuredDataDecodeFailure {
-    return new LandingStructuredDataDecodeFailure(
-      LandingStructuredDataDecodeFailureKind.InvalidStructuredData,
+    const request: LandingStructuredDataDecodeFailureRequest = {
+      kind: LandingStructuredDataDecodeFailureKind.InvalidStructuredData,
       cause,
-    )
+    }
+    return new LandingStructuredDataDecodeFailure(request)
   }
+}
+
+type LandingStructuredDataDecodeFailureRequest = {
+  readonly kind: LandingStructuredDataDecodeFailureKind
+  readonly cause: Error | ParseResult.ParseError
 }
 
 export class LandingStructuredDataDecoder {
   static decode(
     serialized: string,
   ): Effect.Effect<LandingStructuredData, LandingStructuredDataDecodeFailure> {
-    return Effect.try({
-      try: () => JSON.parse(serialized),
-      catch: (cause) =>
-        LandingStructuredDataDecodeFailure.invalidJson(
-          cause instanceof Error ? cause : new Error(String(cause)),
-        ),
-    }).pipe(
+    const jsonSchema = Schema.parseJson()
+    return Schema.decodeUnknown(jsonSchema)(serialized).pipe(
+      Effect.mapError(LandingStructuredDataDecodeFailure.invalidJson),
       Effect.flatMap((value) =>
         Schema.decodeUnknown(LandingStructuredDataSchema)(value).pipe(
           Effect.mapError(
@@ -87,8 +119,13 @@ export function localizeLandingStructuredData(
 ): Effect.Effect<string, LandingStructuredDataDecodeFailure> {
   const { serialized, description, locale } = request
   return LandingStructuredDataDecoder.decode(serialized).pipe(
-    Effect.map((structuredData) =>
-      JSON.stringify({ ...structuredData, description, inLanguage: locale }),
-    ),
+    Effect.map((structuredData) => {
+      const localizedData: LandingStructuredData = {
+        ...structuredData,
+        description,
+        inLanguage: locale,
+      }
+      return JSON.stringify(localizedData)
+    }),
   )
 }

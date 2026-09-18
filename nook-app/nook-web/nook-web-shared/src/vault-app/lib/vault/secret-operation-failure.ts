@@ -6,13 +6,13 @@ import { VaultEditDecision } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 
 /** Retains the Rust-produced edit decision and translated reason. */
+type RejectedVaultEditRestriction = Exclude<
+  VaultEditRestriction,
+  { decision: VaultEditDecision.Allowed }
+>;
+
 export class SecretEditRejection {
-  constructor(
-    readonly restriction: Exclude<
-      VaultEditRestriction,
-      { decision: VaultEditDecision.Allowed }
-    >,
-  ) {}
+  constructor(readonly restriction: RejectedVaultEditRestriction) {}
 }
 export type SecretOperationFailure =
   VaultStorageFailure | SecretEditRejection | OAuthFailure;

@@ -161,86 +161,258 @@ const authenticatorPickerNonEmptyStringSchema = Schema.String.pipe(
   Schema.minLength(1),
 )
 
-const authenticatorPickerQueryResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  origin: authenticatorPickerNonEmptyStringSchema,
-  accounts: Schema.mutable(
-    Schema.Array(
-      Schema.Struct({
-        vaultStoreId: authenticatorPickerNonEmptyStringSchema,
-        secretId: authenticatorPickerNonEmptyStringSchema,
-        issuer: Schema.String,
-        account: Schema.String,
-        vaultName: Schema.String,
-      }),
+type AuthenticatorPickerQueryResponseAccountsSchemaFields = {
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  issuer: typeof Schema.String
+  account: typeof Schema.String
+  vaultName: typeof Schema.String
+}
+const authenticatorPickerQueryResponseAccountsSchemaFields: AuthenticatorPickerQueryResponseAccountsSchemaFields =
+  {
+    vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+    secretId: authenticatorPickerNonEmptyStringSchema,
+    issuer: Schema.String,
+    account: Schema.String,
+    vaultName: Schema.String,
+  }
+
+type AuthenticatorPickerQueryResponseSchemaFields = {
+  ok: Schema.Literal<[true]>
+  origin: Schema.filter<typeof Schema.String>
+  accounts: Schema.mutable<
+    Schema.Array$<
+      Schema.Struct<{
+        vaultStoreId: Schema.filter<typeof Schema.String>
+        secretId: Schema.filter<typeof Schema.String>
+        issuer: typeof Schema.String
+        account: typeof Schema.String
+        vaultName: typeof Schema.String
+      }>
+    >
+  >
+}
+const authenticatorPickerQueryResponseSchemaFields: AuthenticatorPickerQueryResponseSchemaFields =
+  {
+    ok: Schema.Literal(true),
+    origin: authenticatorPickerNonEmptyStringSchema,
+    accounts: Schema.mutable(
+      Schema.Array(
+        Schema.Struct(authenticatorPickerQueryResponseAccountsSchemaFields),
+      ),
     ),
-  ),
-}) satisfies Schema.Schema<AuthenticatorPickerQueryResponse>
+  }
 
-const authenticatorPickerSelectResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-}) satisfies Schema.Schema<AuthenticatorPickerSelectResponse>
+const authenticatorPickerQueryResponseSchema = Schema.Struct(
+  authenticatorPickerQueryResponseSchemaFields,
+) satisfies Schema.Schema<AuthenticatorPickerQueryResponse>
 
-const websiteAuthenticatorPickerOpenMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen,
-  ),
-  payload: Schema.Struct({ origin: authenticatorPickerNonEmptyStringSchema }),
-}) satisfies Schema.Schema<WebsiteAuthenticatorPickerOpenMessage>
+type AuthenticatorPickerSelectResponseSchemaFields = {
+  ok: Schema.Literal<[true]>
+}
+const authenticatorPickerSelectResponseSchemaFields: AuthenticatorPickerSelectResponseSchemaFields =
+  {
+    ok: Schema.Literal(true),
+  }
 
-const authenticatorPickerQueryMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
-  ),
-  payload: Schema.Struct({
+const authenticatorPickerSelectResponseSchema = Schema.Struct(
+  authenticatorPickerSelectResponseSchemaFields,
+) satisfies Schema.Schema<AuthenticatorPickerSelectResponse>
+
+type WebsiteAuthenticatorPickerOpenMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteAuthenticatorPickerOpenMessagePayloadSchemaFields: WebsiteAuthenticatorPickerOpenMessagePayloadSchemaFields =
+  { origin: authenticatorPickerNonEmptyStringSchema }
+
+type WebsiteAuthenticatorPickerOpenMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteAuthenticatorPickerOpenMessageType]>
+  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+}
+const websiteAuthenticatorPickerOpenMessageSchemaFields: WebsiteAuthenticatorPickerOpenMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen,
+    ),
+    payload: Schema.Struct(
+      websiteAuthenticatorPickerOpenMessagePayloadSchemaFields,
+    ),
+  }
+
+const websiteAuthenticatorPickerOpenMessageSchema = Schema.Struct(
+  websiteAuthenticatorPickerOpenMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteAuthenticatorPickerOpenMessage>
+
+type AuthenticatorPickerQueryMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+  query: Schema.filter<typeof Schema.String>
+}
+const authenticatorPickerQueryMessagePayloadSchemaFields: AuthenticatorPickerQueryMessagePayloadSchemaFields =
+  {
     requestId: authenticatorPickerNonEmptyStringSchema,
     query: Schema.String.pipe(
       Schema.maxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH),
     ),
-  }),
-}) satisfies Schema.Schema<AuthenticatorPickerQueryMessage>
+  }
 
-const authenticatorPickerSelectMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
-  ),
-  payload: Schema.Struct({
+type AuthenticatorPickerQueryMessageSchemaFields = {
+  type: Schema.Literal<[AuthenticatorPickerQueryMessageType]>
+  payload: Schema.Struct<{
+    requestId: Schema.filter<typeof Schema.String>
+    query: Schema.filter<typeof Schema.String>
+  }>
+}
+const authenticatorPickerQueryMessageSchemaFields: AuthenticatorPickerQueryMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    ),
+    payload: Schema.Struct(authenticatorPickerQueryMessagePayloadSchemaFields),
+  }
+
+const authenticatorPickerQueryMessageSchema = Schema.Struct(
+  authenticatorPickerQueryMessageSchemaFields,
+) satisfies Schema.Schema<AuthenticatorPickerQueryMessage>
+
+type AuthenticatorPickerSelectMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+}
+const authenticatorPickerSelectMessagePayloadSchemaFields: AuthenticatorPickerSelectMessagePayloadSchemaFields =
+  {
     requestId: authenticatorPickerNonEmptyStringSchema,
     vaultStoreId: authenticatorPickerNonEmptyStringSchema,
     secretId: authenticatorPickerNonEmptyStringSchema,
-  }),
-}) satisfies Schema.Schema<AuthenticatorPickerSelectMessage>
+  }
 
-const authenticatorPickerCancelMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel,
-  ),
-  payload: Schema.Struct({
+type AuthenticatorPickerSelectMessageSchemaFields = {
+  type: Schema.Literal<[AuthenticatorPickerSelectMessageType]>
+  payload: Schema.Struct<{
+    requestId: Schema.filter<typeof Schema.String>
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+  }>
+}
+const authenticatorPickerSelectMessageSchemaFields: AuthenticatorPickerSelectMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
+    ),
+    payload: Schema.Struct(authenticatorPickerSelectMessagePayloadSchemaFields),
+  }
+
+const authenticatorPickerSelectMessageSchema = Schema.Struct(
+  authenticatorPickerSelectMessageSchemaFields,
+) satisfies Schema.Schema<AuthenticatorPickerSelectMessage>
+
+type AuthenticatorPickerCancelMessagePayloadSchemaFields = {
+  requestId: Schema.filter<typeof Schema.String>
+}
+const authenticatorPickerCancelMessagePayloadSchemaFields: AuthenticatorPickerCancelMessagePayloadSchemaFields =
+  {
     requestId: authenticatorPickerNonEmptyStringSchema,
-  }),
-}) satisfies Schema.Schema<AuthenticatorPickerCancelMessage>
+  }
 
-const websiteAuthenticatorSelectedMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
-  ),
-  payload: Schema.Struct({
+type AuthenticatorPickerCancelMessageSchemaFields = {
+  type: Schema.Literal<[AuthenticatorPickerCancelMessageType]>
+  payload: Schema.Struct<{ requestId: Schema.filter<typeof Schema.String> }>
+}
+const authenticatorPickerCancelMessageSchemaFields: AuthenticatorPickerCancelMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel,
+    ),
+    payload: Schema.Struct(authenticatorPickerCancelMessagePayloadSchemaFields),
+  }
+
+const authenticatorPickerCancelMessageSchema = Schema.Struct(
+  authenticatorPickerCancelMessageSchemaFields,
+) satisfies Schema.Schema<AuthenticatorPickerCancelMessage>
+
+type WebsiteAuthenticatorSelectedMessagePayloadAccountSchemaFields = {
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  authorizationGeneration: Schema.filter<typeof Schema.String>
+}
+const websiteAuthenticatorSelectedMessagePayloadAccountSchemaFields: WebsiteAuthenticatorSelectedMessagePayloadAccountSchemaFields =
+  {
+    vaultStoreId: authenticatorPickerNonEmptyStringSchema,
+    secretId: authenticatorPickerNonEmptyStringSchema,
+    authorizationGeneration: authenticatorPickerNonEmptyStringSchema,
+  }
+
+type WebsiteAuthenticatorSelectedMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  requestId: Schema.filter<typeof Schema.String>
+  account: Schema.Struct<{
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+    authorizationGeneration: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteAuthenticatorSelectedMessagePayloadSchemaFields: WebsiteAuthenticatorSelectedMessagePayloadSchemaFields =
+  {
     origin: authenticatorPickerNonEmptyStringSchema,
     requestId: authenticatorPickerNonEmptyStringSchema,
-    account: Schema.Struct({
-      vaultStoreId: authenticatorPickerNonEmptyStringSchema,
-      secretId: authenticatorPickerNonEmptyStringSchema,
-      authorizationGeneration: authenticatorPickerNonEmptyStringSchema,
-    }),
-  }),
-}) satisfies Schema.Schema<WebsiteAuthenticatorSelectedMessage>
+    account: Schema.Struct(
+      websiteAuthenticatorSelectedMessagePayloadAccountSchemaFields,
+    ),
+  }
 
-const websiteAuthenticatorCanceledMessageSchema = Schema.Struct({
-  type: Schema.Literal(
-    WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
-  ),
-  payload: Schema.Struct({
+type WebsiteAuthenticatorSelectedMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteAuthenticatorSelectedMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    requestId: Schema.filter<typeof Schema.String>
+    account: Schema.Struct<{
+      vaultStoreId: Schema.filter<typeof Schema.String>
+      secretId: Schema.filter<typeof Schema.String>
+      authorizationGeneration: Schema.filter<typeof Schema.String>
+    }>
+  }>
+}
+const websiteAuthenticatorSelectedMessageSchemaFields: WebsiteAuthenticatorSelectedMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected,
+    ),
+    payload: Schema.Struct(
+      websiteAuthenticatorSelectedMessagePayloadSchemaFields,
+    ),
+  }
+
+const websiteAuthenticatorSelectedMessageSchema = Schema.Struct(
+  websiteAuthenticatorSelectedMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteAuthenticatorSelectedMessage>
+
+type WebsiteAuthenticatorCanceledMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  requestId: Schema.filter<typeof Schema.String>
+}
+const websiteAuthenticatorCanceledMessagePayloadSchemaFields: WebsiteAuthenticatorCanceledMessagePayloadSchemaFields =
+  {
     origin: authenticatorPickerNonEmptyStringSchema,
     requestId: authenticatorPickerNonEmptyStringSchema,
-  }),
-}) satisfies Schema.Schema<WebsiteAuthenticatorCanceledMessage>
+  }
+
+type WebsiteAuthenticatorCanceledMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteAuthenticatorCanceledMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    requestId: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteAuthenticatorCanceledMessageSchemaFields: WebsiteAuthenticatorCanceledMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+    ),
+    payload: Schema.Struct(
+      websiteAuthenticatorCanceledMessagePayloadSchemaFields,
+    ),
+  }
+
+const websiteAuthenticatorCanceledMessageSchema = Schema.Struct(
+  websiteAuthenticatorCanceledMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteAuthenticatorCanceledMessage>

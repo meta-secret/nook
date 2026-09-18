@@ -6,9 +6,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
@@ -35,7 +33,6 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
 )
@@ -58,9 +55,18 @@ const versionName = commit
 
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 
+type ResolvedViteModule = {
+  readonly build: typeof import('vite').build
+}
+
+type ResolvedSvelteModule = {
+  readonly svelte: typeof import('@sveltejs/vite-plugin-svelte').svelte
+  readonly vitePreprocess: typeof import('@sveltejs/vite-plugin-svelte').vitePreprocess
+}
+
 class ExtensionBuildDependencyLoader {
   async importVite(): Promise<Pick<typeof import('vite'), 'build'>> {
-    return this.decodeViteModule(await this.importResolved('vite'))
+    return this.importResolved('vite')
   }
 
   async importSvelte(): Promise<
@@ -69,59 +75,22 @@ class ExtensionBuildDependencyLoader {
       'svelte' | 'vitePreprocess'
     >
   > {
-    return this.decodeSvelteModule(
-      await this.importResolved('@sveltejs/vite-plugin-svelte'),
-    )
+    return this.importResolved('@sveltejs/vite-plugin-svelte')
   }
 
-  private async importResolved(specifier: string): Promise<unknown> {
-    const resolved = requireFromWeb.resolve(specifier)
-    // Resolution is constrained to the installed web dependency tree.
-    // eslint-disable-next-line no-unsanitized/method
-    return import(pathToFileURL(resolved).href)
-  }
-
-  private decodeViteModule(
-    value: unknown,
-  ): Pick<typeof import('vite'), 'build'> {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('build' in value) ||
-      typeof value.build !== 'function'
-    ) {
-      throw new Error('Invalid web dependency: vite')
+  private importResolved(specifier: 'vite'): Promise<ResolvedViteModule>
+  private importResolved(
+    specifier: '@sveltejs/vite-plugin-svelte',
+  ): Promise<ResolvedSvelteModule>
+  private importResolved(
+    specifier: 'vite' | '@sveltejs/vite-plugin-svelte',
+  ): Promise<ResolvedViteModule | ResolvedSvelteModule> {
+    switch (specifier) {
+      case 'vite':
+        return import('vite')
+      case '@sveltejs/vite-plugin-svelte':
+        return import('@sveltejs/vite-plugin-svelte')
     }
-    const buildFunction = value.build
-    const build: typeof import('vite').build = (...parameters) =>
-      Reflect.apply(buildFunction, value, parameters)
-    return { build }
-  }
-
-  private decodeSvelteModule(
-    value: unknown,
-  ): Pick<
-    typeof import('@sveltejs/vite-plugin-svelte'),
-    'svelte' | 'vitePreprocess'
-  > {
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('svelte' in value) ||
-      typeof value.svelte !== 'function' ||
-      !('vitePreprocess' in value) ||
-      typeof value.vitePreprocess !== 'function'
-    ) {
-      throw new Error('Invalid web dependency: @sveltejs/vite-plugin-svelte')
-    }
-    const svelteFunction = value.svelte
-    const preprocessFunction = value.vitePreprocess
-    const svelte: typeof import('@sveltejs/vite-plugin-svelte').svelte = (
-      ...parameters
-    ) => Reflect.apply(svelteFunction, value, parameters)
-    const vitePreprocess: typeof import('@sveltejs/vite-plugin-svelte').vitePreprocess =
-      (...parameters) => Reflect.apply(preprocessFunction, value, parameters)
-    return { svelte, vitePreprocess }
   }
 }
 
@@ -383,13 +352,13 @@ type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
 
 class LocaleMessageSection<Key extends string> {
-  private readonly messages: object
+  private readonly messages: Record<string, unknown>
 
   constructor(value: unknown, label: string) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`${label} locale catalog has an invalid shape.`)
     }
-    this.messages = value
+    this.messages = Object.fromEntries(Object.entries(value))
     for (const message of Object.values(this.messages)) {
       if (typeof message !== 'string') {
         throw new Error(`${label} locale catalog has an invalid shape.`)

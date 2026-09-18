@@ -38,7 +38,17 @@
         })
     )
 
-  let props: Props = $props()
+  let {
+    messages,
+    panelTestId,
+    fileTestId,
+    submitTestId,
+    errorTestId,
+    resultTestId,
+    accept,
+    icon,
+    ...workflow
+  }: Props = $props()
   let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
   })
@@ -47,7 +57,7 @@
   })
   let error = $state('')
   let isImporting = $state(false)
-  const busy = $derived(isImporting || props.isSaving)
+  const busy = $derived(isImporting || workflow.isSaving)
 
   function selectFile(event: Event) {
     const input = event.currentTarget
@@ -68,13 +78,13 @@
     error = ''
     isImporting = true
     try {
-      if (props.format === PasswordImportFormat.Text) {
+      if (workflow.format === PasswordImportFormat.Text) {
         const importRequest: ConstructorParameters<
           typeof TextVaultFileImport
         >[0] = {
           file,
           isSaving: false,
-          onImport: props.onImport,
+          onImport: workflow.onImport,
         }
         const imported = await new TextVaultFileImport(importRequest).execute()
         if (imported.kind === ImportAttemptKind.Completed) {
@@ -83,7 +93,7 @@
             result: imported.result,
           }
         } else if (imported.kind === ImportAttemptKind.Failed) {
-          error = new SecretFailurePresentation(props.vault).message(
+          error = new SecretFailurePresentation(workflow.vault).message(
             imported.error,
           )
         }
@@ -94,7 +104,7 @@
       >[0] = {
         file,
         isSaving: false,
-        onImport: props.onImport,
+        onImport: workflow.onImport,
       }
       const imported = await new BinaryVaultFileImport(importRequest).execute()
       if (imported.kind === ImportAttemptKind.Completed) {
@@ -103,7 +113,7 @@
           result: imported.result,
         }
       } else if (imported.kind === ImportAttemptKind.Failed) {
-        error = new SecretFailurePresentation(props.vault).message(
+        error = new SecretFailurePresentation(workflow.vault).message(
           imported.error,
         )
       }
@@ -113,14 +123,14 @@
   }
 </script>
 
-<div class="space-y-4" data-testid={props.panelTestId}>
-  {#if !props.embedded}
+<div class="space-y-4" data-testid={panelTestId}>
+  {#if !workflow.embedded}
     <div>
       <h2 class="text-lg font-semibold text-foreground">
-        {props.vault.t(props.messages.title)}
+        {workflow.vault.t(messages.title)}
       </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        {props.vault.t(props.messages.description)}
+        {workflow.vault.t(messages.description)}
       </p>
     </div>
   {/if}
@@ -128,27 +138,27 @@
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        {#if props.icon === PasswordImportIcon.Archive}
+        {#if icon === PasswordImportIcon.Archive}
           <Archive class="mt-0.5 size-5 shrink-0 text-primary" />
         {:else}
           <FileSpreadsheet class="mt-0.5 size-5 shrink-0 text-primary" />
         {/if}
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">
-            {props.vault.t(props.messages.exportHintTitle)}
+            {workflow.vault.t(messages.exportHintTitle)}
           </p>
           <p class="text-muted-foreground">
-            {props.vault.t(props.messages.exportHint)}
+            {workflow.vault.t(messages.exportHint)}
           </p>
         </div>
       </div>
 
       <label class="block space-y-2 text-sm font-medium text-foreground">
-        <span>{props.vault.t(props.messages.fileLabel)}</span>
+        <span>{workflow.vault.t(messages.fileLabel)}</span>
         <input
           type="file"
-          accept={props.accept}
-          data-testid={props.fileTestId}
+          {accept}
+          data-testid={fileTestId}
           disabled={busy}
           onchange={selectFile}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
@@ -156,30 +166,30 @@
       </label>
 
       <p class="text-xs text-muted-foreground">
-        {props.vault.t(props.messages.supportedTypes)}
+        {workflow.vault.t(messages.supportedTypes)}
       </p>
 
       <Button
-        data-testid={props.submitTestId}
+        data-testid={submitTestId}
         disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
           busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
         {busy
-          ? props.vault.t(props.messages.importing)
-          : props.vault.t(props.messages.import)}
+          ? workflow.vault.t(messages.importing)
+          : workflow.vault.t(messages.import)}
       </Button>
 
       {#if isImporting}
         <ImportProgress
-          vault={props.vault}
-          testId={`${props.panelTestId}-progress`}
+          vault={workflow.vault}
+          testId={`${panelTestId}-progress`}
         />
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid={props.errorTestId}>
+        <p class="text-sm text-destructive" data-testid={errorTestId}>
           {error}
         </p>
       {/if}
@@ -187,29 +197,32 @@
       {#if result.kind === PasswordImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
-          data-testid={props.resultTestId}
+          data-testid={resultTestId}
         >
           <p class="font-medium">
             {(() => {
-              const translationRequest: Parameters<typeof props.vault.t>[0] = {
-                key: props.messages.resultImported,
-                replacements: {
-                  count: String(result.result.imported),
-                },
-              }
-              return props.vault.t(translationRequest)
+              const translationRequest: Parameters<typeof workflow.vault.t>[0] =
+                {
+                  key: messages.resultImported,
+                  replacements: {
+                    count: String(result.result.imported),
+                  },
+                }
+              return workflow.vault.t(translationRequest)
             })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {(() => {
-              const translationRequest2: Parameters<typeof props.vault.t>[0] = {
-                key: props.messages.resultSkipped,
+              const translationRequest2: Parameters<
+                typeof workflow.vault.t
+              >[0] = {
+                key: messages.resultSkipped,
                 replacements: {
                   unsupported: String(result.result.skippedUnsupported),
                   duplicates: String(result.result.skippedDuplicates),
                 },
               }
-              return props.vault.t(translationRequest2)
+              return workflow.vault.t(translationRequest2)
             })()}
           </p>
         </div>

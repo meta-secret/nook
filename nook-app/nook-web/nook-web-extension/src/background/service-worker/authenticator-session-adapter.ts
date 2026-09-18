@@ -336,14 +336,20 @@ export class ExtensionAuthenticatorSession {
         ),
       )
     }
+    type SelectedAuthenticatorPageAcknowledgedOkRequest = {
+      kind: AuthenticatorPageAcknowledgementKind
+      requestId: string
+    }
+    const selectedAuthenticatorPageAcknowledgedOkRequest: SelectedAuthenticatorPageAcknowledgedOkRequest =
+      {
+        kind: AuthenticatorPageAcknowledgementKind.Acknowledged,
+        requestId,
+      }
     return response &&
       typeof response === 'object' &&
       'ok' in response &&
       response.ok === true
-      ? ok({
-          kind: AuthenticatorPageAcknowledgementKind.Acknowledged,
-          requestId,
-        })
+      ? ok(selectedAuthenticatorPageAcknowledgedOkRequest)
       : err(
           new AuthenticatorSessionFailure(
             AuthenticatorSessionFailureKind.PageRejected,

@@ -107,12 +107,10 @@
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   );
-  const policyDraft = $derived(
-    evaluate_sentinel_policy_draft({
-      participants: participantCount,
-      threshold,
-    }),
-  );
+  const policyRequest = $derived<
+    Parameters<typeof evaluate_sentinel_policy_draft>[0]
+  >({ participants: participantCount, threshold });
+  const policyDraft = $derived(evaluate_sentinel_policy_draft(policyRequest));
   const policyValid = $derived(
     name.trim().length > 0 && policyDraft.admission.kind === "accepted",
   );
@@ -163,10 +161,11 @@
 
   function chooseTotal(value: number) {
     participantCount = value;
-    const choices = evaluate_sentinel_policy_draft({
+    const request: Parameters<typeof evaluate_sentinel_policy_draft>[0] = {
       participants: value,
       threshold,
-    }).thresholdChoices;
+    };
+    const choices = evaluate_sentinel_policy_draft(request).thresholdChoices;
     if (!choices.includes(threshold)) {
       const lastChoice = choices[choices.length - 1];
       if (lastChoice) threshold = lastChoice;

@@ -28,9 +28,13 @@ type SentinelDashboardPortalParameters = {
   choice: SentinelDashboardChoice;
 };
 
-export function sentinelDashboardPortal(
+type SentinelDashboardPortalInvocation = readonly [
   node: HTMLElement,
   parameters: SentinelDashboardPortalParameters,
+];
+
+export function sentinelDashboardPortal(
+  ...[node, parameters]: SentinelDashboardPortalInvocation
 ) {
   const anchor = document.createComment("sentinel-dashboard-home");
   const focusableSelector = [

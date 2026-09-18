@@ -337,10 +337,14 @@ class PickerState {
   ): PendingPickerApprovalDisposition {
     if (this.authenticatorState.kind === AuthenticatorPickerKind.Closed)
       return PendingPickerApprovalDisposition.Closed
-    return AuthenticationWorkflowApproval.compare({
+    const comparison: Parameters<
+      typeof AuthenticationWorkflowApproval.compare
+    >[0] = {
       approved: this.authenticatorState.request.approval,
       current,
-    }) === AuthenticationWorkflowApprovalDisposition.Current
+    }
+    return AuthenticationWorkflowApproval.compare(comparison) ===
+      AuthenticationWorkflowApprovalDisposition.Current
       ? PendingPickerApprovalDisposition.Current
       : PendingPickerApprovalDisposition.Changed
   }
@@ -349,10 +353,14 @@ class PickerState {
   ): PendingPickerApprovalDisposition {
     if (this.loginState.kind === LoginPickerKind.Closed)
       return PendingPickerApprovalDisposition.Closed
-    return AuthenticationWorkflowApproval.compare({
+    const comparison: Parameters<
+      typeof AuthenticationWorkflowApproval.compare
+    >[0] = {
       approved: this.loginState.request.approval,
       current,
-    }) === AuthenticationWorkflowApprovalDisposition.Current
+    }
+    return AuthenticationWorkflowApproval.compare(comparison) ===
+      AuthenticationWorkflowApprovalDisposition.Current
       ? PendingPickerApprovalDisposition.Current
       : PendingPickerApprovalDisposition.Changed
   }

@@ -90,10 +90,11 @@ export class SyncConflictActions {
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
           await admittedManager.value.activate_local_identity(identityId);
-          return storageOk({
+          const outcome: ProviderVaultImportOutcome = {
             kind: ProviderVaultImportOutcomeKind.Imported,
             storeId: importedStoreId,
-          });
+          };
+          return storageOk(outcome);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -206,28 +207,36 @@ export class SyncConflictActions {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk({
+      const emptySnapshot: ProjectionConflictRefreshSnapshot = {
         replacementConflictCount: 0,
         securityConflictCount: 0,
-      });
+      };
+      return storageOk(emptySnapshot);
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       let conflicts: NookReplacementConflict[] = [];
       try {
-        if (!manager.value.event_log_mode())
-          return storageOk({
+        if (!manager.value.event_log_mode()) {
+          const conflictsSnapshot: Parameters<
+            typeof state.replaceProjectionConflicts
+          >[0] = {
             replacementConflicts: conflicts,
             securityConflicts: [] as NookSecurityConflict[],
-          });
+          };
+          return storageOk(conflictsSnapshot);
+        }
         conflicts = await manager.value.list_projection_conflicts();
         const securityConflicts =
           await manager.value.list_projection_security_conflicts();
-        return storageOk({
+        const conflictsSnapshot: Parameters<
+          typeof state.replaceProjectionConflicts
+        >[0] = {
           replacementConflicts: conflicts,
           securityConflicts,
-        });
+        };
+        return storageOk(conflictsSnapshot);
       } catch (failure) {
         for (const conflict of conflicts) conflict.free();
         return storageErr(new NativeVaultStorageFailure(failure));
@@ -235,10 +244,11 @@ export class SyncConflictActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.replaceProjectionConflicts(snapshot.value);
-    return storageOk({
+    const refreshedSnapshot: ProjectionConflictRefreshSnapshot = {
       replacementConflictCount: snapshot.value.replacementConflicts.length,
       securityConflictCount: snapshot.value.securityConflicts.length,
-    });
+    };
+    return storageOk(refreshedSnapshot);
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {

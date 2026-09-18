@@ -25,7 +25,10 @@ import {
   LoginSetupKind,
   StagedRemoteStorageKind,
 } from "$lib/vault/state/provider.svelte";
-import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
+import {
+  VaultDiscoveryTimeout,
+  type DiscoveryCompletion,
+} from "$lib/vault/vault-discovery-timeout";
 import { ProviderEventOutbox } from "$lib/vault/sync-operation-state";
 
 const log = browserLogRuntime.createLogger("vault-provider-connection");
@@ -112,9 +115,21 @@ export class ProviderConnectionActions {
           }
         });
       })();
-      const storeId = await new VaultDiscoveryTimeout({
+      const discoveryDeadline: ConstructorParameters<
+        typeof VaultDiscoveryTimeout
+      >[0] = {
         timeoutMs: 30_000,
-      }).waitFor({ operation: discovery, releaseLateValue: () => {} });
+      };
+      const discoveryCompletion: DiscoveryCompletion<
+        string,
+        StorageOperationFailure
+      > = {
+        operation: discovery,
+        releaseLateValue: () => {},
+      };
+      const storeId = await new VaultDiscoveryTimeout(
+        discoveryDeadline,
+      ).waitFor(discoveryCompletion);
       if (storeId.isErr()) return storageErr(storeId.error);
       if (storeId.value && state.hasManager) {
         const summary = await state.enqueueStorage(async () => {

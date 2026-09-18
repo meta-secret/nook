@@ -53,7 +53,71 @@ export type PendingAuthenticatorPicker = {
 
 type PendingLoginPicker = PendingAuthenticatorPicker
 
-const pendingAuthenticatorPickerSchema = Schema.Struct({
+type SessionAuthenticatorAccount = {
+  readonly secretId: string
+  readonly issuer: string
+  readonly account: string
+}
+
+type SessionLoginAccount = {
+  readonly secretId: string
+  readonly username: string
+  readonly websiteUrl: string
+  readonly websiteHost: string
+}
+
+type SessionAccount = SessionAuthenticatorAccount | SessionLoginAccount
+
+type SessionAuthenticatorAccountSchemaFields = {
+  readonly secretId: typeof Schema.String
+  readonly issuer: typeof Schema.String
+  readonly account: typeof Schema.String
+}
+
+const sessionAuthenticatorAccountSchemaFields: SessionAuthenticatorAccountSchemaFields =
+  {
+    secretId: Schema.String,
+    issuer: Schema.String,
+    account: Schema.String,
+  }
+const sessionAuthenticatorAccountSchema = Schema.Struct(
+  sessionAuthenticatorAccountSchemaFields,
+) satisfies Schema.Schema<SessionAuthenticatorAccount>
+
+type SessionLoginAccountSchemaFields = {
+  readonly secretId: typeof Schema.String
+  readonly username: typeof Schema.String
+  readonly websiteUrl: typeof Schema.String
+  readonly websiteHost: typeof Schema.String
+}
+
+const sessionLoginAccountSchemaFields: SessionLoginAccountSchemaFields = {
+  secretId: Schema.String,
+  username: Schema.String,
+  websiteUrl: Schema.String,
+  websiteHost: Schema.String,
+}
+const sessionLoginAccountSchema = Schema.Struct(
+  sessionLoginAccountSchemaFields,
+) satisfies Schema.Schema<SessionLoginAccount>
+
+const sessionAccountsSchema = Schema.Array(
+  Schema.Union(sessionAuthenticatorAccountSchema, sessionLoginAccountSchema),
+) satisfies Schema.Schema<readonly SessionAccount[]>
+
+function decodeSessionAccounts(value: unknown) {
+  return Schema.decodeUnknown(sessionAccountsSchema)(value)
+}
+
+type ModuleStructRequest = {
+  requestId: typeof Schema.String
+  origin: typeof Schema.String
+  tabId: Schema.filter<typeof Schema.Number>
+  frameId: Schema.filter<typeof Schema.Number>
+  allowedVaultStoreIds: Schema.Array$<Schema.filter<typeof Schema.String>>
+  expiresAt: Schema.filter<typeof Schema.Number>
+}
+const moduleStructRequest: ModuleStructRequest = {
   requestId: Schema.String,
   origin: Schema.String,
   tabId: Schema.Number.pipe(
@@ -64,7 +128,10 @@ const pendingAuthenticatorPickerSchema = Schema.Struct({
   ),
   allowedVaultStoreIds: Schema.Array(Schema.String.pipe(Schema.minLength(1))),
   expiresAt: Schema.Number.pipe(Schema.filter(Number.isFinite)),
-}) satisfies Schema.Schema<PendingAuthenticatorPicker>
+}
+const pendingAuthenticatorPickerSchema = Schema.Struct(
+  moduleStructRequest,
+) satisfies Schema.Schema<PendingAuthenticatorPicker>
 
 function decodePendingAuthenticatorPicker(value: unknown) {
   return Schema.decodeUnknown(pendingAuthenticatorPickerSchema)(value)
@@ -123,10 +190,6 @@ type AccountPickerCancellation = {
 }
 
 type AccountPickerSurfaceRemovalArgs = [number, () => void]
-
-type RemoveAccountPickerSurface = (
-  ...args: AccountPickerSurfaceRemovalArgs
-) => void
 
 export type PersistedAccountPickerCleanupPlan = {
   storageKeys: string[]
@@ -278,17 +341,11 @@ class AccountPickerSessions {
     surface: AccountPickerSurface,
   ): Promise<void> {
     if (surface.kind === AccountPickerSurfaceKind.Window) {
-      const windows = chrome.windows as typeof chrome.windows & {
-        remove?: (windowId: number) => Promise<void>
-      }
-      if (windows.remove) await windows.remove(surface.id)
+      await chrome.windows.remove(surface.id)
       return
     }
     if (surface.kind === AccountPickerSurfaceKind.Tab) {
-      const tabs = chrome.tabs as typeof chrome.tabs & {
-        remove: (tabId: number) => Promise<void>
-      }
-      await tabs.remove(surface.id)
+      await chrome.tabs.remove(surface.id)
     }
   }
 
@@ -414,21 +471,17 @@ class AccountPickerSessions {
         : []
     })
     const removals = await Promise.allSettled(
-      pickerSurfaceTabIds.map(
-        (tabId) =>
-          new Promise<void>((resolve, reject) => {
-            const tabs = chrome.tabs as typeof chrome.tabs & {
-              remove: RemoveAccountPickerSurface
-            }
-            const removed = () => {
-              const error = chrome.runtime.lastError
-              if (error) reject(new Error(error.message))
-              else resolve()
-            }
-            const removeArgs: AccountPickerSurfaceRemovalArgs = [tabId, removed]
-            tabs.remove(...removeArgs)
-          }),
-      ),
+      pickerSurfaceTabIds.map((tabId) => {
+        const removal = Promise.withResolvers<void>()
+        const removed = () => {
+          const error = chrome.runtime.lastError
+          if (error) removal.reject(new Error(error.message))
+          else removal.resolve()
+        }
+        const removeArgs: AccountPickerSurfaceRemovalArgs = [tabId, removed]
+        chrome.tabs.remove(...removeArgs)
+        return removal.promise
+      }),
     )
     if (removals.some((result) => result.status === 'rejected')) {
       throw new Error('account picker surface removal failed')
@@ -459,7 +512,7 @@ class AccountPickerSessions {
 
   private sessionResponseAccounts(
     response: ExtensionSessionResponse,
-  ): Array<WebsiteLoginAccountOption | WebsiteAuthenticatorOption> {
+  ): readonly SessionAccount[] {
     if (
       !response ||
       typeof response !== 'object' ||
@@ -470,7 +523,11 @@ class AccountPickerSessions {
     ) {
       return []
     }
-    return response.accounts
+    const wireAccounts: unknown = response.accounts
+    const decoded = runConcreteDecoder(decodeSessionAccounts, wireAccounts)
+    return decoded.kind === ConcreteDecoderResultKind.Decoded
+      ? decoded.value
+      : []
   }
 
   private authenticatorPickerStorageKey(requestId: string): string {

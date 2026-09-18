@@ -163,10 +163,9 @@ describe('extension pairing grant transport', () => {
     const admission = await ingress.admit({})
     expect('reason' in admission).toBe(true)
     if ('reason' in admission) {
-      expect(admission.reason).toEqual(
-        expect.objectContaining({
-          kind: RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
-        }),
+      expect(admission.reason).toHaveProperty(
+        'kind',
+        RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedMessage,
       )
     }
   })

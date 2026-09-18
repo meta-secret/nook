@@ -163,6 +163,8 @@ type LogEchoEvent = {
   readonly text: string;
 };
 
+type HostLogEchoArguments = readonly [level: LogLevel, text: string];
+
 /** Persist one entry (no console echo). Queues until WASM is ready. */
 type LogMessagePersistence = {
   readonly level: LogLevel;
@@ -233,7 +235,7 @@ declare global {
     };
     /** Bridge for Rust `tracing` events to reach the original console. */
     __nookConsole?: {
-      echo: (level: LogLevel, text: string) => void;
+      echo: (...event: HostLogEchoArguments) => void;
     };
   }
 }
@@ -280,14 +282,14 @@ class BrowserLogRuntime {
     await readiness.completion;
   }
   runtimeFailure<NativeCause>(cause: NativeCause): RuntimeFailure {
-    return new RuntimeFailure(
+    const details: RuntimeFailureDetails =
       cause instanceof Error
         ? {
             message: cause.message,
             ...(cause.stack ? { stack: cause.stack } : {}),
           }
-        : { message: String(cause) },
-    );
+        : { message: String(cause) };
+    return new RuntimeFailure(details);
   }
 
   runtimeError<NativeCause>(cause: NativeCause): Error {
@@ -405,7 +407,8 @@ class BrowserLogRuntime {
     }
   }
 
-  private hostEcho(level: LogLevel, text: string): void {
+  private hostEcho(...event: HostLogEchoArguments): void {
+    const [level, text] = event;
     const echoArgs: Parameters<typeof this.echo>[0] = { level, text };
     this.echo(echoArgs);
   }
@@ -749,7 +752,7 @@ class BrowserLogRuntime {
 
     const wrap = ({ method, level }: ConsoleMethodWrap) => {
       console[method] = (...args: ConsoleArguments) => {
-        this.originalConsole[method](...args);
+        this.originalConsole[method].apply(console, args);
         if (this.isEnabled(level)) {
           const persistMessageArgs2: Parameters<typeof this.persistMessage>[0] =
             {

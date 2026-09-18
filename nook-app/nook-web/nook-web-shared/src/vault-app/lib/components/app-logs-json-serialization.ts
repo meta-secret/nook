@@ -39,10 +39,12 @@ export class AppLogsJsonDocument {
   }
 
   static error(message: string): AppLogsJsonDocument {
-    return new AppLogsJsonDocument({ error: message });
+    const document: AppLogsErrorDocument = { error: message };
+    return new AppLogsJsonDocument(document);
   }
 
   static loading(): AppLogsJsonDocument {
-    return new AppLogsJsonDocument({ loading: true });
+    const document: AppLogsLoadingDocument = { loading: true };
+    return new AppLogsJsonDocument(document);
   }
 }

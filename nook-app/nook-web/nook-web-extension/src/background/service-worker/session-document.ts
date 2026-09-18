@@ -33,16 +33,20 @@ export type ExtensionSessionTransportResult<
   DecodeFailure = never,
 > = Result<T, ExtensionSessionTransportFailure | DecodeFailure>
 
+export type ExtensionSessionTransportDelivery<
+  Response = ExtensionSessionResponse,
+  DecodeFailure = never,
+> = {
+  readonly message: ExtensionSessionTransportRequest
+  readonly decodeResponse?: (
+    response: ExtensionSessionResponse,
+  ) => Result<Response, DecodeFailure>
+}
+
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
-  sendMessage(
-    message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    delivery: ExtensionSessionTransportDelivery<Response, DecodeFailure>,
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
 
@@ -55,24 +59,10 @@ enum SessionDocumentAccess {
 class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
-  sendMessage(
-    message: ExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
-  sendMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
-  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
-  ): Promise<
-    | ExtensionSessionTransportResult<ExtensionSessionResponse>
-    | ExtensionSessionTransportResult<Response, DecodeFailure>
-  > {
+    delivery: ExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>> {
+    const { message, decodeResponse } = delivery
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
         new ExtensionSessionTransportFailure(
@@ -204,12 +194,18 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<OpenExtensionSessionDocument>
   > {
     try {
-      await chrome.offscreen.createDocument({
+      type CreateCreateDocumentRequest = {
+        url: string
+        reasons: chrome.offscreen.Reason[]
+        justification: string
+      }
+      const createCreateDocumentRequest: CreateCreateDocumentRequest = {
         url: extensionSessionDocument,
         reasons: [chrome.offscreen.Reason.WORKERS],
         justification:
           'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-      })
+      }
+      await chrome.offscreen.createDocument(createCreateDocumentRequest)
     } catch {
       return err(
         new ExtensionSessionTransportFailure(
@@ -336,10 +332,18 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     try {
-      const contexts = await chrome.runtime.getContexts({
-        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-        documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
-      })
+      type CloseUnobservedDocumentGetContextsRequest = {
+        contextTypes: chrome.runtime.ContextType[]
+        documentUrls: string[]
+      }
+      const closeUnobservedDocumentGetContextsRequest: CloseUnobservedDocumentGetContextsRequest =
+        {
+          contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+          documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
+        }
+      const contexts = await chrome.runtime.getContexts(
+        closeUnobservedDocumentGetContextsRequest,
+      )
       if (contexts.length === 0) {
         this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
         return ok(ExtensionSessionDocumentStateKind.Closed)

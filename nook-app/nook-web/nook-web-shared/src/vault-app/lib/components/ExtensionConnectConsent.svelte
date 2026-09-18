@@ -29,6 +29,11 @@
     dispose(): void
   }
 
+  type ExtensionConsentWorkflowSessionRequest = {
+    readonly vault: VaultState
+    readonly request: ExtensionConnectRequest
+  }
+
   let {
     vault,
     request,
@@ -39,14 +44,14 @@
     onClose: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
-  function createWorkflowSession(
-    sessionVault: VaultState,
-    sessionRequest: ExtensionConnectRequest,
-  ): ExtensionConsentWorkflowSession {
-    const workflow = new ExtensionConnectConsentWorkflow(
-      sessionVault,
-      sessionRequest,
-    )
+  function createWorkflowSession({
+    vault: sessionVault,
+    request: sessionRequest,
+  }: ExtensionConsentWorkflowSessionRequest): ExtensionConsentWorkflowSession {
+    const workflowRequest: ConstructorParameters<
+      typeof ExtensionConnectConsentWorkflow
+    >[0] = { vault: sessionVault, request: sessionRequest }
+    const workflow = new ExtensionConnectConsentWorkflow(workflowRequest)
     let state = $state.raw(workflow.initialState())
 
     return {
@@ -55,7 +60,11 @@
         return state
       },
       async approve() {
-        await workflow.approve(state, (next) => (state = next))
+        const approvalRequest: Parameters<typeof workflow.approve>[0] = {
+          state,
+          publish: (next) => (state = next),
+        }
+        await workflow.approve(approvalRequest)
       },
       dispose() {
         workflow.dispose()
@@ -63,13 +72,21 @@
     }
   }
 
-  let session = $derived(createWorkflowSession(vault, request))
+  const sessionRequest = $derived<ExtensionConsentWorkflowSessionRequest>({
+    vault,
+    request,
+  })
+  let session = $derived(createWorkflowSession(sessionRequest))
   const presentation = new ExtensionConsentWorkflowPresentation()
   const workflowState = $derived(session.state)
   const availability = $derived(
     session.workflow.approvalAvailability(workflowState),
   )
-  const notice = $derived(presentation.notice(workflowState, availability))
+  const noticeRequest = $derived<Parameters<typeof presentation.notice>[0]>({
+    state: workflowState,
+    availability,
+  })
+  const notice = $derived(presentation.notice(noticeRequest))
   const actionTranslationKey = $derived(
     presentation.actionTranslationKey(workflowState),
   )

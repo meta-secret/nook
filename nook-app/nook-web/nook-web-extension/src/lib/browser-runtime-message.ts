@@ -19,6 +19,22 @@ export type BrowserRuntimeMessageValue =
   | BrowserRuntimeMessageValue[]
   | { readonly [key: string]: BrowserRuntimeMessageValue }
 
+type BrowserRuntimeMessageAdmissionMatcher = {
+  readonly onLeft: () => BrowserRuntimeMessageAdmission
+  readonly onRight: (
+    message: BrowserRuntimeMessage,
+  ) => BrowserRuntimeMessageAdmission
+}
+
+type BrowserRuntimeMessageRecordConfiguration = {
+  readonly key: typeof Schema.String
+  readonly value: Schema.Schema<BrowserRuntimeMessageValue>
+}
+
+type BrowserRuntimeMessageSchemaFields = {
+  readonly type: Schema.filter<typeof Schema.String>
+}
+
 /** Concrete browser IPC envelope admitted before schema-specific routing. */
 export class BrowserRuntimeMessage {
   private constructor() {}
@@ -37,13 +53,14 @@ export class BrowserRuntimeMessage {
     const decodeResult = Effect.runSync(
       Effect.either(BrowserRuntimeMessage.decode(value)),
     )
-    return Either.match(decodeResult, {
+    const admissionMatcher: BrowserRuntimeMessageAdmissionMatcher = {
       onLeft: () => ({ kind: BrowserRuntimeMessageAdmissionKind.Rejected }),
       onRight: (message) => ({
         kind: BrowserRuntimeMessageAdmissionKind.Accepted,
         message,
       }),
-    })
+    }
+    return Either.match(decodeResult, admissionMatcher)
   }
 }
 
@@ -73,6 +90,12 @@ class SerializedBrowserRuntimeValue {
   }
 }
 
+const browserRuntimeMessageRecordConfiguration: BrowserRuntimeMessageRecordConfiguration =
+  {
+    key: Schema.String,
+    value: Schema.suspend(() => browserRuntimeMessageValueSchema),
+  }
+
 const browserRuntimeMessageValueSchema: Schema.Schema<BrowserRuntimeMessageValue> =
   Schema.suspend(() =>
     Schema.Union(
@@ -80,19 +103,21 @@ const browserRuntimeMessageValueSchema: Schema.Schema<BrowserRuntimeMessageValue
       Schema.Number,
       Schema.Boolean,
       Schema.mutable(Schema.Array(browserRuntimeMessageValueSchema)),
-      Schema.Record({
-        key: Schema.String,
-        value: browserRuntimeMessageValueSchema,
-      }),
+      Schema.Record(browserRuntimeMessageRecordConfiguration),
     ),
   )
 
-const browserRuntimeMessageSchema = Schema.Struct(
+const browserRuntimeMessageSchemaFields: BrowserRuntimeMessageSchemaFields = {
+  type: Schema.String.pipe(Schema.minLength(1)),
+}
+
+const browserRuntimeMessageRestRecordConfiguration: BrowserRuntimeMessageRecordConfiguration =
   {
-    type: Schema.String.pipe(Schema.minLength(1)),
-  },
-  Schema.Record({
     key: Schema.String,
     value: browserRuntimeMessageValueSchema,
-  }),
+  }
+
+const browserRuntimeMessageSchema = Schema.Struct(
+  browserRuntimeMessageSchemaFields,
+  Schema.Record(browserRuntimeMessageRestRecordConfiguration),
 ) satisfies Schema.Schema<BrowserRuntimeMessage>

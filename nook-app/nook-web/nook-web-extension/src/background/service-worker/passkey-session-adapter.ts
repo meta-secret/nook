@@ -44,13 +44,14 @@ export class SessionPasskeyResponse {
       Array.isArray(response.transports) &&
       response.transports.every((transport) => typeof transport === 'string')
     ) {
-      return ok({
+      const registrationResponse: WebsitePasskeyRegistrationResponse = {
         ok: true,
         credentialId: response.credentialId,
         clientDataJSON: response.clientDataJSON,
         attestationObject: response.attestationObject,
         transports: response.transports,
-      })
+      }
+      return ok(registrationResponse)
     }
     if (
       'authenticatorData' in response &&
@@ -60,14 +61,15 @@ export class SessionPasskeyResponse {
       'userHandle' in response &&
       typeof response.userHandle === 'string'
     ) {
-      return ok({
+      const assertionResponse: WebsitePasskeyAssertionResponse = {
         ok: true,
         credentialId: response.credentialId,
         clientDataJSON: response.clientDataJSON,
         authenticatorData: response.authenticatorData,
         signature: response.signature,
         userHandle: response.userHandle,
-      })
+      }
+      return ok(assertionResponse)
     }
     return err(PasskeySessionResponseFailure.IncompleteMaterial)
   }

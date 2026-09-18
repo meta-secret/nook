@@ -113,10 +113,15 @@
   )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)
-  const initialRoute = new InitialApplicationRoute({
+  const initialApplicationRouteRequest: ConstructorParameters<
+    typeof InitialApplicationRoute
+  >[0] = {
     isSimpleApplication: IS_SIMPLE_APP,
     supportsExtension: SUPPORTS_EXTENSION,
-  }).read()
+  }
+  const initialRoute = new InitialApplicationRoute(
+    initialApplicationRouteRequest,
+  ).read()
   let legalPageState = $state(initialRoute.legalPage)
   let logsPage = $state(initialRoute.logsPage)
   let appLogsPage = $state(initialRoute.appLogsPage)
@@ -196,22 +201,34 @@
       !extensionConnectRoute
     ) {
       if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
-        new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+        const workspaceRouteRequest: Parameters<
+          VaultWorkspaceActions['applyWorkspaceRoute']
+        >[0] = {
           route: workspaceRoute.route,
-        })
+        }
+        new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+          workspaceRouteRequest,
+        )
 
+        const emptyHistoryState: Record<PropertyKey, never> = {}
         history.replaceState(
-          {},
+          emptyHistoryState,
           '',
           new WorkspaceLocation(workspaceRoute.route).path,
         )
       } else {
-        new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+        const vaultWorkspaceRouteRequest: Parameters<
+          VaultWorkspaceActions['applyWorkspaceRoute']
+        >[0] = {
           route: WorkspaceRoute.Vault,
-        })
+        }
+        new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+          vaultWorkspaceRouteRequest,
+        )
 
+        const emptyHistoryState: Record<PropertyKey, never> = {}
         history.replaceState(
-          {},
+          emptyHistoryState,
           '',
           new WorkspaceLocation(WorkspaceRoute.Vault).path,
         )
@@ -238,18 +255,33 @@
     if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
       untrack(() =>
         (() => {
-          return new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+          const workspaceRouteRequest: Parameters<
+            VaultWorkspaceActions['applyWorkspaceRoute']
+          >[0] = {
             route: workspaceRoute.route,
-          })
+          }
+          return new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+            workspaceRouteRequest,
+          )
         })(),
       )
     }
   })
   function navigateHome() {
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+    const vaultWorkspaceRouteRequest: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = {
       route: WorkspaceRoute.Vault,
-    })
-    history.pushState({}, '', new WorkspaceLocation(WorkspaceRoute.Vault).path)
+    }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      vaultWorkspaceRouteRequest,
+    )
+    const emptyHistoryState: Record<PropertyKey, never> = {}
+    history.pushState(
+      emptyHistoryState,
+      '',
+      new WorkspaceLocation(WorkspaceRoute.Vault).path,
+    )
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
     appLogsPage = false
@@ -264,10 +296,20 @@
         kind: ExtensionConnectIntentKind.Absent,
       }
     }
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+    const vaultWorkspaceRouteRequest: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = {
       route: WorkspaceRoute.Vault,
-    })
-    history.pushState({}, '', new WorkspaceLocation(WorkspaceRoute.Vault).path)
+    }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      vaultWorkspaceRouteRequest,
+    )
+    const emptyHistoryState: Record<PropertyKey, never> = {}
+    history.pushState(
+      emptyHistoryState,
+      '',
+      new WorkspaceLocation(WorkspaceRoute.Vault).path,
+    )
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
     appLogsPage = false
@@ -295,13 +337,16 @@
     )
   })
   $effect(() => {
-    vaultBrowserLifecycle.updateApplicationDocument({
+    const applicationDocumentUpdate: Parameters<
+      typeof vaultBrowserLifecycle.updateApplicationDocument
+    >[0] = {
       colorMode,
       legalRoute: legalPageState,
       logsPage,
       extensionConnectRoute,
       sentinelApplication: IS_SENTINEL_APP,
-    })
+    }
+    vaultBrowserLifecycle.updateApplicationDocument(applicationDocumentUpdate)
   })
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
@@ -349,10 +394,15 @@
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
         adopt: (manager) => {
-          return connectionBrowser.adoptExtensionIdentity({
+          const extensionIdentityAdoption: Parameters<
+            typeof connectionBrowser.adoptExtensionIdentity
+          >[0] = {
             manager,
             request: connectRequest,
-          })
+          }
+          return connectionBrowser.adoptExtensionIdentity(
+            extensionIdentityAdoption,
+          )
         },
         mode: existingVaultImport
           ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
@@ -393,9 +443,12 @@
         ) {
           await connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
         }
-        await waitForPairedExtensionUnlock({
+        const pairedExtensionUnlockRequest: Parameters<
+          typeof waitForPairedExtensionUnlock
+        >[0] = {
           storeId: activeStoreId,
-        })
+        }
+        await waitForPairedExtensionUnlock(pairedExtensionUnlockRequest)
         if (vault.isAuthenticated) return
       }
     }
@@ -421,10 +474,15 @@
             typeof vault.authorizeWithExternalDeviceIdentity
           >[0] = {
             adopt: (manager) => {
-              return connectionBrowser.adoptExtensionIdentity({
+              const extensionIdentityAdoption: Parameters<
+                typeof connectionBrowser.adoptExtensionIdentity
+              >[0] = {
                 manager,
                 request: connectRequest,
-              })
+              }
+              return connectionBrowser.adoptExtensionIdentity(
+                extensionIdentityAdoption,
+              )
             },
             mode: existingVaultImport
               ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
@@ -443,9 +501,12 @@
       }
       pendingExistingVaultUnlock = true
       if (vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
+        const deviceProtectionUnlockRequest: Parameters<
+          deviceProtectionActions.DeviceProtectionActions['unlockDeviceProtection']
+        >[0] = { initializeSession: true }
         await new deviceProtectionActions.DeviceProtectionActions(
           vault,
-        ).unlockDeviceProtection({ initializeSession: true })
+        ).unlockDeviceProtection(deviceProtectionUnlockRequest)
       }
       return
     }
@@ -470,10 +531,13 @@
   }
   function toggleColorMode() {
     followsSystemColorMode = false
-    colorMode = browserColorMode.manualColorMode({
+    const manualColorModeRequest: Parameters<
+      typeof browserColorMode.manualColorMode
+    >[0] = {
       current: colorMode,
       storageKey: THEME_STORAGE_KEY,
-    })
+    }
+    colorMode = browserColorMode.manualColorMode(manualColorModeRequest)
   }
   const appVersion = APP_VERSION
   const shellWidth = $derived(
@@ -484,13 +548,16 @@
   )
   let secretsAddOpen = $state(false)
   const shellSpacing = $derived.by(() => {
-    return new ApplicationShellLayout({
+    const applicationShellLayoutRequest: ConstructorParameters<
+      typeof ApplicationShellLayout
+    >[0] = {
       legalRouteKind: legalPageState.kind,
       logsOpen: logsPage,
       extensionConnectOpen: extensionConnectRoute,
       authenticated: vault.isAuthenticated,
       editorOpen: secretsAddOpen,
-    }).spacing
+    }
+    return new ApplicationShellLayout(applicationShellLayoutRequest).spacing
   })
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending)
@@ -542,10 +609,13 @@
     pendingEnrollmentSubmitState = {
       kind: EnrollmentSubmitQueueKind.Idle,
     }
-    await vault.connectWithEnrollmentCode({
+    const enrollmentConnectionRequest: Parameters<
+      typeof vault.connectWithEnrollmentCode
+    >[0] = {
       code,
       password,
-    })
+    }
+    await vault.connectWithEnrollmentCode(enrollmentConnectionRequest)
   }
 
   async function resumePairedExtensionVault(
@@ -580,20 +650,26 @@
       discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
-      schedulePairedExtensionDiscoveryRetry({
+      const discoveryRetryRequest: Parameters<
+        typeof schedulePairedExtensionDiscoveryRetry
+      >[0] = {
         storeId,
         discoveringStagedImport,
-      })
+      }
+      schedulePairedExtensionDiscoveryRetry(discoveryRetryRequest)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     }
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
     ) {
-      schedulePairedExtensionDiscoveryRetry({
+      const discoveryRetryRequest: Parameters<
+        typeof schedulePairedExtensionDiscoveryRetry
+      >[0] = {
         storeId,
         discoveringStagedImport,
-      })
+      }
+      schedulePairedExtensionDiscoveryRetry(discoveryRetryRequest)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
     }
     extensionIdentityRequestState = {
@@ -650,10 +726,15 @@
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
         adopt: (manager) => {
-          return connectionBrowser.adoptExtensionIdentity({
+          const extensionIdentityAdoption: Parameters<
+            typeof connectionBrowser.adoptExtensionIdentity
+          >[0] = {
             manager,
             request: connectRequest,
-          })
+          }
+          return connectionBrowser.adoptExtensionIdentity(
+            extensionIdentityAdoption,
+          )
         },
         mode: ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
       }
@@ -700,17 +781,22 @@
   function finishPendingCreation(): void {
     pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
   }
+  const sentinelParticipantKeyCreationRequest: ConstructorParameters<
+    typeof sentinelGenesisActions.SentinelParticipantKeyCreationLifecycle
+  >[0] = {
+    vault,
+    waitForDevice: () => {
+      pendingVaultCreationState = {
+        kind: VaultCreationQueueKind.WaitingForDevice,
+        request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
+      }
+    },
+    finishPendingCreation,
+  }
   const sentinelParticipantKeyCreation =
-    new sentinelGenesisActions.SentinelParticipantKeyCreationLifecycle({
-      vault,
-      waitForDevice: () => {
-        pendingVaultCreationState = {
-          kind: VaultCreationQueueKind.WaitingForDevice,
-          request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
-        }
-      },
-      finishPendingCreation,
-    })
+    new sentinelGenesisActions.SentinelParticipantKeyCreationLifecycle(
+      sentinelParticipantKeyCreationRequest,
+    )
   async function handleCreateSentinelParticipantResponse(
     requestPayload: string,
   ): Promise<SentinelActionResult<string>> {
@@ -729,8 +815,11 @@
       )
     }
 
+    const participantResponseRequest: Parameters<
+      sentinelGenesisActions.SentinelGenesisActions['createParticipantResponse']
+    >[0] = { requestPayload }
     return new sentinelGenesisActions.SentinelGenesisActions(vault)
-      .createParticipantResponse({ requestPayload })
+      .createParticipantResponse(participantResponseRequest)
       .finally(finishPendingCreation)
   }
   async function handleAcceptSentinelOnboarding(packageJson: string) {
@@ -746,9 +835,12 @@
     }
     pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
 
+    const onboardingPackageRequest: Parameters<
+      sentinelGenesisActions.SentinelGenesisActions['acceptOnboardingPackage']
+    >[0] = { packageJson }
     const accepted = await new sentinelGenesisActions.SentinelGenesisActions(
       vault,
-    ).acceptOnboardingPackage({ packageJson })
+    ).acceptOnboardingPackage(onboardingPackageRequest)
     if (accepted.isErr()) {
       vault.errorMsg = vault.t(accepted.error.translationKey)
       return

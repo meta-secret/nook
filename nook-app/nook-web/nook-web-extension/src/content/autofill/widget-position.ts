@@ -152,6 +152,11 @@ class AuthenticationWidgetPosition {
   }
 }
 
-export const authenticationWidgetPosition = new AuthenticationWidgetPosition({
+const authenticationWidgetPositionDependencies: ConstructorParameters<
+  typeof AuthenticationWidgetPosition
+>[0] = {
   widgetState,
-})
+}
+export const authenticationWidgetPosition = new AuthenticationWidgetPosition(
+  authenticationWidgetPositionDependencies,
+)

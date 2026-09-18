@@ -1,5 +1,5 @@
 import { err, ok, type Result } from 'neverthrow'
-import { Effect, Schema } from 'effect'
+import { Effect } from 'effect'
 import type {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportResult,
@@ -53,16 +53,9 @@ import {
 } from '../../lib/webauthn-messages'
 import type {
   ExtensionPairingItems,
-  ExtensionReadySetupState,
-  LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
-import type { PendingAuthenticatorPicker } from './account-pickers'
-import {
-  extensionPairingGrantPolicyReady,
-  setupStorageKey,
-} from '../pairing-grants'
-import { backgroundVaultRuntime } from '../vault-runtime'
+import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
@@ -72,89 +65,86 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import {
+  ExtensionPairingStorage,
+  PendingIdentityHandoffKind,
+  type ExtensionSessionStorageItems,
+  type ExtensionSessionStorageWrite,
+  decodePendingIdentityHandoff,
+} from './pairing-identity-storage'
 
-enum PendingIdentityHandoffKind {
-  Pairing = 'pairing',
-}
-
-type PendingIdentityHandoff = {
-  kind: PendingIdentityHandoffKind.Pairing
-  deviceId: string
-  devicePublicKey: string
-  deviceSigningPublicKey: string
-}
-
-const pendingIdentityHandoffSchema = Schema.Struct({
-  kind: Schema.Literal(PendingIdentityHandoffKind.Pairing),
-  deviceId: Schema.String,
-  devicePublicKey: Schema.String,
-  deviceSigningPublicKey: Schema.String,
-}) satisfies Schema.Schema<PendingIdentityHandoff>
-
-function decodePendingIdentityHandoff(value: unknown) {
-  return Schema.decodeUnknown(pendingIdentityHandoffSchema)(value)
-}
+export {
+  type ExtensionSessionStorageItems,
+  type ExtensionSessionStorageValue,
+  type ExtensionSessionStorageWrite,
+} from './pairing-identity-storage'
 
 function decodeCompanionIdentityHandoffRequest(value: unknown) {
-  return Effect.try({
-    try: () => decode_companion_identity_handoff_request(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
+  const decoded = Effect.try(() =>
+    decode_companion_identity_handoff_request(value),
+  )
+  return decoded.pipe(
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromCause
+      >[0] = {
         kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
         cause,
-      }),
-  })
+      }
+      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+    }),
+  )
 }
 
 function decodeCompanionIdentityDiscoveryObservation(value: unknown) {
-  return Effect.try({
-    try: () => decode_companion_identity_discovery_observation(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
+  const decoded = Effect.try(() =>
+    decode_companion_identity_discovery_observation(value),
+  )
+  return decoded.pipe(
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromCause
+      >[0] = {
         kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityDiscovery,
         cause,
-      }),
-  })
+      }
+      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+    }),
+  )
 }
 
 function decodeCompanionPairedVaultIdentityHandoffRequest(value: unknown) {
-  return Effect.try({
-    try: () =>
-      decode_extension_paired_vault_identity_handoff_request_message(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
+  const decoded = Effect.try(() =>
+    decode_extension_paired_vault_identity_handoff_request_message(value),
+  )
+  return decoded.pipe(
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromCause
+      >[0] = {
         kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultIdentityHandoffRequest,
         cause,
-      }),
-  })
+      }
+      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+    }),
+  )
 }
 
 function decodeCompanionPairedVaultUnlockRequest(value: unknown) {
-  return Effect.try({
-    try: () => decode_extension_paired_vault_unlock_request_message(value),
-    catch: (cause) =>
-      RuntimeMessageDecodeFailure.fromCause({
+  const decoded = Effect.try(() =>
+    decode_extension_paired_vault_unlock_request_message(value),
+  )
+  return decoded.pipe(
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromCause
+      >[0] = {
         kind: RuntimeMessageDecodeFailureKind.ExtensionPairedVaultUnlockRequest,
         cause,
-      }),
-  })
-}
-
-export type ExtensionSessionStorageValue =
-  | PendingIdentityHandoff
-  | PendingAuthenticatorPicker
-  | ExtensionPairingItems[string]
-  | ExtensionReadySetupState
-  | StoredExtensionPairingGrant
-  | string
-  | boolean
-
-type ExtensionSessionStorageWrite = Record<string, ExtensionSessionStorageValue>
-type ExtensionSessionStorageItems = Record<string, ExtensionSessionStorageValue>
-
-type IssueIdentityHandoffArgs = {
-  nonce: string
-  pending: PendingIdentityHandoff
+      }
+      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
+    }),
+  )
 }
 
 type CurrentPairedVaultPresenceArgs = {
@@ -165,6 +155,15 @@ type CurrentPairedVaultPresenceArgs = {
 type CompanionUnlockedPresenceShape = {
   app_key: CompanionUnlockedAppKey
 }
+
+export type SessionMessageRequest = [message: ExtensionSessionTransportRequest]
+
+export type DecodedSessionMessageRequest<Response, DecodeFailure> = [
+  message: ExtensionSessionTransportRequest,
+  decodeResponse: (
+    response: ExtensionSessionResponse,
+  ) => Result<Response, DecodeFailure>,
+]
 
 export { ExtensionSessionStatusAvailability }
 
@@ -180,17 +179,6 @@ type ExtensionPairedVaultUnlockResponse =
       vaultStoreId: string
       reason: string
     }
-
-enum LegacyPairingMigrationKind {
-  NotStarted = 'not-started',
-  Running = 'running',
-}
-
-type LegacyPairingMigration =
-  | { kind: LegacyPairingMigrationKind.NotStarted }
-  | { kind: LegacyPairingMigrationKind.Running; operation: Promise<void> }
-
-type LegacyPairingStorageKeys = string[]
 
 export enum WebsitePasskeyRequestContextKind {
   Rejected = 'rejected',
@@ -242,9 +230,7 @@ type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionPairingIdentity {
   private pendingIdentityHandoffConsumptions = new Set<string>()
-  private legacyPairingMigration: LegacyPairingMigration = {
-    kind: LegacyPairingMigrationKind.NotStarted,
-  }
+  private readonly pairingStorage = new ExtensionPairingStorage()
   randomNonce(): string {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
     const bytes = new Uint8Array(16)
@@ -254,62 +240,20 @@ class ExtensionPairingIdentity {
     )
   }
 
-  private pendingIdentityHandoffStorageKey(nonce: string): string {
-    return `nook.extension.identity-handoff.${nonce}`
-  }
-
   setSessionStorage(items: ExtensionSessionStorageWrite): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.set(items, () => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve()
-      })
-    })
+    return this.pairingStorage.setSessionStorage(items)
   }
 
   getSessionStorage(key: string): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.get<ExtensionSessionStorageItems>(key, (items) => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve(items)
-      })
-    })
+    return this.pairingStorage.getSessionStorage(key)
   }
 
   getAllSessionStorage(): Promise<ExtensionSessionStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.get<ExtensionSessionStorageItems>((items) => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve(items)
-      })
-    })
+    return this.pairingStorage.getAllSessionStorage()
   }
 
   removeSessionStorage(key: string): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.session.remove(key, () => {
-        const message = chrome.runtime.lastError?.message
-        if (message) reject(new Error(message))
-        else resolve()
-      })
-    })
-  }
-
-  private async issueIdentityHandoff({
-    nonce,
-    pending,
-  }: IssueIdentityHandoffArgs): Promise<void> {
-    const nookTypedArgs0_0: Parameters<typeof this.setSessionStorage>[0] = {
-      [this.pendingIdentityHandoffStorageKey(nonce)]: pending,
-    }
-    await this.setSessionStorage(nookTypedArgs0_0)
+    return this.pairingStorage.removeSessionStorage(key)
   }
 
   async openExtensionPairing(
@@ -317,7 +261,9 @@ class ExtensionPairingIdentity {
   ): Promise<void> {
     await companionWasmReady
     const nonce = this.randomNonce()
-    const nookTypedArgs0_1: Parameters<typeof this.issueIdentityHandoff>[0] = {
+    const nookTypedArgs0_1: Parameters<
+      typeof this.pairingStorage.issueIdentityHandoff
+    >[0] = {
       nonce,
       pending: {
         kind: PendingIdentityHandoffKind.Pairing,
@@ -326,7 +272,7 @@ class ExtensionPairingIdentity {
         deviceSigningPublicKey: device.deviceSigningPublicKey,
       },
     }
-    await this.issueIdentityHandoff(nookTypedArgs0_1)
+    await this.pairingStorage.issueIdentityHandoff(nookTypedArgs0_1)
     const url = new URL(
       await simpleVaultRuntime.runtimeSimpleVaultUrl('extension-connect'),
     )
@@ -355,26 +301,23 @@ class ExtensionPairingIdentity {
   }
 
   sendSessionMessage(
-    message: ExtensionSessionTransportRequest,
+    ...request: SessionMessageRequest
   ): Promise<ExtensionSessionTransportResult<ExtensionSessionResponse>>
   sendSessionMessage<Response, DecodeFailure>(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    ...request: DecodedSessionMessageRequest<Response, DecodeFailure>
   ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
   async sendSessionMessage<
     Response = ExtensionSessionResponse,
     DecodeFailure = never,
   >(
-    message: ExtensionSessionTransportRequest,
-    decodeResponse?: (
-      response: ExtensionSessionResponse,
-    ) => Result<Response, DecodeFailure>,
+    ...request:
+      | SessionMessageRequest
+      | DecodedSessionMessageRequest<Response, DecodeFailure>
   ): Promise<
     | ExtensionSessionTransportResult<ExtensionSessionResponse>
     | ExtensionSessionTransportResult<Response, DecodeFailure>
   > {
+    const [message, decodeResponse] = request
     const document = await extensionSessionLifecycle.openSessionDocument()
     if (document.isErr()) {
       return err<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
@@ -413,11 +356,17 @@ class ExtensionPairingIdentity {
     }
     this.pendingIdentityHandoffConsumptions.add(nonce)
     try {
-      const key = this.pendingIdentityHandoffStorageKey(nonce)
+      const key = this.pairingStorage.pendingIdentityHandoffStorageKey(nonce)
       const stored = await this.getSessionStorage(key)
+      const storedEntry = Object.entries(stored).find(
+        ([storedKey]) => storedKey === key,
+      )
+      if (!storedEntry) {
+        return { ok: false, reason: 'extension-identity-handoff-not-issued' }
+      }
       const pendingAdmission = runConcreteDecoder(
         decodePendingIdentityHandoff,
-        stored[key],
+        storedEntry[1],
       )
       if (pendingAdmission.kind === ConcreteDecoderResultKind.Rejected) {
         return { ok: false, reason: 'extension-identity-handoff-not-issued' }
@@ -458,12 +407,12 @@ class ExtensionPairingIdentity {
       ) {
         const nextNonce = this.randomNonce()
         const nookTypedArgs0_4: Parameters<
-          typeof this.issueIdentityHandoff
+          typeof this.pairingStorage.issueIdentityHandoff
         >[0] = {
           nonce: nextNonce,
           pending,
         }
-        await this.issueIdentityHandoff(nookTypedArgs0_4)
+        await this.pairingStorage.issueIdentityHandoff(nookTypedArgs0_4)
         return { ok: true, envelope: response.envelope, nextNonce }
       }
       return { ok: false, reason: 'extension-identity-unavailable' }
@@ -792,123 +741,15 @@ class ExtensionPairingIdentity {
   }
 
   async setPairingStorage(items: ExtensionPairingItems): Promise<void> {
-    await this.ensureLegacyPairingMigration()
-    await backgroundVaultRuntime.persistExtensionPairingItems(items)
-  }
-
-  private legacyPairingStorageKeys(
-    stored: LegacyPairingStorageItems,
-  ): string[] {
-    return Object.keys(stored).filter(
-      (key) =>
-        key === setupStorageKey ||
-        key.startsWith('nook:extension-pairing-grant:'),
-    )
-  }
-
-  private readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get<LegacyPairingStorageItems>((items) => {
-        if (chrome.runtime.lastError) {
-          reject(
-            new Error(
-              ((...[v = 'Unable to read legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
-            ),
-          )
-          return
-        }
-        resolve(items)
-      })
-    })
-  }
-
-  private removeLegacyPairingStorage(
-    keys: LegacyPairingStorageKeys,
-  ): Promise<void> {
-    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.remove(keys, () => {
-        if (chrome.runtime.lastError) {
-          reject(
-            new Error(
-              ((...[v = 'Unable to remove legacy extension pairing state.']) =>
-                v)(chrome.runtime.lastError.message),
-            ),
-          )
-          return
-        }
-        resolve()
-      })
-    })
+    return this.pairingStorage.setPairingStorage(items)
   }
 
   ensureLegacyPairingMigration(): Promise<void> {
-    if (
-      this.legacyPairingMigration.kind === LegacyPairingMigrationKind.Running
-    ) {
-      return this.legacyPairingMigration.operation
-    }
-    const operation = (async () => {
-      // Browser storage is a read-once upgrade source only. Rexie remains the
-      // sole ongoing owner of pairing state after the legacy rows are removed.
-      const legacy = await this.readLegacyPairingStorage()
-      const legacyKeys = this.legacyPairingStorageKeys(legacy)
-      if (legacyKeys.length === 0) return
-      const legacyPairingRecords: LegacyPairingStorageItems =
-        Object.fromEntries(
-          Object.entries(legacy).filter(([key]) => legacyKeys.includes(key)),
-        )
-      const current = await backgroundVaultRuntime.loadExtensionPairingItems()
-      const pairingPolicy = await extensionPairingGrantPolicyReady
-      const migrated =
-        pairingPolicy.migratedLegacyPairingStorageItems(legacyPairingRecords)
-      if (Object.keys(current).length > 0) {
-        const completedKeys = Object.keys(migrated).filter((key) => {
-          const currentRecord = current[key]
-          const migratedRecord = migrated[key]
-          if (!legacyKeys.includes(key) || !currentRecord || !migratedRecord)
-            return false
-          const compareRequest: Parameters<
-            typeof pairingPolicy.compare_extension_pairing_records
-          >[0] = {
-            current: currentRecord,
-            migrated: migratedRecord,
-          }
-          return (
-            pairingPolicy.compare_extension_pairing_records(compareRequest) ===
-            'Equivalent'
-          )
-        })
-        if (
-          completedKeys.length > 0 &&
-          completedKeys.length === Object.keys(migrated).length
-        ) {
-          await this.removeLegacyPairingStorage(completedKeys)
-        }
-        return
-      }
-      if (Object.keys(migrated).length > 0) {
-        await backgroundVaultRuntime.persistExtensionPairingItems(migrated)
-        await this.removeLegacyPairingStorage(
-          Object.keys(migrated).filter((key) => legacyKeys.includes(key)),
-        )
-      }
-    })()
-    this.legacyPairingMigration = {
-      kind: LegacyPairingMigrationKind.Running,
-      operation,
-    }
-    return operation
+    return this.pairingStorage.ensureLegacyPairingMigration()
   }
 
   async getPairingStorage(key?: string): Promise<ExtensionPairingItems> {
-    await this.ensureLegacyPairingMigration()
-    const stored = await backgroundVaultRuntime.loadExtensionPairingItems()
-    if (!key) return stored
-    const record = stored[key]
-    return record ? { [key]: record } : {}
+    return this.pairingStorage.getPairingStorage(key)
   }
 
   async requestOriginAndRpId({

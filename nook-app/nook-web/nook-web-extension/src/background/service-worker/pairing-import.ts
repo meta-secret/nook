@@ -182,10 +182,16 @@ async function importDecodedApprovedPairing(
       const migration =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
       if (migration.isErr()) {
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest: ImportDecodedApprovedPairingRestorePairingStorageRequest =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest,
+        )
         return migration.error.response
       }
       const nookTypedArgs0_2: Parameters<
@@ -197,10 +203,16 @@ async function importDecodedApprovedPairing(
       const reset =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
       if (reset.isErr()) {
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest2: ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest2,
+        )
         return reset.error.response
       }
       // Snapshot before scrubbing so lazy extension IPC cannot observe
@@ -235,10 +247,16 @@ async function importDecodedApprovedPairing(
         extensionPairingIdentity.sendSessionMessage(importMessage),
       )
       if (importDelivery.isErr()) {
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest3: ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest3,
+        )
         return importDelivery.error.response
       }
       const sessionImport = importDelivery.value

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SanitizedMarkup from './SanitizedMarkup.svelte'
+
   let {
     html,
     testId,
@@ -11,7 +13,7 @@
 </script>
 
 <div class="markdown-body nook-markdown {className}" data-testid={testId}>
-  {@html html}
+  <SanitizedMarkup {html} />
 </div>
 
 <style>

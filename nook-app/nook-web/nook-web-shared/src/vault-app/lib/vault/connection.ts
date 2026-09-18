@@ -1,6 +1,9 @@
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { err as storageErr, ok as storageOk } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import { VaultRecoveryErrorKind } from "$app-wasm";
 import type { NookStorageConnectArgs } from "$app-wasm";
@@ -19,7 +22,10 @@ import {
 } from "$app-wasm";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
-import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
+import {
+  VaultDiscoveryTimeout,
+  type DiscoveryCompletion,
+} from "$lib/vault/vault-discovery-timeout";
 
 enum StorageConnectionKind {
   Configured = "configured",
@@ -36,6 +42,16 @@ type StorageConnection =
 const log = browserLogRuntime.createLogger("connect");
 
 type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
+type VaultDiscoveryTimeoutConfiguration = ConstructorParameters<
+  typeof VaultDiscoveryTimeout
+>[0];
+type VaultDiscoveryTimeoutRequest = DiscoveryCompletion<
+  SecretRecordCollection,
+  VaultStorageFailure
+>;
+type SentinelCeremonyRequest = Parameters<
+  SentinelUnlockActions["surfaceSentinelCeremonyIfNeeded"]
+>[0];
 
 /** Owns browser orchestration for one connection context. */
 export class VaultConnectionActions {
@@ -208,7 +224,9 @@ export class VaultConnectionActions {
           break;
       }
 
-      const rawRecords = await state.enqueueStorage(async () => {
+      const loadSecretRecords = async (): Promise<
+        Result<SecretRecordCollection, VaultStorageFailure>
+      > => {
         const connectArgs =
           storageConnection.kind === StorageConnectionKind.RemoteRecovery
             ? storageConnection.args
@@ -236,18 +254,26 @@ export class VaultConnectionActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
+        const timeoutRequest: VaultDiscoveryTimeoutRequest = {
           operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
-        });
-      });
+        };
+        const timeoutConfiguration: VaultDiscoveryTimeoutConfiguration = {
+          timeoutMs: 30_000,
+        };
+        return new VaultDiscoveryTimeout(timeoutConfiguration).waitFor(
+          timeoutRequest,
+        );
+      };
+      const rawRecords = await state.enqueueStorage(loadSecretRecords);
       if (rawRecords.isErr()) {
         state.isAuthenticated = false;
+        const ceremonyRequest: SentinelCeremonyRequest = {
+          recoveryKind: rawRecords.error.recoveryKind,
+        };
         const surfaced = await new SentinelUnlockActions(
           state,
-        ).surfaceSentinelCeremonyIfNeeded({
-          recoveryKind: rawRecords.error.recoveryKind,
-        });
+        ).surfaceSentinelCeremonyIfNeeded(ceremonyRequest);
         if (!surfaced)
           state.errorMsg = state.t(rawRecords.error.translationKey);
         return;

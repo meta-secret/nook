@@ -15,18 +15,28 @@ function decodeRuntimeMessage<DecodedMessage, WireMessage>(
   request: RuntimeMessageDecodeRequest<DecodedMessage, WireMessage>,
 ): Effect.Effect<DecodedMessage, RuntimeMessageDecodeFailure> {
   return Schema.decodeUnknown(request.schema)(request.value).pipe(
-    Effect.mapError((cause) =>
-      RuntimeMessageDecodeFailure.fromParseError({
+    Effect.mapError((cause) => {
+      const failureRequest: Parameters<
+        typeof RuntimeMessageDecodeFailure.fromParseError
+      >[0] = {
         kind: request.kind,
         cause,
-      }),
-    ),
+      };
+      return RuntimeMessageDecodeFailure.fromParseError(failureRequest);
+    }),
   );
 }
 
 export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = "nook:open-simple-vault",
 }
+
+const openSimpleVaultTypeSchema = Schema.Literal(
+  OpenSimpleVaultMessageType.NookOpenSimpleVault,
+);
+type OpenSimpleVaultMessageFields = {
+  readonly type: typeof openSimpleVaultTypeSchema;
+};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class OpenSimpleVaultMessage {
@@ -35,19 +45,59 @@ export class OpenSimpleVaultMessage {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<OpenSimpleVaultMessage, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage({
-      schema: Schema.Struct({
-        type: Schema.Literal(OpenSimpleVaultMessageType.NookOpenSimpleVault),
-      }),
+    const schemaFields: OpenSimpleVaultMessageFields = {
+      type: openSimpleVaultTypeSchema,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      OpenSimpleVaultMessage,
+      WireMessage
+    > = {
+      schema: Schema.Struct(schemaFields),
       value: message,
       kind: RuntimeMessageDecodeFailureKind.OpenSimpleVault,
-    });
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 
 export enum BeginExtensionPairingMessageType {
   NookBeginExtensionPairing = "nook:begin-extension-pairing",
 }
+
+const beginExtensionPairingTypeSchema = Schema.Literal(
+  BeginExtensionPairingMessageType.NookBeginExtensionPairing,
+);
+const beginExtensionPairingDeviceIdSchema = Schema.String.pipe(
+  Schema.minLength(1),
+);
+const beginExtensionPairingDevicePublicKeySchema = Schema.String.pipe(
+  Schema.minLength(1),
+);
+const beginExtensionPairingDeviceSigningPublicKeySchema = Schema.String.pipe(
+  Schema.minLength(1),
+);
+const beginExtensionPairingDeviceLabelSchema = Schema.String.pipe(
+  Schema.minLength(1),
+);
+type BeginExtensionPairingPayloadFields = {
+  readonly deviceId: typeof beginExtensionPairingDeviceIdSchema;
+  readonly devicePublicKey: typeof beginExtensionPairingDevicePublicKeySchema;
+  readonly deviceSigningPublicKey: typeof beginExtensionPairingDeviceSigningPublicKeySchema;
+  readonly deviceLabel: typeof beginExtensionPairingDeviceLabelSchema;
+};
+const beginExtensionPairingPayloadFields: BeginExtensionPairingPayloadFields = {
+  deviceId: beginExtensionPairingDeviceIdSchema,
+  devicePublicKey: beginExtensionPairingDevicePublicKeySchema,
+  deviceSigningPublicKey: beginExtensionPairingDeviceSigningPublicKeySchema,
+  deviceLabel: beginExtensionPairingDeviceLabelSchema,
+};
+const beginExtensionPairingPayloadSchema = Schema.Struct(
+  beginExtensionPairingPayloadFields,
+);
+type BeginExtensionPairingMessageFields = {
+  readonly type: typeof beginExtensionPairingTypeSchema;
+  readonly payload: typeof beginExtensionPairingPayloadSchema;
+};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class BeginExtensionPairingMessage {
@@ -62,21 +112,19 @@ export class BeginExtensionPairingMessage {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<BeginExtensionPairingMessage, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage({
-      schema: Schema.Struct({
-        type: Schema.Literal(
-          BeginExtensionPairingMessageType.NookBeginExtensionPairing,
-        ),
-        payload: Schema.Struct({
-          deviceId: Schema.String.pipe(Schema.minLength(1)),
-          devicePublicKey: Schema.String.pipe(Schema.minLength(1)),
-          deviceSigningPublicKey: Schema.String.pipe(Schema.minLength(1)),
-          deviceLabel: Schema.String.pipe(Schema.minLength(1)),
-        }),
-      }),
+    const schemaFields: BeginExtensionPairingMessageFields = {
+      type: beginExtensionPairingTypeSchema,
+      payload: beginExtensionPairingPayloadSchema,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      BeginExtensionPairingMessage,
+      WireMessage
+    > = {
+      schema: Schema.Struct(schemaFields),
       value: message,
       kind: RuntimeMessageDecodeFailureKind.BeginExtensionPairing,
-    });
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 
@@ -115,23 +163,31 @@ export class ExtensionEventLogRecordAdmission {
     value: WireValue,
   ): Effect.Effect<ExtensionEventLogRecord, RuntimeMessageDecodeFailure> {
     switch (ExtensionEventLogRecordAdmission.runtimeState.kind) {
-      case ExtensionEventLogRecordRuntimeStateKind.Unconfigured:
-        return Effect.fail(
-          RuntimeMessageDecodeFailure.fromCause({
-            kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
-            cause: new Error("Extension event-log decoder is not configured."),
-          }),
-        );
+      case ExtensionEventLogRecordRuntimeStateKind.Unconfigured: {
+        const failureRequest: Parameters<
+          typeof RuntimeMessageDecodeFailure.fromCause
+        >[0] = {
+          kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
+          cause: new Error("Extension event-log decoder is not configured."),
+        };
+        const failure = RuntimeMessageDecodeFailure.fromCause(failureRequest);
+        return Effect.fail(failure);
+      }
       case ExtensionEventLogRecordRuntimeStateKind.Configured: {
         const { runtime } = ExtensionEventLogRecordAdmission.runtimeState;
-        return Effect.try({
-          try: () => runtime.decode_extension_event_log_record(value),
-          catch: (cause) =>
-            RuntimeMessageDecodeFailure.fromCause({
+        return Effect.try(() =>
+          runtime.decode_extension_event_log_record(value),
+        ).pipe(
+          Effect.mapError((cause) => {
+            const failureRequest: Parameters<
+              typeof RuntimeMessageDecodeFailure.fromCause
+            >[0] = {
               kind: RuntimeMessageDecodeFailureKind.ExtensionEventLogRecord,
               cause,
-            }),
-        });
+            };
+            return RuntimeMessageDecodeFailure.fromCause(failureRequest);
+          }),
+        );
       }
     }
   }
@@ -140,6 +196,32 @@ export class ExtensionEventLogRecordAdmission {
 export enum ExtensionLocalEventLogUpdatedMessageType {
   NookExtensionLocalEventLogUpdated = "nook:extension-local-event-log-updated",
 }
+
+const extensionLocalEventLogUpdatedTypeSchema = Schema.Literal(
+  ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
+);
+const extensionLocalEventLogUpdatedVaultStoreIdSchema = Schema.String.pipe(
+  Schema.minLength(1),
+);
+const extensionLocalEventLogUpdatedRecordsSchema = Schema.Array(
+  Schema.Unknown,
+).pipe(Schema.minItems(1));
+type ExtensionLocalEventLogUpdatedPayloadFields = {
+  readonly vaultStoreId: typeof extensionLocalEventLogUpdatedVaultStoreIdSchema;
+  readonly eventLogRecords: typeof extensionLocalEventLogUpdatedRecordsSchema;
+};
+const extensionLocalEventLogUpdatedPayloadFields: ExtensionLocalEventLogUpdatedPayloadFields =
+  {
+    vaultStoreId: extensionLocalEventLogUpdatedVaultStoreIdSchema,
+    eventLogRecords: extensionLocalEventLogUpdatedRecordsSchema,
+  };
+const extensionLocalEventLogUpdatedPayloadSchema = Schema.Struct(
+  extensionLocalEventLogUpdatedPayloadFields,
+);
+type ExtensionLocalEventLogUpdatedEnvelopeFields = {
+  readonly type: typeof extensionLocalEventLogUpdatedTypeSchema;
+  readonly payload: typeof extensionLocalEventLogUpdatedPayloadSchema;
+};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class ExtensionLocalEventLogUpdatedMessage {
@@ -155,26 +237,30 @@ export class ExtensionLocalEventLogUpdatedMessage {
     ExtensionLocalEventLogUpdatedMessage,
     RuntimeMessageDecodeFailure
   > {
-    const envelopeSchema = Schema.Struct({
-      type: Schema.Literal(
-        ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
-      ),
-      payload: Schema.Struct({
-        vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-        eventLogRecords: Schema.Array(Schema.Unknown).pipe(Schema.minItems(1)),
-      }),
-    });
-    return decodeRuntimeMessage({
+    const envelopeFields: ExtensionLocalEventLogUpdatedEnvelopeFields = {
+      type: extensionLocalEventLogUpdatedTypeSchema,
+      payload: extensionLocalEventLogUpdatedPayloadSchema,
+    };
+    const envelopeSchema = Schema.Struct(envelopeFields);
+    type ExtensionLocalEventLogUpdatedEnvelope = Schema.Schema.Type<
+      typeof envelopeSchema
+    >;
+    const request: RuntimeMessageDecodeRequest<
+      ExtensionLocalEventLogUpdatedEnvelope,
+      WireMessage
+    > = {
       schema: envelopeSchema,
       value: message,
       kind: RuntimeMessageDecodeFailureKind.ExtensionLocalEventLogUpdated,
-    }).pipe(
+    };
+    const eventLogRecordDecodeOptions: { readonly concurrency: "unbounded" } = {
+      concurrency: "unbounded",
+    };
+    return decodeRuntimeMessage(request).pipe(
       Effect.flatMap(({ type, payload }) =>
         Effect.all(
           payload.eventLogRecords.map(ExtensionEventLogRecord.decode),
-          {
-            concurrency: "unbounded",
-          },
+          eventLogRecordDecodeOptions,
         ).pipe(
           Effect.map((eventLogRecords) => ({
             type,
@@ -193,11 +279,20 @@ export class RuntimeMessageEnvelope {
   static decode<WireMessage>(
     message: WireMessage,
   ): Effect.Effect<RuntimeMessageEnvelope, RuntimeMessageDecodeFailure> {
-    return decodeRuntimeMessage({
-      schema: Schema.Struct({ type: Schema.String }),
+    const runtimeMessageEnvelopeFields: {
+      readonly type: typeof Schema.String;
+    } = {
+      type: Schema.String,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      RuntimeMessageEnvelope,
+      WireMessage
+    > = {
+      schema: Schema.Struct(runtimeMessageEnvelopeFields),
       value: message,
       kind: RuntimeMessageDecodeFailureKind.RuntimeMessageEnvelope,
-    });
+    };
+    return decodeRuntimeMessage(request);
   }
 }
 

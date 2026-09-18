@@ -187,7 +187,8 @@ export class SentinelGenesisActions {
     } catch {
       return;
     }
-    this.applyStatus({ status });
+    const statusUpdate: Parameters<typeof this.applyStatus>[0] = { status };
+    this.applyStatus(statusUpdate);
   }
 
   async start({
@@ -223,7 +224,10 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(status.error);
       }
-      this.applyStatus({ status: status.value });
+      const statusUpdate: Parameters<typeof this.applyStatus>[0] = {
+        status: status.value,
+      };
+      this.applyStatus(statusUpdate);
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
       try {
@@ -269,7 +273,10 @@ export class SentinelGenesisActions {
         }
       });
       if (status.isErr()) return storageErr(status.error);
-      this.applyStatus({ status: status.value });
+      const statusUpdate: Parameters<typeof this.applyStatus>[0] = {
+        status: status.value,
+      };
+      this.applyStatus(statusUpdate);
       return storageOk(SentinelGenesisParticipantResponseOutcome.Added);
     } finally {
       state.isVerifying = false;
@@ -405,7 +412,10 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(result.error);
       }
-      this.applyFinalizeResult({ result: result.value });
+      const finalization: Parameters<typeof this.applyFinalizeResult>[0] = {
+        result: result.value,
+      };
+      this.applyFinalizeResult(finalization);
       return storageOk(SentinelGenesisFinalizationOutcome.Finalized);
     } finally {
       state.isVerifying = false;
@@ -522,9 +532,10 @@ export class SentinelGenesisActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.openActiveVault(storeId.value);
-    const loadedProviders1 = await state.loadProviders({
+    const providerLoad: Parameters<typeof state.loadProviders>[0] = {
       ensureLocalRow: false,
-    });
+    };
+    const loadedProviders1 = await state.loadProviders(providerLoad);
     if (loadedProviders1.isErr()) {
       return storageErr(loadedProviders1.error);
     }

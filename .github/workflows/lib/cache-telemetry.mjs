@@ -1,4 +1,3 @@
-import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,12 +12,12 @@ import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
 import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
 import { BuildHistoryBaseline } from "./cache-telemetry-baseline.mjs";
+import { BuildHistoryTelemetry } from "./build-history-telemetry.mjs";
 
 export { BuildkitCacheExportTelemetry, CacheScopeTelemetry };
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
-const HISTORY_LOG_TIMEOUT_MS = 12_000;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
   Unavailable: "unavailable",
@@ -43,20 +42,17 @@ const HistoryLogCollectionKind = Object.freeze({
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
   static isJsonRecord(value) {
-    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+    return BuildHistoryTelemetry.isJsonRecord(value);
   }
 
   /** @param {string} text @returns {unknown} */
   static parseJson(text) {
-    return JSON.parse(text);
+    return BuildHistoryTelemetry.parseJson(text);
   }
 
   /** @this {void} @param {string} text @returns {JsonRecord} */
   static parseJsonRecord(text) {
-    const parsed = CacheTelemetry.parseJson(text);
-    if (!CacheTelemetry.isJsonRecord(parsed))
-      throw new Error("expected a JSON object");
-    return parsed;
+    return BuildHistoryTelemetry.parseJsonRecord(text);
   }
 
   /** @param {MarkedTelemetryJsonRequest} request @returns {string} */
@@ -84,60 +80,12 @@ export class CacheTelemetry {
 
   /** @param {string} text @returns {JsonRecord[]} */
   static parseJsonObjects(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
-    if (trimmed.startsWith("[")) {
-      const parsed = CacheTelemetry.parseJson(trimmed);
-      if (!Array.isArray(parsed)) {
-        throw new Error("expected a JSON object array");
-      }
-      /** @type {unknown[]} */
-      const candidates = parsed;
-      if (
-        !candidates.every((candidate) => CacheTelemetry.isJsonRecord(candidate))
-      ) {
-        throw new Error("expected a JSON object array");
-      }
-      return candidates;
-    }
-    return trimmed
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => CacheTelemetry.parseJsonRecord(line));
+    return BuildHistoryTelemetry.parseJsonObjects(text);
   }
 
   /** @param {string} text @returns {RawJsonProgress} */
   static parseRawJsonProgress(text) {
-    /** @type {JsonRecord[]} */
-    const objects = [];
-    /** @type {string[]} */
-    const diagnostics = [];
-    for (const line of text.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = CacheTelemetry.parseJson(line);
-        if (Array.isArray(parsed)) {
-          /** @type {unknown[]} */
-          const candidates = parsed;
-          if (
-            candidates.every((candidate) =>
-              CacheTelemetry.isJsonRecord(candidate),
-            )
-          ) {
-            objects.push(...candidates);
-          } else {
-            diagnostics.push(line);
-          }
-        } else if (CacheTelemetry.isJsonRecord(parsed)) {
-          objects.push(parsed);
-        } else {
-          diagnostics.push(line);
-        }
-      } catch {
-        diagnostics.push(line);
-      }
-    }
-    return { objects, diagnostics };
+    return BuildHistoryTelemetry.parseRawJsonProgress(text);
   }
 
   /** @param {unknown} value @param {number} [fallback] @returns {number} */
@@ -200,8 +148,7 @@ export class CacheTelemetry {
 
   /** @param {string} ref @returns {string} */
   static historyLogRef(ref) {
-    const [historyRef = ""] = [String(ref).split("/").filter(Boolean).pop()];
-    return historyRef;
+    return BuildHistoryTelemetry.historyLogRef(ref);
   }
 
   /** @param {string} left @param {string} right @returns {number} */
@@ -586,18 +533,7 @@ export class CacheTelemetry {
 
   /** @returns {BuildHistoryRecord[]} */
   static listBuildHistory() {
-    const result = spawnSync(
-      "docker",
-      ["buildx", "history", "ls", "--format", "json", "--no-trunc"],
-      { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
-    );
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(
-        result.stderr.trim() || `buildx history exited ${result.status}`,
-      );
-    }
-    return CacheTelemetry.parseJsonObjects(result.stdout).map((record) =>
+    return BuildHistoryTelemetry.listBuildHistory().map((record) =>
       CacheTelemetry.normalizeBuildRecord(record),
     );
   }
@@ -607,61 +543,8 @@ export class CacheTelemetry {
    * @param {number} [timeoutMs]
    * @returns {Promise<JsonRecord[]>}
    */
-  static readHistoryEvents(ref, timeoutMs = HISTORY_LOG_TIMEOUT_MS) {
-    return new Promise((resolve, reject) => {
-      const child = spawn("docker", [
-        "buildx",
-        "history",
-        "logs",
-        CacheTelemetry.historyLogRef(ref),
-        "--progress",
-        "rawjson",
-      ]);
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGTERM");
-      }, timeoutMs);
-      child.stdout.on("data", (chunk) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-      });
-      child.on("error", (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-      child.on("close", (status) => {
-        clearTimeout(timeout);
-        if (timedOut) {
-          reject(
-            new Error(`buildx history logs timed out after ${timeoutMs}ms`),
-          );
-          return;
-        }
-        const parsedStdout = CacheTelemetry.parseRawJsonProgress(stdout);
-        const parsedStderr = CacheTelemetry.parseRawJsonProgress(stderr);
-        const events = [...parsedStdout.objects, ...parsedStderr.objects];
-        const diagnostics = [
-          ...parsedStdout.diagnostics,
-          ...parsedStderr.diagnostics,
-        ];
-        if (events.length > 0 || (status === 0 && diagnostics.length === 0)) {
-          resolve(events);
-        } else {
-          reject(
-            new Error(
-              diagnostics.join("\n") ||
-                stderr.trim() ||
-                `buildx history logs exited ${status}`,
-            ),
-          );
-        }
-      });
-    });
+  static readHistoryEvents(ref, timeoutMs) {
+    return BuildHistoryTelemetry.readHistoryEvents(ref, timeoutMs);
   }
 
   /** @param {NodeJS.ProcessEnv} [environment] @returns {CacheBackend} */

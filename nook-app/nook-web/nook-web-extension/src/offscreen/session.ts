@@ -83,6 +83,20 @@ type ExtensionSessionExpiryMessage = {
   type: ExtensionSessionLifecycleMessageType.Expired
 }
 
+type SessionExpiryLeaseConfiguration = ConstructorParameters<
+  typeof ActiveExtensionSessionLease
+>[0]
+
+type CompanionIdentityHandoffSessionResponse = {
+  readonly ok: true
+  readonly response: CompanionIdentityHandoffResponse
+}
+
+type CompanionIdentityDiscoverySessionResponse = {
+  readonly ok: true
+  readonly status: CompanionIdentityStatus
+}
+
 let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
@@ -103,18 +117,19 @@ class ExtensionSessionExpiryLifecycle {
       this.scheduleState.lease.stop()
     }
     const generation = this.generation
+    const leaseConfiguration: SessionExpiryLeaseConfiguration = {
+      generation,
+      durationMs: SESSION_DURATION_MS,
+      onExpire: () => {
+        if (!this.generation.matches(generation)) return
+        this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
+        this.generation = this.generation.next()
+        onExpire()
+      },
+    }
     this.scheduleState = {
       kind: SessionExpiryScheduleKind.Scheduled,
-      lease: new ActiveExtensionSessionLease({
-        generation,
-        durationMs: SESSION_DURATION_MS,
-        onExpire: () => {
-          if (!this.generation.matches(generation)) return
-          this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
-          this.generation = this.generation.next()
-          onExpire()
-        },
-      }),
+      lease: new ActiveExtensionSessionLease(leaseConfiguration),
     }
   }
 
@@ -277,7 +292,11 @@ async function handleCompanionIdentityHandoff(
         return err(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
-      return ok({ ok: true, response })
+      const result: CompanionIdentityHandoffSessionResponse = {
+        ok: true,
+        response,
+      }
+      return ok(result)
     } finally {
       if (!consumed) endpoint.free()
     }
@@ -335,7 +354,11 @@ async function handleCompanionIdentityDiscovery(
       }
       const status: CompanionIdentityStatus = discovered.status
       if (status.status !== 'unlocked') releaseCompanionEndpoint()
-      return ok({ ok: true, status })
+      const response: CompanionIdentityDiscoverySessionResponse = {
+        ok: true,
+        status,
+      }
+      return ok(response)
     } catch {
       releaseCompanionEndpoint()
       return err(
