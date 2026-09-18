@@ -58,7 +58,9 @@ jobs:
     if: inputs.validation_requested
     needs: validation-request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # The native image build can consume almost five minutes on a cold ARC
+    # worker. Leave bounded room for mandatory cache telemetry and cleanup.
+    timeout-minutes: 10
     outputs:
       image: ${{ steps.image.outputs.ref }}
       produced: ${{ steps.image.outputs.produced }}

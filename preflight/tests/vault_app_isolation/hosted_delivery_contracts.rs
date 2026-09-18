@@ -304,6 +304,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR CI must finish WASM Node tests without exporting ARC graphs while preserving hosted exact-cache publication"
     );
     assert!(
+        native_build_job.contains("timeout-minutes: 10"),
+        "native PR image production must leave bounded time for telemetry after a cold build"
+    );
+    assert!(
         native_build_job.contains("cache-write: \"false\"")
             && native_build_job.contains("task ci:pr:rust-build-image")
             && native_build_job.contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
