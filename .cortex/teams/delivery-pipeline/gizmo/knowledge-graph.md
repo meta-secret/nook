@@ -4,7 +4,7 @@
 
 - [Team Gizmo contract](AGENTS.md)
 - [Activation prompt](activation-prompt.md)
-- [Delivery Pipeline contract](../AGENTS.md)
+- [Delivery Pipeline team contract](../AGENTS.md)
 - [PR Lifecycle Agent](../pr-lifecycle/AGENTS.md)
 - [Multiagent delivery diagrams](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Feature pull-request delivery](../../../gizmo-prime/architecture/dev-delivery.md)

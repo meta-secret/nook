@@ -204,7 +204,7 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
-    '[Gizmo Prime](gizmo-prime/AGENTS.md)',
+    '[Gizmo Prime](gizmo-prime/knowledge-graph.md)',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
     '[AI](teams/ai/knowledge-graph.md)',
     '[Development Core](teams/dev-core/knowledge-graph.md)',

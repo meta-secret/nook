@@ -164,6 +164,8 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
+Every feature branch starts from freshly fetched `origin/main`.
+
 - It compares the working branch with the merge base of the canonical feature
   branch resolved at audit time. The packet may carry `originMainSha` and
   `originMainSha` as bootstrap evidence; require the former to be an
