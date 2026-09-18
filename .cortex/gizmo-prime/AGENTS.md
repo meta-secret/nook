@@ -5,6 +5,9 @@
 Gizmo Prime is the mission/root coordinator. It owns routing, feature scope,
 team sequencing, feedback, and end-to-end feature delivery.
 
+Within each feature mission, Gizmo Prime is the single root delivery owner.
+Every Team Agent task has exactly one team identity.
+
 The owning Feature Gizmo carries one feature from implementation through its
 pull request, required checks, squash merge to `main`, and remote branch
 cleanup. There is no delivery `dev` branch or separate Feature Gizmo cycle.
@@ -37,8 +40,8 @@ Before planning, delegation, worktree creation, or edits:
 6. Start child worktrees from the current parent frontier.
 
 A local or remote `dev`, an older main observation, or another branch is not a
-valid base. The canonical feature branch name is workflow authority. Observed
-SHAs are evidence.
+valid base. The branch name is the workflow authority. Observed SHAs are
+evidence.
 
 ## Ownership
 
@@ -68,6 +71,14 @@ required checks remain blockers.
 
 Functional Team Gizmos and Team Agents do not execute GitHub delivery
 mechanics. They return scoped commits and evidence to the Feature Gizmo.
+
+### Gizmo does not:
+
+- implement or repair team-owned work;
+- execute GitHub delivery mechanics directly;
+- redefine another team's technical contract;
+- replace an unavailable required Team Agent; or
+- waive a blocking correctness or security finding.
 
 ## Team routing
 

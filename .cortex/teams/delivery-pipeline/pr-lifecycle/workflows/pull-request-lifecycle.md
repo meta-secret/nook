@@ -27,6 +27,32 @@ feature branch is deleted after merge.
 Reviews and approvals are optional. The owning Feature Gizmo may merge its own
 pull request. Required checks and unresolved known defects remain mandatory.
 
+## Required actions
+
+### Observe pull-request events
+
+1. Start the live subscription from the active PR Lifecycle Agent task.
+
+   ```bash
+   bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>
+   ```
+
+   Run the direct Bun process in the foreground. Keep it attached to the
+   current pull request while observing required checks.
+2. Read newline-delimited JSON from standard output.
+   - Each line is one closed `pr-steward-ndjson/v2` envelope.
+   - Deploy its writer and reader atomically. No compatibility reader exists.
+   - A version mismatch fails closed. Stop the subscriber and report a blocker.
+   - Treat notifications as bounded observation hints.
+   - Re-fetch authoritative pull-request, head, and check state before acting.
+3. End the observation iteration after all required checks reach terminal
+   state.
+   - If the feature head advances, discard head-bound evidence.
+   - Start a fresh observation iteration for the new head.
+
+The subscriber does not decide readiness or merge authority. The Feature Gizmo
+retains the full delivery decision.
+
 ## Failure handling
 
 - A partial check inventory is incomplete.
