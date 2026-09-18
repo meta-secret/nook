@@ -13,6 +13,51 @@ import {
 } from './service-worker-routing-test-support'
 
 describe('external companion routing', () => {
+  test('passes the decoded new-device identity handoff wire request unchanged', async () => {
+    const createIdentityHandoff = mock(() =>
+      Promise.resolve({
+        ok: true as const,
+        envelope: 'sealed',
+        nextNonce: 'next',
+      }),
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      createIdentityHandoff,
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const message = {
+      type: 'nook:extension-identity-handoff-request' as const,
+      payload: {
+        recipientPublicKey: 'age1recipient',
+        nonce: 'handoff-nonce',
+        expectedDeviceId: 'device-id',
+        expectedDevicePublicKey: 'age1device',
+        expectedDeviceSigningPublicKey: 'signing-key',
+      },
+    }
+
+    expect(
+      await new ExternalCompanionRouter({
+        dependencies,
+        message,
+        sender: { url: 'https://simple.example.test/' },
+        sendResponse,
+      }).route(),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(createIdentityHandoff).toHaveBeenCalledTimes(1)
+    expect(createIdentityHandoff).toHaveBeenCalledWith(message)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: true,
+      envelope: 'sealed',
+      nextNonce: 'next',
+    })
+  })
+
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =

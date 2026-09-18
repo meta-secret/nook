@@ -94,6 +94,25 @@ function parseProviderImport(providers: BrowserRuntimeMessageValue[]) {
 }
 
 describe('provider credential staging', () => {
+  test('accepts a local provider from the pairing approval payload', async () => {
+    const parse = await parseProviderImport([
+      {
+        id: 'local-provider',
+        type: 'local',
+        label: 'This device',
+        githubPat: { state: 'missing' },
+        githubRepo: { state: 'defaultRepository' },
+        oauthFile: { state: 'notApplicable' },
+        localFolder: { state: 'notApplicable' },
+        storeId: { state: 'storeId', value: 'store_abcdefghijk' },
+        syncCheckpoint: { state: 'neverSynced' },
+        createdAt: '2026-09-18T00:00:00.000Z',
+      },
+    ])
+
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+  })
+
   test('invalid identity is a typed rejection', () => {
     expect(
       new ProviderCredentialBuffer([{ id: '', type: 'github' }]).identities(),

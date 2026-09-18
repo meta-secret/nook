@@ -16,6 +16,7 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -44,6 +45,7 @@ type PairingIngressAdmission =
   | {
       readonly kind: PairingIngressAdmissionKind.Admitted
       readonly message: ExtensionPairingApprovedMessage
+      readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
     }
   | {
       readonly kind: PairingIngressAdmissionKind.Rejected
@@ -62,6 +64,13 @@ export class ExtensionPairingIngress {
         reason: PairingIngressFailure.RuntimeUnavailable,
       }
     }
+    const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
+    if (!wireSnapshot) {
+      return {
+        kind: PairingIngressAdmissionKind.Rejected,
+        reason: PairingIngressFailure.AdmissionFailed,
+      }
+    }
     const admission = runConcreteDecoder(
       ExtensionPairingApprovedMessageSchema.decode,
       message,
@@ -72,9 +81,14 @@ export class ExtensionPairingIngress {
         reason: admission.failure,
       }
     }
+    const preservedMessage =
+      SerializedWireValueAdapter.restore<ExtensionPairingApprovedMessage>(
+        wireSnapshot,
+      )
     return {
       kind: PairingIngressAdmissionKind.Admitted,
       message: admission.value,
+      sessionEventLogRecords: preservedMessage.eventLogRecords,
     }
   }
 }
@@ -86,7 +100,11 @@ export async function importPairingAfterCompanionReady(message: unknown) {
   if (admission.kind === PairingIngressAdmissionKind.Rejected) {
     return { ok: false, reason: admission.reason }
   }
-  return new PairingCredentialImportLifecycle(admission.message).import()
+  const lifecycleArgs: PairingCredentialImportLifecycleArgs = {
+    message: admission.message,
+    sessionEventLogRecords: admission.sessionEventLogRecords,
+  }
+  return new PairingCredentialImportLifecycle(lifecycleArgs).import()
 }
 
 type ReconcilePairingStorageArgs = {
@@ -126,6 +144,7 @@ async function restorePairingStorage(
 
 type ImportDecodedApprovedPairingArgs = {
   message: ExtensionPairingApprovedMessage
+  sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
   providers: StorageProvider[]
 }
 
@@ -135,7 +154,7 @@ export type PairingImportResult =
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
 ): Promise<PairingImportResult> {
-  const { message, providers } = args
+  const { message, providers, sessionEventLogRecords } = args
   const pairingPolicy = await extensionPairingGrantPolicyReady
   const grantApproval: ExtensionPairingGrantApproval = {
     vaultType: message.payload.vaultType,
@@ -235,7 +254,7 @@ async function importDecodedApprovedPairing(
           deviceId: grantApproval.deviceId,
           devicePublicKey: grantApproval.devicePublicKey,
           deviceSigningPublicKey: grantApproval.deviceSigningPublicKey,
-          eventLogRecords: message.eventLogRecords,
+          eventLogRecords: sessionEventLogRecords,
           providers: structuredClone(providers),
           queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
         },
@@ -295,8 +314,19 @@ async function importDecodedApprovedPairing(
   }
 }
 
+type PairingCredentialImportLifecycleArgs = {
+  readonly message: ExtensionPairingApprovedMessage
+  readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
+}
+
 export class PairingCredentialImportLifecycle {
-  constructor(private readonly message: ExtensionPairingApprovedMessage) {}
+  private readonly message: ExtensionPairingApprovedMessage
+  private readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
+
+  constructor(args: PairingCredentialImportLifecycleArgs) {
+    this.message = args.message
+    this.sessionEventLogRecords = args.sessionEventLogRecords
+  }
 
   async import(): Promise<PairingImportResult> {
     try {
@@ -319,6 +349,7 @@ export class PairingCredentialImportLifecycle {
       try {
         const args: ImportDecodedApprovedPairingArgs = {
           message: this.message,
+          sessionEventLogRecords: this.sessionEventLogRecords,
           providers: stagedProviders,
         }
         return await importDecodedApprovedPairing(args)

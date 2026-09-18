@@ -218,7 +218,12 @@ class BackgroundVaultRuntime {
     const manager = new NookVaultManager()
     try {
       await manager.activate_local_identity_for_app_id(grant.deviceId)
-      const recordValues = NookExternalEventLogRecords.from_array(records)
+      // The WASM import consumes the nested event objects. Preserve the caller's
+      // records because pairing forwards the same canonical events to the
+      // offscreen session after validating them in the background runtime.
+      const recordValues = NookExternalEventLogRecords.from_array(
+        structuredClone(records),
+      )
       const statusValue = await manager.import_extension_event_log_records_js(
         grant.vaultStoreId,
         grant.deviceId,

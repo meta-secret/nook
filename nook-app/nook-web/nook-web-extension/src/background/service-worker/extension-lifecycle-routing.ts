@@ -22,6 +22,7 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -439,6 +440,7 @@ export function routeExtensionLifecycleMessage({
   sender,
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
+  const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
   const {
     beginAccountPickerAuthorizationCleanup,
     clearPendingAccountPickers,
@@ -596,7 +598,16 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void importPairingAfterCompanionReady(pairingApproval.value)
+    if (!wireSnapshot) return ExtensionLifecycleRoutingResult.Unhandled
+    const preservedPairingApproval =
+      SerializedWireValueAdapter.restore<typeof pairingApproval.value>(
+        wireSnapshot,
+      )
+    const importMessage: typeof pairingApproval.value = {
+      ...pairingApproval.value,
+      eventLogRecords: preservedPairingApproval.eventLogRecords,
+    }
+    void importPairingAfterCompanionReady(importMessage)
       .then(async (response) => {
         if (response.ok) await refreshAuthenticationSurfaces()
         return response
@@ -611,6 +622,9 @@ export function routeExtensionLifecycleMessage({
   )
   if (localEventLogUpdate.kind === ConcreteDecoderResultKind.Decoded) {
     const decodedMessage = localEventLogUpdate.value
+    if (!wireSnapshot) return ExtensionLifecycleRoutingResult.Unhandled
+    const preservedMessage =
+      SerializedWireValueAdapter.restore<typeof decodedMessage>(wireSnapshot)
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -623,7 +637,7 @@ export function routeExtensionLifecycleMessage({
         }
         const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
           vaultStoreId: decodedMessage.payload.vaultStoreId,
-          eventLogRecords: decodedMessage.payload.eventLogRecords,
+          eventLogRecords: preservedMessage.payload.eventLogRecords,
         }
         void beginAccountPickerAuthorizationCleanup()
           .then(async (cleanupStart) => {

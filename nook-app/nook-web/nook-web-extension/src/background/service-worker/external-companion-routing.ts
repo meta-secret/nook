@@ -8,6 +8,7 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import { SerializedWireValueAdapter } from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
@@ -67,6 +68,7 @@ export class ExternalCompanionRouter {
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
+    const wireSnapshot = SerializedWireValueAdapter.snapshot(message)
     if (!(await ExternalSenderTrustPolicy.admits(sender))) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -162,7 +164,19 @@ export class ExternalCompanionRouter {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
-    void importPairingAfterCompanionReady(pairingApproval.value)
+    if (!wireSnapshot) {
+      sendResponse(invalidPairingGrantResponse)
+      return false
+    }
+    const preservedPairingApproval =
+      SerializedWireValueAdapter.restore<typeof pairingApproval.value>(
+        wireSnapshot,
+      )
+    const importMessage: typeof pairingApproval.value = {
+      ...pairingApproval.value,
+      eventLogRecords: preservedPairingApproval.eventLogRecords,
+    }
+    void importPairingAfterCompanionReady(importMessage)
       .then(async (response) => {
         if (!response.ok) return response
         try {

@@ -23,7 +23,6 @@ import {
   admit_companion_handoff_identity_status,
   admit_companion_identity_status,
   decode_companion_identity_discovery_observation,
-  decode_companion_identity_handoff_request,
   decode_extension_paired_vault_identity_handoff_request_message,
   decode_extension_paired_vault_unlock_request_message,
   decode_extension_session_status_response,
@@ -81,23 +80,6 @@ export {
   type ExtensionSessionStorageValue,
   type ExtensionSessionStorageWrite,
 } from './pairing-identity-storage'
-
-function decodeCompanionIdentityHandoffRequest(value: unknown) {
-  const decoded = Effect.try(() =>
-    decode_companion_identity_handoff_request(value),
-  )
-  return decoded.pipe(
-    Effect.mapError((cause) => {
-      const failureRequest: Parameters<
-        typeof RuntimeMessageDecodeFailure.fromCause
-      >[0] = {
-        kind: RuntimeMessageDecodeFailureKind.ExtensionIdentityHandoffRequest,
-        cause,
-      }
-      return RuntimeMessageDecodeFailure.fromCause(failureRequest)
-    }),
-  )
-}
 
 function decodeCompanionIdentityDiscoveryObservation(value: unknown) {
   const decoded = Effect.try(() =>
@@ -351,19 +333,8 @@ class ExtensionPairingIdentity {
     reason?: string
   }> {
     await companionWasmReady
-    const decodedRequest = runConcreteDecoder(
-      decodeCompanionIdentityHandoffRequest,
-      message.payload,
-    )
-    if (decodedRequest.kind === ConcreteDecoderResultKind.Rejected) {
-      return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-    }
-    const handoffRequest: CompanionIdentityHandoffRequest = decodedRequest.value
-    if (handoffRequest.transaction.status.status !== 'unlocked') {
-      return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-    }
-    const admittedIdentity = handoffRequest.transaction.status.app_key
-    const nonce = admittedIdentity.nonce
+    const handoffRequest = message.payload
+    const nonce = handoffRequest.nonce
     if (this.pendingIdentityHandoffConsumptions.has(nonce)) {
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
@@ -386,11 +357,10 @@ class ExtensionPairingIdentity {
       }
       const pending = pendingAdmission.value
       if (
-        pending.deviceId !== admittedIdentity.appKey.appId ||
-        pending.devicePublicKey !==
-          admittedIdentity.appKey.encryptionPublicKey ||
+        pending.deviceId !== handoffRequest.expectedDeviceId ||
+        pending.devicePublicKey !== handoffRequest.expectedDevicePublicKey ||
         pending.deviceSigningPublicKey !==
-          admittedIdentity.appKey.signingPublicKey
+          handoffRequest.expectedDeviceSigningPublicKey
       ) {
         return { ok: false, reason: 'extension-identity-handoff-not-issued' }
       }
@@ -401,10 +371,10 @@ class ExtensionPairingIdentity {
       >[0] = {
         recipientPublicKey: handoffRequest.recipientPublicKey,
         nonce,
-        expectedDeviceId: admittedIdentity.appKey.appId,
-        expectedDevicePublicKey: admittedIdentity.appKey.encryptionPublicKey,
+        expectedDeviceId: handoffRequest.expectedDeviceId,
+        expectedDevicePublicKey: handoffRequest.expectedDevicePublicKey,
         expectedDeviceSigningPublicKey:
-          admittedIdentity.appKey.signingPublicKey,
+          handoffRequest.expectedDeviceSigningPublicKey,
       }
       const nookTypedArgs0_3 = identityHandoffSessionRequest(handoffProjection)
       const delivery = await this.sendSessionMessage(nookTypedArgs0_3)
