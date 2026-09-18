@@ -630,11 +630,8 @@ export const noRawObjectArgumentsRule = {
     function expressionProducesObject(args) {
       const { expression, seenVariables } = args;
       const unwrapped = unwrapResultExpression(expression);
-      // Closed AST vocabulary: unwrapped.type === 'ObjectExpression',
-      // unwrapped.type === 'ConditionalExpression',
-      // unwrapped.type === 'LogicalExpression', and
-      // unwrapped.type === 'SequenceExpression'; array traversal admits
-      // unwrapped.type === 'ArrayExpression'.
+      // Closed AST vocabulary: unwrapped.type === 'ObjectExpression', unwrapped.type === 'ConditionalExpression', unwrapped.type === 'LogicalExpression',
+      // unwrapped.type === 'SequenceExpression'; array traversal admits unwrapped.type === 'ArrayExpression'.
       if (unwrapped.type === "ObjectExpression") return true;
       if (unwrapped.type === "AssignmentExpression") {
         return expressionProducesObject({
