@@ -131,8 +131,7 @@ type LogRuntimeReadiness =
  * paths (`createLogger`, the `console.*` patch, Rust via `__nookConsole.echo`)
  * print through these so patching never causes recursion or double-persist.
  */
-// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console owns this variadic ingress boundary.
-type ConsoleArguments = unknown[];
+type ConsoleArguments = Parameters<Console["log"]>;
 
 type ConsoleMethod = (...args: ConsoleArguments) => void;
 
@@ -163,6 +162,8 @@ type LogEchoEvent = {
   readonly level: LogLevel;
   readonly text: string;
 };
+
+type HostLogEchoArguments = readonly [level: LogLevel, text: string];
 
 /** Persist one entry (no console echo). Queues until WASM is ready. */
 type LogMessagePersistence = {
@@ -234,8 +235,7 @@ declare global {
     };
     /** Bridge for Rust `tracing` events to reach the original console. */
     __nookConsole?: {
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-      echo: (level: LogLevel, text: string) => void;
+      echo: (...event: HostLogEchoArguments) => void;
     };
   }
 }
@@ -281,22 +281,18 @@ class BrowserLogRuntime {
     if (readiness.kind === LogRuntimeReadinessKind.Ready) return;
     await readiness.completion;
   }
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  runtimeFailure(cause: unknown): RuntimeFailure {
-    return new RuntimeFailure(
+  runtimeFailure<NativeCause>(cause: NativeCause): RuntimeFailure {
+    const details: RuntimeFailureDetails =
       cause instanceof Error
-        ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          {
+        ? {
             message: cause.message,
             ...(cause.stack ? { stack: cause.stack } : {}),
           }
-        : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          { message: String(cause) },
-    );
+        : { message: String(cause) };
+    return new RuntimeFailure(details);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  runtimeError(cause: unknown): Error {
+  runtimeError<NativeCause>(cause: NativeCause): Error {
     return cause instanceof Error ? cause : new Error(String(cause));
   }
 
@@ -411,8 +407,8 @@ class BrowserLogRuntime {
     }
   }
 
-  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
-  private hostEcho(level: LogLevel, text: string): void {
+  private hostEcho(...event: HostLogEchoArguments): void {
+    const [level, text] = event;
     const echoArgs: Parameters<typeof this.echo>[0] = { level, text };
     this.echo(echoArgs);
   }
@@ -478,9 +474,7 @@ class BrowserLogRuntime {
     this.persistMessage(persistMessageArgs);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  isIgnoredErrorSource(source: unknown): boolean {
-    if (typeof source !== "string") return false;
+  isIgnoredErrorSource(source: string): boolean {
     const value = source.trim();
     if (!value) return false;
     return (
@@ -536,6 +530,7 @@ class BrowserLogRuntime {
     window.addEventListener("unhandledrejection", (event) => {
       if (
         event.reason instanceof Error &&
+        event.reason.stack &&
         this.isIgnoredErrorSource(event.reason.stack)
       )
         return;
@@ -757,7 +752,7 @@ class BrowserLogRuntime {
 
     const wrap = ({ method, level }: ConsoleMethodWrap) => {
       console[method] = (...args: ConsoleArguments) => {
-        this.originalConsole[method](...args);
+        this.originalConsole[method].apply(console, args);
         if (this.isEnabled(level)) {
           const persistMessageArgs2: Parameters<typeof this.persistMessage>[0] =
             {

@@ -100,34 +100,214 @@ type SiteShellRef = {
 }
 
 class SiteFixtureCatalogAdmission {
-  isSiteShellRef(value: unknown): value is SiteShellRef {
-    if (!value || typeof value !== 'object') return false
-    return (
-      'template' in value &&
-      typeof value.template === 'string' &&
-      'source' in value &&
-      (value.source === SiteFixtureSource.Capture ||
-        value.source === SiteFixtureSource.Research) &&
-      'loginUrl' in value &&
-      typeof value.loginUrl === 'string'
-    )
+  decodeSiteShellRef(value: unknown): SiteShellRef {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('template' in value) ||
+      typeof value.template !== 'string' ||
+      !('source' in value) ||
+      (value.source !== SiteFixtureSource.Capture &&
+        value.source !== SiteFixtureSource.Research) ||
+      !('loginUrl' in value) ||
+      typeof value.loginUrl !== 'string'
+    ) {
+      throw new TypeError('site shell reference has an invalid shape')
+    }
+    const reference: SiteShellRef = {
+      template: value.template,
+      source: value.source,
+      loginUrl: value.loginUrl,
+    }
+    if ('quirks' in value) {
+      reference.quirks = this.decodeStringList(value.quirks)
+    }
+    if ('steps' in value) {
+      reference.steps = this.decodeSteps(value.steps)
+    }
+    return reference
   }
 
-  parsePilotExpectation(value: unknown): SiteFixturePilotExpectation | false {
+  decodePilotExpectation(value: unknown): SiteFixturePilotExpectation {
     switch (value) {
       case SiteFixturePilotExpectation.ContinueWithNook:
         return SiteFixturePilotExpectation.ContinueWithNook
       case SiteFixturePilotExpectation.FailClosedAlternateAuthentication:
         return SiteFixturePilotExpectation.FailClosedAlternateAuthentication
       default:
-        return false
+        throw new TypeError('shell template has an invalid Pilot expectation')
     }
   }
 
-  isShellTemplateRaw(value: unknown): value is ShellTemplateRaw {
-    if (!value || typeof value !== 'object') return false
-    if (!('quirks' in value) || !Array.isArray(value.quirks)) return false
-    return 'steps' in value && Array.isArray(value.steps)
+  decodeShellTemplateRaw(value: unknown): ShellTemplateRaw {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('quirks' in value) ||
+      !('steps' in value)
+    ) {
+      throw new TypeError('shell template has an invalid shape')
+    }
+    return {
+      quirks: this.decodeStringList(value.quirks),
+      steps: this.decodeSteps(value.steps),
+    }
+  }
+
+  decodeSiteFixture(value: unknown): SiteFixture {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('id' in value) ||
+      typeof value.id !== 'string' ||
+      !('source' in value) ||
+      (value.source !== SiteFixtureSource.Capture &&
+        value.source !== SiteFixtureSource.Research) ||
+      !('loginUrl' in value) ||
+      typeof value.loginUrl !== 'string' ||
+      !('quirks' in value) ||
+      !('steps' in value) ||
+      !('template' in value) ||
+      typeof value.template !== 'string'
+    ) {
+      throw new TypeError('site fixture has an invalid shape')
+    }
+    const steps = this.decodeSteps(value.steps)
+    if (steps.length === 0) {
+      throw new TypeError('site fixture must contain at least one step')
+    }
+    return {
+      id: value.id,
+      source: value.source,
+      loginUrl: value.loginUrl,
+      quirks: this.decodeStringList(value.quirks),
+      steps,
+      template: value.template,
+    }
+  }
+
+  private decodeStringList(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      throw new TypeError('fixture string list has an invalid shape')
+    }
+    const strings: string[] = []
+    for (const item of value) {
+      if (typeof item !== 'string') {
+        throw new TypeError('fixture string list contains a non-string value')
+      }
+      strings.push(item)
+    }
+    return strings
+  }
+
+  private decodeSteps(value: unknown): SiteFixtureStep[] {
+    if (!Array.isArray(value)) {
+      throw new TypeError('fixture steps have an invalid shape')
+    }
+    const steps: SiteFixtureStep[] = []
+    for (const step of value) steps.push(this.decodeStep(step))
+    return steps
+  }
+
+  private decodeStep(value: unknown): SiteFixtureStep {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('fields' in value) ||
+      !('submit' in value)
+    ) {
+      throw new TypeError('fixture step has an invalid shape')
+    }
+    const fields = this.decodeFields(value.fields)
+    const submit = this.decodeSubmit(value.submit)
+    return { fields, submit }
+  }
+
+  private decodeFields(value: unknown): SiteFixtureField[] {
+    if (!Array.isArray(value)) {
+      throw new TypeError('fixture fields have an invalid shape')
+    }
+    const fields: SiteFixtureField[] = []
+    for (const field of value) fields.push(this.decodeField(field))
+    return fields
+  }
+
+  private decodeField(value: unknown): SiteFixtureField {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError('fixture field has an invalid shape')
+    }
+    const field: SiteFixtureField = {}
+    if ('name' in value) field.name = this.decodeString(value.name, 'name')
+    if ('type' in value) field.type = this.decodeString(value.type, 'type')
+    if ('id' in value) field.id = this.decodeString(value.id, 'id')
+    if ('autocomplete' in value) {
+      field.autocomplete = this.decodeString(value.autocomplete, 'autocomplete')
+    }
+    if ('label' in value) field.label = this.decodeString(value.label, 'label')
+    if ('placeholder' in value) {
+      field.placeholder = this.decodeString(value.placeholder, 'placeholder')
+    }
+    if ('aria-label' in value) {
+      field['aria-label'] = this.decodeString(value['aria-label'], 'aria-label')
+    }
+    if ('data-qa' in value) {
+      field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
+    }
+    if ('data-testid' in value) {
+      field['data-testid'] = this.decodeString(
+        value['data-testid'],
+        'data-testid',
+      )
+    }
+    if ('inputmode' in value) {
+      if (value.inputmode !== SiteFixtureInputMode.Email) {
+        throw new TypeError('fixture field inputmode has an invalid value')
+      }
+      field.inputmode = SiteFixtureInputMode.Email
+    }
+    return field
+  }
+
+  private decodeSubmit(value: unknown): SiteFixtureSubmit {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('label' in value) ||
+      typeof value.label !== 'string'
+    ) {
+      throw new TypeError('fixture submit button has an invalid shape')
+    }
+    const submit: SiteFixtureSubmit = {
+      type: SiteFixtureSubmitType.Submit,
+      label: value.label,
+    }
+    if ('type' in value) {
+      if (
+        value.type !== SiteFixtureSubmitType.Button &&
+        value.type !== SiteFixtureSubmitType.Submit
+      ) {
+        throw new TypeError('fixture submit button has an invalid type')
+      }
+      submit.type = value.type
+    }
+    if ('name' in value) submit.name = this.decodeString(value.name, 'name')
+    if ('id' in value) submit.id = this.decodeString(value.id, 'id')
+    if ('data-qa' in value) {
+      submit['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
+    }
+    return submit
+  }
+
+  private decodeString(value: unknown, property: string): string {
+    if (typeof value !== 'string') {
+      throw new TypeError(`fixture property ${property} must be a string`)
+    }
+    return value
   }
 }
 
@@ -135,15 +315,15 @@ const siteFixtureCatalogAdmission = new SiteFixtureCatalogAdmission()
 
 const siteShells = new Map<string, SiteShellRef>()
 for (const [id, value] of Object.entries(siteShellsJson)) {
-  if (siteFixtureCatalogAdmission.isSiteShellRef(value)) {
-    siteShells.set(id, value)
-  }
+  siteShells.set(id, siteFixtureCatalogAdmission.decodeSiteShellRef(value))
 }
 
 const pilotExpectations = new Map<string, SiteFixturePilotExpectation>()
 for (const [id, value] of Object.entries(pilotExpectationsJson)) {
-  const expectation = siteFixtureCatalogAdmission.parsePilotExpectation(value)
-  if (expectation) pilotExpectations.set(id, expectation)
+  pilotExpectations.set(
+    id,
+    siteFixtureCatalogAdmission.decodePilotExpectation(value),
+  )
 }
 
 const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
@@ -153,16 +333,16 @@ const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
 
 const templatesById = new Map<string, ShellTemplate>()
 for (const [pathKey, template] of Object.entries(templateModules)) {
-  const id = pathKey
-    .split('/')
-    .pop()
-    ?.replace(/\.json$/u, '')
-  if (!id || !siteFixtureCatalogAdmission.isShellTemplateRaw(template)) continue
+  const fileName = pathKey.split('/').pop()
+  if (!fileName) throw new Error(`shell template path is invalid: ${pathKey}`)
+  const id = fileName.replace(/\.json$/u, '')
+  const decodedTemplate =
+    siteFixtureCatalogAdmission.decodeShellTemplateRaw(template)
   const pilotExpectation = pilotExpectations.get(id)
   if (!pilotExpectation) {
     throw new Error(`missing Pilot expectation for shell template ${id}`)
   }
-  templatesById.set(id, { ...template, id, pilotExpectation })
+  templatesById.set(id, { ...decodedTemplate, id, pilotExpectation })
 }
 
 function resolveSiteFixture(id: string): SiteFixtureLookup {
@@ -237,37 +417,8 @@ export function getTemplateFixture(templateId: string): SiteFixtureLookup {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isSiteFixtureStep(value: unknown): value is SiteFixtureStep {
-  if (!isRecord(value) || !Array.isArray(value.fields)) return false
-  if (!isRecord(value.submit) || typeof value.submit.label !== 'string') {
-    return false
-  }
-  return value.fields.every((field) => isRecord(field))
-}
-
-export function isSiteFixture(value: unknown): value is SiteFixture {
-  if (!isRecord(value)) return false
-  if (typeof value.id !== 'string' || typeof value.loginUrl !== 'string') {
-    return false
-  }
-  if (
-    value.source !== SiteFixtureSource.Capture &&
-    value.source !== SiteFixtureSource.Research
-  ) {
-    return false
-  }
-  if (
-    !Array.isArray(value.quirks) ||
-    !Array.isArray(value.steps) ||
-    typeof value.template !== 'string'
-  ) {
-    return false
-  }
-  return value.steps.length > 0 && value.steps.every(isSiteFixtureStep)
+export function decodeSiteFixture(value: unknown): SiteFixture {
+  return siteFixtureCatalogAdmission.decodeSiteFixture(value)
 }
 
 /** Build static HTML for unit tests (first step, or final step for password shells). */

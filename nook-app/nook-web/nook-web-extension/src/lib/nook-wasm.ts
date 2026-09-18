@@ -1,4 +1,4 @@
-import { ExtensionSessionDeviceProtectionStatusWire as DeviceProtectionStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { ExtensionSessionDeviceProtectionStatusWire } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionRuntimeRequestType } from './extension-runtime-request-type'
 import { ExtensionSessionMessageType } from './extension-session-message-type'
 import {
@@ -51,7 +51,10 @@ export type {
   NookAppLocale,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-export { DeviceMode, DeviceProtectionStatus }
+export {
+  DeviceMode,
+  ExtensionSessionDeviceProtectionStatusWire as DeviceProtectionStatus,
+}
 
 export enum StoredAppLocaleInputKind {
   Missing = 'missing',
@@ -74,17 +77,17 @@ export type StoredAppLocaleParse =
 type ExtensionControlPayload = { queue: ExtensionSessionQueue }
 
 type ExtensionStatusRequest = {
-  type: ExtensionSessionMessageType.Status
+  type: typeof ExtensionSessionMessageType.Status
   payload: ExtensionControlPayload
 }
 
 type ExtensionBeginPasskeySetupRequest = {
-  type: ExtensionSessionMessageType.BeginPasskeySetup
+  type: typeof ExtensionSessionMessageType.BeginPasskeySetup
   payload: ExtensionControlPayload
 }
 
 type ExtensionFinishPasskeySetupRequest = {
-  type: ExtensionSessionMessageType.FinishPasskeySetup
+  type: typeof ExtensionSessionMessageType.FinishPasskeySetup
   payload: {
     credentialId: number[]
     userHandle: number[]
@@ -96,7 +99,7 @@ type ExtensionFinishPasskeySetupRequest = {
 }
 
 type ExtensionRecoverPasskeyRequest = {
-  type: ExtensionSessionMessageType.RecoverPasskey
+  type: typeof ExtensionSessionMessageType.RecoverPasskey
   payload: {
     credentialId: number[]
     userHandle: number[]
@@ -106,22 +109,22 @@ type ExtensionRecoverPasskeyRequest = {
 }
 
 type ExtensionUnlockOptionsRequest = {
-  type: ExtensionSessionMessageType.UnlockOptions
+  type: typeof ExtensionSessionMessageType.UnlockOptions
   payload: ExtensionControlPayload
 }
 
 type ExtensionUnlockPasskeyRequest = {
-  type: ExtensionSessionMessageType.UnlockPasskey
+  type: typeof ExtensionSessionMessageType.UnlockPasskey
   payload: { prfOutput: number[]; queue: ExtensionSessionQueue }
 }
 
 type ExtensionCreatePinRequest = {
-  type: ExtensionSessionMessageType.CreatePin
+  type: typeof ExtensionSessionMessageType.CreatePin
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
 type ExtensionUnlockPinRequest = {
-  type: ExtensionSessionMessageType.UnlockPin
+  type: typeof ExtensionSessionMessageType.UnlockPin
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
@@ -168,6 +171,21 @@ type WasmCatalogRead =
   | { kind: WasmCatalogReadKind.Available; catalog: string }
   | { kind: WasmCatalogReadKind.Unavailable }
 
+type ExtensionRuntimeResponseDecoder<Response> = (response: unknown) => Response
+
+type ExtensionRuntimeMessageRequest<Response> = {
+  readonly message: ExtensionRuntimeRequest
+  readonly decode: ExtensionRuntimeResponseDecoder<Response>
+}
+
+type ExtensionSessionResponseRequest<Response> = {
+  readonly message: ExtensionSessionRequest
+  readonly decode: ExtensionRuntimeResponseDecoder<Response>
+}
+
+type ExtensionRuntimeStartupResponse =
+  { readonly ok: true } | { readonly ok: false; readonly reason?: string }
+
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionWasmRuntime {
   private extensionWasmStartup: ExtensionWasmStartup = {
@@ -190,38 +208,57 @@ class ExtensionWasmRuntime {
     return operation
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  private runtimeMessage(message: ExtensionRuntimeRequest): Promise<unknown> {
-    // Promise owns this callback's resolve and reject signature.
-    // eslint-disable-next-line max-params
-    return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-      chrome.runtime.sendMessage(message, (runtimeResponse: unknown) => {
-        if (chrome.runtime.lastError?.message) {
-          reject(new Error(chrome.runtime.lastError.message))
-          return
-        }
-        if (
-          !runtimeResponse ||
-          typeof runtimeResponse !== 'object' ||
-          Array.isArray(runtimeResponse)
-        ) {
-          reject(new Error('Extension session returned a malformed response.'))
-          return
-        }
-        resolve(runtimeResponse)
-      })
+  private runtimeMessage<Response>(
+    request: ExtensionRuntimeMessageRequest<Response>,
+  ): Promise<Response> {
+    return new Promise<Response>((...[resolve, reject]) => {
+      chrome.runtime.sendMessage(
+        request.message,
+        (runtimeResponse: unknown) => {
+          if (chrome.runtime.lastError?.message) {
+            reject(new Error(chrome.runtime.lastError.message))
+            return
+          }
+          try {
+            resolve(request.decode(runtimeResponse))
+          } catch {
+            reject(
+              new Error('Extension session returned a malformed response.'),
+            )
+          }
+        },
+      )
     })
   }
 
-  private async sessionResponse(
-    message: ExtensionSessionRequest,
-  ): Promise<Parameters<typeof decode_extension_session_status_details>[0]> {
+  private async sessionResponse<Response>(
+    request: ExtensionSessionResponseRequest<Response>,
+  ): Promise<Response> {
     await this.ensureNookWasm()
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const runtime = await this.runtimeMessage({
-      type: ExtensionRuntimeRequestType.EnsureRuntime,
-    })
+
+    const runtimeStartupRequest: ExtensionRuntimeMessageRequest<ExtensionRuntimeStartupResponse> =
+      {
+        message: { type: ExtensionRuntimeRequestType.EnsureRuntime },
+        decode: (response): ExtensionRuntimeStartupResponse => {
+          if (
+            !response ||
+            typeof response !== 'object' ||
+            Array.isArray(response)
+          ) {
+            throw new Error(
+              'Extension session runtime returned a malformed response.',
+            )
+          }
+          if ('ok' in response && response.ok === true) return { ok: true }
+          return {
+            ok: false,
+            ...('reason' in response && typeof response.reason === 'string'
+              ? { reason: response.reason }
+              : {}),
+          }
+        },
+      }
+    const runtime = await this.runtimeMessage(runtimeStartupRequest)
     if (
       !runtime ||
       typeof runtime !== 'object' ||
@@ -237,23 +274,29 @@ class ExtensionWasmRuntime {
           : 'Extension session runtime could not start.',
       )
     }
-    const response = await this.runtimeMessage(message)
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true
-    ) {
-      throw new Error(
-        response &&
-          typeof response === 'object' &&
-          'error' in response &&
-          typeof response.error === 'string'
-          ? response.error
-          : 'Extension session operation failed.',
-      )
+    const sessionRuntimeRequest: ExtensionRuntimeMessageRequest<Response> = {
+      message: request.message,
+      decode: (response) => {
+        if (
+          !response ||
+          typeof response !== 'object' ||
+          Array.isArray(response) ||
+          !('ok' in response) ||
+          response.ok !== true
+        ) {
+          throw new Error(
+            response &&
+              typeof response === 'object' &&
+              'error' in response &&
+              typeof response.error === 'string'
+              ? response.error
+              : 'Extension session operation failed.',
+          )
+        }
+        return request.decode(response)
+      },
     }
-    return response
+    return this.runtimeMessage(sessionRuntimeRequest)
   }
 
   private bytes(value: ArrayBuffer | ArrayBufferView): number[] {
@@ -313,7 +356,7 @@ class ExtensionWasmRuntime {
       return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
-        error,
+        error: error instanceof Error ? error : new Error(),
         action: PasskeyOperation.Get,
       }
       throw new PasskeyCeremonyFailure(args).error
@@ -340,36 +383,48 @@ class ExtensionWasmRuntime {
       return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
-        error,
+        error: error instanceof Error ? error : new Error(),
         action: PasskeyOperation.Create,
       }
       throw new PasskeyCeremonyFailure(args).error
     }
   }
 
-  async extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
+  async extensionDeviceProtectionStatus(): Promise<ExtensionSessionDeviceProtectionStatusWire> {
     const request: ExtensionStatusRequest = {
       type: ExtensionSessionMessageType.Status,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response = await this.sessionResponse(request)
-    const deviceStatus =
-      decode_extension_session_status_details(response).status
-    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- Existing exhaustive fallback behavior is preserved.
-    switch (deviceStatus) {
-      case DeviceProtectionStatus.Missing:
-      case DeviceProtectionStatus.Plaintext:
-      case DeviceProtectionStatus.Passkey:
-      case DeviceProtectionStatus.Pin:
-      case DeviceProtectionStatus.Unlocked:
-        return deviceStatus
-      case DeviceProtectionStatus.Loading:
-      case DeviceProtectionStatus.PinSetup:
-      case DeviceProtectionStatus.Error:
-      case DeviceProtectionStatus.Unknown:
-        throw new Error(
-          `Unsupported extension device protection status: ${deviceStatus}`,
-        )
+    const statusResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_status_details>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_status_details(response),
+    }
+    const status = await this.sessionResponse(statusResponseRequest)
+    const deviceStatus = status.status
+    if (typeof deviceStatus !== 'number') {
+      throw new Error('Extension device protection status is unavailable.')
+    }
+
+    if (
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Missing ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Plaintext ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Passkey ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Pin ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Unlocked
+    ) {
+      return deviceStatus
+    }
+    if (
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Loading ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.PinSetup ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Error ||
+      deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Unknown
+    ) {
+      throw new Error(
+        `Unsupported extension device protection status: ${deviceStatus}`,
+      )
     }
     throw new Error('Unsupported extension device protection status.')
   }
@@ -379,8 +434,13 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.Status,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response = await this.sessionResponse(request)
-    const status = decode_extension_session_status_details(response)
+    const statusResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_status_details>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_status_details(response),
+    }
+    const status = await this.sessionResponse(statusResponseRequest)
     if (status.kind === 'inactive') {
       return { kind: ExtensionSessionDeviceStateKind.Locked }
     }
@@ -399,8 +459,13 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.BeginPasskeySetup,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const setupResponse = await this.sessionResponse(beginRequest)
-    const setup = decode_passkey_setup_material_response(setupResponse)
+    const setupResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_passkey_setup_material_response>
+    > = {
+      message: beginRequest,
+      decode: (response) => decode_passkey_setup_material_response(response),
+    }
+    const setup = await this.sessionResponse(setupResponseRequest)
     const creationOptions = build_passkey_creation_options(
       '',
       'Nook Extension',
@@ -426,8 +491,14 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const finishResponse = await this.sessionResponse(finishRequest)
-    return decode_extension_session_device_response(finishResponse).device
+    const finishResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_device_response>
+    > = {
+      message: finishRequest,
+      decode: (response) => decode_extension_session_device_response(response),
+    }
+    const finishResponse = await this.sessionResponse(finishResponseRequest)
+    return finishResponse.device
   }
 
   async recoverExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
@@ -443,8 +514,14 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const response = await this.sessionResponse(request)
-    return decode_extension_session_device_response(response).device
+    const recoveryResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_device_response>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_device_response(response),
+    }
+    const response = await this.sessionResponse(recoveryResponseRequest)
+    return response.device
   }
 
   async unlockExtensionPasskey(): Promise<ExtensionSessionDeviceWire> {
@@ -453,8 +530,13 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.UnlockOptions,
       payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const materialResponse = await this.sessionResponse(optionsRequest)
-    const material = decode_passkey_unlock_material_response(materialResponse)
+    const materialResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_passkey_unlock_material_response>
+    > = {
+      message: optionsRequest,
+      decode: (response) => decode_passkey_unlock_material_response(response),
+    }
+    const material = await this.sessionResponse(materialResponseRequest)
     const options = build_passkey_prf_request_options(
       '',
       new Uint8Array(material.credentialId),
@@ -468,8 +550,14 @@ class ExtensionWasmRuntime {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    const response = await this.sessionResponse(request)
-    return decode_extension_session_device_response(response).device
+    const unlockResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_device_response>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_device_response(response),
+    }
+    const response = await this.sessionResponse(unlockResponseRequest)
+    return response.device
   }
 
   async createExtensionPin(pin: string): Promise<ExtensionSessionDeviceWire> {
@@ -477,8 +565,14 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.CreatePin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response = await this.sessionResponse(request)
-    return decode_extension_session_device_response(response).device
+    const createPinResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_device_response>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_device_response(response),
+    }
+    const response = await this.sessionResponse(createPinResponseRequest)
+    return response.device
   }
 
   async unlockExtensionPin(pin: string): Promise<ExtensionSessionDeviceWire> {
@@ -486,8 +580,14 @@ class ExtensionWasmRuntime {
       type: ExtensionSessionMessageType.UnlockPin,
       payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     }
-    const response = await this.sessionResponse(request)
-    return decode_extension_session_device_response(response).device
+    const unlockPinResponseRequest: ExtensionSessionResponseRequest<
+      ReturnType<typeof decode_extension_session_device_response>
+    > = {
+      message: request,
+      decode: (response) => decode_extension_session_device_response(response),
+    }
+    const response = await this.sessionResponse(unlockPinResponseRequest)
+    return response.device
   }
 
   async generateSuggestedPassword(): Promise<string> {

@@ -13,8 +13,7 @@ Use this ownership hierarchy:
 - When an existing feature and focused Markdown record own the work:
   - preserve existing progress and decisions;
   - update those records;
-  - link the Nook PR; and
-  - publish a task worklog.
+  - link the Nook PR.
 - Otherwise create `issues/<feature>/README.md` and the smallest independently
   deliverable issue files.
 - Keep the feature inside one focused issue and one PR when it fits cleanly.
@@ -45,7 +44,7 @@ to generate bookkeeping.
 
 ## Application procedure
 
-1. Search Workbench issues and worklogs with user and code vocabulary.
+1. Search Workbench issues with user and code vocabulary.
 2. Inspect likely feature summaries, dependencies, owners, status, and PRs.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
@@ -59,11 +58,14 @@ to generate bookkeeping.
    - Keep independent features in separate Gizmo worktrees.
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
-7. Publish a worklog before completion or blocked handoff.
+7. Update the issue's status and progress before completion or blocked
+   handoff.
 8. Re-open Workbench `main` and verify links and state.
 
-Independent features may proceed concurrently. Land completed features through
-serialized local dev integration under [dev delivery](../architecture/dev-delivery.md).
+Independent features may proceed concurrently. Land accepted feature commits
+through serialized local dev integration under
+[dev delivery](../architecture/dev-delivery.md). Feature completion still
+requires post-landing containment evidence.
 
 ## Validation
 

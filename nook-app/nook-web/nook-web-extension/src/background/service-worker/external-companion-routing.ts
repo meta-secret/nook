@@ -1,24 +1,31 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
-import {
-  OpenCompanionLauncherNormalizationKind,
-  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../../lib/serialized-wire-value-adapter'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
 >[0]
 
+export type ExternalCompanionValue =
+  | string
+  | number
+  | boolean
+  | ExternalCompanionMessage
+  | ExternalCompanionValue[]
+
 export type ExternalCompanionMessage = {
-  [key: string]:
-    | string
-    | number
-    | boolean
-    | ExternalCompanionMessage
-    | ExternalCompanionMessage[]
+  [key: string]: ExternalCompanionValue
 }
 
 export type ExternalCompanionRoutingRequest = {
@@ -32,13 +39,13 @@ export type ExternalCompanionRoutingDependencies = {
   createIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createIdentityHandoff
   createPairedIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createPairedIdentityHandoff
   discoverPairedVaultIdentity: typeof PairingIdentity.extensionPairingIdentity.discoverPairedVaultIdentity
-  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
+  decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionIdentityHandoffRequestMessage.is
-  isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityDiscoveryMessage.is
-  isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityHandoffRequestMessage.is
-  isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage.is
-  normalizeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage
+  decodeExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionIdentityHandoffRequestMessage.decode
+  decodeExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityDiscoveryMessage.decode
+  decodeExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityHandoffRequestMessage.decode
+  decodeExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage.decode
+  decodeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.decode
   openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
   refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
@@ -59,66 +66,69 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
-const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
-  ok: false,
-  reason: 'authentication-surface-refresh-failed',
-}
-
 export class ExternalCompanionRouter {
   constructor(private readonly request: ExternalCompanionRoutingRequest) {}
 
   async route(): Promise<boolean> {
     const { dependencies, message, sender, sendResponse } = this.request
+    const eventLogRecordsSnapshot =
+      SerializedWireValueAdapter.snapshotEventLogRecords(message)
+    if (!(await ExternalSenderTrustPolicy.admits(sender))) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
     const {
       createIdentityHandoff,
       createPairedIdentityHandoff,
       discoverPairedVaultIdentity,
-      hasPairingApprovedType,
+      decodePairingApprovedMessage,
       importPairingAfterCompanionReady,
-      isExtensionIdentityHandoffRequestMessage,
-      isExtensionPairedVaultIdentityDiscoveryMessage,
-      isExtensionPairedVaultIdentityHandoffRequestMessage,
-      isExtensionPairedVaultUnlockRequestMessage,
-      normalizeOpenCompanionLauncherMessage,
+      decodeExtensionIdentityHandoffRequestMessage,
+      decodeExtensionPairedVaultIdentityDiscoveryMessage,
+      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
+      decodeExtensionPairedVaultUnlockRequestMessage,
+      decodeOpenCompanionLauncherMessage,
       openCompanionLauncher,
       refreshAuthenticationSurfaces,
       requestPairedVaultUnlock,
     } = dependencies
-    const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
-    if (
-      launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
-    ) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
-      void openCompanionLauncher(launcherMessage.message.intent)
+    const launcherMessage = runConcreteDecoder(
+      decodeOpenCompanionLauncherMessage,
+      message,
+    )
+    if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
+      void openCompanionLauncher(launcherMessage.value.intent)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
       return true
     }
 
-    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
+    const identityDiscovery = runConcreteDecoder(
+      decodeExtensionPairedVaultIdentityDiscoveryMessage,
+      message,
+    )
+    if (identityDiscovery.kind === ConcreteDecoderResultKind.Decoded) {
       if (!(await ExternalSenderTrustPolicy.admits(sender))) {
         sendResponse(forbiddenSenderResponse)
         return false
       }
-      void discoverPairedVaultIdentity(message).then(sendResponse)
+      void discoverPairedVaultIdentity(identityDiscovery.value).then(
+        sendResponse,
+      )
       return true
     }
 
-    if (isExtensionPairedVaultUnlockRequestMessage(message)) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
-      void requestPairedVaultUnlock(message)
+    const pairedVaultUnlock = runConcreteDecoder(
+      decodeExtensionPairedVaultUnlockRequestMessage,
+      message,
+    )
+    if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
+      const decodedMessage = pairedVaultUnlock.value
+      void requestPairedVaultUnlock(decodedMessage)
         .then(sendResponse)
         .catch(() => {
           const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
-            requestId: message.payload.requestId,
-            vaultStoreId: message.payload.vaultStoreId,
             reason: 'unlock-launch-failed',
           }
           return sendResponse(unlockFailureResponse)
@@ -126,39 +136,57 @@ export class ExternalCompanionRouter {
       return true
     }
 
-    if (isExtensionIdentityHandoffRequestMessage(message)) {
+    const identityHandoff = runConcreteDecoder(
+      decodeExtensionIdentityHandoffRequestMessage,
+      message,
+    )
+    if (identityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
+      void createIdentityHandoff(identityHandoff.value).then(sendResponse)
+      return true
+    }
+
+    const pairedIdentityHandoff = runConcreteDecoder(
+      decodeExtensionPairedVaultIdentityHandoffRequestMessage,
+      message,
+    )
+    if (pairedIdentityHandoff.kind === ConcreteDecoderResultKind.Decoded) {
       if (!(await ExternalSenderTrustPolicy.admits(sender))) {
         sendResponse(forbiddenSenderResponse)
         return false
       }
-      void createIdentityHandoff(message).then(sendResponse)
+      void createPairedIdentityHandoff(pairedIdentityHandoff.value).then(
+        sendResponse,
+      )
       return true
     }
 
-    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
-      if (!(await ExternalSenderTrustPolicy.admits(sender))) {
-        sendResponse(forbiddenSenderResponse)
-        return false
-      }
-      void createPairedIdentityHandoff(message).then(sendResponse)
-      return true
-    }
-
-    if (
-      !hasPairingApprovedType(message) ||
-      !(await ExternalSenderTrustPolicy.admits(sender))
-    ) {
+    const pairingApproval = runConcreteDecoder(
+      decodePairingApprovedMessage,
+      message,
+    )
+    if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
       sendResponse(invalidPairingGrantResponse)
       return false
     }
-    void importPairingAfterCompanionReady(message)
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
+      sendResponse(invalidPairingGrantResponse)
+      return false
+    }
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        typeof pairingApproval.value.eventLogRecords
+      >(eventLogRecordsSnapshot.value)
+    const importMessage: typeof pairingApproval.value = {
+      ...pairingApproval.value,
+      eventLogRecords: preservedEventLogRecords,
+    }
+    void importPairingAfterCompanionReady(importMessage)
       .then(async (response) => {
-        if (response.ok) {
-          try {
-            await refreshAuthenticationSurfaces()
-          } catch {
-            return authenticationSurfaceRefreshFailureResponse
-          }
+        if (!response.ok) return response
+        try {
+          await refreshAuthenticationSurfaces()
+        } catch {
+          // The pairing import has already committed; keep its success response.
         }
         return response
       })

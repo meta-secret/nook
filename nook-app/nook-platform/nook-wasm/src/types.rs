@@ -1,6 +1,7 @@
 //! Typed values exported across the wasm-bindgen boundary (no untyped JavaScript bags).
 
-use crate::{NookError, NookSecretListItem, NookSecretRecord, NookVaultManager};
+use crate::secret_api::NookSecretRecord;
+use crate::{NookError, NookSecretListItem, NookVaultManager};
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -13,6 +14,7 @@ mod runtime;
 mod runtime_policy;
 mod secret_data;
 mod sentinel;
+mod store_id;
 mod sync;
 mod sync_state;
 
@@ -25,6 +27,7 @@ pub use runtime::*;
 pub use runtime_policy::*;
 pub use secret_data::*;
 pub use sentinel::*;
+pub use store_id::*;
 pub use sync::*;
 pub use sync_state::*;
 

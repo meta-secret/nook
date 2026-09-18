@@ -27,6 +27,10 @@ packet and coordinates only Web Development mechanics.
 - Verify each specialist's complete commit.
 - Integrate specialist commits into the feature branch.
 - Preserve the established typed Rust/WASM boundary when coordinating web work.
+- For TypeScript, JavaScript, or Svelte script packets, include the read-only
+  [TypeScript Effect Workflows](../dynamic-skills/typescript-effect.md)
+  authority. Apply it to effectful workflows and preserve its pure-code and
+  Rust/WASM ownership boundaries.
 - Synthesize only high-level evidence and blockers upward to Gizmo Prime.
 - Report exact commit evidence when it is needed to verify the handoff.
 

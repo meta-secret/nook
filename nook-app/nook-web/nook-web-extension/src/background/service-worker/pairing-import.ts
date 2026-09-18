@@ -1,13 +1,25 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
-import { decode_extension_grant_authority_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  decode_extension_grant_authority_response,
+  NookPairingVaultId,
+  type ExtensionGrantAuthority,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   type ExtensionPairingApprovedMessage,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
-  type ExtensionPairingApprovedMessageAdmissionFailure,
+  type RuntimeMessageDecodeFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ProviderCredentialBuffer } from '../../lib/provider-credential-staging'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
+import {
+  SerializedWireSnapshotKind,
+  SerializedWireValueAdapter,
+} from '../../lib/serialized-wire-value-adapter'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -36,11 +48,11 @@ type PairingIngressAdmission =
   | {
       readonly kind: PairingIngressAdmissionKind.Admitted
       readonly message: ExtensionPairingApprovedMessage
+      readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
     }
   | {
       readonly kind: PairingIngressAdmissionKind.Rejected
-      readonly reason:
-        PairingIngressFailure | ExtensionPairingApprovedMessageAdmissionFailure
+      readonly reason: PairingIngressFailure | RuntimeMessageDecodeFailure
     }
 
 export class ExtensionPairingIngress {
@@ -55,22 +67,32 @@ export class ExtensionPairingIngress {
         reason: PairingIngressFailure.RuntimeUnavailable,
       }
     }
-    try {
-      const admission = ExtensionPairingApprovedMessageSchema.parse(message)
-      return admission.isOk()
-        ? {
-            kind: PairingIngressAdmissionKind.Admitted,
-            message: admission.value,
-          }
-        : {
-            kind: PairingIngressAdmissionKind.Rejected,
-            reason: admission.error,
-          }
-    } catch {
+    const eventLogRecordsSnapshot =
+      SerializedWireValueAdapter.snapshotEventLogRecords(message)
+    const admission = runConcreteDecoder(
+      ExtensionPairingApprovedMessageSchema.decode,
+      message,
+    )
+    if (admission.kind === ConcreteDecoderResultKind.Rejected) {
+      return {
+        kind: PairingIngressAdmissionKind.Rejected,
+        reason: admission.failure,
+      }
+    }
+    if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
       return {
         kind: PairingIngressAdmissionKind.Rejected,
         reason: PairingIngressFailure.AdmissionFailed,
       }
+    }
+    const preservedEventLogRecords =
+      SerializedWireValueAdapter.restoreEventLogRecords<
+        ExtensionPairingApprovedMessage['eventLogRecords']
+      >(eventLogRecordsSnapshot.value)
+    return {
+      kind: PairingIngressAdmissionKind.Admitted,
+      message: admission.value,
+      sessionEventLogRecords: preservedEventLogRecords,
     }
   }
 }
@@ -82,7 +104,11 @@ export async function importPairingAfterCompanionReady(message: unknown) {
   if (admission.kind === PairingIngressAdmissionKind.Rejected) {
     return { ok: false, reason: admission.reason }
   }
-  return new PairingCredentialImportLifecycle(admission.message).import()
+  const lifecycleArgs: PairingCredentialImportLifecycleArgs = {
+    message: admission.message,
+    sessionEventLogRecords: admission.sessionEventLogRecords,
+  }
+  return new PairingCredentialImportLifecycle(lifecycleArgs).import()
 }
 
 type ReconcilePairingStorageArgs = {
@@ -122,6 +148,7 @@ async function restorePairingStorage(
 
 type ImportDecodedApprovedPairingArgs = {
   message: ExtensionPairingApprovedMessage
+  sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
   providers: StorageProvider[]
 }
 
@@ -131,7 +158,7 @@ export type PairingImportResult =
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
 ): Promise<PairingImportResult> {
-  const { message, providers } = args
+  const { message, providers, sessionEventLogRecords } = args
   const pairingPolicy = await extensionPairingGrantPolicyReady
   const grantApproval: ExtensionPairingGrantApproval = {
     vaultType: message.payload.vaultType,
@@ -178,11 +205,16 @@ async function importDecodedApprovedPairing(
       const migration =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_1)
       if (migration.isErr()) {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest: ImportDecodedApprovedPairingRestorePairingStorageRequest =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest,
+        )
         return migration.error.response
       }
       const nookTypedArgs0_2: Parameters<
@@ -194,17 +226,22 @@ async function importDecodedApprovedPairing(
       const reset =
         await extensionPairingIdentity.sendSessionMessage(nookTypedArgs0_2)
       if (reset.isErr()) {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest2: ImportDecodedApprovedPairingRestorePairingStorageRequest2 =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest2,
+        )
         return reset.error.response
       }
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
       const importMessage: {
-        type: ExtensionSessionMessageType.ImportVault
+        type: typeof ExtensionSessionMessageType.ImportVault
         payload: {
           vaultStoreId: string
           deviceId: string
@@ -221,7 +258,7 @@ async function importDecodedApprovedPairing(
           deviceId: grantApproval.deviceId,
           devicePublicKey: grantApproval.devicePublicKey,
           deviceSigningPublicKey: grantApproval.deviceSigningPublicKey,
-          eventLogRecords: message.eventLogRecords,
+          eventLogRecords: sessionEventLogRecords,
           providers: structuredClone(providers),
           queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
         },
@@ -233,11 +270,16 @@ async function importDecodedApprovedPairing(
         extensionPairingIdentity.sendSessionMessage(importMessage),
       )
       if (importDelivery.isErr()) {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        await restorePairingStorage({
-          previous: previousPairingState,
-          written: pairingItems,
-        })
+        type ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
+          RestorePairingStorageArgs
+        const importDecodedApprovedPairingRestorePairingStorageRequest3: ImportDecodedApprovedPairingRestorePairingStorageRequest3 =
+          {
+            previous: previousPairingState,
+            written: pairingItems,
+          }
+        await restorePairingStorage(
+          importDecodedApprovedPairingRestorePairingStorageRequest3,
+        )
         return importDelivery.error.response
       }
       const sessionImport = importDelivery.value
@@ -276,8 +318,19 @@ async function importDecodedApprovedPairing(
   }
 }
 
+type PairingCredentialImportLifecycleArgs = {
+  readonly message: ExtensionPairingApprovedMessage
+  readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
+}
+
 export class PairingCredentialImportLifecycle {
-  constructor(private readonly message: ExtensionPairingApprovedMessage) {}
+  private readonly message: ExtensionPairingApprovedMessage
+  private readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
+
+  constructor(args: PairingCredentialImportLifecycleArgs) {
+    this.message = args.message
+    this.sessionEventLogRecords = args.sessionEventLogRecords
+  }
 
   async import(): Promise<PairingImportResult> {
     try {
@@ -300,6 +353,7 @@ export class PairingCredentialImportLifecycle {
       try {
         const args: ImportDecodedApprovedPairingArgs = {
           message: this.message,
+          sessionEventLogRecords: this.sessionEventLogRecords,
           providers: stagedProviders,
         }
         return await importDecodedApprovedPairing(args)
@@ -396,10 +450,16 @@ export async function importLocalEventLogUpdateWithDependencies({
         reason: LocalEventLogUpdateFailure.EventLogImportFailed,
       }
     }
-    const authority = decode_extension_grant_authority_response(
-      JSON.stringify(authorityDelivery.value),
-      vaultStoreId,
-    )
+    const requestedVaultId = new NookPairingVaultId(vaultStoreId)
+    let authority: ExtensionGrantAuthority
+    try {
+      authority = decode_extension_grant_authority_response(
+        JSON.stringify(authorityDelivery.value),
+        requestedVaultId,
+      )
+    } finally {
+      requestedVaultId.free()
+    }
     switch (authority.kind) {
       case 'Authorized':
         break
@@ -445,9 +505,13 @@ export async function importLocalEventLogUpdateWithDependencies({
       }
     }
     const setup = stored[setupStorageKey]
+    const setupDecode = runConcreteDecoder(
+      pairingPolicy.decodeExtensionReadySetupState,
+      setup,
+    )
     const select =
-      pairingPolicy.isExtensionReadySetupState(setup) &&
-      setup.selectedVaultStoreId === vaultStoreId
+      setupDecode.kind === ConcreteDecoderResultKind.Decoded &&
+      setupDecode.value.selectedVaultStoreId === vaultStoreId
     const pairingItemsArgs: Parameters<
       typeof pairingPolicy.extensionStoredPairingGrantStorageItems
     >[0] = { grant, imported, select }

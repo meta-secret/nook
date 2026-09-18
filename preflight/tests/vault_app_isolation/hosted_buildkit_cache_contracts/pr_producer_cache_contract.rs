@@ -15,11 +15,14 @@ impl<'a> PrProducerCacheContract<'a> {
 
     pub(super) fn assert_contract(&self) -> anyhow::Result<()> {
         let pr = self.root.read(".github/workflows/pr.yml");
+        let bake = self
+            .root
+            .read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
         for marker in [
-            "Publish git-scoped native BuildKit cache",
+            "Build native Rust image",
             "Publish git-scoped WASM BuildKit cache",
             "Publish git-scoped web BuildKit cache",
-            "task ci:main:publish-native-cache",
+            "task ci:pr:rust-build-image",
             "task ci:main:publish-wasm-cache",
             "task ci:main:publish-web-cache",
         ] {
@@ -36,13 +39,22 @@ impl<'a> PrProducerCacheContract<'a> {
             steps.cache_contract(&pr)? && browser_contract.is_satisfied()?,
             "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
         );
+        assert!(
+            pr.find("task ci:pr:rust-build-image") < pr.find("  rust-ecosystem:\n"),
+            "native cache production must precede the reusable ecosystem consumers"
+        );
+        assert!(
+            bake.contains("target \"pr-native-build\"")
+                && bake.contains("cache-to   = rust_native_source_cache_to"),
+            "the native producer must publish the exact-head BuildKit scope imported by cross-node Rust consumers"
+        );
         Ok(())
     }
 }
 
 struct PrProducerSteps {
-    rust_verify: usize,
     rust_publish: usize,
+    rust_verify: usize,
     wasm_verify: usize,
     wasm_publish: usize,
     web_verify: usize,
@@ -52,12 +64,12 @@ struct PrProducerSteps {
 impl PrProducerSteps {
     fn read(pr: &str) -> anyhow::Result<Self> {
         Ok(Self {
-            rust_verify: pr
-                .find("task ci:pr:rust")
-                .context("PR Rust job must verify")?,
             rust_publish: pr
-                .find("task ci:main:publish-native-cache")
-                .context("PR Rust job must publish its cache")?,
+                .find("task ci:pr:rust-build-image")
+                .context("PR Rust producer must publish its image and cache")?,
+            rust_verify: pr
+                .find("task docker:ci:rust:verify-built-buildkit")
+                .context("PR Rust consumer must verify the producer image")?,
             wasm_verify: pr
                 .find("task ci:pr:wasm")
                 .context("PR WASM job must verify")?,
@@ -74,21 +86,12 @@ impl PrProducerSteps {
     }
 
     fn cache_contract(&self, pr: &str) -> anyhow::Result<bool> {
-        Ok(self.rust_verify < self.rust_publish
-            && pr
-                .get(self.rust_verify..self.rust_publish)
-                .context("PR Rust verification-to-publication section must have valid boundaries")?
-                .contains("GHA_CACHE_WRITE_ENABLED=\"\"")
+        Ok(self.rust_publish < self.rust_verify
             && pr
                 .get(..self.rust_publish)
-                .context("PR Rust pre-publication section must have a valid boundary")?
-                .contains(
-                    "ARC keeps the verified native graph local; Main and sccache remain reusable",
-                )
-            && pr
-                .get(self.rust_publish..)
-                .context("PR Rust publication section must have a valid boundary")?
-                .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+                .context("PR Rust publication-to-verification section must have valid boundaries")?
+                .contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
+            && pr.contains("nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}")
             && self.wasm_verify < self.wasm_publish
             && pr
                 .get(self.wasm_verify..self.wasm_publish)

@@ -82,12 +82,24 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         "simple.nokey.sh:nokey-simple",
         "sentinel.nokey.sh:nokey-sentinel",
         "nook-app-kind",
+        "failed release verification",
     ] {
         assert!(
             domains_script.contains(required),
             "release domain attach script missing {required}"
         );
     }
+    assert!(
+        !domains_script.contains("for attempt in") && !domains_script.contains("sleep 10"),
+        "release domain verification must probe exact-release metadata once"
+    );
+    let research_verifier = root.read(".github/scripts/web-research-verify-live.sh");
+    assert!(
+        research_verifier.contains("Web research deployment verification failed")
+            && !research_verifier.contains("--retry")
+            && !research_verifier.contains("sleep "),
+        "web research deployment verification must probe the live artifact once"
+    );
     Ok(())
 }
 
@@ -169,9 +181,8 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         "grep -Fq '<meta name=\"nook-app-kind\" content=\"sentinel\"'",
         "zones/$zone_id/purge_cache",
         "Cloudflare zone administration was unavailable; verifying live domains",
-        "cache_bust=\"nook_commit=$COMMIT_SHA&attempt=$attempt\"",
-        "EXTENSION_CACHE_BUST=\"$COMMIT_SHA-$attempt\"",
-        "Waiting for exact-head development extension artifacts",
+        "cache_bust=\"nook_commit=$COMMIT_SHA\"",
+        "EXTENSION_CACHE_BUST=\"$COMMIT_SHA\"",
         "https://$DEV_DOMAIN/site/",
         "https://$DEV_DOMAIN/simple/",
         "https://$DEV_DOMAIN/sentinel/",
@@ -186,6 +197,11 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
             "main development domain script is missing isolation invariant: {required}"
         );
     }
+    assert!(
+        !domains_script.contains("Waiting for isolated development domains")
+            && !domains_script.contains("Waiting for exact-head development extension artifacts"),
+        "main development verification must fail directly"
+    );
 
     let pull_request = root.read(".github/workflows/pr.yml");
     assert!(
@@ -194,8 +210,19 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
     );
     let pr_deploy_script = root.read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
-        pr_deploy_script.contains("EXTENSION_CACHE_BUST=\"$HEAD_SHA-$attempt\""),
-        "PR extension verification must bypass mutable artifact caches on every convergence attempt"
+        pr_deploy_script.contains("EXTENSION_CACHE_BUST=\"$HEAD_SHA\""),
+        "PR extension verification must use one exact-head cache key"
+    );
+    assert!(
+        pr_deploy_script.contains("EXTENSION_FETCH_ORIGIN_URL=\"$site_deployment_url/\"")
+            && pr_deploy_script.contains("deployment_url_from_log()")
+            && pr_deploy_script.contains("^https://[0-9a-f]{8}\\.nokey-sh\\.pages\\.dev$"),
+        "PR extension verification must read the immutable deployment rather than race the alias"
+    );
+    assert!(
+        !pr_deploy_script.contains("Waiting for exact-head extension metadata")
+            && !pr_deploy_script.contains("Waiting for isolated aliases"),
+        "PR deployment must fail directly instead of polling exact-head evidence"
     );
 
     let release = root.read(".github/workflows/release.yml");
@@ -205,17 +232,17 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
     );
     let release_extension = root.read(".github/scripts/ci-release-verify-extension.sh");
     assert!(
-        release_extension.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA-$attempt\"")
-            && release_extension.contains("Waiting for exact-release extension artifacts"),
-        "release extension verification must retry cache-busted exact-release artifacts"
+        release_extension.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA\"")
+            && !release_extension.contains("Waiting for exact-release extension artifacts"),
+        "release extension verification must check exact-release artifacts once"
     );
 
     let verifier = root.read("nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh");
     for required in [
         "cache_busted_url()",
         "fetch_from_selected_origin \"$(cache_busted_url \"$EXTENSION_METADATA_URL\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$download_url\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$checksum_url\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"${fetch_site_url}${download_url#\"$site_url\"}\")\"",
+        "fetch_from_selected_origin \"$(cache_busted_url \"${fetch_site_url}${checksum_url#\"$site_url\"}\")\"",
         "Extension deployment verification failed at line $LINENO",
     ] {
         assert!(

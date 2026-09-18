@@ -3,8 +3,11 @@ import {
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
 import { err, ok, type Result } from 'neverthrow'
-import { ExtensionSessionLeaseFailure } from './session-lease'
-import { ActiveExtensionSessionLease } from './session-lease'
+import {
+  ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
+  ExtensionSessionLeaseFailure,
+} from './session-lease'
 import initNookWasm, {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
@@ -80,6 +83,20 @@ type ExtensionSessionExpiryMessage = {
   type: ExtensionSessionLifecycleMessageType.Expired
 }
 
+type SessionExpiryLeaseConfiguration = ConstructorParameters<
+  typeof ActiveExtensionSessionLease
+>[0]
+
+type CompanionIdentityHandoffSessionResponse = {
+  readonly ok: true
+  readonly response: CompanionIdentityHandoffResponse
+}
+
+type CompanionIdentityDiscoverySessionResponse = {
+  readonly ok: true
+  readonly status: CompanionIdentityStatus
+}
+
 let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 let managerAvailability: VaultManagerAvailability = {
   kind: VaultManagerAvailabilityKind.Locked,
@@ -88,42 +105,46 @@ class ExtensionSessionExpiryLifecycle {
   private scheduleState: SessionExpirySchedule = {
     kind: SessionExpiryScheduleKind.Stopped,
   }
-  private generation = 0
+  private generation = ExtensionSessionGeneration.initial()
 
-  currentGeneration(): number {
+  currentGeneration(): ExtensionSessionGeneration {
     return this.generation
   }
 
   activate(onExpire: () => void): void {
-    this.generation += 1
+    this.generation = this.generation.next()
     if (this.scheduleState.kind === SessionExpiryScheduleKind.Scheduled) {
       this.scheduleState.lease.stop()
     }
     const generation = this.generation
+    const leaseConfiguration: SessionExpiryLeaseConfiguration = {
+      generation,
+      durationMs: SESSION_DURATION_MS,
+      onExpire: () => {
+        if (!this.generation.matches(generation)) return
+        this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
+        this.generation = this.generation.next()
+        onExpire()
+      },
+    }
     this.scheduleState = {
       kind: SessionExpiryScheduleKind.Scheduled,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      lease: new ActiveExtensionSessionLease({
-        generation,
-        durationMs: SESSION_DURATION_MS,
-        onExpire: () => {
-          if (generation !== this.generation) return
-          this.scheduleState = { kind: SessionExpiryScheduleKind.Stopped }
-          this.generation += 1
-          onExpire()
-        },
-      }),
+      lease: new ActiveExtensionSessionLease(leaseConfiguration),
     }
   }
 
-  renew(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+  renew(
+    generation: ExtensionSessionGeneration,
+  ): Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure> {
     if (
-      generation !== this.generation ||
+      !this.generation.matches(generation) ||
       this.scheduleState.kind !== SessionExpiryScheduleKind.Scheduled
     ) {
       return err(ExtensionSessionLeaseFailure.Locked)
     }
-    return this.scheduleState.lease.renew(generation)
+    const renewed = this.scheduleState.lease.renew(generation)
+    if (renewed.isErr()) return err(renewed.error)
+    return ok(this.scheduleState.lease)
   }
 }
 
@@ -271,8 +292,11 @@ async function handleCompanionIdentityHandoff(
         return err(
           new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({ ok: true, response })
+      const result: CompanionIdentityHandoffSessionResponse = {
+        ok: true,
+        response,
+      }
+      return ok(result)
     } finally {
       if (!consumed) endpoint.free()
     }
@@ -330,8 +354,11 @@ async function handleCompanionIdentityDiscovery(
       }
       const status: CompanionIdentityStatus = discovered.status
       if (status.status !== 'unlocked') releaseCompanionEndpoint()
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({ ok: true, status })
+      const response: CompanionIdentityDiscoverySessionResponse = {
+        ok: true,
+        status,
+      }
+      return ok(response)
     } catch {
       releaseCompanionEndpoint()
       return err(
@@ -345,11 +372,21 @@ async function handleCompanionIdentityDiscovery(
 
 type SessionSuccess<T> =
   T extends Result<infer Value, SessionOperationFailure> ? Value : never
-type ExtensionSessionResponse = SessionSuccess<
-  | Awaited<ReturnType<typeof handleMessage>>
-  | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
-  | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
->
+type WebsitePasskeyAccountsSessionResponse = {
+  readonly ok: true
+  readonly accounts: readonly {
+    readonly credentialId: string
+    readonly userName: string
+    readonly userDisplayName: string
+  }[]
+}
+export type ExtensionSessionResponse =
+  | SessionSuccess<
+      | Awaited<ReturnType<typeof handleMessage>>
+      | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
+      | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
+    >
+  | WebsitePasskeyAccountsSessionResponse
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {

@@ -18,7 +18,6 @@ import {
   syncSecretCount,
 } from './local-sync'
 import { assertVaultReady, revealSecretInRow } from './settings-auth'
-import { requireValue } from './guards'
 import {
   waitForStorageChainIdle,
   waitForVaultOperationsIdle,
@@ -227,7 +226,15 @@ export async function assertGenesisVaultOnGithub(
 ) {
   const resolved: GithubE2eTarget =
     typeof target === 'string'
-      ? { pat: target, repoName: requireValue(repoName, 'GitHub repo name') }
+      ? {
+          pat: target,
+          repoName: (() => {
+            if (typeof repoName !== 'string') {
+              throw new Error('GitHub repo name was not available.')
+            }
+            return repoName
+          })(),
+        }
       : target
   const snapshot = await waitForGithubVaultState(
     resolved,

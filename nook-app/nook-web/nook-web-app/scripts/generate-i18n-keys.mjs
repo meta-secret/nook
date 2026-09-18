@@ -340,7 +340,12 @@ const excludedDirectories = new Set([
 /** @param {string} directory @param {string[]} files */
 async function sourceFiles(directory, files = []) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.isDirectory() && excludedDirectories.has(entry.name)) continue
+    if (
+      entry.isDirectory() &&
+      (excludedDirectories.has(entry.name) ||
+        entry.name.startsWith('__compile-contracts-'))
+    )
+      continue
     const path = resolve(directory, entry.name)
     if (entry.isDirectory()) await sourceFiles(path, files)
     else if (entry.isFile() && sourceExtensions.has(extname(entry.name)))

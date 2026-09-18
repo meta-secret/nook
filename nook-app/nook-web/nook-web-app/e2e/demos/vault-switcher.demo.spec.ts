@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures'
+import { Effect } from 'effect'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -264,9 +265,15 @@ test('list every local vault and pair the open vault with the companion', async 
   if (typeof encodedLauncherMessage !== 'string') {
     throw new Error('Companion launcher message was not recorded.')
   }
-  const launcherMessage: unknown = parseJson(encodedLauncherMessage)
-  if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
+  const launcherMessage = Effect.runSync(
+    Effect.either(
+      OpenCompanionLauncherMessageGuard.decode(
+        parseJson(encodedLauncherMessage),
+      ),
+    ),
+  )
+  if (launcherMessage._tag === 'Left') {
     throw new Error('Companion launcher message was malformed.')
   }
-  expect(launcherMessage.payload).toEqual({ intent: 'pair' })
+  expect(launcherMessage.right.intent).toBe(OpenCompanionLauncherIntent.Pair)
 })

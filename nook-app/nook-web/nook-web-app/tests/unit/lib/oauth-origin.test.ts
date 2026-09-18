@@ -6,53 +6,69 @@ import {
   resolveOAuthOriginSupport,
 } from '$lib/auth/oauth-origin'
 
-function isLocation(value: unknown): value is Location {
-  return (
-    value instanceof Object &&
-    'origin' in value &&
-    typeof value.origin === 'string' &&
-    'hostname' in value &&
-    typeof value.hostname === 'string'
-  )
+type OAuthLocationFixtureRequest = {
+  origin: string
+  hostname: string
 }
 
-function loc(origin: string, hostname: string): Location {
-  const candidate: unknown = { origin, hostname }
-  if (!isLocation(candidate))
-    throw new TypeError('location fixture must be an object')
-  return candidate
+type OAuthLocation = Pick<Location, 'origin' | 'hostname'>
+
+class OAuthLocationFixture {
+  create(request: OAuthLocationFixtureRequest): OAuthLocation {
+    return {
+      origin: request.origin,
+      hostname: request.hostname,
+    }
+  }
 }
+
+const oauthLocationFixture = new OAuthLocationFixture()
 
 describe('oauth origin support', () => {
   test('allows the configured Google stable, development, and local origins', () => {
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.GoogleDrive,
-        location: loc('https://simple.nokey.sh', 'simple.nokey.sh'),
+        location: oauthLocationFixture.create({
+          origin: 'https://simple.nokey.sh',
+          hostname: 'simple.nokey.sh',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.GoogleDrive,
-        location: loc('https://sentinel.dev.nokey.sh', 'sentinel.dev.nokey.sh'),
+        location: oauthLocationFixture.create({
+          origin: 'https://sentinel.dev.nokey.sh',
+          hostname: 'sentinel.dev.nokey.sh',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.GoogleDrive,
-        location: loc('https://localhost:5173', 'localhost'),
+        location: oauthLocationFixture.create({
+          origin: 'https://localhost:5173',
+          hostname: 'localhost',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.GoogleDrive,
-        location: loc('http://localhost:5173', 'localhost'),
+        location: oauthLocationFixture.create({
+          origin: 'http://localhost:5173',
+          hostname: 'localhost',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.GoogleDrive,
-        location: loc('http://127.0.0.1:5173', '127.0.0.1'),
+        location: oauthLocationFixture.create({
+          origin: 'http://127.0.0.1:5173',
+          hostname: '127.0.0.1',
+        }),
       }).supported,
     ).toBe(true)
   })
@@ -61,25 +77,37 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.ICloud,
-        location: loc('https://sentinel.nokey.sh', 'sentinel.nokey.sh'),
+        location: oauthLocationFixture.create({
+          origin: 'https://sentinel.nokey.sh',
+          hostname: 'sentinel.nokey.sh',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.ICloud,
-        location: loc('https://simple.dev.nokey.sh', 'simple.dev.nokey.sh'),
+        location: oauthLocationFixture.create({
+          origin: 'https://simple.dev.nokey.sh',
+          hostname: 'simple.dev.nokey.sh',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.ICloud,
-        location: loc('https://localhost:5173', 'localhost'),
+        location: oauthLocationFixture.create({
+          origin: 'https://localhost:5173',
+          hostname: 'localhost',
+        }),
       }).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.ICloud,
-        location: loc('https://localhost:5175', 'localhost'),
+        location: oauthLocationFixture.create({
+          origin: 'https://localhost:5175',
+          hostname: 'localhost',
+        }),
       }).supported,
     ).toBe(true)
   })
@@ -90,7 +118,7 @@ describe('oauth origin support', () => {
       expect(
         resolveOAuthOriginSupport({
           provider: BrowserOAuthProvider.GoogleDrive,
-          location: loc(origin, hostname),
+          location: oauthLocationFixture.create({ origin, hostname }),
         }),
       ).toMatchObject({
         supported: false,
@@ -99,7 +127,7 @@ describe('oauth origin support', () => {
       expect(
         resolveOAuthOriginSupport({
           provider: BrowserOAuthProvider.ICloud,
-          location: loc(origin, hostname),
+          location: oauthLocationFixture.create({ origin, hostname }),
         }),
       ).toMatchObject({
         supported: false,
@@ -111,10 +139,10 @@ describe('oauth origin support', () => {
   test('blocks Cloudflare PR preview origins with a preview reason', () => {
     const support = resolveOAuthOriginSupport({
       provider: BrowserOAuthProvider.GoogleDrive,
-      location: loc(
-        'https://pr-191.nook-1n8.pages.dev',
-        'pr-191.nook-1n8.pages.dev',
-      ),
+      location: oauthLocationFixture.create({
+        origin: 'https://pr-191.nook-1n8.pages.dev',
+        hostname: 'pr-191.nook-1n8.pages.dev',
+      }),
     })
 
     expect(support).toEqual({
@@ -128,7 +156,10 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport({
         provider: BrowserOAuthProvider.ICloud,
-        location: loc('http://localhost:5173', 'localhost'),
+        location: oauthLocationFixture.create({
+          origin: 'http://localhost:5173',
+          hostname: 'localhost',
+        }),
       }),
     ).toEqual({
       supported: false,

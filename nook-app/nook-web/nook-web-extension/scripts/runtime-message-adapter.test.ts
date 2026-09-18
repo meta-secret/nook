@@ -40,15 +40,16 @@ import { AuthenticationOutcomeClassifyMessageType } from '../src/lib/outcome-evi
 
 type TestAcknowledgement = { accepted: true }
 
-function isTestAcknowledgement(
-  response: unknown,
-): response is TestAcknowledgement {
-  return (
-    !!response &&
-    typeof response === 'object' &&
-    'accepted' in response &&
-    response.accepted === true
-  )
+function decodeTestAcknowledgement(response: unknown): TestAcknowledgement {
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('accepted' in response) ||
+    response.accepted !== true
+  ) {
+    throw new TypeError('runtime response is not an accepted acknowledgement')
+  }
+  return { accepted: true }
 }
 
 enum RuntimeMockKind {
@@ -810,7 +811,7 @@ describe('runtime message adapters', () => {
       typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<TestAcknowledgement>
     >[0] = {
       message: generatedPasswordMessage,
-      decode: isTestAcknowledgement,
+      decode: decodeTestAcknowledgement,
     }
 
     const delivery =
@@ -828,7 +829,7 @@ describe('runtime message adapters', () => {
       typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<TestAcknowledgement>
     >[0] = {
       message: generatedPasswordMessage,
-      decode: isTestAcknowledgement,
+      decode: decodeTestAcknowledgement,
     }
 
     const delivery =

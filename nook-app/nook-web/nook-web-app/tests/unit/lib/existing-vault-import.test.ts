@@ -4,6 +4,7 @@ import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
+import { ConnectedExistingVaultActivationOutcome } from '$lib/vault/local-login'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
@@ -49,7 +50,7 @@ function lifecycleHarness(authenticated = false) {
     .mockResolvedValue()
   const activateConnectedExistingVault = vi
     .spyOn(state, 'activateConnectedExistingVault')
-    .mockResolvedValue(ok())
+    .mockResolvedValue(ok(ConnectedExistingVaultActivationOutcome.Activated))
   const clearExistingVaultRecoverySummary = vi.spyOn(
     state,
     'clearExistingVaultRecoverySummary',
@@ -61,7 +62,7 @@ function lifecycleHarness(authenticated = false) {
   })
   selectVaultForUnlock.mockImplementation(async (storeId: string) => {
     state.openActiveVault(storeId)
-    return ok()
+    return ok(storeId)
   })
   activateLoginSetup.mockImplementation((providerType) => {
     activateLoginSetupImplementation(providerType)

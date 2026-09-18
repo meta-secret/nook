@@ -1,4 +1,7 @@
-import { passwordFieldDiscovery } from "./password-form-fields";
+import {
+  passwordFieldDiscovery,
+  type AutocompleteTokenMatchRequest,
+} from "./password-form-fields";
 import { PasswordFormFieldQuery } from "./password-form-summary-state";
 import {
   PasswordFormQueryKind,
@@ -22,18 +25,22 @@ export class PasswordFormSummaryObservation {
       new PasswordFormFieldQuery(request).query,
     );
     const currentPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const currentPasswordTokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "current-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(
+        currentPasswordTokenRequest,
+      );
     }).length;
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "new-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(
+        newPasswordTokenRequest,
+      );
     }).length;
     const forms = new Set<HTMLFormElement>();
     for (const field of [

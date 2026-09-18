@@ -70,9 +70,9 @@ will implement named files.
 
 ## Authored implementation routing
 
-An AI Team Agent that authors TypeScript or JavaScript, including an executable
-skill or its tests, loads and applies these read-only authorities before
-editing:
+An AI Team Agent that authors TypeScript, JavaScript, or Svelte, including an
+executable skill or its tests, loads and applies these read-only authorities
+before editing:
 
 - [Function ownership](../../shared/dynamic-skills/function-ownership.md)
   assigns every authored function to a meaningful owner. An unowned function
@@ -80,6 +80,11 @@ editing:
 - [TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)
   requires named state and normalizes authored absence. It forbids authored
   `null`, `undefined`, and value-or-`void` contracts.
+- [TypeScript Effect Workflows](../web-dev/dynamic-skills/typescript-effect.md)
+  governs effectful workflows, typed expected failures, untrusted boundary
+  decoding, effectful dependencies, resources, concurrency, observability, and
+  runtime boundaries. Pure calculations, inert declarations, and Svelte
+  rendering remain outside Effect.
 - [Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)
   routes named types, one-parameter requests, typed failures, and schema or
   migration decisions.
@@ -109,6 +114,16 @@ for domain, state, policy, mode, configuration, or owned-contract booleans;
 load [Svelte state modeling](../web-dev/dynamic-skills/svelte-state-modeling.md)
 for authored Svelte; and load [serial operation queues](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)
 when authoring a serial async queue.
+
+For authored Svelte TypeScript, the packet and focused review apply
+the authorities above together for failure outcomes, workflow transitions,
+event handlers, and eligibility decisions. Require one semantically owned
+exhaustive workflow state with closed typed failure kinds and outcomes. The
+semantic owner must model workflow phase exhaustively and classify eligibility
+as an exhaustive outcome. Reject free-form application error state or text,
+parallel error slots, and coupled eligibility or phase booleans as P1 findings.
+Localized presentation copy derived from a typed outcome at the presentation
+edge is allowed.
 
 These links are the AI packet's minimal policy set. The AI team does not copy
 or edit foreign-team policy. A missing required authority or an unprovable
@@ -160,8 +175,8 @@ feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
 or formatting. Older instructions to run Loom tests, audits, preflight, or
 broad pre-push commands are not local or feature-stage permissions.
 
-For an AI packet that authors TypeScript or JavaScript, the acceptance packet
-must name the authoritative checks below:
+For an AI packet that authors TypeScript, JavaScript, or Svelte, the acceptance
+packet must name the authoritative checks below:
 
 - `task loom:verify` checks Loom and every executable-skill package. It does
   not replace repository-wide TypeScript state checks or semantic ownership

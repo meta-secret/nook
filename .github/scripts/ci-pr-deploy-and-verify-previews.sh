@@ -1,35 +1,45 @@
 #!/usr/bin/env bash
-# Deploy and verify Cloudflare Pages preview aliases for a pull request.
+# Deploy and verify Cloudflare Pages preview aliases for a deployment tag.
 #
 # Required env:
-#   PR_NUMBER, HEAD_SHA
+#   DEPLOYMENT_TAG, HEAD_SHA
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 # Optional env:
-#   CF_PAGES_BRANCH (defaults to pr-$PR_NUMBER)
+#   CF_PAGES_BRANCH (defaults to pr-$DEPLOYMENT_TAG)
 #   GITHUB_OUTPUT — when set, writes preview_url/site_url/simple_url/sentinel_url/extension_url
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-: "${PR_NUMBER:?PR_NUMBER is required}"
+: "${DEPLOYMENT_TAG:?DEPLOYMENT_TAG is required}"
 : "${HEAD_SHA:?HEAD_SHA is required}"
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
 
-pr="$PR_NUMBER"
-export CF_PAGES_BRANCH="${CF_PAGES_BRANCH:-pr-$pr}"
-site_url="https://pr-$pr.nokey-sh.pages.dev"
-simple_url="https://pr-$pr.nokey-simple.pages.dev"
-sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
+deployment_tag="$DEPLOYMENT_TAG"
+if [[ ! "$deployment_tag" =~ ^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$ ]]; then
+  echo "::error::DEPLOYMENT_TAG must be a safe Cloudflare preview identifier (lowercase letters, numbers, and hyphens; 1-60 characters)" >&2
+  exit 1
+fi
+
+preview_branch="${CF_PAGES_BRANCH:-pr-$deployment_tag}"
+if [[ ! "$preview_branch" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+  echo "::error::CF_PAGES_BRANCH must be a safe Cloudflare preview identifier (lowercase letters, numbers, and hyphens; 1-63 characters)" >&2
+  exit 1
+fi
+export CF_PAGES_BRANCH="$preview_branch"
+site_url="https://$preview_branch.nokey-sh.pages.dev"
+simple_url="https://$preview_branch.nokey-simple.pages.dev"
+sentinel_url="https://$preview_branch.nokey-sentinel.pages.dev"
 
 deploy_dir="$(mktemp -d)"
 trap 'rm -rf "$deploy_dir"' EXIT
 
 if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
   export NOOK_WRANGLER_VERSION="${NOOK_WRANGLER_VERSION:-4.114.0}"
-  # Complete the pinned npm install before four deploy processes share the
-  # npx cache. A cold concurrent install can expose Miniflare before all of its
+  # Complete the pinned Wrangler install before four deploy processes share the
+  # Bun cache. A cold concurrent install can expose Miniflare before all of its
   # dependencies are present.
   npx --yes "wrangler@${NOOK_WRANGLER_VERSION}" --version >/dev/null
 fi
@@ -84,6 +94,20 @@ wait_for_deploy "$site_pid" "Site" "$deploy_dir/site.log"
 wait_for_deploy "$simple_pid" "Simple" "$deploy_dir/simple.log"
 wait_for_deploy "$sentinel_pid" "Sentinel" "$deploy_dir/sentinel.log"
 
+deployment_url_from_log() {
+  local log="$1"
+  sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$log" \
+    | grep -oE 'Deployment complete! Take a peek over at https://[^ ]+' \
+    | sed 's/Deployment complete! Take a peek over at //' \
+    | tail -1
+}
+
+site_deployment_url="$(deployment_url_from_log "$deploy_dir/site.log")"
+if [[ ! "$site_deployment_url" =~ ^https://[0-9a-f]{8}\.nokey-sh\.pages\.dev$ ]]; then
+  echo "::error::Site preview deploy did not emit a canonical immutable nokey-sh deployment URL"
+  exit 1
+fi
+
 clean="$(sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$deploy_dir/unified.log")"
 preview_url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
 if [ -z "$preview_url" ]; then
@@ -93,88 +117,61 @@ fi
 
 body="$(mktemp)"
 headers="$(mktemp)"
-verified=false
-for attempt in $(seq 1 60); do
-  site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
-  retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
-  site_ok=false
-  if [ "$site_status" = "200" ] \
-    && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
-    && grep -Fq "$simple_url/" "$body" \
-    && grep -Fq "$sentinel_url/" "$body" \
-    && [ "$retired_status" = "404" ] \
-    && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
-    site_ok=true
-  fi
+site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
+retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
+site_ok=false
+if [ "$site_status" = "200" ] \
+  && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
+  && grep -Fq "$simple_url/" "$body" \
+  && grep -Fq "$sentinel_url/" "$body" \
+  && [ "$retired_status" = "404" ] \
+  && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
+  site_ok=true
+fi
 
-  simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
-  simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
-  simple_ok=false
-  if [ "$simple_status" = "200" ] \
-    && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
-    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-    && [ "$simple_extension" = "200" ]; then
-    simple_ok=true
-  fi
+simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
+simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
+simple_ok=false
+if [ "$simple_status" = "200" ] \
+  && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
+  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+  && [ "$simple_extension" = "200" ]; then
+  simple_ok=true
+fi
 
-  sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
-  sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
-  sentinel_ok=false
-  if [ "$sentinel_status" = "200" ] \
-    && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
-    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-    && [ "$sentinel_extension" = "404" ]; then
-    sentinel_ok=true
-  fi
+sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
+sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
+sentinel_ok=false
+if [ "$sentinel_status" = "200" ] \
+  && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
+  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+  && [ "$sentinel_extension" = "404" ]; then
+  sentinel_ok=true
+fi
 
-  if [ "$site_ok" = true ] && [ "$simple_ok" = true ] && [ "$sentinel_ok" = true ]; then
-    verified=true
-    break
-  fi
-  echo "Waiting for isolated aliases (attempt $attempt/60; site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
-  sleep 2
-done
-if [ "$verified" != true ]; then
-  echo "::error::Isolated Pages aliases did not expose the expected site, Simple, and Sentinel boundaries"
+if [ "$site_ok" != true ] || [ "$simple_ok" != true ] || [ "$sentinel_ok" != true ]; then
+  echo "::error::Isolated Pages aliases failed verification (site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
   exit 1
 fi
-extension_verified=false
-last_extension_output=''
-for attempt in $(seq 1 30); do
-  set +e
-  last_extension_output="$(
-    EXTENSION_METADATA_URL="$site_url/downloads/extension.json" \
-    EXTENSION_CACHE_BUST="$HEAD_SHA-$attempt" \
-    EXPECTED_EXTENSION_CHANNEL="pr-$pr" \
-    EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
-    EXPECTED_EXTENSION_SITE_URL="$site_url/" \
-    EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
-    EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
-      bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh 2>&1
-  )"
-  extension_status=$?
-  set -e
-  if [ "$extension_status" -eq 0 ]; then
-    printf '%s\n' "$last_extension_output"
-    extension_verified=true
-    break
-  fi
-  echo "Waiting for exact-head extension metadata (attempt $attempt/30)"
-  sleep 2
-done
-if [ "$extension_verified" != true ]; then
-  printf '%s\n' "$last_extension_output" >&2
-  echo "::error::Extension metadata did not converge to the exact PR head"
-  exit 1
-fi
+expected_extension_channel="pr-$deployment_tag"
+extension_archive="nook-passwords-${expected_extension_channel}.zip"
+EXTENSION_METADATA_URL="$site_deployment_url/downloads/extension.json" \
+EXTENSION_FETCH_ORIGIN_URL="$site_deployment_url/" \
+EXTENSION_CACHE_BUST="$HEAD_SHA" \
+EXPECTED_EXTENSION_CHANNEL="$expected_extension_channel" \
+EXPECTED_EXTENSION_COMMIT="$HEAD_SHA" \
+EXPECTED_EXTENSION_SITE_URL="$site_url/" \
+EXPECTED_SIMPLE_VAULT_URL="$simple_url/" \
+EXPECTED_SENTINEL_VAULT_URL="$sentinel_url/" \
+  bash nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "preview_url=$preview_url"
     echo "site_url=$site_url"
     echo "simple_url=$simple_url"
     echo "sentinel_url=$sentinel_url"
-    echo "extension_url=$site_url/downloads/nook-passwords-pr-$pr.zip"
+    echo "extension_url=$site_url/downloads/$extension_archive"
   } >> "$GITHUB_OUTPUT"
 fi

@@ -97,11 +97,13 @@ export class SitemapDocument {
   }
 
   private locationXml(entry: SitemapEntry): string {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const location = new PublicSiteLocation({
+    const publicSiteLocationRequest: ConstructorParameters<
+      typeof PublicSiteLocation
+    >[0] = {
       siteUrl: this.request.siteUrl,
       path: entry.path,
-    });
+    };
+    const location = new PublicSiteLocation(publicSiteLocationRequest);
     return location.url
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")

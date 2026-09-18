@@ -5,11 +5,15 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  BuildkitCacheExportTelemetry,
   CacheScopeTelemetry,
   CacheTelemetry,
 } from "./cache-telemetry.mjs";
+import {
+  CompilePhaseCacheExportMode,
+  CompilePhaseStatus,
+} from "./cache-scope-telemetry.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
+import { BuildHistoryTelemetry } from "./build-history-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
 /** @typedef {{state: 'active' | 'fallback', reason: string}} FallbackState */
@@ -18,6 +22,8 @@ void test("records the active compile scope without preselection state", () => {
   assert.deepEqual(
     new CacheScopeTelemetry({
       GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+      GHA_CACHE_PARENT_SCOPE_SUFFIX: `-git-${"a".repeat(40)}`,
+      NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
     }).record(),
     {
       scope: "",
@@ -28,7 +34,34 @@ void test("records the active compile scope without preselection state", () => {
         export_enabled: false,
       },
       compile_source: {
-        scope: `nook-build-compile-v4-git-${"b".repeat(40)}`,
+        scope: `nook-build-compile-git-${"b".repeat(40)}`,
+        parent_scope_suffix: `-git-${"a".repeat(40)}`,
+        parent_ref: `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile-git-${"a".repeat(40)}:buildcache`,
+      },
+      compile_phases: {
+        foundation: {
+          requested: false,
+          target: "build-compile-foundation",
+          status: CompilePhaseStatus.NotRequested,
+          cache_from: [],
+          cache_to: {
+            enabled: false,
+            ref: "",
+            mode: CompilePhaseCacheExportMode.Disabled,
+          },
+          input_refs_access_verified: false,
+        },
+        source_compile: {
+          requested: false,
+          target: "build-compile",
+          status: CompilePhaseStatus.NotRequested,
+          cache_from: [],
+          cache_to: {
+            enabled: false,
+            ref: "",
+            mode: CompilePhaseCacheExportMode.Disabled,
+          },
+        },
       },
       imports: {
         probes_complete: false,
@@ -37,6 +70,133 @@ void test("records the active compile scope without preselection state", () => {
       },
     },
   );
+});
+
+void test("records the two compile phases with the authorized exporter only in Phase A", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const parentSuffix = `-git-${"a".repeat(40)}`;
+  const compilePhases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_WRITE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    GHA_CACHE_PARENT_SCOPE_SUFFIX: parentSuffix,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_COMPILE_CACHE_MODE: "publish",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Running,
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+  }).record().compile_phases;
+  const currentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${currentSuffix}:buildcache`;
+  const parentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${parentSuffix}:buildcache`;
+
+  assert.deepEqual(compilePhases.foundation, {
+    requested: true,
+    target: "build-compile-foundation",
+    status: CompilePhaseStatus.Completed,
+    cache_from: [currentRef, parentRef],
+    cache_to: {
+      enabled: true,
+      ref: currentRef,
+      mode: CompilePhaseCacheExportMode.Max,
+    },
+    input_refs_access_verified: true,
+  });
+  assert.deepEqual(compilePhases.source_compile, {
+    requested: true,
+    target: "build-compile",
+    status: CompilePhaseStatus.Running,
+    cache_from: [currentRef],
+    cache_to: {
+      enabled: false,
+      ref: "",
+      mode: CompilePhaseCacheExportMode.Disabled,
+    },
+  });
+});
+
+void test("records the persisted remote workflow handoff after both compile phases", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const scope = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: "completed",
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: "completed",
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+    GHA_CACHE_EXACT_PROBES_COMPLETE: "1",
+    GHA_CACHE_EXACT_PROBE_FAILURE_CLASS: "none",
+  }).record();
+
+  assert.equal(scope.compile_phases.foundation.requested, true);
+  assert.equal(
+    scope.compile_phases.foundation.status,
+    CompilePhaseStatus.Completed,
+  );
+  assert.equal(scope.compile_phases.source_compile.requested, true);
+  assert.equal(
+    scope.compile_phases.source_compile.status,
+    CompilePhaseStatus.Completed,
+  );
+  assert.equal(scope.imports.probes_complete, true);
+  assert.equal(scope.imports.failure_class, "none");
+});
+
+void test("normalizes an invalid persisted phase status to not started", () => {
+  const phases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: "unexpected",
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: "unexpected",
+  }).record().compile_phases;
+
+  assert.equal(phases.foundation.status, CompilePhaseStatus.NotStarted);
+  assert.equal(phases.source_compile.status, CompilePhaseStatus.NotStarted);
+});
+
+void test("records both phases without registry exporters for no-export compile verification", () => {
+  const currentSuffix = `-git-${"b".repeat(40)}`;
+  const currentRef = `registry.dev.nokey.sh/nook/remote-buildcache/nook-build-compile${currentSuffix}:buildcache`;
+  const compilePhases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_WRITE_ENABLED: "",
+    GHA_CACHE_SCOPE_SUFFIX: currentSuffix,
+    GHA_CACHE_PARENT_SCOPE_SUFFIX: "",
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_COMPILE_CACHE_MODE: "read-only",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED: "1",
+  }).record().compile_phases;
+
+  assert.deepEqual(compilePhases.foundation.cache_from, [currentRef]);
+  assert.deepEqual(compilePhases.foundation.cache_to, {
+    enabled: false,
+    ref: "",
+    mode: CompilePhaseCacheExportMode.Disabled,
+  });
+  assert.deepEqual(compilePhases.source_compile.cache_from, [currentRef]);
+  assert.deepEqual(compilePhases.source_compile.cache_to, {
+    enabled: false,
+    ref: "",
+    mode: CompilePhaseCacheExportMode.Disabled,
+  });
+});
+
+void test("records a failed source phase after the foundation has completed", () => {
+  const phases = new CacheScopeTelemetry({
+    NOOK_REMOTE_TASK_SELECTION: "build:compile",
+    GHA_CACHE_ENABLED: "1",
+    GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+    NOOK_BUILD_COMPILE_FOUNDATION_STATUS: CompilePhaseStatus.Completed,
+    NOOK_BUILD_COMPILE_SOURCE_STATUS: CompilePhaseStatus.Failed,
+  }).record().compile_phases;
+
+  assert.equal(phases.foundation.status, CompilePhaseStatus.Completed);
+  assert.equal(phases.source_compile.status, CompilePhaseStatus.Failed);
+  assert.equal(phases.source_compile.cache_to.enabled, false);
 });
 
 void test("records transient optional probe failures without marking probes incomplete", () => {
@@ -49,6 +209,21 @@ void test("records transient optional probe failures without marking probes inco
   assert.equal(scope.imports.failure_class, "transient_unavailable");
   assert.equal(scope.compile_dependencies.available, false);
   assert.equal(Object.hasOwn(scope.compile_source, "available"), false);
+});
+
+void test("records an explicit empty parent cache identity for a root commit", () => {
+  const source = new CacheScopeTelemetry({
+    GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
+    NOOK_REGISTRY_CACHE_HOST: "registry.dev.nokey.sh",
+  }).record().compile_source;
+
+  assert.deepEqual(
+    {
+      parent_scope_suffix: source.parent_scope_suffix,
+      parent_ref: source.parent_ref,
+    },
+    { parent_scope_suffix: "", parent_ref: "" },
+  );
 });
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {
@@ -254,7 +429,7 @@ void test("maps history logs concurrently while preserving record order", async 
 
 void test("accepts raw Buildx progress JSON from either process stream", () => {
   assert.match(
-    CacheTelemetry.readHistoryEvents.toString(),
+    BuildHistoryTelemetry.readHistoryEvents.toString(),
     /events\.length > 0 \|\| \(status === 0/,
   );
   assert.deepEqual(
@@ -295,7 +470,10 @@ void test("normalizes Buildx history output and computes the target-step cache r
     cache_export: {
       attempts: 0,
       completed: 0,
-      bytes: 0,
+      byte_measurement: {
+        status: "unavailable",
+        reason: "buildkit_did_not_emit_byte_count",
+      },
       duration_ms: 0,
       incomplete_failures: 0,
     },
@@ -307,51 +485,6 @@ void test("normalizes Buildx history output and computes the target-step cache r
   assert.ok(secondRecord);
   assert.equal(firstRecord.cache_hit_rate_percent, 75);
   assert.equal(secondRecord.status, "error");
-});
-
-void test("extracts structured registry cache bytes, timings, and incomplete failures", () => {
-  const summary = new BuildkitCacheExportTelemetry([
-    {
-      vertexes: [
-        {
-          digest: "sha256:complete",
-          name: "exporting cache to registry",
-          started: "2026-09-13T01:00:00Z",
-          completed: "2026-09-13T01:00:03.250Z",
-        },
-        {
-          digest: "sha256:failed",
-          name: "exporting cache to registry",
-          started: "2026-09-13T01:00:04Z",
-          error: "rpc error: code = Unavailable",
-        },
-      ],
-      statuses: [
-        {
-          vertex: "sha256:complete-transfer",
-          id: "push",
-          name: "pushing cache manifest",
-          current: 0,
-          total: 4096,
-        },
-        {
-          vertex: "sha256:failed-transfer",
-          id: "push",
-          name: "pushing layers",
-          current: 1024,
-          total: 8192,
-        },
-      ],
-    },
-  ]).summary();
-
-  assert.deepEqual(summary, {
-    attempts: 2,
-    completed: 1,
-    bytes: 5120,
-    duration_ms: 3250,
-    incomplete_failures: 1,
-  });
 });
 
 void test("accepts the documented Buildx JSON array and PascalCase fields", () => {
@@ -449,6 +582,50 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
   });
 });
 
+void test("aggregates reports across equivalent runtime authority sources", () => {
+  const environmentReport = {
+    stage: "wasm-source",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "environment",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 2,
+    requests_executed: 2,
+    cache_hits: 2,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+    remote_writes: 0,
+    compile_failures: 0,
+  };
+  const runtimeSecretReport = {
+    ...environmentReport,
+    stage: "wasm-build",
+    runtime_mode_source: "runtime_secret",
+    client_side: true,
+    counter_reliability: "backend_incomplete",
+    compile_requests: 1,
+    requests_executed: 1,
+    cache_hits: 1,
+  };
+
+  const summary = CacheTelemetry.summarizeSccache([
+    CacheTelemetry.normalizeSccacheReport(environmentReport),
+    CacheTelemetry.normalizeSccacheReport(runtimeSecretReport),
+  ]);
+
+  assert.equal(summary.report_count, 2);
+  assert.equal(summary.runtime_mode, "READ_WRITE");
+  assert.equal(summary.runtime_mode_source, "runtime_secret");
+  assert.equal(summary.client_side, true);
+  assert.equal(summary.counter_reliability, "backend_incomplete");
+  assert.equal(summary.compile_requests, 3);
+  assert.equal(summary.cache_hits, 3);
+});
+
 void test("extracts zero-based sccache snapshots from a cancelled raw build log", () => {
   const raw =
     'step NOOK_SCCACHE_STATS {"stage":"native","baked_runtime_mode":"READ_WRITE","runtime_mode":"READ_WRITE","runtime_mode_source":"runtime_secret","client_side":true,"counter_reliability":"backend_incomplete","publication_status":"counters_observed","compile_requests":12,"requests_executed":10,"cache_hits":8,"cache_misses":2,"cache_errors":0,"cache_write_errors":0,"cache_writes":2,"remote_writes":2,"compile_failures":0}\ncancelled\n';
@@ -464,7 +641,9 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
     CacheTelemetry.listBuildHistory.bind(CacheTelemetry);
   const originalReadHistoryEvents =
     CacheTelemetry.readHistoryEvents.bind(CacheTelemetry);
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "nook-cache-telemetry-"));
+  const temporary = fs.mkdtempSync(
+    path.join(os.tmpdir(), "nook-cache-telemetry-"),
+  );
   const report = {
     stage: "wasm-node-test-and-coverage",
     baked_runtime_mode: "READ_WRITE",
@@ -501,19 +680,20 @@ void test("merges raw-log and BuildKit-history reports for distinct compiler sta
       cached_steps: 0,
     },
   ];
-  CacheTelemetry.readHistoryEvents = () => Promise.resolve([
-    {
-      logs: [
-        {
-          vertex: "sha256:wasm-node",
-          timestamp: "2026-09-15T01:01:00Z",
-          data: Buffer.from(
-            `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\nNOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}\n`,
-          ).toString("base64"),
-        },
-      ],
-    },
-  ]);
+  CacheTelemetry.readHistoryEvents = () =>
+    Promise.resolve([
+      {
+        logs: [
+          {
+            vertex: "sha256:wasm-node",
+            timestamp: "2026-09-15T01:01:00Z",
+            data: Buffer.from(
+              `NOOK_SCCACHE_STATS ${JSON.stringify(historyReport)}\nNOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}\n`,
+            ).toString("base64"),
+          },
+        ],
+      },
+    ]);
 
   try {
     const record = await CacheTelemetry.collectTelemetry({
@@ -616,6 +796,36 @@ void test("a healthy terminal snapshot supersedes an earlier vertex fallback", (
   });
 });
 
+void test("a healthy terminal snapshot supersedes stale credential fallback history", () => {
+  /** @type {SccacheReport} */
+  const report = {
+    stage: "compile-native-dependencies",
+    baked_runtime_mode: "READ_WRITE",
+    runtime_mode: "READ_WRITE",
+    runtime_mode_source: "runtime_secret",
+    client_side: false,
+    counter_reliability: "authoritative",
+    publication_status: "counters_observed",
+    compile_requests: 339,
+    requests_executed: 279,
+    cache_hits: 275,
+    cache_misses: 0,
+    cache_errors: 0,
+    cache_write_errors: 0,
+    cache_writes: 0,
+    remote_writes: 0,
+    compile_failures: 0,
+  };
+  assert.deepEqual(
+    resolveSccacheFallback(
+      [report],
+      { state: "active", reason: "none" },
+      { state: "fallback", reason: "credentials_unavailable" },
+    ),
+    { state: "active", reason: "none" },
+  );
+});
+
 void test("a real raw fallback remains active despite healthy terminal evidence", () => {
   /** @type {SccacheReport} */
   const report = {
@@ -657,14 +867,7 @@ void test("a real raw fallback remains active despite healthy terminal evidence"
     ),
     { state: "fallback", reason: "cache_transport_unavailable" },
   );
-  assert.deepEqual(
-    resolveSccacheFallback(
-      [],
-      active,
-      fallback,
-    ),
-    fallback,
-  );
+  assert.deepEqual(resolveSccacheFallback([], active, fallback), fallback);
   assert.deepEqual(
     resolveSccacheFallback(
       [],
@@ -680,10 +883,97 @@ void test("rejects malformed nested telemetry records at the ingress", () => {
   assert.throws(
     () =>
       CacheTelemetry.validateTelemetryRecord({
-        schema_version: 1,
+        schema_version: 2,
         github: "invalid",
       }),
     /telemetry github context is required/,
+  );
+});
+
+void test("rejects malformed cache-export byte measurement states", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const malformedMeasurement = {
+    ...record,
+    buildkit: {
+      ...record.buildkit,
+      cache_export: {
+        ...record.buildkit.cache_export,
+        byte_measurement: {
+          status: "unavailable",
+          reason: "zero_assumed",
+        },
+      },
+    },
+  };
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedMeasurement),
+    /telemetry buildkit.cache_export.byte_measurement is invalid/,
+  );
+});
+
+void test("rejects malformed compile phase objects at the ingress", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const malformedSource = {
+    ...record,
+    cache_scope: {
+      ...record.cache_scope,
+      compile_phases: {
+        ...record.cache_scope.compile_phases,
+        source_compile: "invalid",
+      },
+    },
+  };
+  const malformedFoundation = {
+    ...record,
+    cache_scope: {
+      ...record.cache_scope,
+      compile_phases: {
+        ...record.cache_scope.compile_phases,
+        foundation: {
+          ...record.cache_scope.compile_phases.foundation,
+          input_refs_access_verified: "invalid",
+        },
+      },
+    },
+  };
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedSource),
+    /telemetry compile phase source_compile is invalid/,
+  );
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(malformedFoundation),
+    /telemetry compile phase foundation.input_refs_access_verified is invalid/,
+  );
+});
+
+void test("rejects telemetry without required compile phase evidence", () => {
+  const record = CacheTelemetry.buildUnavailableTelemetry({
+    warning: "fixture",
+    job: "compile",
+    runId: "1",
+    runAttempt: "1",
+  });
+  const missingCompilePhases = {
+    ...record,
+    cache_scope: { ...record.cache_scope },
+  };
+  Reflect.deleteProperty(missingCompilePhases.cache_scope, "compile_phases");
+
+  assert.throws(
+    () => CacheTelemetry.validateTelemetryRecord(missingCompilePhases),
+    /telemetry cache_scope\.compile_phases is required/,
   );
 });
 

@@ -18,6 +18,7 @@ import {
   type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
 import { VaultState } from '$lib/vault.svelte'
+import { DeviceProtectionLockOutcome } from '$lib/vault/device-protection.svelte'
 import {
   VaultInitializationActions,
   shouldAutoAuthorizeE2e,
@@ -31,6 +32,8 @@ import {
 } from '$lib/runtime/storage-failure'
 import { TranslationMessage } from '$lib/vault/translation'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
+import { unselectedVaultScope } from '$lib/auth/providers'
+import { LocaleUpdateOutcome } from '$lib/vault/locale'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
@@ -153,9 +156,11 @@ describe('external browser identity handoff commit ownership', () => {
         fixture.manager,
         'has_pending_sentinel_genesis_finalization',
       ).mockResolvedValue(false)
-      vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'loadProviders').mockResolvedValue(
+        ok({ providers: [], activeVaultStoreId: unselectedVaultScope() }),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       const refreshDeviceState = vi
         .spyOn(fixture.state, 'refreshDeviceState')
@@ -165,6 +170,15 @@ describe('external browser identity handoff commit ownership', () => {
         await fixture.lifecycle.continueInitializationAfterDeviceUnlock()
 
       expect(continued.isOk()).toBe(true)
+      expect(
+        continued.match(
+          (snapshot) => snapshot,
+          (failure) => failure,
+        ),
+      ).toEqual({
+        deviceId: fixture.state.deviceId,
+        devicePublicKey: fixture.state.devicePublicKey,
+      })
       expect(refreshDeviceState).not.toHaveBeenCalled()
       expect(fixture.state.enrollmentFromUrlPending).toBe(true)
       expect(fixture.state.prefillEnrollmentCode).toBe('pending-enrollment')
@@ -180,9 +194,11 @@ describe('external browser identity handoff commit ownership', () => {
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
         ok(fixture.manager),
       )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok(LocaleUpdateOutcome.Updated),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockRejectedValue(
         new Error('identity directory cannot be read'),
@@ -219,9 +235,11 @@ describe('external browser identity handoff commit ownership', () => {
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
         ok(fixture.manager),
       )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(ok())
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok(LocaleUpdateOutcome.Updated),
+      )
       vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(),
+        ok(fixture.state.localVaultCatalog),
       )
       vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
         DeviceProtectionStatus.Passkey,
@@ -240,7 +258,7 @@ describe('external browser identity handoff commit ownership', () => {
       ).mockResolvedValue(err(continuationFailure))
       const lockDeviceProtection = vi
         .spyOn(fixture.state, 'lockDeviceProtection')
-        .mockResolvedValue(ok())
+        .mockResolvedValue(ok(DeviceProtectionLockOutcome.Locked))
 
       await fixture.lifecycle.initOnce()
 

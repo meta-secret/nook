@@ -26,7 +26,6 @@ import {
   waitForVaultUnlocked,
   parseJson,
   requireRecord,
-  requireValue,
 } from './helpers'
 
 const SIMPLE_SECRET_VALUE = 'architecture-simple-secret-value'
@@ -109,8 +108,10 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
   }
   for (let left = 0; left < boxes.length; left += 1) {
     for (let right = left + 1; right < boxes.length; right += 1) {
-      const a = requireValue(boxes[left], `${testIds[left]} left box`)
-      const b = requireValue(boxes[right], `${testIds[right]} right box`)
+      const a = boxes[left]
+      const b = boxes[right]
+      if (!a) throw new Error(`${testIds[left]} left box was not available.`)
+      if (!b) throw new Error(`${testIds[right]} right box was not available.`)
       const overlapsX =
         a.box.x < b.box.x + b.box.width && b.box.x < a.box.x + a.box.width
       const overlapsY =
@@ -713,10 +714,8 @@ test.describe('vault architecture modes', () => {
       /Shared Drive folder|готова|ready/i,
     )
     expect(driveStub.getSharedFolders().length).toBeGreaterThan(0)
-    const sharedFolder = requireValue(
-      driveStub.getSharedFolders()[0],
-      'shared Drive folder',
-    )
+    const sharedFolder = driveStub.getSharedFolders()[0]
+    if (!sharedFolder) throw new Error('shared Drive folder was not available.')
     expect(sharedFolder.writers).toContain(SHARED_JOINER_IDENTITY)
     await expect
       .poll(() => driveStub.getEventFileCountForParent(sharedFolder.id), {
@@ -834,10 +833,8 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('onboarding-link-url')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const sharedFolder = requireValue(
-      driveStub.getSharedFolders()[0],
-      'shared Drive folder',
-    )
+    const sharedFolder = driveStub.getSharedFolders()[0]
+    if (!sharedFolder) throw new Error('shared Drive folder was not available.')
     expect(sharedFolder.writers).toEqual([])
     await expect(page.getByTestId('shared-grant-instructions')).toContainText(
       sharedFolder.name,

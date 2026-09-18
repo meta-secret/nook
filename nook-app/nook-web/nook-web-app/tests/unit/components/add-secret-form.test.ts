@@ -9,9 +9,16 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
 import { SecretEditorKind } from '$lib/components/secret-vault-state'
-import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
+import {
+  SecretMutationOutcome,
+  type SecretOperationResult,
+} from '$lib/vault/secret-operation-failure'
 import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
+
+function addedSecret() {
+  return ok<SecretMutationOutcome.Added, never>(SecretMutationOutcome.Added)
+}
 
 const vault = VaultStateTestFixture.create()
 vi.spyOn(vault, 't').mockImplementation((request) =>
@@ -39,13 +46,13 @@ function renderLegacyAuthenticatorEditor() {
         readonly oldId: string
         readonly type: SecretType
         readonly data: string
-      }) => Promise<SecretOperationResult<void>>
+      }) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>
     >()
-    .mockResolvedValue(ok())
+    .mockResolvedValue(ok(SecretMutationOutcome.Replaced))
   const view = render(AddSecretForm, {
     vault,
     isSaving: false,
-    onAddSecret: vi.fn(async () => ok()),
+    onAddSecret: vi.fn(async () => addedSecret()),
     onReplaceSecret,
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
@@ -66,7 +73,7 @@ describe('AddSecretForm file attachment picker', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => ok()),
+      onAddSecret: vi.fn(async () => addedSecret()),
       onGeneratePassword: vi.fn(() => ''),
       onCancel: vi.fn(),
     })
@@ -86,7 +93,7 @@ describe('AddSecretForm password generation', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => ok()),
+      onAddSecret: vi.fn(async () => addedSecret()),
       onGeneratePassword,
       onCancel: vi.fn(),
     })

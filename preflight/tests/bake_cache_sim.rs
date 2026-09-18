@@ -223,13 +223,20 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
 }
 
 #[test]
-fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
+fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     let root = RepositoryFixture::repository_root();
     let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
     let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
+    let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let compile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
+    let production_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
+    let setup = root.read(".github/actions/nook-docker-setup/action.yml");
+    let workflow = root.read(".github/workflows/remote.yml");
+    let runtime_proof = root.read("infra/tasks/bake-cache.yml");
 
     for path in [
         "infra/sim/bake-cache/inputs/compile-base.txt",
+        "infra/sim/bake-cache/inputs/compile-platform-manifests.txt",
         "infra/sim/bake-cache/inputs/compile-wasm-manifest.txt",
         "infra/sim/bake-cache/inputs/compile-wasm-shared.txt",
         "infra/sim/bake-cache/inputs/compile-nook-wasm.txt",
@@ -249,17 +256,78 @@ fn compile_cache_sim_mirrors_unseeded_cross_head_reuse() {
     assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION"));
     assert!(dockerfile.contains("NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE"));
     assert!(dockerfile.contains("AS compile-native-dependencies"));
+    assert!(dockerfile.contains("AS compile-platform-manifests"));
+    assert!(dockerfile.contains("bake-sim-compile-cargo-fetch"));
     assert!(dockerfile.contains("AS compile-wasm-dependencies"));
     assert!(dockerfile.contains("AS compile-web-dependencies"));
     assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
     assert!(!dockerfile.contains("ci-agent"));
     assert!(bake.contains("target \"compile-warm\""));
-    assert!(bake.contains("COMPILE_RESTORE_SOURCE_SCOPE"));
-    assert!(bake.contains("mode=max,compression=zstd,timeout=20s,ignore-error=true"));
+    assert!(bake.contains("SIMULATED_SCCACHE_TELEMETRY_REPLAY"));
+    assert!(bake.contains("target \"compile-toolchain-context\""));
+    assert!(bake.contains("COMPILE_PARENT_SOURCE_SCOPE"));
+    assert!(bake.contains("nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}"));
+    assert!(bake.contains("nook-bake-sim-compile-${COMPILE_PARENT_SOURCE_SCOPE}"));
+    assert!(bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(!bake.contains("nook-bake-sim-compile-v"));
+    assert!(!bake.contains("ignore-error=true"));
     assert!(!bake.contains("compile_deps_cache_to"));
     assert!(!bake.contains("target \"compile-dependency-cache\""));
     assert!(!bake.contains("target \"compile-seed"));
     assert!(!bake.contains("SEED_SCOPE"));
+    assert!(!bake.contains("RUST_DEPS_INPUT_FINGERPRINT"));
+    assert!(production_bake.contains("variable \"GHA_CACHE_PARENT_SCOPE_SUFFIX\""));
+    assert!(production_bake.contains("nook-build-compile${GHA_CACHE_SCOPE_SUFFIX}"));
+    assert!(production_bake.contains("nook-build-compile${GHA_CACHE_PARENT_SCOPE_SUFFIX}"));
+    assert!(!production_bake.contains("nook-build-compile-v"));
+    assert!(production_bake.contains("mode=max,compression=zstd,timeout=20s"));
+    assert!(!production_bake.contains("ignore-error=true"));
+    assert!(setup.contains("git rev-parse --verify HEAD^1"));
+    assert!(setup.contains("GHA_CACHE_PARENT_SCOPE_SUFFIX"));
+    assert!(setup.contains("Verify Docker cache refs and blobs"));
+    let pr_native = compile
+        .split_once("FROM compile-native-source AS pr-native-build")
+        .and_then(|(_, stages)| stages.split_once("FROM ${PR_NATIVE_IMAGE} AS pr-native-verify"))
+        .map(|(stage, _)| stage)
+        .expect("PR native compiler image stage must exist");
+    assert!(pr_native.contains("ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled"));
+    assert!(pr_native.contains("nook-sccache-report --replay compile-native-dependencies"));
+    assert!(setup.contains("class BuildKitCacheAccessVerifier"));
+    assert!(setup.contains("await this.verifyRegistryAvailability();"));
+    assert!(setup.contains("async verifyCacheRef(scopeSuffix)"));
+    assert!(setup.contains("async verifyBlob(repository, digest)"));
+    assert!(setup.contains(
+        "const url = `https://${this.registryHost}/v2/${repository}/manifests/${reference}`;"
+    ));
+    assert!(
+        setup.contains(
+            "const url = `https://${this.registryHost}/v2/${repository}/blobs/${digest}`;"
+        )
+    );
+    assert!(setup.contains("const available = await this.verifyCacheRef(cacheRef.scopeSuffix);"));
+    assert!(workflow.contains("build:compile' && 5 || 360"));
+    assert!(runtime_proof.contains("Scenario AA: cold compile cache seeds exact head"));
+    assert!(runtime_proof.contains("Scenario AB: successor head imports parent lineage"));
+    assert!(
+        runtime_proof.contains("replay-aa-${suffix}")
+            && runtime_proof.contains("replay-ab-${suffix}")
+    );
+    assert!(
+        runtime_proof
+            .contains("require_cached_step \"$proof_log\" \"bake-sim-compile-cargo-fetch\"")
+    );
+
+    let rust_base_start = product
+        .find("FROM ${RUST_IMAGE} AS rust-base")
+        .expect("product rust-base stage is missing");
+    let rust_base_end = product[rust_base_start + 1..]
+        .find("\nFROM ")
+        .map(|offset| rust_base_start + 1 + offset)
+        .expect("product rust-base end is missing");
+    assert!(
+        !product[rust_base_start..rust_base_end].contains("NOOK_SCCACHE_TELEMETRY_REPLAY"),
+        "per-run replay argument must not vary the shared rust-base lineage"
+    );
 }
 
 fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {

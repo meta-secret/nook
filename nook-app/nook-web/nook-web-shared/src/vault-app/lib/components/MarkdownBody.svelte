@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SanitizedMarkup from './SanitizedMarkup.svelte'
+
   let {
     html,
     testId,
@@ -11,8 +13,7 @@
 </script>
 
 <div class="markdown-body nook-markdown {className}" data-testid={testId}>
-  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-  {@html html}
+  <SanitizedMarkup {html} />
 </div>
 
 <style>

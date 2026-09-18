@@ -22,8 +22,12 @@ on:
         description: Exact committed source to compile; required for the feature build:compile route
         required: false
         type: string
+      deployment_tag:
+        description: Safe Cloudflare Pages preview deployment tag (only for ci:pr:deploy-and-verify-previews)
+        required: false
+        type: string
       publish_compile_cache:
-        description: Publish build:compile BuildKit caches (sccache remains enabled when secrets are available)
+        description: Publish the Phase A build:compile dependency foundation (sccache remains enabled when secrets are available)
         required: false
         type: boolean
         default: true
@@ -75,7 +79,8 @@ jobs:
       (inputs.tasks || inputs.task) != 'extension:e2e' &&
       (inputs.tasks || inputs.task) != 'check' &&
       (inputs.tasks || inputs.task) != 'ci:pr' &&
-      (inputs.tasks || inputs.task) != 'ci:pr:e2e')
+      (inputs.tasks || inputs.task) != 'ci:pr:e2e' &&
+      (inputs.tasks || inputs.task) != 'ci:pr:deploy-and-verify-previews')
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -166,11 +171,17 @@ jobs:
           : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
-          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
+          echo "Build-only two-phase route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST Phase-A-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
       - name: Run task batch
         shell: bash
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
+          TYPE_CHECK_REPORT_DIR: ${{ runner.temp }}/nook-type-check-report
+          TYPE_CHECK_ARTIFACT_NAME: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
+          DEPLOYMENT_TAG: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && inputs.deployment_tag || '' }}
+          HEAD_SHA: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && (inputs.source_sha || github.sha) || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_PAGES_TOKEN || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews' && secrets.CLOUD_FLARE_ACCOUNT_ID || '' }}
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
       - name: Preserve compile cache telemetry
         if: always() && (inputs.tasks || inputs.task) == 'build:compile'
@@ -185,6 +196,176 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
+      - name: Preserve hosted type-check report
+        if: always() && (inputs.tasks || inputs.task) == 'type:check'
+        uses: actions/upload-artifact@v7
+        with:
+          name: remote-type-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-type-check-report
+          if-no-files-found: warn
+          retention-days: 15
+
+  pages-preview:
+    if: >-
+      inputs.publish_compile_cache != false &&
+      (inputs.tasks == '' || inputs.task == '') &&
+      (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews'
+    name: Remote / Pages preview
+    runs-on: nook-k0s-container
+    timeout-minutes: 45
+    container:
+      # Keep the preview's native Rust toolchain on the repository-proxied,
+      # digest-pinned Rust lineage used by product.Dockerfile. The ARC job
+      # container owns rustc, cc/ar, and archive extraction on the Kubernetes
+      # Pod; it does not require a nested runtime or host toolchain installs.
+      image: registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trust exact Actions workspace for Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Expose Actions Node.js runtime
+        run: |
+          set -euo pipefail
+          node_version=24.19.0
+          node_sha256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
+          node_root="$RUNNER_TEMP/nook-node-v${node_version}"
+          node_archive="$RUNNER_TEMP/nook-node-v${node_version}.tar.gz"
+          node_url="https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-x64.tar.gz"
+
+          # The ARC job container cannot see the runner-owned Actions runtime.
+          # Keep the container boundary intact by extracting only the pinned
+          # Node binary under RUNNER_TEMP instead of mutating the image.
+          install -d -m 0755 "$node_root"
+          curl --fail --location --show-error --silent "$node_url" -o "$node_archive"
+          printf '%s  %s\n' "$node_sha256" "$node_archive" | sha256sum -c -
+          tar -xzf "$node_archive" -C "$node_root" --strip-components=1 --no-same-owner
+          rm -f "$node_archive"
+          test -x "$node_root/bin/node"
+          echo "$node_root/bin" >> "$GITHUB_PATH"
+      - name: Validate exact remote source
+        env:
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Remote execution requires a 40-character exact source SHA." >&2
+            exit 2
+          fi
+          if [ "$(git rev-parse HEAD)" != "$REQUESTED_SOURCE_SHA" ]; then
+            echo "Remote checkout drifted from the requested source SHA." >&2
+            exit 2
+          fi
+      - name: Connect host sccache
+        env:
+          INPUT_SCCACHE-ACCESS-KEY: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          INPUT_SCCACHE-SECRET-KEY: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          INPUT_SCCACHE-ENDPOINT: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          INPUT_SCCACHE-BUCKET: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+        run: node .github/actions/nook-cache-connect/main.js
+      - name: Setup Bun for host Pages build
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Prepare writable host Rust directories
+        run: |
+          set -euo pipefail
+          cargo_home="$RUNNER_TEMP/nook-cargo-home"
+          cargo_target_dir="$RUNNER_TEMP/nook-cargo-target"
+          wasm_pack_root="$RUNNER_TEMP/nook-wasm-pack"
+          install -d -m 0755 "$cargo_home" "$cargo_target_dir" "$wasm_pack_root"
+          {
+            printf 'CARGO_HOME=%s\n' "$cargo_home"
+            printf 'CARGO_TARGET_DIR=%s\n' "$cargo_target_dir"
+            printf 'NOOK_WASM_PACK_ROOT=%s\n' "$wasm_pack_root"
+          } >> "$GITHUB_ENV"
+      - name: Prepare host sccache before Rust tooling install
+        run: bash .github/scripts/ci-pr-native-pages-build.sh --prepare
+      - name: Install pinned host WASM tooling
+        run: |
+          set -euo pipefail
+          cargo install wasm-pack --version 0.15.0 --locked --root "$NOOK_WASM_PACK_ROOT"
+          printf '%s/bin\n' "$NOOK_WASM_PACK_ROOT" >> "$GITHUB_PATH"
+      - name: Install host WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Prepare native Pages preview artifacts
+        env:
+          DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
+          HEAD_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          export CI=1
+          export GIT_COMMIT_ID="$HEAD_SHA"
+          export NOOK_EXTENSION_COMMIT="$HEAD_SHA"
+          export NOOK_EXTENSION_CHANNEL="pr-$DEPLOYMENT_TAG"
+          export NOOK_EXTENSION_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev/"
+          export NOOK_SIMPLE_VAULT_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev/"
+          export VITE_BASE=/
+          export VITE_SITE_URL="https://pr-$DEPLOYMENT_TAG.nokey-sh.pages.dev"
+          export VITE_PUBLIC_APP_URL="https://pr-$DEPLOYMENT_TAG.nook-1n8.pages.dev"
+          export VITE_SIMPLE_APP_URL="https://pr-$DEPLOYMENT_TAG.nokey-simple.pages.dev"
+          export VITE_SENTINEL_APP_URL="https://pr-$DEPLOYMENT_TAG.nokey-sentinel.pages.dev"
+          export WASM_BUILD_MODE=dev
+
+          bash .github/scripts/ci-pr-native-pages-build.sh
+
+          for required in \
+            "nook-app/nook-web/nook-web-app/dist" \
+            "nook-app/nook-web/nook-web-app/dist/site" \
+            "nook-app/nook-web/nook-vault-simple/dist" \
+            "nook-app/nook-web/nook-vault-sentinel/dist"; do
+            test -d "$required"
+          done
+      - name: Expose pinned jq for deployment verification
+        run: |
+          set -euo pipefail
+          jq_version=1.8.1
+          jq_sha256=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
+          jq_root="$RUNNER_TEMP/nook-jq-v${jq_version}"
+          jq_archive="$RUNNER_TEMP/nook-jq-v${jq_version}.bin"
+          jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-linux-amd64"
+
+          # The minimal ARC job container does not provide jq. Keep the
+          # verifier's real jq semantics without mutating the image or host.
+          install -d -m 0755 "$jq_root"
+          curl --fail --location --show-error --silent \
+            --proto '=https' --proto-redir '=https' \
+            "$jq_url" -o "$jq_archive"
+          printf '%s  %s\n' "$jq_sha256" "$jq_archive" | sha256sum -c -
+          install -m 0755 "$jq_archive" "$jq_root/jq"
+          rm -f "$jq_archive"
+          echo "$jq_root" >> "$GITHUB_PATH"
+      - name: Deploy and verify Pages previews
+        id: deploy-all
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          DEPLOYMENT_TAG: ${{ inputs.deployment_tag }}
+          HEAD_SHA: ${{ inputs.source_sha || github.sha }}
+          NOOK_HOST_PAGES_DEPLOY: "1"
+          NOOK_WRANGLER_VERSION: "4.114.0"
+        run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
+      - name: Preserve preview sccache telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-preview-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-sccache-reports
+          retention-days: 30
+          if-no-files-found: warn
+          overwrite: true
+
   web-verify:
     if: >-
       inputs.publish_compile_cache != false &&

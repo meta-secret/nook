@@ -1,5 +1,7 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -8,6 +10,7 @@ import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   SharedGrantProviderOutcomeKind,
   findSharedGrantProvider,
@@ -33,11 +36,14 @@ import {
   configuredOAuthFile,
   defaultOAuthFileConfig,
   GITHUB_PROVIDER_TYPE,
+  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  ICLOUD_OAUTH_FILE_PRESET,
   githubPatValue,
   githubRepositoryValue,
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
-  isConfiguredOAuthFile,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
   oauth_access_token,
   OAuthFilePresentation,
   OAuthFileNameKind,
@@ -55,6 +61,8 @@ import { GoogleOAuthPrompt, googleOAuthSession } from "$lib/auth/google/oauth";
 import {
   ICLOUD_SIGN_IN_TIMEOUT_MS,
   ICloudAccountNameKind,
+  type ICloudAccountName,
+  type ICloudOAuthTokens,
   iCloudOAuthSession,
 } from "$lib/auth/icloud/oauth";
 
@@ -71,8 +79,34 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
-function isOAuthFilePreset(value: string): value is OAuthFilePreset {
-  return value === "google-drive" || value === "icloud";
+type VaultNameUpdate = {
+  readonly storeId: string;
+  readonly label: string;
+};
+
+export enum OAuthFilePresetDecodeFailureKind {
+  Invalid = "invalid-oauth-file-preset",
+}
+
+export class OAuthFilePresetDecoder {
+  private constructor() {}
+
+  static decode(value: string): Effect.Effect<
+    OAuthFilePreset,
+    {
+      readonly kind: OAuthFilePresetDecodeFailureKind.Invalid;
+      readonly cause: ParseResult.ParseError;
+    }
+  > {
+    return Schema.decodeUnknown(
+      Schema.Literal(GOOGLE_DRIVE_OAUTH_FILE_PRESET, ICLOUD_OAUTH_FILE_PRESET),
+    )(value).pipe(
+      Effect.mapError((cause) => ({
+        kind: OAuthFilePresetDecodeFailureKind.Invalid,
+        cause,
+      })),
+    );
+  }
 }
 
 export type EnrollmentCodeConnection = {
@@ -95,7 +129,7 @@ export class PasswordEnrollmentActions {
   private applySavedEnrollmentProvider({
     selection,
   }: SavedEnrollmentProviderApplication): Result<
-    void,
+    StorageProvider["type"],
     StorageOperationFailure
   > {
     const state = this.state;
@@ -105,7 +139,7 @@ export class PasswordEnrollmentActions {
     ) {
       state.storageMode = "local";
       state.activateLoginSetup("local");
-      return storageOk();
+      return storageOk(state.storageMode);
     }
 
     const { provider } = selection;
@@ -116,11 +150,16 @@ export class PasswordEnrollmentActions {
       state.githubRepo = githubRepositoryValue(provider.githubRepo);
       state.clearOauthFile();
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(state.storageMode);
     }
     if (provider.type === "oauth-file") {
       const configuration = provider.oauthFile;
-      if (!isConfiguredOAuthFile(configuration)) {
+      const decodedConfiguration =
+        decodeStoredOAuthFileConfiguration(configuration);
+      if (
+        decodedConfiguration.kind !==
+        StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
         return storageErr(
           new StorageOperationFailure(
             StorageOperationFailureKind.OperationFailed,
@@ -129,16 +168,16 @@ export class PasswordEnrollmentActions {
       }
       state.storageMode = provider.type;
       state.clearLoginSetup();
-      state.configureOauthFile(configuration.config);
+      state.configureOauthFile(decodedConfiguration.config);
       state.githubPat = "";
       const fileName = new OAuthFilePresentation(
-        configuration.config,
+        decodedConfiguration.config,
       ).oauthFileName();
       if (fileName.kind === OAuthFileNameKind.Resolved) {
         state.githubRepo = fileName.fileName;
       }
       state.clearLocalFolder();
-      return storageOk();
+      return storageOk(state.storageMode);
     }
 
     const configuration = new StorageProviderPresentation(
@@ -156,7 +195,7 @@ export class PasswordEnrollmentActions {
     state.configureLocalFolder(configuration.config);
     state.githubPat = "";
     state.clearOauthFile();
-    return storageOk();
+    return storageOk(state.storageMode);
   }
 
   private async localVaultHasPasswordEntries(): Promise<
@@ -249,11 +288,14 @@ export class PasswordEnrollmentActions {
             payload.onboardingType === OnboardingType.SharedProviderGrant
           ) {
             const presetValue = enrollmentProvider.oauthPreset;
-            if (!isOAuthFilePreset(presetValue)) {
+            const decodedPreset = await Effect.runPromise(
+              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+            );
+            if (decodedPreset._tag === "Left") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
-            const preset = presetValue;
+            const preset = decodedPreset.right;
             const storageTarget: SharedStorageTarget = {
               kind: SharedStorageTargetKind.Bound,
               storageTargetId: enrollmentProvider.sharedStorageTargetId,
@@ -348,43 +390,45 @@ export class PasswordEnrollmentActions {
                 SharedGrantProviderOutcomeKind.Existing
                   ? existingProvider.provider.oauthFile
                   : oauthConfigurationNotApplicable();
-              const existingConfig = isConfiguredOAuthFile(
-                existingConfiguration,
-              )
-                ? existingConfiguration.config
-                : (() => {
-                    const defaultOAuthFileConfigArgs3: Parameters<
-                      typeof defaultOAuthFileConfig
-                    >[0] = { preset: "icloud", fileName: "nook-events" };
-                    return defaultOAuthFileConfig(defaultOAuthFileConfigArgs3);
-                  })();
-              const existingCredential = oauth_access_token(existingConfig);
-              const tokens =
-                existingCredential.kind === "available"
-                  ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                    storageOk({
-                      accessToken: existingCredential.token,
-                      accountName:
-                        existingConfig.accountEmail.state === "email"
-                          ? {
-                              kind: ICloudAccountNameKind.Available as const,
-                              value: existingConfig.accountEmail.value,
-                            }
-                          : {
-                              kind: ICloudAccountNameKind.Unavailable as const,
-                            },
-                    })
-                  : await (() => {
-                      const request: Parameters<
-                        typeof iCloudOAuthSession.requestICloudWebAuthToken
-                      >[0] = {
-                        signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
-                        clickSignInControl: true,
-                      };
-                      return iCloudOAuthSession.requestICloudWebAuthToken(
-                        request,
+              const decodedExistingConfiguration =
+                decodeStoredOAuthFileConfiguration(existingConfiguration);
+              const existingConfig =
+                decodedExistingConfiguration.kind ===
+                StoredOAuthFileConfigurationDecodeKind.Configured
+                  ? decodedExistingConfiguration.config
+                  : (() => {
+                      const defaultOAuthFileConfigArgs3: Parameters<
+                        typeof defaultOAuthFileConfig
+                      >[0] = { preset: "icloud", fileName: "nook-events" };
+                      return defaultOAuthFileConfig(
+                        defaultOAuthFileConfigArgs3,
                       );
                     })();
+              const existingCredential = oauth_access_token(existingConfig);
+              let tokens: Result<ICloudOAuthTokens, OAuthFailure>;
+              if (existingCredential.kind === "available") {
+                const accountName: ICloudAccountName =
+                  existingConfig.accountEmail.state === "email"
+                    ? {
+                        kind: ICloudAccountNameKind.Available,
+                        value: existingConfig.accountEmail.value,
+                      }
+                    : { kind: ICloudAccountNameKind.Unavailable };
+                const availableTokens: ICloudOAuthTokens = {
+                  accessToken: existingCredential.token,
+                  accountName,
+                };
+                tokens = storageOk(availableTokens);
+              } else {
+                const request: Parameters<
+                  typeof iCloudOAuthSession.requestICloudWebAuthToken
+                >[0] = {
+                  signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+                  clickSignInControl: true,
+                };
+                tokens =
+                  await iCloudOAuthSession.requestICloudWebAuthToken(request);
+              }
               if (tokens.isErr()) {
                 state.errorMsg = state.t(tokens.error.translationKey);
                 return;
@@ -458,16 +502,19 @@ export class PasswordEnrollmentActions {
             }
             let provider: StorageProvider = sharedProvider.provider;
             const providerConfiguration = provider.oauthFile;
+            const decodedProviderConfiguration =
+              decodeStoredOAuthFileConfiguration(providerConfiguration);
             if (
               storageTarget.kind === SharedStorageTargetKind.Bound &&
               preset === "google-drive" &&
-              isConfiguredOAuthFile(providerConfiguration) &&
-              providerConfiguration.config.folderId.state === "root"
+              decodedProviderConfiguration.kind ===
+                StoredOAuthFileConfigurationDecodeKind.Configured &&
+              decodedProviderConfiguration.config.folderId.state === "root"
             ) {
               const configuredOAuthFileArgs: Parameters<
                 typeof configuredOAuthFile
               >[0] = {
-                ...providerConfiguration.config,
+                ...decodedProviderConfiguration.config,
                 folderId: storedGoogleDriveFolder(
                   storageTarget.storageTargetId,
                 ),
@@ -498,14 +545,17 @@ export class PasswordEnrollmentActions {
             enrollmentStorageArgs = state.providerWasmArgs(provider);
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
             const presetValue = enrollmentProvider.oauthPreset;
-            if (!isOAuthFilePreset(presetValue)) {
+            const decodedPreset = await Effect.runPromise(
+              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+            );
+            if (decodedPreset._tag === "Left") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
             const defaultOAuthFileConfigArgs: Parameters<
               typeof defaultOAuthFileConfig
             >[0] = {
-              preset: presetValue,
+              preset: decodedPreset.right,
               fileName: DEFAULT_DRIVE_BACKUP_NAME,
             };
             const defaults = defaultOAuthFileConfig(defaultOAuthFileConfigArgs);
@@ -648,9 +698,12 @@ export class PasswordEnrollmentActions {
               if (admittedManager.isErr())
                 return storageErr(admittedManager.error);
               try {
-                return storageOk(
-                  await admittedManager.value.set_vault_name(vaultName),
-                );
+                await admittedManager.value.set_vault_name(vaultName);
+                const vaultNameUpdate: VaultNameUpdate = {
+                  storeId: vaultStoreId,
+                  label: vaultName,
+                };
+                return storageOk(vaultNameUpdate);
               } catch (nativeFailure) {
                 return storageErr(new NativeVaultStorageFailure(nativeFailure));
               }
@@ -660,7 +713,10 @@ export class PasswordEnrollmentActions {
               return;
             }
             try {
-              await set_local_vault_label(vaultStoreId, vaultName);
+              await set_local_vault_label(
+                renamed.value.storeId,
+                renamed.value.label,
+              );
             } catch (failure) {
               state.errorMsg = state.t(
                 new NativeVaultStorageFailure(failure).translationKey,

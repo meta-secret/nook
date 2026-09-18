@@ -28,8 +28,10 @@ import {
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
-  isConfiguredOAuthFile,
-  isConfiguredLocalFolder,
+  decodeStoredOAuthFileConfiguration,
+  StoredOAuthFileConfigurationDecodeKind,
+  decodeStoredLocalFolderConfiguration,
+  StoredLocalFolderConfigurationDecodeKind,
   missing_oauth_access_token,
   OAUTH_FILE_PROVIDER_TYPE,
   oauth_access_token,
@@ -88,6 +90,7 @@ import {
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
   type ProviderSaveRequest,
+  type AuthProvidersSnapshot,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -112,6 +115,13 @@ const log = browserLogRuntime.createLogger("vault-providers");
 export interface VaultConnectAssessmentRequest {
   readonly args: NookStorageConnectArgs;
 }
+
+type VaultConnectStatusDiscoveryCompletion = {
+  readonly operation: Promise<
+    Result<VaultAccessStatus, StorageOperationFailure>
+  >;
+  readonly releaseLateValue: (status: VaultAccessStatus) => void;
+};
 
 export interface RemoteVaultAssessmentHandling {
   readonly accessStatus: VaultAccessStatus;
@@ -141,6 +151,48 @@ export interface ProviderSetup {
 export interface ProviderRemoval {
   readonly id: string;
 }
+
+/** Confirms provider persistence without exposing credential-bearing provider state. */
+export enum ProviderSaveOutcome {
+  Saved = "saved",
+}
+
+export enum ProviderPersistenceOutcome {
+  Persisted = "persisted",
+}
+
+export enum OAuthRemoteReferenceSyncKind {
+  NotApplicable = "not-applicable",
+  Unchanged = "unchanged",
+  Updated = "updated",
+}
+
+export type OAuthRemoteReferenceSyncOutcome =
+  | { readonly kind: OAuthRemoteReferenceSyncKind.NotApplicable }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Unchanged }
+  | { readonly kind: OAuthRemoteReferenceSyncKind.Updated };
+
+export type PromotedProviderSnapshot = {
+  readonly snapshot: AuthProvidersSnapshot;
+  readonly localVaultPresent: boolean;
+};
+
+export enum ProviderRemovalOutcomeKind {
+  NotFound = "not-found",
+  LocalProviderRetained = "local-provider-retained",
+  Removed = "removed",
+}
+
+export type ProviderRemovalOutcome =
+  | { readonly kind: ProviderRemovalOutcomeKind.NotFound }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.LocalProviderRetained;
+      readonly provider: StorageProvider;
+    }
+  | {
+      readonly kind: ProviderRemovalOutcomeKind.Removed;
+      readonly providers: readonly StorageProvider[];
+    };
 
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
@@ -281,14 +333,21 @@ export class VaultProviderActions {
     return state.storageMode === LOCAL_PROVIDER_TYPE;
   }
 
-  syncOAuthRemoteRefFromManager(): Result<void, StorageOperationFailure> {
+  syncOAuthRemoteRefFromManager(): Result<
+    OAuthRemoteReferenceSyncOutcome,
+    StorageOperationFailure
+  > {
     const state = this.state;
     const draft = state.oauthFileDraft;
     if (
       state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
       draft.kind !== OAuthFileDraftKind.Configured
-    )
-      return storageOk();
+    ) {
+      const outcome: OAuthRemoteReferenceSyncOutcome = {
+        kind: OAuthRemoteReferenceSyncKind.NotApplicable,
+      };
+      return storageOk(outcome);
+    }
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     let updated: ReturnType<typeof update_oauth_remote_ref>;
@@ -303,14 +362,21 @@ export class VaultProviderActions {
     try {
       let config: typeof draft.config;
       try {
-        if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated)
-          return storageOk();
+        if (updated.state !== NookOAuthRemoteConfigurationUpdateState.Updated) {
+          const outcome: OAuthRemoteReferenceSyncOutcome = {
+            kind: OAuthRemoteReferenceSyncKind.Unchanged,
+          };
+          return storageOk(outcome);
+        }
         config = updated.config;
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       state.configureOauthFile(config);
-      return storageOk();
+      const outcome: OAuthRemoteReferenceSyncOutcome = {
+        kind: OAuthRemoteReferenceSyncKind.Updated,
+      };
+      return storageOk(outcome);
     } finally {
       updated.free();
     }
@@ -325,7 +391,9 @@ export class VaultProviderActions {
     return state.enqueueStorage(async () => {
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
-      const operation = (async () => {
+      const operation: Promise<
+        Result<VaultAccessStatus, StorageOperationFailure>
+      > = (async () => {
         try {
           return storageOk(
             await admitted.value.assess_vault_connect(
@@ -338,11 +406,17 @@ export class VaultProviderActions {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
       })();
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments, nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return new VaultDiscoveryTimeout({ timeoutMs: 30_000 }).waitFor({
+      const deadline: ConstructorParameters<typeof VaultDiscoveryTimeout>[0] = {
+        timeoutMs: 30_000,
+      };
+      const timeout = new VaultDiscoveryTimeout(deadline);
+      const timeoutRequest: VaultConnectStatusDiscoveryCompletion = {
         operation,
         releaseLateValue: () => {},
-      });
+      };
+      return timeout.waitFor<VaultAccessStatus, StorageOperationFailure>(
+        timeoutRequest,
+      );
     });
   }
 
@@ -420,11 +494,15 @@ export class VaultProviderActions {
     }
     state.providersLoaded = true;
     log.debug("providers loaded");
-    return storageOk();
+    const loadedSnapshot: AuthProvidersSnapshot = {
+      providers: state.providers,
+      activeVaultStoreId: snapshot.activeVaultStoreId,
+    };
+    return storageOk(loadedSnapshot);
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<PromotedProviderSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     const ensureLocalAuthProviderSnapshotArgs: Parameters<
@@ -445,8 +523,11 @@ export class VaultProviderActions {
             ensureLocalAuthProviderSnapshotArgs,
           );
         const localVaultPresent = await has_local_vault();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return storageOk({ snapshot, localVaultPresent });
+        const promotion: PromotedProviderSnapshot = {
+          snapshot,
+          localVaultPresent,
+        };
+        return storageOk(promotion);
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
@@ -460,7 +541,7 @@ export class VaultProviderActions {
       state.clearOauthFile();
       state.clearLocalFolder();
     }
-    return storageOk();
+    return storageOk(promoted.value);
   }
 
   async persistProviders({ opts }: ProviderPersistence) {
@@ -493,7 +574,7 @@ export class VaultProviderActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.providers = snapshot.value.providers;
-    return storageOk();
+    return storageOk(ProviderPersistenceOutcome.Persisted);
   }
 
   beginProviderSetup({ request }: ProviderSetup) {
@@ -588,16 +669,30 @@ export class VaultProviderActions {
 
   async removeProvider({
     id,
-  }: ProviderRemoval): Promise<Result<void, StorageOperationFailure>> {
+  }: ProviderRemoval): Promise<
+    Result<ProviderRemovalOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const target = state.providers.find((p) => p.id === id);
-    if (!target || target.type === "local") return storageOk();
+    if (!target) {
+      const outcome: ProviderRemovalOutcome = {
+        kind: ProviderRemovalOutcomeKind.NotFound,
+      };
+      return storageOk(outcome);
+    }
+    if (target.type === "local") {
+      const outcome: ProviderRemovalOutcome = {
+        kind: ProviderRemovalOutcomeKind.LocalProviderRetained,
+        provider: target,
+      };
+      return storageOk(outcome);
+    }
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const persistence = await state.persistProviders({
+    const persistenceOptions: ProviderPersistenceOptions = {
       replace: true,
       providers: state.providers.filter((provider) => provider.id !== id),
-    });
+    };
+    const persistence = await state.persistProviders(persistenceOptions);
     if (persistence.isErr()) return storageErr(persistence.error);
     if (state.providers.length === 0 && state.isAuthenticated) {
       state.clearUnlockedSession();
@@ -627,7 +722,11 @@ export class VaultProviderActions {
       replacements: { label: target.label },
     };
     state.showSuccess(state.t(tArgs));
-    return storageOk();
+    const outcome: ProviderRemovalOutcome = {
+      kind: ProviderRemovalOutcomeKind.Removed,
+      providers: state.providers,
+    };
+    return storageOk(outcome);
   }
 }
 
@@ -666,7 +765,9 @@ export class ProviderPersistenceActions {
     );
   }
 
-  async ensureProviderSaved(): Promise<Result<void, StorageOperationFailure>> {
+  async ensureProviderSaved(): Promise<
+    Result<ProviderSaveOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     const scope = await this.providerStoreIdForSave();
     if (scope.isErr()) return storageErr(scope.error);
@@ -728,23 +829,29 @@ export class ProviderPersistenceActions {
           ),
         );
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const persistence = await state.persistProviders({
+      const persistenceOptions: ProviderPersistenceOptions = {
         replace: false,
         providers: outcome.snapshot.providers,
-      });
+      };
+      const persistence = await state.persistProviders(persistenceOptions);
       if (persistence.isErr()) {
         return storageErr(persistence.error);
       }
-      if (isConfiguredOAuthFile(outcome.oauthFile)) {
-        state.configureOauthFile(outcome.oauthFile.config);
+      const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+        outcome.oauthFile,
+      );
+      if (
+        oauthFileConfiguration.kind ===
+        StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
+        state.configureOauthFile(oauthFileConfiguration.config);
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");
-      return storageOk();
+      return storageOk(ProviderSaveOutcome.Saved);
     } finally {
       outcome.free();
     }
@@ -789,13 +896,25 @@ export class ActiveProviderCredentialsActions {
     state.storageMode = draft.storageMode;
     state.githubPat = draft.githubPat;
     state.githubRepo = draft.githubRepo;
-    if (isConfiguredOAuthFile(draft.oauthFile)) {
-      state.configureOauthFile(draft.oauthFile.config);
+    const oauthFileConfiguration = decodeStoredOAuthFileConfiguration(
+      draft.oauthFile,
+    );
+    if (
+      oauthFileConfiguration.kind ===
+      StoredOAuthFileConfigurationDecodeKind.Configured
+    ) {
+      state.configureOauthFile(oauthFileConfiguration.config);
     } else {
       state.clearOauthFile();
     }
-    if (isConfiguredLocalFolder(draft.localFolder)) {
-      state.configureLocalFolder(draft.localFolder.config);
+    const localFolderConfiguration = decodeStoredLocalFolderConfiguration(
+      draft.localFolder,
+    );
+    if (
+      localFolderConfiguration.kind ===
+      StoredLocalFolderConfigurationDecodeKind.Configured
+    ) {
+      state.configureLocalFolder(localFolderConfiguration.config);
     } else {
       state.clearLocalFolder();
     }

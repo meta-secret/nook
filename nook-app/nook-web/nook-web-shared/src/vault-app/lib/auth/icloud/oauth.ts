@@ -42,10 +42,20 @@ import {
   WebAuthTokenLookupKind,
   type CloudKitContainer,
   type CloudKitConfiguration,
+  type CloudKitGlobal,
   type CloudKitRecordInfosResponse,
+  type CloudKitAuthSetupOptions,
+  type CloudKitRecord,
+  type CloudKitRecordSaveOptions,
+  type CloudKitSharePresentationOptions,
+  type CloudKitZoneID,
   cloudKitRuntime,
 } from "$lib/auth/icloud/cloudkit-runtime";
-import { CloudKitSetupFailure } from "$lib/auth/icloud/auth-errors";
+import {
+  CloudKitFailureDiagnostic,
+  CloudKitSetupFailure,
+  type ExpectedCloudKitSignInFailureCheck,
+} from "$lib/auth/icloud/auth-errors";
 import {
   CloudKitAuthSetupKind,
   CloudKitIdentityKind,
@@ -88,6 +98,16 @@ type CloudKitSignInRequest = {
   readonly container: CloudKitContainer;
   readonly timeoutMs: number;
   readonly clickSignInControl: boolean;
+};
+
+type CloudKitIdentityResult = Result<CloudKitIdentity, OAuthFailure>;
+
+type CloudKitRecordLocation = {
+  readonly zoneID: {
+    readonly zoneName: string;
+    readonly ownerRecordName: string;
+  };
+  readonly rootRecordName: string;
 };
 
 export type ICloudOAuthConfigurationUpdate = {
@@ -169,7 +189,7 @@ class ICloudOAuthSession {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
   }
-  initICloudAuth(): Promise<Result<void, OAuthFailure>> {
+  initICloudAuth(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     if (
       this.cloudKitInitialization.kind ===
       CloudKitInitializationKind.Initializing
@@ -182,7 +202,7 @@ class ICloudOAuthSession {
     };
     return completion;
   }
-  private async initialize(): Promise<Result<void, OAuthFailure>> {
+  private async initialize(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     const loaded = await cloudKitRuntime.loadCloudKitScript();
     if (loaded.isErr()) return err(loaded.error);
     const configureArgs: CloudKitConfiguration = {
@@ -207,10 +227,8 @@ class ICloudOAuthSession {
       services: { authTokenStore: cloudKitAuthTokenStore },
     };
     try {
-      if (!window.CloudKit)
-        return err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
-      window.CloudKit.configure(configureArgs);
-      return ok();
+      loaded.value.configure(configureArgs);
+      return ok(loaded.value);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
@@ -231,28 +249,28 @@ class ICloudOAuthSession {
     container: CloudKitContainer,
   ): Promise<Result<CloudKitIdentity, OAuthFailure>> {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const identity = await container.setUpAuth({
+      const options: CloudKitAuthSetupOptions = {
         grabAuthToken: true,
         persist: true,
-      });
+      };
+      const identity = await container.setUpAuth(options);
       this.cloudKitIdentity = identity;
       return ok(identity);
     } catch (error) {
       this.cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
-      if (
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        new CloudKitSetupFailure({
-          error,
-          hasSignInControl: this.hasCloudKitSignInControl(),
-        }).expected
-      )
+      const failureCheck: ExpectedCloudKitSignInFailureCheck = {
+        diagnostic: new CloudKitFailureDiagnostic(error),
+        hasSignInControl: this.hasCloudKitSignInControl(),
+      };
+      if (new CloudKitSetupFailure(failureCheck).expected)
         return ok(this.cloudKitIdentity);
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
       return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
     }
   }
-  async prepareICloudSignInControl(): Promise<Result<void, OAuthFailure>> {
+  async prepareICloudSignInControl(): Promise<
+    Result<CloudKitGlobal, OAuthFailure>
+  > {
     const initialized = await this.initICloudAuth();
     if (initialized.isErr()) return err(initialized.error);
     const admitted = cloudKitRuntime.getDefaultCloudKitContainer();
@@ -270,9 +288,11 @@ class ICloudOAuthSession {
       !existing
     )
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
-    return (await this.setUpCloudKitAuth(admitted.value)).map(() => {});
+    return (await this.setUpCloudKitAuth(admitted.value)).map(
+      () => initialized.value,
+    );
   }
-  private clickCloudKitSignInButton(): Result<void, OAuthFailure> {
+  private clickCloudKitSignInButton(): Result<HTMLElement, OAuthFailure> {
     try {
       const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
       const control = mount
@@ -283,7 +303,7 @@ class ICloudOAuthSession {
       if (!control)
         return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
       control.click();
-      return ok();
+      return ok(control);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.ControlUnavailable));
     }
@@ -295,11 +315,11 @@ class ICloudOAuthSession {
     if (token.isErr()) return err(token.error);
     if (token.value.kind === WebAuthTokenLookupKind.Unavailable)
       return err(new OAuthFailure(OAuthFailureKind.TokenUnavailable));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return ok({
+    const tokens: ICloudOAuthTokens = {
       accessToken: token.value.token,
       accountName: new CloudKitAccountPresentation(identity).name,
-    });
+    };
+    return ok(tokens);
   }
   private normalizedICloudShortGuid(
     value: string,
@@ -328,13 +348,7 @@ class ICloudOAuthSession {
   }
   private requireCloudKitRecordInfo(
     response: CloudKitRecordInfosResponse,
-  ): Result<
-    {
-      zoneID: { zoneName: string; ownerRecordName: string };
-      rootRecordName: string;
-    },
-    OAuthFailure
-  > {
+  ): Result<CloudKitRecordLocation, OAuthFailure> {
     const info = response.results[0];
     const zoneID = info?.zoneID;
     const rootRecordName =
@@ -345,14 +359,14 @@ class ICloudOAuthSession {
       !rootRecordName
     )
       return err(new OAuthFailure(OAuthFailureKind.SharedLocationMissing));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return ok({
+    const location: CloudKitRecordLocation = {
       zoneID: {
         zoneName: zoneID.zoneName,
         ownerRecordName: zoneID.ownerRecordName,
       },
       rootRecordName,
-    });
+    };
+    return ok(location);
   }
   private async previewCloudKitRecord({
     container,
@@ -360,15 +374,18 @@ class ICloudOAuthSession {
   }: CloudKitRecordPreviewRequest): Promise<
     Result<CloudKitRecordPreview, OAuthFailure>
   > {
-    if (!container.fetchRecordInfos)
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({ kind: CloudKitRecordPreviewKind.Unavailable });
+    if (!container.fetchRecordInfos) {
+      const preview: CloudKitRecordPreview = {
+        kind: CloudKitRecordPreviewKind.Unavailable,
+      };
+      return ok(preview);
+    }
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      const preview: CloudKitRecordPreview = {
         kind: CloudKitRecordPreviewKind.Available,
         response: await container.fetchRecordInfos([shortGuid]),
-      });
+      };
+      return ok(preview);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
     }
@@ -419,33 +436,30 @@ class ICloudOAuthSession {
       const suffix = crypto.randomUUID();
       const zoneName = `nook-shared-${suffix}`;
       const rootRecordName = `nook-root-${suffix}`;
-      await database.saveRecordZones([{ zoneName }]);
-      const saved = await database.saveRecords(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        {
-          recordType: "NookVault",
-          recordName: rootRecordName,
-          createShortGUID: true,
-          fields: { content: { value: "" } },
-        },
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        { zoneID: zoneName },
-      );
+      const zones: CloudKitZoneID[] = [{ zoneName }];
+      await database.saveRecordZones(zones);
+      const record: CloudKitRecord = {
+        recordType: "NookVault",
+        recordName: rootRecordName,
+        createShortGUID: true,
+        fields: { content: { value: "" } },
+      };
+      const saveOptions: CloudKitRecordSaveOptions = { zoneID: zoneName };
+      const saved = await database.saveRecords(record, saveOptions);
       const root = saved.records[0];
       const shortGuid = root?.shortGUID?.trim();
       if (!root || !shortGuid)
         return err(new OAuthFailure(OAuthFailureKind.SharedIdentifierMissing));
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      await database.shareWithUI({
+      const shareOptions: CloudKitSharePresentationOptions = {
         record: root,
         zoneID: zoneName,
         shareTitle: title.trim() || "Nook",
         shareType: "com.meta-secret.nook.vault",
         supportedAccess: [CloudKitShareAccess.Private],
         supportedPermissions: [CloudKitSharePermission.ReadWrite],
-      });
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      };
+      await database.shareWithUI(shareOptions);
+      const storageTarget: ICloudSharedStorageTarget = {
         role: "owner",
         zoneName,
         ownerRecordName,
@@ -458,7 +472,8 @@ class ICloudOAuthSession {
           rootRecordName,
           shortGuid,
         ),
-      });
+      };
+      return ok(storageTarget);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedCreation));
     }
@@ -498,8 +513,7 @@ class ICloudOAuthSession {
     ) {
       try {
         const target = encodedTarget.target;
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({
+        const storageTarget: ICloudSharedStorageTarget = {
           ...target,
           role: "owner",
           storageTargetId: create_icloud_shared_storage_target(
@@ -509,15 +523,19 @@ class ICloudOAuthSession {
             target.rootRecordName,
             target.shortGuid,
           ),
-        });
+        };
+        return ok(storageTarget);
       } catch {
         return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
       }
     }
     if (!container.acceptShares || !container.fetchRecordInfos)
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const preview = await this.previewCloudKitRecord({ container, shortGuid });
+    const previewRequest: CloudKitRecordPreviewRequest = {
+      container,
+      shortGuid,
+    };
+    const preview = await this.previewCloudKitRecord(previewRequest);
     if (preview.isErr()) return err(preview.error);
     let response: CloudKitRecordInfosResponse;
     if (
@@ -537,8 +555,7 @@ class ICloudOAuthSession {
     if (info.isErr()) return err(info.error);
     const { zoneID, rootRecordName } = info.value;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      const storageTarget: ICloudSharedStorageTarget = {
         role: "participant",
         zoneName: zoneID.zoneName,
         ownerRecordName: zoneID.ownerRecordName,
@@ -551,15 +568,15 @@ class ICloudOAuthSession {
           rootRecordName,
           shortGuid,
         ),
-      });
+      };
+      return ok(storageTarget);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.SharedConnection));
     }
   }
   private signInOutcome(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    outcome: Result<CloudKitIdentity, OAuthFailure>,
-  ): Result<CloudKitIdentity, OAuthFailure> {
+    outcome: CloudKitIdentityResult,
+  ): CloudKitIdentityResult {
     if (outcome.isErr()) {
       this.cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
       this.cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
@@ -598,17 +615,19 @@ class ICloudOAuthSession {
           this.cloudKitIdentity = identity;
         return ok(identity);
       } catch (error) {
+        const failureCheck: ExpectedCloudKitSignInFailureCheck = {
+          diagnostic: new CloudKitFailureDiagnostic(error),
+          hasSignInControl: this.hasCloudKitSignInControl(),
+        };
         if (
           !clickSignInControl ||
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          new CloudKitSetupFailure({
-            error,
-            hasSignInControl: this.hasCloudKitSignInControl(),
-          }).expected
+          new CloudKitSetupFailure(failureCheck).expected
         ) {
           expectedFailure = true;
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({ kind: CloudKitIdentityKind.SignedOut });
+          const signedOut: CloudKitIdentity = {
+            kind: CloudKitIdentityKind.SignedOut,
+          };
+          return ok(signedOut);
         }
         return err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication));
       }
@@ -654,12 +673,12 @@ class ICloudOAuthSession {
       return this.requireStoredWebAuthToken();
     const container = cloudKitRuntime.getDefaultCloudKitContainer();
     if (container.isErr()) return err(container.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const identity = await this.waitForCloudKitSignIn({
+    const signInRequest: CloudKitSignInRequest = {
       container: container.value,
       timeoutMs: request.signInTimeoutMs,
       clickSignInControl: request.clickSignInControl,
-    });
+    };
+    const identity = await this.waitForCloudKitSignIn(signInRequest);
     return identity.andThen((value) => this.requireStoredWebAuthToken(value));
   }
   async requestICloudWebAuthToken(
@@ -677,12 +696,12 @@ class ICloudOAuthSession {
       identity.value.kind === CloudKitIdentityKind.SignedOut &&
       stored.value.kind === WebAuthTokenLookupKind.Unavailable
     ) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const signedIn = await this.waitForCloudKitSignIn({
+      const signInRequest: CloudKitSignInRequest = {
         container: container.value,
         timeoutMs: request.signInTimeoutMs,
         clickSignInControl: request.clickSignInControl,
-      });
+      };
+      const signedIn = await this.waitForCloudKitSignIn(signInRequest);
       if (signedIn.isErr()) return err(signedIn.error);
     }
     return this.requireStoredWebAuthToken();
@@ -710,18 +729,18 @@ class ICloudOAuthSession {
   ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
     if (oauth_access_token(config).kind === OAuthAccessTokenKind.Available)
       return ok(config);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const refreshed = await this.requestICloudWebAuthToken({
+    const tokenRequest: ICloudWebAuthTokenRequest = {
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
       clickSignInControl: true,
-    });
-    return refreshed.andThen((tokens) =>
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.oauthTokensToICloudConfig({
+    };
+    const refreshed = await this.requestICloudWebAuthToken(tokenRequest);
+    return refreshed.andThen((tokens) => {
+      const update: ICloudOAuthConfigurationUpdate = {
         tokens,
         existing: configuredOAuthFile(config),
-      }),
-    );
+      };
+      return this.oauthTokensToICloudConfig(update);
+    });
   }
 }
 export const iCloudOAuthSession = new ICloudOAuthSession();

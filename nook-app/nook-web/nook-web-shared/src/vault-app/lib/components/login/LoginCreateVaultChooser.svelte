@@ -9,7 +9,11 @@
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
   import type { SentinelParticipation } from "./sentinel-card-stack-contract";
-import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+  import type { SentinelDashboardSurfaceProps } from "./sentinel-dashboard-surface-contract";
+  import type {
+    SentinelActionResult,
+    SentinelGenesisParticipantResponseOutcome,
+  } from "$lib/vault/sentinel-genesis";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { tick, type ComponentProps } from "svelte";
@@ -25,11 +29,10 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
     Users,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import SentinelCardStackDashboard from "$lib/components/login/SentinelCardStackDashboard.svelte";
-  import SentinelTerminalDashboard from "$lib/components/login/SentinelTerminalDashboard.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
   import VaultSecurityOrbit from "$lib/components/login/VaultSecurityOrbit.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
+  import SentinelDashboardSurface from "$lib/components/login/SentinelDashboardSurface.svelte";
   import {
     SentinelDashboard,
     SentinelDashboardChoiceKind,
@@ -100,6 +103,22 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
     return props;
   });
 
+  type DashboardOptionalProps = Partial<
+    Pick<
+      SentinelDashboardSurfaceProps,
+      "onFinalizeSentinelGenesis" | "onCompleteSentinelGenesisDelivery"
+    >
+  >;
+  const dashboardOptionalProps = $derived.by(() => {
+    const props: DashboardOptionalProps = {};
+    if (onFinalizeSentinelGenesis)
+      props.onFinalizeSentinelGenesis = onFinalizeSentinelGenesis;
+    if (onCompleteSentinelGenesisDelivery)
+      props.onCompleteSentinelGenesisDelivery =
+        onCompleteSentinelGenesisDelivery;
+    return props;
+  });
+
   const isBusy = $derived(isVerifying || isInitializing);
   let wizardStep = $state<VaultCreationWizardStep>(
     VaultCreationWizardStep.Choose,
@@ -130,7 +149,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   let initiatorPasskeyRequested = $state(false);
   let importedParticipantResponse = $state("");
 
-  function participantActionFailure(): SentinelActionResult<void> {
+  function participantActionFailure(): SentinelActionResult<SentinelGenesisParticipantResponseOutcome> {
     return err(
       new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
     );
@@ -138,7 +157,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   function addCardParticipant(
     request: SentinelParticipation,
-  ): Promise<SentinelActionResult<void>> {
+  ): Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>> {
     return onAddSentinelGenesisParticipantResponse
       ? onAddSentinelGenesisParticipantResponse(request)
       : Promise.resolve(participantActionFailure());
@@ -146,7 +165,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   function addTerminalParticipant(
     payload: string,
-  ): Promise<SentinelActionResult<void>> {
+  ): Promise<SentinelActionResult<SentinelGenesisParticipantResponseOutcome>> {
     const terminalParticipantRequest: SentinelGenesisParticipation = {
       payload,
     };
@@ -212,12 +231,14 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   const trimmedVaultName = $derived(vaultName.trim());
   const vaultNameReady = $derived(trimmedVaultName.length > 0);
   const sentinelNameReady = $derived(sentinelName.trim().length > 0);
+  const sentinelPolicyRequest = $derived<
+    Parameters<typeof evaluate_sentinel_policy_draft>[0]
+  >({
+    participants: sentinelParticipantCount,
+    threshold: sentinelThreshold,
+  });
   const sentinelPolicy = $derived(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    evaluate_sentinel_policy_draft({
-      participants: sentinelParticipantCount,
-      threshold: sentinelThreshold,
-    }),
+    evaluate_sentinel_policy_draft(sentinelPolicyRequest),
   );
   const sentinelPolicyValid = $derived(
     sentinelPolicy.admission.kind === "accepted",
@@ -458,8 +479,9 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   }}
 >
   {#if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
-    <SentinelCardStackDashboard
+    <SentinelDashboardSurface
       {vault}
+      dashboard={SentinelDashboard.CardStack}
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
@@ -474,62 +496,31 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={addCardParticipant}
-      onFinalize={() =>
-        onFinalizeSentinelGenesis
-          ? onFinalizeSentinelGenesis()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
-      onCompleteDelivery={() =>
-        onCompleteSentinelGenesisDelivery
-          ? onCompleteSentinelGenesisDelivery()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
+      onAddCardParticipant={addCardParticipant}
+      onAddTerminalParticipant={addTerminalParticipant}
+      {...dashboardOptionalProps}
     />
   {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.Terminal)}
-    <SentinelTerminalDashboard
+    <SentinelDashboardSurface
       {vault}
+      dashboard={SentinelDashboard.Terminal}
       bind:name={sentinelName}
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisPhase}
       request={sentinelGenesisInvitationLink}
+      participantResponse=""
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
+      initiatorFingerprint=""
+      initiatorKeyLoading={false}
+      onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={addTerminalParticipant}
-      onFinalize={() =>
-        onFinalizeSentinelGenesis
-          ? onFinalizeSentinelGenesis()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
-      onCompleteDelivery={() =>
-        onCompleteSentinelGenesisDelivery
-          ? onCompleteSentinelGenesisDelivery()
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            )}
+      onAddCardParticipant={addCardParticipant}
+      onAddTerminalParticipant={addTerminalParticipant}
+      {...dashboardOptionalProps}
     />
   {:else}
     <section

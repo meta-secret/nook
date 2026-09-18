@@ -35,7 +35,7 @@ export interface ExtensionVaultGrant {
 
 type ImportVaultRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.ImportVault }
+  { type: typeof ExtensionSessionMessageType.ImportVault }
 >
 
 export type ImportExtensionVaultArgs = {
@@ -59,6 +59,10 @@ type ExtensionIdentityOperationOutcome = {
   ok: boolean
   status: ExtensionEventLogImportStatus
 }
+
+type RemoteEventFlushProviderSelection = Parameters<
+  typeof select_remote_event_flush_providers
+>[0]
 
 export type ExtensionVaultImportManager = Pick<
   NookVaultManager,
@@ -93,6 +97,10 @@ export type OpenPasskeyVaultRequest = {
   grant: ExtensionVaultGrant
 }
 
+export enum PasskeyVaultOpenOutcome {
+  Opened = 'opened',
+}
+
 export type CompanionDiscoveryEndpoint =
   | {
       kind: CompanionDiscoveryEndpointKind.Initial
@@ -122,6 +130,10 @@ export type PasskeyEventProviderFlushRequest = {
     'load_auth_providers_snapshot' | 'flush_event_outbox_for_provider'
   >
   vaultStoreId: string
+}
+
+export enum PasskeyEventProviderFlushOutcome {
+  Flushed = 'flushed',
 }
 
 export type ActivatedExtensionIdentityOperation<
@@ -286,8 +298,11 @@ export async function importExtensionVaultWithDependencies({
               saveArgs,
             )
           }
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({ ok: true, status })
+          const outcome: ExtensionIdentityOperationOutcome = {
+            ok: true,
+            status,
+          }
+          return ok(outcome)
         } catch {
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.Failed),
@@ -313,7 +328,9 @@ export async function importExtensionVaultWithDependencies({
 export async function openPasskeyVault({
   activeManager,
   grant,
-}: OpenPasskeyVaultRequest): Promise<Result<void, SessionOperationFailure>> {
+}: OpenPasskeyVaultRequest): Promise<
+  Result<PasskeyVaultOpenOutcome, SessionOperationFailure>
+> {
   try {
     await activeManager.open_extension_passkey_vault_js(
       grant.vaultStoreId,
@@ -321,7 +338,7 @@ export async function openPasskeyVault({
       grant.devicePublicKey,
       grant.deviceSigningPublicKey,
     )
-    return ok()
+    return ok(PasskeyVaultOpenOutcome.Opened)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
@@ -386,15 +403,15 @@ export async function flushPasskeyEventToProviders({
   activeManager,
   vaultStoreId,
 }: PasskeyEventProviderFlushRequest): Promise<
-  Result<void, SessionOperationFailure>
+  Result<PasskeyEventProviderFlushOutcome, SessionOperationFailure>
 > {
   try {
     const snapshot = await activeManager.load_auth_providers_snapshot()
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const providers = select_remote_event_flush_providers({
+    const selection: RemoteEventFlushProviderSelection = {
       snapshot,
       vaultStoreId,
-    })
+    }
+    const providers = select_remote_event_flush_providers(selection)
     const deliveries = await Promise.allSettled(
       providers.map(async (provider) => {
         const args = provider_wasm_args(provider)
@@ -413,7 +430,7 @@ export async function flushPasskeyEventToProviders({
       return err(
         new SessionOperationFailure(SessionOperationFailureKind.Failed),
       )
-    return ok()
+    return ok(PasskeyEventProviderFlushOutcome.Flushed)
   } catch {
     return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }

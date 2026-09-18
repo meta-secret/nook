@@ -119,9 +119,7 @@ class PageQrCapture {
   pageHasQrEnrollmentHint(): boolean {
     const media = [
       ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ].filter(
-      (element): element is HTMLElement => element instanceof HTMLElement,
-    )
+    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
     return media.some(
       (element) =>
         this.isVisibleElement(element) && this.looksLikeQrMedia(element),
@@ -165,9 +163,7 @@ class PageQrCapture {
   private collectQrMedia(): HTMLElement[] {
     const media = [
       ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ].filter(
-      (element): element is HTMLElement => element instanceof HTMLElement,
-    )
+    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
     return media
       .filter(
         (element) =>
@@ -179,9 +175,7 @@ class PageQrCapture {
   private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
     const elements = [
       ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
-    ].filter(
-      (element): element is HTMLElement => element instanceof HTMLElement,
-    )
+    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
     const candidates: DecodedOtpauthCandidate[] = []
     const seen = new Set<string>()
     let index = 0

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
@@ -12,14 +13,14 @@ import {
   COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
   COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   ExtensionSessionQueueKind,
-  isCompanionIdentityDiscoverySessionTransportRequest,
-  isCompanionIdentityHandoffSessionTransportRequest,
+  decodeCompanionIdentityDiscoverySessionTransportRequest,
+  decodeCompanionIdentityHandoffSessionTransportRequest,
   type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 
 describe('extension session request projections', () => {
-  test('keeps generated companion values structural across offscreen delivery', () => {
+  test('keeps generated companion values structural across offscreen delivery', async () => {
     const appKey = {
       appId: 'app',
       encryptionPublicKey: 'public',
@@ -74,31 +75,45 @@ describe('extension session request projections', () => {
     } satisfies CompanionIdentityHandoffSessionTransportRequest
 
     expect(
-      isCompanionIdentityDiscoverySessionTransportRequest(discoveryDelivery),
-    ).toBe(true)
+      await Effect.runPromise(
+        decodeCompanionIdentityDiscoverySessionTransportRequest(
+          discoveryDelivery,
+        ),
+      ),
+    ).toEqual(discoveryDelivery)
     expect(discoveryDelivery).toEqual({
       type: 'nook:extension-session-discover-companion-identity',
       payload: { presence, discovery },
     })
-    expect(isCompanionIdentityHandoffSessionTransportRequest(delivery)).toBe(
-      true,
-    )
+    expect(
+      await Effect.runPromise(
+        decodeCompanionIdentityHandoffSessionTransportRequest(delivery),
+      ),
+    ).toEqual(delivery)
     expect(delivery).toEqual({
       type: 'nook:extension-session-authorize-companion-identity-handoff',
       payload: { authorization },
     })
     expect(
-      isCompanionIdentityHandoffSessionTransportRequest({
-        type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
-        payload: { request },
-      }),
-    ).toBe(false)
+      await Effect.runPromise(
+        Effect.either(
+          decodeCompanionIdentityHandoffSessionTransportRequest({
+            type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+            payload: { request },
+          }),
+        ),
+      ),
+    ).toHaveProperty('_tag', 'Left')
     expect(
-      isCompanionIdentityDiscoverySessionTransportRequest({
-        type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
-        payload: { presence },
-      }),
-    ).toBe(false)
+      await Effect.runPromise(
+        Effect.either(
+          decodeCompanionIdentityDiscoverySessionTransportRequest({
+            type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+            payload: { presence },
+          }),
+        ),
+      ),
+    ).toHaveProperty('_tag', 'Left')
   })
 
   test('removes stored-grant metadata from login reveal', () => {
@@ -110,7 +125,7 @@ describe('extension session request projections', () => {
       deviceSigningPublicKey: 'signing',
       vaultName: 'Private vault',
       deviceLabel: 'Laptop',
-      approvedAt: '2026-08-10T00:00:00Z',
+      approvedAt: 1_786_320_000_000,
       scopes: ['password-filling'],
       syncProviderCount: 0,
       eventCount: 1,

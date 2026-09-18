@@ -22,6 +22,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import type { VaultState } from "$lib/vault.svelte";
   import {
     DashboardLoadKind,
+    IdentityLifecycleMutationOutcome,
     DashboardReadyProjectionKind,
     DashboardSnapshotFailureTransition,
     type DashboardSnapshotFailureRequest,
@@ -167,12 +168,14 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   }
 
   function resetSelectedVaultForIdentity(): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    selectedVault = new IdentityVaultSelection({
+    const resetRequest: ConstructorParameters<
+      typeof IdentityVaultSelection
+    >[0] = {
       loadState,
       directoryLoadState,
       selectedVault,
-    }).reset();
+    };
+    selectedVault = new IdentityVaultSelection(resetRequest).reset();
   }
 
   async function renamePasskey(name: string): Promise<boolean> {
@@ -220,7 +223,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error);
       try {
         await manager.value.begin_local_identity_creation(vault.t(labelArgs));
-        return ok();
+        return ok(IdentityLifecycleMutationOutcome.CreationPrepared);
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
@@ -297,7 +300,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       if (manager.isErr()) return err(manager.error);
       try {
         await manager.value.activate_local_identity(identityId);
-        return ok();
+        return ok(IdentityLifecycleMutationOutcome.Activated);
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }

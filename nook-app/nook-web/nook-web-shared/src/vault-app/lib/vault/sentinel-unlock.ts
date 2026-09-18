@@ -25,6 +25,24 @@ export enum SentinelCeremonyVisibility {
   Visible = "visible",
 }
 
+export enum SentinelCeremonyHydrationOutcome {
+  AlreadySettled = "already-settled",
+  CeremonyRestored = "ceremony-restored",
+  StorageConnected = "storage-connected",
+}
+
+export enum SentinelUnlockStartOutcome {
+  Started = "started",
+}
+
+export enum SentinelUnlockResponseAdditionOutcome {
+  Added = "added",
+}
+
+export enum SentinelUnlockFinalizationOutcome {
+  Unlocked = "unlocked",
+}
+
 const log = browserLogRuntime.createLogger("vault-sentinel");
 
 export type {
@@ -185,9 +203,12 @@ export class SentinelUnlockActions {
     return storageOk(state.sentinelUnlockStatus);
   }
 
-  async ensureSentinelCeremonyHydrated(): Promise<SentinelActionResult<void>> {
+  async ensureSentinelCeremonyHydrated(): Promise<
+    SentinelActionResult<SentinelCeremonyHydrationOutcome>
+  > {
     const state = this.state;
-    if (state.isAuthenticated || state.isVerifying) return storageOk();
+    if (state.isAuthenticated || state.isVerifying)
+      return storageOk(SentinelCeremonyHydrationOutcome.AlreadySettled);
     const initialized = await state.initDeviceIdentity();
     if (initialized.isErr()) return storageErr(initialized.error);
     const synchronized = await state.syncFromStorage(
@@ -211,7 +232,7 @@ export class SentinelUnlockActions {
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
       state.loginPasswordPrompt = false;
-      return storageOk();
+      return storageOk(SentinelCeremonyHydrationOutcome.CeremonyRestored);
     }
     const connected = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -235,13 +256,15 @@ export class SentinelUnlockActions {
       if (architecture.isErr()) return storageErr(architecture.error);
       state.sentinelCeremonyPrompt = true;
       state.loginPasswordPrompt = false;
-      return storageOk();
+      return storageOk(SentinelCeremonyHydrationOutcome.CeremonyRestored);
     }
     for (const record of connected.value) record.free();
-    return storageOk();
+    return storageOk(SentinelCeremonyHydrationOutcome.StorageConnected);
   }
 
-  async startSentinelUnlock(): Promise<SentinelActionResult<void>> {
+  async startSentinelUnlock(): Promise<
+    SentinelActionResult<SentinelUnlockStartOutcome>
+  > {
     const state = this.state;
     if (!state.hasManager || state.isVerifying)
       return storageErr(
@@ -279,12 +302,14 @@ export class SentinelUnlockActions {
     });
     if (request.isErr()) return storageErr(request.error);
     state.sentinelUnlockRequest = request.value;
-    return storageOk();
+    return storageOk(SentinelUnlockStartOutcome.Started);
   }
 
   async addSentinelUnlockResponse({
     response,
-  }: SentinelUnlockResponseSubmission): Promise<SentinelActionResult<void>> {
+  }: SentinelUnlockResponseSubmission): Promise<
+    SentinelActionResult<SentinelUnlockResponseAdditionOutcome>
+  > {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -308,7 +333,7 @@ export class SentinelUnlockActions {
       SentinelUnlockActions["replaceUnlockSession"]
     >[0] = { status: status.value };
     this.replaceUnlockSession(replaceUnlockSessionArgs2);
-    return storageOk();
+    return storageOk(SentinelUnlockResponseAdditionOutcome.Added);
   }
 
   async listSentinelStoredDeliveries(): Promise<
@@ -386,15 +411,19 @@ export class SentinelUnlockActions {
 
   private restoreFinalizationFailure(
     failure: StorageOperationFailure | OAuthFailure,
-  ): SentinelActionResult<void> {
+  ): SentinelActionResult<SentinelUnlockFinalizationOutcome> {
     const state = this.state;
     state.isAuthenticated = false;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
     try {
       const status = manager.value.sentinel_unlock_session_status();
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.replaceUnlockSession({ status });
+      const sessionReplacement: Parameters<
+        typeof this.replaceUnlockSession
+      >[0] = {
+        status,
+      };
+      this.replaceUnlockSession(sessionReplacement);
       if (!status.active) state.sentinelUnlockRequest = "";
       state.sentinelUnlockStatus = manager.value.sentinel_unlock_status();
     } catch (nativeFailure) {
@@ -405,7 +434,9 @@ export class SentinelUnlockActions {
     return storageErr(failure);
   }
 
-  async finalizeSentinelUnlock(): Promise<SentinelActionResult<void>> {
+  async finalizeSentinelUnlock(): Promise<
+    SentinelActionResult<SentinelUnlockFinalizationOutcome>
+  > {
     const state = this.state;
     if (
       !state.hasManager ||
@@ -485,7 +516,7 @@ export class SentinelUnlockActions {
       state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
       state.startIdleSessionTracking();
       state.startVaultSync();
-      return storageOk();
+      return storageOk(SentinelUnlockFinalizationOutcome.Unlocked);
     } finally {
       state.isVerifying = false;
     }

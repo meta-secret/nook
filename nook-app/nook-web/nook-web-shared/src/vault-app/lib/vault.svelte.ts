@@ -1,15 +1,11 @@
 import type { PasswordOperationResult } from "$lib/vault/password-unlock";
-import type { SecretOperationResult } from "$lib/vault/secret-operation-failure";
-import { err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+import { Effect } from "effect";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
-import {
-  VaultAccessStatus,
-  type NookImportResult,
-  type NookVaultSyncResult,
-  type SecretType,
-} from "$lib/nook";
+import { VaultAccessStatus, type NookVaultSyncResult } from "$lib/nook";
 import {
   DeviceIdentityInitializationMode,
   ExternalDeviceIdentityAuthorizationMode,
@@ -50,6 +46,20 @@ import * as idleSessionActions from "$lib/vault/idle-session";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
+import {
+  VaultSecretImportActions,
+  type AuthenticatorMigrationImportInput,
+  type BitwardenVaultImportInput,
+  type CsvVaultImportInput,
+  type OnePasswordVaultImportInput,
+  type PasswordsVaultImportInput,
+} from "$lib/vault/secret-imports.svelte";
+import {
+  VaultSecretMutationActions,
+  type SecretCreationInput,
+  type SecretDeletionInput,
+  type SecretReplacementInput,
+} from "$lib/vault/secret-mutations.svelte";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import type {
@@ -130,24 +140,7 @@ interface EnrollmentCodeConnectionInput {
   readonly password: string;
 }
 
-interface SecretCreationInput {
-  readonly id: string;
-  readonly type: SecretType;
-  readonly data: string;
-}
-
-interface BitwardenVaultImportInput {
-  readonly json: string;
-  readonly password: string;
-}
-
 type AuthenticatorMigrationUriCollection = string[];
-
-interface SecretReplacementInput {
-  readonly oldId: string;
-  readonly type: SecretType;
-  readonly data: string;
-}
 
 export class VaultState extends VaultRuntimeState {
   private readonly lifecycleActions =
@@ -160,6 +153,12 @@ export class VaultState extends VaultRuntimeState {
   private readonly sentinelGenesisActions =
     new sentinelGenesisActions.SentinelGenesisActions(this);
   private readonly secretsActions = new secretsActions.VaultSecretActions(this);
+  private readonly secretImportActions = new VaultSecretImportActions(
+    this.secretsActions,
+  );
+  private readonly secretMutationActions = new VaultSecretMutationActions(
+    this.secretsActions,
+  );
   private readonly sessionActions = new sessionActions.VaultSessionActions(
     this,
   );
@@ -266,9 +265,18 @@ export class VaultState extends VaultRuntimeState {
     return this.localLoginActions.renameLocalVaultLabel({ storeId, label });
   }
 
-  async selectVaultForUnlock(storeId: StoreId) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.localLoginActions.selectVaultForUnlock({ storeId });
+  async selectVaultForUnlock(
+    storeId: StoreId,
+  ): Promise<Result<StoreId, VaultStorageFailure | OAuthFailure>> {
+    const request: Parameters<
+      typeof this.localLoginActions.selectVaultForUnlock
+    >[0] = { storeId };
+    const selection = await Effect.runPromise(
+      Effect.either(this.localLoginActions.selectVaultForUnlock(request)),
+    );
+    return selection._tag === "Left"
+      ? err(selection.left)
+      : ok(selection.right);
   }
 
   async prepareExistingVaultImportSlot() {
@@ -285,7 +293,12 @@ export class VaultState extends VaultRuntimeState {
 
   async activateConnectedExistingVault(
     storeId: StoreId,
-  ): Promise<Result<void, VaultStorageFailure>> {
+  ): Promise<
+    Result<
+      localLoginActions.ConnectedExistingVaultActivationOutcome,
+      VaultStorageFailure
+    >
+  > {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }
@@ -452,7 +465,11 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
-  async removeProvider(id: string): Promise<Result<void, VaultStorageFailure>> {
+  async removeProvider(
+    id: string,
+  ): Promise<
+    Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>
+  > {
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     return new providersActions.VaultProviderActions(this).removeProvider({
       id,
@@ -794,7 +811,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<providersActions.PromotedProviderSnapshot, VaultStorageFailure>
   > {
     return new providersActions.VaultProviderActions(
       this,
@@ -895,88 +912,59 @@ export class VaultState extends VaultRuntimeState {
     ).connectWithEnrollmentCode({ code, password });
   }
 
-  async handleAddSecret({ id, type, data }: SecretCreationInput) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleAddSecret({
-      id,
-      type,
-      data,
-    });
+  async handleAddSecret(request: SecretCreationInput) {
+    return this.secretMutationActions.handleAddSecret(request);
   }
 
-  async handleBitwardenImport({
-    json,
-    password,
-  }: BitwardenVaultImportInput): Promise<
-    SecretOperationResult<NookImportResult>
-  > {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleBitwardenImport({ json, password });
+  async handleBitwardenImport(request: BitwardenVaultImportInput) {
+    return this.secretImportActions.handleBitwardenImport(request);
   }
 
-  async handleKeePassXcImport(
-    csv: string,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleKeePassXcImport({ csv });
+  async handleKeePassXcImport(csv: string) {
+    const request: CsvVaultImportInput = { csv };
+    return this.secretImportActions.handleKeePassXcImport(request);
   }
 
-  async handleLastPassImport(
-    csv: string,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleLastPassImport({ csv });
+  async handleLastPassImport(csv: string) {
+    const request: CsvVaultImportInput = { csv };
+    return this.secretImportActions.handleLastPassImport(request);
   }
 
-  async handleKeeperImport(
-    csv: string,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleKeeperImport({ csv });
+  async handleKeeperImport(csv: string) {
+    const request: CsvVaultImportInput = { csv };
+    return this.secretImportActions.handleKeeperImport(request);
   }
 
-  async handleOnePasswordImport(
-    archive: Uint8Array,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleOnePasswordImport({ archive });
+  async handleOnePasswordImport(archive: Uint8Array) {
+    const request: OnePasswordVaultImportInput = { archive };
+    return this.secretImportActions.handleOnePasswordImport(request);
   }
 
-  async handleApplePasswordsImport(
-    exportBytes: Uint8Array,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleApplePasswordsImport({ exportBytes });
+  async handleApplePasswordsImport(exportBytes: Uint8Array) {
+    const request: PasswordsVaultImportInput = { exportBytes };
+    return this.secretImportActions.handleApplePasswordsImport(request);
   }
 
-  async handleChromePasswordsImport(
-    csv: string,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleChromePasswordsImport({ csv });
+  async handleChromePasswordsImport(csv: string) {
+    const request: CsvVaultImportInput = { csv };
+    return this.secretImportActions.handleChromePasswordsImport(request);
   }
 
-  async handleDashlaneImport(
-    exportBytes: Uint8Array,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleDashlaneImport({ exportBytes });
+  async handleDashlaneImport(exportBytes: Uint8Array) {
+    const request: PasswordsVaultImportInput = { exportBytes };
+    return this.secretImportActions.handleDashlaneImport(request);
   }
 
   async handleGoogleAuthenticatorImport(
     migrationUris: AuthenticatorMigrationUriCollection,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleGoogleAuthenticatorImport({
-      migrationUris,
-    });
+  ) {
+    const request: AuthenticatorMigrationImportInput = { migrationUris };
+    return this.secretImportActions.handleGoogleAuthenticatorImport(request);
   }
 
-  async handleProtonPassImport(
-    exportBytes: Uint8Array,
-  ): Promise<SecretOperationResult<NookImportResult>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleProtonPassImport({ exportBytes });
+  async handleProtonPassImport(exportBytes: Uint8Array) {
+    const request: PasswordsVaultImportInput = { exportBytes };
+    return this.secretImportActions.handleProtonPassImport(request);
   }
 
   async flushRemoteEventOutboxNow(request: EventOutboxRequest) {
@@ -987,12 +975,12 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async handleDeleteSecret(id: string) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleDeleteSecret({ id });
+    const request: SecretDeletionInput = { id };
+    return this.secretMutationActions.handleDeleteSecret(request);
   }
 
   async handleReplaceSecret({ oldId, type, data }: SecretReplacementInput) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.secretsActions.handleReplaceSecret({ oldId, type, data });
+    const request: SecretReplacementInput = { oldId, type, data };
+    return this.secretMutationActions.handleReplaceSecret(request);
   }
 }

@@ -1,13 +1,13 @@
-import { err } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
   ExtensionSessionLeaseFailure,
 } from '../../../../nook-web-extension/src/offscreen/session-lease'
 
 class SessionLeaseFixture {
   readonly onExpire = vi.fn()
-  readonly generation = 7
+  readonly generation = ExtensionSessionGeneration.initial()
   readonly lease = new ActiveExtensionSessionLease({
     generation: this.generation,
     durationMs: 1000,
@@ -44,18 +44,20 @@ describe('active extension session lease', () => {
   test('stale generations reject without extending the deadline', () => {
     const fixture = new SessionLeaseFixture()
     vi.advanceTimersByTime(600)
-    expect(fixture.lease.renew(fixture.generation + 1)).toEqual(
-      err(ExtensionSessionLeaseFailure.Locked),
-    )
+    const renewal = fixture.lease.renew(fixture.generation.next())
+    expect(renewal.isErr()).toBe(true)
+    if (renewal.isErr())
+      expect(renewal.error).toBe(ExtensionSessionLeaseFailure.Locked)
     vi.advanceTimersByTime(400)
     expect(fixture.onExpire).toHaveBeenCalledTimes(1)
   })
   test('elapsed leases reject before a delayed timer callback executes', () => {
     const fixture = new SessionLeaseFixture()
     vi.setSystemTime(1000)
-    expect(fixture.lease.renew(fixture.generation)).toEqual(
-      err(ExtensionSessionLeaseFailure.Locked),
-    )
+    const renewal = fixture.lease.renew(fixture.generation)
+    expect(renewal.isErr()).toBe(true)
+    if (renewal.isErr())
+      expect(renewal.error).toBe(ExtensionSessionLeaseFailure.Locked)
     expect(fixture.onExpire).not.toHaveBeenCalled()
     vi.runOnlyPendingTimers()
     expect(fixture.onExpire).toHaveBeenCalledTimes(1)
@@ -63,9 +65,10 @@ describe('active extension session lease', () => {
   test('stop cancels expiration and rejects further renewal', () => {
     const fixture = new SessionLeaseFixture()
     fixture.lease.stop()
-    expect(fixture.lease.renew(fixture.generation)).toEqual(
-      err(ExtensionSessionLeaseFailure.Locked),
-    )
+    const renewal = fixture.lease.renew(fixture.generation)
+    expect(renewal.isErr()).toBe(true)
+    if (renewal.isErr())
+      expect(renewal.error).toBe(ExtensionSessionLeaseFailure.Locked)
     vi.advanceTimersByTime(5000)
     expect(fixture.onExpire).not.toHaveBeenCalled()
   })

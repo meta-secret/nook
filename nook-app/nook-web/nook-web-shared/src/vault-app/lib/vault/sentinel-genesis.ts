@@ -65,6 +65,38 @@ export type SentinelActionResult<T> = Result<
   StorageOperationFailure | OAuthFailure
 >;
 
+export enum SentinelGenesisStartOutcome {
+  Started = "started",
+}
+
+export enum SentinelGenesisParticipantResponseOutcome {
+  Added = "added",
+}
+
+export enum SentinelGenesisRequestMemoryOutcome {
+  Remembered = "remembered",
+}
+
+export enum SentinelGenesisFinalizationOutcome {
+  Finalized = "finalized",
+}
+
+enum SentinelGenesisShareAcceptanceOutcome {
+  Accepted = "accepted",
+}
+
+export enum SentinelGenesisShareDeliveryOutcome {
+  AcceptedAndRefreshed = "accepted-and-refreshed",
+}
+
+export enum SentinelGenesisDeliveryCompletionOutcome {
+  Completed = "completed",
+}
+
+export enum SentinelOnboardingPackageAcceptanceOutcome {
+  Accepted = "accepted",
+}
+
 export class SentinelParticipantKeyCreationLifecycle {
   constructor(
     private readonly request: SentinelParticipantKeyCreationRequest,
@@ -155,13 +187,15 @@ export class SentinelGenesisActions {
     } catch {
       return;
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.applyStatus({ status });
+    const statusUpdate: Parameters<typeof this.applyStatus>[0] = { status };
+    this.applyStatus(statusUpdate);
   }
 
   async start({
     args,
-  }: SentinelGenesisStart): Promise<Result<void, StorageOperationFailure>> {
+  }: SentinelGenesisStart): Promise<
+    Result<SentinelGenesisStartOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     if (state.isVerifying)
       return storageErr(
@@ -190,8 +224,10 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(status.error);
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.applyStatus({ status: status.value });
+      const statusUpdate: Parameters<typeof this.applyStatus>[0] = {
+        status: status.value,
+      };
+      this.applyStatus(statusUpdate);
       const admitted = state.admitManager();
       if (admitted.isErr()) return storageErr(admitted.error);
       try {
@@ -200,7 +236,7 @@ export class SentinelGenesisActions {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      return storageOk();
+      return storageOk(SentinelGenesisStartOutcome.Started);
     } finally {
       state.isVerifying = false;
     }
@@ -210,7 +246,7 @@ export class SentinelGenesisActions {
     payload,
     participantLabel,
   }: SentinelGenesisParticipantResponseAddition): Promise<
-    Result<void, StorageOperationFailure>
+    Result<SentinelGenesisParticipantResponseOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (state.isVerifying)
@@ -237,9 +273,11 @@ export class SentinelGenesisActions {
         }
       });
       if (status.isErr()) return storageErr(status.error);
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.applyStatus({ status: status.value });
-      return storageOk();
+      const statusUpdate: Parameters<typeof this.applyStatus>[0] = {
+        status: status.value,
+      };
+      this.applyStatus(statusUpdate);
+      return storageOk(SentinelGenesisParticipantResponseOutcome.Added);
     } finally {
       state.isVerifying = false;
     }
@@ -282,7 +320,7 @@ export class SentinelGenesisActions {
   async rememberRequest({
     requestPayload,
   }: SentinelGenesisRequestPayload): Promise<
-    Result<void, StorageOperationFailure>
+    Result<SentinelGenesisRequestMemoryOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (state.isVerifying)
@@ -301,7 +339,7 @@ export class SentinelGenesisActions {
           admitted.value.remember_sentinel_genesis_request(
             requestPayload.trim(),
           );
-          return storageOk();
+          return storageOk(SentinelGenesisRequestMemoryOutcome.Remembered);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -348,7 +386,9 @@ export class SentinelGenesisActions {
     }
   }
 
-  async finalize(): Promise<Result<void, StorageOperationFailure>> {
+  async finalize(): Promise<
+    Result<SentinelGenesisFinalizationOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     if (state.isVerifying)
       return storageErr(
@@ -372,9 +412,11 @@ export class SentinelGenesisActions {
         this.restoreStatus();
         return storageErr(result.error);
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.applyFinalizeResult({ result: result.value });
-      return storageOk();
+      const finalization: Parameters<typeof this.applyFinalizeResult>[0] = {
+        result: result.value,
+      };
+      this.applyFinalizeResult(finalization);
+      return storageOk(SentinelGenesisFinalizationOutcome.Finalized);
     } finally {
       state.isVerifying = false;
     }
@@ -382,7 +424,9 @@ export class SentinelGenesisActions {
 
   async acceptShareDelivery({
     payload,
-  }: SentinelGenesisShareDelivery): Promise<SentinelActionResult<void>> {
+  }: SentinelGenesisShareDelivery): Promise<
+    SentinelActionResult<SentinelGenesisShareDeliveryOutcome>
+  > {
     const state = this.state;
     if (state.isVerifying)
       return storageErr(
@@ -400,7 +444,7 @@ export class SentinelGenesisActions {
           await admitted.value.accept_sentinel_genesis_share_delivery(
             payload.trim(),
           );
-          return storageOk();
+          return storageOk(SentinelGenesisShareAcceptanceOutcome.Accepted);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -413,13 +457,17 @@ export class SentinelGenesisActions {
       state.showSuccess(
         state.t(I18N_KEYS.LoginSentinelGenesisReceiveShareSuccess),
       );
-      return storageOk();
+      return storageOk(
+        SentinelGenesisShareDeliveryOutcome.AcceptedAndRefreshed,
+      );
     } finally {
       state.isVerifying = false;
     }
   }
 
-  async completeDelivery(): Promise<Result<void, StorageOperationFailure>> {
+  async completeDelivery(): Promise<
+    Result<SentinelGenesisDeliveryCompletionOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     if (
       state.sentinelGenesisTarget.kind !== SentinelGenesisTargetKind.Selected ||
@@ -453,7 +501,7 @@ export class SentinelGenesisActions {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      return storageOk();
+      return storageOk(SentinelGenesisDeliveryCompletionOutcome.Completed);
     } finally {
       state.isVerifying = false;
     }
@@ -462,7 +510,7 @@ export class SentinelGenesisActions {
   async acceptOnboardingPackage({
     packageJson,
   }: SentinelOnboardingPackageAcceptance): Promise<
-    Result<void, StorageOperationFailure>
+    Result<SentinelOnboardingPackageAcceptanceOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     state.errorMsg = "";
@@ -484,10 +532,10 @@ export class SentinelGenesisActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.openActiveVault(storeId.value);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const loadedProviders1 = await state.loadProviders({
+    const providerLoad: Parameters<typeof state.loadProviders>[0] = {
       ensureLocalRow: false,
-    });
+    };
+    const loadedProviders1 = await state.loadProviders(providerLoad);
     if (loadedProviders1.isErr()) {
       return storageErr(loadedProviders1.error);
     }
@@ -500,6 +548,6 @@ export class SentinelGenesisActions {
     } catch (failure) {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
-    return storageOk();
+    return storageOk(SentinelOnboardingPackageAcceptanceOutcome.Accepted);
   }
 }

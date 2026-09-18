@@ -52,18 +52,19 @@ scope, and apply the pattern with normal coding workflow and validation.
 ## Delivery and Workbench routing
 
 AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
-authors any Workbench record or request content and decides its Workbench
-state. For feature build or check mechanics, the owning Feature Gizmo submits
-the exact head to Gizmo Prime. Gizmo Prime authorizes Delivery Pipeline Team
-Gizmo, which dispatches PR Lifecycle Agent through the active harness and
-returns the evidence. The dev manager authorizes manager-stage publication,
-slow checks, and promotion through the same Delivery Pipeline Team Gizmo to
-PR Lifecycle Agent route.
+authors Workbench feature summaries and focused issues. It records feature
+completion and sets issue lifecycle state. For feature build or check
+mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
+Gizmo Prime authorizes Delivery Pipeline Team Gizmo. The Team Gizmo dispatches
+PR Lifecycle Agent through the active harness and returns the evidence. The
+dev manager authorizes manager-stage publication, slow checks, and promotion
+through the same route.
 
-For Workbench publication, Feature Gizmo approves the exact record and state.
-Gizmo Prime routes the approved packet through Delivery Pipeline Team Gizmo,
-which dispatches PR Lifecycle Agent through the active harness to publish
-only that controller-authored content.
+For Workbench publication, Feature Gizmo approves the exact feature summary or
+focused issue content, including feature completion status or issue lifecycle
+state. Gizmo Prime routes the approved packet through Delivery Pipeline Team
+Gizmo. The Team Gizmo dispatches PR Lifecycle Agent through the active harness
+to publish only that controller-authored content.
 
 Team Gizmo and PR Lifecycle Agent perform only packetized mechanics. They do
 not create or update pull requests, author Workbench content, or decide policy,

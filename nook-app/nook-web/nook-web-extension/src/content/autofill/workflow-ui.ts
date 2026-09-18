@@ -36,6 +36,26 @@ type WorkflowCopyProjection = {
   readonly descriptionKey: BrowserMessageKey
 }
 
+const loginWorkflowCopy: WorkflowCopyProjection = {
+  titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+  descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
+}
+const signupWorkflowCopy: WorkflowCopyProjection = {
+  titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
+  descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
+}
+const passwordChangeWorkflowCopy: WorkflowCopyProjection = {
+  titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
+  descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
+}
+const authenticatorWorkflowCopy: WorkflowCopyProjection = {
+  titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+  descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
+}
+const manualWorkflowCopy: WorkflowCopyProjection = {
+  titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
+  descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
+}
 export class WorkflowCopy {
   readonly titleKey: BrowserMessageKey
   readonly descriptionKey: BrowserMessageKey
@@ -46,36 +66,16 @@ export class WorkflowCopy {
   static forKind(kind: AuthenticationWorkflowKind): WorkflowCopy {
     switch (kind) {
       case AuthenticationWorkflowKind.Login:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
-        })
+        return new WorkflowCopy(loginWorkflowCopy)
       case AuthenticationWorkflowKind.Signup:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
-        })
+        return new WorkflowCopy(signupWorkflowCopy)
       case AuthenticationWorkflowKind.PasswordChange:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
-        })
+        return new WorkflowCopy(passwordChangeWorkflowCopy)
       case AuthenticationWorkflowKind.TotpChallenge:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
-        })
+        return new WorkflowCopy(authenticatorWorkflowCopy)
       case AuthenticationWorkflowKind.TotpEnrollment:
       case AuthenticationWorkflowKind.Manual:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return new WorkflowCopy({
-          titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
-          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
-        })
+        return new WorkflowCopy(manualWorkflowCopy)
     }
   }
 }
@@ -191,5 +191,8 @@ class WorkflowUi {
   }
 }
 
-// eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-export const workflowUi = new WorkflowUi({ widgetState, saveOfferState })
+const workflowUiDependencies: ConstructorParameters<typeof WorkflowUi>[0] = {
+  widgetState,
+  saveOfferState,
+}
+export const workflowUi = new WorkflowUi(workflowUiDependencies)

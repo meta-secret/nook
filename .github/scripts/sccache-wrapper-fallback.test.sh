@@ -18,6 +18,9 @@ if [ "${1:-}" = --start-server ]; then
   if [ -n "${FAKE_START_COUNT_FILE:-}" ]; then
     printf 'start\n' >>"$FAKE_START_COUNT_FILE"
   fi
+  if [ "${FAKE_START_DELAY:-0}" -gt 0 ]; then
+    sleep "$FAKE_START_DELAY"
+  fi
   exit "${FAKE_START_STATUS:-0}"
 fi
 if [ "${1:-}" = --zero-stats ]; then
@@ -44,9 +47,17 @@ cat >"$fixture_dir/timeout" <<'EOF'
 #!/bin/sh
 duration="${1:-}"
 shift
-if [ "${FAKE_START_DELAY:-0}" -gt "${duration%s}" ]; then
+duration_seconds="${duration%s}"
+start_delay="${FAKE_START_DELAY:-0}"
+if [ "$start_delay" -gt "$duration_seconds" ]; then
+  "$@" >/dev/null 2>&1 &
+  command_pid=$!
+  sleep "$duration_seconds"
+  kill "$command_pid" 2>/dev/null || true
+  wait "$command_pid" 2>/dev/null || true
   exit 124
 fi
+sleep "$start_delay"
 exec "$@"
 EOF
 chmod 0755 "$fixture_dir/compiler" "$fixture_dir/sccache" "$fixture_dir/timeout"
@@ -78,6 +89,27 @@ grep -Fq 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"credential
 grep -Fq 'direct compiler invoked' "$no_secret_log"
 echo 'Sccache no-secret route: compiler ran directly without remote access'
 
+access_file="$fixture_dir/access-key"
+secret_file="$fixture_dir/secret-key"
+printf '%s\n' access-key >"$access_file"
+printf '%s\n' secret-key >"$secret_file"
+file_authority_log="$fixture_dir/file-authority.log"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_S3_MODE=external \
+NOOK_SCCACHE_FALLBACK_MARKER="$fixture_dir/file-authority-remote-disabled" \
+NOOK_SCCACHE_READY_MARKER="$fixture_dir/file-authority-remote-ready" \
+NOOK_SCCACHE_START_LOCK="$fixture_dir/file-authority-start-lock" \
+SCCACHE_S3_ACCESS_KEY_FILE="$access_file" \
+SCCACHE_S3_SECRET_KEY_FILE="$secret_file" \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
+  "$wrapper" "$fixture_dir/compiler" 2>"$file_authority_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$file_authority_log"
+if grep -Fq 'credentials_unavailable' "$file_authority_log"; then
+  echo 'sccache wrapper ignored runner-local credential files' >&2
+  exit 1
+fi
+echo 'Sccache runner credential-file route: remote access remained enabled'
+
 fallback_log="$fixture_dir/fallback.log"
 fallback_marker="$fixture_dir/remote-disabled"
 ready_marker="$fixture_dir/remote-ready"
@@ -103,8 +135,11 @@ NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
 SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=compiler \
   "$wrapper" "$fixture_dir/compiler" 2>"$circuit_log"
-grep -Fq '"reason":"cache_circuit_open"' "$circuit_log"
 grep -Fq 'direct compiler invoked' "$circuit_log"
+if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$circuit_log"; then
+  echo 'sccache wrapper contract: an open circuit emitted a duplicate fallback event' >&2
+  exit 1
+fi
 echo 'Sccache circuit proof: later compiler invocations skipped the unavailable backend'
 
 startup_log="$fixture_dir/startup.log"
@@ -121,7 +156,9 @@ grep -Fq '"reason":"server_start_unavailable"' "$startup_log"
 grep -Fq 'direct compiler invoked' "$startup_log"
 echo 'Sccache startup fault: bounded fallback compiled directly'
 
-slow_start_log="$fixture_dir/slow-start.log"
+slow_start_count="$fixture_dir/slow-start-count"
+slow_start_owner_log="$fixture_dir/slow-start-owner.log"
+slow_start_peer_log="$fixture_dir/slow-start-peer.log"
 rm -f "$fallback_marker" "$ready_marker"
 NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
 NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
@@ -130,14 +167,82 @@ NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
 SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=3 FAKE_SCCACHE_RESULT=success \
-  "$wrapper" "$fixture_dir/compiler" 2>"$slow_start_log"
-grep -Fq 'effective sccache mode: READ_WRITE' "$slow_start_log"
-if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$slow_start_log"; then
-  echo 'sccache wrapper contract: slow startup incorrectly opened the circuit' >&2
+FAKE_START_COUNT_FILE="$slow_start_count" \
+  "$wrapper" "$fixture_dir/compiler" 2>"$slow_start_owner_log" &
+slow_start_owner_pid=$!
+for wait_index in $(seq 1 100); do
+  if [ -d "$startup_lock" ]; then
+    break
+  fi
+  sleep 0.01
+done
+test -d "$startup_lock"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
+  "$wrapper" "$fixture_dir/compiler" 2>"$slow_start_peer_log" &
+slow_start_peer_pid=$!
+wait "$slow_start_owner_pid"
+wait "$slow_start_peer_pid"
+test "$(wc -l <"$slow_start_count" | tr -d ' ')" -eq 1
+grep -Fq '"reason":"server_start_unavailable"' "$slow_start_owner_log"
+grep -Fq 'direct compiler invoked' "$slow_start_owner_log"
+grep -Fq 'direct compiler invoked' "$slow_start_peer_log"
+fallback_event_count="$(grep -hFc 'NOOK_SCCACHE_FALLBACK' "$slow_start_owner_log" "$slow_start_peer_log" | awk '{ total += $1 } END { print total + 0 }')"
+test "$fallback_event_count" -eq 1
+if grep -Fq 'effective sccache mode: READ_WRITE' "$slow_start_owner_log" "$slow_start_peer_log"; then
+  echo 'sccache wrapper contract: over-bound startup split compiler invocations across backends' >&2
+  exit 1
+fi
+if grep -Fq 'startup_coordination_timeout' "$slow_start_owner_log" "$slow_start_peer_log"; then
+  echo 'sccache wrapper contract: peer opened the circuit before observing the startup owner result' >&2
+  exit 1
+fi
+echo 'Sccache startup bound: over-bound startup opened one shared circuit and emitted one fallback event'
+
+concurrent_start_count="$fixture_dir/concurrent-start-count"
+concurrent_first_log="$fixture_dir/concurrent-first.log"
+concurrent_waiter_log="$fixture_dir/concurrent-waiter.log"
+rm -f "$fallback_marker" "$ready_marker" "$startup_lock"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_DELAY=1 FAKE_SCCACHE_RESULT=success \
+FAKE_START_COUNT_FILE="$concurrent_start_count" \
+  "$wrapper" "$fixture_dir/compiler" 2>"$concurrent_first_log" &
+first_pid=$!
+startup_lock_wait=0
+while [ ! -d "$startup_lock" ] && [ "$startup_lock_wait" -lt 20 ]; do
+  sleep 0.1
+  startup_lock_wait=$((startup_lock_wait + 1))
+done
+test -d "$startup_lock"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
+NOOK_SCCACHE_S3_MODE=external \
+AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
+FAKE_START_COUNT_FILE="$concurrent_start_count" \
+  "$wrapper" "$fixture_dir/compiler" 2>"$concurrent_waiter_log"
+wait "$first_pid"
+test "$(wc -l <"$concurrent_start_count" | tr -d ' ')" -eq 1
+grep -Fq 'effective sccache mode: READ_WRITE' "$concurrent_first_log"
+grep -Fq 'effective sccache mode: READ_WRITE' "$concurrent_waiter_log"
+if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$concurrent_first_log" "$concurrent_waiter_log"; then
+  echo 'sccache wrapper contract: concurrent waiter incorrectly opened the circuit' >&2
   exit 1
 fi
 test ! -e "$fallback_marker"
-echo 'Sccache startup grace: a three-second warm-up remained on the remote path'
+echo 'Sccache startup coordination: concurrent compilers shared one slow startup without opening the circuit'
 
 compiler_log="$fixture_dir/compiler-failure.log"
 rm -f "$fallback_marker" "$ready_marker"

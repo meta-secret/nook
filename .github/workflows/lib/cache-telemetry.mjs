@@ -1,19 +1,23 @@
-import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import {
+  BuildkitCacheExportReconciler,
+  BuildkitCacheExportTelemetry,
+} from "./buildkit-cache-export-telemetry.mjs";
+import { BuildkitPlainLogTelemetry } from "./buildkit-plain-log-telemetry.mjs";
 import { CacheScopeTelemetry } from "./cache-scope-telemetry.mjs";
 import { CacheTelemetryValidator } from "./cache-telemetry-validator.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
 import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
+import { CacheTelemetryJobSummary } from "./cache-telemetry-job-summary.mjs";
+import { BuildHistoryBaseline } from "./cache-telemetry-baseline.mjs";
+import { BuildHistoryTelemetry } from "./build-history-telemetry.mjs";
 
-export { BuildkitCacheExportTelemetry };
-export { CacheScopeTelemetry };
+export { BuildkitCacheExportTelemetry, CacheScopeTelemetry };
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const SCCACHE_FALLBACK_MARKER = "NOOK_SCCACHE_FALLBACK ";
 const HISTORY_LOG_CONCURRENCY = 8;
-const HISTORY_LOG_TIMEOUT_MS = 12_000;
 const HistoryLogCollectionKind = Object.freeze({
   Collected: "collected",
   Unavailable: "unavailable",
@@ -30,7 +34,7 @@ const HistoryLogCollectionKind = Object.freeze({
 /** @typedef {import("./cache-telemetry-contracts.mjs").RawJsonProgress} RawJsonProgress */
 /** @typedef {import("./cache-telemetry-contracts.mjs").TelemetryIdentityExpectation} TelemetryIdentityExpectation */
 /** @typedef {import("./cache-telemetry-contracts.mjs").CollectTelemetryRequest} CollectTelemetryRequest */
-/** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaseline */
+/** @typedef {{line: string, marker: string}} MarkedTelemetryJsonRequest */
 /**
  * @typedef {{kind: typeof HistoryLogCollectionKind.Collected, record: BuildHistoryRecord, events: JsonRecord[]} | {kind: typeof HistoryLogCollectionKind.Unavailable, record: BuildHistoryRecord, message: string}} HistoryLogCollection
  */
@@ -38,32 +42,30 @@ const HistoryLogCollectionKind = Object.freeze({
 export class CacheTelemetry {
   /** @this {void} @param {unknown} value @returns {value is JsonRecord} */
   static isJsonRecord(value) {
-    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+    return BuildHistoryTelemetry.isJsonRecord(value);
   }
 
   /** @param {string} text @returns {unknown} */
   static parseJson(text) {
-    return JSON.parse(text);
+    return BuildHistoryTelemetry.parseJson(text);
   }
 
   /** @this {void} @param {string} text @returns {JsonRecord} */
   static parseJsonRecord(text) {
-    const parsed = CacheTelemetry.parseJson(text);
-    if (!CacheTelemetry.isJsonRecord(parsed))
-      throw new Error("expected a JSON object");
-    return parsed;
+    return BuildHistoryTelemetry.parseJsonRecord(text);
   }
 
-  /** @param {string} text @returns {BuildHistoryBaseline} */
-  static parseBuildHistoryBaseline(text) {
-    const parsed = CacheTelemetry.parseJsonRecord(text);
-    const refs = Array.isArray(parsed.refs)
-      ? parsed.refs.filter((ref) => typeof ref === "string")
-      : [];
-    const warnings = Array.isArray(parsed.warnings)
-      ? parsed.warnings.filter((warning) => typeof warning === "string")
-      : [];
-    return { refs, warnings };
+  /** @param {MarkedTelemetryJsonRequest} request @returns {string} */
+  static markedJsonObject(request) {
+    const markerAt = request.line.indexOf(request.marker);
+    if (markerAt === -1) throw new Error("telemetry marker is missing");
+    const payload = request.line.slice(markerAt + request.marker.length);
+    const objectStart = payload.indexOf("{");
+    const objectEnd = payload.lastIndexOf("}");
+    if (objectStart === -1 || objectEnd < objectStart) {
+      throw new Error("telemetry marker has no complete JSON object");
+    }
+    return payload.slice(objectStart, objectEnd + 1);
   }
 
   /** @param {unknown} value @returns {string} */
@@ -78,60 +80,12 @@ export class CacheTelemetry {
 
   /** @param {string} text @returns {JsonRecord[]} */
   static parseJsonObjects(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
-    if (trimmed.startsWith("[")) {
-      const parsed = CacheTelemetry.parseJson(trimmed);
-      if (!Array.isArray(parsed)) {
-        throw new Error("expected a JSON object array");
-      }
-      /** @type {unknown[]} */
-      const candidates = parsed;
-      if (
-        !candidates.every((candidate) => CacheTelemetry.isJsonRecord(candidate))
-      ) {
-        throw new Error("expected a JSON object array");
-      }
-      return candidates;
-    }
-    return trimmed
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => CacheTelemetry.parseJsonRecord(line));
+    return BuildHistoryTelemetry.parseJsonObjects(text);
   }
 
   /** @param {string} text @returns {RawJsonProgress} */
   static parseRawJsonProgress(text) {
-    /** @type {JsonRecord[]} */
-    const objects = [];
-    /** @type {string[]} */
-    const diagnostics = [];
-    for (const line of text.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = CacheTelemetry.parseJson(line);
-        if (Array.isArray(parsed)) {
-          /** @type {unknown[]} */
-          const candidates = parsed;
-          if (
-            candidates.every((candidate) =>
-              CacheTelemetry.isJsonRecord(candidate),
-            )
-          ) {
-            objects.push(...candidates);
-          } else {
-            diagnostics.push(line);
-          }
-        } else if (CacheTelemetry.isJsonRecord(parsed)) {
-          objects.push(parsed);
-        } else {
-          diagnostics.push(line);
-        }
-      } catch {
-        diagnostics.push(line);
-      }
-    }
-    return { objects, diagnostics };
+    return BuildHistoryTelemetry.parseRawJsonProgress(text);
   }
 
   /** @param {unknown} value @param {number} [fallback] @returns {number} */
@@ -168,7 +122,8 @@ export class CacheTelemetry {
     const [status = ""] = [statusRaw];
     const completedSteps = CacheTelemetry.nonNegativeInteger(completedStepsRaw);
     const cachedSteps = CacheTelemetry.nonNegativeInteger(cachedStepsRaw);
-    const startedAtRaw = record.created_at || record.StartedAt;
+    const startedAtRaw =
+      record.created_at || record.StartedAt || record.started_at;
     const completedAtRaw = record.completed_at || record.CompletedAt;
     return {
       ref: String(ref),
@@ -193,8 +148,7 @@ export class CacheTelemetry {
 
   /** @param {string} ref @returns {string} */
   static historyLogRef(ref) {
-    const [historyRef = ""] = [String(ref).split("/").filter(Boolean).pop()];
-    return historyRef;
+    return BuildHistoryTelemetry.historyLogRef(ref);
   }
 
   /** @param {string} left @param {string} right @returns {number} */
@@ -366,9 +320,6 @@ export class CacheTelemetry {
       for (const field of /** @type {const} */ ([
         "baked_runtime_mode",
         "runtime_mode",
-        "runtime_mode_source",
-        "client_side",
-        "counter_reliability",
       ])) {
         if (report[field] !== summary[field]) {
           throw new Error(
@@ -387,6 +338,17 @@ export class CacheTelemetry {
       summary.compile_failures += report.compile_failures;
     }
     if (terminalReports.length > 0) {
+      summary.runtime_mode_source = terminalReports.some(
+        (report) => report.runtime_mode_source === "runtime_secret",
+      )
+        ? "runtime_secret"
+        : "environment";
+      summary.client_side = terminalReports.some((report) => report.client_side);
+      summary.counter_reliability = terminalReports.every(
+        (report) => report.counter_reliability === "authoritative",
+      )
+        ? "authoritative"
+        : "backend_incomplete";
       summary.publication_status =
         summary.client_side &&
         summary.cache_errors === 0 &&
@@ -447,7 +409,12 @@ export class CacheTelemetry {
     function inspectLine(line, log) {
       const markerAt = line.indexOf(SCCACHE_MARKER);
       if (markerAt === -1) return;
-      const payload = line.slice(markerAt + SCCACHE_MARKER.length).trim();
+      /** @type {MarkedTelemetryJsonRequest} */
+      const markedReport = {
+        line,
+        marker: SCCACHE_MARKER,
+      };
+      const payload = CacheTelemetry.markedJsonObject(markedReport);
       const vertex = typeof log.vertex === "string" ? log.vertex : "";
       const timestamp = typeof log.timestamp === "string" ? log.timestamp : "";
       const identity = `${vertex}:${timestamp}:${payload}`;
@@ -491,9 +458,11 @@ export class CacheTelemetry {
       const markerAt = line.indexOf(SCCACHE_MARKER);
       if (markerAt === -1) continue;
       try {
+        /** @type {MarkedTelemetryJsonRequest} */
+        const markedReport = { line, marker: SCCACHE_MARKER };
         const report = CacheTelemetry.normalizeSccacheReport(
           CacheTelemetry.parseJsonRecord(
-            line.slice(markerAt + SCCACHE_MARKER.length).trim(),
+            CacheTelemetry.markedJsonObject(markedReport),
           ),
         );
         latestByStage.set(report.stage, report);
@@ -513,9 +482,11 @@ export class CacheTelemetry {
       const reportAt = line.indexOf(SCCACHE_MARKER);
       if (reportAt !== -1) {
         try {
+          /** @type {MarkedTelemetryJsonRequest} */
+          const markedReport = { line, marker: SCCACHE_MARKER };
           const report = CacheTelemetry.normalizeSccacheReport(
             CacheTelemetry.parseJsonRecord(
-              line.slice(reportAt + SCCACHE_MARKER.length).trim(),
+              CacheTelemetry.markedJsonObject(markedReport),
             ),
           );
           if (
@@ -534,8 +505,10 @@ export class CacheTelemetry {
       const markerAt = line.indexOf(SCCACHE_FALLBACK_MARKER);
       if (markerAt === -1) continue;
       try {
+        /** @type {MarkedTelemetryJsonRequest} */
+        const markedFallback = { line, marker: SCCACHE_FALLBACK_MARKER };
         const fallback = CacheTelemetry.parseJsonRecord(
-          line.slice(markerAt + SCCACHE_FALLBACK_MARKER.length).trim(),
+          CacheTelemetry.markedJsonObject(markedFallback),
         );
         if (typeof fallback.reason === "string" && fallback.reason) {
           reason = fallback.reason;
@@ -568,18 +541,7 @@ export class CacheTelemetry {
 
   /** @returns {BuildHistoryRecord[]} */
   static listBuildHistory() {
-    const result = spawnSync(
-      "docker",
-      ["buildx", "history", "ls", "--format", "json", "--no-trunc"],
-      { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
-    );
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(
-        result.stderr.trim() || `buildx history exited ${result.status}`,
-      );
-    }
-    return CacheTelemetry.parseJsonObjects(result.stdout).map((record) =>
+    return BuildHistoryTelemetry.listBuildHistory().map((record) =>
       CacheTelemetry.normalizeBuildRecord(record),
     );
   }
@@ -589,61 +551,8 @@ export class CacheTelemetry {
    * @param {number} [timeoutMs]
    * @returns {Promise<JsonRecord[]>}
    */
-  static readHistoryEvents(ref, timeoutMs = HISTORY_LOG_TIMEOUT_MS) {
-    return new Promise((resolve, reject) => {
-      const child = spawn("docker", [
-        "buildx",
-        "history",
-        "logs",
-        CacheTelemetry.historyLogRef(ref),
-        "--progress",
-        "rawjson",
-      ]);
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGTERM");
-      }, timeoutMs);
-      child.stdout.on("data", (chunk) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-      });
-      child.on("error", (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-      child.on("close", (status) => {
-        clearTimeout(timeout);
-        if (timedOut) {
-          reject(
-            new Error(`buildx history logs timed out after ${timeoutMs}ms`),
-          );
-          return;
-        }
-        const parsedStdout = CacheTelemetry.parseRawJsonProgress(stdout);
-        const parsedStderr = CacheTelemetry.parseRawJsonProgress(stderr);
-        const events = [...parsedStdout.objects, ...parsedStderr.objects];
-        const diagnostics = [
-          ...parsedStdout.diagnostics,
-          ...parsedStderr.diagnostics,
-        ];
-        if (events.length > 0 || (status === 0 && diagnostics.length === 0)) {
-          resolve(events);
-        } else {
-          reject(
-            new Error(
-              diagnostics.join("\n") ||
-                stderr.trim() ||
-                `buildx history logs exited ${status}`,
-            ),
-          );
-        }
-      });
-    });
+  static readHistoryEvents(ref, timeoutMs) {
+    return BuildHistoryTelemetry.readHistoryEvents(ref, timeoutMs);
   }
 
   /** @param {NodeJS.ProcessEnv} [environment] @returns {CacheBackend} */
@@ -674,6 +583,7 @@ export class CacheTelemetry {
   /** @param {CollectTelemetryRequest} request @returns {Promise<CacheTelemetryRecord>} */
   static async collectTelemetry({
     baselineRefs,
+    baselineRecords = [],
     baselineWarnings = [],
     job = "",
     runId = "",
@@ -691,8 +601,15 @@ export class CacheTelemetry {
     let records = [];
     try {
       const baseline = new Set(baselineRefs);
+      const baselineIdentities = new Set(
+        baselineRecords.map((record) => BuildHistoryBaseline.identity(record)),
+      );
       const candidates = CacheTelemetry.listBuildHistory().filter(
-        (record) => record.ref && !baseline.has(record.ref),
+        (record) =>
+          record.ref &&
+          (baselineRecords.length === 0
+            ? !baseline.has(record.ref)
+            : !baselineIdentities.has(BuildHistoryBaseline.identity(record))),
       );
       const selection = CacheTelemetry.selectBuildRecords(
         candidates,
@@ -794,6 +711,12 @@ export class CacheTelemetry {
     }
 
     const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    const plainCacheExport = new BuildkitPlainLogTelemetry(
+      rawBuildLog,
+    ).summary();
+    buildkit.cache_export = new BuildkitCacheExportReconciler(
+      buildkit.cache_export,
+    ).reconcile(plainCacheExport);
     if (buildkit.cache_export.incomplete_failures > 0) {
       warnings.push(
         `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
@@ -805,7 +728,8 @@ export class CacheTelemetry {
       });
     }
     const sccache = CacheTelemetry.summarizeSccache(reports);
-    const rawFallback = CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
+    const rawFallback =
+      CacheTelemetry.extractSccacheFallbackFromText(rawBuildLog);
     const historyFallback =
       CacheTelemetry.extractSccacheFallback(historyEvents);
     sccache.fallback = resolveSccacheFallback(
@@ -815,7 +739,7 @@ export class CacheTelemetry {
       rawBuildLog,
     );
     return {
-      schema_version: 1,
+      schema_version: 2,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),
@@ -846,7 +770,7 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     return {
-      schema_version: 1,
+      schema_version: 2,
       github: {
         run_id: String(runId),
         run_attempt: CacheTelemetry.nonNegativeInteger(runAttempt, 1),
@@ -880,42 +804,6 @@ export class CacheTelemetry {
     fs.writeFileSync(filename, `${JSON.stringify(value, replacer, 2)}\n`);
   }
 
-  /**
-   * @param {CacheTelemetryRecord} record
-   * @param {string} [filename]
-   * @returns {void}
-   */
-  static appendJobSummary(record, filename = process.env.GITHUB_STEP_SUMMARY) {
-    if (!filename) return;
-    const compilerRate = !Number.isFinite(record.sccache.hit_rate_percent)
-      ? "n/a (no executed cacheable compiler requests)"
-      : `${record.sccache.hit_rate_percent}%`;
-    const buildkitRate = !Number.isFinite(
-      record.buildkit.cache_hit_rate_percent,
-    )
-      ? "n/a (no completed Buildx steps)"
-      : `${record.buildkit.cache_hit_rate_percent}%`;
-    fs.appendFileSync(
-      filename,
-      [
-        "### Cache telemetry",
-        "",
-        `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
-        `- sccache authority: baked=\`${record.sccache.baked_runtime_mode}\`, effective=\`${record.sccache.runtime_mode}\`, source=\`${record.sccache.runtime_mode_source}\``,
-        `- sccache counters: \`${record.sccache.counter_reliability}\` (client-side=\`${record.sccache.client_side}\`)`,
-        `- sccache publication: \`${record.sccache.publication_status}\``,
-        `- sccache measurement: \`${record.sccache.measurement}\`; fallback=\`${record.sccache.fallback.state}\` (${record.sccache.fallback.reason})`,
-        `- sccache requests: ${record.sccache.compile_requests} received, ${record.sccache.requests_executed} executed, ${record.sccache.compile_failures} compile failures`,
-        `- sccache cache results: ${record.sccache.cache_hits} hits, ${record.sccache.cache_misses} misses, ${record.sccache.cache_writes} writes`,
-        `- sccache errors: ${record.sccache.cache_errors} cache operations, ${record.sccache.cache_write_errors} cache writes`,
-        `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
-        `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
-        `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
-        "",
-      ].join("\n"),
-    );
-  }
-
   /** @param {readonly string[]} arguments_ @param {string} name @returns {string} */
   static argumentValue(arguments_, name) {
     const index = arguments_.indexOf(name);
@@ -932,16 +820,22 @@ export class CacheTelemetry {
       const warnings = [];
       /** @type {string[]} */
       let refs = [];
+      /** @type {BuildHistoryRecord[]} */
+      let records = [];
       try {
-        refs = CacheTelemetry.listBuildHistory()
-          .map((record) => record.ref)
-          .filter(Boolean);
+        records = CacheTelemetry.listBuildHistory();
+        refs = records.map((record) => record.ref).filter(Boolean);
       } catch (error) {
         warnings.push(
           `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
         );
       }
-      CacheTelemetry.writeJson(output, { schema_version: 1, refs, warnings });
+      CacheTelemetry.writeJson(output, {
+        schema_version: 2,
+        refs,
+        records,
+        warnings,
+      });
       return;
     }
     if (command === "unavailable") {
@@ -957,20 +851,26 @@ export class CacheTelemetry {
       });
       CacheTelemetry.validateTelemetryRecord(record);
       CacheTelemetry.writeJson(output, record);
-      CacheTelemetry.appendJobSummary(record);
+      new CacheTelemetryJobSummary(record).append();
       return;
     }
     if (command !== "collect") throw new Error("expected start or collect");
 
-    const baseline = CacheTelemetry.parseBuildHistoryBaseline(
-      fs.readFileSync(
+    const baseline = BuildHistoryBaseline.parse({
+      text: fs.readFileSync(
         CacheTelemetry.argumentValue(arguments_, "--baseline"),
         "utf8",
       ),
-    );
-    const { refs: baselineRefs, warnings: baselineWarnings } = baseline;
+      normalize: (record) => CacheTelemetry.normalizeBuildRecord(record),
+    });
+    const {
+      refs: baselineRefs,
+      records: baselineRecords,
+      warnings: baselineWarnings,
+    } = baseline;
     const record = await CacheTelemetry.collectTelemetry({
       baselineRefs,
+      baselineRecords,
       baselineWarnings,
       ...(process.env.GITHUB_JOB ? { job: process.env.GITHUB_JOB } : {}),
       ...(process.env.GITHUB_RUN_ID
@@ -982,7 +882,7 @@ export class CacheTelemetry {
     });
     CacheTelemetry.validateTelemetryRecord(record);
     CacheTelemetry.writeJson(output, record);
-    CacheTelemetry.appendJobSummary(record);
+    new CacheTelemetryJobSummary(record).append();
   }
 }
 

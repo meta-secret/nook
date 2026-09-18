@@ -1,6 +1,7 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import { Effect } from "effect";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -19,18 +20,26 @@ import {
   set_vault_session_locked,
   NookVaultSwitchState,
   NookActiveVaultSelectionState,
+  type NookLocalVaultEntry,
+  type StoreId,
 } from "$app-wasm";
-import { activeVaultScope, AuthProviderPersistence } from "$lib/auth/providers";
+import {
+  activeVaultScope,
+  AuthProviderPersistence,
+  type AuthProvidersSnapshot,
+} from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
+  type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
 import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
+import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 
 const log = browserLogRuntime.createLogger("vault-local");
 
 interface LoginVaultActionRequest {
-  readonly storeId: string;
+  readonly storeId: StoreId;
 }
 
 interface LocalVaultCreationRequest {
@@ -56,12 +65,79 @@ enum LocalVaultCreationState {
   Committed = "committed",
 }
 
+export enum LocalVaultPresence {
+  Absent = "absent",
+  Present = "present",
+}
+
+export enum ActiveVaultAuthSyncOutcome {
+  NotRequired = "not-required",
+  Synchronized = "synchronized",
+}
+
+export enum ConnectedExistingVaultActivationOutcome {
+  Activated = "activated",
+}
+
+export interface ExistingVaultImportSlotPrepared {
+  readonly activeVaultPresence: LocalVaultPresence;
+  readonly localLoginPreparation: LocalLoginPreparationState.Idle;
+}
+
+interface StorageResultOperation<T, E> {
+  readonly operation: () => Promise<Result<T, E>>;
+}
+
+interface QueuedStorageResultOperation<T, E> {
+  readonly operation: () => Result<T, E> | Promise<Result<T, E>>;
+}
+
+interface NativePromiseAttempt<T> {
+  readonly try: () => PromiseLike<T>;
+  readonly catch: (
+    failure: ConstructorParameters<typeof NativeVaultStorageFailure>[0],
+  ) => StorageOperationFailure;
+}
+
+type PreviousVaultReduction = readonly [
+  current: PreviousVaultLabel,
+  vault: NookLocalVaultEntry,
+];
+
 /** Owns browser orchestration for one local login context. */
 export class VaultLoginActions {
   constructor(private readonly state: VaultState) {}
 
+  private liftStorageResult<T, E>(
+    request: StorageResultOperation<T, E>,
+  ): Effect.Effect<T, E | StorageOperationFailure> {
+    const attempt: NativePromiseAttempt<Result<T, E>> = {
+      try: request.operation,
+      catch: (failure) => new NativeVaultStorageFailure(failure),
+    };
+    return Effect.tryPromise(attempt).pipe(
+      Effect.flatMap((outcome) =>
+        outcome.isErr()
+          ? Effect.fail(outcome.error)
+          : Effect.succeed(outcome.value),
+      ),
+    );
+  }
+
+  private enqueueStorageEffect<T, E>(
+    request: QueuedStorageResultOperation<T, E>,
+  ): Effect.Effect<T, E | StorageOperationFailure> {
+    const queuedOperation: StorageResultOperation<
+      T,
+      E | StorageOperationFailure
+    > = {
+      operation: () => this.state.enqueueStorage(request.operation),
+    };
+    return this.liftStorageResult(queuedOperation);
+  }
+
   async reloadProvidersForActiveVault(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<AuthProvidersSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     const snapshot = await state.enqueueStorage(async () => {
@@ -81,7 +157,7 @@ export class VaultLoginActions {
       state.openActiveVault(snapshot.value.activeVaultStoreId.value);
     }
     state.applyActiveProviderCredentials();
-    return storageOk();
+    return storageOk(snapshot.value);
   }
 
   beginLoginVaultPicker(): void {
@@ -165,7 +241,7 @@ export class VaultLoginActions {
   }
 
   async refreshLocalVaultCatalog(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<LocalVaultCatalog, StorageOperationFailure>
   > {
     const state = this.state;
     let vaults: Awaited<ReturnType<typeof list_local_vaults>>;
@@ -183,7 +259,7 @@ export class VaultLoginActions {
       state.localVaultPresent = present;
       if (selection.state === NookActiveVaultSelectionState.Selected)
         state.openActiveVault(selection.storeId);
-      return storageOk();
+      return storageOk(state.localVaultCatalog);
     } finally {
       selection.free();
     }
@@ -220,52 +296,69 @@ export class VaultLoginActions {
     }
   }
 
-  async selectVaultForUnlock({
+  selectVaultForUnlock({
     storeId,
-  }: LoginVaultActionRequest): Promise<
-    Result<void, StorageOperationFailure | OAuthFailure>
+  }: LoginVaultActionRequest): Effect.Effect<
+    StoreId,
+    StorageOperationFailure | OAuthFailure
   > {
     const state = this.state;
-    state.errorMsg = "";
-    state.dismissSuccess();
-    state.isVerifying = true;
-    try {
-      try {
-        await set_active_vault(storeId);
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
+    const enqueueStorageEffect = this.enqueueStorageEffect.bind(this);
+    const liftStorageResult = this.liftStorageResult.bind(this);
+    return Effect.gen(function* () {
+      state.errorMsg = "";
+      state.dismissSuccess();
+      state.isVerifying = true;
+      const selectAttempt: NativePromiseAttempt<void> = {
+        try: () => set_active_vault(storeId),
+        catch: (failure) => new NativeVaultStorageFailure(failure),
+      };
+      yield* Effect.tryPromise(selectAttempt);
       state.openActiveVault(storeId);
       if (state.hasManager) {
-        const reset = await state.enqueueStorage(async () => {
-          const manager = state.admitManager();
-          if (manager.isErr()) return storageErr(manager.error);
-          try {
-            manager.value.reset_vault_session();
-            return storageOk();
-          } catch (failure) {
-            return storageErr(new NativeVaultStorageFailure(failure));
-          }
-        });
-        if (reset.isErr()) return storageErr(reset.error);
+        const resetOperation: QueuedStorageResultOperation<
+          StoreId,
+          StorageOperationFailure
+        > = {
+          operation: async () => {
+            const manager = state.admitManager();
+            if (manager.isErr()) return storageErr(manager.error);
+            try {
+              manager.value.reset_vault_session();
+              return storageOk(storeId);
+            } catch (failure) {
+              return storageErr(new NativeVaultStorageFailure(failure));
+            }
+          },
+        };
+        yield* enqueueStorageEffect(resetOperation);
       }
-      try {
-        state.localVaultPresent = await has_active_local_vault();
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
+      const presenceAttempt: NativePromiseAttempt<boolean> = {
+        try: () => has_active_local_vault(),
+        catch: (failure) => new NativeVaultStorageFailure(failure),
+      };
+      state.localVaultPresent = yield* Effect.tryPromise(presenceAttempt);
       state.localLoginPreparation = LocalLoginPreparationState.Idle;
-      const passwordRefresh2 = await state.refreshPasswordEntriesList();
-      if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error);
+      const passwordRefresh: StorageResultOperation<
+        PasswordEntriesRefreshSnapshot,
+        OAuthFailure | StorageOperationFailure
+      > = {
+        operation: () => state.refreshPasswordEntriesList(),
+      };
+      yield* liftStorageResult(passwordRefresh);
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
-      return storageOk();
-    } finally {
-      state.isVerifying = false;
-    }
+      return storeId;
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          state.isVerifying = false;
+        }),
+      ),
+    );
   }
 
   async prepareExistingVaultImportSlot(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<ExistingVaultImportSlotPrepared, StorageOperationFailure>
   > {
     const state = this.state;
     try {
@@ -279,7 +372,7 @@ export class VaultLoginActions {
         if (manager.isErr()) return storageErr(manager.error);
         try {
           manager.value.reset_vault_session();
-          return storageOk();
+          return storageOk(manager.value);
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
@@ -293,7 +386,13 @@ export class VaultLoginActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    return storageOk();
+    const prepared: ExistingVaultImportSlotPrepared = {
+      activeVaultPresence: state.localVaultPresent
+        ? LocalVaultPresence.Present
+        : LocalVaultPresence.Absent,
+      localLoginPreparation: LocalLoginPreparationState.Idle,
+    };
+    return storageOk(prepared);
   }
 
   async createLocalVaultWithDeviceKeys({
@@ -353,7 +452,8 @@ export class VaultLoginActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(admittedManager.value.reset_vault_session());
+            admittedManager.value.reset_vault_session();
+            return storageOk(admittedManager.value);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -431,9 +531,8 @@ export class VaultLoginActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.set_vault_name(trimmedLabel),
-          );
+          await admittedManager.value.set_vault_name(trimmedLabel);
+          return storageOk(storeId);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -524,11 +623,12 @@ export class VaultLoginActions {
       kind: PreviousVaultLabelKind.Missing,
     };
     const previousLabel = state.localVaults.reduce<PreviousVaultLabel>(
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-      (current, vault) =>
-        vault.storeId.trim() === trimmedStoreId
+      (...reduction: PreviousVaultReduction) => {
+        const [current, vault] = reduction;
+        return vault.storeId.trim() === trimmedStoreId
           ? { kind: PreviousVaultLabelKind.Present, label: vault.label }
-          : current,
+          : current;
+      },
       previousLabelInitial,
     );
     let renameCommitted = false;
@@ -543,9 +643,8 @@ export class VaultLoginActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(
-              await admittedManager.value.set_vault_name(trimmedLabel),
-            );
+            await admittedManager.value.set_vault_name(trimmedLabel);
+            return storageOk(trimmedStoreId);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -588,29 +687,38 @@ export class VaultLoginActions {
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<ActiveVaultAuthSyncOutcome, StorageOperationFailure>
   > {
     const state = this.state;
-    if (state.activeVault.kind === ActiveVaultKind.Closed) return storageOk();
+    if (state.activeVault.kind === ActiveVaultKind.Closed)
+      return storageOk(ActiveVaultAuthSyncOutcome.NotRequired);
     const storeId = state.activeVault.storeId.trim();
-    if (!storeId) return storageOk();
-    return state.enqueueStorage(async () => {
+    if (!storeId) return storageOk(ActiveVaultAuthSyncOutcome.NotRequired);
+    const snapshot: AuthProvidersSnapshot = {
+      providers: state.providers,
+      activeVaultStoreId: activeVaultScope(storeId),
+    };
+    const persisted = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return new AuthProviderPersistence({
+      const persistenceRequest: ConstructorParameters<
+        typeof AuthProviderPersistence
+      >[0] = {
         manager: manager.value,
-        snapshot: {
-          providers: state.providers,
-          activeVaultStoreId: activeVaultScope(storeId),
-        },
-      }).save();
+        snapshot,
+      };
+      return new AuthProviderPersistence(persistenceRequest).save();
     });
+    return persisted.isErr()
+      ? storageErr(persisted.error)
+      : storageOk(ActiveVaultAuthSyncOutcome.Synchronized);
   }
 
   async activateConnectedExistingVault({
     storeId,
-  }: LoginVaultActionRequest): Promise<Result<void, StorageOperationFailure>> {
+  }: LoginVaultActionRequest): Promise<
+    Result<ConnectedExistingVaultActivationOutcome, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.isAuthenticated)
       return storageErr(
@@ -634,6 +742,9 @@ export class VaultLoginActions {
     state.openActiveVault(storeId);
     const catalog = await this.refreshLocalVaultCatalog();
     if (catalog.isErr()) return storageErr(catalog.error);
-    return this.syncActiveVaultStoreIdToAuth();
+    const synchronized = await this.syncActiveVaultStoreIdToAuth();
+    return synchronized.isErr()
+      ? storageErr(synchronized.error)
+      : storageOk(ConnectedExistingVaultActivationOutcome.Activated);
   }
 }

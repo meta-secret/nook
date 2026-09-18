@@ -7,5 +7,10 @@ set -euo pipefail
 
 : "${RESEARCH_URL:?RESEARCH_URL is required}"
 
-curl --retry 30 --retry-all-errors --retry-delay 10 -fsS "$RESEARCH_URL/" \
-  | grep -F '<title>Nook UI experiments</title>' >/dev/null
+body="$(mktemp)"
+trap 'rm -f "$body"' EXIT
+status="$(curl -sS -o "$body" -w '%{http_code}' "$RESEARCH_URL/" || true)"
+if [ "$status" != 200 ] || ! grep -Fq '<title>Nook UI experiments</title>' "$body"; then
+  echo "Web research deployment verification failed (status=$status, expected title missing)" >&2
+  exit 1
+fi

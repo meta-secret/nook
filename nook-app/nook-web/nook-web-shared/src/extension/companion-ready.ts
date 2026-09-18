@@ -1,14 +1,23 @@
 import initCompanionWasm, {
+  admit_extension_pairing_vault_type,
+  decode_extension_event_log_record,
   extension_passkey_management_scope,
   extension_password_filling_scope,
   extension_sync_provider_credentials_scope,
   extension_vault_access_scope,
-  is_extension_connect_scope,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  type ExtensionConnectScopeRuntime,
+  ExtensionEventLogRecordAdmission,
+  type ExtensionEventLogRecordRuntime,
+} from "./lifecycle-runtime-messages";
+import {
   ExtensionConnectScope,
+  type ExtensionConnectScopeRuntime,
 } from "./extension-connect-scope";
+import {
+  type ExtensionPairingVaultTypeRuntime,
+  extensionPairingVaultType,
+} from "./extension-pairing-vault-type";
 
 type BunFileApi = {
   file: (path: string) => {
@@ -186,18 +195,19 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
   return { kind: CompanionWasmModuleKind.Absent };
 }
 
-async function startCompanionWasm(): Promise<unknown> {
+async function startCompanionWasm(): Promise<void> {
   const resolved = await companionWasmModuleOrPath();
   if (resolved.kind === CompanionWasmModuleKind.Present) {
     const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
       module_or_path: resolved.moduleOrPath,
     };
-    return initCompanionWasm(nookTypedArgs0_0);
+    await initCompanionWasm(nookTypedArgs0_0);
+    return;
   }
   // Node/Bun last resort: wasm-bindgen resolves via import.meta.url. Extension
   // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).
   // Web-app vitest installs a fetch mock in setup-wasm for this path.
-  return initCompanionWasm();
+  await initCompanionWasm();
 }
 
 /**
@@ -213,8 +223,15 @@ export const companionWasmReady: Promise<void> = startCompanionWasm().then(
       extension_password_filling_scope,
       extension_passkey_management_scope,
       extension_sync_provider_credentials_scope,
-      is_extension_connect_scope,
     };
     ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
+    const eventLogRecordRuntime: ExtensionEventLogRecordRuntime = {
+      decode_extension_event_log_record,
+    };
+    ExtensionEventLogRecordAdmission.configure(eventLogRecordRuntime);
+    const vaultTypeRuntime: ExtensionPairingVaultTypeRuntime = {
+      admit_extension_pairing_vault_type,
+    };
+    extensionPairingVaultType.configure(vaultTypeRuntime);
   },
 );

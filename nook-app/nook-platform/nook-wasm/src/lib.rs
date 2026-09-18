@@ -29,6 +29,7 @@ mod application;
 mod conversion;
 mod device_access;
 mod error_mapping;
+mod extension_consent;
 mod identity_record;
 mod logger;
 mod manager;
@@ -39,6 +40,7 @@ mod sync_io;
 mod types;
 
 pub use device_access::*;
+pub use extension_consent::*;
 pub use identity_record::{
     NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot,
     NookIdentityDirectorySnapshotRequest, NookIdentitySnapshot, NookIdentitySnapshotKind,
@@ -52,12 +54,13 @@ pub use manager::{
     NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
     NookCompanionPairingCandidateOutcomeState, NookCompanionPairingExtensionEndpoint,
     NookDiscoveredCompanionExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
-    NookExtensionEventLogImportStatus, NookExtensionIdentityHandoffContext,
-    NookExternalEventLogRecords, NookPendingCompanionIdentityHandoff,
-    NookPendingExtensionIdentityHandoff, NookPreparedCompanionPairingActivation,
-    NookPrevalidatedCompanionPairingApproval, NookSentinelStoredDeliveriesRequest,
-    NookStoredCompanionPairingActivationCandidate, NookVaultManager, NookVaultNameState,
-    admit_companion_handoff_response, admit_companion_identity_status,
+    NookExtensionDeviceApproval, NookExtensionEventLogImportStatus,
+    NookExtensionIdentityHandoffContext, NookExternalEventLogRecords,
+    NookPendingCompanionIdentityHandoff, NookPendingExtensionIdentityHandoff,
+    NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
+    NookSentinelStoredDeliveriesRequest, NookStoredCompanionPairingActivationCandidate,
+    NookVaultManager, NookVaultNameState, admit_companion_handoff_response,
+    admit_companion_identity_status,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
@@ -77,11 +80,12 @@ pub use types::{
     NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
-    NookSyncConflictReview, NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport,
-    NookVaultArchitecture, NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic,
-    NookVaultEventAccessDiagnostic, NookVaultLastSync, NookVaultLastSyncState, NookVaultMember,
-    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
-    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
+    NookStoreId, NookStoreIdPresence, NookStoreIdPresenceState, NookSyncConflictReview,
+    NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
+    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
+    NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
+    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSaveDecision,
+    NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -172,6 +176,19 @@ mod browser_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn typed_vault_identity_exports_are_available_at_the_crate_boundary() -> Result<(), JsError> {
+        let store_id = NookStoreId::from(nook_core::StoreId::before_genesis_placeholder());
+        assert_eq!(store_id.value(), "store_abcdefghijk");
+        assert_eq!(
+            NookStoreIdPresence::from_raw("")
+                .map_err(|error| JsError::new(&error.to_string()))?
+                .state(),
+            NookStoreIdPresenceState::Absent,
+        );
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     fn extension_scopes_and_sentinel_translation_are_typed() {

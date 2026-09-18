@@ -34,6 +34,9 @@ placing domain decisions on these types.
 - Keep advanced capability construction private to the legal transition.
 - Expose an operation only on the state or capability where it is legal.
 - Return a named next state or exhaustive outcome from a state transition.
+- Preserve a meaningful success state or capability in the transition result.
+- Use unit or void success (`Result<(), E>` or `Result<void, E>`) only for a
+  genuinely effect-only operation with no meaningful success state.
 - Return semantic outcomes for eligibility, classification, and selection decisions.
 - Put each decision on the owner of the data it interprets.
 - Choose the [precise receiver](function-ownership.md#precise-receivers).
@@ -59,9 +62,11 @@ placing domain decisions on these types.
 - Use one named domain or operation request when an API needs multiple values.
 - Construct independent request values with named fields.
 - Return a domain-specific failure with a stable kind or code.
-- Use `neverthrow` `Result<T, E>` for authored TypeScript failure-capable APIs.
-- Use `Promise<Result<T, E>>` or `ResultAsync<T, E>` for asynchronous failures.
-- Handle or propagate both alternatives explicitly at every caller.
+- For TypeScript effectful workflows, follow the Web-owned
+  [TypeScript Effect Workflows](../../teams/web-dev/dynamic-skills/typescript-effect.md)
+  policy.
+- Keep expected TypeScript failures tagged and in Effect's typed error channel.
+- Handle or propagate typed failures explicitly at every caller.
 - Translate foreign exceptions into concrete failures at the narrow adapter.
 - Retain Rust's standard `Result<T, E>` for fallible operations.
 - Preserve a typed source when one operation fails because another operation
@@ -78,6 +83,10 @@ placing domain decisions on these types.
 - Validate TypeScript transport fields before constructing the concrete type.
 - Keep raw JSON trees only inside decoding or genuinely dynamic protocol edges.
 - Encode domain values only when crossing a required external boundary.
+- When a domain event time is owned by a Unix-millisecond newtype, preserve
+  that newtype through application layers.
+- Convert that value to an ISO string only at a required external presentation
+  or serialization boundary.
 - Give every persisted or wire schema version a named domain type.
 - Keep one explicit current writer version and an explicit supported-reader
   set.
@@ -103,11 +112,17 @@ placing domain decisions on these types.
 - Do not serialize a typed value merely to pass it between internal operations.
 - Do not use an unchecked cast, non-null assertion, panic shortcut, or
   equivalent escape hatch to manufacture a valid state.
+- Do not use a file-, module-, or crate-wide lint suppression to avoid
+  repairing an API, domain-state, newtype, or ownership violation in a migrated
+  scope.
+- Retain a narrow lint exception only when its owning language or boundary
+  policy permits it and identifies the exact external contract.
 - Do not use multiple positional parameters, tuples, arrays, or collections to
   hide independent request values.
 - Do not throw to propagate authored TypeScript domain or application failures.
 - Do not use unchecked Result extraction or convert an error into a fake success.
-- Do not duplicate the shared `neverthrow` convention with local Result wrappers.
+- Do not add a TypeScript failure abstraction that competes with Effect for an
+  effectful workflow.
 - Do not introduce generic optional-value or catch-all error wrappers that erase meaning.
 - Do not catch or convert a failure unless the current owner adds domain
   meaning, recovery, or boundary translation.
@@ -144,6 +159,7 @@ Its secret lifetime still follows the security authority above.
 - TypeScript follows
   [domain structure](../../teams/web-dev/dynamic-skills/typescript-domain-structure.md),
   [explicit state](../../teams/web-dev/dynamic-skills/typescript-explicit-state.md),
+  [Effect workflows](../../teams/web-dev/dynamic-skills/typescript-effect.md),
   [concrete values](../../teams/web-dev/dynamic-skills/typescript-no-unknown.md),
   and [single parameter](../../teams/web-dev/dynamic-skills/typescript-single-parameter.md).
 - Rust owns portable product, security, persistence, and wire vocabulary.

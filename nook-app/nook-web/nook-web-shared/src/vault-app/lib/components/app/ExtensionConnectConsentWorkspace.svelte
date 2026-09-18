@@ -3,6 +3,7 @@
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
 
   let {
     vault,
@@ -13,7 +14,7 @@
     vault: VaultState
     request: ExtensionConnectRequest
     appVersion: string
-    onClose: (approved?: boolean) => void
+    onClose: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 </script>
 

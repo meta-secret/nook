@@ -280,7 +280,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       expect.objectContaining({
         vaultName: extensionApprovalVaultName,
         deviceLabel: expect.any(String),
-        approvedAt: expect.any(String),
+        approvedAt: expect.any(Number),
         scopes: expect.arrayContaining([
           ExtensionConnectScope.PasskeyManagement,
           ExtensionConnectScope.PasswordFilling,

@@ -6,9 +6,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
@@ -19,6 +17,7 @@ import {
   ExtensionManifestBuildKind,
 } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
+import { extensionEntrypointBuildPolicy } from './build-contract'
 
 await companionWasmReady
 
@@ -34,7 +33,6 @@ const appCommonLocalesRoot = join(
   'locales',
 )
 const distDir = join(projectRoot, 'dist')
-const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL?.trim() || SimpleVaultTarget.defaultBase(),
 )
@@ -57,44 +55,49 @@ const versionName = commit
 
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 
+type ResolvedViteModule = {
+  readonly build: typeof import('vite').build
+}
+
+type ResolvedSvelteModule = {
+  readonly svelte: typeof import('@sveltejs/vite-plugin-svelte').svelte
+  readonly vitePreprocess: typeof import('@sveltejs/vite-plugin-svelte').vitePreprocess
+}
+
+enum ExtensionBuildDependencySpecifier {
+  Vite = 'vite',
+  Svelte = '@sveltejs/vite-plugin-svelte',
+}
+
 class ExtensionBuildDependencyLoader {
-  async importVite(): Promise<typeof import('vite')> {
-    return this.importDependency(
-      'vite',
-      (value): value is typeof import('vite') => {
-        if (!value || typeof value !== 'object') return false
-        return 'build' in value && typeof value.build === 'function'
-      },
-    )
+  async importVite(): Promise<Pick<typeof import('vite'), 'build'>> {
+    return this.importResolved(ExtensionBuildDependencySpecifier.Vite)
   }
 
-  async importSvelte(): Promise<typeof import('@sveltejs/vite-plugin-svelte')> {
-    return this.importDependency(
-      '@sveltejs/vite-plugin-svelte',
-      (value): value is typeof import('@sveltejs/vite-plugin-svelte') => {
-        if (!value || typeof value !== 'object') return false
-        return (
-          'svelte' in value &&
-          typeof value.svelte === 'function' &&
-          'vitePreprocess' in value &&
-          typeof value.vitePreprocess === 'function'
-        )
-      },
-    )
+  async importSvelte(): Promise<
+    Pick<
+      typeof import('@sveltejs/vite-plugin-svelte'),
+      'svelte' | 'vitePreprocess'
+    >
+  > {
+    return this.importResolved(ExtensionBuildDependencySpecifier.Svelte)
   }
 
-  private async importDependency<TModule>(
-    specifier: string,
-    admits: (value: unknown) => value is TModule,
-  ): Promise<TModule> {
-    const resolved = requireFromWeb.resolve(specifier)
-    // Resolution is constrained to the installed web dependency tree.
-    // eslint-disable-next-line no-unsanitized/method
-    const imported: unknown = await import(pathToFileURL(resolved).href)
-    if (!admits(imported)) {
-      throw new Error(`Invalid web dependency: ${specifier}`)
+  private importResolved(
+    specifier: ExtensionBuildDependencySpecifier.Vite,
+  ): Promise<ResolvedViteModule>
+  private importResolved(
+    specifier: ExtensionBuildDependencySpecifier.Svelte,
+  ): Promise<ResolvedSvelteModule>
+  private importResolved(
+    specifier: ExtensionBuildDependencySpecifier,
+  ): Promise<ResolvedViteModule | ResolvedSvelteModule> {
+    switch (specifier) {
+      case ExtensionBuildDependencySpecifier.Vite:
+        return import('vite')
+      case ExtensionBuildDependencySpecifier.Svelte:
+        return import('@sveltejs/vite-plugin-svelte')
     }
-    return imported
   }
 }
 
@@ -150,7 +153,7 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     entrypoints: [join(projectRoot, entrypoint)],
     outdir: join(distDir, outdir),
     target: 'browser',
-    format: 'esm',
+    format: extensionEntrypointBuildPolicy.format({ entrypoint }),
     sourcemap: 'external',
     minify: false,
     splitting: false,
@@ -180,7 +183,8 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
   const classicSafe = stripClassicContentScriptForbiddenSyntax(bundled)
   if (
     classicSafe.includes('import.meta') ||
-    /^\s*import\s/m.test(classicSafe)
+    /^\s*import\s/m.test(classicSafe) ||
+    /^\s*export\s/m.test(classicSafe)
   ) {
     throw new Error(
       `Content bundle ${entryName} still contains classic-script-forbidden ESM syntax.`,
@@ -227,7 +231,7 @@ async function buildSveltePage(page: 'popup') {
   })
 }
 
-type NookLocaleCatalog = {
+type NookLocaleCatalogShape = {
   extension: {
     widget: {
       open_vault: string
@@ -349,34 +353,75 @@ type ExtensionLocaleCatalogAdmissionArgs = {
   locale: string
 }
 
+type WidgetLocaleMessageKey =
+  keyof NookLocaleCatalogShape['extension']['widget']
+type PasskeyLocaleMessageKey =
+  keyof NookLocaleCatalogShape['extension']['passkey']
+
+class LocaleMessageSection<Key extends string> {
+  private readonly messages: Record<string, unknown>
+
+  constructor(value: unknown, label: string) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`${label} locale catalog has an invalid shape.`)
+    }
+    this.messages = Object.fromEntries(Object.entries(value))
+    for (const message of Object.values(this.messages)) {
+      if (typeof message !== 'string') {
+        throw new Error(`${label} locale catalog has an invalid shape.`)
+      }
+    }
+  }
+
+  message(key: Key, label: string): string {
+    if (!(key in this.messages)) {
+      throw new Error(`${label} locale catalog is missing ${key}.`)
+    }
+    const message: unknown = Reflect.get(this.messages, key)
+    if (typeof message !== 'string') {
+      throw new Error(`${label} locale catalog has an invalid message.`)
+    }
+    return message
+  }
+}
+
+type NookLocaleCatalog = {
+  extension: {
+    widget: LocaleMessageSection<WidgetLocaleMessageKey>
+    passkey: LocaleMessageSection<PasskeyLocaleMessageKey>
+  }
+}
+
 class ExtensionLocaleCatalogAdmission {
   admit({
     value,
     locale,
   }: ExtensionLocaleCatalogAdmissionArgs): NookLocaleCatalog {
-    if (!this.isNookLocaleCatalog(value)) {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('extension' in value) ||
+      !value.extension ||
+      typeof value.extension !== 'object' ||
+      Array.isArray(value.extension) ||
+      !('widget' in value.extension) ||
+      !('passkey' in value.extension)
+    ) {
       throw new Error(`Locale catalog ${locale} has an invalid shape.`)
     }
-    return value
-  }
-
-  private isNookLocaleCatalog(value: unknown): value is NookLocaleCatalog {
-    if (!value || typeof value !== 'object' || !('extension' in value)) {
-      return false
+    return {
+      extension: {
+        widget: new LocaleMessageSection<WidgetLocaleMessageKey>(
+          value.extension.widget,
+          `${locale} widget`,
+        ),
+        passkey: new LocaleMessageSection<PasskeyLocaleMessageKey>(
+          value.extension.passkey,
+          `${locale} passkey`,
+        ),
+      },
     }
-    const extension = value.extension
-    if (!extension || typeof extension !== 'object') return false
-    if (!('widget' in extension) || !('passkey' in extension)) return false
-    return (
-      this.isStringRecord(extension.widget) &&
-      this.isStringRecord(extension.passkey)
-    )
-  }
-
-  private isStringRecord(value: unknown): value is Record<string, string> {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return false
-    return Object.values(value).every((entry) => typeof entry === 'string')
   }
 }
 
@@ -395,266 +440,468 @@ async function buildChromeLocales() {
       }
       const catalog = extensionLocaleCatalogAdmission.admit(admissionArgs)
       const messages = {
-        widgetOpenVault: { message: catalog.extension.widget.open_vault },
-        widgetDismiss: { message: catalog.extension.widget.dismiss },
-        widgetCollapse: { message: catalog.extension.widget.collapse },
-        widgetExpand: { message: catalog.extension.widget.expand },
-        widgetPilotLabel: { message: catalog.extension.widget.pilot_label },
+        widgetOpenVault: {
+          message: catalog.extension.widget.message('open_vault', locale),
+        },
+        widgetDismiss: {
+          message: catalog.extension.widget.message('dismiss', locale),
+        },
+        widgetCollapse: {
+          message: catalog.extension.widget.message('collapse', locale),
+        },
+        widgetExpand: {
+          message: catalog.extension.widget.message('expand', locale),
+        },
+        widgetPilotLabel: {
+          message: catalog.extension.widget.message('pilot_label', locale),
+        },
         widgetVaultConnected: {
-          message: catalog.extension.widget.vault_connected,
+          message: catalog.extension.widget.message('vault_connected', locale),
         },
         widgetVaultNotConnected: {
-          message: catalog.extension.widget.vault_not_connected,
+          message: catalog.extension.widget.message(
+            'vault_not_connected',
+            locale,
+          ),
         },
         widgetConnectVault: {
-          message: catalog.extension.widget.connect_vault,
+          message: catalog.extension.widget.message('connect_vault', locale),
         },
-        widgetLoginTitle: { message: catalog.extension.widget.login_title },
+        widgetLoginTitle: {
+          message: catalog.extension.widget.message('login_title', locale),
+        },
         widgetLoginDescription: {
-          message: catalog.extension.widget.login_description,
+          message: catalog.extension.widget.message(
+            'login_description',
+            locale,
+          ),
         },
-        widgetSignupTitle: { message: catalog.extension.widget.signup_title },
+        widgetSignupTitle: {
+          message: catalog.extension.widget.message('signup_title', locale),
+        },
         widgetSignupDescription: {
-          message: catalog.extension.widget.signup_description,
+          message: catalog.extension.widget.message(
+            'signup_description',
+            locale,
+          ),
         },
         widgetPasswordChangeTitle: {
-          message: catalog.extension.widget.password_change_title,
+          message: catalog.extension.widget.message(
+            'password_change_title',
+            locale,
+          ),
         },
         widgetPasswordChangeDescription: {
-          message: catalog.extension.widget.password_change_description,
+          message: catalog.extension.widget.message(
+            'password_change_description',
+            locale,
+          ),
         },
         widgetGeneratePassword: {
-          message: catalog.extension.widget.generate_password,
+          message: catalog.extension.widget.message(
+            'generate_password',
+            locale,
+          ),
         },
         widgetGeneratePasswordWorking: {
-          message: catalog.extension.widget.generate_password_working,
+          message: catalog.extension.widget.message(
+            'generate_password_working',
+            locale,
+          ),
         },
         widgetGeneratePasswordFailed: {
-          message: catalog.extension.widget.generate_password_failed,
+          message: catalog.extension.widget.message(
+            'generate_password_failed',
+            locale,
+          ),
         },
         widgetGeneratedPasswordFilled: {
-          message: catalog.extension.widget.generated_password_filled,
+          message: catalog.extension.widget.message(
+            'generated_password_filled',
+            locale,
+          ),
         },
         widgetUsePasskey: {
-          message: catalog.extension.widget.use_passkey,
+          message: catalog.extension.widget.message('use_passkey', locale),
         },
         widgetCreatePasskey: {
-          message: catalog.extension.widget.create_passkey,
+          message: catalog.extension.widget.message('create_passkey', locale),
         },
         widgetUsePasskeyWorking: {
-          message: catalog.extension.widget.use_passkey_working,
+          message: catalog.extension.widget.message(
+            'use_passkey_working',
+            locale,
+          ),
         },
         widgetCreatePasskeyWorking: {
-          message: catalog.extension.widget.create_passkey_working,
+          message: catalog.extension.widget.message(
+            'create_passkey_working',
+            locale,
+          ),
         },
         widgetPasskeyControlMissing: {
-          message: catalog.extension.widget.passkey_control_missing,
+          message: catalog.extension.widget.message(
+            'passkey_control_missing',
+            locale,
+          ),
         },
         widgetPasskeyCeremonyStarted: {
-          message: catalog.extension.widget.passkey_ceremony_started,
+          message: catalog.extension.widget.message(
+            'passkey_ceremony_started',
+            locale,
+          ),
         },
         widgetSaveLoginTitle: {
-          message: catalog.extension.widget.save_login_title,
+          message: catalog.extension.widget.message('save_login_title', locale),
         },
         widgetSaveLoginDescription: {
-          message: catalog.extension.widget.save_login_description,
+          message: catalog.extension.widget.message(
+            'save_login_description',
+            locale,
+          ),
         },
         widgetUpdateLoginTitle: {
-          message: catalog.extension.widget.update_login_title,
+          message: catalog.extension.widget.message(
+            'update_login_title',
+            locale,
+          ),
         },
         widgetUpdateLoginDescription: {
-          message: catalog.extension.widget.update_login_description,
+          message: catalog.extension.widget.message(
+            'update_login_description',
+            locale,
+          ),
         },
-        widgetSaveLogin: { message: catalog.extension.widget.save_login },
-        widgetUpdateLogin: { message: catalog.extension.widget.update_login },
+        widgetSaveLogin: {
+          message: catalog.extension.widget.message('save_login', locale),
+        },
+        widgetUpdateLogin: {
+          message: catalog.extension.widget.message('update_login', locale),
+        },
         widgetSaveLoginNotNow: {
-          message: catalog.extension.widget.save_login_not_now,
+          message: catalog.extension.widget.message(
+            'save_login_not_now',
+            locale,
+          ),
         },
         widgetSaveLoginFailed: {
-          message: catalog.extension.widget.save_login_failed,
+          message: catalog.extension.widget.message(
+            'save_login_failed',
+            locale,
+          ),
         },
         widgetSaveLoginSavedTitle: {
-          message: catalog.extension.widget.save_login_saved_title,
+          message: catalog.extension.widget.message(
+            'save_login_saved_title',
+            locale,
+          ),
         },
         widgetSaveLoginSavedDescription: {
-          message: catalog.extension.widget.save_login_saved_description,
+          message: catalog.extension.widget.message(
+            'save_login_saved_description',
+            locale,
+          ),
         },
-        widgetTotpTitle: { message: catalog.extension.widget.totp_title },
+        widgetTotpTitle: {
+          message: catalog.extension.widget.message('totp_title', locale),
+        },
         widgetTotpDescription: {
-          message: catalog.extension.widget.totp_description,
+          message: catalog.extension.widget.message('totp_description', locale),
         },
-        widgetManualTitle: { message: catalog.extension.widget.manual_title },
+        widgetManualTitle: {
+          message: catalog.extension.widget.message('manual_title', locale),
+        },
         widgetManualDescription: {
-          message: catalog.extension.widget.manual_description,
+          message: catalog.extension.widget.message(
+            'manual_description',
+            locale,
+          ),
         },
-        widgetTakeOver: { message: catalog.extension.widget.take_over },
-        widgetFillingTitle: { message: catalog.extension.widget.filling_title },
+        widgetTakeOver: {
+          message: catalog.extension.widget.message('take_over', locale),
+        },
+        widgetFillingTitle: {
+          message: catalog.extension.widget.message('filling_title', locale),
+        },
         widgetVerifyingTitle: {
-          message: catalog.extension.widget.verifying_title,
+          message: catalog.extension.widget.message('verifying_title', locale),
         },
-        widgetSubmitted: { message: catalog.extension.widget.submitted },
-        widgetGateStep: { message: catalog.extension.widget.gate_step },
-        widgetGateTitle: { message: catalog.extension.widget.gate_title },
+        widgetSubmitted: {
+          message: catalog.extension.widget.message('submitted', locale),
+        },
+        widgetGateStep: {
+          message: catalog.extension.widget.message('gate_step', locale),
+        },
+        widgetGateTitle: {
+          message: catalog.extension.widget.message('gate_title', locale),
+        },
         widgetGateDescription: {
-          message: catalog.extension.widget.gate_description,
+          message: catalog.extension.widget.message('gate_description', locale),
         },
-        widgetContinue: { message: catalog.extension.widget.continue },
-        widgetWorking: { message: catalog.extension.widget.working },
+        widgetContinue: {
+          message: catalog.extension.widget.message('continue', locale),
+        },
+        widgetWorking: {
+          message: catalog.extension.widget.message('working', locale),
+        },
         widgetUnlockThenContinue: {
-          message: catalog.extension.widget.unlock_then_continue,
+          message: catalog.extension.widget.message(
+            'unlock_then_continue',
+            locale,
+          ),
         },
-        widgetNoMatch: { message: catalog.extension.widget.no_match },
+        widgetNoMatch: {
+          message: catalog.extension.widget.message('no_match', locale),
+        },
         widgetChooseAccount: {
-          message: catalog.extension.widget.choose_account,
+          message: catalog.extension.widget.message('choose_account', locale),
         },
-        widgetSavedLogin: { message: catalog.extension.widget.saved_login },
+        widgetSavedLogin: {
+          message: catalog.extension.widget.message('saved_login', locale),
+        },
         widgetLoginPickerOpened: {
-          message: catalog.extension.widget.login_picker_opened,
+          message: catalog.extension.widget.message(
+            'login_picker_opened',
+            locale,
+          ),
         },
         widgetLoginPickerCanceled: {
-          message: catalog.extension.widget.login_picker_canceled,
+          message: catalog.extension.widget.message(
+            'login_picker_canceled',
+            locale,
+          ),
         },
-        widgetFillFailed: { message: catalog.extension.widget.fill_failed },
+        widgetFillFailed: {
+          message: catalog.extension.widget.message('fill_failed', locale),
+        },
         widgetFilledManual: {
-          message: catalog.extension.widget.filled_manual,
+          message: catalog.extension.widget.message('filled_manual', locale),
         },
         widgetAuthenticatorStep: {
-          message: catalog.extension.widget.authenticator_step,
+          message: catalog.extension.widget.message(
+            'authenticator_step',
+            locale,
+          ),
         },
         widgetAuthenticatorTitle: {
-          message: catalog.extension.widget.authenticator_title,
+          message: catalog.extension.widget.message(
+            'authenticator_title',
+            locale,
+          ),
         },
         widgetAuthenticatorDescription: {
-          message: catalog.extension.widget.authenticator_description,
+          message: catalog.extension.widget.message(
+            'authenticator_description',
+            locale,
+          ),
         },
         widgetFillAuthenticator: {
-          message: catalog.extension.widget.fill_authenticator,
+          message: catalog.extension.widget.message(
+            'fill_authenticator',
+            locale,
+          ),
         },
         widgetAuthenticatorWorking: {
-          message: catalog.extension.widget.authenticator_working,
+          message: catalog.extension.widget.message(
+            'authenticator_working',
+            locale,
+          ),
         },
         widgetAuthenticatorUnlock: {
-          message: catalog.extension.widget.authenticator_unlock,
+          message: catalog.extension.widget.message(
+            'authenticator_unlock',
+            locale,
+          ),
         },
         widgetNoAuthenticator: {
-          message: catalog.extension.widget.no_authenticator,
+          message: catalog.extension.widget.message('no_authenticator', locale),
         },
         widgetAddAuthenticator: {
-          message: catalog.extension.widget.add_authenticator,
+          message: catalog.extension.widget.message(
+            'add_authenticator',
+            locale,
+          ),
         },
         widgetChooseAuthenticator: {
-          message: catalog.extension.widget.choose_authenticator,
+          message: catalog.extension.widget.message(
+            'choose_authenticator',
+            locale,
+          ),
         },
         widgetSavedAuthenticator: {
-          message: catalog.extension.widget.saved_authenticator,
+          message: catalog.extension.widget.message(
+            'saved_authenticator',
+            locale,
+          ),
         },
         widgetAuthenticatorFillFailed: {
-          message: catalog.extension.widget.authenticator_fill_failed,
+          message: catalog.extension.widget.message(
+            'authenticator_fill_failed',
+            locale,
+          ),
         },
         widgetAuthenticatorFilled: {
-          message: catalog.extension.widget.authenticator_filled,
+          message: catalog.extension.widget.message(
+            'authenticator_filled',
+            locale,
+          ),
         },
         widgetAuthenticatorPickerOpened: {
-          message: catalog.extension.widget.authenticator_picker_opened,
+          message: catalog.extension.widget.message(
+            'authenticator_picker_opened',
+            locale,
+          ),
         },
         widgetAuthenticatorPickerCanceled: {
-          message: catalog.extension.widget.authenticator_picker_canceled,
+          message: catalog.extension.widget.message(
+            'authenticator_picker_canceled',
+            locale,
+          ),
         },
-        widgetEnrollTitle: { message: catalog.extension.widget.enroll_title },
+        widgetEnrollTitle: {
+          message: catalog.extension.widget.message('enroll_title', locale),
+        },
         widgetEnrollDescription: {
-          message: catalog.extension.widget.enroll_description,
+          message: catalog.extension.widget.message(
+            'enroll_description',
+            locale,
+          ),
         },
-        widgetAddFromPage: { message: catalog.extension.widget.add_from_page },
+        widgetAddFromPage: {
+          message: catalog.extension.widget.message('add_from_page', locale),
+        },
         widgetSaveBackupCodes: {
-          message: catalog.extension.widget.save_backup_codes,
+          message: catalog.extension.widget.message(
+            'save_backup_codes',
+            locale,
+          ),
         },
         widgetEnrollWorking: {
-          message: catalog.extension.widget.enroll_working,
+          message: catalog.extension.widget.message('enroll_working', locale),
         },
         widgetEnrollUnsupported: {
-          message: catalog.extension.widget.enroll_unsupported,
+          message: catalog.extension.widget.message(
+            'enroll_unsupported',
+            locale,
+          ),
         },
-        widgetEnrollNoQr: { message: catalog.extension.widget.enroll_no_qr },
+        widgetEnrollNoQr: {
+          message: catalog.extension.widget.message('enroll_no_qr', locale),
+        },
         widgetEnrollAmbiguous: {
-          message: catalog.extension.widget.enroll_ambiguous,
+          message: catalog.extension.widget.message('enroll_ambiguous', locale),
         },
         widgetEnrollPreview: {
-          message: catalog.extension.widget.enroll_preview,
+          message: catalog.extension.widget.message('enroll_preview', locale),
         },
         widgetEnrollConfirm: {
-          message: catalog.extension.widget.enroll_confirm,
+          message: catalog.extension.widget.message('enroll_confirm', locale),
         },
         widgetEnrollCancel: {
-          message: catalog.extension.widget.enroll_cancel,
+          message: catalog.extension.widget.message('enroll_cancel', locale),
         },
         widgetEnrollStaging: {
-          message: catalog.extension.widget.enroll_staging,
+          message: catalog.extension.widget.message('enroll_staging', locale),
         },
         widgetEnrollVerifyFilled: {
-          message: catalog.extension.widget.enroll_verify_filled,
+          message: catalog.extension.widget.message(
+            'enroll_verify_filled',
+            locale,
+          ),
         },
         widgetEnrollVerifyPending: {
-          message: catalog.extension.widget.enroll_verify_pending,
+          message: catalog.extension.widget.message(
+            'enroll_verify_pending',
+            locale,
+          ),
         },
-        widgetEnrollSaved: { message: catalog.extension.widget.enroll_saved },
+        widgetEnrollSaved: {
+          message: catalog.extension.widget.message('enroll_saved', locale),
+        },
         widgetEnrollFailed: {
-          message: catalog.extension.widget.enroll_failed,
+          message: catalog.extension.widget.message('enroll_failed', locale),
         },
         widgetEnrollUnlock: {
-          message: catalog.extension.widget.enroll_unlock,
+          message: catalog.extension.widget.message('enroll_unlock', locale),
         },
         widgetEnrollIssuer: {
-          message: catalog.extension.widget.enroll_issuer,
+          message: catalog.extension.widget.message('enroll_issuer', locale),
         },
         widgetEnrollAccount: {
-          message: catalog.extension.widget.enroll_account,
+          message: catalog.extension.widget.message('enroll_account', locale),
         },
         widgetEnrollOrigin: {
-          message: catalog.extension.widget.enroll_origin,
+          message: catalog.extension.widget.message('enroll_origin', locale),
         },
         widgetEnrollAlgorithm: {
-          message: catalog.extension.widget.enroll_algorithm,
+          message: catalog.extension.widget.message('enroll_algorithm', locale),
         },
         widgetEnrollDigits: {
-          message: catalog.extension.widget.enroll_digits,
+          message: catalog.extension.widget.message('enroll_digits', locale),
         },
         widgetEnrollPeriod: {
-          message: catalog.extension.widget.enroll_period,
+          message: catalog.extension.widget.message('enroll_period', locale),
         },
-        widgetBackupTitle: { message: catalog.extension.widget.backup_title },
+        widgetBackupTitle: {
+          message: catalog.extension.widget.message('backup_title', locale),
+        },
         widgetBackupDescription: {
-          message: catalog.extension.widget.backup_description,
+          message: catalog.extension.widget.message(
+            'backup_description',
+            locale,
+          ),
         },
         widgetBackupWorking: {
-          message: catalog.extension.widget.backup_working,
+          message: catalog.extension.widget.message('backup_working', locale),
         },
-        widgetBackupEmpty: { message: catalog.extension.widget.backup_empty },
+        widgetBackupEmpty: {
+          message: catalog.extension.widget.message('backup_empty', locale),
+        },
         widgetBackupReview: {
-          message: catalog.extension.widget.backup_review,
+          message: catalog.extension.widget.message('backup_review', locale),
         },
-        widgetBackupPaste: { message: catalog.extension.widget.backup_paste },
+        widgetBackupPaste: {
+          message: catalog.extension.widget.message('backup_paste', locale),
+        },
         widgetBackupConfirm: {
-          message: catalog.extension.widget.backup_confirm,
+          message: catalog.extension.widget.message('backup_confirm', locale),
         },
         widgetBackupCancel: {
-          message: catalog.extension.widget.backup_cancel,
+          message: catalog.extension.widget.message('backup_cancel', locale),
         },
-        widgetBackupSaved: { message: catalog.extension.widget.backup_saved },
+        widgetBackupSaved: {
+          message: catalog.extension.widget.message('backup_saved', locale),
+        },
         widgetBackupFailed: {
-          message: catalog.extension.widget.backup_failed,
+          message: catalog.extension.widget.message('backup_failed', locale),
         },
         widgetBackupChooseAuthenticator: {
-          message: catalog.extension.widget.backup_choose_authenticator,
+          message: catalog.extension.widget.message(
+            'backup_choose_authenticator',
+            locale,
+          ),
         },
         widgetBackupModeReplace: {
-          message: catalog.extension.widget.backup_mode_replace,
+          message: catalog.extension.widget.message(
+            'backup_mode_replace',
+            locale,
+          ),
         },
         widgetBackupModeMerge: {
-          message: catalog.extension.widget.backup_mode_merge,
+          message: catalog.extension.widget.message(
+            'backup_mode_merge',
+            locale,
+          ),
         },
-        passkeySaveTitle: { message: catalog.extension.passkey.save_title },
-        passkeyUseTitle: { message: catalog.extension.passkey.use_title },
-        passkeyUseBrowser: { message: catalog.extension.passkey.use_browser },
+        passkeySaveTitle: {
+          message: catalog.extension.passkey.message('save_title', locale),
+        },
+        passkeyUseTitle: {
+          message: catalog.extension.passkey.message('use_title', locale),
+        },
+        passkeyUseBrowser: {
+          message: catalog.extension.passkey.message('use_browser', locale),
+        },
       }
       const localeDir = join(distDir, '_locales', locale)
       await mkdir(localeDir, { recursive: true })

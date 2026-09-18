@@ -4,6 +4,7 @@ import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-
 import type { extensionAuthenticatorSession } from '../src/background/service-worker/authenticator-session-adapter'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
+import type { ExtensionSessionResponse } from '../src/offscreen/session'
 
 function pairingGrant(): Parameters<
   typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
@@ -16,7 +17,7 @@ function pairingGrant(): Parameters<
     deviceLabel: 'Test browser',
     vaultStoreId: 'vault-1',
     vaultName: 'Test vault',
-    approvedAt: '2026-08-11T00:00:00.000Z',
+    approvedAt: 1_786_406_400_000,
     scopes: [],
     syncProviderCount: 0,
     eventCount: 0,
@@ -26,6 +27,43 @@ function pairingGrant(): Parameters<
 }
 
 describe('authenticator session adapter', () => {
+  test('returns a typed acknowledgement only after the page accepts selection', async () => {
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: {
+          sendMessage: async () => ({ ok: true }),
+        },
+      },
+    })
+    const {
+      AuthenticatorPageAcknowledgementKind,
+      extensionAuthenticatorSession,
+    } =
+      await import('../src/background/service-worker/authenticator-session-adapter')
+    const args: Parameters<
+      typeof extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged
+    >[0] = {
+      tabId: 7,
+      frameId: 0,
+      origin: 'https://login.example.test',
+      requestId: 'request-1',
+      vaultStoreId: 'vault-1',
+      secretId: 'secret-1',
+      authorizationGeneration: 'generation-1',
+    }
+
+    expect(
+      await extensionAuthenticatorSession.selectedAuthenticatorPageAcknowledged(
+        args,
+      ),
+    ).toEqual(
+      ok({
+        kind: AuthenticatorPageAcknowledgementKind.Acknowledged,
+        requestId: 'request-1',
+      }),
+    )
+  })
+
   test('owns backup codes until the runtime accepts the message', async () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -40,12 +78,13 @@ describe('authenticator session adapter', () => {
         ) {
           observedCodes.push([...request.payload.codes])
         }
-        return ok({
-          ok: true,
+        const response: ExtensionSessionResponse = { ok: true }
+        Object.assign(response, {
           secretId: 'secret-1',
           backupCodesVerified: true,
           reviewedInputPersisted: true,
         })
+        return ok(response)
       },
     })
     const codes = ['A1B2-C3D4', 'E5F6-G7H8']
@@ -80,7 +119,10 @@ describe('authenticator session adapter', () => {
     } =
       await import('../src/background/service-worker/authenticator-session-adapter')
     const session = new ExtensionAuthenticatorSession({
-      sendSessionMessage: async () => ok({ ok: true, secretId: 'secret-1' }),
+      sendSessionMessage: async () => {
+        const response: ExtensionSessionResponse = { ok: true }
+        return ok(response)
+      },
     })
     const args: Parameters<
       typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession

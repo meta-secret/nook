@@ -40,8 +40,25 @@ type DeviceRevocation = {
   readonly authId: string;
 };
 
-export type DeviceMutationResult = Result<
-  void,
+export enum DeviceRenameOutcome {
+  Renamed = "renamed",
+}
+
+export enum DeviceRevocationOutcome {
+  Revoked = "revoked",
+}
+
+enum VaultAccessRequestOutcome {
+  Requested = "requested",
+}
+
+export type DeviceRenameResult = Result<
+  DeviceRenameOutcome,
+  StorageOperationFailure | OAuthFailure
+>;
+
+export type DeviceRevocationResult = Result<
+  DeviceRevocationOutcome,
   StorageOperationFailure | OAuthFailure
 >;
 
@@ -174,7 +191,7 @@ export class VaultDeviceActions {
   async renameDevice({
     authId,
     label,
-  }: DeviceRename): Promise<DeviceMutationResult> {
+  }: DeviceRename): Promise<DeviceRenameResult> {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -190,9 +207,8 @@ export class VaultDeviceActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.rename_vault_member(authId, label),
-          );
+          await admittedManager.value.rename_vault_member(authId, label);
+          return storageOk(DeviceRenameOutcome.Renamed);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -211,7 +227,7 @@ export class VaultDeviceActions {
           ? state.t(I18N_KEYS.ToastsDeviceRenamed)
           : state.t(I18N_KEYS.ToastsDeviceNameReset),
       );
-      return storageOk();
+      return storageOk(DeviceRenameOutcome.Renamed);
     } finally {
       state.isSaving = false;
     }
@@ -219,7 +235,7 @@ export class VaultDeviceActions {
 
   async revokeDevice({
     authId,
-  }: DeviceRevocation): Promise<DeviceMutationResult> {
+  }: DeviceRevocation): Promise<DeviceRevocationResult> {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -254,7 +270,7 @@ export class VaultDeviceActions {
       if (isSelf) {
         state.clearUnlockedSession();
         state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRemoved));
-        return storageOk();
+        return storageOk(DeviceRevocationOutcome.Revoked);
       }
       const secretRefresh3 = await state.refreshSecretsFromSession();
       if (secretRefresh3.isErr()) {
@@ -267,7 +283,7 @@ export class VaultDeviceActions {
       }
       state.scheduleFanOutSyncAfterLocalSave();
       state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
-      return storageOk();
+      return storageOk(DeviceRevocationOutcome.Revoked);
     } finally {
       state.isSaving = false;
     }
@@ -292,14 +308,13 @@ export class VaultDeviceActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.request_vault_access(
-              storageArgs.mode,
-              storageArgs.pat,
-              storageArgs.repo,
-              isoTimestamp(),
-            ),
+          await admittedManager.value.request_vault_access(
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
+            isoTimestamp(),
           );
+          return storageOk(VaultAccessRequestOutcome.Requested);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }

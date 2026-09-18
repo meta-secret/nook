@@ -160,10 +160,15 @@ export class VaultLifecycleState extends VaultStateSlices {
 
   scheduleSync({ callback, intervalMs }: LifecycleSyncSchedule): void {
     this.stopScheduledSync();
+    const scheduleArgs: ConstructorParameters<
+      typeof ActiveVaultSyncSchedule
+    >[0] = {
+      callback,
+      intervalMs,
+    };
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      schedule: new ActiveVaultSyncSchedule({ callback, intervalMs }),
+      schedule: new ActiveVaultSyncSchedule(scheduleArgs),
     };
   }
 

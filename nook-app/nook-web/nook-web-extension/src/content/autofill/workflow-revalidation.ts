@@ -87,9 +87,14 @@ enum AuthenticationControlIdentityComparison {
   Changed = 'changed',
 }
 
+type AuthenticationControlList = Element[]
+
 class AuthenticationControlIdentitySnapshot {
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  private constructor(private readonly controls: Element[]) {}
+  private readonly controls: AuthenticationControlList
+
+  private constructor(controls: AuthenticationControlList) {
+    this.controls = controls
+  }
 
   static capture(
     workflow: PasswordFormObservation,

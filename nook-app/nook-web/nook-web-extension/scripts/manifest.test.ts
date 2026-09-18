@@ -7,7 +7,6 @@ import {
   ContentScriptRunAt,
   type CreateExtensionManifestArgs,
   ExtensionManifestBuildKind,
-  ExtensionManifestType,
   ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
@@ -118,11 +117,12 @@ describe('extension origin isolation', () => {
     ])
   })
 
-  test('loads autofill as a module so companion WASM top-level await can run', () => {
+  test('loads autofill as a classic script with promise-based WASM readiness', () => {
     const autofill = defaultManifest().content_scripts.find((script) =>
       script.js.includes('content/autofill.js'),
     )
-    expect(autofill?.type).toBe(ExtensionManifestType.Module)
+    if (!autofill) throw new Error('Autofill content script is not declared.')
+    expect('type' in autofill).toBe(false)
     expect(autofill).toHaveProperty('all_frames', true)
     expect(
       defaultManifest()

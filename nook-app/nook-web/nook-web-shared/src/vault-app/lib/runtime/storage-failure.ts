@@ -32,14 +32,30 @@ export enum VaultStorageFailureKind {
   LoggingCleanupFailed = "logging-cleanup-failed",
   ReloadFailed = "reload-failed",
   ExtensionPublicationFailed = "extension-publication-failed",
+  ExtensionApprovalContextChanged = "extension-approval-context-changed",
 }
 
+export type VaultStorageFailureRequest = {
+  readonly kind: VaultStorageFailureKind;
+  readonly recoveryKind: VaultRecoveryErrorKind;
+};
+
+type VaultStorageFailureInput =
+  VaultStorageFailureKind | VaultStorageFailureRequest;
+
 export class VaultStorageFailure {
-  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
-  constructor(
-    readonly kind: VaultStorageFailureKind,
-    readonly recoveryKind = VaultRecoveryErrorKind.Other,
-  ) {}
+  readonly kind: VaultStorageFailureKind;
+  readonly recoveryKind: VaultRecoveryErrorKind;
+
+  constructor(input: VaultStorageFailureInput) {
+    if (typeof input === "string") {
+      this.kind = input;
+      this.recoveryKind = VaultRecoveryErrorKind.Other;
+      return;
+    }
+    this.kind = input.kind;
+    this.recoveryKind = input.recoveryKind;
+  }
   get translationKey() {
     switch (this.kind) {
       case VaultStorageFailureKind.IdentityHandoffRejected:
@@ -69,6 +85,8 @@ export class VaultStorageFailure {
         return I18N_KEYS.ToastsErrorTimeout;
       case VaultStorageFailureKind.VaultSelectionFailed:
         return I18N_KEYS.ErrorsVaultSelectionFailed;
+      case VaultStorageFailureKind.ExtensionApprovalContextChanged:
+        return I18N_KEYS.ExtensionConsentApprovalFailed;
       case VaultStorageFailureKind.ExtensionPublicationFailed:
       case VaultStorageFailureKind.OperationFailed:
       case VaultStorageFailureKind.LockUnavailable:
@@ -87,14 +105,16 @@ export class VaultStorageFailure {
 }
 
 /** Admits a native failure through Rust's compatibility classifier without retaining its message. */
-export class NativeVaultStorageFailure extends VaultStorageFailure {
-  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  constructor(cause: unknown) {
-    super(
-      VaultStorageFailureKind.OperationFailed,
-      classify_vault_recovery_error(
+export class NativeVaultStorageFailure<
+  NativeCause = Error | string,
+> extends VaultStorageFailure {
+  constructor(cause: NativeCause) {
+    const request: VaultStorageFailureRequest = {
+      kind: VaultStorageFailureKind.OperationFailed,
+      recoveryKind: classify_vault_recovery_error(
         cause instanceof Error ? cause.message : String(cause),
       ),
-    );
+    };
+    super(request);
   }
 }

@@ -65,6 +65,45 @@ type LocalDataResetMessage =
   | LocalDataResetReady
   | LocalDataResetReload;
 
+export enum TabScopedBrowserDataCleanupOutcome {
+  Cleared = "cleared",
+}
+
+enum BrowserManagedStorageCleanupOutcome {
+  Cleared = "cleared",
+}
+
+export enum RemoteLocalBrowserDataDeletionOutcome {
+  Quiesced = "quiesced",
+}
+
+export enum LocalDataRecoverySupportOutcome {
+  Available = "available",
+}
+
+export enum LocalDataRecoveryQuiescenceOutcome {
+  Quiesced = "quiesced",
+}
+
+export enum LocalDataRecoveryReloadOutcome {
+  Requested = "requested",
+}
+
+export enum NookDatabaseCleanupOutcome {
+  Cleared = "cleared",
+}
+
+type BrowserDataCleanupOutcome =
+  BrowserManagedStorageCleanupOutcome | NookDatabaseCleanupOutcome;
+
+export enum LocalBrowserDataDeletionOutcome {
+  Cleared = "cleared",
+}
+
+enum WasmLoggingSuspensionOutcome {
+  Suspended = "suspended",
+}
+
 export type LocalDataStorageOperation<T, E = never> = {
   readonly generation: string;
   readonly operation: () => Result<T, E> | Promise<Result<T, E>>;
@@ -78,6 +117,9 @@ export class BrowserDataCleanupFailure extends VaultStorageFailure {
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class BrowserDataLifecycle {
+  private readonly sharedLockOptions: LockOptions = { mode: "shared" };
+  private readonly exclusiveLockOptions: LockOptions = { mode: "exclusive" };
+
   constructor(private readonly browser: typeof globalThis) {}
 
   captureLocalDataStorageGeneration(): Result<string, VaultStorageFailure> {
@@ -109,8 +151,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        { mode: "shared" },
+        this.sharedLockOptions,
         run,
       );
     } catch {
@@ -128,8 +169,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        { mode: "exclusive" },
+        this.exclusiveLockOptions,
         async () => {
           const result = await operation();
           try {
@@ -197,10 +237,13 @@ class BrowserDataLifecycle {
     }
   }
 
-  clearTabScopedBrowserData(): Result<void, VaultStorageFailure> {
+  clearTabScopedBrowserData(): Result<
+    TabScopedBrowserDataCleanupOutcome,
+    VaultStorageFailure
+  > {
     try {
       this.browser.sessionStorage.clear();
-      return ok();
+      return ok(TabScopedBrowserDataCleanupOutcome.Cleared);
     } catch {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
@@ -209,7 +252,7 @@ class BrowserDataLifecycle {
   }
 
   private async clearBrowserManagedStorage(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<BrowserManagedStorageCleanupOutcome, VaultStorageFailure>
   > {
     const failures: VaultStorageFailureKind[] = [];
     const operations: Array<() => void | Promise<void>> = [
@@ -235,11 +278,13 @@ class BrowserDataLifecycle {
       ? err(
           new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
         )
-      : ok();
+      : ok(BrowserManagedStorageCleanupOutcome.Cleared);
   }
 
   subscribeToLocalBrowserDataDeletion(
-    handler: () => Promise<Result<void, VaultStorageFailure>>,
+    handler: () => Promise<
+      Result<RemoteLocalBrowserDataDeletionOutcome, VaultStorageFailure>
+    >,
   ): Result<() => void, VaultStorageFailure> {
     if (!("BroadcastChannel" in this.browser)) return ok(() => {});
     let channel: BroadcastChannel;
@@ -260,19 +305,22 @@ class BrowserDataLifecycle {
         return;
       handled.add(message.requestId);
       try {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        channel.postMessage({
+        const seenMessage: LocalDataResetMessage = {
           type: LocalDataResetMessageType.Seen,
           requestId: message.requestId,
           senderId: message.senderId,
           responderId: TAB_ID,
-        } satisfies LocalDataResetMessage);
+        };
+        channel.postMessage(seenMessage);
       } catch {
         browserLogRuntime
           .createLogger("browser-data")
           .warn("Peer storage stop acknowledgement could not be sent");
       }
-      let outcome: Result<void, VaultStorageFailure>;
+      let outcome: Result<
+        RemoteLocalBrowserDataDeletionOutcome,
+        VaultStorageFailure
+      >;
       try {
         outcome = await handler();
       } catch {
@@ -287,14 +335,14 @@ class BrowserDataLifecycle {
             failure: outcome.error.kind,
           };
       try {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        channel.postMessage({
+        const readyMessage: LocalDataResetMessage = {
           type: LocalDataResetMessageType.Ready,
           requestId: message.requestId,
           senderId: message.senderId,
           responderId: TAB_ID,
           readiness,
-        } satisfies LocalDataResetMessage);
+        };
+        channel.postMessage(readyMessage);
       } catch {
         /* The requesting tab cannot acknowledge this peer and will fail its deadline. */
       }
@@ -310,15 +358,18 @@ class BrowserDataLifecycle {
     return ok(() => channel.close());
   }
 
-  requireLocalDataRecoverySupport(): Result<void, VaultStorageFailure> {
+  requireLocalDataRecoverySupport(): Result<
+    LocalDataRecoverySupportOutcome,
+    VaultStorageFailure
+  > {
     return "BroadcastChannel" in this.browser &&
       "locks" in this.browser.navigator
-      ? ok()
+      ? ok(LocalDataRecoverySupportOutcome.Available)
       : err(new VaultStorageFailure(VaultStorageFailureKind.LockUnavailable));
   }
 
   async quiesceOtherTabsForLocalRecovery(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<LocalDataRecoveryQuiescenceOutcome, VaultStorageFailure>
   > {
     const support = this.requireLocalDataRecoverySupport();
     if (support.isErr()) return err(support.error);
@@ -352,7 +403,10 @@ class BrowserDataLifecycle {
       if (message.type === LocalDataResetMessageType.Ready)
         ready.set(message.responderId, message.readiness);
     };
-    let outcome: Result<void, VaultStorageFailure> = ok();
+    let outcome: Result<
+      LocalDataRecoveryQuiescenceOutcome,
+      VaultStorageFailure
+    > = ok(LocalDataRecoveryQuiescenceOutcome.Quiesced);
     try {
       try {
         channel.postMessage(request);
@@ -393,9 +447,10 @@ class BrowserDataLifecycle {
   }
 
   async reloadQuiescedTabsAfterLocalRecovery(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<LocalDataRecoveryReloadOutcome, VaultStorageFailure>
   > {
-    if (!("BroadcastChannel" in this.browser)) return ok();
+    if (!("BroadcastChannel" in this.browser))
+      return ok(LocalDataRecoveryReloadOutcome.Requested);
     let channel: BroadcastChannel;
     try {
       channel = new this.browser.BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
@@ -405,13 +460,13 @@ class BrowserDataLifecycle {
       );
     }
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      channel.postMessage({
+      const reloadMessage: LocalDataResetMessage = {
         type: LocalDataResetMessageType.Reload,
         senderId: TAB_ID,
-      } satisfies LocalDataResetMessage);
+      };
+      channel.postMessage(reloadMessage);
       await new Promise((resolve) => setTimeout(resolve, 50));
-      return ok();
+      return ok(LocalDataRecoveryReloadOutcome.Requested);
     } catch {
       return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
     } finally {
@@ -420,17 +475,19 @@ class BrowserDataLifecycle {
   }
 
   async deleteLocalBrowserData(
-    clearNookDatabases: () => Promise<Result<void, VaultStorageFailure>>,
-  ): Promise<Result<void, VaultStorageFailure>> {
+    clearNookDatabases: () => Promise<
+      Result<NookDatabaseCleanupOutcome, VaultStorageFailure>
+    >,
+  ): Promise<Result<LocalBrowserDataDeletionOutcome, VaultStorageFailure>> {
     const support = this.requireLocalDataRecoverySupport();
     if (support.isErr()) return err(support.error);
     const peers = await this.quiesceOtherTabsForLocalRecovery();
     if (peers.isErr()) return err(peers.error);
-    let outcome: Result<void, VaultStorageFailure>;
-    let logging: Result<void, VaultStorageFailure>;
+    let outcome: Result<BrowserDataCleanupOutcome, VaultStorageFailure>;
+    let logging: Result<WasmLoggingSuspensionOutcome, VaultStorageFailure>;
     try {
       await browserLogRuntime.suspendWasmLogging();
-      logging = ok();
+      logging = ok(WasmLoggingSuspensionOutcome.Suspended);
     } catch {
       logging = err(
         new VaultStorageFailure(VaultStorageFailureKind.LoggingCleanupFailed),
@@ -458,7 +515,7 @@ class BrowserDataLifecycle {
     } catch {
       return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
     }
-    return ok();
+    return ok(LocalBrowserDataDeletionOutcome.Cleared);
   }
 }
 

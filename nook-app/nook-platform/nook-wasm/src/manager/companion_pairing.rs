@@ -2,7 +2,7 @@ use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
     AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
-    ConsumedCompanionPairingAuthority, ExtensionConnectScope,
+    ConsumedCompanionPairingAuthority, ExtensionConnectScope, ExtensionPairingVaultType,
 };
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
@@ -18,6 +18,51 @@ pub use activation::{
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {
     inner: CompanionExtensionPairingEndpoint,
+}
+
+/// Named result of the vault authorization effect used to prepare a pairing grant.
+#[wasm_bindgen]
+pub struct NookExtensionDeviceApproval {
+    store_id: nook_core::StoreId,
+    approved_at: nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
+    vault_type: ExtensionPairingVaultType,
+}
+
+impl NookExtensionDeviceApproval {
+    pub(crate) fn for_manager(manager: &NookVaultManager) -> Result<Self, JsError> {
+        Ok(Self {
+            store_id: nook_core::StoreId::parse(&manager.vault.store_id)
+                .map_err(|error| JsError::new(&error.to_string()))?,
+            approved_at: serde_json::from_str(&js_sys::Date::now().to_string())
+                .map_err(|error| JsError::new(&error.to_string()))?,
+            vault_type: match manager.vault.architecture.vault_type {
+                VaultType::Simple => ExtensionPairingVaultType::Simple,
+                VaultType::Sentinel => {
+                    return Err(JsError::new(
+                        "Sentinel vaults cannot approve extension devices",
+                    ));
+                }
+            },
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl NookExtensionDeviceApproval {
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> crate::NookStoreId {
+        self.store_id.clone().into()
+    }
+
+    #[wasm_bindgen(getter, js_name = approvedAt)]
+    pub fn approved_at(&self) -> nook_companion_core::ExtensionPairingApprovalEpochMilliseconds {
+        self.approved_at
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultType)]
+    pub fn vault_type(&self) -> ExtensionPairingVaultType {
+        self.vault_type
+    }
 }
 
 #[wasm_bindgen]
@@ -84,7 +129,7 @@ impl NookCompanionPairingApprovalAuthority {
         };
         if manager.application != VaultApplication::Extension
             || manager.vault.architecture.vault_type != VaultType::Simple
-            || manager.vault.store_id != approval.vault_store_id
+            || manager.vault.store_id != approval.vault_store_id.as_str()
             || vault_name != &approval.vault_name
         {
             return Err(CompanionPairingFailure::VaultMismatch);
@@ -148,7 +193,7 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
+        CompanionPairingProviderManifestDigest,
     };
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -170,7 +215,7 @@ mod tests {
             let (signing, signing_seed) = SigningIdentity::generate()?;
             let mut manager = NookVaultManager::new();
             manager.application = VaultApplication::Extension;
-            manager.vault.store_id = "store-1".to_owned();
+            manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
             manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
             manager.device.id = identity.device_id().as_str().to_owned();
             manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -178,7 +223,9 @@ mod tests {
 
             let mut providers = AuthProvidersSnapshotData {
                 providers: Vec::new(),
-                active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
+                active_vault_store_id: ActiveVaultScope::StoreId(
+                    nook_core::StoreId::before_genesis_placeholder().into_inner(),
+                ),
             };
             let mut scopes = vec![ExtensionConnectScope::VaultAccess];
             if with_provider {
@@ -189,7 +236,9 @@ mod tests {
                     "nook",
                     "2026-09-07T00:00:00Z",
                 );
-                provider.store_id = ProviderVaultScope::StoreId("store-1".to_owned());
+                provider.store_id = ProviderVaultScope::StoreId(
+                    nook_core::StoreId::before_genesis_placeholder().into_inner(),
+                );
                 providers.providers.push(provider);
                 providers = providers
                     .seal_credentials_for(&identity.public_key())
@@ -213,9 +262,9 @@ mod tests {
             };
             let approval = CompanionPairingApproval {
                 request: request.clone(),
-                vault_store_id: "store-1".to_owned(),
+                vault_store_id: nook_core::StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                approved_at: serde_json::from_str("100")?,
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
@@ -294,6 +343,25 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    fn extension_device_approval_owns_typed_grant_facts() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
+        manager.vault.architecture.vault_type = VaultType::Simple;
+
+        let approval = NookExtensionDeviceApproval::for_manager(&manager)?;
+
+        assert_eq!(approval.store_id().value(), manager.vault.store_id);
+        let vault_type: ExtensionPairingVaultType = approval.vault_type();
+        assert_eq!(vault_type, ExtensionPairingVaultType::Simple);
+        assert!(approval.approved_at().validate().is_ok());
+        assert!(
+            approval.approved_at()
+                > nook_companion_core::ExtensionPairingApprovalEpochMilliseconds::MINIMUM
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn real_manager_prevalidates_exact_empty_and_sealed_provider_approvals() -> anyhow::Result<()> {
         for with_provider in [false, true] {
             let fixture = PairingFixture::new(with_provider)?;
@@ -314,7 +382,9 @@ mod tests {
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
                 admitted.providers.active_vault_store_id,
-                ActiveVaultScope::StoreId(("store-1").to_owned())
+                ActiveVaultScope::StoreId(
+                    nook_core::StoreId::before_genesis_placeholder().into_inner()
+                )
             );
             assert_eq!(
                 admitted.providers.providers.len(),
@@ -452,13 +522,17 @@ mod tests {
                 "nook",
                 "2026-09-07T00:00:00Z",
             )],
-            active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId(
+                nook_core::StoreId::before_genesis_placeholder().into_inner(),
+            ),
         };
         replacement
             .providers
             .first_mut()
             .ok_or_else(|| anyhow::anyhow!("replacement provider must be present"))?
-            .store_id = ProviderVaultScope::StoreId("store-1".to_owned());
+            .store_id = ProviderVaultScope::StoreId(
+            nook_core::StoreId::before_genesis_placeholder().into_inner(),
+        );
         replacement = replacement
             .seal_credentials_for(&other.public_key())
             .map_err(nook_core::ProviderCredentialRejection::into_cause)?;

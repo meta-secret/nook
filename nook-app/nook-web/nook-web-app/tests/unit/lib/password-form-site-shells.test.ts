@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe('popular-site login shells', () => {
   test('isolates and classifies the Namecheap login inside its page-wide form', () => {
-    document.body.innerHTML = `<form id="aspnetForm" method="post"><header><input name="LoginUserName" title="Your username" autocomplete="on" hidden /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><div class="gb-scope loginBox nc_login"><div class="gb-panel"><div class="gb-panel__body"><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" class="gb-form-control nc_username nc_username_required" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" class="nc_password nc_password_required handlereturn gb-form-control" /><input id="login-submit" type="submit" value="Sign in" class="nc_login_submit" /></fieldset></div></div></div>
+    document.body.innerHTML = `<style>.gb-dropdown__holder { display: none; }</style><form id="aspnetForm" method="post"><header><div class="gb-dropdown__holder"><input data-ncid="input-login-username" name="LoginUserName" title="Username" /><input data-ncid="input-login-password" name="LoginPassword" title="Password" type="password" /></div><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><div class="gb-scope loginBox nc_login"><div class="gb-panel"><div class="gb-panel__body"><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" class="gb-form-control nc_username nc_username_required" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" class="nc_password nc_password_required handlereturn gb-form-control" /><input id="login-submit" type="submit" value="Sign in" class="nc_login_submit" /></fieldset></div></div></div>
       <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="button">Use a passkey</button><button type="submit">Subscribe</button></footer></form>`
 
     const observations =
@@ -92,6 +92,30 @@ describe('popular-site login shells', () => {
     ).toBe('reader@example.test')
   })
 
+  test('emits independently bounded login clusters that share one page-wide form', () => {
+    document.body.innerHTML = `<form id="page-form" method="post">
+      <header class="signin-popover"><input name="header-user" title="Username" /><input name="header-password" title="Password" type="password" /><a href="/login">Sign in</a></header>
+      <main class="login-panel"><input name="account-user" title="Username" /><input name="account-password" title="Password" type="password" /><button type="submit">Sign in</button></main>
+      <footer><input type="email" name="newsletter" /><button type="submit">Subscribe</button></footer>
+    </form>`
+
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    expect(observations.map(({ root }) => root)).toEqual([
+      document.querySelector('.login-panel'),
+      document.querySelector('.signin-popover'),
+    ])
+    expect(
+      observations.map(({ summary }) => ({
+        passwordFieldCount: summary.passwordFieldCount,
+        usernameFieldCount: summary.usernameFieldCount,
+      })),
+    ).toEqual([
+      { passwordFieldCount: 1, usernameFieldCount: 1 },
+      { passwordFieldCount: 1, usernameFieldCount: 1 },
+    ])
+  })
+
   test('keeps a page-wide owner when a rendered OTP sibling is present', () => {
     document.body.innerHTML = `<form><main class="login-panel"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></main>
       <aside><input autocomplete="one-time-code" /></aside></form>`
@@ -110,13 +134,16 @@ describe('popular-site login shells', () => {
       kind: 'password',
       extra: '<aside><input type="password" /></aside>',
     },
-  ])('keeps a page-wide owner with an extra rendered $kind', ({ extra }) => {
-    document.body.innerHTML = `<form><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></fieldset>${extra}</form>`
+  ])(
+    'isolates an explicit login cluster from an extra rendered $kind',
+    ({ extra }) => {
+      document.body.innerHTML = `<form><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></fieldset>${extra}</form>`
 
-    expect(
-      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
-    ).toBe(document)
-  })
+      expect(
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+      ).toBe(document.querySelector('.loginForm'))
+    },
+  )
 
   test('keeps an explicit new-password surface at document scope', () => {
     document.body.innerHTML = `<form><fieldset class="loginForm"><input autocomplete="username" /><input type="password" autocomplete="new-password" /></fieldset></form>`

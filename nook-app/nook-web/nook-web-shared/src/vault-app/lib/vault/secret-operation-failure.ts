@@ -1,21 +1,29 @@
 import type { Result } from "neverthrow";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 import type { VaultEditRestriction } from "$lib/vault/runtime-state.svelte";
 import { VaultEditDecision } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 
 /** Retains the Rust-produced edit decision and translated reason. */
+type RejectedVaultEditRestriction = Exclude<
+  VaultEditRestriction,
+  { decision: VaultEditDecision.Allowed }
+>;
+
 export class SecretEditRejection {
-  constructor(
-    readonly restriction: Exclude<
-      VaultEditRestriction,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      { decision: VaultEditDecision.Allowed }
-    >,
-  ) {}
+  constructor(readonly restriction: RejectedVaultEditRestriction) {}
 }
-export type SecretOperationFailure = VaultStorageFailure | SecretEditRejection;
+export type SecretOperationFailure =
+  VaultStorageFailure | SecretEditRejection | OAuthFailure;
 export type SecretOperationResult<T> = Result<T, SecretOperationFailure>;
+
+export enum SecretMutationOutcome {
+  Prepared = "prepared",
+  Added = "added",
+  Deleted = "deleted",
+  Replaced = "replaced",
+}
 
 export class SecretFailurePresentation {
   constructor(private readonly vault: VaultState) {}

@@ -1,14 +1,17 @@
 <script lang="ts">
-  import type { DeviceMutationResult } from '$lib/vault/multi-device'
+  import type {
+    DeviceRenameResult,
+    DeviceRevocationResult,
+  } from "$lib/vault/multi-device";
   type IdentityTextTruncation = {
-    readonly value: string
-    readonly head: number
-    readonly tail: number
-  }
+    readonly value: string;
+    readonly head: number;
+    readonly tail: number;
+  };
 
-  type DeviceRename = { readonly authId: string; readonly label: string }
+  type DeviceRename = { readonly authId: string; readonly label: string };
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     Check,
     ChevronDown,
@@ -19,31 +22,33 @@
     Smartphone,
     TriangleAlert,
     X,
-  } from '@lucide/svelte'
-  import { configured_vault_application_supports_extension } from '$app-wasm'
-  import { Button } from '$lib/components/ui/button'
-  import { extensionConnectionBrowser } from '$lib/extension/connect'
+  } from "@lucide/svelte";
+  import { configured_vault_application_supports_extension } from "$app-wasm";
+  import { Button } from "$lib/components/ui/button";
+  import { extensionConnectionBrowser } from "$lib/extension/connect";
   import {
     ExtensionSetupStatus,
     extensionInstallationBrowser,
-  } from '$lib/extension/install'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
-  import type { VaultState } from '$lib/vault.svelte'
-  import { VaultType } from '$lib/vault/architecture-model'
+  } from "$lib/extension/install";
+  import type { JoinRequest, VaultMember } from "$lib/nook";
+  import type { VaultState } from "$lib/vault.svelte";
+  import { VaultType } from "$lib/vault/architecture-model";
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app/extension-setup'
+  } from "$lib/app/extension-setup";
   import {
+    type JoinApprovalHandlingOutcome,
+    type JoinDenialHandlingOutcome,
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
     type MemberDetails,
     type MemberRename,
     type MemberRevocation,
-  } from './vault-devices-card-state'
+  } from "./vault-devices-card-state";
 
-  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
   let {
     vault,
@@ -58,210 +63,216 @@
     onRenameDevice,
     onRevokeDevice,
   }: {
-    vault: VaultState
-    deviceId: string
-    devicePublicKey: string
-    pendingJoins?: JoinRequest[]
-    vaultMembers?: VaultMember[]
-    isBusy: boolean
-    hasPasswordEnvelope?: boolean
-    onApproveJoin: (deviceId: string) => void | Promise<void>
-    onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
-    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
-  } = $props()
+    vault: VaultState;
+    deviceId: string;
+    devicePublicKey: string;
+    pendingJoins?: JoinRequest[];
+    vaultMembers?: VaultMember[];
+    isBusy: boolean;
+    hasPasswordEnvelope?: boolean;
+    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>;
+    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>;
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>;
+    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>;
+  } = $props();
 
   let detailsAuthId = $state<MemberDetails>({
     kind: MemberDetailsKind.Collapsed,
-  })
-  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle })
-  let renameLabel = $state('')
+  });
+  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle });
+  let renameLabel = $state("");
   let revokeAuthId = $state<MemberRevocation>({
     kind: MemberRevocationKind.Idle,
-  })
+  });
   let extensionSetupState = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
-  })
-  let extensionInstallBusy = $state(false)
-  let extensionConnectError = $state(false)
+  });
+  let extensionInstallBusy = $state(false);
+  let extensionConnectError = $state(false);
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
-  )
+  );
 
   async function refreshExtensionSetupStatus() {
-    if (!SUPPORTS_EXTENSION) return
+    if (!SUPPORTS_EXTENSION) return;
     const state = await extensionInstallationBrowser.resolveExtensionSetupState(
       vault.activeVault,
-    )
+    );
     extensionSetupState = (() => {
       const shouldOfferExtensionSetupArgs: Parameters<
         typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-      >[0] = { status: state.status, environment: navigator }
+      >[0] = { status: state.status, environment: navigator };
       return extensionInstallationBrowser.shouldOfferExtensionSetup(
         shouldOfferExtensionSetupArgs,
-      )
+      );
     })()
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
-      : { kind: ExtensionSetupOfferKind.Hidden }
+      : { kind: ExtensionSetupOfferKind.Hidden };
   }
 
   async function handleExtensionInstall() {
-    extensionInstallBusy = true
+    extensionInstallBusy = true;
     try {
       const target =
-        await extensionInstallationBrowser.loadExtensionInstallTarget()
-      extensionInstallationBrowser.openExtensionInstallTarget(target)
+        await extensionInstallationBrowser.loadExtensionInstallTarget();
+      extensionInstallationBrowser.openExtensionInstallTarget(target);
     } finally {
-      extensionInstallBusy = false
+      extensionInstallBusy = false;
     }
   }
 
   async function handleExtensionConnect() {
-    extensionInstallBusy = true
-    extensionConnectError = false
+    extensionInstallBusy = true;
+    extensionConnectError = false;
     try {
       extensionConnectError =
-        !(await extensionConnectionBrowser.openInstalledExtension())
+        !(await extensionConnectionBrowser.openInstalledExtension());
     } finally {
-      extensionInstallBusy = false
+      extensionInstallBusy = false;
     }
   }
 
   async function handleExtensionSetupAction() {
-    if (extensionSetupState.kind !== ExtensionSetupOfferKind.Visible) return
-    const state = extensionSetupState.setup
+    if (extensionSetupState.kind !== ExtensionSetupOfferKind.Visible) return;
+    const state = extensionSetupState.setup;
     if (state.status === ExtensionSetupStatus.NotInstalled) {
-      await handleExtensionInstall()
-      return
+      await handleExtensionInstall();
+      return;
     }
-    await handleExtensionConnect()
+    await handleExtensionConnect();
   }
 
   function extensionStatusLabel(status: ExtensionSetupStatus): string {
     if (status === ExtensionSetupStatus.NotInstalled) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusNotInstalled)
+      return vault.t(I18N_KEYS.ExtensionSetupStatusNotInstalled);
     }
     if (status === ExtensionSetupStatus.InstalledUnpaired) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusInstalledUnpaired)
+      return vault.t(I18N_KEYS.ExtensionSetupStatusInstalledUnpaired);
     }
     if (status === ExtensionSetupStatus.PairedElsewhere) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusPairedElsewhere)
+      return vault.t(I18N_KEYS.ExtensionSetupStatusPairedElsewhere);
     }
-    return vault.t(I18N_KEYS.ExtensionSetupStatusPaired)
+    return vault.t(I18N_KEYS.ExtensionSetupStatusPaired);
   }
 
   $effect(() => {
-    void vault.activeVault
-    void refreshExtensionSetupStatus()
+    void vault.activeVault;
+    void refreshExtensionSetupStatus();
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshExtensionSetupStatus()
+      if (document.visibilityState === "visible") {
+        void refreshExtensionSetupStatus();
       }
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     const observer = new MutationObserver(() => {
-      void refreshExtensionSetupStatus()
-    })
+      void refreshExtensionSetupStatus();
+    });
     const observeArgs: Parameters<typeof observer.observe>[1] = {
       attributes: true,
-      attributeFilter: ['data-nook-extension-runtime-id'],
-    }
-    observer.observe(document.documentElement, observeArgs)
+      attributeFilter: ["data-nook-extension-runtime-id"],
+    };
+    observer.observe(document.documentElement, observeArgs);
 
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      observer.disconnect()
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      observer.disconnect();
+    };
+  });
+
+  type VaultMemberComparison = readonly [
+    left: (typeof vaultMembers)[number],
+    right: (typeof vaultMembers)[number],
+  ];
+
+  class VaultMemberOrdering {
+    static currentDeviceFirst(...[a, b]: VaultMemberComparison): number {
+      if (a.deviceId === deviceId) return -1;
+      if (b.deviceId === deviceId) return 1;
+      return displayName(a).localeCompare(displayName(b));
     }
-  })
+  }
 
   const sortedMembers = $derived(
-    [...vaultMembers].sort(
-      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-      (a, b) => {
-        if (a.deviceId === deviceId) return -1
-        if (b.deviceId === deviceId) return 1
-        return displayName(a).localeCompare(displayName(b))
-      },
-    ),
-  )
+    [...vaultMembers].sort(VaultMemberOrdering.currentDeviceFirst),
+  );
 
   function currentDeviceName(): string {
-    if (!('navigator' in globalThis))
-      return vault.t(I18N_KEYS.DevicesCardThisBrowserOs)
-    const ua = navigator.userAgent
-    let os = vault.t(I18N_KEYS.DevicesCardUnknownOs)
-    if (ua.includes('Android')) os = 'Android'
-    else if (ua.includes('like Mac')) os = 'iOS'
-    else if (ua.includes('Win')) os = 'Windows'
-    else if (ua.includes('Mac')) os = 'Mac'
-    else if (ua.includes('Linux')) os = 'Linux'
+    if (!("navigator" in globalThis))
+      return vault.t(I18N_KEYS.DevicesCardThisBrowserOs);
+    const ua = navigator.userAgent;
+    let os = vault.t(I18N_KEYS.DevicesCardUnknownOs);
+    if (ua.includes("Android")) os = "Android";
+    else if (ua.includes("like Mac")) os = "iOS";
+    else if (ua.includes("Win")) os = "Windows";
+    else if (ua.includes("Mac")) os = "Mac";
+    else if (ua.includes("Linux")) os = "Linux";
 
-    let browser = 'Browser'
-    if (ua.includes('Edg')) browser = 'Edge'
-    else if (ua.includes('Firefox')) browser = 'Firefox'
-    else if (ua.includes('Chrome')) browser = 'Chrome'
-    else if (ua.includes('Safari')) browser = 'Safari'
-    return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`
+    let browser = "Browser";
+    if (ua.includes("Edg")) browser = "Edge";
+    else if (ua.includes("Firefox")) browser = "Firefox";
+    else if (ua.includes("Chrome")) browser = "Chrome";
+    else if (ua.includes("Safari")) browser = "Safari";
+    return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`;
   }
 
   function truncate({ value, head, tail }: IdentityTextTruncation) {
-    if (value.length <= head + tail + 3) return value
-    return `${value.slice(0, head)}…${value.slice(-tail)}`
+    if (value.length <= head + tail + 3) return value;
+    return `${value.slice(0, head)}…${value.slice(-tail)}`;
   }
 
   function formatDate(value: string): string {
-    if (!value || value === 'genesis' || value === 'self-sync')
-      return vault.t(I18N_KEYS.DevicesCardEnrolled)
-    const date = new Date(value)
+    if (!value || value === "genesis" || value === "self-sync")
+      return vault.t(I18N_KEYS.DevicesCardEnrolled);
+    const date = new Date(value);
     if (Number.isNaN(date.getTime()))
-      return vault.t(I18N_KEYS.DevicesCardEnrolled)
-    return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`
+      return vault.t(I18N_KEYS.DevicesCardEnrolled);
+    return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`;
   }
 
   function formatRequestDate(value: string): string {
-    const date = new Date(value)
+    const date = new Date(value);
     if (Number.isNaN(date.getTime()))
-      return vault.t(I18N_KEYS.DevicesCardRecently)
-    return date.toLocaleDateString()
+      return vault.t(I18N_KEYS.DevicesCardRecently);
+    return date.toLocaleDateString();
   }
 
   function displayName(member: VaultMember): string {
-    const label = member.label.trim()
-    if (label) return label
-    if (member.deviceId === deviceId) return currentDeviceName()
+    const label = member.label.trim();
+    if (label) return label;
+    if (member.deviceId === deviceId) return currentDeviceName();
     const truncateArgs: Parameters<typeof truncate>[0] = {
       value: member.deviceId,
       head: 6,
       tail: 4,
-    }
-    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`
+    };
+    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`;
   }
 
   function beginRename(member: VaultMember) {
-    renameAuthId = { kind: MemberRenameKind.Editing, authId: member.authId }
-    renameLabel = member.label.trim()
-    revokeAuthId = { kind: MemberRevocationKind.Idle }
+    renameAuthId = { kind: MemberRenameKind.Editing, authId: member.authId };
+    renameLabel = member.label.trim();
+    revokeAuthId = { kind: MemberRevocationKind.Idle };
   }
 
   async function saveRename(member: VaultMember) {
     const deviceRename: Parameters<typeof onRenameDevice>[0] = {
       authId: member.authId,
       label: renameLabel,
-    }
-    const renamed = await onRenameDevice(deviceRename)
+    };
+    const renamed = await onRenameDevice(deviceRename);
     if (renamed.isErr()) {
-      vault.errorMsg = vault.t(renamed.error.translationKey)
-      return
+      vault.errorMsg = vault.t(renamed.error.translationKey);
+      return;
     }
-    renameAuthId = { kind: MemberRenameKind.Idle }
-    renameLabel = ''
+    renameAuthId = { kind: MemberRenameKind.Idle };
+    renameLabel = "";
   }
 
   async function copyText(value: string) {
-    if (!value) return
-    await navigator.clipboard.writeText(value)
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
   }
 </script>
 
@@ -300,13 +311,13 @@
             const tArgs: Parameters<typeof vault.t>[0] = {
               key: I18N_KEYS.ExtensionSetupConnectedVault,
               replacements: {
-                vault: ((v) => (v ? v : ''))(extensionSetup.connectedVaultName),
-                store: ((v) => (v ? v : ''))(
+                vault: ((v) => (v ? v : ""))(extensionSetup.connectedVaultName),
+                store: ((v) => (v ? v : ""))(
                   extensionSetup.connectedVaultStoreId,
                 ),
               },
-            }
-            return vault.t(tArgs)
+            };
+            return vault.t(tArgs);
           })()}
         </p>
       {/if}
@@ -325,11 +336,11 @@
           type="button"
           size="sm"
           variant={extensionSetup.status === ExtensionSetupStatus.NotInstalled
-            ? 'default'
-            : 'outline'}
+            ? "default"
+            : "outline"}
           class={extensionSetup.status === ExtensionSetupStatus.NotInstalled
-            ? ''
-            : 'border-border'}
+            ? ""
+            : "border-border"}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
           onclick={() => void handleExtensionSetupAction()}
@@ -397,8 +408,8 @@
                   replacements: {
                     count: String(pendingJoins.length),
                   },
-                }
-                return vault.t(tArgs2)
+                };
+                return vault.t(tArgs2);
               })()}
         </span>
       </div>
@@ -422,8 +433,8 @@
                         value: join.deviceId,
                         head: 14,
                         tail: 10,
-                      }
-                      return truncate(truncateArgs2)
+                      };
+                      return truncate(truncateArgs2);
                     })()}
                   </p>
                   <p class="text-xs text-muted-foreground">
@@ -478,8 +489,8 @@
                 replacements: {
                   count: String(vaultMembers.length),
                 },
-              }
-              return vault.t(tArgs3)
+              };
+              return vault.t(tArgs3);
             })()}
       </span>
     </div>
@@ -585,8 +596,8 @@
                     disabled={isBusy}
                     aria-label={vault.t(I18N_KEYS.DevicesCardCancelRename)}
                     onclick={() => {
-                      renameAuthId = { kind: MemberRenameKind.Idle }
-                      renameLabel = ''
+                      renameAuthId = { kind: MemberRenameKind.Idle };
+                      renameLabel = "";
                     }}
                   >
                     <X class="size-3.5" />
@@ -616,8 +627,8 @@
                       revokeAuthId = {
                         kind: MemberRevocationKind.Confirming,
                         authId: member.authId,
-                      }
-                      renameAuthId = { kind: MemberRenameKind.Idle }
+                      };
+                      renameAuthId = { kind: MemberRenameKind.Idle };
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -694,7 +705,7 @@
                           if (result.isErr())
                             vault.errorMsg = vault.t(
                               result.error.translationKey,
-                            )
+                            );
                         })}
                     >
                       {vault.t(I18N_KEYS.DevicesCardRevoke)}
@@ -735,8 +746,8 @@
                         value: member.authId,
                         head: 10,
                         tail: 8,
-                      }
-                      return truncate(truncateArgs3)
+                      };
+                      return truncate(truncateArgs3);
                     })()}
                   </dd>
                 </div>
@@ -751,8 +762,8 @@
                           value: member.publicKey,
                           head: 12,
                           tail: 10,
-                        }
-                        return truncate(truncateArgs4)
+                        };
+                        return truncate(truncateArgs4);
                       })()}
                     </span>
                     <button

@@ -54,8 +54,7 @@
   let {
     vault,
     value = $bindable(''),
-    // eslint-disable-next-line no-useless-assignment -- parent bind:valid output
-    valid = $bindable(false),
+    valid: validity = $bindable(false),
     readonly = false,
     revealed = true,
   }: {
@@ -65,6 +64,10 @@
     readonly?: boolean
     revealed?: boolean
   } = $props()
+
+  $effect(() => {
+    void validity
+  })
 
   let wordCount = $state<MnemonicLength>(12)
   const fromArgs: Parameters<typeof Array.from>[0] = { length: 24 }
@@ -278,14 +281,14 @@
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
       checksumValid = { kind: ChecksumStatusKind.NotChecked }
-      valid = false
+      validity = false
       return
     }
 
     const mnemonic = value
     const ok = validate_bip39_mnemonic(mnemonic)
     checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok }
-    valid = ok
+    validity = ok
   })
 </script>
 

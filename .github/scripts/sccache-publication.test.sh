@@ -38,6 +38,17 @@ NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
   bash "$report" --replay publication >"$fixture_dir/replayed.log"
 grep -Fq 'NOOK_SCCACHE_STATS {"stage":"publication"' "$fixture_dir/replayed.log"
 grep -Fq '"cache_misses":275' "$fixture_dir/replayed.log"
+if NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
+  FAKE_SCCACHE_STATS="$fixture_dir/zero-writes.json" \
+  NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+  NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
+  SCCACHE_CLIENT_SIDE=0 \
+  SCCACHE_S3_RW_MODE=READ_WRITE \
+    bash "$report" --require publication >"$fixture_dir/zero-writes-gate.log" 2>&1; then
+  echo 'sccache health gate accepted a zero-hit, zero-write compile' >&2
+  exit 1
+fi
+grep -Fq 'health gate failed for publication' "$fixture_dir/zero-writes-gate.log"
 
 cat >"$fixture_dir/completed-writes.json" <<'EOF'
 {"stats":{"compile_requests":339,"requests_executed":279,"cache_hits":{"counts":{}},"cache_misses":{"counts":{"Rust":275}},"cache_errors":{"counts":{}},"cache_write_errors":0,"cache_writes":275}}
@@ -52,6 +63,18 @@ SCCACHE_S3_RW_MODE=READ_WRITE \
 grep -Fq '"cache_writes":275' "$fixture_dir/completed-writes.log"
 grep -Fq '"remote_writes":275' "$fixture_dir/completed-writes.log"
 grep -Fq '"runtime_mode":"READ_WRITE"' "$fixture_dir/completed-writes.log"
+
+cat >"$fixture_dir/authoritative-hits.json" <<'EOF'
+{"stats":{"compile_requests":339,"requests_executed":279,"cache_hits":{"counts":{"Rust":275}},"cache_misses":{"counts":{}},"cache_errors":{"counts":{}},"cache_write_errors":0,"cache_writes":0}}
+EOF
+NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
+FAKE_SCCACHE_STATS="$fixture_dir/authoritative-hits.json" \
+NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
+SCCACHE_CLIENT_SIDE=0 \
+SCCACHE_S3_RW_MODE=READ_WRITE \
+  bash "$report" --require publication >"$fixture_dir/authoritative-hits.log" 2>&1
+grep -Fq '"cache_hits":275' "$fixture_dir/authoritative-hits.log"
 
 cat >"$fixture_dir/write-errors.json" <<'EOF'
 {"stats":{"compile_requests":339,"requests_executed":279,"cache_hits":{"counts":{}},"cache_misses":{"counts":{"Rust":275}},"cache_errors":{"counts":{"S3":1}},"cache_write_errors":0,"cache_writes":0}}

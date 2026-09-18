@@ -1,4 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
+import { Effect, Schema } from "effect";
+import * as ParseResult from "effect/ParseResult";
 import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 import {
   ICLOUD_API_TOKEN,
@@ -59,13 +61,38 @@ export type CloudKitZoneID = {
   ownerRecordName?: string;
 };
 
+type CloudKitRecordAsset = {
+  downloadURL?: string;
+  fileChecksum?: string;
+  size?: number;
+};
+
+type CloudKitRecordReference = {
+  recordName: string;
+  action?: CloudKitRecordReferenceAction;
+};
+
+enum CloudKitRecordReferenceAction {
+  DeleteSelf = "DELETE_SELF",
+  None = "NONE",
+}
+
+type CloudKitRecordFieldValue =
+  | string
+  | number
+  | boolean
+  | Date
+  | ArrayBuffer
+  | CloudKitRecordAsset
+  | CloudKitRecordReference;
+
 export type CloudKitRecord = {
   recordType: string;
   recordName: string;
   recordChangeTag?: string;
   createShortGUID?: boolean;
   shortGUID?: string;
-  fields?: Record<string, { value: unknown }>;
+  fields?: Record<string, { value: CloudKitRecordFieldValue }>;
 };
 
 export type CloudKitRecordsResponse = {
@@ -93,9 +120,14 @@ type CloudKitSharePermissionOptions = CloudKitSharePermission[];
 
 type CloudKitShortIdentifiers = string[];
 
-type CloudKitRecordSaveOptions = { zoneID: string | CloudKitZoneID };
+export type CloudKitRecordSaveOptions = { zoneID: string | CloudKitZoneID };
 
-type CloudKitSharePresentationOptions = {
+type CloudKitRecordSaveInput = readonly [
+  records: CloudKitRecordBatch,
+  options: CloudKitRecordSaveOptions,
+];
+
+export type CloudKitSharePresentationOptions = {
   record: CloudKitRecord;
   zoneID: string | CloudKitZoneID;
   shareTitle: string;
@@ -105,13 +137,11 @@ type CloudKitSharePresentationOptions = {
 };
 
 export type CloudKitDatabase = {
-  saveRecordZones: (zones: CloudKitRecordZones) => Promise<unknown>;
-  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+  saveRecordZones: (zones: CloudKitRecordZones) => Promise<void>;
   saveRecords: (
-    records: CloudKitRecordBatch,
-    options: CloudKitRecordSaveOptions,
+    ...input: CloudKitRecordSaveInput
   ) => Promise<CloudKitRecordsResponse>;
-  shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<unknown>;
+  shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<void>;
 };
 
 export type CloudKitAuthError = {
@@ -148,7 +178,7 @@ export type CloudKitAuthChallenge = {
   uuid?: string;
 };
 
-type CloudKitAuthSetupOptions = {
+export type CloudKitAuthSetupOptions = {
   grabAuthToken: boolean;
   persist: boolean;
 };
@@ -176,13 +206,20 @@ type ExternalCloudKitContainer = Omit<
   CloudKitContainer,
   "setUpAuth" | "fetchCurrentUserIdentity"
 > & {
-  setUpAuth: (options?: ExternalCloudKitAuthSetupOptions) => Promise<unknown>;
-  fetchCurrentUserIdentity?: () => Promise<unknown>;
+  setUpAuth: (
+    options?: ExternalCloudKitAuthSetupOptions,
+  ) => Promise<CloudKitUserIdentity>;
+  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
 };
 
+type CloudKitTokenWriteInput = readonly [
+  containerIdentifier: string,
+  authToken: string,
+];
+
 export type CloudKitAuthTokenStore = {
-  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-  putToken: (containerIdentifier: string, authToken: unknown) => void;
+  putToken: (...input: CloudKitTokenWriteInput) => void;
+  // CloudKit JS owns absent-token handling at this opaque host callback edge.
   getToken: (containerIdentifier: string) => unknown;
 };
 
@@ -224,14 +261,14 @@ export type WebAuthTokenLookup =
   | { kind: WebAuthTokenLookupKind.Unavailable }
   | { kind: WebAuthTokenLookupKind.Available; token: string };
 
-type CloudKitWebAuthTokenPersistence = {
+export type CloudKitWebAuthTokenPersistence = {
   readonly containerIdentifier: string;
   readonly token: WebAuthTokenLookup;
 };
 
 export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
-  // eslint-disable-next-line max-params -- CloudKit owns this positional token-store callback signature.
-  putToken(containerIdentifier, authToken) {
+  putToken(...input) {
+    const [containerIdentifier, authToken] = input;
     log.debug("CloudKit putToken");
     const storeCloudKitWebAuthTokenArgs: Parameters<
       typeof cloudKitRuntime.storeCloudKitWebAuthToken
@@ -262,71 +299,111 @@ declare global {
   }
 }
 
-function isCloudKitUserIdentity(value: unknown): value is CloudKitUserIdentity {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  if ("userRecordName" in value && typeof value.userRecordName !== "string")
-    return false;
-  if ("nameComponents" in value) {
-    const nameComponents = value.nameComponents;
-    if (
-      !nameComponents ||
-      typeof nameComponents !== "object" ||
-      Array.isArray(nameComponents)
-    )
-      return false;
-    if (
-      "givenName" in nameComponents &&
-      typeof nameComponents.givenName !== "string"
-    )
-      return false;
-    if (
-      "familyName" in nameComponents &&
-      typeof nameComponents.familyName !== "string"
-    )
-      return false;
-  }
-  if ("lookupInfo" in value) {
-    const lookupInfo = value.lookupInfo;
-    if (
-      !lookupInfo ||
-      typeof lookupInfo !== "object" ||
-      Array.isArray(lookupInfo)
-    )
-      return false;
-    if (
-      "emailAddress" in lookupInfo &&
-      typeof lookupInfo.emailAddress !== "string"
-    )
-      return false;
-  }
-  return true;
+export enum CloudKitUserIdentityDecodeFailureKind {
+  Invalid = "invalid-cloudkit-user-identity",
 }
+
+export type CloudKitUserIdentityDecodeFailure = {
+  readonly kind: CloudKitUserIdentityDecodeFailureKind.Invalid;
+  readonly cause: ParseResult.ParseError;
+};
+
+export class CloudKitUserIdentityDecoder {
+  private constructor() {}
+
+  static decode(
+    value: unknown,
+  ): Effect.Effect<CloudKitUserIdentity, CloudKitUserIdentityDecodeFailure> {
+    return Schema.decodeUnknown(CloudKitUserIdentitySchema)(value).pipe(
+      Effect.mapError((cause) => {
+        const failure: CloudKitUserIdentityDecodeFailure = {
+          kind: CloudKitUserIdentityDecodeFailureKind.Invalid,
+          cause,
+        };
+        return failure;
+      }),
+    );
+  }
+}
+
+type ExactOptionalFieldOptions = { readonly exact: true };
+const exactOptionalFieldOptions: ExactOptionalFieldOptions = { exact: true };
+const CloudKitGivenNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+const CloudKitFamilyNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+type CloudKitNameComponentFields = {
+  readonly givenName: typeof CloudKitGivenNameSchema;
+  readonly familyName: typeof CloudKitFamilyNameSchema;
+};
+const cloudKitNameComponentFields: CloudKitNameComponentFields = {
+  givenName: CloudKitGivenNameSchema,
+  familyName: CloudKitFamilyNameSchema,
+};
+const CloudKitNameComponentsSchema = Schema.Struct(cloudKitNameComponentFields);
+const CloudKitEmailAddressSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+type CloudKitLookupInfoFields = {
+  readonly emailAddress: typeof CloudKitEmailAddressSchema;
+};
+const cloudKitLookupInfoFields: CloudKitLookupInfoFields = {
+  emailAddress: CloudKitEmailAddressSchema,
+};
+const CloudKitLookupInfoSchema = Schema.Struct(cloudKitLookupInfoFields);
+const CloudKitUserRecordNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+const CloudKitNameComponentsOptionalSchema = Schema.optionalWith(
+  CloudKitNameComponentsSchema,
+  exactOptionalFieldOptions,
+);
+const CloudKitLookupInfoOptionalSchema = Schema.optionalWith(
+  CloudKitLookupInfoSchema,
+  exactOptionalFieldOptions,
+);
+type CloudKitUserIdentityFields = {
+  readonly userRecordName: typeof CloudKitUserRecordNameSchema;
+  readonly nameComponents: typeof CloudKitNameComponentsOptionalSchema;
+  readonly lookupInfo: typeof CloudKitLookupInfoOptionalSchema;
+};
+const cloudKitUserIdentityFields: CloudKitUserIdentityFields = {
+  userRecordName: CloudKitUserRecordNameSchema,
+  nameComponents: CloudKitNameComponentsOptionalSchema,
+  lookupInfo: CloudKitLookupInfoOptionalSchema,
+};
+const CloudKitUserIdentitySchema = Schema.Struct(cloudKitUserIdentityFields);
+
+type CloudKitWebAuthTokenResult = Result<string, OAuthFailure>;
+type CloudKitWebAuthTokenListener = (
+  tokenResult: CloudKitWebAuthTokenResult,
+) => void;
 
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
-  addTokenListener(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    listener: (token: Result<string, OAuthFailure>) => void,
-  ): void {
+  addTokenListener(listener: CloudKitWebAuthTokenListener): void {
     this.webAuthTokenListeners.add(listener);
   }
-  removeTokenListener(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    listener: (token: Result<string, OAuthFailure>) => void,
-  ): void {
+  removeTokenListener(listener: CloudKitWebAuthTokenListener): void {
     this.webAuthTokenListeners.delete(listener);
   }
   clearTokenListeners(): void {
     this.webAuthTokenListeners.clear();
   }
 
-  private webAuthTokenListeners = new Set<
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    (token: Result<string, OAuthFailure>) => void
-  >();
+  private webAuthTokenListeners = new Set<CloudKitWebAuthTokenListener>();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
-    return isCloudKitUserIdentity(value)
-      ? { kind: CloudKitIdentityKind.SignedIn, identity: value }
+    const decoded = Effect.runSync(
+      Effect.either(CloudKitUserIdentityDecoder.decode(value)),
+    );
+    return decoded._tag === "Right"
+      ? { kind: CloudKitIdentityKind.SignedIn, identity: decoded.right }
       : { kind: CloudKitIdentityKind.SignedOut };
   }
 
@@ -419,7 +496,13 @@ class CloudKitRuntime {
   }
 
   isBraveBrowser(): boolean {
-    return Boolean((navigator as Navigator & { brave?: unknown }).brave);
+    return Boolean(
+      (
+        navigator as Navigator & {
+          brave?: { readonly isBrave?: () => Promise<boolean> };
+        }
+      ).brave,
+    );
   }
 
   webAuthTokenStorageDiagnostics(): {
@@ -560,12 +643,10 @@ class CloudKitRuntime {
       const raw = sessionStorage.getItem(
         `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
       );
-      return ok(
-        raw
-          ? this.normalizeWebAuthToken(JSON.parse(raw))
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            { kind: WebAuthTokenLookupKind.Unavailable },
-      );
+      const token = raw
+        ? this.normalizeWebAuthToken(JSON.parse(raw))
+        : this.unavailableWebAuthToken();
+      return ok(token);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));
     }
@@ -600,24 +681,33 @@ class CloudKitRuntime {
     return outcome;
   }
 
-  loadCloudKitScript(): Promise<Result<void, OAuthFailure>> {
+  private loadedCloudKitApi(): Result<CloudKitGlobal, OAuthFailure> {
+    const cloudKit = window.CloudKit;
+    return cloudKit
+      ? ok(cloudKit)
+      : err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
+  }
+
+  loadCloudKitScript(): Promise<Result<CloudKitGlobal, OAuthFailure>> {
     return new Promise((resolve) => {
       try {
-        if (window.CloudKit) {
-          resolve(ok());
+        const cloudKit = window.CloudKit;
+        if (cloudKit) {
+          resolve(ok(cloudKit));
           return;
         }
-        const loaded = () => resolve(ok());
+        const loaded = () => resolve(this.loadedCloudKitApi());
         const failed = () =>
           resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
         const existing = document.querySelector(
           `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
         );
         if (existing) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          existing.addEventListener("load", loaded, { once: true });
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          existing.addEventListener("error", failed, { once: true });
+          const oneTimeListenerOptions: AddEventListenerOptions = {
+            once: true,
+          };
+          existing.addEventListener("load", loaded, oneTimeListenerOptions);
+          existing.addEventListener("error", failed, oneTimeListenerOptions);
           return;
         }
         const script = document.createElement("script");
@@ -631,6 +721,10 @@ class CloudKitRuntime {
         resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
       }
     });
+  }
+
+  private unavailableWebAuthToken(): WebAuthTokenLookup {
+    return { kind: WebAuthTokenLookupKind.Unavailable };
   }
 }
 

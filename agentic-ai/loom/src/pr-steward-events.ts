@@ -192,98 +192,6 @@ export class PrStewardCredentialFile {
 
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
-export const PR_STEWARD_PENDING_MESSAGE_LIMIT = 4;
-export enum PrStewardSubscriptionKind {
-  Active = 'active',
-  Closed = 'closed',
-  Failed = 'failed',
-  Overloaded = 'overloaded',
-}
-export type PrStewardSubscriptionTermination =
-  | { readonly kind: PrStewardSubscriptionKind.Closed }
-  | { readonly kind: PrStewardSubscriptionKind.Failed; readonly error: Error };
-
-type PrStewardSubscriptionOverload = {
-  readonly kind: PrStewardSubscriptionKind.Overloaded;
-  readonly pending: number;
-};
-type PrStewardSubscriptionState =
-  | { readonly kind: PrStewardSubscriptionKind.Active }
-  | PrStewardSubscriptionTermination
-  | PrStewardSubscriptionOverload;
-export type PrStewardSubscriptionAdmission = {
-  readonly data: Uint8Array;
-  readonly unsubscribe: () => void;
-};
-export type PrStewardSubscriptionOutcome =
-  PrStewardSubscriptionTermination | PrStewardSubscriptionOverload;
-type PrStewardSubscriptionOverloadRequest = { readonly pending: number };
-export class PrStewardSubscriptionOverloadError extends Error {
-  readonly pending: number;
-  constructor(request: PrStewardSubscriptionOverloadRequest) {
-    super(
-      `NATS subscription overloaded with ${request.pending} pending messages`,
-    );
-    this.name = 'PrStewardSubscriptionOverloadError';
-    this.pending = request.pending;
-  }
-}
-export class PrStewardBoundedMessageStream implements AsyncIterable<PrStewardMessage> {
-  // Admission remains owned until the consumer resumes after processing it.
-  #admitted = 0;
-  readonly #messages: PrStewardMessage[] = [];
-  #signal = Promise.withResolvers<void>();
-  #state: PrStewardSubscriptionState = {
-    kind: PrStewardSubscriptionKind.Active,
-  };
-
-  admit(request: PrStewardSubscriptionAdmission): void {
-    if (this.#state.kind !== PrStewardSubscriptionKind.Active) return;
-    if (this.#admitted === PR_STEWARD_PENDING_MESSAGE_LIMIT) {
-      this.#state = {
-        kind: PrStewardSubscriptionKind.Overloaded,
-        pending: this.#admitted,
-      };
-      request.unsubscribe();
-      this.#signal.resolve();
-      return;
-    }
-    this.#admitted += 1;
-    this.#messages.push({ data: request.data });
-    this.#signal.resolve();
-  }
-
-  terminate(termination: PrStewardSubscriptionTermination): void {
-    if (this.#state.kind !== PrStewardSubscriptionKind.Active) return;
-    this.#state = termination;
-    this.#signal.resolve();
-  }
-
-  outcome(): PrStewardSubscriptionOutcome {
-    if (this.#state.kind === PrStewardSubscriptionKind.Active)
-      throw new Error('NATS subscription is still active');
-    return this.#state;
-  }
-
-  async *[Symbol.asyncIterator](): AsyncIterator<PrStewardMessage> {
-    while (true) {
-      const message = this.#messages.shift();
-      if (message) {
-        yield message;
-        this.#admitted -= 1;
-        continue;
-      }
-      if (this.#state.kind === PrStewardSubscriptionKind.Active) {
-        await this.#signal.promise;
-        this.#signal = Promise.withResolvers<void>();
-        continue;
-      }
-      if (this.#state.kind === PrStewardSubscriptionKind.Failed)
-        throw this.#state.error;
-      return;
-    }
-  }
-}
 
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
@@ -738,14 +646,25 @@ export class PrStewardWebhookDecoder {
   }
 }
 
+type PrStewardMessage = { readonly data: Uint8Array };
+
+type PrStewardEventSubscriptionConnection = {
+  subscribe(subject: string): AsyncIterable<PrStewardMessage>;
+};
+
 type PrStewardObservationRequest = {
-  readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
+  readonly messages: AsyncIterable<PrStewardMessage>;
   readonly pullRequest: PrStewardPullRequest;
   readonly write: (line: string) => void;
   readonly activity: (event: { readonly checkEvent: boolean }) => void;
 };
-
-type PrStewardMessage = { readonly data: Uint8Array };
+type PrStewardSubscriptionObservationRequest = Omit<
+  PrStewardObservationRequest,
+  'messages'
+> & {
+  readonly connection: PrStewardEventSubscriptionConnection;
+  readonly subject: string;
+};
 
 export class PrStewardEventObserver {
   readonly #reader: PrStewardAssignedPrReader;
@@ -772,6 +691,18 @@ export class PrStewardEventObserver {
       if (record.kind === PrStewardRecordKind.Routing)
         deliveries.remember(message);
     }
+  }
+
+  async observeSubscription(
+    request: PrStewardSubscriptionObservationRequest,
+  ): Promise<void> {
+    const messages = request.connection.subscribe(request.subject);
+    await this.observe({
+      activity: request.activity,
+      messages,
+      pullRequest: request.pullRequest,
+      write: request.write,
+    });
   }
 
   async #observeMessage(args: {

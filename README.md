@@ -286,9 +286,10 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 - [Engineering principles](.cortex/teams/ai/design-docs/core-beliefs.md)
 - [Agent map](.cortex/AGENTS.md)
 
-Development issues, agent worklogs, and delivery statistics live in the
-versioned [Nook Workbench](https://github.com/meta-secret/nook-workbench)
-instead of this repository's GitHub Issues or source tree.
+Development issues are stored in the versioned
+[Nook Workbench](https://github.com/meta-secret/nook-workbench) instead of this
+repository's GitHub Issues or source tree. Agent plans, worklogs, and build
+statistics are not published there.
 
 ## Deployments
 

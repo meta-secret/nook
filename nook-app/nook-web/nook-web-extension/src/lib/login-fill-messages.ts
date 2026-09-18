@@ -1,4 +1,4 @@
-import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
+import { Schema } from 'effect'
 
 export type {
   WebsiteLoginAccountOption,
@@ -26,41 +26,12 @@ export class WebsiteLoginOptionsMessage {
   declare readonly payload: {
     origin: string
   }
-  static isWebsiteLoginFillResponse(
-    response: unknown,
-  ): response is WebsiteLoginFillResponse {
-    if (!response || typeof response !== 'object') return false
-    if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-    if (!response.ok) {
-      return 'reason' in response && typeof response.reason === 'string'
-    }
-    return (
-      'username' in response &&
-      typeof response.username === 'string' &&
-      'password' in response &&
-      typeof response.password === 'string'
-    )
+  static decodeWebsiteLoginFillResponse(response: unknown) {
+    return Schema.decodeUnknown(websiteLoginFillResponseSchema)(response)
   }
 
-  static is(message: unknown): message is WebsiteLoginOptionsMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions ||
-      !('payload' in message) ||
-      typeof message.payload !== 'object' ||
-      !message.payload
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'origin' in payload &&
-      typeof payload.origin === 'string' &&
-      payload.origin.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginOptionsMessageSchema)(message)
   }
 }
 
@@ -78,34 +49,8 @@ export class WebsiteLoginRevealMessage {
     secretId: string
     authorizationGeneration: string
   }
-  static is(message: unknown): message is WebsiteLoginRevealMessage {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== WebsiteLoginRevealMessageType.NookWebsiteLoginFill ||
-      !('payload' in message) ||
-      typeof message.payload !== 'object' ||
-      !message.payload
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'origin' in payload &&
-      typeof payload.origin === 'string' &&
-      payload.origin.length > 0 &&
-      'vaultStoreId' in payload &&
-      typeof payload.vaultStoreId === 'string' &&
-      payload.vaultStoreId.length > 0 &&
-      'secretId' in payload &&
-      typeof payload.secretId === 'string' &&
-      payload.secretId.length > 0 &&
-      (!('authorizationGeneration' in payload) ||
-        (typeof payload.authorizationGeneration === 'string' &&
-          payload.authorizationGeneration.length > 0))
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginRevealMessageSchema)(message)
   }
 }
 
@@ -120,11 +65,9 @@ export class WebsiteAuthenticatorOptionsMessage {
   declare readonly payload: {
     origin: string
   }
-  static is(message: unknown): message is WebsiteAuthenticatorOptionsMessage {
-    return (
-      OriginRuntimeMessageSchema.is(message) &&
-      message.type ===
-        WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorOptionsMessageSchema)(
+      message,
     )
   }
 }
@@ -143,26 +86,161 @@ export class WebsiteAuthenticatorFillMessage {
     secretId: string
     authorizationGeneration?: string
   }
-  static is(message: unknown): message is WebsiteAuthenticatorFillMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'vaultStoreId' in payload &&
-      typeof payload.vaultStoreId === 'string' &&
-      payload.vaultStoreId.length > 0 &&
-      'secretId' in payload &&
-      typeof payload.secretId === 'string' &&
-      payload.secretId.length > 0 &&
-      'authorizationGeneration' in payload &&
-      typeof payload.authorizationGeneration === 'string' &&
-      payload.authorizationGeneration.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteAuthenticatorFillMessageSchema)(message)
   }
 }
+
+const nonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+
+type WebsiteLoginFillFailureSchemaFields = {
+  ok: Schema.Literal<[false]>
+  reason: typeof Schema.String
+}
+const websiteLoginFillFailureSchemaFields: WebsiteLoginFillFailureSchemaFields =
+  {
+    ok: Schema.Literal(false),
+    reason: Schema.String,
+  }
+
+type WebsiteLoginFillSuccessSchemaFields = {
+  ok: Schema.Literal<[true]>
+  username: typeof Schema.String
+  password: typeof Schema.String
+}
+const websiteLoginFillSuccessSchemaFields: WebsiteLoginFillSuccessSchemaFields =
+  {
+    ok: Schema.Literal(true),
+    username: Schema.String,
+    password: Schema.String,
+  }
+
+const websiteLoginFillResponseSchema = Schema.Union(
+  Schema.Struct(websiteLoginFillSuccessSchemaFields),
+  Schema.Struct(websiteLoginFillFailureSchemaFields),
+) satisfies Schema.Schema<WebsiteLoginFillResponse>
+
+type WebsiteLoginOptionsMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteLoginOptionsMessagePayloadSchemaFields: WebsiteLoginOptionsMessagePayloadSchemaFields =
+  { origin: nonEmptyStringSchema }
+
+type WebsiteLoginOptionsMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginOptionsMessageType]>
+  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+}
+const websiteLoginOptionsMessageSchemaFields: WebsiteLoginOptionsMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
+    ),
+    payload: Schema.Struct(websiteLoginOptionsMessagePayloadSchemaFields),
+  }
+
+const websiteLoginOptionsMessageSchema = Schema.Struct(
+  websiteLoginOptionsMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginOptionsMessage>
+
+type WebsiteLoginRevealMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  authorizationGeneration: Schema.filter<typeof Schema.String>
+}
+const websiteLoginRevealMessagePayloadSchemaFields: WebsiteLoginRevealMessagePayloadSchemaFields =
+  {
+    origin: nonEmptyStringSchema,
+    vaultStoreId: nonEmptyStringSchema,
+    secretId: nonEmptyStringSchema,
+    authorizationGeneration: nonEmptyStringSchema,
+  }
+
+type WebsiteLoginRevealMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginRevealMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+    authorizationGeneration: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginRevealMessageSchemaFields: WebsiteLoginRevealMessageSchemaFields =
+  {
+    type: Schema.Literal(WebsiteLoginRevealMessageType.NookWebsiteLoginFill),
+    payload: Schema.Struct(websiteLoginRevealMessagePayloadSchemaFields),
+  }
+
+const websiteLoginRevealMessageSchema = Schema.Struct(
+  websiteLoginRevealMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginRevealMessage>
+
+type WebsiteAuthenticatorOptionsMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteAuthenticatorOptionsMessagePayloadSchemaFields: WebsiteAuthenticatorOptionsMessagePayloadSchemaFields =
+  { origin: nonEmptyStringSchema }
+
+type WebsiteAuthenticatorOptionsMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteAuthenticatorOptionsMessageType]>
+  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+}
+const websiteAuthenticatorOptionsMessageSchemaFields: WebsiteAuthenticatorOptionsMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions,
+    ),
+    payload: Schema.Struct(
+      websiteAuthenticatorOptionsMessagePayloadSchemaFields,
+    ),
+  }
+
+const websiteAuthenticatorOptionsMessageSchema = Schema.Struct(
+  websiteAuthenticatorOptionsMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteAuthenticatorOptionsMessage>
+
+type WebsiteAuthenticatorFillMessagePayloadSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+  vaultStoreId: Schema.filter<typeof Schema.String>
+  secretId: Schema.filter<typeof Schema.String>
+  authorizationGeneration: Schema.optionalWith<
+    Schema.filter<typeof Schema.String>,
+    { exact: true }
+  >
+}
+type ExactSchemaPropertyOptions = { readonly exact: true }
+const exactSchemaPropertyOptions: ExactSchemaPropertyOptions = { exact: true }
+const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFillMessagePayloadSchemaFields =
+  {
+    origin: nonEmptyStringSchema,
+    vaultStoreId: nonEmptyStringSchema,
+    secretId: nonEmptyStringSchema,
+    authorizationGeneration: Schema.optionalWith(
+      nonEmptyStringSchema,
+      exactSchemaPropertyOptions,
+    ),
+  }
+
+type WebsiteAuthenticatorFillMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteAuthenticatorFillMessageType]>
+  payload: Schema.Struct<{
+    origin: Schema.filter<typeof Schema.String>
+    vaultStoreId: Schema.filter<typeof Schema.String>
+    secretId: Schema.filter<typeof Schema.String>
+    authorizationGeneration: Schema.optionalWith<
+      Schema.filter<typeof Schema.String>,
+      { exact: true }
+    >
+  }>
+}
+const websiteAuthenticatorFillMessageSchemaFields: WebsiteAuthenticatorFillMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
+    ),
+    payload: Schema.Struct(websiteAuthenticatorFillMessagePayloadSchemaFields),
+  }
+
+const websiteAuthenticatorFillMessageSchema = Schema.Struct(
+  websiteAuthenticatorFillMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteAuthenticatorFillMessage>

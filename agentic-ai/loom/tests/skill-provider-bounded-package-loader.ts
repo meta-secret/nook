@@ -46,7 +46,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       replacements.push(importReplacement);
       const dynamicImportReplacement: SourceReplacement = {
         end: candidate.dynamicImport.end,
-        replacement: 'Promise.resolve(false)',
+        replacement: 'await Promise.resolve(false)',
         start: candidate.dynamicImport.getStart(sourceFile),
       };
       replacements.push(dynamicImportReplacement);

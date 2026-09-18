@@ -18,6 +18,7 @@ import {
 export { FormSubmissionResult, type FormSubmissionApproval };
 import {
   PasswordFormScopeKind,
+  type AutocompleteTokenMatchRequest,
   type PasswordFieldQuery,
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
@@ -421,7 +422,9 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
 
   private controlIsNativelyDisabledOrInert(control: HTMLElement): boolean {
     if (
-      (this.controlHasDisabledProperty(control) && control.disabled) ||
+      ((control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
+        control.disabled) ||
       this.isDisabledByAncestorFieldset(control)
     ) {
       return true;
@@ -691,11 +694,13 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields = passwordFieldDiscovery.findPasswordFields(query);
     if (hasLocalUnownedScope && passwordFields.length > 0) {
       const newPasswordFieldCount = passwordFields.filter((field) => {
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return passwordFieldDiscovery.hasAutocompleteToken({
+        const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
           field,
           expected: "new-password",
-        });
+        };
+        return passwordFieldDiscovery.hasAutocompleteToken(
+          newPasswordTokenRequest,
+        );
       }).length;
       const controls = Array.from(
         query.root.querySelectorAll<HTMLElement>(
@@ -811,11 +816,13 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const passwordFields =
       passwordFieldDiscovery.findPasswordFields(fieldQuery);
     const newPasswordFieldCount = passwordFields.filter((field) => {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return passwordFieldDiscovery.hasAutocompleteToken({
+      const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
         field,
         expected: "new-password",
-      });
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(
+        newPasswordTokenRequest,
+      );
     }).length;
     const oneTimeCodeFieldCount =
       passwordFieldDiscovery.findOneTimeCodeFields(fieldQuery).length;

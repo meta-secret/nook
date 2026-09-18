@@ -7,6 +7,7 @@ export type ExtensionStorageProviderIdentities =
 type ProviderCredentialTransport =
   StorageProvider | ExtensionStorageProviderPayload
 type ProviderCredentialTransports = ProviderCredentialTransport[]
+type ProviderCredentialList = StorageProvider[]
 
 export enum ProviderCredentialFailure {
   InvalidIdentity = 'invalid-provider-identity',
@@ -14,9 +15,12 @@ export enum ProviderCredentialFailure {
   AdmissionRejected = 'provider-admission-rejected',
 }
 
+export type ProviderCredentialDecoder = (
+  providers: ProviderCredentialList,
+) => Promise<ProviderCredentialList>
+
 export type StageProviderCredentialsArgs = {
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
-  decode: (providers: StorageProvider[]) => Promise<StorageProvider[]>
+  decode: ProviderCredentialDecoder
 }
 
 enum SerializedProviderFieldAdmission {
@@ -51,35 +55,33 @@ class SerializedProviderField {
 
 export class ProviderCredentialBuffer {
   constructor(private readonly providers: ProviderCredentialTransports) {}
-  private isStorageProvider(
-    value: ProviderCredentialTransport,
-  ): value is StorageProvider {
-    if (!value || typeof value !== 'object') return false
-    if (
-      !('id' in value) ||
-      typeof value.id !== 'string' ||
-      !('type' in value) ||
-      typeof value.type !== 'string' ||
-      !('label' in value) ||
-      typeof value.label !== 'string'
-    )
-      return false
-    return [
-      'githubPat',
-      'githubRepo',
-      'oauthFile',
-      'localFolder',
-      'storeId',
-      'createdAt',
-    ].every((key) => key in value)
-  }
   private storageProviders(): Result<
     StorageProvider[],
     ProviderCredentialFailure
   > {
-    return this.providers.every((provider) => this.isStorageProvider(provider))
-      ? ok(this.providers as StorageProvider[])
-      : err(ProviderCredentialFailure.InvalidTransport)
+    const providers: StorageProvider[] = []
+    for (const provider of this.providers) {
+      if (!provider || typeof provider !== 'object') {
+        return err(ProviderCredentialFailure.InvalidTransport)
+      }
+      if (!('githubPat' in provider)) {
+        return err(ProviderCredentialFailure.InvalidTransport)
+      }
+      if (
+        typeof provider.id !== 'string' ||
+        typeof provider.type !== 'string' ||
+        typeof provider.label !== 'string' ||
+        !('githubRepo' in provider) ||
+        !('oauthFile' in provider) ||
+        !('localFolder' in provider) ||
+        !('storeId' in provider) ||
+        !('createdAt' in provider)
+      ) {
+        return err(ProviderCredentialFailure.InvalidTransport)
+      }
+      providers.push(provider)
+    }
+    return ok(providers)
   }
   identities(): Result<
     ExtensionStorageProviderIdentities,

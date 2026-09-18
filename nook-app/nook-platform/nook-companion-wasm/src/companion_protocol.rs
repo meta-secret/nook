@@ -1,11 +1,11 @@
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionExtensionPresence, CompanionExtensionProtocol,
     CompanionHandoffResponseAdmission, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
-    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
-    CompanionIdentityUnlockRequest,
+    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
+    CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -35,6 +35,149 @@ pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffRespon
 pub struct CompanionIdentityHandoffStatusAdmission {
     request: CompanionIdentityHandoffRequest,
     observed_at: CompanionEpochMilliseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum CompanionIdentityDiscoverySessionTransportRequest {
+    #[serde(rename = "nook:extension-session-discover-companion-identity")]
+    DiscoverCompanionIdentity {
+        presence: CompanionExtensionPresence,
+        discovery: CompanionIdentityDiscoveryObservation,
+    },
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityDiscoverySessionTransportAdmission(
+    CompanionIdentityDiscoverySessionTransportRequest,
+);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum CompanionIdentityHandoffSessionTransportRequest {
+    #[serde(rename = "nook:extension-session-authorize-companion-identity-handoff")]
+    AuthorizeCompanionIdentityHandoff {
+        authorization: CompanionIdentityHandoffAuthorization,
+    },
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityHandoffSessionTransportAdmission(
+    CompanionIdentityHandoffSessionTransportRequest,
+);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityUnlockRequestAdmission(CompanionIdentityUnlockRequest);
+
+impl CompanionIdentityUnlockRequestAdmission {
+    fn decode(
+        &self,
+    ) -> Result<CompanionIdentityUnlockRequest, nook_companion_core::CompanionProtocolError> {
+        self.0.validate()?;
+        Ok(self.0.clone())
+    }
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityHandoffRequestAdmission(CompanionIdentityHandoffRequestPayload);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(into_wasm_abi)]
+pub struct CompanionIdentityHandoffRequestPayload(CompanionIdentityHandoffRequest);
+
+impl CompanionIdentityHandoffRequestPayload {
+    fn request_mut(&mut self) -> &mut CompanionIdentityHandoffRequest {
+        &mut self.0
+    }
+}
+
+impl CompanionIdentityHandoffRequestAdmission {
+    fn decode(
+        &self,
+    ) -> Result<CompanionIdentityHandoffRequestPayload, nook_companion_core::CompanionProtocolError>
+    {
+        self.0.0.validate()?;
+        Ok(self.0.clone())
+    }
+}
+
+impl Drop for CompanionIdentityHandoffRequestPayload {
+    fn drop(&mut self) {
+        self.request_mut().zeroize_sensitive_material();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum ExtensionPairedVaultUnlockRequestMessage {
+    #[serde(rename = "nook:extension-paired-vault-unlock-request")]
+    Unlock(CompanionIdentityUnlockRequest),
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionPairedVaultUnlockRequestMessageAdmission(
+    ExtensionPairedVaultUnlockRequestMessage,
+);
+
+impl ExtensionPairedVaultUnlockRequestMessageAdmission {
+    fn decode(
+        &self,
+    ) -> Result<ExtensionPairedVaultUnlockRequestMessage, nook_companion_core::CompanionProtocolError>
+    {
+        let ExtensionPairedVaultUnlockRequestMessage::Unlock(request) = &self.0;
+        request.validate()?;
+        Ok(self.0.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
+#[tsify(into_wasm_abi)]
+pub enum ExtensionPairedVaultIdentityHandoffRequestMessage {
+    #[serde(rename = "nook:extension-paired-vault-identity-handoff-request")]
+    IdentityHandoff(CompanionIdentityHandoffRequestPayload),
+}
+
+#[cfg(test)]
+impl ExtensionPairedVaultIdentityHandoffRequestMessage {
+    fn request_mut(&mut self) -> &mut CompanionIdentityHandoffRequest {
+        let Self::IdentityHandoff(payload) = self;
+        payload.request_mut()
+    }
+}
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionPairedVaultIdentityHandoffRequestMessageAdmission(
+    ExtensionPairedVaultIdentityHandoffRequestMessage,
+);
+
+impl ExtensionPairedVaultIdentityHandoffRequestMessageAdmission {
+    fn decode(
+        &self,
+    ) -> Result<
+        ExtensionPairedVaultIdentityHandoffRequestMessage,
+        nook_companion_core::CompanionProtocolError,
+    > {
+        let ExtensionPairedVaultIdentityHandoffRequestMessage::IdentityHandoff(payload) = &self.0;
+        payload.0.validate()?;
+        Ok(self.0.clone())
+    }
 }
 
 #[wasm_bindgen]
@@ -95,6 +238,64 @@ impl NookCompanionExtensionProtocol {
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_discovery_session_transport_request(
+    request: CompanionIdentityDiscoverySessionTransportAdmission,
+) -> CompanionIdentityDiscoverySessionTransportRequest {
+    let CompanionIdentityDiscoverySessionTransportAdmission(request) = request;
+    request
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_handoff_session_transport_request(
+    request: CompanionIdentityHandoffSessionTransportAdmission,
+) -> CompanionIdentityHandoffSessionTransportRequest {
+    let CompanionIdentityHandoffSessionTransportAdmission(request) = request;
+    request
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_unlock_request(
+    admission: CompanionIdentityUnlockRequestAdmission,
+) -> Result<CompanionIdentityUnlockRequest, JsError> {
+    admission
+        .decode()
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_handoff_request(
+    admission: CompanionIdentityHandoffRequestAdmission,
+) -> Result<CompanionIdentityHandoffRequestPayload, JsError> {
+    admission
+        .decode()
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_paired_vault_unlock_request_message(
+    admission: ExtensionPairedVaultUnlockRequestMessageAdmission,
+) -> Result<ExtensionPairedVaultUnlockRequestMessage, JsError> {
+    admission
+        .decode()
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_paired_vault_identity_handoff_request_message(
+    admission: ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
+) -> Result<ExtensionPairedVaultIdentityHandoffRequestMessage, JsError> {
+    admission
+        .decode()
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_identity_status(
     admission: CompanionIdentityHandoffStatusAdmission,
 ) -> Result<CompanionIdentityStatusAdmission, JsError> {
@@ -127,24 +328,192 @@ impl NookCompanionExtensionProtocol {
 #[cfg(test)]
 mod admission_tests {
     use super::*;
+    use nook_companion_core::CompanionProtocolError;
+    use serde::de::DeserializeOwned;
 
-    #[test]
+    struct AdmissionFixture;
+
+    impl AdmissionFixture {
+        fn decode<Value: DeserializeOwned>(json: &str) -> Result<Value, String> {
+            serde_json::from_str(json).map_err(|error| error.to_string())
+        }
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     fn chrome_identity_admissions_are_unknown_and_schema_checked() {
         assert!(CompanionIdentityDiscoveryAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionExtensionPresenceAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionIdentityStatusRequestAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionHandoffResponseValueAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionIdentityHandoffStatusAdmission::DECL.ends_with(" = unknown;"));
-        assert!(serde_json::from_str::<CompanionIdentityDiscoveryAdmission>("null").is_err());
-        assert!(serde_json::from_str::<CompanionExtensionPresenceAdmission>("null").is_err());
-        assert!(serde_json::from_str::<CompanionIdentityStatusRequestAdmission>("null").is_err());
-        assert!(serde_json::from_str::<CompanionHandoffResponseValueAdmission>("null").is_err());
-        assert!(serde_json::from_str::<CompanionIdentityHandoffStatusAdmission>("null").is_err());
+        assert!(CompanionIdentityDiscoverySessionTransportAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityHandoffSessionTransportAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityUnlockRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityHandoffRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(ExtensionPairedVaultUnlockRequestMessageAdmission::DECL.ends_with(" = unknown;"));
+        assert!(
+            ExtensionPairedVaultIdentityHandoffRequestMessageAdmission::DECL
+                .ends_with(" = unknown;")
+        );
+        assert!(
+            CompanionIdentityDiscoverySessionTransportRequest::DECL
+                .contains("nook:extension-session-discover-companion-identity")
+        );
+        assert!(
+            CompanionIdentityHandoffSessionTransportRequest::DECL
+                .contains("nook:extension-session-authorize-companion-identity-handoff")
+        );
+        assert!(AdmissionFixture::decode::<CompanionIdentityDiscoveryAdmission>("null").is_err());
+        assert!(AdmissionFixture::decode::<CompanionExtensionPresenceAdmission>("null").is_err());
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityStatusRequestAdmission>("null").is_err()
+        );
+        assert!(
+            AdmissionFixture::decode::<CompanionHandoffResponseValueAdmission>("null").is_err()
+        );
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityHandoffStatusAdmission>("null").is_err()
+        );
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityDiscoverySessionTransportAdmission>("null")
+                .is_err()
+        );
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityHandoffSessionTransportAdmission>("null")
+                .is_err()
+        );
     }
 
-    #[test]
-    fn handoff_status_admission_validates_the_full_request() -> Result<(), serde_json::Error> {
-        let admission = serde_json::from_str::<CompanionIdentityHandoffStatusAdmission>(
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn paired_vault_unlock_message_decoder_returns_concrete_envelope() -> Result<(), String> {
+        let admission = AdmissionFixture::decode::<
+            ExtensionPairedVaultUnlockRequestMessageAdmission,
+        >(
+            r#"{"type":"nook:extension-paired-vault-unlock-request","payload":{"requestId":"request","vaultStoreId":"vault"}}"#,
+        )?;
+        assert!(matches!(
+            decode_extension_paired_vault_unlock_request_message(admission),
+            Ok(ExtensionPairedVaultUnlockRequestMessage::Unlock(request))
+                if request.request_id == "request" && request.vault_store_id == "vault"
+        ));
+        Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn paired_vault_unlock_message_decoder_rejects_invalid_envelopes() -> Result<(), String> {
+        assert!(
+            AdmissionFixture::decode::<ExtensionPairedVaultUnlockRequestMessageAdmission>(
+                r#"{"type":"wrong","payload":{"requestId":"request","vaultStoreId":"vault"}}"#
+            )
+            .is_err()
+        );
+        assert!(AdmissionFixture::decode::<ExtensionPairedVaultUnlockRequestMessageAdmission>(
+            r#"{"type":"nook:extension-paired-vault-unlock-request","payload":{"requestId":"request"}}"#
+        ).is_err());
+        let empty = AdmissionFixture::decode::<ExtensionPairedVaultUnlockRequestMessageAdmission>(
+            r#"{"type":"nook:extension-paired-vault-unlock-request","payload":{"requestId":"","vaultStoreId":"vault"}}"#,
+        )?;
+        #[cfg(target_arch = "wasm32")]
+        assert!(decode_extension_paired_vault_unlock_request_message(empty).is_err());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(empty.decode().is_err());
+        Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn paired_vault_handoff_message_decoder_validates_and_cleans_decoded_material()
+    -> Result<(), String> {
+        let json = r#"{
+            "type":"nook:extension-paired-vault-identity-handoff-request",
+            "payload":{
+                "transaction":{
+                    "discovery":{"request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},"observedAt":100},
+                    "status":{"status":"unlocked","request_id":"request","vault_store_id":"vault","app_key":{"extensionRuntimeId":"runtime","appKey":{"appId":"app","encryptionPublicKey":"age1public","signingPublicKey":"signing","installationLabel":"Extension"},"nonce":"nonce","scopes":["vault-access"]}},
+                    "admittedAt":100
+                },
+                "recipientPublicKey":"age1recipient"
+            }
+        }"#;
+        let admission = AdmissionFixture::decode::<
+            ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
+        >(json)?;
+        let Ok(mut decoded) =
+            decode_extension_paired_vault_identity_handoff_request_message(admission)
+        else {
+            panic!("valid handoff envelope must decode");
+        };
+        let request = decoded.request_mut();
+        assert_eq!(request.recipient_public_key, "age1recipient");
+        request.zeroize_sensitive_material();
+        assert!(request.recipient_public_key.is_empty());
+        let CompanionIdentityStatus::Unlocked { app_key, .. } = &request.transaction.status else {
+            panic!("handoff fixture must remain unlocked");
+        };
+        assert!(app_key.nonce.is_empty());
+
+        Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn paired_vault_handoff_message_decoder_rejects_invalid_material() -> Result<(), String> {
+        let invalid = r#"{
+            "type":"nook:extension-paired-vault-identity-handoff-request",
+            "payload":{
+                "transaction":{
+                    "discovery":{"request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},"observedAt":100},
+                    "status":{"status":"unlocked","request_id":"request","vault_store_id":"vault","app_key":{"extensionRuntimeId":"runtime","appKey":{"appId":"app","encryptionPublicKey":"age1public","signingPublicKey":"signing","installationLabel":"Extension"},"nonce":"nonce","scopes":["vault-access"]}},
+                    "admittedAt":100
+                },
+                "recipientPublicKey":" "
+            }
+        }"#;
+        let admission = AdmissionFixture::decode::<
+            ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
+        >(invalid)?;
+
+        match admission.decode() {
+            Err(CompanionProtocolError::InvalidValue) => Ok(()),
+            Err(error) => panic!("invalid handoff must report invalid value, got {error}"),
+            Ok(_) => panic!("invalid handoff must be rejected"),
+        }
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn direct_identity_request_decoders_validate_payloads() -> Result<(), String> {
+        let unlock = AdmissionFixture::decode::<CompanionIdentityUnlockRequestAdmission>(
+            r#"{"requestId":"request","vaultStoreId":"vault"}"#,
+        )?;
+        let Ok(decoded) = decode_companion_identity_unlock_request(unlock) else {
+            panic!("valid unlock payload must decode");
+        };
+        assert_eq!(decoded.request_id, "request");
+
+        let empty = AdmissionFixture::decode::<CompanionIdentityUnlockRequestAdmission>(
+            r#"{"requestId":"","vaultStoreId":"vault"}"#,
+        )?;
+        #[cfg(target_arch = "wasm32")]
+        assert!(decode_companion_identity_unlock_request(empty).is_err());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(empty.decode().is_err());
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityHandoffRequestAdmission>(
+                r#"{"recipientPublicKey":"age1recipient"}"#
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn handoff_status_admission_validates_the_full_request() -> Result<(), String> {
+        let admission = AdmissionFixture::decode::<CompanionIdentityHandoffStatusAdmission>(
             r#"{
                 "request": {
                     "transaction": {
@@ -183,6 +552,73 @@ mod admission_tests {
             CompanionIdentityStatusAdmission::Accepted { .. }
         ));
         Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn session_transport_decoders_return_concrete_identity_variants() -> Result<(), String> {
+        let discovery = r#"{
+            "type":"nook:extension-session-discover-companion-identity",
+            "payload":{
+                "presence":{"kind":"unavailable"},
+                "discovery":{
+                    "request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},
+                    "observedAt":100
+                }
+            }
+        }"#;
+        let discovery: CompanionIdentityDiscoverySessionTransportAdmission =
+            AdmissionFixture::decode(discovery)?;
+        assert!(matches!(
+            decode_companion_identity_discovery_session_transport_request(discovery),
+            CompanionIdentityDiscoverySessionTransportRequest::DiscoverCompanionIdentity { .. }
+        ));
+
+        let handoff = r#"{
+            "type":"nook:extension-session-authorize-companion-identity-handoff",
+            "payload":{"authorization":{
+                "request":{
+                    "transaction":{
+                        "discovery":{
+                            "request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},
+                            "observedAt":100
+                        },
+                        "status":{"status":"unavailable","request_id":"request","vault_store_id":"vault"},
+                        "admittedAt":100
+                    },
+                    "recipientPublicKey":"age1recipient"
+                },
+                "observedAt":150,
+                "presence":{"kind":"unavailable"}
+            }}
+        }"#;
+        let handoff: CompanionIdentityHandoffSessionTransportAdmission =
+            AdmissionFixture::decode(handoff)?;
+        assert!(matches!(
+            decode_companion_identity_handoff_session_transport_request(handoff),
+            CompanionIdentityHandoffSessionTransportRequest::AuthorizeCompanionIdentityHandoff { .. }
+        ));
+        Ok(())
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    fn session_transport_admissions_reject_wrong_tags_and_partial_payloads() {
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityDiscoverySessionTransportAdmission>(
+                r#"{"type":"wrong","payload":{"presence":{"kind":"unavailable"}}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            AdmissionFixture::decode::<CompanionIdentityDiscoverySessionTransportAdmission>(
+                r#"{"type":"nook:extension-session-discover-companion-identity","payload":{"presence":{"kind":"unavailable"},"discovery":{"request":{"requestId":"request","vaultStoreId":"vault","expiresAt":200},"observedAt":100},"unexpected":true}}"#
+            )
+            .is_err()
+        );
+        assert!(AdmissionFixture::decode::<CompanionIdentityHandoffSessionTransportAdmission>(
+            r#"{"type":"nook:extension-session-authorize-companion-identity-handoff","payload":{}}"#
+        ).is_err());
     }
 }
 

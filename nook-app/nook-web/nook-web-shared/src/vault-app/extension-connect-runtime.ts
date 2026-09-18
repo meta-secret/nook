@@ -3,7 +3,6 @@ import {
   extension_password_filling_scope,
   extension_sync_provider_credentials_scope,
   extension_vault_access_scope,
-  is_extension_connect_scope,
 } from "$app-wasm";
 import {
   ExtensionConnectScope,
@@ -17,7 +16,6 @@ export function configureVaultExtensionConnectScopeRuntime(): void {
     extension_password_filling_scope,
     extension_passkey_management_scope,
     extension_sync_provider_credentials_scope,
-    is_extension_connect_scope,
   };
   ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
 }

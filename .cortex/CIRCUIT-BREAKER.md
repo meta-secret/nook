@@ -114,12 +114,32 @@ evidence, or validation results.
     dispatch results.
   - Do not execute an acceptance selector inside Loom.
   - Do not turn a selector into an authorization or identity mechanism.
+  - This prohibition covers AI-authored verification, security,
+    selector-discovery, preflight, mock, simulation, and contract-test
+    machinery around remote Task names and dispatch.
+  - It does not prohibit an ordinary product or delivery change that directly
+    adds, removes, or modifies an actual remote Task implementation, its real
+    selector, or its ordinary input schema when the owning work requires it.
+  - A direct implementation change does not authorize selector discovery,
+    local catalogs, existence validation, aliases, fallback resolution,
+    pre-dispatch simulations, mocks, contract tests, or invented
+    security/authority machinery.
+  - The terminal GitHub Actions outcome remains the execution evidence.
 - **Docker layer-cache authority**
   - Treat agent-authored reproductions of Docker or BuildKit cache
     functionality as P1 violations.
   - This prohibition applies only to Rust, application, or other custom code
     that computes cache keys, invalidates dependencies, selects caches, or
     decides layer reuse without invoking Docker or BuildKit.
+- **Job-to-job and exact-head metadata polling**
+  - Do not poll or retry while waiting for another workflow job, deployment
+    metadata, or exact-head evidence to appear.
+  - Model ordering through ordinary workflow dependencies and pass immutable
+    artifacts or outputs directly between jobs.
+  - After a deployment command completes, perform each required exact-head
+    verification once and fail immediately with its real diagnostic output.
+  - Do not hide a deterministic contract mismatch behind convergence retries,
+    cache-busting attempt counters, or generic timeout errors.
 - **Preservation**
   - Never preserve a prohibited system merely because another document or
     existing implementation describes it.

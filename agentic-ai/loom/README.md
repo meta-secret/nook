@@ -237,8 +237,8 @@ loom --default toolsList
 ```
 
 Each request is a **domain-tagged object**. Exactly one root key selects the
-request family. Nested operation keys group same-prefix requests (`agentStats`,
-`prLand`). There is no generic `name` / `arguments` envelope.
+request family. The `prLand` family uses a nested operation key. There is no
+generic `name` / `arguments` envelope.
 
 The historical `prePush` request identifier is decoded only to provide a
 controlled retirement response for older callers. It never runs host
@@ -247,12 +247,9 @@ remote build-only `build:compile` task; full validation is owned by the Dev
 Manager's later CI cycle.
 
 ```yaml
-agentStats:
-  assemble:
+prLand:
+  status:
     prNumber: 123
-    scratchPath: '{agentTempDir}/pr-123-scratch.json'
-    outputPath: '{agentTempDir}/123.yaml'
-    includeTestInventory: true
 ```
 
 Stdout is YAML only.
@@ -261,8 +258,8 @@ Success for a nested family:
 
 ```yaml
 ok: true
-family: agentStats
-operation: assemble
+family: prLand
+operation: status
 result: { ... }
 ```
 
@@ -287,34 +284,15 @@ task loom:tools-list
 ```
 
 Each discovered request includes its typed `inputSchema`, canonical
-`exampleRequest` invoke command, exact `exampleYaml`, and explicit
-`resolvedExampleYaml`.
+`exampleRequest` invoke command, and exact `exampleYaml`.
 Generated examples are the source of truth. Agents should consume that
 output instead of copying request bodies into guidance.
-
-Agent-statistics path fields also accept `{agentTempDir}`. Loom resolves it to:
-
-```text
-<os-temp>/nook-agent-stats/<40-character-task-anchor-commit>/<opaque-worktree-id>
-```
-
-The task-anchor commit is the exact commit checked out when the current task
-branch was first entered, or the worktree's initial commit when Git created the
-branch with the worktree. A later branch re-entry does not replace it. The
-worktree identifier isolates parallel worktrees on the same anchor. The mapping
-therefore stays stable so `assemble`, `validate`, and `publish` can share one
-file. Loom provisions this directory when it resolves the token. Ordinary
-relative and absolute paths remain supported.
-
-`task loom:tools-list` keeps the tokenized blueprint in `exampleYaml` and
-returns `resolvedExampleYaml` with the current worktree and commit path filled
-in. Use the resolved path when creating the scratch JSON before `assemble`.
 
 ## TypeScript domain structure
 
 Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-domain-structure.md):
 
-- nested request families (`agentStats.assemble`, `prLand.validate`)
+- nested request families (`prLand.status`, `prLand.validate`)
 - field-name enums for deny-unknown-key checks
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
 - runtime failures return `neverthrow` `Result` values with concrete
@@ -348,7 +326,6 @@ task loom:cortex-audit
 task loom:cortex-session-clean
 task loom:dependency-popularity
 task loom:skill-scaffold CONFIG=path/to/request.yaml
-task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
@@ -366,16 +343,15 @@ There is no checked-in sample-file catalog.
 
 ## Tools
 
-| name                    | Role                                              |
-| ----------------------- | ------------------------------------------------- |
-| `tools-list`            | Discovery                                         |
-| `tools-call`            | Nested call helper                                |
-| `cortex-audit`          | Cortex structure, links, and policy contracts     |
-| `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
-| `skill-scaffold`        | Create a dynamic-skill card                       |
-| `agent-stats`           | Assemble / validate / publish AI-agent stats YAML |
-| `pr-land`               | Status / validate                                 |
-| `dependency-popularity` | Reject low-adoption npm packages and crates       |
+| name                    | Role                                          |
+| ----------------------- | --------------------------------------------- |
+| `tools-list`            | Discovery                                     |
+| `tools-call`            | Nested call helper                            |
+| `cortex-audit`          | Cortex structure, links, and policy contracts |
+| `cortex-session-clean`  | Temporary Cortex session readiness assertion  |
+| `skill-scaffold`        | Create a dynamic-skill card                   |
+| `pr-land`               | Status / validate                             |
+| `dependency-popularity` | Reject low-adoption npm packages and crates   |
 
 ## Quality bar
 

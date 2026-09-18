@@ -19,12 +19,13 @@ packet.
 ## Required actions
 
 - Accept the packet from AI Team Gizmo through the active harness.
-- If the packet authorizes TypeScript or JavaScript, load and apply the
+- If the packet authorizes TypeScript, JavaScript, or Svelte, load and apply the
   [AI authored implementation routes](../AGENTS.md#authored-implementation-routing)
   read-only, including [function ownership](../../../shared/dynamic-skills/function-ownership.md)
-  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md).
+  and [TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md),
+  plus [TypeScript Effect Workflows](../../web-dev/dynamic-skills/typescript-effect.md).
   Record those authorities in the acceptance handoff.
-- For an authored TypeScript or JavaScript scope, require the manager's
+- For an authored TypeScript, JavaScript, or Svelte scope, require the manager's
   authorized slow-stage acceptance evidence for `task loom:verify`, `task preflight:typescript-state`, and
   `task preflight:source-architecture`, plus focused function-ownership
   review. A missing authority, command, result, or review finding is a P1 and

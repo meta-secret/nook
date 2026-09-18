@@ -1,5 +1,6 @@
 <script lang="ts">
   import { type SecretOperationResult } from "$lib/vault/secret-operation-failure";
+  import type { SecretMutationOutcome } from "$lib/vault/secrets";
   import { err, ok } from "neverthrow";
   import {
     VaultStorageFailure,
@@ -29,6 +30,18 @@
   };
 
   type SecretListItemCollection = ReadonlyArray<NookSecretListItem>;
+
+  type SecretListItemComparison = readonly [
+    left: NookSecretListItem,
+    right: NookSecretListItem,
+  ];
+
+  type SecretGroup = {
+    readonly site: string;
+    readonly items: NookSecretListItem[];
+  };
+
+  type SecretGroupComparison = readonly [left: SecretGroup, right: SecretGroup];
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
@@ -103,11 +116,13 @@
     secrets?: NookSecretListItem[];
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>;
     onReplaceSecret: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<void>>;
-    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
+    onDeleteSecret: (
+      id: string,
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>;
     onGeneratePassword: (options: PasswordGenerationOptions) => string;
     onAddModeChange?: (args: SecretAddModeChange) => void;
   } = $props();
@@ -117,8 +132,8 @@
   );
   let searchPattern = $derived(vault.secretQuery);
   let decryptedSecrets = $state<DecryptedSecrets>({});
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  let secretExposure = new SecretExposure({});
+  const initialDecryptedSecrets: DecryptedSecrets = {};
+  let secretExposure = new SecretExposure(initialDecryptedSecrets);
   let expandedSecrets = $state<Record<string, boolean>>({});
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
   let addSecretOpen = $state(false);
@@ -128,6 +143,16 @@
   let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating });
   let editLoadSequence = 0;
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({});
+
+  class SecretVaultOrdering {
+    static byType(...[left, right]: SecretListItemComparison): number {
+      return left.type - right.type;
+    }
+
+    static bySite(...[left, right]: SecretGroupComparison): number {
+      return left.site.localeCompare(right.site);
+    }
+  }
 
   const typeFilters: Array<{
     value: SecretType;
@@ -233,15 +258,9 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort(
-          // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-          (a, b) => a.type - b.type,
-        ),
+        items: items.sort(SecretVaultOrdering.byType),
       }))
-      .sort(
-        // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-        (a, b) => a.site.localeCompare(b.site),
-      );
+      .sort(SecretVaultOrdering.bySite);
   });
 
   function notifyAddMode() {
@@ -290,8 +309,8 @@
 
   function resetTransientSecretViews() {
     secretExposure.free();
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    secretExposure = new SecretExposure({});
+    const clearedSecrets: DecryptedSecrets = {};
+    secretExposure = new SecretExposure(clearedSecrets);
     decryptedSecrets = {};
     authenticatorCodes = {};
   }
@@ -382,23 +401,28 @@
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       );
     }
-    copiedKey = {
+    const notice: ClipboardNotice = {
       kind: ClipboardNoticeKind.Visible,
       fieldKey: `${id}-${field}`,
     };
-    setTimeout(() => {
-      if (
-        copiedKey.kind === ClipboardNoticeKind.Visible &&
-        copiedKey.fieldKey === `${id}-${field}`
-      )
-        copiedKey = { kind: ClipboardNoticeKind.Hidden };
-    }, 2000);
-    return ok();
+    return ok(notice);
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {
     const copied = await copyToClipboard(request);
-    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+    if (copied.isErr()) {
+      vault.errorMsg = vault.t(copied.error.translationKey);
+      return;
+    }
+    const notice = copied.value;
+    copiedKey = notice;
+    setTimeout(() => {
+      if (
+        copiedKey.kind === ClipboardNoticeKind.Visible &&
+        copiedKey.fieldKey === notice.fieldKey
+      )
+        copiedKey = { kind: ClipboardNoticeKind.Hidden };
+    }, 2000);
   }
 
   function secretReveal(itemId: string): SecretReveal {

@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -5,12 +6,6 @@ import {
   NativeVaultStorageFailure,
 } from "$lib/runtime/storage-failure";
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
-type ExtensionMessageRequest = {
-  readonly extensionId: string;
-  readonly message: unknown;
-  readonly responseWait: ExtensionMessageResponseWait;
-};
-
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -24,30 +19,43 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
-type ChromeRuntimeResponseArguments = unknown[];
-
-type ChromeRuntimeHost = {
-  // eslint-disable-next-line max-params -- Chrome owns this positional API.
-  sendMessage: (
-    extensionId: string,
-    message: unknown,
-    callback: (...responses: ChromeRuntimeResponseArguments) => void,
-  ) => void;
+type ExtensionIdentityEnvelope = {
+  readonly envelope: string;
+  readonly nextNonce: string;
 };
 
-type ExtensionBrowserHost = typeof globalThis;
-
-enum ChromeRuntimeAvailabilityKind {
-  Unavailable = "unavailable",
-  Available = "available",
+enum IdentityHandoffAttemptKind {
+  Pending = "pending",
+  Consumed = "consumed",
 }
 
-type ChromeRuntimeAvailability =
-  | { readonly kind: ChromeRuntimeAvailabilityKind.Unavailable }
-  | {
-      readonly kind: ChromeRuntimeAvailabilityKind.Available;
-      readonly runtime: ChromeRuntimeHost;
-    };
+type IdentityHandoffAttempt = {
+  readonly kind: IdentityHandoffAttemptKind;
+  readonly outcome: Result<
+    NookAdoptedExtensionIdentityHandoff,
+    VaultStorageFailure
+  >;
+};
+
+type PairedIdentityAdoptionAttempt = ExtensionIdentityAdoption & {
+  readonly request: Extract<
+    ExtensionConnectRequest,
+    { source: ExtensionIdentityRequestSource.PairedVault }
+  >;
+  readonly handoff: ReturnType<
+    NookVaultManager["begin_companion_identity_handoff"]
+  >;
+};
+
+type NewIdentityAdoptionAttempt = ExtensionIdentityAdoption & {
+  readonly request: Extract<
+    ExtensionConnectRequest,
+    { source: ExtensionIdentityRequestSource.ExtensionConnect }
+  >;
+  readonly pending: ReturnType<
+    NookVaultManager["begin_extension_identity_handoff"]
+  >;
+};
 
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
@@ -82,9 +90,23 @@ import {
 import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import {
   ExtensionPairingDeliveryKind,
-  ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
+import {
+  companionResponseDecoder,
+  identityHandoffResponseDecoder,
+  pairingApprovalResponseDecoder,
+} from "./extension-response-decoders";
+import {
+  EXTENSION_MESSAGE_TIMEOUT_MS,
+  ExtensionMessageChannel,
+  ExtensionMessageDeliveryKind,
+  ExtensionMessageResponseWaitKind,
+  type ChromeExtensionRuntimeResponse,
+  type ExtensionBrowserHost,
+  type ExtensionMessageDelivery,
+  type ExtensionMessageRequest,
+} from "./extension-message-channel";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -94,6 +116,13 @@ export {
   ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
+export {
+  AcceptedIdentityHandoffResponseSchema,
+  companionResponseDecoder,
+  ExtensionResponseDecodeFailureKind as IdentityHandoffResponseDecodeFailureKind,
+  identityHandoffResponseDecoder,
+  pairingApprovalResponseDecoder,
+} from "./extension-response-decoders";
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -132,159 +161,14 @@ export type InstalledExtensionRuntime =
 
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
 
-const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
-
 const PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS = 150;
-
-enum ExtensionMessageResponseWaitKind {
-  BrowserChannel = "browser-channel",
-  Bounded = "bounded",
-}
-
-type ExtensionMessageResponseWait =
-  | { readonly kind: ExtensionMessageResponseWaitKind.BrowserChannel }
-  | {
-      readonly kind: ExtensionMessageResponseWaitKind.Bounded;
-      readonly timeoutMs: number;
-    };
-
-enum ExtensionMessageResponseTimerKind {
-  NotScheduled = "not-scheduled",
-  Scheduled = "scheduled",
-}
-
-type ExtensionMessageResponseTimer =
-  | { readonly kind: ExtensionMessageResponseTimerKind.NotScheduled }
-  | {
-      readonly kind: ExtensionMessageResponseTimerKind.Scheduled;
-      readonly handle: number;
-    };
-
-enum ExtensionMessageDeliveryKind {
-  Unavailable = "unavailable",
-  Received = "received",
-}
-
-type ExtensionMessageDelivery =
-  | { kind: ExtensionMessageDeliveryKind.Unavailable }
-  | { kind: ExtensionMessageDeliveryKind.Received; response: unknown };
-
-function isAcceptedIdentityHandoffResponse(value: unknown): value is {
-  readonly ok: true;
-  readonly envelope: string;
-  readonly nextNonce: string;
-} {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return (
-    "ok" in value &&
-    value.ok === true &&
-    "envelope" in value &&
-    typeof value.envelope === "string" &&
-    "nextNonce" in value &&
-    typeof value.nextNonce === "string" &&
-    value.nextNonce.length > 0
-  );
-}
-
-enum ExtensionResponsePhase {
-  Pending = "pending",
-  Settled = "settled",
-}
-type ExtensionResponseState =
-  | {
-      kind: ExtensionResponsePhase.Pending;
-      timer: ExtensionMessageResponseTimer;
-    }
-  | { kind: ExtensionResponsePhase.Settled };
-
-/** Only a pending response owns timer completion; native callback aliases are invalidated. */
-class PendingExtensionResponse {
-  private state: ExtensionResponseState = {
-    kind: ExtensionResponsePhase.Pending,
-    timer: { kind: ExtensionMessageResponseTimerKind.NotScheduled },
-  };
-  constructor(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    private readonly request: {
-      browser: typeof globalThis;
-      wait: ExtensionMessageResponseWait;
-      resolve: (delivery: ExtensionMessageDelivery) => void;
-    },
-  ) {
-    if (request.wait.kind === ExtensionMessageResponseWaitKind.Bounded) {
-      this.state = {
-        kind: ExtensionResponsePhase.Pending,
-        timer: {
-          kind: ExtensionMessageResponseTimerKind.Scheduled,
-          handle: request.browser.window.setTimeout(
-            () => this.unavailable(),
-            request.wait.timeoutMs,
-          ),
-        },
-      };
-    }
-  }
-  private settle(delivery: ExtensionMessageDelivery): void {
-    const pending = this.state;
-    if (pending.kind !== ExtensionResponsePhase.Pending) return;
-    this.state = { kind: ExtensionResponsePhase.Settled };
-    if (pending.timer.kind === ExtensionMessageResponseTimerKind.Scheduled)
-      this.request.browser.window.clearTimeout(pending.timer.handle);
-    this.request.resolve(delivery);
-  }
-  unavailable(): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.settle({ kind: ExtensionMessageDeliveryKind.Unavailable });
-  }
-  receive(response: unknown): void {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.settle({ kind: ExtensionMessageDeliveryKind.Received, response });
-  }
-}
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
-  constructor(private readonly browser: ExtensionBrowserHost) {}
+  private readonly messageChannel: ExtensionMessageChannel;
 
-  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
-    return (
-      typeof value === "object" &&
-      !!value &&
-      "sendMessage" in value &&
-      typeof value.sendMessage === "function"
-    );
-  }
-
-  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-    if (!("lastError" in runtime)) return false;
-    const error = runtime.lastError;
-    return (
-      typeof error === "object" &&
-      !!error &&
-      "message" in error &&
-      typeof error.message === "string" &&
-      error.message.length > 0
-    );
-  }
-
-  private chromeRuntime(): ChromeRuntimeAvailability {
-    if (!("chrome" in this.browser)) {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
-    const chromeHost = this.browser.chrome;
-    if (
-      typeof chromeHost !== "object" ||
-      !chromeHost ||
-      !("runtime" in chromeHost)
-    ) {
-      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
-    }
-    return this.isChromeRuntimeHost(chromeHost.runtime)
-      ? {
-          kind: ChromeRuntimeAvailabilityKind.Available,
-          runtime: chromeHost.runtime,
-        }
-      : { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+  constructor(private readonly browser: ExtensionBrowserHost) {
+    this.messageChannel = new ExtensionMessageChannel(browser);
   }
 
   isExtensionConnectPath(pathname: string): boolean {
@@ -300,9 +184,14 @@ class ExtensionConnectionBrowser {
       .map((scope) => scope.trim())
       .filter(Boolean);
 
-    return scopes.filter((scope) =>
-      ExtensionConnectScope.isExtensionConnectScopeValue(scope),
-    );
+    const admittedScopes: ExtensionConnectScope[] = [];
+    for (const scope of scopes) {
+      const admitted = Effect.runSync(
+        Effect.either(ExtensionConnectScope.decode(scope)),
+      );
+      if (admitted._tag === "Right") admittedScopes.push(admitted.right);
+    }
+    return admittedScopes;
   }
 
   extensionConnectRequestFromLocation(
@@ -374,100 +263,27 @@ class ExtensionConnectionBrowser {
       : { kind: InstalledExtensionRuntimeKind.NotInstalled };
   }
 
-  private sendExtensionMessage({
-    extensionId,
-    message,
-    responseWait,
-  }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
-    return new Promise((resolve) => {
-      const runtimeAvailability = this.chromeRuntime();
-      if (
-        runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable
-      ) {
-        const resolveArgs: Parameters<typeof resolve>[0] = {
-          kind: ExtensionMessageDeliveryKind.Unavailable,
-        };
-        resolve(resolveArgs);
-        return;
-      }
-      const { runtime } = runtimeAvailability;
-      const sendMessage = runtime.sendMessage.bind(runtime);
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const pending = new PendingExtensionResponse({
-        browser: this.browser,
-        wait: responseWait,
-        resolve,
-      });
-      const receiveExtensionResponse = (
-        ...responses: ChromeRuntimeResponseArguments
-      ): void => {
-        if (this.chromeRuntimeLastError(runtime)) {
-          pending.unavailable();
-          return;
-        }
-        if (responses.length === 0) {
-          pending.unavailable();
-          return;
-        }
-        const [response] = responses;
-        pending.receive(response);
-      };
-      sendMessage(extensionId, message, receiveExtensionResponse);
-    });
-  }
-
   private pairingDeliveryFromResponse(
-    response: unknown,
+    response: ChromeExtensionRuntimeResponse,
   ): ExtensionPairingDelivery {
-    if (
-      response &&
-      typeof response === "object" &&
-      "ok" in response &&
-      response.ok === true
-    ) {
-      return { kind: ExtensionPairingDeliveryKind.Delivered };
-    }
-    const migrationRequired =
-      response &&
-      typeof response === "object" &&
-      (("reason" in response &&
-        response.reason === "auth-provider-plaintext-migration-required") ||
-        ("error" in response &&
-          response.error === "auth-provider-plaintext-migration-required"));
-    const responseReason =
-      response &&
-      typeof response === "object" &&
-      "reason" in response &&
-      typeof response.reason === "string"
-        ? response.reason
-        : "";
-    const admittedReason = Object.values(ExtensionPairingRejectionReason).find(
-      (reason) => reason === responseReason,
+    const decoded = Effect.runSync(
+      Effect.either(pairingApprovalResponseDecoder.decode(response)),
     );
-    if (!migrationRequired && admittedReason) {
-      return {
-        kind: ExtensionPairingDeliveryKind.Rejected,
-        reason: admittedReason,
-      };
-    }
-    if (migrationRequired) {
-      return {
-        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-      };
-    }
-    return { kind: ExtensionPairingDeliveryKind.Rejected };
+    return decoded._tag === "Right"
+      ? decoded.right
+      : { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
   async deliverExtensionPairingApproval({
     request,
     message,
   }: ExtensionPairingApprovalDelivery): Promise<ExtensionPairingDelivery> {
-    const sendArgs: Parameters<typeof this.sendExtensionMessage>[0] = {
+    const sendArgs: Parameters<ExtensionMessageChannel["send"]>[0] = {
       extensionId: request.extensionRuntimeId,
       message,
       responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
     };
-    const delivery = await this.sendExtensionMessage(sendArgs);
+    const delivery = await this.messageChannel.send(sendArgs);
     return delivery.kind === ExtensionMessageDeliveryKind.Received
       ? this.pairingDeliveryFromResponse(delivery.response)
       : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
@@ -486,7 +302,7 @@ class ExtensionConnectionBrowser {
       payload: { intent: OpenCompanionLauncherIntent.Pair },
     };
     const sendExtensionMessageArgs: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -495,15 +311,12 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
-    const response = delivery.response;
-    return (
-      !!response &&
-      typeof response === "object" &&
-      "ok" in response &&
-      response.ok === true
+    const decoded = Effect.runSync(
+      Effect.either(companionResponseDecoder.decodeLauncher(delivery.response)),
     );
+    return decoded._tag === "Right";
   }
 
   private async discoverPairedExtensionIdentityOnce(
@@ -538,7 +351,7 @@ class ExtensionConnectionBrowser {
     };
 
     const sendExtensionMessageArgs2: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -547,17 +360,15 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs2);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs2);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
       return delivery;
-    const response = delivery.response;
-    if (
-      !response ||
-      typeof response !== "object" ||
-      !("ok" in response) ||
-      response.ok !== true ||
-      !("status" in response)
-    ) {
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityDiscovery(delivery.response),
+      ),
+    );
+    if (decoded._tag === "Left") {
       return { kind: ExtensionMessageDeliveryKind.Unavailable };
     }
     let admission: ReturnType<typeof admit_companion_identity_status>;
@@ -566,7 +377,7 @@ class ExtensionConnectionBrowser {
         typeof admit_companion_identity_status
       >[0] = {
         discovery: protocolDiscovery,
-        status: response.status,
+        status: decoded.right.status,
         observedAt: Date.now(),
       };
       admission = admit_companion_identity_status(admissionRequest);
@@ -667,7 +478,7 @@ class ExtensionConnectionBrowser {
       payload: { requestId: unlockRequestId, vaultStoreId },
     };
     const sendExtensionMessageArgs3: Parameters<
-      typeof this.sendExtensionMessage
+      ExtensionMessageChannel["send"]
     >[0] = {
       extensionId: installedExtension.extensionRuntimeId,
       message,
@@ -676,18 +487,15 @@ class ExtensionConnectionBrowser {
         timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
       },
     };
-    const delivery = await this.sendExtensionMessage(sendExtensionMessageArgs3);
+    const delivery = await this.messageChannel.send(sendExtensionMessageArgs3);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
-    const response = delivery.response;
+    const decoded = Effect.runSync(
+      Effect.either(companionResponseDecoder.decodeUnlock(delivery.response)),
+    );
     return (
-      !!response &&
-      typeof response === "object" &&
-      "ok" in response &&
-      response.ok === true &&
-      "requestId" in response &&
-      response.requestId === unlockRequestId &&
-      "vaultStoreId" in response &&
-      response.vaultStoreId === vaultStoreId
+      decoded._tag === "Right" &&
+      decoded.right.requestId === unlockRequestId &&
+      decoded.right.vaultStoreId === vaultStoreId
     );
   }
 
@@ -695,59 +503,204 @@ class ExtensionConnectionBrowser {
     request,
     message,
   }: IdentityEnvelopeRequest): Promise<
-    Result<{ envelope: string; nextNonce: string }, VaultStorageFailure>
+    Result<ExtensionIdentityEnvelope, VaultStorageFailure>
   > {
-    const runtimeAvailability = this.chromeRuntime();
-    if (runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable)
-      return Promise.resolve(
+    const sendArgs: ExtensionMessageRequest = {
+      extensionId: request.extensionRuntimeId,
+      message,
+      responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
+    };
+    return this.messageChannel.send(sendArgs).then(
+      (delivery) => {
+        if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
+          return err(
+            new VaultStorageFailure(
+              VaultStorageFailureKind.IdentityHandoffUnavailable,
+            ),
+          );
+        const decodedResponse = Effect.runSync(
+          Effect.either(
+            identityHandoffResponseDecoder.decode(delivery.response),
+          ),
+        );
+        if (decodedResponse._tag === "Right") {
+          const identityEnvelope: ExtensionIdentityEnvelope = {
+            envelope: decodedResponse.right.envelope,
+            nextNonce: decodedResponse.right.nextNonce,
+          };
+          return ok(identityEnvelope);
+        }
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffRejected,
+          ),
+        );
+      },
+      () =>
         err(
           new VaultStorageFailure(
             VaultStorageFailureKind.IdentityHandoffUnavailable,
           ),
         ),
-      );
-    const { runtime } = runtimeAvailability;
-    return new Promise((resolve) => {
-      try {
-        runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
-          if (this.chromeRuntimeLastError(runtime)) {
-            resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.IdentityHandoffRejected,
-                ),
-              ),
-            );
-            return;
-          }
-          if (isAcceptedIdentityHandoffResponse(response)) {
-            resolve(
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              ok({
-                envelope: response.envelope,
-                nextNonce: response.nextNonce,
-              }),
-            );
-            return;
-          }
-          resolve(
-            err(
-              new VaultStorageFailure(
-                VaultStorageFailureKind.IdentityHandoffRejected,
-              ),
-            ),
-          );
-        });
-      } catch {
-        resolve(
-          err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffUnavailable,
-            ),
+    );
+  }
+
+  private async completePairedIdentityAdoption({
+    manager,
+    request,
+    handoff,
+  }: PairedIdentityAdoptionAttempt): Promise<IdentityHandoffAttempt> {
+    let payload: ExtensionPairedVaultIdentityHandoffRequestMessage["payload"];
+    try {
+      payload = handoff.request;
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+    const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
+      type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
+      payload,
+    };
+    const sendArgs: ExtensionMessageRequest = {
+      extensionId: request.extensionRuntimeId,
+      message,
+      responseWait: {
+        kind: ExtensionMessageResponseWaitKind.Bounded,
+        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+      },
+    };
+    let delivery: ExtensionMessageDelivery;
+    try {
+      delivery = await this.messageChannel.send(sendArgs);
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+    if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffRejected,
           ),
-        );
-      }
-    });
+        ),
+      };
+    const decoded = Effect.runSync(
+      Effect.either(
+        companionResponseDecoder.decodeIdentityHandoff(delivery.response),
+      ),
+    );
+    if (decoded._tag === "Left")
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffRejected,
+          ),
+        ),
+      };
+    let admission: ReturnType<typeof admit_companion_handoff_response>;
+    try {
+      admission = admit_companion_handoff_response(decoded.right.response);
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+    if (admission.kind !== "accepted")
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffRejected,
+          ),
+        ),
+      };
+    try {
+      return {
+        kind: IdentityHandoffAttemptKind.Consumed,
+        outcome: ok(await handoff.finish(manager, admission.response)),
+      };
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Consumed,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+  }
+
+  private async completeNewIdentityAdoption({
+    manager,
+    request,
+    pending,
+  }: NewIdentityAdoptionAttempt): Promise<IdentityHandoffAttempt> {
+    let recipientPublicKey: string;
+    try {
+      recipientPublicKey = pending.recipient_public_key;
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+    const nonce = request.nonce;
+    const message: ExtensionIdentityHandoffRequestMessage = {
+      type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
+      payload: {
+        recipientPublicKey,
+        nonce,
+        expectedDeviceId: request.deviceId,
+        expectedDevicePublicKey: request.devicePublicKey,
+        expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
+      },
+    };
+    const identityEnvelopeRequest: IdentityEnvelopeRequest = {
+      request,
+      message,
+    };
+    const delivered = await this.requestIdentityEnvelope(
+      identityEnvelopeRequest,
+    );
+    if (delivered.isErr())
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(delivered.error),
+      };
+    let context: ReturnType<
+      typeof NookExtensionIdentityHandoffContext.vault_creation
+    >;
+    try {
+      context = NookExtensionIdentityHandoffContext.vault_creation();
+    } catch (failure) {
+      return {
+        kind: IdentityHandoffAttemptKind.Pending,
+        outcome: err(new NativeVaultStorageFailure(failure)),
+      };
+    }
+    let outcome: IdentityHandoffAttempt["outcome"];
+    try {
+      const adopted = await pending.finish(
+        manager,
+        delivered.value.envelope,
+        nonce,
+        request.deviceId,
+        request.devicePublicKey,
+        request.deviceSigningPublicKey,
+        context,
+      );
+      request.nonce = delivered.value.nextNonce;
+      outcome = ok(adopted);
+    } catch (failure) {
+      outcome = err(new NativeVaultStorageFailure(failure));
+    } finally {
+      context.free();
+    }
+    return { kind: IdentityHandoffAttemptKind.Consumed, outcome };
   }
 
   async adoptExtensionIdentity({
@@ -759,7 +712,10 @@ class ExtensionConnectionBrowser {
     if (request.source === ExtensionIdentityRequestSource.PairedVault) {
       const begin: CompanionWebsiteHandoffBegin = {
         transaction: request.protocolTransaction,
-        context: { kind: "paired-vault", vault_store_id: request.vaultStoreId },
+        context: {
+          kind: "paired-vault",
+          vault_store_id: request.vaultStoreId,
+        },
       };
       let handoff: ReturnType<typeof manager.begin_companion_identity_handoff>;
       try {
@@ -767,139 +723,18 @@ class ExtensionConnectionBrowser {
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));
       }
-      let consumed = false;
-      try {
-        let payload: ExtensionPairedVaultIdentityHandoffRequestMessage["payload"];
-        try {
-          payload = handoff.request;
-        } catch (failure) {
-          return err(new NativeVaultStorageFailure(failure));
-        }
-        const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
-          type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-          payload,
-        };
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        const delivery = await this.sendExtensionMessage({
-          extensionId: request.extensionRuntimeId,
-          message,
-          responseWait: {
-            kind: ExtensionMessageResponseWaitKind.Bounded,
-            timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
-          },
-        });
-        if (
-          delivery.kind !== ExtensionMessageDeliveryKind.Received ||
-          !delivery.response ||
-          typeof delivery.response !== "object" ||
-          !("ok" in delivery.response) ||
-          delivery.response.ok !== true ||
-          !("response" in delivery.response)
-        )
-          return err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffRejected,
-            ),
-          );
-        let admission: ReturnType<typeof admit_companion_handoff_response>;
-        try {
-          admission = admit_companion_handoff_response(
-            delivery.response.response,
-          );
-        } catch (failure) {
-          return err(new NativeVaultStorageFailure(failure));
-        }
-        if (admission.kind !== "accepted")
-          return err(
-            new VaultStorageFailure(
-              VaultStorageFailureKind.IdentityHandoffRejected,
-            ),
-          );
-        consumed = true;
-        try {
-          return ok(await handoff.finish(manager, admission.response));
-        } catch (failure) {
-          return err(new NativeVaultStorageFailure(failure));
-        }
-      } finally {
-        if (!consumed) {
-          try {
-            handoff.cancel(manager);
-          } catch {
-            // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
-            return err(
-              new VaultStorageFailure(
-                VaultStorageFailureKind.IdentityHandoffCleanupFailed,
-              ),
-            );
-          }
-        }
-      }
-    }
-    let pending: ReturnType<typeof manager.begin_extension_identity_handoff>;
-    try {
-      pending = manager.begin_extension_identity_handoff();
-    } catch (failure) {
-      return err(new NativeVaultStorageFailure(failure));
-    }
-    let consumed = false;
-    try {
-      let recipientPublicKey: string;
-      try {
-        recipientPublicKey = pending.recipient_public_key;
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
-      const nonce = request.nonce;
-      const message: ExtensionIdentityHandoffRequestMessage = {
-        type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
-        payload: {
-          recipientPublicKey,
-          nonce,
-          expectedDeviceId: request.deviceId,
-          expectedDevicePublicKey: request.devicePublicKey,
-          expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
-        },
-      };
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const delivered = await this.requestIdentityEnvelope({
+      const pairedIdentityAdoptionAttempt: PairedIdentityAdoptionAttempt = {
+        manager,
         request,
-        message,
-      });
-      if (delivered.isErr()) return err(delivered.error);
-      let context: ReturnType<
-        typeof NookExtensionIdentityHandoffContext.vault_creation
-      >;
-      try {
-        context = NookExtensionIdentityHandoffContext.vault_creation();
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      }
-      consumed = true;
-      let adopted: NookAdoptedExtensionIdentityHandoff;
-      try {
-        adopted = await pending.finish(
-          manager,
-          delivered.value.envelope,
-          nonce,
-          request.deviceId,
-          request.devicePublicKey,
-          request.deviceSigningPublicKey,
-          context,
-        );
-      } catch (failure) {
-        return err(new NativeVaultStorageFailure(failure));
-      } finally {
-        context.free();
-      }
-      request.nonce = delivered.value.nextNonce;
-      return ok(adopted);
-    } finally {
-      if (!consumed) {
+        handoff,
+      };
+      const attempt = await this.completePairedIdentityAdoption(
+        pairedIdentityAdoptionAttempt,
+      );
+      if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
         try {
-          pending.cancel(manager);
+          handoff.cancel(manager);
         } catch {
-          // eslint-disable-next-line no-unsafe-finally -- Existing cleanup-result precedence is preserved.
           return err(
             new VaultStorageFailure(
               VaultStorageFailureKind.IdentityHandoffCleanupFailed,
@@ -907,7 +742,34 @@ class ExtensionConnectionBrowser {
           );
         }
       }
+      return attempt.outcome;
     }
+    let pending: ReturnType<typeof manager.begin_extension_identity_handoff>;
+    try {
+      pending = manager.begin_extension_identity_handoff();
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    const newIdentityAdoptionAttempt: NewIdentityAdoptionAttempt = {
+      manager,
+      request,
+      pending,
+    };
+    const attempt = await this.completeNewIdentityAdoption(
+      newIdentityAdoptionAttempt,
+    );
+    if (attempt.kind === IdentityHandoffAttemptKind.Pending) {
+      try {
+        pending.cancel(manager);
+      } catch {
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.IdentityHandoffCleanupFailed,
+          ),
+        );
+      }
+    }
+    return attempt.outcome;
   }
 }
 

@@ -11,6 +11,10 @@ import {
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
+  OAuthTokenFreshnessKind,
+  type OAuthTokenFreshnessOutcome,
+} from "$lib/vault/action-contexts";
+import {
   bind_google_drive_shared_folder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
@@ -86,6 +90,13 @@ export interface ICloudSharedProviderAccess {
   readonly shareReference: string;
 }
 
+export enum OAuthOperationOutcome {
+  ICloudSharedProviderCreated = "iCloudSharedProviderCreated",
+  ICloudSharedProviderConnected = "iCloudSharedProviderConnected",
+  ICloudTokensApplied = "iCloudTokensApplied",
+  GoogleTokensApplied = "googleTokensApplied",
+}
+
 export interface GoogleSharedFolderCreation {
   readonly collaboratorEmail: string;
 }
@@ -111,14 +122,17 @@ export class VaultOAuthActions {
   constructor(private readonly state: VaultState) {}
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   > {
     const state = this.state;
     if (
       state.storageMode !== "oauth-file" ||
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
     ) {
-      return ok();
+      const outcome: OAuthTokenFreshnessOutcome = {
+        kind: OAuthTokenFreshnessKind.NotConfigured,
+      };
+      return ok(outcome);
     }
     const oauthFile = state.oauthFileDraft.config;
     log.info("oauth token freshness check started");
@@ -166,7 +180,10 @@ export class VaultOAuthActions {
           refreshed.expiresAt.value === oauthFile.expiresAt.value))
     ) {
       log.info("oauth token freshness check kept existing token");
-      return ok();
+      const outcome: OAuthTokenFreshnessOutcome = {
+        kind: OAuthTokenFreshnessKind.AlreadyFresh,
+      };
+      return ok(outcome);
     }
     if (providerToRefresh.state === "duplicate") {
       const providers = state.providers.map((provider) =>
@@ -183,7 +200,10 @@ export class VaultOAuthActions {
     }
     state.configureOauthFile(refreshed);
     log.info("oauth token freshness check refreshed provider");
-    return ok();
+    const outcome: OAuthTokenFreshnessOutcome = {
+      kind: OAuthTokenFreshnessKind.Refreshed,
+    };
+    return ok(outcome);
   }
 
   private bindSharedICloudTarget({
@@ -191,13 +211,13 @@ export class VaultOAuthActions {
     storageTargetId,
   }: SharedICloudTargetBinding): Result<OAuthFileConfig, OAuthFailure> {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return ok({
+      const boundConfiguration: OAuthFileConfig = {
         ...config,
         iCloudMode: "shared",
         iCloudShareTarget: storedICloudShareTarget(storageTargetId),
         fileId: unresolvedOAuthRemoteFileId(),
-      });
+      };
+      return ok(boundConfiguration);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
     }
@@ -209,13 +229,10 @@ export class VaultOAuthActions {
       state.errorMsg = state.t(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured);
       return;
     }
-    if (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      !this.ensureSupportedOAuthOrigin({
-        provider: BrowserOAuthProvider.GoogleDrive,
-      })
-    )
-      return;
+    const originRequirement: OAuthOriginRequirement = {
+      provider: BrowserOAuthProvider.GoogleDrive,
+    };
+    if (!this.ensureSupportedOAuthOrigin(originRequirement)) return;
     state.googleOAuthBusy = true;
     state.errorMsg = "";
     try {
@@ -223,21 +240,24 @@ export class VaultOAuthActions {
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
         (state.oauthFileDraft.config.driveMode === "shared" ||
           state.oauthFileDraft.config.folderId.state === "folderId");
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const tokens = await googleOAuthSession.requestGoogleAccessToken({
+      const tokenRequest: Parameters<
+        typeof googleOAuthSession.requestGoogleAccessToken
+      >[0] = {
         prompt: GoogleOAuthPrompt.Consent,
         scope: shared
           ? GoogleDriveOAuthScope.Shared
           : GoogleDriveOAuthScope.AppData,
-      });
+      };
+      const tokens =
+        await googleOAuthSession.requestGoogleAccessToken(tokenRequest);
       if (tokens.isErr()) {
         state.errorMsg = state.t(tokens.error.translationKey);
         return;
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const applied = await this.applyGoogleOAuthTokens({
+      const tokenApplication: GoogleTokenApplication = {
         tokens: tokens.value,
-      });
+      };
+      const applied = await this.applyGoogleOAuthTokens(tokenApplication);
       if (applied.isErr())
         state.errorMsg = state.t(applied.error.translationKey);
     } finally {
@@ -269,7 +289,9 @@ export class VaultOAuthActions {
     state.errorMsg = "";
   }
 
-  async createICloudSharedProvider(): Promise<Result<void, OAuthFailure>> {
+  async createICloudSharedProvider(): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -280,22 +302,24 @@ export class VaultOAuthActions {
       state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME,
     );
     if (target.isErr()) return err(target.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const bound = this.bindSharedICloudTarget({
+    const targetBinding: SharedICloudTargetBinding = {
       config: state.oauthFileDraft.config,
       storageTargetId: target.value.storageTargetId,
-    });
+    };
+    const bound = this.bindSharedICloudTarget(targetBinding);
     if (bound.isErr()) return err(bound.error);
     state.configureOauthFile(bound.value);
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedCreated,
     );
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudSharedProviderCreated);
   }
 
   async useICloudSharedProvider({
     shareReference,
-  }: ICloudSharedProviderAccess): Promise<Result<void, OAuthFailure>> {
+  }: ICloudSharedProviderAccess): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
@@ -305,17 +329,17 @@ export class VaultOAuthActions {
     const target =
       await iCloudOAuthSession.acceptICloudSharedVault(shareReference);
     if (target.isErr()) return err(target.error);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const bound = this.bindSharedICloudTarget({
+    const targetBinding: SharedICloudTargetBinding = {
       config: state.oauthFileDraft.config,
       storageTargetId: target.value.storageTargetId,
-    });
+    };
+    const bound = this.bindSharedICloudTarget(targetBinding);
     if (bound.isErr()) return err(bound.error);
     state.configureOauthFile(bound.value);
     state.sharedGrantInstructions = state.t(
       I18N_KEYS.ProviderSetupIcloudSharedConnected,
     );
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudSharedProviderConnected);
   }
 
   async createGoogleSharedFolder({
@@ -454,13 +478,10 @@ export class VaultOAuthActions {
       state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
       return;
     }
-    if (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      !this.ensureSupportedOAuthOrigin({
-        provider: BrowserOAuthProvider.ICloud,
-      })
-    )
-      return;
+    const originRequirement: OAuthOriginRequirement = {
+      provider: BrowserOAuthProvider.ICloud,
+    };
+    if (!this.ensureSupportedOAuthOrigin(originRequirement)) return;
     state.icloudOAuthBusy = true;
     state.errorMsg = "";
     try {
@@ -474,21 +495,24 @@ export class VaultOAuthActions {
         state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudSignInReady);
         return;
       }
-      const tokens = await iCloudOAuthSession.requestPreparedICloudWebAuthToken(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        {
-          clickSignInControl: clickPreparedControl,
-          signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
-        },
-      );
+      const tokenRequest: Parameters<
+        typeof iCloudOAuthSession.requestPreparedICloudWebAuthToken
+      >[0] = {
+        clickSignInControl: clickPreparedControl,
+        signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+      };
+      const tokens =
+        await iCloudOAuthSession.requestPreparedICloudWebAuthToken(
+          tokenRequest,
+        );
       if (tokens.isErr()) {
         state.errorMsg = state.t(tokens.error.translationKey);
         return;
       }
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const applied = await this.applyICloudOAuthTokens({
+      const tokenApplication: ICloudTokenApplication = {
         tokens: tokens.value,
-      });
+      };
+      const applied = await this.applyICloudOAuthTokens(tokenApplication);
       if (applied.isErr())
         state.errorMsg = state.t(applied.error.translationKey);
     } finally {
@@ -521,29 +545,34 @@ export class VaultOAuthActions {
 
   private async applyICloudOAuthTokens({
     tokens,
-  }: ICloudTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: ICloudTokenApplication): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     const fallbackFileName =
       state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
     let existing: StoredOAuthFileConfiguration;
     try {
+      const fallbackRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
+        preset: "icloud",
+        fileName: fallbackFileName,
+      };
       existing = configuredOAuthFile(
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            defaultOAuthFileConfig({
-              preset: "icloud",
-              fileName: fallbackFileName,
-            }),
+          : defaultOAuthFileConfig(fallbackRequest),
       );
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.InvalidConfiguration));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const converted = iCloudOAuthSession.oauthTokensToICloudConfig({
+    const conversionRequest: Parameters<
+      typeof iCloudOAuthSession.oauthTokensToICloudConfig
+    >[0] = {
       tokens,
       existing,
-    });
+    };
+    const converted =
+      iCloudOAuthSession.oauthTokensToICloudConfig(conversionRequest);
     if (converted.isErr()) return err(converted.error);
     state.activateLoginSetup("oauth-file");
     if (!state.addProviderOpen) state.storageMode = "oauth-file";
@@ -555,7 +584,7 @@ export class VaultOAuthActions {
       name.kind === OAuthFileNameKind.Resolved
         ? name.fileName
         : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(OAuthOperationOutcome.ICloudTokensApplied);
   }
 
   private ensureSupportedOAuthOrigin({
@@ -581,7 +610,9 @@ export class VaultOAuthActions {
 
   private async applyGoogleOAuthTokens({
     tokens,
-  }: GoogleTokenApplication): Promise<Result<void, OAuthFailure>> {
+  }: GoogleTokenApplication): Promise<
+    Result<OAuthOperationOutcome, OAuthFailure>
+  > {
     const state = this.state;
     const email = await googleOAuthSession.fetchGoogleAccountEmail(
       tokens.accessToken,
@@ -591,16 +622,15 @@ export class VaultOAuthActions {
     const fallbackFileName = sharedFolderName || DEFAULT_DRIVE_BACKUP_NAME;
     let existing: StoredOAuthFileConfiguration;
     try {
+      const fallbackRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
+        preset: "google-drive",
+        fileName: fallbackFileName,
+      };
       const previous =
         state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? state.oauthFileDraft.config
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            defaultOAuthFileConfig({
-              preset: "google-drive",
-              fileName: fallbackFileName,
-            });
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      existing = configuredOAuthFile({
+          : defaultOAuthFileConfig(fallbackRequest);
+      const configuration: Parameters<typeof configuredOAuthFile>[0] = {
         ...previous,
         fileName:
           previous.fileName.state === "fileName"
@@ -610,15 +640,18 @@ export class VaultOAuthActions {
           email.value.kind === GoogleAccountIdentityKind.Available
             ? storedOAuthAccountEmail(email.value.label)
             : previous.accountEmail,
-      });
+      };
+      existing = configuredOAuthFile(configuration);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const converted = googleOAuthSession.oauthTokensToConfig({
+    const conversionRequest: Parameters<
+      typeof googleOAuthSession.oauthTokensToConfig
+    >[0] = {
       tokens,
       existing,
-    });
+    };
+    const converted = googleOAuthSession.oauthTokensToConfig(conversionRequest);
     if (converted.isErr()) return err(converted.error);
     const config = converted.value;
     state.activateLoginSetup("oauth-file");
@@ -633,6 +666,6 @@ export class VaultOAuthActions {
         : name.kind === OAuthFileNameKind.Resolved
           ? name.fileName
           : DEFAULT_DRIVE_BACKUP_NAME;
-    return ok();
+    return ok(OAuthOperationOutcome.GoogleTokensApplied);
   }
 }

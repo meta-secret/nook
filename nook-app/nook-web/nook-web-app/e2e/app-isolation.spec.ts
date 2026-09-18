@@ -1,5 +1,5 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
-import type { NookVaultArchitecture } from '$app-wasm'
+import { NookVaultArchitecture } from '$app-wasm'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
@@ -77,28 +77,22 @@ test('exposes only the project capability and rejects the opposite vault type', 
     if (admission.isErr()) return admission.error.translationKey
     const manager = admission.value
     const current = manager.vaultArchitecture
-    const isArchitectureFactory = (
-      candidate: unknown,
-    ): candidate is Pick<typeof NookVaultArchitecture, 'sentinel' | 'simple'> =>
-      typeof candidate === 'function' &&
-      'sentinel' in candidate &&
-      typeof candidate.sentinel === 'function' &&
-      'simple' in candidate &&
-      typeof candidate.simple === 'function'
-    const Architecture = current.constructor
-    if (!isArchitectureFactory(Architecture)) {
+    const Architecture = NookVaultArchitecture
+    if (
+      typeof Architecture !== 'function' ||
+      !('sentinel' in Architecture) ||
+      typeof Architecture.sentinel !== 'function' ||
+      !('simple' in Architecture) ||
+      typeof Architecture.simple !== 'function'
+    ) {
       current.free()
       return 'Vault architecture factory is unavailable'
     }
+    const sentinelFactory = Architecture.sentinel
+    const simpleFactory = Architecture.simple
     const oppositeArchitecture = simpleApp
-      ? Architecture.sentinel(
-          current.device_mode,
-          current.replication_type,
-          2,
-          3,
-          0,
-        )
-      : Architecture.simple(current.device_mode, current.replication_type)
+      ? sentinelFactory(current.device_mode, current.replication_type, 2, 3, 0)
+      : simpleFactory(current.device_mode, current.replication_type)
     try {
       manager.set_vault_architecture(oppositeArchitecture)
       return ''

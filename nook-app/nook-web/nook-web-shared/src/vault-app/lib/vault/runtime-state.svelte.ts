@@ -41,7 +41,10 @@ import {
   TranslationMessage,
   type TranslationRequest,
 } from "$lib/vault/translation";
-import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+import type {
+  OAuthTokenFreshnessOutcome,
+  ProviderActionsContext,
+} from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
 
 export type VaultEditRestriction =
@@ -59,12 +62,21 @@ export enum SyncProviderLabelKind {
   Active = "active",
 }
 
+export enum LocalFolderBackupDirectorySelectionOutcome {
+  Selected = "selected",
+}
+
 export type SyncProviderLabel =
   | { kind: SyncProviderLabelKind.Idle }
   | { kind: SyncProviderLabelKind.Active; label: string };
 
 interface StorageTimeoutRace<T, E> {
   readonly promise: Promise<Result<T, E>>;
+  readonly releaseLateValue: (value: T) => void;
+}
+
+interface StorageTimeoutCompletion<T, E> {
+  readonly operation: Promise<Result<T, E>>;
   readonly releaseLateValue: (value: T) => void;
 }
 
@@ -201,11 +213,22 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     promise,
     releaseLateValue,
   }: StorageTimeoutRace<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new VaultDiscoveryTimeout({
+    const discoveryDeadline: ConstructorParameters<
+      typeof VaultDiscoveryTimeout
+    >[0] = {
       timeoutMs: this.storageOpTimeoutMs,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    }).waitFor({ operation: promise, releaseLateValue });
+    };
+    const discoveryCompletion: StorageTimeoutRace<T, E> = {
+      promise,
+      releaseLateValue,
+    };
+    const timeoutCompletion: StorageTimeoutCompletion<T, E> = {
+      operation: discoveryCompletion.promise,
+      releaseLateValue: discoveryCompletion.releaseLateValue,
+    };
+    return new VaultDiscoveryTimeout(discoveryDeadline).waitFor(
+      timeoutCompletion,
+    );
   }
 
   wasmStorageArgs(): NookStorageConnectArgs {
@@ -251,7 +274,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<void, OAuthFailure | VaultStorageFailure>
+    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
   > {
     return new oauthActions.VaultOAuthActions(
       this.completeVaultState(),
@@ -281,11 +304,14 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<LocalFolderBackupDirectorySelectionOutcome, VaultStorageFailure>
   > {
-    return new providersActions.ProviderSelectionActions(
+    const selection = await new providersActions.ProviderSelectionActions(
       this.providerActionsContext(),
     ).chooseLocalFolder();
+    return selection.map(
+      () => LocalFolderBackupDirectorySelectionOutcome.Selected,
+    );
   }
 
   refreshLocalFolderBackupSupport(): void {

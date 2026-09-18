@@ -9,6 +9,11 @@ import initNookWasm, {
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../src/lib/browser-runtime-message'
 import {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -32,7 +37,10 @@ class ProviderStagingFixture {
       id: 'github',
       type: 'github',
       label: 'GitHub',
-      githubPat: { state: 'token', value: 'github_pat_secret' },
+      githubPat: {
+        state: 'token',
+        value: '-----BEGIN AGE ENCRYPTED FILE-----\nfixture',
+      },
       githubRepo: { state: 'defaultRepository' },
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
@@ -48,15 +56,33 @@ class ProviderStagingFixture {
       decode: async (candidate) => admit_extension_storage_providers(candidate),
     })
   }
+
+  runtimeValue(provider: StorageProvider): BrowserRuntimeMessageValue {
+    if (provider.githubPat.state !== 'token') {
+      throw new Error('GitHub staging fixture requires a token')
+    }
+    return {
+      id: provider.id,
+      type: provider.type,
+      label: provider.label,
+      githubPat: { state: 'token', value: provider.githubPat.value },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: provider.createdAt,
+    }
+  }
 }
 
 const providerStagingFixture = new ProviderStagingFixture()
 
-function parseProviderImport(providers: unknown[]) {
+function parseProviderImport(providers: BrowserRuntimeMessageValue[]) {
   return parseExtensionSessionRequest({
     type: ExtensionSessionMessageType.ImportVault,
     payload: {
-      vaultStoreId: 'vault',
+      vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
@@ -68,6 +94,25 @@ function parseProviderImport(providers: unknown[]) {
 }
 
 describe('provider credential staging', () => {
+  test('accepts a local provider from the pairing approval payload', async () => {
+    const parse = await parseProviderImport([
+      {
+        id: 'local-provider',
+        type: 'local',
+        label: 'This device',
+        githubPat: { state: 'missing' },
+        githubRepo: { state: 'defaultRepository' },
+        oauthFile: { state: 'notApplicable' },
+        localFolder: { state: 'notApplicable' },
+        storeId: { state: 'storeId', value: 'store_abcdefghijk' },
+        syncCheckpoint: { state: 'neverSynced' },
+        createdAt: '2026-09-18T00:00:00.000Z',
+      },
+    ])
+
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+  })
+
   test('invalid identity is a typed rejection', () => {
     expect(
       new ProviderCredentialBuffer([{ id: '', type: 'github' }]).identities(),
@@ -85,10 +130,9 @@ describe('provider credential staging', () => {
     })
     expect(result).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
     expect(staged).toEqual([{ ...source[0], githubPat: { state: 'missing' } }])
-    expect(source[0]?.githubPat).toEqual({
-      state: 'token',
-      value: 'github_pat_secret',
-    })
+    expect(source[0]?.githubPat).toEqual(
+      providerStagingFixture.github().githubPat,
+    )
   })
 
   test('scrubs a cloned credential copy when structural admission rejects it', async () => {
@@ -120,10 +164,9 @@ describe('provider credential staging', () => {
           oauthFile: { state: 'notApplicable', accessToken: '' },
         },
       ])
-      expect(source.githubPat).toEqual({
-        state: 'token',
-        value: 'github_pat_secret',
-      })
+      expect(source.githubPat).toEqual(
+        providerStagingFixture.github().githubPat,
+      )
     } finally {
       globalThis.structuredClone = nativeStructuredClone
     }
@@ -223,10 +266,9 @@ describe('provider credential staging', () => {
     if (staging.isErr()) return
     expect(staging.value).toEqual(source)
     expect(staging.value[0]).not.toBe(source[0])
-    expect(source[0]?.githubPat).toEqual({
-      state: 'token',
-      value: 'github_pat_secret',
-    })
+    expect(source[0]?.githubPat).toEqual(
+      providerStagingFixture.github().githubPat,
+    )
   })
 
   test('scrubs decoded providers when queued import work expires', async () => {
@@ -278,36 +320,30 @@ describe('provider credential staging', () => {
     const source = [
       { ...providerStagingFixture.github(), metadata: new Date() },
     ]
-    const credentialBuffer = new ProviderCredentialBuffer(source)
-    try {
-      expect(
-        await credentialBuffer.stage({
-          decode: async (candidate) =>
-            admit_extension_storage_providers(candidate),
-        }),
-      ).toEqual(err(ProviderCredentialFailure.InvalidTransport))
-      expect(source[0]?.githubPat.state).toBe('token')
-    } finally {
-      credentialBuffer.clear()
-    }
-    expect(source[0]?.githubPat).toEqual({ state: 'missing' })
+    const admission = BrowserRuntimeMessage.from({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers: source,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+
+    expect(admission.kind).toBe(BrowserRuntimeMessageAdmissionKind.Rejected)
+    expect(source[0]?.githubPat.state).toBe('token')
   })
 
-  test('preserves valid identity-only metadata for canonical provider admission', async () => {
-    const providerIdentity: Pick<StorageProvider, 'id' | 'type'> = {
-      id: 'github',
-      type: 'github',
-    }
-    const parsed = await parseProviderImport([providerIdentity])
+  test('preserves valid provider metadata through canonical admission', async () => {
+    const provider = providerStagingFixture.github()
+    const parsed = await parseProviderImport([
+      providerStagingFixture.runtimeValue(provider),
+    ])
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
     expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
     if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
     expect(parsed.request.payload.providers).toHaveLength(1)
-    expect(parsed.request.payload.providers[0]?.id).toBe(providerIdentity.id)
-    expect(parsed.request.payload.providers[0]?.type).toBe(
-      providerIdentity.type,
-    )
+    expect(parsed.request.payload.providers[0]?.id).toBe(provider.id)
+    expect(parsed.request.payload.providers[0]?.type).toBe(provider.type)
   })
 
   test('canonical admission does not retain prototype metadata', async () => {

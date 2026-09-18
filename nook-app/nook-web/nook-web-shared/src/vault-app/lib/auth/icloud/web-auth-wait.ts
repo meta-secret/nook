@@ -8,6 +8,7 @@ import {
 import {
   cloudKitRuntime,
   WebAuthTokenLookupKind,
+  type CloudKitWebAuthTokenPersistence,
   type WebAuthTokenLookup,
 } from "$lib/auth/icloud/cloudkit-runtime";
 
@@ -29,27 +30,32 @@ type CloudKitTokenWaitRequest = {
   popup?: Window;
 };
 
+type CloudKitTokenWaitOutcome = Result<string, OAuthFailure>;
+type CloudKitTokenWaitCompletion = (
+  tokenOutcome: CloudKitTokenWaitOutcome,
+) => void;
+
 /** Owns every listener, timer and optional popup until one terminal outcome. */
 export class CloudKitTokenWait {
   private state = CloudKitTokenWaitState.Waiting;
   private readonly timeout: ReturnType<typeof setTimeout>;
   private readonly poll: ReturnType<typeof setInterval>;
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  private resolve: (outcome: Result<string, OAuthFailure>) => void = () => {};
-  readonly completion = new Promise<Result<string, OAuthFailure>>((resolve) => {
+  private resolve: CloudKitTokenWaitCompletion = () => {};
+  readonly completion = new Promise<CloudKitTokenWaitOutcome>((resolve) => {
     this.resolve = resolve;
   });
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  private readonly tokenListener = (outcome: Result<string, OAuthFailure>) =>
+  private readonly tokenListener = (outcome: CloudKitTokenWaitOutcome) =>
     this.finish(outcome);
-  private readonly messageListener = (event: MessageEvent<unknown>) => {
-    const token = this.request.owner.webAuthTokenFromMessageData(event.data);
+  private readonly messageListener = (event: MessageEvent) => {
+    const data: unknown = event.data;
+    const token = this.request.owner.webAuthTokenFromMessageData(data);
     if (token.kind === WebAuthTokenLookupKind.Unavailable) return;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const stored = cloudKitRuntime.storeCloudKitWebAuthToken({
+    const persistenceRequest: CloudKitWebAuthTokenPersistence = {
       containerIdentifier: ICLOUD_CONTAINER_ID,
       token,
-    });
+    };
+    const stored =
+      cloudKitRuntime.storeCloudKitWebAuthToken(persistenceRequest);
     this.finish(stored.isErr() ? err(stored.error) : ok(token.token));
   };
   constructor(private readonly request: CloudKitTokenWaitRequest) {
@@ -94,8 +100,7 @@ export class CloudKitTokenWait {
     else if (token.value.kind === WebAuthTokenLookupKind.Available)
       this.finish(ok(token.value.token));
   }
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  private finish(outcome: Result<string, OAuthFailure>): void {
+  private finish(outcome: CloudKitTokenWaitOutcome): void {
     if (this.state === CloudKitTokenWaitState.Settled) return;
     this.state = CloudKitTokenWaitState.Settled;
     clearTimeout(this.timeout);
@@ -133,12 +138,13 @@ class CloudKitSignInBrowser {
         const eq = trimmed.indexOf("=");
         if (eq === -1) continue;
         const value = trimmed.slice(eq + 1);
-        if (value)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+        if (value) {
+          const token: WebAuthTokenLookup = {
             kind: WebAuthTokenLookupKind.Available,
             token: decodeURIComponent(value),
-          });
+          };
+          return ok(token);
+        }
       }
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));
@@ -148,24 +154,24 @@ class CloudKitSignInBrowser {
   startStoredWebAuthTokenWait(
     timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
   ): CloudKitTokenWait {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new CloudKitTokenWait({
+    const request: CloudKitTokenWaitRequest = {
       browser: this.browser,
       owner: this,
       timeoutMs,
       mode: CloudKitTokenWaitMode.Stored,
-    });
+    };
+    return new CloudKitTokenWait(request);
   }
   startNativeCloudKitWebAuthTokenWait(
     timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
   ): CloudKitTokenWait {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new CloudKitTokenWait({
+    const request: CloudKitTokenWaitRequest = {
       browser: this.browser,
       owner: this,
       timeoutMs,
       mode: CloudKitTokenWaitMode.Native,
-    });
+    };
+    return new CloudKitTokenWait(request);
   }
   private async fetchCloudKitWebAuthChallenge(): Promise<
     Result<string, OAuthFailure>
@@ -175,10 +181,11 @@ class CloudKitSignInBrowser {
     const apiToken = encodeURIComponent(ICLOUD_API_TOKEN);
     let value: unknown;
     try {
+      const headers: HeadersInit = { Accept: "application/json" };
+      const requestInit: RequestInit = { method: "GET", headers };
       const response = await fetch(
         `https://api.apple-cloudkit.com/database/1/${container}/${environment}/public/users/current?ckAPIToken=${apiToken}`,
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        { method: "GET", headers: { Accept: "application/json" } },
+        requestInit,
       );
       value = await response.json();
     } catch {
@@ -248,14 +255,14 @@ class CloudKitSignInBrowser {
       return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
     }
     if (!opened) return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const wait = new CloudKitTokenWait({
+    const request: CloudKitTokenWaitRequest = {
       browser: this.browser,
       owner: this,
       timeoutMs,
       mode: CloudKitTokenWaitMode.Native,
       popup: opened,
-    });
+    };
+    const wait = new CloudKitTokenWait(request);
     return wait.completion;
   }
 }

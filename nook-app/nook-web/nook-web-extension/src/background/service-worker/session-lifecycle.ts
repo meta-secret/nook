@@ -1,5 +1,7 @@
+import { Schema } from 'effect'
 import {
   ExtensionSessionDocumentOwner,
+  ExtensionSessionDocumentStateKind,
   type ExtensionSessionTransportResult,
   type ExtensionSessionTransport,
 } from './session-document'
@@ -8,6 +10,10 @@ import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
@@ -17,6 +23,20 @@ type AuthenticationSurfaceNotification = {
 
 type AuthenticationSurfaceRefreshSuccess = { ok: true }
 type AuthenticationSurfaceRefreshResponse = { ok?: boolean }
+
+type ModuleStructRequest = { ok: Schema.Literal<[true]> }
+const moduleStructRequest: ModuleStructRequest = {
+  ok: Schema.Literal(true),
+}
+const authenticationSurfaceRefreshSuccessSchema = Schema.Struct(
+  moduleStructRequest,
+) satisfies Schema.Schema<AuthenticationSurfaceRefreshSuccess>
+
+function decodeAuthenticationSurfaceRefreshSuccess(response: unknown) {
+  return Schema.decodeUnknown(authenticationSurfaceRefreshSuccessSchema)(
+    response,
+  )
+}
 
 type AuthenticationSurfaceDeliveryRequest = {
   tabId: number
@@ -28,10 +48,9 @@ export class ExtensionSessionLifecycle {
   private readonly document = new ExtensionSessionDocumentOwner()
 
   async ensureExtensionSessionDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionTransport>
   > {
-    const opened = await this.document.open()
-    return opened.map(() => {})
+    return this.document.open()
   }
 
   openSessionDocument(): Promise<
@@ -41,7 +60,7 @@ export class ExtensionSessionLifecycle {
   }
 
   closeExtensionSessionDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     return this.document.close()
   }
@@ -60,17 +79,6 @@ export class ExtensionSessionLifecycle {
       url: await simpleVaultRuntime.runtimeSimpleVaultUrl(path),
     }
     await chrome.tabs.create(nookTypedArgs0_1)
-  }
-
-  private authenticationSurfaceRefreshSucceeded(
-    response: unknown,
-  ): response is AuthenticationSurfaceRefreshSuccess {
-    return (
-      !!response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true
-    )
   }
 
   private async authenticationSurfaceTabId(
@@ -104,7 +112,11 @@ export class ExtensionSessionLifecycle {
       chrome.tabs.sendMessage(targetTabId, targetMessage)
     const request: AuthenticationSurfaceDeliveryRequest = { tabId, message }
     const response = await sendTabMessage(request)
-    if (!this.authenticationSurfaceRefreshSucceeded(response)) {
+    const decoded = runConcreteDecoder(
+      decodeAuthenticationSurfaceRefreshSuccess,
+      response,
+    )
+    if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
       throw new Error('authentication surface refresh rejected')
     }
   }

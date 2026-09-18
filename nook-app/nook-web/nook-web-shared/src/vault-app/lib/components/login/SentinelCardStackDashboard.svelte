@@ -66,22 +66,22 @@
   const t: VaultState["t"] = (request) => vault.t(request);
 
   function rosterLabel(key: I18nKey) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return t({
+    const request: Parameters<typeof t>[0] = {
       key,
       replacements: { count: String(availableRosterSlots) },
-    });
+    };
+    return t(request);
   }
 
   function policyLabel(key: I18nKey) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return t({
+    const request: Parameters<typeof t>[0] = {
       key,
       replacements: {
         count: String(participantCount),
         threshold: String(threshold),
       },
-    });
+    };
+    return t(request);
   }
 
   const requestCopy = $derived<
@@ -124,13 +124,10 @@
   const availableRosterSlots = $derived(
     Math.max(0, participantCount - rosterCount),
   );
-  const policyDraft = $derived(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    evaluate_sentinel_policy_draft({
-      participants: participantCount,
-      threshold,
-    }),
-  );
+  const policyRequest = $derived<
+    Parameters<typeof evaluate_sentinel_policy_draft>[0]
+  >({ participants: participantCount, threshold });
+  const policyDraft = $derived(evaluate_sentinel_policy_draft(policyRequest));
   const policyValid = $derived(
     name.trim().length > 0 && policyDraft.admission.kind === "accepted",
   );
@@ -194,12 +191,12 @@
     if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return;
     actionBusy = true;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const started = await onStart({
+      const request: Parameters<typeof onStart>[0] = {
         label: name.trim(),
         participantCount,
         threshold,
-      });
+      };
+      const started = await onStart(request);
       if (started !== false) {
         onboardingStage = SentinelCardOnboardingStage.Roster;
       }
@@ -220,11 +217,11 @@
       return;
     actionBusy = true;
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const added = await onAddParticipant({
+      const request: Parameters<typeof onAddParticipant>[0] = {
         payload,
         participantLabel: participantLabel.trim(),
-      });
+      };
+      const added = await onAddParticipant(request);
       if (added.isErr()) {
         vault.errorMsg = vault.t(added.error.translationKey);
         return;

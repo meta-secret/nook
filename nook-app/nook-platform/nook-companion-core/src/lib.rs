@@ -34,6 +34,7 @@ mod companion_pairing;
 mod companion_protocol;
 pub mod credential_fill;
 mod domain_numbers;
+mod extension_consent;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
@@ -48,6 +49,8 @@ mod website_login_options_response;
 mod website_login_save_offer_response;
 mod website_passkey_account_list;
 mod website_passkey_proposal;
+
+pub use nook_auth2::StoreId;
 
 pub use account_picker_authorization::{
     AccountPickerAuthorizationLifecycle, AccountPickerAuthorizationTransition, CleanupEvidence,
@@ -149,26 +152,33 @@ pub use domain_numbers::{
     AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
+pub use extension_consent::{
+    ExtensionConsentApprovalAvailability, ExtensionConsentEvent, ExtensionConsentObservation,
+    ExtensionConsentPhase, ExtensionConsentTransitionFailure, ExtensionConsentTransitionOutcome,
+    ExtensionConsentTransitionRequest, ExtensionConsentVaultReadiness,
+};
 pub use extension_pairing_state::{
     ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
     EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
     ExtensionConnectScope, ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
-    ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
-    ExtensionPairingRecord, ExtensionPairingRecordComparison,
-    ExtensionPairingRecordComparisonRequest, ExtensionPairingState, ExtensionPairingStateError,
-    ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
-    ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
-    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
-    RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
-    UnknownExtensionConnectScope,
+    ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingEntry,
+    ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput, ExtensionPairingRecord,
+    ExtensionPairingRecordComparison, ExtensionPairingRecordComparisonRequest,
+    ExtensionPairingState, ExtensionPairingStateError, ExtensionPairingVaultType,
+    ExtensionReadySetup, ExtensionReadySetupStatus, ExtensionSetupAfterRemoval,
+    GrantAuthorityResponseError, GrantAuthorityResponseJson, ImportedExtensionEventLog,
+    PairingStorageJson, PairingVaultId, RefreshExtensionPairingGrantInput,
+    SelectedExtensionPairingGrant, StoredExtensionPairingGrant, UnknownExtensionConnectScope,
+    UnknownExtensionPairingVaultType,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
     ExtensionPersistenceStoreState,
 };
 pub use extension_session_protocol::{
-    ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
-    LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
+    ExtensionEventLogRecord, ExtensionSessionRequest, ExtensionSessionRequestValidation,
+    ExtensionSessionRequestWire, LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError,
+    LoginPickerOpenResponseWire,
 };
 pub use extension_session_status_response::{
     ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,

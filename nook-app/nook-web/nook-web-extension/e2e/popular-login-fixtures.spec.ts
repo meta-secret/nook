@@ -24,21 +24,33 @@ const catalogPath = path.resolve(
 
 type CatalogEntry = { id: string }
 
-function isCatalogEntry(value: unknown): value is CatalogEntry {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'id' in value &&
-    typeof value.id === 'string'
-  )
+class PopularLoginCatalogDecoder {
+  decode(value: unknown): CatalogEntry[] {
+    if (!Array.isArray(value)) {
+      throw new TypeError('popular login catalog must be an array')
+    }
+    const catalog: CatalogEntry[] = []
+    for (const entry of value) catalog.push(this.decodeEntry(entry))
+    return catalog
+  }
+
+  private decodeEntry(value: unknown): CatalogEntry {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      !('id' in value) ||
+      typeof value.id !== 'string'
+    ) {
+      throw new TypeError('popular login catalog entry has an invalid shape')
+    }
+    return { id: value.id }
+  }
 }
 
 const safeJson: { parse: (value: string) => unknown } = JSON
-const parsedCatalog = safeJson.parse(readFileSync(catalogPath, 'utf8'))
-if (!Array.isArray(parsedCatalog) || !parsedCatalog.every(isCatalogEntry)) {
-  throw new Error('popular login catalog has an invalid shape')
-}
-const catalog = parsedCatalog.filter(isCatalogEntry)
+const parsedCatalog: unknown = safeJson.parse(readFileSync(catalogPath, 'utf8'))
+const catalog = new PopularLoginCatalogDecoder().decode(parsedCatalog)
 const templateIds = listShellTemplateIds()
 
 function requiredShellTemplate(templateId: string) {

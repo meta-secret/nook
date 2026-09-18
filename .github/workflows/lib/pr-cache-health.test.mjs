@@ -4,13 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { PrCacheHealth } from "./pr-cache-health.mjs";
+import { PrCacheHealth, SccacheExpectation } from "./pr-cache-health.mjs";
+import {
+  CompilePhaseCacheExportMode,
+  CompilePhaseStatus,
+} from "./cache-scope-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").CacheTelemetryRecord} CacheTelemetryRecord */
 
 /** @param {string} job @param {Record<string, unknown>} [overrides] @returns {CacheTelemetryRecord} */
 const telemetry = (job, overrides = {}) => ({
-  schema_version: 1,
+  schema_version: 2,
   github: { run_id: "42", run_attempt: 1, job },
   cache_backend: {
     kind: "remote",
@@ -27,6 +31,33 @@ const telemetry = (job, overrides = {}) => ({
     },
     compile_source: {
       scope: "source",
+      parent_scope_suffix: "",
+      parent_ref: "",
+    },
+    compile_phases: {
+      foundation: {
+        requested: false,
+        target: "build-compile-foundation",
+        status: CompilePhaseStatus.NotRequested,
+        cache_from: [],
+        cache_to: {
+          enabled: false,
+          ref: "",
+          mode: CompilePhaseCacheExportMode.Disabled,
+        },
+        input_refs_access_verified: false,
+      },
+      source_compile: {
+        requested: false,
+        target: "build-compile",
+        status: CompilePhaseStatus.NotRequested,
+        cache_from: [],
+        cache_to: {
+          enabled: false,
+          ref: "",
+          mode: CompilePhaseCacheExportMode.Disabled,
+        },
+      },
     },
     imports: {
       probes_complete: true,
@@ -66,7 +97,10 @@ const telemetry = (job, overrides = {}) => ({
     cache_export: {
       attempts: 0,
       completed: 0,
-      bytes: 0,
+      byte_measurement: {
+        status: "unavailable",
+        reason: "buildkit_did_not_emit_byte_count",
+      },
       duration_ms: 0,
       incomplete_failures: 0,
     },
@@ -80,7 +114,13 @@ const telemetry = (job, overrides = {}) => ({
 void test("passes warm no-export Docker jobs while sccache remains writable", () => {
   const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
     jobs: [
-      { id: "verify", result: "success", buildExpected: true, readOnly: true },
+      {
+        id: "verify",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.NotRequired,
+        readOnly: true,
+      },
     ],
     telemetry: [telemetry("verify")],
   });
@@ -92,10 +132,128 @@ void test("passes warm no-export Docker jobs while sccache remains writable", ()
   );
 });
 
+void test("does not require sccache telemetry for compiler-free BuildKit jobs", () => {
+  const compilerFree = telemetry("dependency-policy", {
+    cache_backend: {
+      kind: "direct_compile",
+      persistent: false,
+      reason: "no_compiler_invocations",
+    },
+    sccache: {
+      report_count: 0,
+      baked_runtime_mode: "UNAVAILABLE",
+      runtime_mode: "UNAVAILABLE",
+      runtime_mode_source: "unavailable",
+      client_side: false,
+      counter_reliability: "unavailable",
+      publication_status: "unavailable",
+      compile_requests: 0,
+      requests_executed: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      cache_errors: 0,
+      cache_write_errors: 0,
+      cache_writes: 0,
+      remote_writes: 0,
+      compile_failures: 0,
+      measurement: "sum_of_zero_based_run_snapshots",
+      fallback: { state: "active", reason: "none" },
+      snapshots: [],
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "dependency-policy",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.NotRequired,
+        readOnly: false,
+      },
+    ],
+    telemetry: [compilerFree],
+  });
+
+  assert.equal(model.gate.verdict, "pass");
+  assert.deepEqual(model.gate.reasons, []);
+});
+
+void test("requires a named sccache expectation at the workflow boundary", () => {
+  const jobs = PrCacheHealth.parseJobs(
+    JSON.stringify([
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
+      {
+        id: "dependency-policy",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.NotRequired,
+        readOnly: false,
+      },
+      {
+        id: "wasm-node-test",
+        result: "skipped",
+        buildExpected: false,
+        sccacheExpectation: SccacheExpectation.NotApplicable,
+        readOnly: true,
+      },
+    ]),
+  );
+
+  assert.deepEqual(
+    jobs.map((job) => job.sccacheExpectation),
+    [
+      SccacheExpectation.Required,
+      SccacheExpectation.NotRequired,
+      SccacheExpectation.NotApplicable,
+    ],
+  );
+  assert.throws(
+    () =>
+      PrCacheHealth.parseJobs(
+        JSON.stringify([
+          {
+            id: "rust",
+            result: "success",
+            buildExpected: true,
+            readOnly: false,
+          },
+        ]),
+      ),
+    /cache-health jobs must be a valid job array/,
+  );
+  assert.throws(
+    () =>
+      PrCacheHealth.parseJobs(
+        JSON.stringify([
+          {
+            id: "rust",
+            result: "success",
+            buildExpected: true,
+            sccacheExpectation: SccacheExpectation.NotApplicable,
+            readOnly: false,
+          },
+        ]),
+      ),
+    /cache-health sccache expectation is inconsistent/,
+  );
+});
+
 void test("does not require removed registry pre-probes when BuildKit telemetry is present", () => {
   const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
     ],
     telemetry: [
       telemetry("rust", {
@@ -130,7 +288,7 @@ void test("fails missing telemetry, failed jobs, broken collection, and read-onl
       cache_export: {
         attempts: 1,
         completed: 1,
-        bytes: 20,
+        byte_measurement: { status: "measured", bytes: 20 },
         duration_ms: 2,
         incomplete_failures: 0,
       },
@@ -139,8 +297,20 @@ void test("fails missing telemetry, failed jobs, broken collection, and read-onl
   });
   const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
     jobs: [
-      { id: "rust", result: "failure", buildExpected: true, readOnly: true },
-      { id: "wasm", result: "success", buildExpected: true, readOnly: true },
+      {
+        id: "rust",
+        result: "failure",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: true,
+      },
+      {
+        id: "wasm",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: true,
+      },
     ],
     telemetry: [broken],
   });
@@ -158,8 +328,20 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
     minimumCompletedSteps: 20,
   }).evaluate({
     jobs: [
-      { id: "wasm", result: "success", buildExpected: false, readOnly: true },
-      { id: "verify", result: "success", buildExpected: true, readOnly: true },
+      {
+        id: "wasm",
+        result: "success",
+        buildExpected: false,
+        sccacheExpectation: SccacheExpectation.NotApplicable,
+        readOnly: true,
+      },
+      {
+        id: "verify",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.NotRequired,
+        readOnly: true,
+      },
     ],
     telemetry: [
       telemetry("wasm", {
@@ -170,7 +352,10 @@ void test("does not invent a regression for cold, tiny, or handoff-only work", (
           cache_export: {
             attempts: 0,
             completed: 0,
-            bytes: 0,
+            byte_measurement: {
+              status: "unavailable",
+              reason: "buildkit_did_not_emit_byte_count",
+            },
             duration_ms: 0,
             incomplete_failures: 0,
           },
@@ -218,7 +403,13 @@ void test("records a legitimate cold build without applying the warm threshold",
   });
   const model = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
     ],
     telemetry: [cold],
   });
@@ -233,7 +424,13 @@ void test("fails warm samples when BuildKit does not report a hit rate", () => {
   void omittedRate;
   const model = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
     ],
     telemetry: [telemetry("rust", { buildkit })],
   });
@@ -261,7 +458,13 @@ void test("fails changed-head zero-hit verification and cache write errors", () 
   });
   const model = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
     ],
     telemetry: [successor],
   });
@@ -275,6 +478,9 @@ void test("requires remote write evidence only when compiler misses occur", () =
   const missWithoutWrite = telemetry("rust", {
     sccache: {
       ...telemetry("rust").sccache,
+      client_side: false,
+      counter_reliability: "authoritative",
+      publication_status: "counters_observed",
       cache_hits: 0,
       cache_misses: 2,
       cache_writes: 0,
@@ -283,7 +489,13 @@ void test("requires remote write evidence only when compiler misses occur", () =
   });
   const missModel = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: false },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
     ],
     telemetry: [missWithoutWrite],
   });
@@ -303,11 +515,88 @@ void test("requires remote write evidence only when compiler misses occur", () =
   });
   const cachedModel = new PrCacheHealth().evaluate({
     jobs: [
-      { id: "rust", result: "success", buildExpected: true, readOnly: true },
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: true,
+      },
     ],
     telemetry: [fullyCached],
   });
   assert.equal(cachedModel.gate.verdict, "pass");
+});
+
+void test("defers incomplete client-side writes but keeps changed-head zero hits terminal", () => {
+  const pending = telemetry("rust", {
+    sccache: {
+      ...telemetry("rust").sccache,
+      client_side: true,
+      counter_reliability: "backend_incomplete",
+      publication_status: "pending_verification",
+      cache_hits: 0,
+      cache_misses: 2,
+      cache_writes: 0,
+      remote_writes: 0,
+    },
+  });
+  const coldPending = telemetry("rust", {
+    sccache: pending.sccache,
+    cache_scope: {
+      ...pending.cache_scope,
+      imports: {
+        probes_complete: true,
+        failure_class: "none",
+        availability: [
+          { name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: false },
+        ],
+      },
+    },
+  });
+  const coldModel = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
+    ],
+    telemetry: [coldPending],
+  });
+
+  assert.equal(coldModel.gate.verdict, "pass");
+  assert.ok(
+    coldModel.warnings.includes("rust:publication_pending_verification"),
+  );
+  assert.ok(
+    !coldModel.gate.reasons.includes("rust:sccache_remote_writes_missing"),
+  );
+
+  const changedHeadModel = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "rust",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: false,
+      },
+    ],
+    telemetry: [pending],
+  });
+
+  assert.equal(changedHeadModel.gate.verdict, "fail");
+  assert.ok(
+    changedHeadModel.gate.reasons.includes("rust:sccache_next_head_zero_hits"),
+  );
+  assert.ok(
+    !changedHeadModel.gate.reasons.includes(
+      "rust:sccache_remote_writes_missing",
+    ),
+  );
 });
 
 void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fallback telemetry", () => {
@@ -345,6 +634,7 @@ void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fal
         id: "wasm-node-test",
         result: "success",
         buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
         readOnly: false,
       },
     ],
@@ -352,9 +642,7 @@ void test("fails compiler-bearing WASM Node jobs with unavailable sccache or fal
   });
 
   assert.equal(model.gate.verdict, "fail");
-  assert.ok(
-    model.gate.reasons.includes("wasm-node-test:sccache_unavailable"),
-  );
+  assert.ok(model.gate.reasons.includes("wasm-node-test:sccache_unavailable"));
   assert.ok(
     model.gate.reasons.includes(
       "wasm-node-test:sccache_fallback:credentials_unavailable",
@@ -392,7 +680,15 @@ void test("does not require sccache for the web-only verification job", () => {
     },
   });
   const model = new PrCacheHealth().evaluate({
-    jobs: [{ id: "verify", result: "success", buildExpected: true, readOnly: false }],
+    jobs: [
+      {
+        id: "verify",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.NotRequired,
+        readOnly: false,
+      },
+    ],
     telemetry: [webOnly],
   });
 
@@ -439,7 +735,7 @@ void test("PR workflow covers every BuildKit-producing job without another build
   );
   assert.match(
     workflow,
-    /cache-health:\n[\s\S]*needs: \[rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
+    /cache-health:\n[\s\S]*needs: \[rust-build, rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
   );
   assert.match(workflow, /uses: \.\/\.github\/workflows\/pr-cache-health\.yml/);
   assert.match(
@@ -498,6 +794,34 @@ void test("PR workflow covers every BuildKit-producing job without another build
     workflow,
     /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\}/,
   );
+  assert.match(
+    workflow,
+    /"id":"dependency-policy","result":"[^"]*","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"deterministic-tests","result":"[^"]*","buildExpected":true,"sccacheExpectation":"required","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"dylint","result":"[^"]*","buildExpected":true,"sccacheExpectation":"required","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"rust","result":"\$\{\{ needs\.rust\.result \}\}","buildExpected":\$\{\{ needs\.rust\.outputs\.cache-build-expected \|\| 'true' \}\},"sccacheExpectation":"\$\{\{ \(needs\.rust\.outputs\.cache-build-expected \|\| 'true'\) == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"wasm","result":"\$\{\{ needs\.wasm\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.cache-build-expected \|\| 'true' \}\},"sccacheExpectation":"\$\{\{ \(needs\.wasm\.outputs\.cache-build-expected \|\| 'true'\) == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\},"sccacheExpectation":"\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
+  );
+  assert.match(
+    workflow,
+    /"id":"verify","result":"\$\{\{ needs\.verify\.result \}\}","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false/,
+  );
   const wasmNodeJob = workflow.slice(
     workflow.indexOf("  wasm-node-test:"),
     workflow.indexOf("  verify:", workflow.indexOf("  wasm-node-test:")),
@@ -509,11 +833,17 @@ void test("PR workflow covers every BuildKit-producing job without another build
     "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
     'require-sccache: "true"',
   ]) {
-    assert.match(wasmNodeJob, new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(
+      wasmNodeJob,
+      new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   }
   assert.match(
     productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
+    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\n(?:#.*\n|\n)*RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
   );
-  assert.match(productDockerfile, /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/);
+  assert.match(
+    productDockerfile,
+    /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/,
+  );
 });

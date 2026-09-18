@@ -21,9 +21,9 @@ inputs:
     default: "false"
   publish-compile-cache:
     description: >-
-      Build-only compile cache contract: true publishes the exact-head source cache;
-      false imports caches without exporting them. This input is valid only for
-      the remote build:compile task.
+      Build-only compile cache contract: true publishes the Phase A dependency
+      foundation to the exact-head source cache; false runs both phases without
+      registry export. This input is valid only for remote build:compile.
     required: false
     default: "true"
   monitor-buildkit-storage:
@@ -197,13 +197,17 @@ runs:
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           remote_compile_scope=1
+          echo "NOOK_REMOTE_TASK_SELECTION=$NOOK_REMOTE_TASK_SELECTION" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=0" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_FOUNDATION_STATUS=not_started" >> "$GITHUB_ENV"
+          echo "NOOK_BUILD_COMPILE_SOURCE_STATUS=not_started" >> "$GITHUB_ENV"
           # Feature source output is exact-head scoped.
           if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
             && [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
-            echo "build:compile publication mode enables exact-head cache export"
+            echo "build:compile publication mode enables the Phase A exact-head foundation export"
           else
-            echo "build:compile read-only verification imports caches without registry export"
+            echo "build:compile read-only verification imports caches in both phases without registry export"
           fi
         elif [ "$publish_compile_cache" != "true" ]; then
           echo "publish-compile-cache=false requires the remote build:compile task" >&2
@@ -284,7 +288,22 @@ runs:
             echo "Remote compile read-only verification uses exact source scope $scope_suffix"
           fi
         fi
+        parent_scope_suffix=""
+        if [ -n "$remote_compile_scope" ]; then
+          if parent_scope_sha="$(git rev-parse --verify HEAD^1 2>/dev/null)"; then
+            if [[ "$parent_scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              parent_scope_suffix="-git-$parent_scope_sha"
+              echo "Remote compile cache lineage includes the first-parent scope $parent_scope_suffix"
+            else
+              echo "first-parent commit is not a 40-character lowercase Git SHA" >&2
+              exit 1
+            fi
+          else
+            echo "Remote compile cache lineage has no first-parent scope to import"
+          fi
+        fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_PARENT_SCOPE_SUFFIX=$parent_scope_suffix" >> "$GITHUB_ENV"
         # BuildKit does not replay cached RUN stdout. Compiler stages persist
         # their reports in-layer; this per-job value reruns only the terminal
         # read that emits the persisted, authoritative JSON marker.
@@ -306,6 +325,211 @@ runs:
           cache_write_enabled=""
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
+
+    - name: Verify Docker cache refs and blobs
+      if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.tasks || github.event.inputs.task) == 'build:compile' }}
+      shell: bash
+      env:
+        REGISTRY_HOST: ${{ inputs.registry-host }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+      run: |
+        set -euo pipefail
+        timeout 60s node --input-type=module <<'NODE'
+        import fs from "node:fs";
+
+        class BuildKitCacheAccessVerifier {
+          constructor(environment, fetcher) {
+            this.environment = environment;
+            this.fetcher = fetcher;
+          }
+
+          async verify() {
+            this.registryHost = this.requireValue("REGISTRY_HOST");
+            const username = this.requireValue("REGISTRY_USERNAME");
+            const password = this.requireValue("REGISTRY_PASSWORD");
+            this.authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+            await this.verifyRegistryAvailability();
+            const currentScope = this.environment.GHA_CACHE_SCOPE_SUFFIX;
+            if (typeof currentScope !== "string" || currentScope.length === 0) {
+              throw new Error("remote compile current cache scope is missing");
+            }
+            const cacheRefs = [
+              {
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE",
+                scopeSuffix: currentScope,
+              },
+            ];
+            const parentScope = this.environment.GHA_CACHE_PARENT_SCOPE_SUFFIX;
+            if (
+              typeof parentScope === "string" &&
+              parentScope.length > 0 &&
+              parentScope !== currentScope
+            ) {
+              cacheRefs.push({
+                availabilityName: "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE",
+                scopeSuffix: parentScope,
+              });
+            }
+
+            for (const cacheRef of cacheRefs) {
+              const available = await this.verifyCacheRef(cacheRef.scopeSuffix);
+              const cacheAvailability = {
+                name: cacheRef.availabilityName,
+                available,
+              };
+              this.persistAvailability(cacheAvailability);
+            }
+            console.log("Registry transport and every present Phase A cache manifest/blob are accessible; absent exact refs remain expected misses");
+          }
+
+          async verifyRegistryAvailability() {
+            const response = await this.request(`https://${this.registryHost}/v2/`, "GET");
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for the authenticated API check`);
+            }
+          }
+
+          requireValue(name) {
+            const value = this.environment[name];
+            if (typeof value !== "string" || value.length === 0) {
+              throw new Error(`required registry setting ${name} is missing`);
+            }
+            return value;
+          }
+
+          async request(url, method) {
+            return await this.fetcher(url, {
+              method,
+              headers: {
+                authorization: this.authorization,
+                accept: [
+                  "application/vnd.oci.image.index.v1+json",
+                  "application/vnd.oci.image.manifest.v1+json",
+                  "application/vnd.docker.distribution.manifest.list.v2+json",
+                  "application/vnd.docker.distribution.manifest.v2+json",
+                ].join(", "),
+              },
+              signal: AbortSignal.timeout(10_000),
+            });
+          }
+
+          async verifyCacheRef(scopeSuffix) {
+            // This checks access only; Phase A gives both refs to BuildKit, which owns reuse/validity.
+            const repository = `nook/remote-buildcache/nook-build-compile${scopeSuffix}`;
+            const visitedManifests = new Set();
+            const blobDigests = new Set();
+            const available = await this.visitManifest(
+              repository,
+              "buildcache",
+              true,
+              visitedManifests,
+              blobDigests,
+            );
+            const digests = Array.from(blobDigests);
+            for (let offset = 0; offset < digests.length; offset += 16) {
+              await Promise.all(
+                digests
+                  .slice(offset, offset + 16)
+                  .map((digest) => this.verifyBlob(repository, digest)),
+              );
+            }
+            return available;
+          }
+
+          async visitManifest(repository, reference, root, visitedManifests, blobDigests) {
+            if (visitedManifests.has(reference)) return;
+            visitedManifests.add(reference);
+            const url = `https://${this.registryHost}/v2/${repository}/manifests/${reference}`;
+            const response = await this.request(url, "GET");
+            if (root && response.status === 404) {
+              console.log(`BuildKit cache ref is absent; BuildKit may treat it as a cache miss: ${repository}:buildcache`);
+              return false;
+            }
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for cache manifest ${repository}:${reference}`);
+            }
+
+            let manifest;
+            try {
+              manifest = await response.json();
+            } catch {
+              throw new Error(`registry returned invalid JSON for cache manifest ${repository}:${reference}`);
+            }
+            if (typeof manifest !== "object" || Array.isArray(manifest) || !Object.hasOwn(manifest, "schemaVersion")) {
+              throw new Error(`registry returned an invalid cache manifest ${repository}:${reference}`);
+            }
+
+            if (Object.hasOwn(manifest, "manifests")) {
+              if (!Array.isArray(manifest.manifests)) {
+                throw new Error(`cache manifest list is invalid for ${repository}:${reference}`);
+              }
+              for (const descriptor of manifest.manifests) {
+                await this.visitManifest(
+                  repository,
+                  this.digestFrom(descriptor),
+                  false,
+                  visitedManifests,
+                  blobDigests,
+                );
+              }
+            }
+
+            if (Object.hasOwn(manifest, "config")) {
+              blobDigests.add(this.digestFrom(manifest.config));
+            }
+            if (Object.hasOwn(manifest, "layers")) {
+              if (!Array.isArray(manifest.layers)) {
+                throw new Error(`cache manifest layers are invalid for ${repository}:${reference}`);
+              }
+              for (const descriptor of manifest.layers) {
+                blobDigests.add(this.digestFrom(descriptor));
+              }
+            }
+            if (
+              !Object.hasOwn(manifest, "manifests") &&
+              (!Object.hasOwn(manifest, "config") || !Object.hasOwn(manifest, "layers"))
+            ) {
+              throw new Error(`cache manifest has no referenced content: ${repository}:${reference}`);
+            }
+            return true;
+          }
+
+          persistAvailability(cacheAvailability) {
+            const environmentFile = this.requireValue("GITHUB_ENV");
+            const value = cacheAvailability.available ? "1" : "0";
+            fs.appendFileSync(
+              environmentFile,
+              `${cacheAvailability.name}=${value}\n`,
+            );
+          }
+
+          digestFrom(descriptor) {
+            const digest = descriptor.digest;
+            if (typeof digest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+              throw new Error("registry cache manifest contains an invalid blob digest");
+            }
+            return digest;
+          }
+
+          async verifyBlob(repository, digest) {
+            const url = `https://${this.registryHost}/v2/${repository}/blobs/${digest}`;
+            const response = await this.request(url, "HEAD");
+            if (!response.ok) {
+              throw new Error(`registry returned HTTP ${response.status} for referenced cache blob ${digest}`);
+            }
+          }
+        }
+
+        const verifier = new BuildKitCacheAccessVerifier(process.env, fetch);
+        await verifier.verify();
+        NODE
+        {
+          echo "NOOK_BUILD_COMPILE_CACHE_IMPORTS_VERIFIED=1"
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"
+          echo "GHA_CACHE_EXACT_PROBE_FAILURE_CLASS=none"
+        } >> "$GITHUB_ENV"
 
     - name: Set CI environment
       shell: bash

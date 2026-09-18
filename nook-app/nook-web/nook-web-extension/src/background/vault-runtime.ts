@@ -81,6 +81,8 @@ type ExtensionEventLogImportRequest = {
   records: ExtensionEventLogRecord[]
 }
 
+type ExtensionStorageProviders = StorageProvider[]
+
 /** Owns the browser runtime resources shared by these interactions. */
 class BackgroundVaultRuntime {
   private backgroundWasmStartup: BackgroundWasmStartup = {
@@ -216,7 +218,12 @@ class BackgroundVaultRuntime {
     const manager = new NookVaultManager()
     try {
       await manager.activate_local_identity_for_app_id(grant.deviceId)
-      const recordValues = NookExternalEventLogRecords.from_array(records)
+      // The WASM import consumes the nested event objects. Preserve the caller's
+      // records because pairing forwards the same canonical events to the
+      // offscreen session after validating them in the background runtime.
+      const recordValues = NookExternalEventLogRecords.from_array(
+        structuredClone(records),
+      )
       const statusValue = await manager.import_extension_event_log_records_js(
         grant.vaultStoreId,
         grant.deviceId,
@@ -235,8 +242,7 @@ class BackgroundVaultRuntime {
   }
 
   async decodeExtensionStorageProviders(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the WASM boundary directly.
-    providers: StorageProvider[],
+    providers: ExtensionStorageProviders,
   ): Promise<StorageProvider[]> {
     await this.ensureExtensionWasm()
     return admit_extension_storage_providers(providers)

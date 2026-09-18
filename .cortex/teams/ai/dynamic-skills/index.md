@@ -80,7 +80,7 @@ catalogs the linked authorities without copying their policies.
 - **[feature-issue-planning.md](../../../gizmo-prime/dynamic-skills/feature-issue-planning.md)**
   - Purpose: Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state
 - **[issue-scope-management.md](../../../gizmo-prime/dynamic-skills/issue-scope-management.md)**
-  - Purpose: Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents
+  - Purpose: Keep deferred, risky, or oversized work in a focused Workbench issue while preserving ownership and append-only issue history
 - **[module-expert.md](module-expert.md)**
   - Purpose: Route exact-baseline production-module analysis through one named read-only expert without granting write or scheduling authority
 - **[internal-api-expert.md](internal-api-expert.md)**
@@ -116,7 +116,12 @@ catalogs the linked authorities without copying their policies.
     - Nest same-prefix closed vocabularies into parent objects plus operation
       enums.
     - Use field enums instead of string sets.
-    - Use shared `neverthrow` Result values; prohibit competing local wrappers.
+    - Use Effect's typed error channel for effectful workflows; prohibit new
+      `neverthrow` and hand-rolled Promise error workflows.
+- **[typescript-effect.md](../../web-dev/dynamic-skills/typescript-effect.md)**
+  - Purpose: Require Effect for new or materially changed TypeScript workflows
+    that model async work, expected failure, resources, concurrency, services,
+    or untrusted boundary decoding while preserving Rust/WASM ownership.
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
 - **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**

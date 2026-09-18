@@ -1,5 +1,4 @@
 import { wsconnect } from '@nats-io/nats-core';
-import type { Msg, MsgCallback } from '@nats-io/nats-core';
 import { PR_STEWARD_REPOSITORY } from './pr-steward-contract.ts';
 import { PrStewardGithubPrReader } from './pr-steward-github.ts';
 import { PrStewardChecksReader } from './pr-steward-checks.ts';
@@ -10,13 +9,36 @@ import {
   PR_STEWARD_ENDPOINT,
   PR_STEWARD_SUBJECT,
   PrStewardCredentialFile,
-  PrStewardBoundedMessageStream,
-  PrStewardSubscriptionKind,
-  PrStewardSubscriptionOverloadError,
   PrStewardEventObserver,
 } from './pr-steward-events.ts';
 
-type PrStewardSubscriptionCallbackArguments = Parameters<MsgCallback<Msg>>;
+enum PrStewardCompletionFailureKind {
+  None = 'none',
+  Failed = 'failed',
+}
+type PrStewardCompletionFailureOutcome =
+  | { readonly kind: PrStewardCompletionFailureKind.None }
+  | {
+      readonly kind: PrStewardCompletionFailureKind.Failed;
+      readonly error: Error;
+    };
+
+class PrStewardCompletionFailure {
+  #outcome: PrStewardCompletionFailureOutcome = {
+    kind: PrStewardCompletionFailureKind.None,
+  };
+
+  record(error: Error): void {
+    this.#outcome = {
+      kind: PrStewardCompletionFailureKind.Failed,
+      error,
+    };
+  }
+
+  read(): PrStewardCompletionFailureOutcome {
+    return this.#outcome;
+  }
+}
 
 export class PrStewardEventCli {
   private constructor(private readonly request: readonly string[]) {}
@@ -36,33 +58,9 @@ export class PrStewardEventCli {
       name: `pr-steward-${process.pid}`,
       ignoreClusterUpdates: true,
     });
-    const messages = new PrStewardBoundedMessageStream();
-    const subscription = connection.subscribe(PR_STEWARD_SUBJECT, {
-      callback: (
-        ...[error, message]: PrStewardSubscriptionCallbackArguments
-      ) => {
-        if (error instanceof Error) {
-          messages.terminate({
-            kind: PrStewardSubscriptionKind.Failed,
-            error,
-          });
-          return;
-        }
-        messages.admit({
-          data: message.data,
-          unsubscribe: () => subscription.unsubscribe(),
-        });
-      },
-    });
-    void connection.closed().then((error) => {
-      messages.terminate(
-        error instanceof Error
-          ? { kind: PrStewardSubscriptionKind.Failed, error }
-          : { kind: PrStewardSubscriptionKind.Closed },
-      );
-    });
     let stopping = false;
     let draining: Promise<void> | false = false;
+    const completionFailure = new PrStewardCompletionFailure();
     const terminal: { result: PrStewardCompletionSnapshot | false } = {
       result: false,
     };
@@ -86,7 +84,8 @@ export class PrStewardEventCli {
         stop();
       },
       failed: (error) => {
-        messages.terminate({ kind: PrStewardSubscriptionKind.Failed, error });
+        completionFailure.record(error);
+        stop();
       },
     });
     process.once('SIGINT', stop);
@@ -95,22 +94,21 @@ export class PrStewardEventCli {
     try {
       await new PrStewardEventObserver({
         reader,
-      }).observe({
-        messages,
+      }).observeSubscription({
+        connection,
+        subject: PR_STEWARD_SUBJECT,
         pullRequest: invocation.pullRequest,
         activity: (event) => completion.activity(event),
         write: (line) => {
           process.stdout.write(line);
         },
       });
-      const outcome = messages.outcome();
-      if (outcome.kind === PrStewardSubscriptionKind.Overloaded)
-        throw new PrStewardSubscriptionOverloadError({
-          pending: outcome.pending,
-        });
       const closeError = await connection.closed();
-      if (closeError) throw new Error('NATS connection closed unexpectedly');
       if (draining !== false) await draining;
+      const completionOutcome = completionFailure.read();
+      if (completionOutcome.kind === PrStewardCompletionFailureKind.Failed)
+        throw completionOutcome.error;
+      if (closeError) throw new Error('NATS connection closed unexpectedly');
       if (terminal.result !== false && process.exitCode !== 1)
         process.stderr.write(
           `PR Lifecycle Agent finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha} checks=${terminal.result.totalChecks} failed-checks=${terminal.result.failedChecks} unknown-conclusions=${terminal.result.unknownConclusions}\n`,

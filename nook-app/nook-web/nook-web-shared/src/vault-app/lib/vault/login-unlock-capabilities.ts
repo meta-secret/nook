@@ -24,21 +24,29 @@ type LoginUnlockCapabilityState = {
   ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
 };
 
+export enum LoginUnlockRefreshOutcome {
+  DefaultCapabilityApplied = "default-capability-applied",
+  UnlockOptionsAssessed = "unlock-options-assessed",
+}
+
 /** Assess whether device keys or backup passwords can unlock the active vault. */
 export class LoginUnlockPresentation {
   constructor(private readonly request: LoginUnlockCapabilityState) {}
-  async refresh(): Promise<Result<void, VaultStorageFailure>> {
+  async refresh(): Promise<
+    Result<LoginUnlockRefreshOutcome, VaultStorageFailure>
+  > {
     const state = this.request;
     if (!state.hasManager || !state.localVaultPresent) {
       state.loginDeviceKeysCapable = true;
-      return ok();
+      return ok(LoginUnlockRefreshOutcome.DefaultCapabilityApplied);
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const accessStatus = await state.assessVaultConnectStatus({
-      mode: "local",
-      pat: "",
-      repo: "",
-    });
+    const connectRequest: Parameters<typeof state.assessVaultConnectStatus>[0] =
+      {
+        mode: "local",
+        pat: "",
+        repo: "",
+      };
+    const accessStatus = await state.assessVaultConnectStatus(connectRequest);
     if (accessStatus.isErr()) return err(accessStatus.error);
     try {
       const decision = login_unlock_decision(
@@ -58,6 +66,6 @@ export class LoginUnlockPresentation {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    return ok();
+    return ok(LoginUnlockRefreshOutcome.UnlockOptionsAssessed);
   }
 }

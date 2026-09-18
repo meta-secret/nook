@@ -321,7 +321,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         deviceLabel: 'Forged Sentinel device',
         vaultStoreId: 'sentinel-store-e2e',
         vaultName: 'Sentinel safe',
-        approvedAt: '2026-07-07T00:00:00.000Z',
+        approvedAt: 1_783_373_640_000,
         scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
@@ -343,7 +343,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         deviceLabel: 'Nook Extension - Chromium test profile',
         vaultStoreId: 'store-e2e',
         vaultName: 'Personal',
-        approvedAt: '2026-07-07T00:00:00.000Z',
+        approvedAt: 1_783_373_640_000,
         scopes: [
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.PasswordFilling,
@@ -373,7 +373,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         deviceLabel: 'Nook Extension - Chromium test profile',
         vaultStoreId: 'store-e2e',
         vaultName: 'Personal',
-        approvedAt: '2026-07-07T00:00:00.000Z',
+        approvedAt: 1_783_373_640_000,
         scopes: [
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.PasswordFilling,

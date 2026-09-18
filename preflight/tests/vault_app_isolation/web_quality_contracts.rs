@@ -63,7 +63,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         root.read("nook-app/nook-web/typed-api-rules.js")
     );
     for required in [
-        "import { typedApiRules } from './typed-api-rules.js'",
+        "typedApiRules,",
+        "} from \"./typed-api-rules.js\";",
         "untrustedInputAdapterRules",
         "concreteObjectTypeRules",
         "rules: typedApiRules",
@@ -182,9 +183,20 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     let extension_manifest = root.read("nook-app/nook-web/nook-web-extension/package.json");
     assert!(
         extension_manifest.contains(
-            "eslint --config eslint.config.js nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated"
+            "eslint --config eslint.config.js --ignore-pattern '**/__compile-contracts-*/**' nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated"
         ),
-        "the extension lint command must retain its complete authored and shared source trees"
+        "the extension lint command must retain its complete authored and shared source trees while excluding only transient compile-contract fixtures"
+    );
+    let i18n_generator = root.read("nook-app/nook-web/nook-web-app/scripts/generate-i18n-keys.mjs");
+    assert!(
+        i18n_generator.contains("entry.name.startsWith('__compile-contracts-')"),
+        "the parallel i18n scanner must exclude transient compile-contract fixtures"
+    );
+    let named_success_contract_test = root
+        .read("nook-app/nook-web/nook-web-extension/scripts/eslint-named-success-contract.test.js");
+    assert!(
+        named_success_contract_test.contains("__compile-contracts-named-success-"),
+        "every in-tree ESLint fixture must use the reserved transient namespace"
     );
 
     let typed_api_tests =

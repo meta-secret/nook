@@ -1,5 +1,10 @@
 <script lang="ts">
-  import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
+  import type {
+    SentinelActionResult,
+    SentinelGenesisDeliveryCompletionOutcome,
+    SentinelGenesisFinalizationOutcome,
+    SentinelGenesisParticipantResponseOutcome,
+  } from "$lib/vault/sentinel-genesis";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     ArrowLeft,
@@ -58,9 +63,17 @@
     isBusy: boolean;
     onBack: () => void;
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
-    onAddParticipant: (payload: string) => Promise<SentinelActionResult<void>>;
-    onFinalize: () => Promise<SentinelActionResult<void>>;
-    onCompleteDelivery: () => Promise<SentinelActionResult<void>>;
+    onAddParticipant: (
+      payload: string,
+    ) => Promise<
+      SentinelActionResult<SentinelGenesisParticipantResponseOutcome>
+    >;
+    onFinalize: () => Promise<
+      SentinelActionResult<SentinelGenesisFinalizationOutcome>
+    >;
+    onCompleteDelivery: () => Promise<
+      SentinelActionResult<SentinelGenesisDeliveryCompletionOutcome>
+    >;
   } = $props();
 
   let policyStep = $state<SentinelTerminalPolicyStep>(
@@ -94,13 +107,10 @@
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   );
-  const policyDraft = $derived(
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    evaluate_sentinel_policy_draft({
-      participants: participantCount,
-      threshold,
-    }),
-  );
+  const policyRequest = $derived<
+    Parameters<typeof evaluate_sentinel_policy_draft>[0]
+  >({ participants: participantCount, threshold });
+  const policyDraft = $derived(evaluate_sentinel_policy_draft(policyRequest));
   const policyValid = $derived(
     name.trim().length > 0 && policyDraft.admission.kind === "accepted",
   );
@@ -151,11 +161,11 @@
 
   function chooseTotal(value: number) {
     participantCount = value;
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const choices = evaluate_sentinel_policy_draft({
+    const request: Parameters<typeof evaluate_sentinel_policy_draft>[0] = {
       participants: value,
       threshold,
-    }).thresholdChoices;
+    };
+    const choices = evaluate_sentinel_policy_draft(request).thresholdChoices;
     if (!choices.includes(threshold)) {
       const lastChoice = choices[choices.length - 1];
       if (lastChoice) threshold = lastChoice;

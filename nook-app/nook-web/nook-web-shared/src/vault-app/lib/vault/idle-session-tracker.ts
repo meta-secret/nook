@@ -54,6 +54,10 @@ type ActiveVaultIdleSessionRequest = {
   readonly activityDocument: Document;
 };
 
+const PASSIVE_ACTIVITY_LISTENER_OPTIONS: AddEventListenerOptions = {
+  passive: true,
+};
+
 export class ActiveVaultIdleSession {
   private state: SessionState = { kind: SessionStateKind.Stopped };
 
@@ -64,10 +68,11 @@ export class ActiveVaultIdleSession {
     this.configuration = request.configuration;
     this.activityDocument = request.activityDocument;
     for (const event of ACTIVITY_EVENTS) {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.activityDocument.addEventListener(event, this.onActivity, {
-        passive: true,
-      });
+      this.activityDocument.addEventListener(
+        event,
+        this.onActivity,
+        PASSIVE_ACTIVITY_LISTENER_OPTIONS,
+      );
     }
     this.scheduleTimers();
   }
@@ -167,13 +172,13 @@ export class VaultIdleSessionTracker {
   start(): VaultIdleSessionStart {
     if (!("document" in globalThis))
       return { kind: VaultIdleSessionStartKind.Unavailable };
+    const sessionRequest: ActiveVaultIdleSessionRequest = {
+      configuration: this.configuration,
+      activityDocument: document,
+    };
     return {
       kind: VaultIdleSessionStartKind.Tracking,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      session: new ActiveVaultIdleSession({
-        configuration: this.configuration,
-        activityDocument: document,
-      }),
+      session: new ActiveVaultIdleSession(sessionRequest),
     };
   }
 }

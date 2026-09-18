@@ -16,6 +16,9 @@ It handles only Svelte presentation and interaction work named in the packet.
 
 - Accept the packet from Web Development Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
+- Load [TypeScript Effect Workflows](../dynamic-skills/typescript-effect.md)
+  when the packet authors a Svelte script. Apply it to effectful workflows and
+  preserve the policy's rendering and Rust/WASM ownership boundaries.
 - Write only the assigned Svelte scope.
 - Consume public typed Rust/WASM projections at the established boundary.
 - Commit the complete scoped iteration during the granted commit turn.

@@ -3,7 +3,11 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
-import type { ExtensionSessionLeaseFailure } from './session-lease'
+import type {
+  ActiveExtensionSessionLease,
+  ExtensionSessionGeneration,
+  ExtensionSessionLeaseFailure,
+} from './session-lease'
 import {
   DeviceMode,
   DeviceProtectionStatus,
@@ -12,6 +16,10 @@ import {
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  classify_extension_grant_authority,
+  type ExtensionGrantAuthorityRequest,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import { handleAuthenticatorEnrollmentMessage } from './authenticator-enrollment-session'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import { type ExtensionSessionRequest } from './session-request-adapter'
@@ -53,15 +61,138 @@ type PasskeyUnlockMaterial = {
   prfInput: number[]
 }
 
+type SessionAcknowledgement = { readonly ok: true }
+type AuthProviderMigrationResponse = {
+  readonly ok: true
+  readonly migrated: boolean
+}
+type SessionStatusResponse =
+  | {
+      readonly ok: true
+      readonly status: DeviceProtectionStatus.Unlocked
+      readonly device: DeviceResult
+    }
+  | {
+      readonly ok: true
+      readonly status: Exclude<
+        DeviceProtectionStatus,
+        DeviceProtectionStatus.Unlocked
+      >
+    }
+type PasskeySetupResponse = {
+  readonly ok: true
+  readonly setup: PasskeySetup
+}
+type DeviceActivationResponse = {
+  readonly ok: true
+  readonly device: DeviceResult
+}
+type PasskeyUnlockOptionsResponse = {
+  readonly ok: true
+  readonly material: PasskeyUnlockMaterial
+}
+type IdentityHandoffSealRequest = Parameters<
+  NookVaultManager['seal_extension_identity_handoff']
+>[0]
+type IdentityHandoffSealResponse = {
+  readonly ok: true
+  readonly envelope: Awaited<
+    ReturnType<NookVaultManager['seal_extension_identity_handoff']>
+  >
+}
+type WebsitePasskeyAccountListResponse = {
+  readonly ok: true
+  readonly accounts: ReadonlyArray<{
+    readonly credentialId: string
+    readonly userName: string
+    readonly userDisplayName: string
+  }>
+}
+type WebsiteLoginAccountListResponse = {
+  readonly ok: true
+  readonly accounts: ReadonlyArray<{
+    readonly secretId: string
+    readonly username: string
+    readonly websiteUrl: string
+    readonly websiteHost: string
+  }>
+}
+type WebsiteLoginRevealResponse = {
+  readonly ok: true
+  readonly username: string
+  readonly password: string
+}
+type AuthenticatorAccountListResponse = {
+  readonly ok: true
+  readonly accounts: ReadonlyArray<{
+    readonly secretId: string
+    readonly issuer: string
+    readonly account: string
+  }>
+}
+type AuthenticatorCodeResponse = {
+  readonly ok: true
+  readonly code: string
+  readonly expiresAt: number
+}
+type LoginSavePlanResponse =
+  | {
+      readonly ok: true
+      readonly decision: NookWebsiteLoginSaveDecision.AlreadySaved
+      readonly secretId: string
+    }
+  | {
+      readonly ok: true
+      readonly decision: Exclude<
+        NookWebsiteLoginSaveDecision,
+        NookWebsiteLoginSaveDecision.AlreadySaved
+      >
+    }
+type LoginSaveOfferResponse =
+  | {
+      readonly ok: true
+      readonly decision: NookWebsiteLoginSaveDecision.Create
+      readonly offerId: string
+      readonly vaultStoreId: string
+    }
+  | {
+      readonly ok: true
+      readonly decision: NookWebsiteLoginSaveDecision.Update
+      readonly offerId: string
+      readonly secretId: string
+      readonly vaultStoreId: string
+    }
+type PendingLoginSaveResponse =
+  | {
+      readonly ok: true
+      readonly state: PendingLoginSaveLookupState.Unavailable
+    }
+  | {
+      readonly ok: true
+      readonly state: PendingLoginSaveLookupState.Available
+      readonly offer: {
+        readonly offerId: string
+        readonly decision:
+          | NookWebsiteLoginSaveDecision.Create
+          | NookWebsiteLoginSaveDecision.Update
+        readonly vaultStoreId: string
+      }
+    }
+type LoginSaveCommitResponse = {
+  readonly ok: true
+  readonly decision:
+    NookWebsiteLoginSaveDecision.Create | NookWebsiteLoginSaveDecision.Update
+}
+
 export type SessionOperationContext = {
   ensureWasm: () => ReturnType<typeof initNookWasm>
   getManager: () => Promise<NookVaultManager>
   activateSession: () => Promise<DeviceResult>
   deviceResult: (activeManager: NookVaultManager) => Promise<DeviceResult>
-  currentGeneration: () => number
+  currentGeneration: () => ExtensionSessionGeneration
   renewSessionExpiry: (
-    generation: number,
-  ) => Result<void, ExtensionSessionLeaseFailure>
+    generation: ExtensionSessionGeneration,
+  ) => Result<ActiveExtensionSessionLease, ExtensionSessionLeaseFailure>
   resetOperations: (error: SessionOperationFailure) => void
 }
 
@@ -71,11 +202,11 @@ export type HandleSessionMessageArgs = {
 }
 
 type ClassifySessionGrantAuthorityArgs = {
-  manager: Pick<NookVaultManager, 'classify_extension_grant_authority'>
+  manager: Pick<NookVaultManager, 'active_extension_vault_scope'>
   payload: Extract<
     ExtensionSessionRequest,
     {
-      type: ExtensionSessionMessageType.ClassifyGrantAuthority
+      type: typeof ExtensionSessionMessageType.ClassifyGrantAuthority
     }
   >['payload']
 }
@@ -84,10 +215,12 @@ export function classifySessionGrantAuthority({
   manager,
   payload,
 }: ClassifySessionGrantAuthorityArgs) {
-  return manager.classify_extension_grant_authority(
-    payload.stored_json,
-    payload.vault_store_id,
-  )
+  const request: ExtensionGrantAuthorityRequest = {
+    stored_json: payload.stored_json,
+    vault_store_id: payload.vault_store_id,
+    active_vault: manager.active_extension_vault_scope(),
+  }
+  return classify_extension_grant_authority(request)
 }
 
 export async function handleSessionMessage({
@@ -119,8 +252,8 @@ export async function handleSessionMessage({
         )
         const activeManager = await getManager()
         activeManager.reset_vault_session()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true })
+        const response: SessionAcknowledgement = { ok: true }
+        return ok(response)
       }
       case ExtensionSessionMessageType.MigrateAuthProviders: {
         const activeManager = await getManager()
@@ -128,24 +261,31 @@ export async function handleSessionMessage({
           (await activeManager.device_protection_status()) !==
           DeviceProtectionStatus.Unlocked
         ) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({ ok: true, migrated: false })
+          const response: AuthProviderMigrationResponse = {
+            ok: true,
+            migrated: false,
+          }
+          return ok(response)
         }
         await activeManager.load_auth_providers_snapshot()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, migrated: true })
+        const response: AuthProviderMigrationResponse = {
+          ok: true,
+          migrated: true,
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.Status: {
         const activeManager = await getManager()
         const status = await activeManager.device_protection_status()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({
-          ok: true,
-          status,
-          ...(status === DeviceProtectionStatus.Unlocked
-            ? { device: await deviceResult(activeManager) }
-            : {}),
-        })
+        const response: SessionStatusResponse =
+          status === DeviceProtectionStatus.Unlocked
+            ? {
+                ok: true,
+                status,
+                device: await deviceResult(activeManager),
+              }
+            : { ok: true, status }
+        return ok(response)
       }
       case ExtensionSessionMessageType.BeginPasskeySetup: {
         const activeManager = await getManager()
@@ -153,14 +293,14 @@ export async function handleSessionMessage({
         const userHandle = setup.userHandle
         const prfInput = setup.prfInput
         setup.free()
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({
+        const response: PasskeySetupResponse = {
           ok: true,
           setup: {
             userHandle: PasskeyBrowserBytes.toWire(userHandle),
             prfInput: PasskeyBrowserBytes.toWire(prfInput),
           } satisfies PasskeySetup,
-        })
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.FinishPasskeySetup: {
         const payload = message.payload
@@ -194,8 +334,11 @@ export async function handleSessionMessage({
           prfInput.fill(0)
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, device: await activateSession() })
+        const response: DeviceActivationResponse = {
+          ok: true,
+          device: await activateSession(),
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.RecoverPasskey: {
         const payload = message.payload
@@ -214,20 +357,23 @@ export async function handleSessionMessage({
           userHandle.fill(0)
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, device: await activateSession() })
+        const response: DeviceActivationResponse = {
+          ok: true,
+          device: await activateSession(),
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.UnlockOptions: {
         const options = await (await getManager()).passkey_unlock_options()
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: PasskeyUnlockOptionsResponse = {
             ok: true,
             material: {
               credentialId: PasskeyBrowserBytes.toWire(options.credentialId),
               prfInput: PasskeyBrowserBytes.toWire(options.prfInput),
             } satisfies PasskeyUnlockMaterial,
-          })
+          }
+          return ok(response)
         } finally {
           options.free()
         }
@@ -241,8 +387,11 @@ export async function handleSessionMessage({
         } finally {
           prfOutput.fill(0)
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, device: await activateSession() })
+        const response: DeviceActivationResponse = {
+          ok: true,
+          device: await activateSession(),
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.CreatePin: {
         const pin = message.payload.pin
@@ -253,8 +402,11 @@ export async function handleSessionMessage({
             ),
           )
         await (await getManager()).finish_pin_device_protection(pin)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, device: await activateSession() })
+        const response: DeviceActivationResponse = {
+          ok: true,
+          device: await activateSession(),
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.UnlockPin: {
         const pin = message.payload.pin
@@ -265,8 +417,11 @@ export async function handleSessionMessage({
             ),
           )
         await (await getManager()).unlock_pin_device_identity(pin)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, device: await activateSession() })
+        const response: DeviceActivationResponse = {
+          ok: true,
+          device: await activateSession(),
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.SealIdentityHandoff: {
         const generation = sessionGeneration
@@ -290,22 +445,23 @@ export async function handleSessionMessage({
             new SessionOperationFailure(SessionOperationFailureKind.Locked),
           )
         }
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        const envelope = await activeManager.seal_extension_identity_handoff({
+        const sealRequest: IdentityHandoffSealRequest = {
           recipientPublicKey,
           nonce,
           expectedDeviceId: payload.expectedDeviceId,
           expectedDevicePublicKey: payload.expectedDevicePublicKey,
           expectedDeviceSigningPublicKey:
             payload.expectedDeviceSigningPublicKey,
-        })
+        }
+        const envelope =
+          await activeManager.seal_extension_identity_handoff(sealRequest)
         const renewal = renewSessionExpiry(generation)
         if (renewal.isErr())
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.Locked),
           )
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true, envelope })
+        const response: IdentityHandoffSealResponse = { ok: true, envelope }
+        return ok(response)
       }
       case ExtensionSessionMessageType.ImportVault: {
         const activeManager = await getManager()
@@ -341,8 +497,12 @@ export async function handleSessionMessage({
               )
             const status = statusValue.to_object()
             statusValue.free()
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            return ok({ ok: true, status })
+            type VaultUpdateResponse = {
+              readonly ok: true
+              readonly status: typeof status
+            }
+            const response: VaultUpdateResponse = { ok: true, status }
+            return ok(response)
           } catch {
             return err(
               new SessionOperationFailure(SessionOperationFailureKind.Failed),
@@ -383,15 +543,15 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: WebsitePasskeyAccountListResponse = {
             ok: true,
             accounts: accounts.map((account) => ({
               credentialId: account.credentialId,
               userName: account.userName,
               userDisplayName: account.userDisplayName,
             })),
-          })
+          }
+          return ok(response)
         } finally {
           accounts.forEach((account) => account.free())
         }
@@ -417,8 +577,7 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: WebsiteLoginAccountListResponse = {
             ok: true,
             accounts: accounts.map((account) => ({
               secretId: account.secretId,
@@ -426,7 +585,8 @@ export async function handleSessionMessage({
               websiteUrl: account.websiteUrl,
               websiteHost: account.websiteHost,
             })),
-          })
+          }
+          return ok(response)
         } finally {
           accounts.forEach((account) => account.free())
         }
@@ -456,12 +616,12 @@ export async function handleSessionMessage({
           payload.origin,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: WebsiteLoginRevealResponse = {
             ok: true,
             username: credential.username,
             password: credential.password,
-          })
+          }
+          return ok(response)
         } finally {
           credential.free()
         }
@@ -487,15 +647,15 @@ export async function handleSessionMessage({
           payload.query,
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: AuthenticatorAccountListResponse = {
             ok: true,
             accounts: accounts.map((account) => ({
               secretId: account.secretId,
               issuer: account.issuer,
               account: account.account,
             })),
-          })
+          }
+          return ok(response)
         } finally {
           accounts.forEach((account) => account.free())
         }
@@ -522,12 +682,12 @@ export async function handleSessionMessage({
           Math.floor(Date.now() / 1000),
         )
         try {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: AuthenticatorCodeResponse = {
             ok: true,
             code: code.code,
             expiresAt: code.expiresAtUnixSeconds * 1_000,
-          })
+          }
+          return ok(response)
         } finally {
           code.free()
         }
@@ -581,13 +741,11 @@ export async function handleSessionMessage({
             decision !== NookWebsiteLoginSaveDecision.Update
           ) {
             payload.password = ''
-            return ok(
+            const response: LoginSavePlanResponse =
               decision === NookWebsiteLoginSaveDecision.AlreadySaved
-                ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                  { ok: true, decision, secretId: plan.secretId }
-                : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                  { ok: true, decision },
-            )
+                ? { ok: true, decision, secretId: plan.secretId }
+                : { ok: true, decision }
+            return ok(response)
           }
           pendingLoginSaveOfferStore.clearForOrigin(payload.origin)
           const offerId = crypto.randomUUID()
@@ -618,16 +776,22 @@ export async function handleSessionMessage({
           }
           pendingLoginSaveOfferStore.store(offer)
           payload.password = ''
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
-            ok: true,
-            decision,
-            offerId,
-            ...(offer.decision === NookWebsiteLoginSaveDecision.Update
-              ? { secretId: offer.replaceSecretId }
-              : {}),
-            vaultStoreId: grant.vaultStoreId,
-          })
+          const response: LoginSaveOfferResponse =
+            offer.decision === NookWebsiteLoginSaveDecision.Update
+              ? {
+                  ok: true,
+                  decision: offer.decision,
+                  offerId,
+                  secretId: offer.replaceSecretId,
+                  vaultStoreId: grant.vaultStoreId,
+                }
+              : {
+                  ok: true,
+                  decision: offer.decision,
+                  offerId,
+                  vaultStoreId: grant.vaultStoreId,
+                }
+          return ok(response)
         } finally {
           plan.free()
         }
@@ -643,15 +807,14 @@ export async function handleSessionMessage({
         }
         const lookup = pendingLoginSaveOfferStore.findByOrigin(payload.origin)
         if (lookup.state === PendingLoginSaveLookupState.Unavailable) {
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({
+          const response: PendingLoginSaveResponse = {
             ok: true,
             state: PendingLoginSaveLookupState.Unavailable,
-          })
+          }
+          return ok(response)
         }
         const { offer } = lookup
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({
+        const response: PendingLoginSaveResponse = {
           ok: true,
           state: PendingLoginSaveLookupState.Available,
           offer: {
@@ -659,7 +822,8 @@ export async function handleSessionMessage({
             decision: offer.decision,
             vaultStoreId: offer.vaultStoreId,
           },
-        })
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.CommitLoginSave: {
         const payload = message.payload
@@ -721,8 +885,11 @@ export async function handleSessionMessage({
           const admission7 =
             await flushPasskeyEventToProviders(nookTypedArgs0_11)
           if (admission7.isErr()) return err(admission7.error)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({ ok: true, decision: committedOffer.decision })
+          const response: LoginSaveCommitResponse = {
+            ok: true,
+            decision: committedOffer.decision,
+          }
+          return ok(response)
         } finally {
           pendingLoginSaveOfferStore.clearOffer(committedOffer)
         }
@@ -737,8 +904,8 @@ export async function handleSessionMessage({
           )
         }
         pendingLoginSaveOfferStore.clearById(payload.offerId)
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true })
+        const response: SessionAcknowledgement = { ok: true }
+        return ok(response)
       }
       case ExtensionSessionMessageType.CancelPasskey:
       case ExtensionSessionMessageType.RegisterPasskey:
@@ -755,9 +922,10 @@ export async function handleSessionMessage({
           )
         return response
       }
-      case ExtensionSessionMessageType.Lock:
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return ok({ ok: true })
+      case ExtensionSessionMessageType.Lock: {
+        const response: SessionAcknowledgement = { ok: true }
+        return ok(response)
+      }
       default:
         return err(
           new SessionOperationFailure(

@@ -50,15 +50,15 @@ export function findSharedGrantProvider({
   preset,
   target,
 }: SharedGrantProviderSearch): SharedGrantProviderOutcome {
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-  return select_shared_grant_provider({
+  const selection: Parameters<typeof select_shared_grant_provider>[0] = {
     snapshot: { providers, activeVaultStoreId: unselectedVaultScope() },
     preset,
     target:
       target.kind === SharedStorageTargetKind.Bound
         ? { state: "existing", storageTargetId: target.storageTargetId }
         : { state: "create" },
-  });
+  };
+  return select_shared_grant_provider(selection);
 }
 
 export function shouldFlushSharedDriveGrant({

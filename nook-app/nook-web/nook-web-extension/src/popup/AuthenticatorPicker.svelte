@@ -8,6 +8,27 @@
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
   import {
+    ConcreteDecoderResultKind,
+    runConcreteDecoder,
+  } from '../lib/concrete-decoder'
+  import {
+    AuthenticatorPickerCancelMessageType,
+    AuthenticatorPickerQueryMessageType,
+    AuthenticatorPickerQueryResponse,
+    AuthenticatorPickerRuntimeResponseKind,
+    AuthenticatorPickerSelectMessageType,
+    AuthenticatorPickerSelectResponse,
+    type AuthenticatorPickerCancelMessage,
+    type AuthenticatorPickerQueryMessage,
+    type AuthenticatorPickerRequestMessage,
+    type AuthenticatorPickerRuntimeResponse,
+    type AuthenticatorPickerSelectMessage,
+  } from '../lib/authenticator-picker-messages'
+  type AuthenticatorPickerRuntimeMessage =
+    | AuthenticatorPickerQueryMessage
+    | AuthenticatorPickerSelectMessage
+    | AuthenticatorPickerCancelMessage
+  import {
     ExtensionTranslationRequestKind,
     type ExtensionI18n,
     type ExtensionTranslationRequest,
@@ -32,37 +53,43 @@
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
-  let searchInput = $state<HTMLInputElement>()
   let querySequence = 0
   let completed = false
 
-  function sendRuntimeMessage(message: unknown): Promise<unknown> {
+  function sendRuntimeMessage(
+    message: AuthenticatorPickerRequestMessage,
+  ): Promise<AuthenticatorPickerRuntimeResponse> {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(message, (response: unknown) => {
-        resolve(response)
+        if (
+          message.type ===
+          AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery
+        ) {
+          const decoded = runConcreteDecoder(
+            AuthenticatorPickerQueryResponse.decode,
+            response,
+          )
+          const queryResponse: AuthenticatorPickerRuntimeResponse =
+            decoded.kind === ConcreteDecoderResultKind.Decoded
+              ? {
+                  kind: AuthenticatorPickerRuntimeResponseKind.Query,
+                  response: decoded.value,
+                }
+              : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
+          resolve(queryResponse)
+          return
+        }
+        const decoded = runConcreteDecoder(
+          AuthenticatorPickerSelectResponse.decode,
+          response,
+        )
+        const selectionResponse: AuthenticatorPickerRuntimeResponse =
+          decoded.kind === ConcreteDecoderResultKind.Decoded
+            ? { kind: AuthenticatorPickerRuntimeResponseKind.Selected }
+            : { kind: AuthenticatorPickerRuntimeResponseKind.Rejected }
+        resolve(selectionResponse)
       })
     })
-  }
-
-  function isOkResponse(response: unknown): response is { ok: true } {
-    return Boolean(
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true,
-    )
-  }
-
-  function isAccountQueryResponse(response: unknown): response is {
-    ok: true
-    origin: string
-    accounts?: WebsiteAuthenticatorOption[]
-  } {
-    return (
-      isOkResponse(response) &&
-      'origin' in response &&
-      typeof response.origin === 'string'
-    )
   }
 
   function destinationLabel(origin: string): string {
@@ -79,20 +106,20 @@
     loading = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:authenticator-picker-query',
+      type: AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
       payload: { requestId, query: searchQuery },
     }
     const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
-    if (!isAccountQueryResponse(response)) {
+    if (response.kind !== AuthenticatorPickerRuntimeResponseKind.Query) {
       accounts = []
       destinationOrigin = ''
       error = translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
       return
     }
-    destinationOrigin = response.origin
-    accounts = ((v) => (v ? v : []))(response.accounts)
+    destinationOrigin = response.response.origin
+    accounts = response.response.accounts
   }
 
   async function choose(account: WebsiteAuthenticatorOption): Promise<void> {
@@ -100,7 +127,7 @@
     busy = true
     error = ''
     const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: 'nook:authenticator-picker-select',
+      type: AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
       payload: {
         requestId,
         vaultStoreId: account.vaultStoreId,
@@ -108,7 +135,7 @@
       },
     }
     const response = await sendRuntimeMessage(message)
-    if (isOkResponse(response)) {
+    if (response.kind === AuthenticatorPickerRuntimeResponseKind.Selected) {
       completed = true
       window.close()
       return
@@ -122,12 +149,13 @@
   })
 
   onMount(() => {
-    searchInput?.focus()
+    const searchInput = document.getElementById('authenticator-search')
+    if (searchInput instanceof HTMLInputElement) searchInput.focus()
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
-      const message: { type: string; payload: { requestId: string } } = {
-        type: 'nook:authenticator-picker-cancel',
+      const message: AuthenticatorPickerRuntimeMessage = {
+        type: AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel,
         payload: { requestId },
       }
       void chrome.runtime.sendMessage(message)
@@ -161,7 +189,6 @@
       id="authenticator-search"
       data-testid="authenticator-search"
       type="search"
-      bind:this={searchInput}
       bind:value={query}
       maxlength="200"
       autocomplete="off"

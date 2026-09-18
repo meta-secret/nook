@@ -121,7 +121,8 @@ mod tests {
             status: ExtensionReadySetupStatus::Ready,
             device_label: "Nook Extension".to_owned(),
             paired_vaults: vec!["store-test".to_owned()],
-            selected_vault_store_id: "store-test".to_owned(),
+            selected_vault_store_id:
+                nook_companion_core::PairingVaultId::before_genesis_placeholder(),
             selected_vault_name: "Personal".to_owned(),
             sync_provider_count: ExtensionSyncProviderCount::from(1),
             event_count: ExtensionEventCount::from(2),

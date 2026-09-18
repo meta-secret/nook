@@ -186,6 +186,10 @@ test('selected local target survives loading the selected identity providers', a
   const loaded = await new VaultProviderActions(state).loadProviders(request)
 
   if (loaded.isErr()) throw loaded.error
+  expect(loaded.value).toEqual({
+    providers: [identityProvider],
+    activeVaultStoreId: { state: 'storeId', value: 'store-b' },
+  })
   expect(state.providers).toEqual([identityProvider])
   expect(openActiveVault).toHaveBeenCalledWith('store-a')
   expect(openActiveVault).not.toHaveBeenCalledWith('store-b')

@@ -11,7 +11,7 @@ enum DiscoveryDeadlineState {
 }
 
 type DiscoveryDeadlineRequest = { readonly timeoutMs: number };
-type DiscoveryCompletion<T, E> = {
+export type DiscoveryCompletion<T, E> = {
   readonly operation: Promise<Result<T, E>>;
   readonly releaseLateValue: (value: T) => void;
 };
@@ -28,13 +28,11 @@ export class VaultDiscoveryTimeout {
         this.state = DiscoveryDeadlineState.Expired;
         resolve(err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut)));
       }, timeoutMs);
+      const abortListenerOptions: AddEventListenerOptions = { once: true };
       this.controller.signal.addEventListener(
         "abort",
         () => clearTimeout(timer),
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        {
-          once: true,
-        },
+        abortListenerOptions,
       );
     });
   }

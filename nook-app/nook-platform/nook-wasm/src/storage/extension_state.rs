@@ -195,13 +195,13 @@ impl ExtensionPairingDatabase {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
-    use js_sys::Date;
     use std::slice;
 
     use super::*;
     use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
-        ExtensionPairingVaultType, StoredExtensionPairingGrant,
+        ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingVaultType, PairingVaultId,
+        StoredExtensionPairingGrant,
     };
     use wasm_bindgen_test::*;
 
@@ -209,8 +209,8 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn writes_reads_and_removes_extension_pairing_state() -> anyhow::Result<()> {
-        let vault_store_id = format!("store-test-{}", Date::now());
-        let key = format!("{GRANT_KEY_PREFIX}{vault_store_id}");
+        let vault_store_id = PairingVaultId::generate()?;
+        let key = format!("{GRANT_KEY_PREFIX}{}", vault_store_id.as_str());
         let mut entries = HashMap::new();
         entries.insert(
             key.clone(),
@@ -222,7 +222,7 @@ mod wasm_idb_tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id,
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+                approved_at: serde_json::from_str("1784937600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
                 event_count: 2.into(),
@@ -255,7 +255,8 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
-        ExtensionPairingVaultType, StoredExtensionPairingGrant,
+        ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingVaultType, PairingVaultId,
+        StoredExtensionPairingGrant,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -270,9 +271,9 @@ mod tests {
                 device_public_key: "age1test".to_owned(),
                 device_signing_public_key: "signing-test".to_owned(),
                 device_label: "Nook Extension".to_owned(),
-                vault_store_id: "store-selected".to_owned(),
+                vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+                approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 0.into(),
                 event_count: 1.into(),

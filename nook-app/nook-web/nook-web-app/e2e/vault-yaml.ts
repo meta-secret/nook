@@ -86,41 +86,350 @@ type VaultEventYaml = {
   operations?: VaultEventOperation[]
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    Object(value) === value &&
-    !Array.isArray(value)
-  )
+enum VaultYamlOptionalStringStateKind {
+  Absent = 'absent',
+  Present = 'present',
 }
 
-function isStoredVaultYaml(value: unknown): value is StoredVaultYaml {
-  if (!isObjectRecord(value)) return false
-  for (const key of [
-    'secrets',
-    'auth',
-    'joins',
-    'members',
-    'unlock',
-    'password_entries',
-    'sentinel_shares',
-  ]) {
-    const field = value[key]
-    if (key in value && typeof field !== 'object') {
-      return false
+type VaultYamlOptionalStringState =
+  | { kind: VaultYamlOptionalStringStateKind.Absent }
+  | { kind: VaultYamlOptionalStringStateKind.Present; value: string }
+
+class VaultYamlDecoder {
+  decodeStoredVault(value: unknown): StoredVaultYaml {
+    try {
+      const vaultValue = this.decodeObject(value, 'vault YAML')
+      const vault: StoredVaultYaml = {}
+      if ('secrets' in vaultValue)
+        vault.secrets = this.decodeStoredSecrets(vaultValue.secrets)
+      if ('auth' in vaultValue)
+        vault.auth = this.decodeAuthRecords(vaultValue.auth)
+      if ('joins' in vaultValue)
+        vault.joins = this.decodeStoredSecrets(vaultValue.joins)
+      if ('members' in vaultValue)
+        vault.members = this.decodeMembers(vaultValue.members)
+      if ('unlock' in vaultValue)
+        vault.unlock = this.decodeUnlock(vaultValue.unlock)
+      if ('password_entries' in vaultValue) {
+        vault.password_entries = this.decodePasswordEntries(
+          vaultValue.password_entries,
+        )
+      }
+      if ('sentinel_shares' in vaultValue) {
+        vault.sentinel_shares = this.decodeStoredSecrets(
+          vaultValue.sentinel_shares,
+        )
+      }
+      return vault
+    } catch {
+      return {}
     }
   }
-  return true
+
+  decodeEvent(value: unknown): VaultEventYaml {
+    try {
+      const eventValue = this.decodeObject(value, 'event YAML')
+      const event: VaultEventYaml = {}
+      const createdAt = this.optionalString(eventValue, 'created_at')
+      if (createdAt.kind === VaultYamlOptionalStringStateKind.Present) {
+        event.created_at = createdAt.value
+      }
+      if ('operations' in eventValue) {
+        const operations = eventValue.operations
+        if (!Array.isArray(operations)) return {}
+        event.operations = operations.map((operation) =>
+          this.decodeOperation(operation),
+        )
+      }
+      return event
+    } catch {
+      return {}
+    }
+  }
+
+  decodeJoin(
+    value: unknown,
+    fallbackId: string,
+  ): { deviceId: string; publicKey: string } {
+    let payload: Record<string, unknown>
+    try {
+      payload = this.decodeObject(value, 'join YAML')
+    } catch {
+      return { deviceId: fallbackId, publicKey: '' }
+    }
+    const deviceIdField = this.optionalString(payload, 'device_id')
+    const publicKeyField = this.optionalString(payload, 'public_key')
+    const deviceId =
+      deviceIdField.kind === VaultYamlOptionalStringStateKind.Present
+        ? deviceIdField.value
+        : fallbackId
+    const publicKey =
+      publicKeyField.kind === VaultYamlOptionalStringStateKind.Present
+        ? publicKeyField.value
+        : ''
+    return { deviceId, publicKey }
+  }
+
+  private decodeObject(value: unknown, label: string): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError(`${label} must be an object`)
+    }
+    return Object.fromEntries(Object.entries(value))
+  }
+
+  private optionalString(
+    value: Record<string, unknown>,
+    key: string,
+  ): VaultYamlOptionalStringState {
+    if (!(key in value)) {
+      return { kind: VaultYamlOptionalStringStateKind.Absent }
+    }
+    const field: unknown = Reflect.get(value, key)
+    if (typeof field !== 'string')
+      throw new TypeError(`${key} must be a string`)
+    return { kind: VaultYamlOptionalStringStateKind.Present, value: field }
+  }
+
+  private decodeStoredSecrets(value: unknown): StoredSecretRecord[] {
+    if (!Array.isArray(value)) throw new TypeError('secrets must be an array')
+    return value.map((entry) => {
+      const secret = this.decodeObject(entry, 'secret')
+      const id = this.optionalString(secret, 'id')
+      const data = this.optionalString(secret, 'data')
+      const type = this.optionalString(secret, 'type')
+      if (
+        id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        data.kind !== VaultYamlOptionalStringStateKind.Present ||
+        type.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !id.value ||
+        !data.value ||
+        !type.value
+      ) {
+        throw new TypeError('secret fields are invalid')
+      }
+      return {
+        id: id.value,
+        data: data.value,
+        type: this.decodeStoredSecretType(type.value),
+      }
+    })
+  }
+
+  private decodeStoredSecretType(value: string): StoredSecretRecordType {
+    switch (value) {
+      case StoredSecretRecordType.Login:
+        return StoredSecretRecordType.Login
+      case StoredSecretRecordType.ApiKey:
+        return StoredSecretRecordType.ApiKey
+      case StoredSecretRecordType.SeedPhrase:
+        return StoredSecretRecordType.SeedPhrase
+      case StoredSecretRecordType.SecureNote:
+        return StoredSecretRecordType.SecureNote
+      default:
+        throw new TypeError('secret type is invalid')
+    }
+  }
+
+  private decodeAuthRecords(value: unknown): AuthYamlRecord[] {
+    if (!Array.isArray(value)) throw new TypeError('auth must be an array')
+    return value.map((entry) => {
+      const auth = this.decodeObject(entry, 'auth record')
+      const pk_id = this.optionalString(auth, 'pk_id')
+      const secrets_key = this.optionalString(auth, 'secrets_key')
+      const members_key = this.optionalString(auth, 'members_key')
+      if (
+        pk_id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        secrets_key.kind !== VaultYamlOptionalStringStateKind.Present ||
+        members_key.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !pk_id.value ||
+        !secrets_key.value ||
+        !members_key.value
+      ) {
+        throw new TypeError('auth record fields are invalid')
+      }
+      return {
+        pk_id: pk_id.value,
+        secrets_key: secrets_key.value,
+        members_key: members_key.value,
+      }
+    })
+  }
+
+  private decodeMembers(value: unknown): MembersYamlRecord[] {
+    if (!Array.isArray(value)) throw new TypeError('members must be an array')
+    return value.map((entry) => {
+      const member = this.decodeObject(entry, 'member')
+      const pk_id = this.optionalString(member, 'pk_id')
+      const ciphertext = this.optionalString(member, 'ciphertext')
+      if (
+        pk_id.kind !== VaultYamlOptionalStringStateKind.Present ||
+        ciphertext.kind !== VaultYamlOptionalStringStateKind.Present ||
+        !pk_id.value ||
+        !ciphertext.value
+      )
+        throw new TypeError('member fields are invalid')
+      return { pk_id: pk_id.value, ciphertext: ciphertext.value }
+    })
+  }
+
+  private decodeUnlock(value: unknown): UnlockYaml {
+    const unlockValue = this.decodeObject(value, 'unlock')
+    const unlock: UnlockYaml = {}
+    const type = this.optionalString(unlockValue, 'type')
+    if (type.kind === VaultYamlOptionalStringStateKind.Present) {
+      unlock.type = type.value
+    }
+    if ('entries' in unlockValue)
+      unlock.entries = this.decodePasswordEntries(unlockValue.entries)
+    return unlock
+  }
+
+  private decodePasswordEntries(value: unknown): PasswordEntryYaml[] {
+    if (!Array.isArray(value))
+      throw new TypeError('password entries must be an array')
+    return value.map((entry) => {
+      const passwordEntry = this.decodeObject(entry, 'password entry')
+      const decoded: PasswordEntryYaml = {}
+      const id = this.optionalString(passwordEntry, 'id')
+      const label = this.optionalString(passwordEntry, 'label')
+      if (id.kind === VaultYamlOptionalStringStateKind.Present) {
+        decoded.id = id.value
+      }
+      if (label.kind === VaultYamlOptionalStringStateKind.Present) {
+        decoded.label = label.value
+      }
+      if ('envelope' in passwordEntry)
+        decoded.envelope = this.decodePasswordEnvelope(passwordEntry.envelope)
+      return decoded
+    })
+  }
+
+  private decodePasswordEnvelope(value: unknown): PasswordEnvelopeYaml {
+    const envelopeValue = this.decodeObject(value, 'password envelope')
+    const envelope: PasswordEnvelopeYaml = {}
+    if ('version' in envelopeValue) {
+      const version: unknown = Reflect.get(envelopeValue, 'version')
+      if (typeof version !== 'number')
+        throw new TypeError('envelope version must be a number')
+      envelope.version = version
+    }
+    if ('work_factor' in envelopeValue) {
+      const workFactor: unknown = Reflect.get(envelopeValue, 'work_factor')
+      if (typeof workFactor !== 'number')
+        throw new TypeError('envelope work factor must be a number')
+      envelope.work_factor = workFactor
+    }
+    const kdf = this.optionalString(envelopeValue, 'kdf')
+    const ciphertext = this.optionalString(envelopeValue, 'ciphertext')
+    if (kdf.kind === VaultYamlOptionalStringStateKind.Present) {
+      envelope.kdf = kdf.value
+    }
+    if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
+      envelope.ciphertext = ciphertext.value
+    }
+    return envelope
+  }
+
+  private decodeOperation(value: unknown): VaultEventOperation {
+    const operationValue = this.decodeObject(value, 'event operation')
+    const operation: VaultEventOperation = {}
+    const stringFields = [
+      'type',
+      'secret_id',
+      'old_id',
+      'chosen_secret_id',
+      'device_id',
+      'encryption_public_key',
+      'secrets_key_ciphertext',
+      'members_key_ciphertext',
+      'entry_id',
+      'label',
+      'created_at',
+    ] as const
+    for (const field of stringFields) {
+      const decoded = this.optionalString(operationValue, field)
+      if (decoded.kind === VaultYamlOptionalStringStateKind.Present) {
+        operation[field] = decoded.value
+      }
+    }
+    if ('secrets' in operationValue)
+      operation.secrets = this.decodeEventSecrets(operationValue.secrets)
+    if ('secret' in operationValue)
+      operation.secret = this.decodeEventSecret(operationValue.secret)
+    if ('new_secret' in operationValue)
+      operation.new_secret = this.decodeEventSecret(operationValue.new_secret)
+    if ('rejected_secret_ids' in operationValue) {
+      operation.rejected_secret_ids = this.decodeStringList(
+        operationValue.rejected_secret_ids,
+      )
+    }
+    if ('envelope' in operationValue)
+      operation.envelope = this.decodePasswordEnvelope(operationValue.envelope)
+    if ('password_entries' in operationValue) {
+      operation.password_entries = this.decodePasswordEntries(
+        operationValue.password_entries,
+      )
+    }
+    if ('shares' in operationValue)
+      operation.shares = this.decodeShares(operationValue.shares)
+    return operation
+  }
+
+  private decodeEventSecrets(value: unknown): EventSecretRecord[] {
+    if (!Array.isArray(value))
+      throw new TypeError('event secrets must be an array')
+    return value.map((entry) => this.decodeEventSecret(entry))
+  }
+
+  private decodeEventSecret(value: unknown): EventSecretRecord {
+    const eventSecret = this.decodeObject(value, 'event secret')
+    const id = this.optionalString(eventSecret, 'id')
+    const ciphertext = this.optionalString(eventSecret, 'ciphertext')
+    const type = this.optionalString(eventSecret, 'type')
+    const decoded: EventSecretRecord = {}
+    if (id.kind === VaultYamlOptionalStringStateKind.Present) {
+      decoded.id = id.value
+    }
+    if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
+      decoded.ciphertext = ciphertext.value
+    }
+    if (type.kind === VaultYamlOptionalStringStateKind.Present) {
+      decoded.type = this.decodeStoredSecretType(type.value)
+    }
+    return decoded
+  }
+
+  private decodeStringList(value: unknown): string[] {
+    if (!Array.isArray(value))
+      throw new TypeError('string list must be an array')
+    return value.map((entry) => {
+      if (typeof entry !== 'string')
+        throw new TypeError('string list value is invalid')
+      return entry
+    })
+  }
+
+  private decodeShares(
+    value: unknown,
+  ): Array<{ device_id?: string; ciphertext?: string }> {
+    if (!Array.isArray(value)) throw new TypeError('shares must be an array')
+    return value.map((entry) => {
+      const shareValue = this.decodeObject(entry, 'share')
+      const share: { device_id?: string; ciphertext?: string } = {}
+      const deviceId = this.optionalString(shareValue, 'device_id')
+      const ciphertext = this.optionalString(shareValue, 'ciphertext')
+      if (deviceId.kind === VaultYamlOptionalStringStateKind.Present) {
+        share.device_id = deviceId.value
+      }
+      if (ciphertext.kind === VaultYamlOptionalStringStateKind.Present) {
+        share.ciphertext = ciphertext.value
+      }
+      return share
+    })
+  }
 }
 
-function isVaultEventYaml(value: unknown): value is VaultEventYaml {
-  if (!isObjectRecord(value)) return false
-  const operations = value.operations
-  return (
-    !('operations' in value) ||
-    (Array.isArray(operations) && operations.every(isObjectRecord))
-  )
-}
+const vaultYamlDecoder = new VaultYamlDecoder()
 
 export enum PasswordEnvelopeCiphertextStateKind {
   Absent = 'absent',
@@ -158,11 +467,7 @@ function parseJoinValue(
   value: string,
 ): { deviceId: string; publicKey: string } {
   const parsed: unknown = JSON.parse(value)
-  const payload = isObjectRecord(parsed) ? parsed : {}
-  return {
-    deviceId: typeof payload.device_id === 'string' ? payload.device_id : key,
-    publicKey: typeof payload.public_key === 'string' ? payload.public_key : '',
-  }
+  return vaultYamlDecoder.decodeJoin(parsed, key)
 }
 
 function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
@@ -177,7 +482,7 @@ function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
 
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const parsed: unknown = parseYaml(yaml)
-  const vault: StoredVaultYaml = isStoredVaultYaml(parsed) ? parsed : {}
+  const vault = vaultYamlDecoder.decodeStoredVault(parsed)
 
   const secretIds = ((v) => (v ? v : []))(vault.secrets).map(
     (record) => record.id,
@@ -256,7 +561,7 @@ function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
   return eventYamls
     .map((yaml) => {
       const parsed: unknown = parseYaml(yaml)
-      return isVaultEventYaml(parsed) ? parsed : {}
+      return vaultYamlDecoder.decodeEvent(parsed)
     })
     .sort((left, right) =>
       ((v) => (v ? v : ''))(left.created_at).localeCompare(
@@ -512,7 +817,7 @@ export function assertEnrolledVaultYaml(
   }
 
   const parsed: unknown = parseYaml(snapshot.raw)
-  const vault: StoredVaultYaml = isStoredVaultYaml(parsed) ? parsed : {}
+  const vault = vaultYamlDecoder.decodeStoredVault(parsed)
   const authHasPlaintextAgeKey = ((v) => (v ? v : []))(vault.auth).some(
     (record) =>
       record.secrets_key.includes('age1') ||

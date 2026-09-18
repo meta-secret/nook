@@ -68,6 +68,13 @@ export type LocalOwnedLoginObservationRootRequest = {
   oneTimeCodeFields: readonly HTMLInputElement[];
 };
 
+export type LocalOwnedLoginObservationRootsRequest = {
+  owner: HTMLFormElement;
+  passwordFields: readonly HTMLInputElement[];
+  usernameFields: readonly HTMLInputElement[];
+  oneTimeCodeFields: readonly HTMLInputElement[];
+};
+
 export type UnownedAuthContainerRequest = {
   field: HTMLElement;
   root: ParentNode;
@@ -186,56 +193,83 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     usernameFields,
     oneTimeCodeFields,
   }: LocalOwnedLoginObservationRootRequest): ParentNode {
-    const {
-      passwordFields: ownedPasswordFields,
-      usernameFields: ownedUsernameFields,
-      oneTimeCodeFields: ownedOneTimeCodeFields,
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    } = authenticationFieldIndexCatalog.fields({
+    const rootsRequest: LocalOwnedLoginObservationRootsRequest = {
       owner,
       passwordFields,
       usernameFields,
       oneTimeCodeFields,
-    });
-    const [passwordField] = ownedPasswordFields;
-    const [usernameField] = ownedUsernameFields;
-    if (
-      ownedPasswordFields.length !== 1 ||
-      ownedUsernameFields.length !== 1 ||
-      ownedOneTimeCodeFields.length > 0 ||
-      !passwordField ||
-      !usernameField
-    ) {
-      return owner.ownerDocument;
-    }
-    // Login pages may expose only autocomplete="on"; an explicit new-password
-    // token still identifies a non-login credential surface.
-    const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
-      field: passwordField,
-      expected: "new-password",
     };
-    if (this.hasAutocompleteToken(newPasswordTokenRequest)) {
-      return owner.ownerDocument;
+    const roots = this.localOwnedLoginObservationRoots(rootsRequest);
+    return roots.length === 1 && roots[0] ? roots[0] : owner.ownerDocument;
+  }
+
+  localOwnedLoginObservationRoots({
+    owner,
+    passwordFields,
+    usernameFields,
+    oneTimeCodeFields,
+  }: LocalOwnedLoginObservationRootsRequest): ParentNode[] {
+    const fieldIndexRequest: LocalOwnedLoginObservationRootsRequest = {
+      owner,
+      passwordFields,
+      usernameFields,
+      oneTimeCodeFields,
+    };
+    const {
+      passwordFields: ownedPasswordFields,
+      usernameFields: ownedUsernameFields,
+      oneTimeCodeFields: ownedOneTimeCodeFields,
+    } = authenticationFieldIndexCatalog.fields(fieldIndexRequest);
+    if (
+      ownedPasswordFields.length === 0 ||
+      ownedUsernameFields.length === 0 ||
+      ownedOneTimeCodeFields.length > 0 ||
+      ownedPasswordFields.some((passwordField) => {
+        const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+          field: passwordField,
+          expected: "new-password",
+        };
+        return this.hasAutocompleteToken(newPasswordTokenRequest);
+      })
+    ) {
+      return [owner.ownerDocument];
     }
-    let container = passwordField.parentElement;
-    while (container && container !== owner) {
-      if (container.contains(usernameField)) {
-        if (!owner.contains(container)) return owner.ownerDocument;
-        if (!this.containerLooksLikeExplicitAuthSurface(container)) {
-          container = container.parentElement;
-          continue;
-        }
+    // A page-wide native form can own several independent credential surfaces.
+    // Emit each explicit local cluster and leave their priority to Rust.
+    const roots: ParentNode[] = [];
+    for (const passwordField of ownedPasswordFields) {
+      let container = passwordField.parentElement;
+      while (container && container !== owner) {
+        const currentContainer = container;
+        const localUsernameFields = ownedUsernameFields.filter((field) =>
+          currentContainer.contains(field),
+        );
+        const localPasswordFields = ownedPasswordFields.filter((field) =>
+          currentContainer.contains(field),
+        );
         if (
-          this.ownedFormHasManualCheckpoint(owner) &&
-          !this.pageHasManualCheckpoint(container)
+          localUsernameFields.length > 0 &&
+          localPasswordFields.length === 1
         ) {
-          return owner.ownerDocument;
+          if (!owner.contains(container)) break;
+          if (!this.containerLooksLikeExplicitAuthSurface(container)) {
+            container = container.parentElement;
+            continue;
+          }
+          if (
+            this.ownedFormHasManualCheckpoint(owner) &&
+            !this.pageHasManualCheckpoint(container)
+          ) {
+            return [owner.ownerDocument];
+          }
+          if (!roots.includes(container)) roots.push(container);
+          break;
         }
-        return container;
+        if (!owner.contains(container)) return [owner.ownerDocument];
+        container = container.parentElement;
       }
-      container = container.parentElement;
     }
-    return owner.ownerDocument;
+    return roots.length > 0 ? roots : [owner.ownerDocument];
   }
 
   ownedObservationIsLocallyBounded({
@@ -430,11 +464,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   authenticationUsernameEvidence(
     field: HTMLInputElement,
   ): AuthenticationUsernameEvidence {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: this.hasLoginContext(field),
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return authentication_username_evidence(observation);
     } finally {
@@ -445,11 +479,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeUsernameField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: this.hasLoginContext(field),
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return looks_like_username_field(observation);
     } finally {
@@ -460,11 +494,11 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
     if (!this.isRenderedInput(field)) return false;
 
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const observation = this.pageInputObservation({
+    const observationRequest: PageInputClassificationRequest = {
       field,
       loginContext: false,
-    });
+    };
+    const observation = this.pageInputObservation(observationRequest);
     try {
       return looks_like_one_time_code_field(observation);
     } finally {
@@ -555,17 +589,17 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
+    const usernameTokenRequest: AutocompleteTokenMatchRequest = {
+      field,
+      expected: "username",
+    };
+    const emailTokenRequest: AutocompleteTokenMatchRequest = {
+      field,
+      expected: "email",
+    };
     return (
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.hasAutocompleteToken({
-        field,
-        expected: "username",
-      }) ||
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      this.hasAutocompleteToken({
-        field,
-        expected: "email",
-      }) ||
+      this.hasAutocompleteToken(usernameTokenRequest) ||
+      this.hasAutocompleteToken(emailTokenRequest) ||
       this.looksLikeUsernameField(field)
     );
   }

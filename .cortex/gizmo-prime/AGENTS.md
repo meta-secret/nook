@@ -33,12 +33,18 @@ second Prime.
 ### Delivery authority
 
 Gizmo Prime authorizes the canonical feature branch name for publication and
-remote `build:compile` execution. The branch name is the workflow authority.
+feature-stage remote evidence. The branch name is the workflow authority.
 Delivery Pipeline Team Gizmo routes that packet to PR Lifecycle, which
-re-fetches and resolves the latest committed head before pushing or invoking
+re-fetches and resolves a stable committed head before pushing or invoking
 the remote task.
+For that unchanged head, required review and remote `build:compile` evidence
+come before exactly one remote `type:check` request. The terminal remote
+`type:check` result is the evidence. `type:check` never replaces the required
+`build:compile` gate.
 It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's bounded
-`dev:land` operation for the completed feature.
+`dev:land` operation for the accepted feature commit. Feature completion
+requires the resulting canonical local `dev` commit to contain that accepted
+feature commit.
 The manually run Dev Manager inside Delivery Pipeline owns remote dev
 publication and main promotion.
 
@@ -104,10 +110,12 @@ post-synchronization `refs/heads/dev` cannot be proved, the run fails closed.
 The base is preserved after feature creation. Prime authorizes the canonical
 feature branch name, which is the workflow authority. Observed base and head
 SHAs are evidence only, not required packet fields. Delivery re-fetches and
-resolves the latest committed branch head before every remote dispatch, review,
-or landing operation. If the branch advances, follow the latest head and rerun
-affected evidence. Do not fail because an earlier observed feature-head SHA is
-stale. Team Gizmos and leaves keep temporary branches private.
+resolves a stable committed branch head before every remote dispatch, review,
+or landing operation. If the branch advances, invalidate review,
+`build:compile`, and `type:check` evidence bound to the older head. Follow the
+latest head and rerun affected evidence. Do not fail because an earlier
+observed feature-head SHA is stale. Team Gizmos and leaves keep temporary
+branches private.
 
 ## Communication
 
@@ -189,14 +197,21 @@ decisions.
 
 ### Validation repair waves
 
-For a terminal dev-validation failure, Prime receives the complete inventory of
-every failed or cancelled required job. Prime groups the diagnostics by owning
-team and coherent competence area, then dispatches affected Team Gizmos in
-parallel. Each Team Gizmo gives one Team Agent the consolidated list for its
+For a terminal feature `type:check` failure or dev-validation failure, Prime
+receives the complete diagnostic inventory before repairs begin. A
+`type:check` inventory consumes
+`remote-type-check-<run-id>-<attempt>/report.yaml`. Prime inventories every
+diagnostic found in `report.yaml` and every diagnostic found in its referenced
+`rawLog` files.
+A first-failure-only report is incomplete.
+Prime groups the full inventory by owning team and coherent competence area.
+Prime sends one consolidated repair packet per competence area. It does not
+send one agent per diagnostic.
+Each Team Gizmo gives one Team Agent the complete consolidated list for its
 area. Multiple agents require genuinely distinct, disjoint competence areas.
-Prime integrates all returned team clusters into local dev before the Dev
-Manager publishes one new snapshot and requests one full validation rerun.
-Prime never pushes or reruns validation after an individual fix.
+Prime integrates the entire repair wave before requesting one rerun of the
+affected remote gate. Prime never notifies, repairs, pushes, or reruns after
+an individual diagnostic.
 
 ### Harness admission
 
@@ -249,22 +264,46 @@ worker boundary.
 5. Verify complete worker commits and integrate them into the parent worktree.
 6. Co-validate returned changes and interface evidence.
 7. Route corrections to the responsible team.
-8. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle's packet. PR
-   Lifecycle re-fetches and resolves the latest committed canonical feature
-   branch, then pushes and invokes the remote build-only task for that head.
-9. Complete the user-selected terminal state.
+8. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle's packet.
+   PR Lifecycle re-fetches and resolves a stable committed canonical feature
+   branch head before every remote operation.
+   - Complete required review for that head.
+   - Invoke remote `build:compile` for that head.
+   - Without a branch advance, invoke remote `type:check` exactly once for the
+     same head. The natural terminal remote result is the evidence.
+   - If `type:check` fails, consume its named report artifact and referenced raw
+     logs. Inventory every diagnostic found in `report.yaml` and every
+     diagnostic found in its referenced `rawLog` files. Dispatch one
+     consolidated repair packet per owning competence area.
+   - Integrate the complete repair wave before one new `type:check` request.
+   - A branch advance invalidates older review, `build:compile`, and `type:check`
+     evidence.
+     Resolve the latest committed head and repeat the affected gates.
+9. Authorize serialized `dev:land` for the accepted feature commit.
+10. Resolve the resulting canonical local `dev` commit and verify that it
+    contains the accepted feature commit.
+11. Complete the user-selected terminal state only after that containment
+    proof succeeds.
 
-For a feature mission, completion includes code review, remote compilation of
-the current branch head, serialized local dev integration, and Workbench handoff.
-The manager separately owns full slow validation and fast-forward promotion.
+For a feature mission, completion includes code review, remote `build:compile`
+and one remote `type:check` result for the same current branch head, serialized
+local dev integration, verified containment of the accepted feature commit in
+canonical local `dev`, and Workbench handoff.
+No agent may report the feature as complete, done, delivered, successful, or an
+equivalent terminal outcome before containment is proved. Intermediate checks
+may be called successful only when the wording names that specific stage and
+cannot imply feature completion. The manager separately owns full slow
+validation and fast-forward promotion.
 
 ## Verdict
 
 The canonical feature branch name is the workflow authority. A commit SHA is
 recorded only as an observation associated with a run or evidence result. It
-is not required in a user packet or immutable authority across stages. When
-the branch advances, delivery follows the latest head and reruns affected
-operations before a verdict.
+is not required in a user packet or immutable authority across stages. Remote
+evidence requires a stable committed head. When the branch advances, all
+review, build, and type-check evidence bound to the older head is invalid.
+Delivery follows the latest head and reruns the affected gates before a
+verdict.
 
 Use [mission delivery](workflows/mission-delivery.md) for the end-to-end
 sequence and [pull requests](workflows/pull-requests.md) for GitHub, validation,

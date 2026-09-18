@@ -1,23 +1,30 @@
 <script lang="ts">
-  import { LocaleCatalogSource } from '$lib/vault/locale'
-  import type { DeviceMutationResult } from '$lib/vault/multi-device'
-  type DeviceRename = { readonly authId: string; readonly label: string }
+  import { LocaleCatalogSource } from "$lib/vault/locale";
+  import type {
+    DeviceRenameResult,
+    DeviceRevocationResult,
+  } from "$lib/vault/multi-device";
+  type DeviceRename = { readonly authId: string; readonly label: string };
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { Laptop, Globe, Trash2, TriangleAlert } from "@lucide/svelte";
   import {
     parse_app_locale,
     supported_app_locale_code,
     NookAppLocaleParse,
-  } from '$app-wasm'
-  import type { VaultState } from '$lib/vault.svelte'
-  import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
-  import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
-  import { Button } from '$lib/components/ui/button'
-  import { SettingsAccordionSection } from '$lib/vault/state/ui.svelte'
+  } from "$app-wasm";
+  import type { VaultState } from "$lib/vault.svelte";
+  import SettingsAccordionPanel from "$lib/components/settings/SettingsAccordionSection.svelte";
+  import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
+  import type {
+    JoinApprovalHandlingOutcome,
+    JoinDenialHandlingOutcome,
+  } from "$lib/components/settings/vault-devices-card-state";
+  import type { JoinRequest, VaultMember } from "$lib/nook";
+  import { Button } from "$lib/components/ui/button";
+  import { SettingsAccordionSection } from "$lib/vault/state/ui.svelte";
 
-  let deleteConfirmationOpen = $state(false)
+  let deleteConfirmationOpen = $state(false);
 
   let {
     vault,
@@ -34,26 +41,26 @@
     onRevokeDevice,
     accordionSection = $bindable(SettingsAccordionSection.Devices),
   }: {
-    vault: VaultState
-    isVerifying: boolean
-    isSaving: boolean
-    deviceId: string
-    devicePublicKey: string
-    pendingJoins: JoinRequest[]
-    vaultMembers: VaultMember[]
-    hasPasswordEnvelope?: boolean
-    onApproveJoin: (deviceId: string) => void | Promise<void>
-    onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
-    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
-    accordionSection?: SettingsAccordionSection
-  } = $props()
+    vault: VaultState;
+    isVerifying: boolean;
+    isSaving: boolean;
+    deviceId: string;
+    devicePublicKey: string;
+    pendingJoins: JoinRequest[];
+    vaultMembers: VaultMember[];
+    hasPasswordEnvelope?: boolean;
+    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>;
+    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>;
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>;
+    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>;
+    accordionSection?: SettingsAccordionSection;
+  } = $props();
 
-  const hasDevices = $derived(vaultMembers.length > 0)
+  const hasDevices = $derived(vaultMembers.length > 0);
 
   function toggleSection(section: SettingsAccordionSection): void {
     accordionSection =
-      accordionSection === section ? SettingsAccordionSection.Closed : section
+      accordionSection === section ? SettingsAccordionSection.Closed : section;
   }
 </script>
 
@@ -81,8 +88,8 @@
                 replacements: {
                   count: String(vaultMembers.length),
                 },
-              }
-              return vault.t(tArgs)
+              };
+              return vault.t(tArgs);
             })()}
       </span>
     {/snippet}
@@ -113,7 +120,7 @@
         class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
       >
         <Globe class="size-3" />
-        {vault.locale === 'en' ? 'English' : 'Русский'}
+        {vault.locale === "en" ? "English" : "Русский"}
       </span>
     {/snippet}
     <div class="p-4 space-y-3">
@@ -128,18 +135,18 @@
         class="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
         value={vault.locale}
         onchange={(e) => {
-          const parsed = parse_app_locale(e.currentTarget.value)
-          if (parsed === NookAppLocaleParse.Unsupported) return
+          const parsed = parse_app_locale(e.currentTarget.value);
+          if (parsed === NookAppLocaleParse.Unsupported) return;
           const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
             newLocale: supported_app_locale_code(parsed),
             catalogSource: vault.hasManager
               ? LocaleCatalogSource.Engine
               : LocaleCatalogSource.Bundled,
-          }
+          };
           void vault.updateLocale(localeRequest).then((updated) => {
             if (updated.isErr())
-              vault.errorMsg = vault.t(updated.error.translationKey)
-          })
+              vault.errorMsg = vault.t(updated.error.translationKey);
+          });
         }}
       >
         <option value="en">English</option>

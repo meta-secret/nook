@@ -1,8 +1,4 @@
 import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
-import {
-  AgentStatisticsFileCommand,
-  type AgentStatisticsFailure,
-} from '../commands/agent-stats.ts';
 import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import {
@@ -13,10 +9,6 @@ import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
 import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
 import { err, ok, type Result } from 'neverthrow';
 import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
-import {
-  AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
-  AGENT_STATS_FILE_INPUT_SCHEMA,
-} from '../codec/args/agent-stats.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { CORTEX_SESSION_CLEAN_INPUT_SCHEMA } from '../codec/args/cortex-session-clean.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
@@ -26,11 +18,7 @@ import {
 } from '../codec/args/pr-land.ts';
 import { SKILL_SCAFFOLD_INPUT_SCHEMA } from '../codec/args/skill-scaffold.ts';
 import { TOOLS_LIST_INPUT_SCHEMA } from '../codec/args/tools-list.ts';
-import {
-  AgentStatsOperation,
-  PrLandOperation,
-  RequestFamily,
-} from '../codec/enums.ts';
+import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 import {
   ExampleCatalogPresence,
   ExampleOperationMarker,
@@ -39,10 +27,6 @@ import {
 } from '../codec/example-documents.ts';
 import type { ObjectJsonSchema } from '../codec/json-schema.ts';
 import { type LoomRequest, LoomRequestSchema } from '../codec/request.ts';
-import {
-  type AgentStatsReport,
-  AgentStatisticsCommand,
-} from '../commands/agent-stats.ts';
 import {
   type CortexAuditReport,
   CortexAuditCommand,
@@ -64,21 +48,15 @@ import {
   SkillScaffoldCommand,
 } from '../commands/skill-scaffold.ts';
 import { LoomFailureCode } from '../loom-failure.ts';
-import {
-  AGENT_TEMP_DIR_TOKEN,
-  AgentTemporaryPath,
-} from '../lib/agent-temp-path.ts';
 import { RepositoryRoot } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
-  readonly operation?: AgentStatsOperation | PrLandOperation;
+  readonly operation?: PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
-  readonly resolvedExampleYaml: string;
   readonly inputSchema: ObjectJsonSchema;
 };
 
@@ -86,7 +64,6 @@ export type LoomCommandResult =
   | CortexAuditReport
   | CortexSessionCleanReport
   | SkillScaffoldReport
-  | AgentStatsReport
   | PrLandReport
   | DependencyPopularityReport;
 
@@ -95,10 +72,7 @@ type RetiredRequestFailure = {
   readonly message: string;
 };
 
-type DiscoverableRequestDefinition = Omit<
-  DiscoverableRequest,
-  'exampleYaml' | 'resolvedExampleYaml'
->;
+type DiscoverableRequestDefinition = Omit<DiscoverableRequest, 'exampleYaml'>;
 
 /** Owns the loom request catalog registry and its capability transitions. */
 export class LoomRequestCatalog {
@@ -110,19 +84,6 @@ export class LoomRequestCatalog {
     readonly DiscoverableRequest[],
     RepositoryDiscoveryFailure
   > {
-    const discovery1 = new RepositoryRoot().locate();
-    if (discovery1.isErr()) return err(discovery1.error);
-    const repoRoot = discovery1.value;
-    const agentTempPathRequest: ResolveAgentTempPathRequest = {
-      repoRoot,
-      authoredPath: AGENT_TEMP_DIR_TOKEN,
-    };
-    const temporaryPath1 = new AgentTemporaryPath(
-      agentTempPathRequest,
-    ).resolve();
-    if (temporaryPath1.isErr()) return err(temporaryPath1.error);
-    const agentTempDirectory = temporaryPath1.value;
-
     const requests: DiscoverableRequest[] = [];
     for (const definition of this.definitions) {
       const encoded = new DiscoverableRequestExample(definition).yaml();
@@ -131,9 +92,6 @@ export class LoomRequestCatalog {
       requests.push({
         ...definition,
         exampleYaml,
-        resolvedExampleYaml: exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)
-          ? exampleYaml.replaceAll(AGENT_TEMP_DIR_TOKEN, agentTempDirectory)
-          : exampleYaml,
       });
     }
     return ok(requests);
@@ -168,27 +126,6 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     description: 'Create a canonical team-owned Cortex dynamic-skill card.',
     exampleRequest: 'task loom:skill-scaffold CONFIG=<request.yaml>',
     inputSchema: SKILL_SCAFFOLD_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Assemble,
-    description: 'Assemble AI-agent stats YAML for a PR.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Validate,
-    description: 'Validate an AI-agent stats YAML file.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_FILE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Publish,
-    description: 'Publish an AI-agent stats YAML file to Workbench.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_FILE_INPUT_SCHEMA,
   },
   {
     family: RequestFamily.PrLand,
@@ -226,7 +163,6 @@ export class LoomRequestExecution {
       | RetiredRequestFailure
       | RegistryFailure
       | ManifestFailure
-      | AgentStatisticsFailure
     >
   > {
     const request = this.request;
@@ -254,17 +190,6 @@ export class LoomRequestExecution {
           request: request.skillScaffold,
           repoRoot: discovery5.value,
         }).execute();
-      }
-      case RequestFamily.AgentStats: {
-        switch (request.operation) {
-          case AgentStatsOperation.Assemble:
-            return new AgentStatisticsCommand(request.assemble).execute();
-          case AgentStatsOperation.Validate:
-            return new AgentStatisticsFileCommand(request.validate).validate();
-          case AgentStatsOperation.Publish:
-            return new AgentStatisticsFileCommand(request.publish).publish();
-        }
-        break;
       }
       case RequestFamily.PrLand: {
         switch (request.operation) {

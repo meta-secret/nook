@@ -3,9 +3,10 @@ import { default as initNookWasm, NookVaultManager } from '$app-wasm'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   configuredOAuthFile,
+  decodeStoredOAuthFileConfiguration,
   defaultOAuthFileConfig,
   githubPatValue,
-  isConfiguredOAuthFile,
+  StoredOAuthFileConfigurationDecodeKind,
   oauth_access_token,
   providerPersistenceDefaults,
   storedGithubPat,
@@ -20,8 +21,9 @@ import {
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value instanceof Object && !Array.isArray(value)
+type PersistedAuthProvider = {
+  githubPat?: unknown
+  oauthFile?: unknown
 }
 
 async function clearAuthProviderStore(): Promise<void> {
@@ -100,19 +102,30 @@ async function readRawAuthProvidersFromIdb(): Promise<unknown> {
   })
 }
 
-function persistedProvider(rawSnapshot: unknown): Record<string, unknown> {
-  if (!isRecord(rawSnapshot) || !('providers' in rawSnapshot)) {
+function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
+  if (
+    !rawSnapshot ||
+    typeof rawSnapshot !== 'object' ||
+    Array.isArray(rawSnapshot) ||
+    !('providers' in rawSnapshot)
+  ) {
     throw new Error('expected a persisted auth-provider snapshot')
   }
   const providers = rawSnapshot.providers
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new Error('expected a persisted auth provider')
   }
-  const provider = providers.find(isRecord)
-  if (!provider) {
-    throw new Error('expected the persisted provider to be an object')
+  for (const candidate of providers) {
+    const provider: unknown = candidate
+    if (!(provider instanceof Object) || Array.isArray(provider)) {
+      continue
+    }
+    const persisted: PersistedAuthProvider = {}
+    if ('githubPat' in provider) persisted.githubPat = provider.githubPat
+    if ('oauthFile' in provider) persisted.oauthFile = provider.oauthFile
+    return persisted
   }
-  return provider
+  throw new Error('expected the persisted provider to be an object')
 }
 
 function persistedGithubPat(rawSnapshot: unknown): string {
@@ -128,19 +141,20 @@ function persistedOAuthCredentials(rawSnapshot: unknown): {
   refreshToken: string
 } {
   const oauthFile = persistedProvider(rawSnapshot).oauthFile
-  if (!isRecord(oauthFile)) {
+  if (!oauthFile || typeof oauthFile !== 'object' || Array.isArray(oauthFile)) {
     throw new Error('expected persisted OAuth credentials')
   }
-  const credentialRecord = oauthFile
   if (
-    typeof credentialRecord.accessToken !== 'string' ||
-    typeof credentialRecord.refreshToken !== 'string'
+    !('accessToken' in oauthFile) ||
+    typeof oauthFile.accessToken !== 'string' ||
+    !('refreshToken' in oauthFile) ||
+    typeof oauthFile.refreshToken !== 'string'
   ) {
     throw new Error('expected persisted OAuth access and refresh tokens')
   }
   return {
-    accessToken: credentialRecord.accessToken,
-    refreshToken: credentialRecord.refreshToken,
+    accessToken: oauthFile.accessToken,
+    refreshToken: oauthFile.refreshToken,
   }
 }
 
@@ -282,8 +296,10 @@ describe.sequential(
       const loaded = await manager.load_auth_providers_snapshot()
       const provider = loaded.providers[0]
       if (!provider) throw new Error('expected a loaded OAuth provider')
-      const loadedOauth = provider.oauthFile
-      if (!isConfiguredOAuthFile(loadedOauth)) {
+      const loadedOauth = decodeStoredOAuthFileConfiguration(provider.oauthFile)
+      if (
+        loadedOauth.kind !== StoredOAuthFileConfigurationDecodeKind.Configured
+      ) {
         throw new Error('expected configured OAuth credentials')
       }
       const loadedAccess = oauth_access_token(loadedOauth.config)

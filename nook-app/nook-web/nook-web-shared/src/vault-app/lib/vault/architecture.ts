@@ -4,7 +4,10 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import { err, ok, type Result } from "neverthrow";
-import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ArchitectureActionsContext,
+  VaultArchitectureRefreshSnapshot,
+} from "$lib/vault/action-contexts";
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
@@ -27,7 +30,10 @@ export class VaultArchitectureActions {
     if (previous !== architecture) previous.free();
   }
 
-  applyDraftVaultArchitecture(): Result<void, VaultStorageFailure> {
+  applyDraftVaultArchitecture(): Result<
+    VaultArchitectureRefreshSnapshot,
+    VaultStorageFailure
+  > {
     const state = this.state;
     let architecture: VaultArchitecture;
     try {
@@ -59,13 +65,21 @@ export class VaultArchitectureActions {
         return err(new NativeVaultStorageFailure(failure));
       }
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.replaceVaultArchitecture({ architecture });
+    const replacement: VaultArchitectureReplacement = { architecture };
+    this.replaceVaultArchitecture(replacement);
     state.architectureSecretCreationAllowed = allowed;
-    return ok();
+    const snapshot: VaultArchitectureRefreshSnapshot = {
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    };
+    return ok(snapshot);
   }
 
-  refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
+  refreshVaultArchitectureFromManager(): Result<
+    VaultArchitectureRefreshSnapshot,
+    VaultStorageFailure
+  > {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return err(manager.error);
@@ -86,8 +100,8 @@ export class VaultArchitectureActions {
       architecture.free();
       return err(new NativeVaultStorageFailure(failure));
     }
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    this.replaceVaultArchitecture({ architecture });
+    const replacement: VaultArchitectureReplacement = { architecture };
+    this.replaceVaultArchitecture(replacement);
     state.architectureSecretCreationAllowed = false;
     state.draftDeviceMode = deviceMode;
     state.draftVaultType = vaultType;
@@ -104,11 +118,16 @@ export class VaultArchitectureActions {
         }
       }
     });
-    return ok();
+    const snapshot: VaultArchitectureRefreshSnapshot = {
+      deviceMode,
+      vaultType,
+      replicationType,
+    };
+    return ok(snapshot);
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
-    Result<void, VaultStorageFailure>
+    Result<VaultArchitectureRefreshSnapshot, VaultStorageFailure>
   > {
     const state = this.state;
     const architecture = state.vaultArchitecture;
@@ -144,6 +163,11 @@ export class VaultArchitectureActions {
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
-    return ok();
+    const snapshot: VaultArchitectureRefreshSnapshot = {
+      deviceMode: state.draftDeviceMode,
+      vaultType: state.draftVaultType,
+      replicationType: state.draftReplicationType,
+    };
+    return ok(snapshot);
   }
 }

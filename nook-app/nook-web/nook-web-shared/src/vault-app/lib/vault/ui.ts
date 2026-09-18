@@ -10,7 +10,12 @@ import type {
   SettingsNavigationRequest,
   UiActionsContext,
 } from "$lib/vault/action-contexts";
-import { browserDataLifecycle } from "$lib/runtime/browser-data";
+import {
+  browserDataLifecycle,
+  LocalDataRecoveryQuiescenceOutcome,
+  NookDatabaseCleanupOutcome,
+  RemoteLocalBrowserDataDeletionOutcome,
+} from "$lib/runtime/browser-data";
 import { set_vault_session_locked } from "$app-wasm";
 import {
   AdminAccordionSection,
@@ -19,8 +24,7 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
 
-// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-export type OpenSettingsRequest = SettingsNavigationRequest & {};
+export type OpenSettingsRequest = SettingsNavigationRequest;
 
 type SettingsViewSelection = {
   readonly section: SettingsSection;
@@ -230,7 +234,7 @@ export class VaultWorkspaceActions {
         async () => {
           try {
             await admitted.value.delete_local_browser_data();
-            return storageOk();
+            return storageOk(NookDatabaseCleanupOutcome.Cleared);
           } catch {
             return storageErr(
               new StorageOperationFailure(
@@ -252,7 +256,7 @@ export class VaultWorkspaceActions {
   }
 
   async handleRemoteLocalBrowserDataDeletion(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<RemoteLocalBrowserDataDeletionOutcome, StorageOperationFailure>
   > {
     const state = this.state;
     if (state.localDataDeletionStarted) {
@@ -266,12 +270,14 @@ export class VaultWorkspaceActions {
           if (manager.isErr()) return storageErr(manager.error);
           try {
             manager.value.quiesce_for_local_recovery();
-            return storageOk();
+            return storageOk(LocalDataRecoveryQuiescenceOutcome.Quiesced);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })
-      : state.waitForStorageChain().then(() => storageOk());
+      : state
+          .waitForStorageChain()
+          .then(() => storageOk(LocalDataRecoveryQuiescenceOutcome.Quiesced));
     state.localDataDeletionStarted = true;
     state.stopIdleSessionTracking();
     state.stopVaultSync();
@@ -280,7 +286,7 @@ export class VaultWorkspaceActions {
     const quiescence = await resetManager;
     const cleanup = browserDataLifecycle.clearTabScopedBrowserData();
     if (quiescence.isErr()) return storageErr(quiescence.error);
-    return cleanup;
+    return cleanup.map(() => RemoteLocalBrowserDataDeletionOutcome.Quiesced);
   }
 
   openHelp(): void {

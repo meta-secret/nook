@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures'
+import { Effect } from 'effect'
 import {
   connectLocalVault,
   parseJson,
@@ -168,11 +169,17 @@ test('offer browser extension install on vault home and in Devices', async ({
   if (typeof encodedLauncherMessage !== 'string') {
     throw new Error('Companion launcher message was not recorded.')
   }
-  const launcherMessage: unknown = parseJson(encodedLauncherMessage)
-  if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
+  const launcherMessage = Effect.runSync(
+    Effect.either(
+      OpenCompanionLauncherMessageGuard.decode(
+        parseJson(encodedLauncherMessage),
+      ),
+    ),
+  )
+  if (launcherMessage._tag === 'Left') {
     throw new Error('Companion launcher message was malformed.')
   }
-  expect(launcherMessage.payload).toEqual({ intent: 'pair' })
+  expect(launcherMessage.right.intent).toBe(OpenCompanionLauncherIntent.Pair)
   const routedTypesAttribute = await page
     .locator('html')
     .evaluate(
@@ -275,6 +282,10 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
   )
+  // This visible consent flow exercises the shared App -> AppSurface ->
+  // ExtensionConnectConsentWorkspace -> ExtensionConnectConsent path. The
+  // Sentinel build replaces that last surface with its intentionally hidden
+  // ExtensionConnectDisabled no-op and denies this route altogether.
   const consent = page.getByTestId('extension-connect-consent')
   await expect(consent).toBeVisible({ timeout: UI_TIMEOUT_MS })
 

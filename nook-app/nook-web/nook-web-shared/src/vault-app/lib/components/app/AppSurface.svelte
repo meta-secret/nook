@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ExtensionConsentCloseOutcome } from '$lib/components/extension-connect-consent-outcome'
   import { ColorMode } from '$lib/app/theme'
   import {
     ExtensionConnectIntentKind,
@@ -62,7 +63,7 @@
     onNavigateHome: () => void
     onToggleColorMode: () => void
     onExtensionConnect: () => Promise<void>
-    onFinishExtensionConnect: (approved?: boolean) => void
+    onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
   let headerDevicesAccessRequestGeneration = $state(0)

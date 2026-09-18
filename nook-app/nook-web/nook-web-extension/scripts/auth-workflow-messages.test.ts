@@ -170,15 +170,15 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('accepts bounded structural page observations', () => {
-    expect(AuthenticationWorkflowSnapshotMessageSchema.is(validMessage)).toBe(
-      true,
-    )
+    expect(
+      AuthenticationWorkflowSnapshotMessageSchema.admit(validMessage).kind,
+    ).toBe('accepted')
   })
 
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
     const observation = validObservation
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -217,8 +217,8 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(true)
+      }).kind,
+    ).toBe('accepted')
   })
 
   test('accepts mixed phone-or-email evidence without admitting unknown evidence', () => {
@@ -263,22 +263,22 @@ describe('authentication workflow snapshot messages', () => {
     })
 
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is(
+      AuthenticationWorkflowSnapshotMessageSchema.admit(
         messageWithEvidence('mixed-phone-or-email'),
-      ),
-    ).toBe(true)
+      ).kind,
+    ).toBe('accepted')
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is(
+      AuthenticationWorkflowSnapshotMessageSchema.admit(
         messageWithEvidence('mixed-contact-channel'),
-      ),
-    ).toBe(false)
+      ).kind,
+    ).toBe('rejected')
   })
 
   test('rejects invalid or oversized recovery copy', () => {
     const observation = validObservation
     for (const backupCodesCopy of [42, 'x'.repeat(513)]) {
       expect(
-        AuthenticationWorkflowSnapshotMessageSchema.is({
+        AuthenticationWorkflowSnapshotMessageSchema.admit({
           ...validMessage,
           payload: {
             ...validMessage.payload,
@@ -292,14 +292,14 @@ describe('authentication workflow snapshot messages', () => {
               },
             ],
           },
-        }),
-      ).toBe(false)
+        }).kind,
+      ).toBe('rejected')
     }
   })
 
   test('accepts the generated passkey presence representation', () => {
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -313,14 +313,14 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(true)
+      }).kind,
+    ).toBe('accepted')
   })
 
   test('accepts bounded passkey and OTP candidate facts', () => {
     const observation = validObservation
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -363,8 +363,8 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(true)
+      }).kind,
+    ).toBe('accepted')
   })
 
   test('rejects missing, negative, and fractional counts structurally', () => {
@@ -379,18 +379,18 @@ describe('authentication workflow snapshot messages', () => {
       ),
     ).toBe(true)
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
           observations: [observationWithoutOneTimeCodeCount],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
 
     for (const invalidCount of [-1, 0.5]) {
       expect(
-        AuthenticationWorkflowSnapshotMessageSchema.is({
+        AuthenticationWorkflowSnapshotMessageSchema.admit({
           ...validMessage,
           payload: {
             ...validMessage.payload,
@@ -404,14 +404,14 @@ describe('authentication workflow snapshot messages', () => {
               },
             ],
           },
-        }),
-      ).toBe(false)
+        }).kind,
+      ).toBe('rejected')
     }
   })
 
   test('leaves portable upper bounds to the Rust workflow policy', () => {
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -425,10 +425,10 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -443,26 +443,26 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
           observations: Array.from({ length: 21 }, () => validObservation),
         },
-      }),
-    ).toBe(true)
+      }).kind,
+    ).toBe('accepted')
   })
 
   test('rejects empty observation batches structurally', () => {
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: { ...validMessage.payload, observations: [] },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
   })
 
   test('accepts a typed control batch and rejects the obsolete singular shape', () => {
@@ -482,7 +482,7 @@ describe('authentication workflow snapshot messages', () => {
       label: 'Sign in',
     }
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -496,10 +496,10 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(true)
+      }).kind,
+    ).toBe('accepted')
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -515,15 +515,15 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
     const missingDestinationSource = { ...control }
     Reflect.deleteProperty(
       missingDestinationSource,
       'submissionDestinationSource',
     )
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -537,10 +537,10 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
     expect(
-      AuthenticationWorkflowSnapshotMessageSchema.is({
+      AuthenticationWorkflowSnapshotMessageSchema.admit({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -554,7 +554,7 @@ describe('authentication workflow snapshot messages', () => {
             },
           ],
         },
-      }),
-    ).toBe(false)
+      }).kind,
+    ).toBe('rejected')
   })
 })

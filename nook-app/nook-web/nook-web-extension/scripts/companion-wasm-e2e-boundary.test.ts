@@ -34,13 +34,6 @@ const scopeValues = [
   ExtensionConnectScope.PasskeyManagement,
   ExtensionConnectScope.SyncProviderCredentials,
 ]
-if (
-  !scopeValues.every((value) =>
-    ExtensionConnectScope.isExtensionConnectScopeValue(value),
-  )
-) {
-  throw new Error('companion scope runtime was not configured')
-}
 console.log(JSON.stringify(scopeValues))
 `
 
@@ -72,10 +65,8 @@ describe('Node-hosted extension E2E WASM setup', () => {
       },
     })
 
+    expect(result.stderr).toBe('')
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('vault-access')
-    expect(result.stderr).not.toContain(
-      'unexpected companion WASM network fetch',
-    )
   })
 })

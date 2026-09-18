@@ -21,9 +21,6 @@ use nook_companion_core::AuthenticationUsernameEvidence;
 #[cfg(test)]
 use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::BackupCodePageText;
-use nook_companion_core::{
-    ExtensionPairingState, ExtensionReadySetup, StoredExtensionPairingGrant,
-};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
@@ -33,6 +30,7 @@ mod authenticator_code_response;
 mod companion_pairing;
 mod companion_protocol;
 mod credential_fill;
+mod extension_pairing;
 mod extension_persistence;
 mod grant_authority;
 mod page_form_policy;
@@ -46,6 +44,7 @@ pub use authenticator_code_response::*;
 pub use companion_pairing::*;
 pub use companion_protocol::*;
 pub use credential_fill::*;
+pub use extension_pairing::*;
 pub use extension_persistence::*;
 pub use grant_authority::*;
 pub use page_form_policy::*;
@@ -150,196 +149,12 @@ pub fn validate_companion_authentication_outcome_decision(
     decision
 }
 
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
-    StoredExtensionPairingGrant::storage_key_for(vault_store_id)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_pairing_setup_storage_key() -> String {
-    nook_companion_core::EXTENSION_SETUP_KEY.to_owned()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::VaultAccess
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasswordFilling
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasskeyManagement
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn is_extension_connect_scope(value: &str) -> bool {
-    nook_companion_core::ExtensionConnectScope::parse(value).is_ok()
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn create_extension_pairing_state(
-    input: nook_companion_core::CreateExtensionPairingStateInput,
-) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    ExtensionPairingState::create(input)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn refresh_extension_pairing_grant(
-    input: nook_companion_core::RefreshExtensionPairingGrantInput,
-) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    ExtensionPairingState::refresh_grant(input)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn ordered_extension_pairing_grants(
-    state: nook_companion_core::ExtensionPairingState,
-) -> Vec<nook_companion_core::StoredExtensionPairingGrant> {
-    state.ordered_grants()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn selected_extension_pairing_grant(
-    state: nook_companion_core::ExtensionPairingState,
-) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.selected_grant()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn first_extension_pairing_grant(
-    state: nook_companion_core::ExtensionPairingState,
-) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.first_grant()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn extension_setup_after_pairing_grant_removal(
-    input: nook_companion_core::ExtensionPairingGrantRemovalInput,
-) -> nook_companion_core::ExtensionSetupAfterRemoval {
-    input
-        .state
-        .setup_after_removal(&input.removed_vault_store_id)
-}
-
-#[wasm_bindgen]
-#[must_use]
-// Existing browser boolean projection; this outer boundary remains to be migrated.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
-    StoredExtensionPairingGrant::validate_json(value).is_ok()
-}
-
-#[wasm_bindgen]
-#[must_use]
-// Existing browser boolean projection; this outer boundary remains to be migrated.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn is_extension_ready_setup_json(value: &str) -> bool {
-    ExtensionReadySetup::validate_json(value).is_ok()
-}
-
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn migrate_legacy_extension_pairing_state_json(
-    value: &str,
-) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    ExtensionPairingState::migrate_legacy_json(value)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use nook_companion_core::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
-        AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch, ExtensionEventCount,
+        AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch,
         OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultHostPolicy,
     };
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -527,90 +342,6 @@ mod tests {
         );
         Ok(())
     }
-    fn pairing_approval() -> nook_companion_core::ExtensionPairingGrantApproval {
-        nook_companion_core::ExtensionPairingGrantApproval {
-            vault_type: nook_companion_core::ExtensionPairingVaultType::Simple,
-            device_id: "device-test".to_owned(),
-            device_public_key: "age1test".to_owned(),
-            device_signing_public_key: "signing-test".to_owned(),
-            device_label: "Nook Extension".to_owned(),
-            vault_store_id: "store-test".to_owned(),
-            vault_name: "Personal".to_owned(),
-            approved_at: "2026-09-05T00:00:00.000Z".to_owned(),
-            scopes: vec![nook_companion_core::ExtensionConnectScope::PasswordFilling],
-            sync_provider_count: 1.into(),
-        }
-    }
-    fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensionEventLog {
-        nook_companion_core::ImportedExtensionEventLog {
-            vault_store_id: "store-test".to_owned(),
-            event_count: event_count.into(),
-            heads: vec![format!("event-{event_count}")],
-            access_granted: true,
-        }
-    }
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn pairing_exports_preserve_creation_refresh_selection_and_json_validation()
-    -> Result<(), String> {
-        let created =
-            create_extension_pairing_state(nook_companion_core::CreateExtensionPairingStateInput {
-                grant: pairing_approval(),
-                imported: imported_event_log(2),
-                observed_at: "2026-09-05T00:00:01.000Z".to_owned(),
-            })
-            .map_err(|error| format!("create failed: {error:?}"))?;
-        let grant = ordered_extension_pairing_grants(created.clone())
-            .into_iter()
-            .next()
-            .ok_or_else(|| "created pairing state did not contain a grant".to_owned())?;
-        assert_eq!(grant.event_count, ExtensionEventCount::from(2));
-        assert!(matches!(
-            first_extension_pairing_grant(created.clone()),
-            nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
-                if grant.vault_store_id == "store-test"
-        ));
-        assert!(matches!(
-            selected_extension_pairing_grant(created.clone()),
-            nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
-                if grant.vault_store_id == "store-test"
-        ));
-        assert!(is_stored_extension_pairing_grant_json(
-            &serde_json::to_string(&grant).map_err(|error| error.to_string())?
-        ));
-        assert!(!is_stored_extension_pairing_grant_json("{}"));
-        let refreshed = refresh_extension_pairing_grant(
-            nook_companion_core::RefreshExtensionPairingGrantInput {
-                grant,
-                imported: imported_event_log(4),
-                observed_at: "2026-09-05T00:00:04.000Z".to_owned(),
-                select: true,
-            },
-        )
-        .map_err(|error| format!("refresh failed: {error:?}"))?;
-        let refreshed_grants = ordered_extension_pairing_grants(refreshed.clone());
-        assert_eq!(
-            refreshed_grants
-                .first()
-                .ok_or_else(|| "refreshed pairing state did not contain a grant".to_owned())?
-                .event_count,
-            ExtensionEventCount::from(4)
-        );
-        assert!(matches!(
-            extension_setup_after_pairing_grant_removal(
-                nook_companion_core::ExtensionPairingGrantRemovalInput {
-                    state: refreshed,
-                    removed_vault_store_id: "store-test".to_owned(),
-                }
-            ),
-            nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault
-        ));
-        #[cfg(target_arch = "wasm32")]
-        assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
-        #[cfg(not(target_arch = "wasm32"))]
-        assert!(nook_companion_core::ExtensionPairingState::migrate_legacy_json("{").is_err());
-        Ok(())
-    }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn remaining_export_families_preserve_closed_policy_and_url_boundaries() -> Result<(), String> {
@@ -639,8 +370,9 @@ mod tests {
             nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
         );
         assert_eq!(
-            extension_pairing_grant_storage_key("store-test"),
-            "nook:extension-pairing-grant:store-test"
+            extension_pairing_grant_storage_key("store_abcdefghijk")
+                .map_err(|error| format!("{error:?}"))?,
+            "nook:extension-pairing-grant:store_abcdefghijk"
         );
         assert!(extension_pairing_setup_storage_key().ends_with("setup"));
         for scope in [

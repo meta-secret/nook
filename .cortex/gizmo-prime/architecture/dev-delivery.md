@@ -41,9 +41,9 @@ Delivery Pipeline is the operational team for CI, pull-request lifecycle, dev
 publication, workflow execution, local landing, evidence, and guarded
 promotion. Delivery Pipeline Team Gizmo owns Level 1 delivery-pipeline
 orchestration and commit handoffs. Gizmo Prime authorizes the canonical feature
-branch name; its packet authorizes PR Lifecycle to re-fetch and resolve the
-latest committed head, push that branch, and invoke the remote build-only task.
-PR Lifecycle also
+branch name; its packet authorizes PR Lifecycle to re-fetch and resolve a
+stable committed head, push that branch, and invoke the feature-stage remote
+gates. PR Lifecycle also
 performs packetized external GitHub, PR, check, review, status, and bounded dev
 mechanics. Neither creates or updates pull requests or replaces the active
 harness.
@@ -80,18 +80,39 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     `pinnedLocalDevSha` does not equal post-synchronization `refs/heads/dev`,
     fail closed. Preserve the base after feature creation.
   - The canonical branch name remains the later-stage workflow authority.
-    Observed SHAs are evidence only. Resolve the latest committed
-    feature-branch head before each stage. A branch advance follows the latest
-    head and reruns affected evidence; it is not a stale-authority failure.
+    Observed SHAs are evidence only. Resolve a stable committed feature-branch
+    head before remote evidence. A branch advance invalidates review,
+    `build:compile`, and `type:check` evidence bound to the older head. Follow
+    the latest head and rerun the affected gates; this is not a stale-authority
+    failure.
   - Missing or unprovable branch/bootstrap evidence fails closed.
   - No tests, coverage, e2e, or preflight may execute transitively.
+- **`type:check`**
+  - The remote selector is exactly `type:check`.
+  - Run one remote `type:check` request only after required review and a
+    successful remote `build:compile` request for the same unchanged stable
+    committed feature head.
+  - `type:check` is an additional feature-stage gate. It never replaces
+    `build:compile`.
+  - Use the natural terminal remote execution result as evidence. Do not add
+    selector discovery, selector preflight, mocks, simulations, or local
+    execution.
+  - Consume the artifact
+    `remote-type-check-<run-id>-<attempt>/report.yaml`.
+  - Inventory every diagnostic found in `report.yaml` and every diagnostic found
+    in its referenced `rawLog` files before deciding whether repair is needed.
+  - Read every raw log named by a `rawLog` field in `report.yaml`.
+  - If the branch advances, invalidate the older head's review,
+    `build:compile`, and `type:check` evidence. Resolve the latest committed
+    head and repeat the affected gates.
 - **`dev:land`**
   - Serialized feature fast-forward into local `dev`, accepting only the
     canonical feature branch as public input.
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's packet; PR Lifecycle
     Agent performs the bounded invocation.
-  - Verify positive remote build evidence for the current canonical branch head
-    by default. A local proof may replace that remote proof only for one
+  - Verify positive remote `build:compile` and `type:check` evidence for the
+    current canonical branch head by default. A local proof may replace the
+    remote build proof only for one
     explicitly authorized landing operation when Gizmo Prime records the exact
     source SHA, allowlisted Task target, proof artifact digest, and
     `gizmo-prime-one-off-local-build` authority in the packet. The short-lived
@@ -145,15 +166,26 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
     formatting as implementation feedback.
   - Have Gizmo Prime authorize the canonical feature branch name.
   - Have Delivery Pipeline Team Gizmo route the packet to PR Lifecycle, which
-    re-fetches and resolves the latest committed head, pushes the branch, and
-    repeatedly invokes the remote build-only task.
-  - Record the observed branch head with compilation evidence. If the branch
-    advances, follow the latest head and rerun affected evidence.
-  - The task builds and checks type compilation without running tests,
+    re-fetches and resolves a stable committed head before remote evidence.
+  - Complete required review for that head.
+  - Invoke remote `build:compile` for that head.
+  - Without a branch advance, invoke remote `type:check` exactly once for the
+    same head. Record the natural terminal result and its report artifact as
+    evidence.
+  - If the branch advances, invalidate all evidence bound to the older head.
+    Resolve the latest committed head and repeat required review,
+    `build:compile`, and the one-request `type:check` sequence.
+  - The `build:compile` task builds and checks type compilation without running tests,
     coverage, e2e, or preflight, including transitively through Docker stages.
+  - The `type:check` task runs only through the exact remote selector. It must
+    not run locally or through selector discovery, preflight, a mock, or a
+    simulation.
   - Fast agents review code and route corrections through the owning team.
-  - A completed feature has passing compilation for its current branch head and
-    resolved required review and security findings.
+  - An accepted feature commit has passing `build:compile` evidence and one
+    passing `type:check` result for its current branch head, with resolved
+    required review and security findings.
+  - Acceptance is an intermediate stage. It is not feature completion or
+    delivery.
 - **Local integration**
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo to route bounded local
     integration to PR Lifecycle Agent for local dev.
@@ -164,7 +196,12 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Serialize all mutations of the shared local dev checkout and index.
   - Task tooling owns the integration exclusion across concurrent Gizmos.
   - Record the observed feature commit and resulting local dev SHA.
-  - Feature completion ends at this local integration handoff.
+  - After `dev:land`, resolve the resulting canonical local `dev` commit and
+    verify that it contains the accepted feature commit with
+    `git merge-base --is-ancestor`.
+  - Feature completion occurs only after that containment proof succeeds.
+  - A successful integration command without containment evidence is an
+    incomplete stage result.
   - Keep dev permanent and preserve every previously integrated feature.
 - **Slow stage ownership**
   - A manually started [dev manager](../../teams/delivery-pipeline/dev-manager/AGENTS.md) is the
@@ -203,8 +240,13 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Do not run local product compilation, Docker work, coverage, or preflight.
   - Do not run remote tests, coverage, e2e, or preflight at the feature stage.
   - Do not treat existing `rust:ci`, `web:verify`, or `loom:verify` as build-only.
+  - Do not use selector discovery, selector preflight, mocks, simulations, or
+    local execution for remote `type:check`.
+  - Do not run `type:check` before `build:compile` or use it as a replacement
+    for the required build gate.
   - Feature Gizmos must not push dev or main.
-  - Do not require full tests to pass before landing a completed feature locally.
+  - Do not require full tests to pass before landing an accepted feature commit
+    locally.
 - **Shared state**
   - Do not mutate the shared dev checkout outside serialized local integration work.
   - Do not let publication or promotion reset local dev to the tested snapshot.
@@ -237,8 +279,13 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
    - Require PR Lifecycle's terminal evidence to list every failed or cancelled
      required GitHub Actions job, with its diagnostics and captured source SHA.
      A first-failure-only report is incomplete.
-   - Forward the complete inventory to Gizmo Prime. Prime groups diagnostics by
-     owning team and coherent competence area.
+   - For a failed feature `type:check`, consume
+     `remote-type-check-<run-id>-<attempt>/report.yaml`.
+   - Inventory every diagnostic found in that report and every diagnostic found
+     in its referenced `rawLog` files before repair.
+   - Read every raw log named by a `rawLog` field before repair.
+   - Forward the complete diagnostic inventory to Gizmo Prime. Prime groups
+     diagnostics by owning team and coherent competence area.
    - Prime dispatches affected Team Gizmos in parallel through the active
      harness. Each Team Gizmo gives one Team Agent the consolidated list for its
      area. Use multiple agents only for genuinely distinct, disjoint areas.
@@ -248,8 +295,10 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
      or blocker to Prime.
    - Prime integrates all team clusters into local dev through the normal
      branch-authoritative Levels 1 through 4 path.
-   - Do not push or rerun validation after an individual fix or before the
-     complete repair wave is integrated.
+   - Send one consolidated repair packet per competence area. Do not send one
+     agent per diagnostic.
+   - Do not notify, repair, push, or rerun a remote gate after an individual
+     fix or before the complete repair wave is integrated.
    - After integration, publish one new snapshot and rerun full validation once
      through Dev Manager -> Delivery Pipeline Team Gizmo -> PR Lifecycle Agent.
    - If that new terminal wave fails, collect its complete job inventory before

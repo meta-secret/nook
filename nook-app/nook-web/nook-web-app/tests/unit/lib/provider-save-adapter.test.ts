@@ -32,6 +32,8 @@ import type {
 import {
   ActiveProviderCredentialsActions,
   ProviderPersistenceActions,
+  ProviderPersistenceOutcome,
+  ProviderSaveOutcome,
 } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
@@ -78,7 +80,9 @@ function providerState(providerType: StorageProviderType): AdapterState {
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
-    persistProviders: vi.fn(async () => ok()),
+    persistProviders: vi.fn(async () =>
+      ok(ProviderPersistenceOutcome.Persisted),
+    ),
   }
 }
 
@@ -218,7 +222,7 @@ describe('provider save web adapter', () => {
       state,
     ).ensureProviderSaved()
 
-    expect(saved.isOk()).toBe(true)
+    expect(saved).toEqual(ok(ProviderSaveOutcome.Saved))
     expect(state.persistProviders).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: [expect.objectContaining({ type: GITHUB_PROVIDER_TYPE })],

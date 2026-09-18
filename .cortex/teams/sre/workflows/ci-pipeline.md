@@ -11,11 +11,9 @@ feature-stage slow checks.
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
 
-Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
-not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues](../../../gizmo-prime/workflows/issues.md),
-[agent statistics](../../../gizmo-prime/workflows/agent-statistics.md), and
-[main-build-statistics.md](main-build-statistics.md).
+Nook Workbench stores development issues only. Issue changes do not create Nook
+branches, PRs, product validation, or recursive Main builds. See
+[issues](../../../gizmo-prime/workflows/issues.md).
 
 ## Central CI entrypoint
 
@@ -114,7 +112,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
-- Owns merged-head ecosystem cache seeding and statistics.
+- Owns merged-head ecosystem cache seeding and local cache telemetry.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e and extension e2e consume verified WASM on separate
@@ -123,11 +121,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
 - Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
-
-**`main-build-stats.yml`**
-
-- Collects run/job/step timing and conclusions.
-- Commits one `stats/main-build/**` record directly to Nook Workbench.
 
 **`release.yml`**
 
@@ -158,9 +151,6 @@ flowchart LR
   ci_yml --> main_yml[main.yml reusable]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
-  main_yml --> main_stats[Persist completed run metrics]
-  main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
   release_yml --> pages[GitHub Pages public site]
@@ -664,7 +654,14 @@ authenticator-domain to 90 percent.
 **PR CI split:**
 
 - PR CI uses independent native Rust and WASM producers.
-- Native Rust runs the portable Rust nextest/coverage branch and uploads its small coverage handoff.
+- Trusted native Rust first publishes an exact-source, run-attempt-scoped image
+  and its BuildKit cache before any format, clippy, test, or coverage consumer
+  starts. Native verification consumes that image through BuildKit, and the
+  sibling Rust ecosystem jobs import the same exact-head cache on their nodes.
+- Fork and Dependabot validation remains secret-free and runs the existing
+  native verification path without publishing or transporting the large image.
+- Native verification uploads its small coverage handoff after consuming the
+  producer image.
 - The WASM build producer runs clippy/build once and uploads the generated package under a run-stable artifact name.
 - `WASM Node tests` depends on that build job and finishes the producer gate.
 - `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
@@ -805,11 +802,17 @@ authenticator-domain to 90 percent.
 **SeaweedFS sccache:**
 
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
-- Compiler vertices receive the bucket-scoped build identity only through stable optional BuildKit secret IDs.
+- Compiler vertices receive the bucket-scoped build identity only through stable
+  BuildKit secret IDs. Credentialed trusted Rust/WASM jobs fail closed before
+  compilation when those credentials or the healthy remote sccache service are
+  unavailable; only secret-free fork and Dependabot lanes use the direct
+  compiler fallback.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
-- SeaweedFS remains an optimization and never a correctness input.
+- A first cold trusted publish may miss while recording authoritative compiler
+  writes. A changed-head successor must report compiler hits; repeated
+  changed-head zero-hit evidence is terminal cache failure.
 - Each workflow run and retry loads its sealed web and e2e results under run-scoped Docker image tags; concurrent jobs must never replace one another's runtime image between build and deploy.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
 - Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
@@ -850,11 +853,22 @@ authenticator-domain to 90 percent.
 - A failed candidate upload or hosted validation leaves the prior stable tag
   unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
-- Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
+- For ordinary Docker builds, cache restoration is an optimization and a
+  missing cache can fall back to a correct cold build. The Remote
+  `build:compile` contract separately fails before compilation when the
+  authenticated registry API, present cache manifests, or referenced blobs
+  are inaccessible, and fails on cache export errors. An absent exact
+  current/parent commit manifest alone remains a normal BuildKit miss; BuildKit
+  still decides cache validity and reuse.
 - Main ARC producers publish shared Zot cache manifests after lane verification.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.
+- Remote `build:compile` is the lineage exception: BuildKit imports both
+  unversioned immutable current-head and first-parent `nook-build-compile`
+  refs, then exports its single rooted graph to the current-head ref. BuildKit
+  owns layer reuse and invalidation from the actual Docker inputs; no manual
+  schema suffix or custom dependency fingerprint is used.
 - The Remote credential can update only `nook/remote-buildcache/**`. It has read-only access to Zot's public mirror repositories, including Main's `nook/buildcache/**` path and mirrored tool images used to bootstrap hosted BuildKit.
 - Same-repository Remote tasks use that registry identity for git-commit
   exporters under `nook/remote-buildcache/**`.

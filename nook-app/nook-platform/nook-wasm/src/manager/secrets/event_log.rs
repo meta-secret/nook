@@ -43,7 +43,8 @@ impl NookExtensionEventLogImportStatus {
     #[wasm_bindgen]
     pub fn to_object(&self) -> Result<nook_core::ImportedExtensionEventLog, JsError> {
         let evidence = nook_core::ImportedExtensionEventLog {
-            vault_store_id: self.0.vault_store_id.clone(),
+            vault_store_id: nook_core::StoreId::parse(&self.0.vault_store_id)
+                .map_err(|error| JsError::new(&error.to_string()))?,
             event_count: u32::try_from(self.0.event_count)
                 .map_err(|_| JsError::new("imported event count exceeds the browser contract"))?
                 .into(),
@@ -314,17 +315,31 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn extension_import_status_projects_plain_js_values() -> Result<(), JsError> {
         let status = NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus {
-            vault_store_id: "store-fixture".to_owned(),
+            vault_store_id: "store_abcdefghijk".to_owned(),
             event_count: 3,
             heads: vec!["head-a".to_owned(), "head-b".to_owned()],
             access_granted: true,
         });
         let object = status.to_object()?;
-        assert_eq!(object.vault_store_id, "store-fixture");
+        let expected_store_id = nook_core::StoreId::parse("store_abcdefghijk")
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        assert_eq!(object.vault_store_id, expected_store_id);
         assert_eq!(object.event_count, 3.into());
         assert!(object.access_granted);
         assert_eq!(object.heads, ["head-a", "head-b"]);
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn extension_import_status_rejects_malformed_vault_store_id() {
+        let status = NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus {
+            vault_store_id: "store-fixture".to_owned(),
+            event_count: 3,
+            heads: vec!["head-a".to_owned()],
+            access_granted: true,
+        });
+
+        assert!(status.to_object().is_err());
     }
 
     #[wasm_bindgen_test]

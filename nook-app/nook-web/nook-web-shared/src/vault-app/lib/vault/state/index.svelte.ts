@@ -166,6 +166,7 @@ const syncKeys = [
   "clearSyncingProvider",
   "isFanOutSyncing",
   "replacementConflicts",
+  "projectionConflictSnapshot",
   "securityConflicts",
   "replaceProjectionConflicts",
   "clearProjectionConflicts",
@@ -180,26 +181,6 @@ const syncKeys = [
   "reportLocalFolderMultipleVaults",
   "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
-
-type VaultStateSliceFields = VaultRuntimeState &
-  VaultUiState &
-  VaultProviderState &
-  VaultSessionState &
-  VaultSecretsState &
-  VaultSentinelState &
-  VaultSyncState;
-
-type VaultDelegatedValue = VaultStateSliceFields[keyof VaultStateSliceFields];
-type VaultDelegatedArguments = never[];
-type VaultDelegatedCallable = (
-  ...args: VaultDelegatedArguments
-) => VaultDelegatedValue;
-
-function isVaultDelegatedCallable<DelegatedStateValue>(
-  value: DelegatedStateValue,
-): value is DelegatedStateValue & VaultDelegatedCallable {
-  return typeof value === "function";
-}
 
 class VaultStateSlicesImplementation {
   declare browserLocale: VaultRuntimeState["browserLocale"];
@@ -334,6 +315,7 @@ class VaultStateSlicesImplementation {
   declare clearSyncingProvider: VaultSyncState["clearSyncingProvider"];
   declare isFanOutSyncing: VaultSyncState["isFanOutSyncing"];
   declare readonly replacementConflicts: VaultSyncState["replacementConflicts"];
+  declare readonly projectionConflictSnapshot: VaultSyncState["projectionConflictSnapshot"];
   declare readonly securityConflicts: VaultSyncState["securityConflicts"];
   declare replaceProjectionConflicts: VaultSyncState["replaceProjectionConflicts"];
   declare clearProjectionConflicts: VaultSyncState["clearProjectionConflicts"];
@@ -359,16 +341,26 @@ class VaultStateSlicesImplementation {
     keys,
   }: VaultStateDelegation<State>): void {
     for (const key of keys) {
+      const member = state[key];
+      if (typeof member === "function") {
+        const defineOwnedMethodArgs: Parameters<
+          typeof Object.defineProperty
+        >[2] = {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value: member.bind(state),
+        };
+        Object.defineProperty(target, key, defineOwnedMethodArgs);
+        continue;
+      }
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
         configurable: true,
         enumerable: true,
-        get: () => {
-          const value = state[key];
-          if (!isVaultDelegatedCallable(value)) return value;
-          return (...args: VaultDelegatedArguments): VaultDelegatedValue =>
-            value.apply(state, args);
+        get: () => state[key],
+        set: (value: State[keyof State]) => {
+          Reflect.set(state, key, value);
         },
-        set: (value: State[keyof State]) => Reflect.set(state, key, value),
       };
       Object.defineProperty(target, key, definePropertyArgs);
     }

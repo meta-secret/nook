@@ -28,10 +28,13 @@ type SentinelDashboardPortalParameters = {
   choice: SentinelDashboardChoice;
 };
 
-// eslint-disable-next-line max-params -- Svelte owns the two-parameter action contract.
-export function sentinelDashboardPortal(
+type SentinelDashboardPortalInvocation = readonly [
   node: HTMLElement,
   parameters: SentinelDashboardPortalParameters,
+];
+
+export function sentinelDashboardPortal(
+  ...[node, parameters]: SentinelDashboardPortalInvocation
 ) {
   const anchor = document.createComment("sentinel-dashboard-home");
   const focusableSelector = [

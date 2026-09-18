@@ -1,9 +1,6 @@
 //! Live in-memory vault scope for queued extension authority checks.
 use super::{NookVaultManager, VaultCryptoState};
-use nook_companion_core::{
-    ActiveExtensionVault, ExtensionActiveVaultScope, ExtensionGrantAuthority,
-    ExtensionGrantAuthorityRequest, PairingStorageJson, PairingVaultId,
-};
+use nook_companion_core::{ActiveExtensionVault, ExtensionActiveVaultScope};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
@@ -18,21 +15,9 @@ impl NookVaultManager {
             ));
         }
         Ok(ExtensionActiveVaultScope::Active(ActiveExtensionVault {
-            vault_store_id: self.vault.store_id.clone().into(),
+            vault_store_id: nook_core::StoreId::parse(&self.vault.store_id)
+                .map_err(|error| JsError::new(&error.to_string()))?,
         }))
-    }
-
-    pub fn classify_extension_grant_authority(
-        &self,
-        stored_json: PairingStorageJson,
-        vault_store_id: PairingVaultId,
-    ) -> Result<ExtensionGrantAuthority, JsError> {
-        Ok(ExtensionGrantAuthorityRequest {
-            stored_json,
-            vault_store_id,
-            active_vault: self.active_extension_vault_scope()?,
-        }
-        .classify())
     }
 }
 
@@ -44,7 +29,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn scope_tracks_decrypted_manager_state_and_reset() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = "store-test".to_owned();
+        manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
         assert_eq!(
             manager.active_extension_vault_scope()?,
             ExtensionActiveVaultScope::NoActiveVault
@@ -53,7 +38,7 @@ mod tests {
         assert_eq!(
             manager.active_extension_vault_scope()?,
             ExtensionActiveVaultScope::Active(ActiveExtensionVault {
-                vault_store_id: "store-test".to_owned().into()
+                vault_store_id: nook_core::StoreId::before_genesis_placeholder()
             })
         );
         manager.reset_vault_session();

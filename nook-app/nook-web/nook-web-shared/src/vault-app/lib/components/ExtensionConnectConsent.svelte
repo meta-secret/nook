@@ -1,20 +1,38 @@
 <script lang="ts">
-  type IdentityTextTruncation = {
-    readonly value: string
-    readonly head: number
-    readonly tail: number
-  }
-
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { onDestroy } from 'svelte'
+  import { NookExtensionConsentPhaseState } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import {
-    ExtensionPairingDeliveryKind,
-    type ExtensionConnectRequest,
-  } from '../extension/connect'
+  import type { ExtensionConnectRequest } from '../extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
-  import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
   import { ExtensionConsentScopeTranslation } from './extension-connect-consent-state'
+  import {
+    ExtensionConsentIdentityText,
+    type ExtensionConsentIdentityTextLayout,
+  } from './extension-consent-identity-text'
+  import {
+    ExtensionConsentDeliveryOutcomeKind,
+    ExtensionConsentRejectionKind,
+    ExtensionConsentWorkflowKind,
+    ExtensionConsentWorkflowNoticeKind,
+    ExtensionConnectConsentWorkflow,
+    ExtensionConsentWorkflowPresentation,
+    type ExtensionConsentWorkflowState,
+  } from './extension-connect-consent-workflow'
+  import { ExtensionConsentCloseOutcome } from './extension-connect-consent-outcome'
+
+  type ExtensionConsentWorkflowSession = {
+    readonly workflow: ExtensionConnectConsentWorkflow
+    readonly state: ExtensionConsentWorkflowState
+    approve(): Promise<void>
+    dispose(): void
+  }
+
+  type ExtensionConsentWorkflowSessionRequest = {
+    readonly vault: VaultState
+    readonly request: ExtensionConnectRequest
+  }
 
   let {
     vault,
@@ -23,98 +41,84 @@
   }: {
     vault: VaultState
     request: ExtensionConnectRequest
-    onClose: (approved: boolean) => void
+    onClose: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
-  let isApproving = $state(false)
-  let approved = $state(false)
-  let error = $state('')
-  let handoffError = $state('')
-  let handoffRejectionReason = $state('')
+  function createWorkflowSession({
+    vault: sessionVault,
+    request: sessionRequest,
+  }: ExtensionConsentWorkflowSessionRequest): ExtensionConsentWorkflowSession {
+    const workflowRequest: ConstructorParameters<
+      typeof ExtensionConnectConsentWorkflow
+    >[0] = { vault: sessionVault, request: sessionRequest }
+    const workflow = new ExtensionConnectConsentWorkflow(workflowRequest)
+    let state = $state.raw(workflow.initialState())
 
-  const canApprove = $derived(
-    vault.isAuthenticated &&
-      !vault.isVerifying &&
-      !isApproving &&
-      !vault.isSaving &&
-      !approved,
-  )
-
-  function truncate({ value, head, tail }: IdentityTextTruncation) {
-    if (value.length <= head + tail + 3) return value
-    return `${value.slice(0, head)}...${value.slice(-tail)}`
+    return {
+      workflow,
+      get state() {
+        return state
+      },
+      async approve() {
+        const approvalRequest: Parameters<typeof workflow.approve>[0] = {
+          state,
+          publish: (next) => (state = next),
+        }
+        await workflow.approve(approvalRequest)
+      },
+      dispose() {
+        workflow.dispose()
+      },
+    }
   }
 
-  async function approveExtension() {
-    if (!vault.hasManager || !canApprove) return
+  const sessionRequest = $derived<ExtensionConsentWorkflowSessionRequest>({
+    vault,
+    request,
+  })
+  let session = $derived(createWorkflowSession(sessionRequest))
+  const presentation = new ExtensionConsentWorkflowPresentation()
+  const workflowState = $derived(session.state)
+  const availability = $derived(
+    session.workflow.approvalAvailability(workflowState),
+  )
+  const noticeRequest = $derived<Parameters<typeof presentation.notice>[0]>({
+    state: workflowState,
+    availability,
+  })
+  const notice = $derived(presentation.notice(noticeRequest))
+  const actionTranslationKey = $derived(
+    presentation.actionTranslationKey(workflowState),
+  )
+  const closeOutcome = $derived(session.workflow.closeOutcome(workflowState))
 
-    isApproving = true
-    vault.isSaving = true
-    error = ''
-    handoffError = ''
-    handoffRejectionReason = ''
-    vault.errorMsg = ''
-    try {
-      const approval = new ExtensionVaultApproval(vault, request)
-      const prepared = await approval.prepare()
-      if (prepared.isErr()) {
-        error = vault.t(prepared.error.translationKey)
-        vault.errorMsg = error
-        return
-      }
-      let delivery: Awaited<ReturnType<typeof approval.deliver>>
-      try {
-        delivery = await approval.deliver(prepared.value)
-      } catch {
-        handoffError = vault.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed)
-        return
-      }
-      if (delivery.isErr()) {
-        handoffError = vault.t(delivery.error.translationKey)
-        return
-      }
-      switch (delivery.value.kind) {
-        case ExtensionPairingDeliveryKind.Delivered:
-          break
-        case ExtensionPairingDeliveryKind.MessagingUnavailable:
-          handoffError = vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable)
-          break
-        case ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired:
-          handoffError = vault.t(
-            I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
-          )
-          break
-        case ExtensionPairingDeliveryKind.Rejected:
-          handoffRejectionReason =
-            'reason' in delivery.value && delivery.value.reason
-              ? delivery.value.reason
-              : ''
-          handoffError = vault.t(I18N_KEYS.ExtensionConsentGrantRejected)
-          break
-      }
-      const devices = await vault.refreshDeviceState()
-      if (devices.isErr()) {
-        error = vault.t(devices.error.translationKey)
-        vault.errorMsg = error
-        return
-      }
-      const completion = approval.admitCompletion()
-      if (completion.isErr()) {
-        handoffError = vault.t(completion.error.translationKey)
-        return
-      }
-      vault.showSuccess(
-        vault.t(
-          handoffError
-            ? I18N_KEYS.ExtensionConsentApprovedReopen
-            : I18N_KEYS.ExtensionConsentApproved,
-        ),
-      )
-      approved = true
-    } finally {
-      vault.isSaving = false
-      isApproving = false
-    }
+  $effect.pre(() => {
+    const activeSession = session
+    return () => activeSession.dispose()
+  })
+  onDestroy(() => session.dispose())
+
+  const identityTextLayout: ExtensionConsentIdentityTextLayout = {
+    head: 14,
+    tail: 10,
+  }
+  const displayedDevicePublicKey = $derived(
+    new ExtensionConsentIdentityText(request.devicePublicKey).truncate(
+      identityTextLayout,
+    ),
+  )
+  const displayedDeviceSigningPublicKey = $derived(
+    new ExtensionConsentIdentityText(request.deviceSigningPublicKey).truncate(
+      identityTextLayout,
+    ),
+  )
+
+  async function approveExtension() {
+    await session.approve()
+  }
+
+  function closeConsent() {
+    onClose(closeOutcome)
   }
 </script>
 
@@ -163,14 +167,7 @@
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
         title={request.devicePublicKey}
       >
-        {(() => {
-          const truncateArgs: Parameters<typeof truncate>[0] = {
-            value: request.devicePublicKey,
-            head: 14,
-            tail: 10,
-          }
-          return truncate(truncateArgs)
-        })()}
+        {displayedDevicePublicKey}
       </p>
     </div>
     <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
@@ -182,14 +179,7 @@
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
         title={request.deviceSigningPublicKey}
       >
-        {(() => {
-          const truncateArgs2: Parameters<typeof truncate>[0] = {
-            value: request.deviceSigningPublicKey,
-            head: 14,
-            tail: 10,
-          }
-          return truncate(truncateArgs2)
-        })()}
+        {displayedDeviceSigningPublicKey}
       </p>
     </div>
   </div>
@@ -210,35 +200,40 @@
     </ul>
   </div>
 
-  {#if !vault.isAuthenticated}
+  {#if notice.kind === ExtensionConsentWorkflowNoticeKind.Message}
     <p
       class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
-      data-testid="extension-connect-locked"
-    >
-      {vault.t(I18N_KEYS.ExtensionConsentUnlockFirst)}
-    </p>
-  {/if}
-
-  {#if error}
-    <p
-      class="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
       role="alert"
     >
-      {error}
+      {vault.t(notice.translationKey)}
     </p>
+  {:else if notice.kind === ExtensionConsentWorkflowNoticeKind.Rejected}
+    {#if notice.rejection.kind === ExtensionConsentRejectionKind.WithReason}
+      <p
+        class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+        data-extension-pairing-rejection-reason={notice.rejection.reason}
+        role="alert"
+      >
+        {vault.t(notice.translationKey)}
+      </p>
+    {:else}
+      <p
+        class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
+        role="alert"
+      >
+        {vault.t(notice.translationKey)}
+      </p>
+    {/if}
   {/if}
 
-  {#if handoffError}
+  {#if (workflowState.kind === ExtensionConsentWorkflowKind.Completed && workflowState.outcome.kind !== ExtensionConsentDeliveryOutcomeKind.Delivered) || (workflowState.kind === ExtensionConsentWorkflowKind.Failed && workflowState.phase.state === NookExtensionConsentPhaseState.Approved)}
     <p
-      class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
-      data-extension-pairing-rejection-reason={handoffRejectionReason}
-      role="alert"
+      class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
+      data-testid="extension-connect-approved"
     >
-      {handoffError}
+      {vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)}
     </p>
-  {/if}
-
-  {#if approved && !handoffError}
+  {:else if workflowState.kind === ExtensionConsentWorkflowKind.Completed}
     <p
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
@@ -248,20 +243,33 @@
   {/if}
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
-    <Button type="button" variant="outline" onclick={() => onClose(approved)}>
-      {approved
+    <Button
+      type="button"
+      variant="outline"
+      disabled={workflowState.kind ===
+        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+        workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
+        workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
+        workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
+      onclick={closeConsent}
+    >
+      {closeOutcome === ExtensionConsentCloseOutcome.Approved
         ? vault.t(I18N_KEYS.CommonDone)
         : vault.t(I18N_KEYS.CommonCancel)}
     </Button>
     <Button
       type="button"
-      disabled={!canApprove}
+      disabled={!session.workflow.canContinue(workflowState)}
       data-testid="approve-extension-device-btn"
       onclick={() => void approveExtension()}
     >
-      {isApproving
+      {workflowState.kind ===
+        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+      workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
+      workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
+      workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
         ? vault.t(I18N_KEYS.ExtensionConsentApproving)
-        : vault.t(I18N_KEYS.ExtensionConsentApprove)}
+        : vault.t(actionTranslationKey)}
     </Button>
   </div>
 </section>

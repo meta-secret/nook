@@ -1,6 +1,9 @@
 import type { Result } from "neverthrow";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
-import type { CloudKitUserIdentity } from "$lib/auth/icloud/cloudkit-runtime";
+import type {
+  CloudKitGlobal,
+  CloudKitUserIdentity,
+} from "$lib/auth/icloud/cloudkit-runtime";
 
 export enum CloudKitInitializationKind {
   NotStarted = "not-started",
@@ -11,7 +14,7 @@ export type CloudKitInitialization =
   | { kind: CloudKitInitializationKind.NotStarted }
   | {
       kind: CloudKitInitializationKind.Initializing;
-      completion: Promise<Result<void, OAuthFailure>>;
+      completion: Promise<Result<CloudKitGlobal, OAuthFailure>>;
     };
 
 export enum CloudKitAuthSetupKind {

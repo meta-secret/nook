@@ -23,6 +23,7 @@ import {
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
+import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
@@ -108,7 +109,7 @@ function providerConnectionScenario(
     stagedRemoteStorageArgs: () => ({
       kind: StagedRemoteStorageKind.Unavailable,
     }),
-    ensureProviderSaved: async () => ok(),
+    ensureProviderSaved: async () => ok(ProviderSaveOutcome.Saved),
     flushRemoteEventOutboxNow,
     syncProviderById,
   } satisfies Pick<

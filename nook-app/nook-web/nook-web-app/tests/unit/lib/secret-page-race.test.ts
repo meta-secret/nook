@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import type { Result } from 'neverthrow'
+import { ok, type Result } from 'neverthrow'
 import { NookSecretTypeFilter, NookVaultManager } from '$app-wasm'
 import { VaultSecretActions } from '$lib/vault/secrets'
 import { VaultState } from '$lib/vault.svelte'
@@ -49,7 +49,7 @@ describe('loadSecretPage', () => {
     })
     const manager = new NookVaultManager()
     vi.spyOn(manager, 'query_prepared_secret_page_js').mockImplementation(
-      (query) => (query === 'older' ? older.promise : newer.promise),
+      (query: string) => (query === 'older' ? older.promise : newer.promise),
     )
     const state = VaultStateTestFixture.createFrom(SecretPageTestState)
     state.openManager(manager)
@@ -67,10 +67,19 @@ describe('loadSecretPage', () => {
       requestedOffset: 0,
     })
     newer.resolve(newPage.page)
-    await newerRequest
+    const newerResult = await newerRequest
     older.resolve(oldPage.page)
-    await olderRequest
+    const olderResult = await olderRequest
 
+    expect(newerResult).toEqual(
+      ok({
+        displayedSecretCount: 1,
+        totalSecretCount: 1,
+        pageOffset: 0,
+        query: 'newer',
+      }),
+    )
+    expect(olderResult.isErr()).toBe(true)
     expect(state.secrets).toEqual([newPage.record])
     expect(state.secretQuery).toBe('newer')
     expect(previousRecord.free).toHaveBeenCalledOnce()
@@ -104,10 +113,19 @@ describe('loadSecretPage', () => {
       state,
     ).refreshSecretsFromSession()
     maintenance.resolve(refreshedPage.page)
-    await maintenanceRefresh
+    const maintenanceResult = await maintenanceRefresh
     pagination.resolve(paginatedPage.page)
-    await paginationRequest
+    const paginationResult = await paginationRequest
 
+    expect(maintenanceResult).toEqual(
+      ok({
+        displayedSecretCount: 1,
+        totalSecretCount: 50,
+        pageOffset: 25,
+        query: 'vault',
+      }),
+    )
+    expect(paginationResult.isErr()).toBe(true)
     expect(queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
     expect(queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([25, 25])
     expect(state.secrets).toEqual([refreshedPage.record])

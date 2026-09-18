@@ -1,16 +1,7 @@
 import { createHash } from 'node:crypto'
-import {
-  chmod,
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  utimes,
-  writeFile,
-} from 'node:fs/promises'
-import { basename, join, relative, resolve } from 'node:path'
-import type { ExtensionManifest } from '../src/manifest'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, join, relative, resolve, sep } from 'node:path'
+import { zipSync, type ZipOptions, type Zippable } from 'fflate'
 import {
   extensionIdFromManifestKey,
   parseExtensionChannel,
@@ -42,33 +33,61 @@ const FIXED_ARCHIVE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z')
 const identityJsonReplacer = (_key: string, value: unknown): unknown => value
 const safeJson: { parse: (value: string) => unknown } = JSON
 
-class ExtensionManifestAdmission {
-  parse(value: unknown): ExtensionManifest {
-    if (!this.isManifest(value)) {
-      throw new Error('Deployment extension manifest has an invalid shape.')
-    }
-    return value
-  }
+export type DeterministicZipRequest = {
+  readonly sourceDirectory: string
+  readonly archivePath: string
+}
 
-  private isManifest(value: unknown): value is ExtensionManifest {
-    if (!value || typeof value !== 'object') return false
+class ExtensionManifestAdmission {
+  parse(value: unknown): DeploymentManifest {
     if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
       !('manifest_version' in value) ||
       value.manifest_version !== 3 ||
       !('version' in value) ||
       typeof value.version !== 'string' ||
+      !('key' in value) ||
+      typeof value.key !== 'string' ||
       !('externally_connectable' in value) ||
       !value.externally_connectable ||
       typeof value.externally_connectable !== 'object' ||
-      !('matches' in value.externally_connectable) ||
-      !Array.isArray(value.externally_connectable.matches)
+      Array.isArray(value.externally_connectable) ||
+      !('matches' in value.externally_connectable)
     ) {
-      return false
+      throw new Error('Deployment extension manifest has an invalid shape.')
     }
-    return value.externally_connectable.matches.every(
-      (match) => typeof match === 'string',
-    )
+    return {
+      manifest_version: 3,
+      version: value.version,
+      key: value.key,
+      externally_connectable: {
+        matches: decodeMatchList(value.externally_connectable.matches),
+      },
+    }
   }
+}
+
+type DeploymentManifest = {
+  manifest_version: 3
+  version: string
+  key: string
+  externally_connectable: { matches: string[] }
+}
+
+function decodeMatchList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError('Deployment extension match list is invalid.')
+  }
+  const matches: string[] = []
+  for (const match of value) {
+    if (typeof match !== 'string') {
+      throw new TypeError('Deployment extension match list is invalid.')
+    }
+    matches.push(match)
+  }
+  return matches
 }
 
 const extensionManifestAdmission = new ExtensionManifestAdmission()
@@ -119,42 +138,39 @@ async function filesBelow(root: string, directory = root): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
   const files = await Promise.all(
     entries.map(async (entry) => {
+      if (entry.isSymbolicLink()) {
+        throw new Error(
+          `Extension archive cannot contain a symbolic link: ${entry.name}`,
+        )
+      }
       const path = join(directory, entry.name)
       return entry.isDirectory()
         ? filesBelow(root, path)
-        : [relative(root, path)]
+        : [relative(root, path).split(sep).join('/')]
     }),
   )
   return files.flat().sort()
 }
 
-async function makeDeterministicZip(
-  sourceDirectory: string,
-  archivePath: string,
+export async function makeDeterministicZip(
+  request: DeterministicZipRequest,
 ): Promise<void> {
+  const { sourceDirectory, archivePath } = request
   const files = await filesBelow(sourceDirectory)
   if (!files.includes('manifest.json')) {
     throw new Error('Extension archive must contain manifest.json at its root.')
   }
-  await Promise.all(
-    files.map(async (file) => {
-      const path = join(sourceDirectory, file)
-      await chmod(path, 0o644)
-      await utimes(path, FIXED_ARCHIVE_TIMESTAMP, FIXED_ARCHIVE_TIMESTAMP)
-    }),
-  )
-  await rm(archivePath, { force: true })
-  const process = Bun.spawn(['zip', '-X', '-q', archivePath, ...files], {
-    cwd: sourceDirectory,
-    stderr: 'pipe',
-    stdout: 'pipe',
-  })
-  const status = await process.exited
-  if (status !== 0) {
-    throw new Error(
-      `Failed to create extension archive: ${await new Response(process.stderr).text()}`,
-    )
+  const archiveEntries: Zippable = {}
+  for (const file of files) {
+    archiveEntries[file] = await readFile(join(sourceDirectory, file))
   }
+  const archiveOptions: ZipOptions = {
+    attrs: 0o644 << 16,
+    mtime: FIXED_ARCHIVE_TIMESTAMP,
+    os: 3,
+  }
+  await rm(archivePath, { force: true })
+  await writeFile(archivePath, zipSync(archiveEntries, archiveOptions))
 }
 
 export async function packageExtensionDeployment(): Promise<ExtensionDeploymentMetadata> {
@@ -191,7 +207,11 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   await mkdir(downloads, { recursive: true })
   const archive = extensionArchiveName(channel, version)
   const archivePath = join(downloads, archive)
-  await makeDeterministicZip(extensionDist, archivePath)
+  const archiveRequest: DeterministicZipRequest = {
+    sourceDirectory: extensionDist,
+    archivePath,
+  }
+  await makeDeterministicZip(archiveRequest)
   const digest = createHash('sha256')
     .update(await readFile(archivePath))
     .digest('hex')

@@ -350,34 +350,62 @@ impl AuthProvidersSnapshotData {
     #[must_use]
     pub fn credential_storage_admission(&self) -> ProviderCredentialStorageAdmission {
         let compatible = self.providers.iter().all(|provider| {
-            let github = match &provider.github_pat {
-                StoredGithubPat::Missing => true,
-                StoredGithubPat::Token(token) => ProviderCredentialField::allows_storage(token),
-            };
-            github
-                && match &provider.oauth_file {
-                    StoredOAuthFileConfiguration::NotApplicable => true,
-                    StoredOAuthFileConfiguration::Configured(oauth) => {
-                        let access = match &oauth.access_token {
-                            StoredOAuthAccessCredential::SignedOut => true,
-                            StoredOAuthAccessCredential::AccessToken(token) => {
-                                ProviderCredentialField::allows_storage(token)
-                            }
-                        };
-                        access
-                            && match &oauth.refresh_token {
-                                StoredOAuthRefreshCredential::NotIssued => true,
-                                StoredOAuthRefreshCredential::Token(token) => {
-                                    ProviderCredentialField::allows_storage(token)
-                                }
-                            }
-                    }
-                }
+            provider.credential_storage_admission()
+                == ProviderCredentialStorageAdmission::MarkerCompatible
         });
         if compatible {
             ProviderCredentialStorageAdmission::MarkerCompatible
         } else {
             ProviderCredentialStorageAdmission::PlaintextPresent
+        }
+    }
+}
+
+impl StorageProviderData {
+    /// Admit only absent or age-armored provider credentials for extension storage.
+    #[must_use]
+    pub fn credential_storage_admission(&self) -> ProviderCredentialStorageAdmission {
+        let github = match &self.github_pat {
+            StoredGithubPat::Missing => true,
+            StoredGithubPat::Token(token) => ProviderCredentialField::allows_storage(token),
+        };
+        let oauth = match &self.oauth_file {
+            StoredOAuthFileConfiguration::NotApplicable => true,
+            StoredOAuthFileConfiguration::Configured(oauth) => {
+                let access = match &oauth.access_token {
+                    StoredOAuthAccessCredential::SignedOut => true,
+                    StoredOAuthAccessCredential::AccessToken(token) => {
+                        ProviderCredentialField::allows_storage(token)
+                    }
+                };
+                let refresh = match &oauth.refresh_token {
+                    StoredOAuthRefreshCredential::NotIssued => true,
+                    StoredOAuthRefreshCredential::Token(token) => {
+                        ProviderCredentialField::allows_storage(token)
+                    }
+                };
+                access && refresh
+            }
+        };
+        if github && oauth {
+            ProviderCredentialStorageAdmission::MarkerCompatible
+        } else {
+            ProviderCredentialStorageAdmission::PlaintextPresent
+        }
+    }
+
+    /// Clear every credential allocation owned by this provider row.
+    pub fn zeroize_credentials(&mut self) {
+        if let StoredGithubPat::Token(token) = &mut self.github_pat {
+            token.zeroize();
+        }
+        if let StoredOAuthFileConfiguration::Configured(oauth) = &mut self.oauth_file {
+            if let StoredOAuthAccessCredential::AccessToken(token) = &mut oauth.access_token {
+                token.zeroize();
+            }
+            if let StoredOAuthRefreshCredential::Token(token) = &mut oauth.refresh_token {
+                token.zeroize();
+            }
         }
     }
 }

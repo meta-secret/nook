@@ -87,8 +87,7 @@ impl NookPrevalidatedCompanionPairingApproval {
         &self,
         records: &NookExternalEventLogRecords,
     ) -> Result<PreparedEventGraph, CompanionPairingPreparationFailure> {
-        let store_id = StoreId::parse(&self.binding.vault_store_id)
-            .map_err(|_| CompanionPairingPreparationFailure::VaultMismatch)?;
+        let store_id = self.binding.vault_store_id.clone();
         let mut unique = BTreeSet::new();
         let mut event_store = LocalEventStore::new();
         for record in &records.0 {
@@ -276,9 +275,9 @@ mod tests {
             };
             let approval = CompanionPairingApproval {
                 request: request.clone(),
-                vault_store_id: manager.vault.store_id.clone(),
+                vault_store_id: StoreId::parse(&manager.vault.store_id)?,
                 vault_name: "Personal".to_owned(),
-                approved_at: "2026-09-08T00:00:00Z".to_owned(),
+                approved_at: serde_json::from_str("100")?,
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,

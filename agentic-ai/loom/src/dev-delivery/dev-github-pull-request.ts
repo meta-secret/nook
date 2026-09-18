@@ -211,8 +211,6 @@ export class DevelopmentPullRequestGateway {
       '## Nook Workbench',
       '',
       '- Focused issue: unavailable — aggregate development snapshot',
-      '- Immutable plan: unavailable — manager snapshot',
-      '- Worklog: unavailable — aggregate snapshot has constituent Workbench records',
       '',
       '## Validation',
       '',

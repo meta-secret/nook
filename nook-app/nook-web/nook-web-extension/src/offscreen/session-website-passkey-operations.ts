@@ -21,56 +21,30 @@ import { extensionVaultGrant } from './session-vault-grant'
 
 export type CancelPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.CancelPasskey }
+  { type: typeof ExtensionSessionMessageType.CancelPasskey }
 >
 
 export type RegisterPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.RegisterPasskey }
+  { type: typeof ExtensionSessionMessageType.RegisterPasskey }
 >
 
 export type AssertPasskeyRequest = Extract<
   ExtensionSessionRequest,
-  { type: ExtensionSessionMessageType.AssertPasskey }
+  { type: typeof ExtensionSessionMessageType.AssertPasskey }
 >
 
 type WebsitePasskeyRequest =
   CancelPasskeyRequest | RegisterPasskeyRequest | AssertPasskeyRequest
-
-type WebsitePasskeyRegistration = {
-  credentialId: string
-  clientDataJSON: string
-  attestationObject: string
-  transports: string[]
-  free: () => void
-}
-
-type WebsitePasskeyAssertion = {
-  credentialId: string
-  clientDataJSON: string
-  authenticatorData: string
-  signature: string
-  userHandle: string
-  free: () => void
-}
 
 type WebsitePasskeyManager = Pick<
   NookVaultManager,
   | 'open_extension_passkey_vault_js'
   | 'load_auth_providers_snapshot'
   | 'flush_event_outbox_for_provider'
-> & {
-  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
-  register_website_passkey: (
-    request: Parameters<NookVaultManager['register_website_passkey']>[0],
-    ceremonyActive: () => boolean,
-  ) => Promise<WebsitePasskeyRegistration>
-  // eslint-disable-next-line max-params -- The WASM manager method mirrors the ceremony API.
-  assert_website_passkey: (
-    request: Parameters<NookVaultManager['assert_website_passkey']>[0],
-    ceremonyActive: () => boolean,
-  ) => Promise<WebsitePasskeyAssertion>
-}
+  | 'register_website_passkey'
+  | 'assert_website_passkey'
+>
 
 export type WebsitePasskeyOperationArgs = {
   message: WebsitePasskeyRequest
@@ -87,6 +61,23 @@ export type WebsitePasskeyRequestActivityArgs = {
 export type WebsitePasskeyOperationResponse = Awaited<
   ReturnType<typeof sessionWebsitePasskeys.handleWebsitePasskeyOperation>
 >
+
+type PasskeyCancellationResponse = { readonly ok: true }
+type PasskeyRegistrationResponse = {
+  readonly ok: true
+  readonly credentialId: string
+  readonly clientDataJSON: string
+  readonly attestationObject: string
+  readonly transports: string[]
+}
+type PasskeyAssertionResponse = {
+  readonly ok: true
+  readonly credentialId: string
+  readonly clientDataJSON: string
+  readonly authenticatorData: string
+  readonly signature: string
+  readonly userHandle: string
+}
 
 /** Owns the browser runtime resources shared by these interactions. */
 class SessionWebsitePasskeys {
@@ -123,8 +114,8 @@ class SessionWebsitePasskeys {
             )
           }
           this.canceledWebsitePasskeyRequests.add(payload.requestId)
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return ok({ ok: true })
+          const response: PasskeyCancellationResponse = { ok: true }
+          return ok(response)
         }
         case ExtensionSessionMessageType.RegisterPasskey: {
           const payload = message.payload
@@ -166,14 +157,14 @@ class SessionWebsitePasskeys {
               }
               const admission1 = await flushEvent(flushArgs)
               if (admission1.isErr()) return err(admission1.error)
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              return ok({
+              const response: PasskeyRegistrationResponse = {
                 ok: true,
                 credentialId: registration.credentialId,
                 clientDataJSON: registration.clientDataJSON,
                 attestationObject: registration.attestationObject,
                 transports: registration.transports,
-              })
+              }
+              return ok(response)
             } finally {
               registration.free()
             }
@@ -221,15 +212,15 @@ class SessionWebsitePasskeys {
               }
               const admission3 = await flushEvent(flushArgs)
               if (admission3.isErr()) return err(admission3.error)
-              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-              return ok({
+              const response: PasskeyAssertionResponse = {
                 ok: true,
                 credentialId: assertion.credentialId,
                 clientDataJSON: assertion.clientDataJSON,
                 authenticatorData: assertion.authenticatorData,
                 signature: assertion.signature,
                 userHandle: assertion.userHandle,
-              })
+              }
+              return ok(response)
             } finally {
               assertion.free()
             }

@@ -1,6 +1,9 @@
-import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
+import { Schema } from 'effect'
 
-import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
+import {
+  AuthenticationOutcomeObservationViewSchema,
+  type AuthenticationOutcomeObservationView,
+} from './outcome-evidence-messages'
 
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
@@ -36,24 +39,8 @@ export class WebsiteLoginSaveOfferMessage {
     username: string
     password: string
   }
-  static is(message: unknown): message is WebsiteLoginSaveOfferMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'username' in payload &&
-      typeof payload.username === 'string' &&
-      payload.username.trim().length > 0 &&
-      'password' in payload &&
-      typeof payload.password === 'string' &&
-      payload.password.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginSaveOfferMessageSchema)(message)
   }
 }
 
@@ -68,12 +55,8 @@ export class WebsiteLoginSavePendingMessage {
   declare readonly payload: {
     origin: string
   }
-  static is(message: unknown): message is WebsiteLoginSavePendingMessage {
-    return (
-      OriginRuntimeMessageSchema.is(message) &&
-      message.type ===
-        WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginSavePendingMessageSchema)(message)
   }
 }
 
@@ -90,47 +73,14 @@ export class WebsiteLoginSaveCommitMessage {
     offerId: string
     evidence: AuthenticationOutcomeObservationView
   }
-  static isOutcomeObservation(
-    value: unknown,
-  ): value is AuthenticationOutcomeObservationView {
-    if (!value || typeof value !== 'object') return false
-    return (
-      'navigatedAwayFromAuthPath' in value &&
-      typeof value.navigatedAwayFromAuthPath === 'boolean' &&
-      'authFieldsPresent' in value &&
-      typeof value.authFieldsPresent === 'boolean' &&
-      'successMarkerPresent' in value &&
-      typeof value.successMarkerPresent === 'boolean' &&
-      'errorMarkerPresent' in value &&
-      typeof value.errorMarkerPresent === 'boolean' &&
-      'sameDocumentMutation' in value &&
-      typeof value.sameDocumentMutation === 'boolean' &&
-      'inIframe' in value &&
-      typeof value.inIframe === 'boolean' &&
-      'elapsedMs' in value &&
-      typeof value.elapsedMs === 'number' &&
-      Number.isFinite(value.elapsedMs) &&
-      value.elapsedMs >= 0
+  static decodeOutcomeObservation(value: unknown) {
+    return Schema.decodeUnknown(AuthenticationOutcomeObservationViewSchema)(
+      value,
     )
   }
 
-  static is(message: unknown): message is WebsiteLoginSaveCommitMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'offerId' in payload &&
-      typeof payload.offerId === 'string' &&
-      payload.offerId.length > 0 &&
-      'evidence' in payload &&
-      WebsiteLoginSaveCommitMessage.isOutcomeObservation(payload.evidence)
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginSaveCommitMessageSchema)(message)
   }
 }
 
@@ -146,20 +96,129 @@ export class WebsiteLoginSaveDismissMessage {
     origin: string
     offerId: string
   }
-  static is(message: unknown): message is WebsiteLoginSaveDismissMessage {
-    if (
-      !OriginRuntimeMessageSchema.is(message) ||
-      message.type !==
-        WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss
-    ) {
-      return false
-    }
-    const { payload } = message
-
-    return (
-      'offerId' in payload &&
-      typeof payload.offerId === 'string' &&
-      payload.offerId.length > 0
-    )
+  static decode(message: unknown) {
+    return Schema.decodeUnknown(websiteLoginSaveDismissMessageSchema)(message)
   }
 }
+
+const loginSaveNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+
+type LoginSaveOriginSchemaFields = {
+  origin: Schema.filter<typeof Schema.String>
+}
+const loginSaveOriginSchemaFields: LoginSaveOriginSchemaFields = {
+  origin: loginSaveNonEmptyStringSchema,
+}
+
+const loginSaveOriginSchema = Schema.Struct(loginSaveOriginSchemaFields)
+
+type WebsiteLoginSaveOfferMessagePayloadSchemaFields = {
+  username: Schema.filter<typeof Schema.String>
+  password: Schema.filter<typeof Schema.String>
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteLoginSaveOfferMessagePayloadSchemaFields: WebsiteLoginSaveOfferMessagePayloadSchemaFields =
+  {
+    ...loginSaveOriginSchema.fields,
+    username: Schema.String.pipe(
+      Schema.filter((username) => username.trim().length > 0),
+    ),
+    password: loginSaveNonEmptyStringSchema,
+  }
+
+type WebsiteLoginSaveOfferMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginSaveOfferMessageType]>
+  payload: Schema.Struct<{
+    username: Schema.filter<typeof Schema.String>
+    password: Schema.filter<typeof Schema.String>
+    origin: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginSaveOfferMessageSchemaFields: WebsiteLoginSaveOfferMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
+    ),
+    payload: Schema.Struct(websiteLoginSaveOfferMessagePayloadSchemaFields),
+  }
+
+const websiteLoginSaveOfferMessageSchema = Schema.Struct(
+  websiteLoginSaveOfferMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginSaveOfferMessage>
+
+type WebsiteLoginSavePendingMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginSavePendingMessageType]>
+  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+}
+const websiteLoginSavePendingMessageSchemaFields: WebsiteLoginSavePendingMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
+    ),
+    payload: loginSaveOriginSchema,
+  }
+
+const websiteLoginSavePendingMessageSchema = Schema.Struct(
+  websiteLoginSavePendingMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginSavePendingMessage>
+
+type WebsiteLoginSaveCommitMessagePayloadSchemaFields = {
+  offerId: Schema.filter<typeof Schema.String>
+  evidence: typeof AuthenticationOutcomeObservationViewSchema
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteLoginSaveCommitMessagePayloadSchemaFields: WebsiteLoginSaveCommitMessagePayloadSchemaFields =
+  {
+    ...loginSaveOriginSchema.fields,
+    offerId: loginSaveNonEmptyStringSchema,
+    evidence: AuthenticationOutcomeObservationViewSchema,
+  }
+
+type WebsiteLoginSaveCommitMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginSaveCommitMessageType]>
+  payload: Schema.Struct<{
+    offerId: Schema.filter<typeof Schema.String>
+    evidence: typeof AuthenticationOutcomeObservationViewSchema
+    origin: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginSaveCommitMessageSchemaFields: WebsiteLoginSaveCommitMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit,
+    ),
+    payload: Schema.Struct(websiteLoginSaveCommitMessagePayloadSchemaFields),
+  }
+
+const websiteLoginSaveCommitMessageSchema = Schema.Struct(
+  websiteLoginSaveCommitMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginSaveCommitMessage>
+
+type WebsiteLoginSaveDismissMessagePayloadSchemaFields = {
+  offerId: Schema.filter<typeof Schema.String>
+  origin: Schema.filter<typeof Schema.String>
+}
+const websiteLoginSaveDismissMessagePayloadSchemaFields: WebsiteLoginSaveDismissMessagePayloadSchemaFields =
+  {
+    ...loginSaveOriginSchema.fields,
+    offerId: loginSaveNonEmptyStringSchema,
+  }
+
+type WebsiteLoginSaveDismissMessageSchemaFields = {
+  type: Schema.Literal<[WebsiteLoginSaveDismissMessageType]>
+  payload: Schema.Struct<{
+    offerId: Schema.filter<typeof Schema.String>
+    origin: Schema.filter<typeof Schema.String>
+  }>
+}
+const websiteLoginSaveDismissMessageSchemaFields: WebsiteLoginSaveDismissMessageSchemaFields =
+  {
+    type: Schema.Literal(
+      WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
+    ),
+    payload: Schema.Struct(websiteLoginSaveDismissMessagePayloadSchemaFields),
+  }
+
+const websiteLoginSaveDismissMessageSchema = Schema.Struct(
+  websiteLoginSaveDismissMessageSchemaFields,
+) satisfies Schema.Schema<WebsiteLoginSaveDismissMessage>

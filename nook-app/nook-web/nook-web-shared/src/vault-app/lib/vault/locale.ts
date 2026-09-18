@@ -45,6 +45,10 @@ export type LocaleUpdate = {
   readonly catalogSource: LocaleCatalogSource;
 };
 
+export enum LocaleUpdateOutcome {
+  Updated = "updated",
+}
+
 /** Owns locale catalog preparation and persistence for one application state. */
 export class VaultLocaleActions {
   constructor(private readonly state: VaultState) {}
@@ -52,19 +56,21 @@ export class VaultLocaleActions {
   savedAppLocale(): Result<SavedAppLocale, LocaleUpdateFailure> {
     try {
       const stored = localStorage.getItem("nook_locale");
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      if (!stored) return ok({ kind: SavedAppLocaleKind.Missing });
+      if (!stored) {
+        const missingLocale: SavedAppLocale = {
+          kind: SavedAppLocaleKind.Missing,
+        };
+        return ok(missingLocale);
+      }
       const parsed = parse_app_locale(stored);
-      return ok(
+      const savedLocale: SavedAppLocale =
         parsed === NookAppLocaleParse.Unsupported
-          ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            { kind: SavedAppLocaleKind.Missing }
-          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-            {
+          ? { kind: SavedAppLocaleKind.Missing }
+          : {
               kind: SavedAppLocaleKind.Supported,
               locale: supported_app_locale_code(parsed),
-            },
-      );
+            };
+      return ok(savedLocale);
     } catch {
       return err(
         new LocaleUpdateFailure(LocaleUpdateFailureKind.SavedLocaleReadFailed),
@@ -94,7 +100,7 @@ export class VaultLocaleActions {
 
   async updateLocale(
     request: LocaleUpdate,
-  ): Promise<Result<void, LocaleUpdateFailure>> {
+  ): Promise<Result<LocaleUpdateOutcome, LocaleUpdateFailure>> {
     const catalog = this.catalog(request);
     if (catalog.isErr()) return err(catalog.error);
     try {
@@ -118,6 +124,6 @@ export class VaultLocaleActions {
     }
     this.state.locale = request.newLocale;
     this.state.translations = catalog.value;
-    return ok();
+    return ok(LocaleUpdateOutcome.Updated);
   }
 }

@@ -3,9 +3,19 @@ import { err, ok, type Result } from 'neverthrow'
 import {
   extensionSessionDocument,
   ExtensionSessionDocumentOwner,
+  ExtensionSessionDocumentStateKind,
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
+  type DecodedExtensionSessionTransportDelivery,
+  type ExtensionSessionTransportDelivery,
 } from '../src/background/service-worker/session-document'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
+
+const fixtureSessionRequest = {
+  type: ExtensionSessionMessageType.Status,
+  payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+} as const
 
 enum BrowserEffectPhase {
   Initializing = 'initializing',
@@ -186,7 +196,7 @@ describe('extension session document ownership', () => {
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(settled).not.toHaveBeenCalled()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('coalesces inherited cleanup and prevents open from overtaking closure', async () => {
@@ -201,8 +211,8 @@ describe('extension session document ownership', () => {
     expect(fixture.createDocument).not.toHaveBeenCalled()
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await first).toEqual(ok())
-    expect(await second).toEqual(ok())
+    expect(await first).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
+    expect(await second).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
     expect(fixture.creation.complete()).toEqual(ok())
     expect((await opening).isOk()).toBe(true)
     expect(fixture.createDocument).toHaveBeenCalledTimes(1)
@@ -210,8 +220,12 @@ describe('extension session document ownership', () => {
 
   test('admits browser-confirmed absence without creating or closing a document', async () => {
     const fixture = new SessionDocumentFixture()
-    expect(await fixture.owner.close()).toEqual(ok())
-    expect(await fixture.owner.close()).toEqual(ok())
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
     expect(fixture.getContexts).toHaveBeenCalledTimes(1)
     expect(fixture.createDocument).not.toHaveBeenCalled()
     expect(fixture.closeDocument).not.toHaveBeenCalled()
@@ -270,7 +284,32 @@ describe('extension session document ownership', () => {
     expect(opened.value).toBe(shared.value)
     const closing = fixture.owner.close()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
+  })
+
+  test('rejects a non-object browser reply before invoking the decoder', async () => {
+    const fixture = new SessionDocumentFixture()
+    const opening = fixture.owner.open()
+    await Promise.resolve()
+    expect(fixture.creation.complete()).toEqual(ok())
+    const opened = await opening
+    if (opened.isErr()) throw new Error('document creation must succeed')
+
+    const decodeResponse = mock((response: unknown) => ok(response))
+    const decodedDelivery: DecodedExtensionSessionTransportDelivery<
+      unknown,
+      never
+    > = { message: fixtureSessionRequest, decodeResponse }
+    const delivery = opened.value.sendMessage(decodedDelivery)
+    expect(fixture.respond(false)).toEqual(ok())
+    expect(await delivery).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.ResponseMissing,
+        ),
+      ),
+    )
+    expect(decodeResponse).not.toHaveBeenCalled()
   })
 
   test('closing while creation is pending denies the late sending capability', async () => {
@@ -288,7 +327,7 @@ describe('extension session document ownership', () => {
     )
     expect(fixture.closeDocument).toHaveBeenCalledTimes(1)
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('revokes aliases and pending replies before awaiting browser closure', async () => {
@@ -298,11 +337,12 @@ describe('extension session document ownership', () => {
     expect(fixture.creation.complete()).toEqual(ok())
     const opened = await opening
     if (opened.isErr()) throw new Error('document creation must succeed')
-    const delivery = opened.value.sendMessage({ type: 'fixture-request' })
+    const deliveryRequest: ExtensionSessionTransportDelivery = {
+      message: fixtureSessionRequest,
+    }
+    const delivery = opened.value.sendMessage(deliveryRequest)
     const closing = fixture.owner.close()
-    expect(
-      await opened.value.sendMessage({ type: 'fixture-after-close' }),
-    ).toEqual(
+    expect(await opened.value.sendMessage(deliveryRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,
@@ -318,7 +358,7 @@ describe('extension session document ownership', () => {
       ),
     )
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
   test('retains denied ownership after closure fails until a caller explicitly closes again', async () => {
@@ -338,9 +378,10 @@ describe('extension session document ownership', () => {
     )
     expect(await fixture.owner.close()).toEqual(failure)
     expect(await fixture.owner.open()).toEqual(failure)
-    expect(
-      await opened.value.sendMessage({ type: 'fixture-after-failure' }),
-    ).toEqual(
+    const deliveryRequest: ExtensionSessionTransportDelivery = {
+      message: fixtureSessionRequest,
+    }
+    expect(await opened.value.sendMessage(deliveryRequest)).toEqual(
       err(
         new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.Closed,
@@ -349,7 +390,7 @@ describe('extension session document ownership', () => {
     )
     const closing = fixture.owner.close()
     expect(fixture.closure.complete()).toEqual(ok())
-    expect(await closing).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
     expect(fixture.closeDocument).toHaveBeenCalledTimes(2)
   })
 
@@ -365,7 +406,9 @@ describe('extension session document ownership', () => {
         ),
       ),
     )
-    expect(await fixture.owner.close()).toEqual(ok())
+    expect(await fixture.owner.close()).toEqual(
+      ok(ExtensionSessionDocumentStateKind.Closed),
+    )
     expect(fixture.closeDocument).not.toHaveBeenCalled()
   })
 

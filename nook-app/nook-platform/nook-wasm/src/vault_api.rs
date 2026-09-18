@@ -1,4 +1,4 @@
-use super::{NookSecretRecord, NookVaultManager, wasm_bindgen};
+use super::{NookVaultManager, wasm_bindgen};
 use crate::AuthProviderDatabase;
 #[cfg(all(test, target_arch = "wasm32"))]
 use crate::ConfiguredVaultApplication;
@@ -391,7 +391,7 @@ impl NookVaultManager {
     join_public_key: String,
     join_signing_public_key: String,
     label: String,
-) -> Result<Vec<NookSecretRecord>, wasm_bindgen::JsError> {
+) -> Result<crate::NookExtensionDeviceApproval, wasm_bindgen::JsError> {
     manager
         .approve_extension_device(
             join_device_id,
@@ -399,7 +399,8 @@ impl NookVaultManager {
             join_signing_public_key,
             label,
         )
-        .await
+        .await?;
+    crate::NookExtensionDeviceApproval::for_manager(manager)
 }
 
 /// Compare local vs remote vault YAML and return a sync action label:

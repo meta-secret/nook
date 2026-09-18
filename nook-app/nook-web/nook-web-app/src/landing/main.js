@@ -1,3 +1,4 @@
+import { Effect } from 'effect'
 import { LANDING_MESSAGE_KEYS } from './generated-message-keys'
 import './shell-and-hero.css'
 import './vault-visual.css'
@@ -407,11 +408,13 @@ function applyLandingLocale(locale, persist = false) {
   if (typeof serialized !== 'string') {
     throw new Error('Incomplete landing structured data.')
   }
-  structuredDataElement.textContent = localizeLandingStructuredData({
-    serialized,
-    description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
-    locale,
-  })
+  structuredDataElement.textContent = Effect.runSync(
+    localizeLandingStructuredData({
+      serialized,
+      description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
+      locale,
+    }),
+  )
 
   if (persist) {
     try {

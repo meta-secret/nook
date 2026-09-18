@@ -2,8 +2,8 @@
 
 set -eu
 
-access_file=/run/secrets/sccache_s3_access_key
-secret_file=/run/secrets/sccache_s3_secret_key
+access_file="${SCCACHE_S3_ACCESS_KEY_FILE:-/run/secrets/sccache_s3_access_key}"
+secret_file="${SCCACHE_S3_SECRET_KEY_FILE:-/run/secrets/sccache_s3_secret_key}"
 runtime_mode_file="${NOOK_SCCACHE_RUNTIME_MODE_FILE:-/run/secrets/sccache_runtime_mode}"
 sccache_binary="${NOOK_SCCACHE_BINARY:-/usr/local/bin/sccache}"
 fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-disabled}"
@@ -91,54 +91,64 @@ fi
 
 if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
   if [ -e "$fallback_marker" ]; then
-    printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}' >&2
     exec "$@"
   fi
-  if [ ! -e "$ready_marker" ] && mkdir "$startup_lock" 2>/dev/null; then
+  if [ ! -e "$ready_marker" ]; then
     startup_diagnostics="$(mktemp /tmp/nook-sccache-start.XXXXXX)"
-    set +e
-    # Allow a bounded daemon warm-up window. A slow first start must not open
-    # the shared circuit for every later compiler vertex, while one failed
-    # probe still fails closed to the direct compiler path.
-    timeout "${NOOK_SCCACHE_START_TIMEOUT:-5s}" \
-      "$sccache_binary" --start-server > /dev/null 2>"$startup_diagnostics"
-    startup_status=$?
-    set -e
-    if [ "$startup_status" -eq 0 ]; then
-      # A descendant Docker stage may expose cumulative daemon counters. Zero
-      # them before publishing readiness so every report is a disjoint per-RUN
-      # terminal snapshot and aggregate telemetry cannot double-count parents.
-      if "$sccache_binary" --zero-stats >/dev/null 2>&1; then
-        : >"$ready_marker"
+    if mkdir "$startup_lock" 2>/dev/null; then
+      if [ -e "$fallback_marker" ]; then
+        rm -f "$startup_diagnostics"
+        rmdir "$startup_lock"
+        exec "$@"
+      elif [ -e "$ready_marker" ]; then
+        rm -f "$startup_diagnostics"
+        rmdir "$startup_lock"
       else
-        startup_status=1
-        : >"$fallback_marker"
+        set +e
+        # The startup owner and its peers share the same two-second budget. The
+        # owner begins immediately after publishing the lock, so a peer's bounded
+        # wait can observe the owner's ready or fallback marker before expiring.
+        timeout 2s \
+          "$sccache_binary" --start-server > /dev/null 2>"$startup_diagnostics"
+        startup_status=$?
+        set -e
+        if [ "$startup_status" -eq 0 ]; then
+          # A descendant Docker stage may expose cumulative daemon counters. Zero
+          # them before publishing readiness so every report is a disjoint per-RUN
+          # terminal snapshot and aggregate telemetry cannot double-count parents.
+          if "$sccache_binary" --zero-stats >/dev/null 2>&1; then
+            : >"$ready_marker"
+          else
+            startup_status=1
+            : >"$fallback_marker"
+          fi
+        else
+          : >"$fallback_marker"
+        fi
+        rm -f "$startup_diagnostics"
+        rmdir "$startup_lock"
+        if [ "$startup_status" -ne 0 ]; then
+          printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"server_start_unavailable","remote_writes":0}' >&2
+          exec "$@"
+        fi
       fi
     else
-      : >"$fallback_marker"
-    fi
-    rm -f "$startup_diagnostics"
-    rmdir "$startup_lock"
-    if [ "$startup_status" -ne 0 ]; then
-      printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"server_start_unavailable","remote_writes":0}' >&2
-      exec "$@"
-    fi
-  elif [ ! -e "$ready_marker" ]; then
-    startup_wait=0
-    while [ "$startup_wait" -lt 20 ] \
-      && [ ! -e "$ready_marker" ] \
-      && [ ! -e "$fallback_marker" ]; do
-      sleep 0.1
-      startup_wait=$((startup_wait + 1))
-    done
-    if [ -e "$fallback_marker" ]; then
-      printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}' >&2
-      exec "$@"
-    fi
-    if [ ! -e "$ready_marker" ]; then
-      : >"$fallback_marker"
-      printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"startup_coordination_timeout","remote_writes":0}' >&2
-      exec "$@"
+      rm -f "$startup_diagnostics"
+      startup_wait=0
+      while [ "$startup_wait" -lt 20 ] \
+        && [ ! -e "$ready_marker" ] \
+        && [ ! -e "$fallback_marker" ]; do
+        sleep 0.1
+        startup_wait=$((startup_wait + 1))
+      done
+      if [ -e "$fallback_marker" ]; then
+        exec "$@"
+      fi
+      if [ ! -e "$ready_marker" ]; then
+        : >"$fallback_marker"
+        printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"startup_coordination_timeout","remote_writes":0}' >&2
+        exec "$@"
+      fi
     fi
   fi
 fi

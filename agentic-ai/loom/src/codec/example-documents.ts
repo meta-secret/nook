@@ -1,8 +1,3 @@
-import type {
-  AgentStatsAssembleRequest,
-  AgentStatsFileRequest,
-} from './args/agent-stats.ts';
-
 import type { CortexAuditRequest } from './args/cortex-audit.ts';
 
 import type { CortexSessionCleanRequest } from './args/cortex-session-clean.ts';
@@ -25,13 +20,7 @@ import {
   UntrustedYamlBoundary,
 } from '../lib/guards.ts';
 
-import { AGENT_TEMP_DIR_TOKEN } from '../lib/agent-temp-path.ts';
-
-import {
-  AgentStatsOperation,
-  PrLandOperation,
-  RequestFamily,
-} from './enums.ts';
+import { PrLandOperation, RequestFamily } from './enums.ts';
 
 import { YamlDocument } from './yaml.ts';
 
@@ -112,7 +101,7 @@ export enum DefaultableExamplePresence {
 }
 
 export type ExampleOperation =
-  AgentStatsOperation | PrLandOperation | ExampleOperationMarker.FamilyRoot;
+  PrLandOperation | ExampleOperationMarker.FamilyRoot;
 
 /** @deprecated Retained only to decode old request documents. */
 export type PrePushExampleDocument = {
@@ -137,24 +126,6 @@ export type SkillScaffoldExampleDocument = {
 
 export type DependencyPopularityExampleDocument = {
   readonly dependencyPopularity: DependencyPopularityRequest;
-};
-
-export type AgentStatsAssembleExampleDocument = {
-  readonly agentStats: {
-    readonly assemble: AgentStatsAssembleRequest;
-  };
-};
-
-export type AgentStatsValidateExampleDocument = {
-  readonly agentStats: {
-    readonly validate: AgentStatsFileRequest;
-  };
-};
-
-export type AgentStatsPublishExampleDocument = {
-  readonly agentStats: {
-    readonly publish: AgentStatsFileRequest;
-  };
 };
 
 export type PrLandStatusExampleDocument = {
@@ -185,9 +156,6 @@ export type ExampleDocument =
   | CortexSessionCleanExampleDocument
   | SkillScaffoldExampleDocument
   | DependencyPopularityExampleDocument
-  | AgentStatsAssembleExampleDocument
-  | AgentStatsValidateExampleDocument
-  | AgentStatsPublishExampleDocument
   | PrLandStatusExampleDocument
   | PrLandValidateExampleDocument
   | ToolsCallExampleDocument;
@@ -245,38 +213,6 @@ export const DEPENDENCY_POPULARITY_EXAMPLE_DOCUMENT: DependencyPopularityExample
     },
   };
 
-const AGENT_STATS_ASSEMBLE_EXAMPLE: AgentStatsAssembleRequest = {
-  prNumber: 123,
-  scratchPath: `${AGENT_TEMP_DIR_TOKEN}/pr-123-scratch.json`,
-  outputPath: `${AGENT_TEMP_DIR_TOKEN}/123.yaml`,
-  includeTestInventory: false,
-};
-
-export const AGENT_STATS_ASSEMBLE_EXAMPLE_DOCUMENT: AgentStatsAssembleExampleDocument =
-  {
-    agentStats: {
-      assemble: AGENT_STATS_ASSEMBLE_EXAMPLE,
-    },
-  };
-
-const AGENT_STATS_FILE_EXAMPLE: AgentStatsFileRequest = {
-  statsFile: `${AGENT_TEMP_DIR_TOKEN}/123.yaml`,
-};
-
-export const AGENT_STATS_VALIDATE_EXAMPLE_DOCUMENT: AgentStatsValidateExampleDocument =
-  {
-    agentStats: {
-      validate: AGENT_STATS_FILE_EXAMPLE,
-    },
-  };
-
-export const AGENT_STATS_PUBLISH_EXAMPLE_DOCUMENT: AgentStatsPublishExampleDocument =
-  {
-    agentStats: {
-      publish: AGENT_STATS_FILE_EXAMPLE,
-    },
-  };
-
 const PR_LAND_PR_EXAMPLE: PrLandPrRequest = {
   prNumber: 123,
 };
@@ -324,24 +260,6 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
     family: RequestFamily.SkillScaffold,
     operation: ExampleOperationMarker.FamilyRoot,
     document: SKILL_SCAFFOLD_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Assemble,
-    document: AGENT_STATS_ASSEMBLE_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Validate,
-    document: AGENT_STATS_VALIDATE_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Publish,
-    document: AGENT_STATS_PUBLISH_EXAMPLE_DOCUMENT,
     dispatch: ExampleDispatchKind.Parameterized,
   },
   {

@@ -146,7 +146,7 @@ class CompanionPairingApprovalFixture {
       observedAt: 130,
       vaultStoreId: extension.vaultStoreId,
       vaultName: extension.vaultName,
-      approvedAt: '2026-09-07T00:00:00Z',
+      approvedAt: 1_788_739_200_000,
     } satisfies CompanionPairingWebsiteAuthorization
     const approval = websiteProtocol.authorize(
       authorization,

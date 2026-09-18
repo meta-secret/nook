@@ -23,14 +23,21 @@ import { DeviceMode, DeviceProtectionStatus, NookVaultManager } from '$app-wasm'
 import {
   PasskeyCeremonyAction,
   PasskeyCeremonyFailure,
+  PasskeyDeviceProtectionSuccess,
+  sanitizedPasskeyCeremonyData,
+  type PasskeyCeremonyFailureInput,
 } from '$lib/auth/passkey-device-protection'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { VaultState } from '$lib/vault.svelte'
-import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import {
+  DeviceProtectionActions,
+  DeviceProtectionLockOutcome,
+} from '$lib/vault/device-protection.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import type { DeviceIdentityInitializationSnapshot } from '$lib/vault/action-contexts'
 
 class DeviceProtectionTestState extends VaultState {
   override async enqueueStorage<Value, Failure>(
@@ -40,7 +47,10 @@ class DeviceProtectionTestState extends VaultState {
   }
 
   static create(
-    initialization: Result<void, VaultStorageFailure> = ok(),
+    initialization: Result<
+      DeviceIdentityInitializationSnapshot,
+      VaultStorageFailure
+    > = ok({ deviceId: 'device-1', devicePublicKey: 'public-key-1' }),
   ): DeviceProtectionTestState {
     const state = VaultStateTestFixture.createFrom(DeviceProtectionTestState)
     state.openManager(new NookVaultManager())
@@ -52,7 +62,9 @@ class DeviceProtectionTestState extends VaultState {
       state,
       'continueInitializationAfterDeviceUnlock',
     ).mockImplementation(async () => initialization)
-    vi.spyOn(state, 'lockDeviceProtection').mockResolvedValue(ok())
+    vi.spyOn(state, 'lockDeviceProtection').mockResolvedValue(
+      ok(DeviceProtectionLockOutcome.Locked),
+    )
     vi.spyOn(state, 't').mockImplementation((request) =>
       typeof request === 'string'
         ? request
@@ -67,7 +79,9 @@ class DeviceProtectionTestState extends VaultState {
 describe('device protection actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    createPasskeyProtection.mockReturnValue(ok())
+    createPasskeyProtection.mockReturnValue(
+      ok(PasskeyDeviceProtectionSuccess.Configured),
+    )
   })
 
   test('publishes unlocked state after passkey authorization and initialization', async () => {
@@ -104,13 +118,14 @@ describe('device protection actions', () => {
 
   test('offers PIN setup when passkey capability is unavailable', async () => {
     const state = DeviceProtectionTestState.create()
-    createPasskeyProtection.mockReturnValue(
-      err(
-        new PasskeyCeremonyFailure(
-          PasskeyCeremonyAction.Create,
-          new Error('PASSKEY_PRF_UNAVAILABLE'),
-        ),
+    const failureInput: PasskeyCeremonyFailureInput = {
+      action: PasskeyCeremonyAction.Create,
+      diagnostic: sanitizedPasskeyCeremonyData(
+        new Error('PASSKEY_PRF_UNAVAILABLE'),
       ),
+    }
+    createPasskeyProtection.mockReturnValue(
+      err(new PasskeyCeremonyFailure(failureInput)),
     )
 
     await new DeviceProtectionActions(state).setupDeviceProtection({

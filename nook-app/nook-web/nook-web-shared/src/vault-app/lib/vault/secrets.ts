@@ -22,6 +22,10 @@ import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
 import { VaultEditDecision } from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
+import type {
+  PasswordEntriesRefreshSnapshot,
+  SecretPageRefreshSnapshot,
+} from "$lib/vault/action-contexts";
 
 export { VaultConnectionActions } from "$lib/vault/connection";
 
@@ -32,6 +36,13 @@ interface VaultSecretAllocation {
 }
 
 type VaultSecretAllocationCollection = ReadonlyArray<VaultSecretAllocation>;
+
+interface SecretMutationTimeoutRequest {
+  readonly promise: Promise<
+    Result<VaultSecretAllocationCollection, StorageOperationFailure>
+  >;
+  readonly releaseLateValue: (records: VaultSecretAllocationCollection) => void;
+}
 
 interface PasswordManagerImportExecution {
   readonly importFromManager: (
@@ -99,6 +110,13 @@ interface SecretReplacement {
   readonly data: string;
 }
 
+export enum SecretMutationOutcome {
+  Prepared = "prepared",
+  Added = "added",
+  Deleted = "deleted",
+  Replaced = "replaced",
+}
+
 interface SecretPageRequest {
   readonly query: string;
   readonly requestedOffset: number;
@@ -154,20 +172,20 @@ export class VaultSecretActions {
         return storageErr(refreshed.error);
       }
       log.info(sourceName + " import completed");
-      state.showSuccess(
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        state.t({
-          key: successKey,
-          replacements: { count: String(imported.value.imported) },
-        }),
-      );
+      const successTranslation: Parameters<typeof state.t>[0] = {
+        key: successKey,
+        replacements: { count: String(imported.value.imported) },
+      };
+      state.showSuccess(state.t(successTranslation));
       return imported;
     } finally {
       state.isSaving = false;
     }
   }
 
-  private async prepareSecretMutation(): Promise<SecretOperationResult<void>> {
+  private async prepareSecretMutation(): Promise<
+    SecretOperationResult<SecretMutationOutcome.Prepared>
+  > {
     const state = this.state;
     const manager = state.admitManager();
     if (manager.isErr()) return storageErr(manager.error);
@@ -179,14 +197,16 @@ export class VaultSecretActions {
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
-    return storageOk();
+    return storageOk(SecretMutationOutcome.Prepared);
   }
 
   async handleAddSecret({
     id,
     type,
     data,
-  }: SecretCreation): Promise<SecretOperationResult<void>> {
+  }: SecretCreation): Promise<
+    SecretOperationResult<SecretMutationOutcome.Added>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -202,11 +222,11 @@ export class VaultSecretActions {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
         })();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return state.raceStorageTimeout({
+        const timeoutRequest: SecretMutationTimeoutRequest = {
           promise: operation,
           releaseLateValue: (records) => this.freeSecretRecords(records),
-        });
+        };
+        return state.raceStorageTimeout(timeoutRequest);
       });
       if (added.isErr()) {
         return storageErr(added.error);
@@ -220,7 +240,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Added);
     } finally {
       state.isSaving = false;
     }
@@ -439,7 +459,9 @@ export class VaultSecretActions {
 
   async handleDeleteSecret({
     id,
-  }: SecretDeletion): Promise<SecretOperationResult<void>> {
+  }: SecretDeletion): Promise<
+    SecretOperationResult<SecretMutationOutcome.Deleted>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -469,7 +491,7 @@ export class VaultSecretActions {
       const synchronized = await state.refreshSecretsFromSession();
       if (synchronized.isErr()) return storageErr(synchronized.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Deleted);
     } finally {
       if (!committed) state.secrets = previousSecrets;
       state.isSaving = false;
@@ -480,7 +502,9 @@ export class VaultSecretActions {
     oldId,
     type,
     data,
-  }: SecretReplacement): Promise<SecretOperationResult<void>> {
+  }: SecretReplacement): Promise<
+    SecretOperationResult<SecretMutationOutcome.Replaced>
+  > {
     const state = this.state;
     const prepared = await this.prepareSecretMutation();
     if (prepared.isErr()) return storageErr(prepared.error);
@@ -509,19 +533,25 @@ export class VaultSecretActions {
       const localSaveSync = await state.runFanOutSyncAfterLocalSave();
       if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
       state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-      return storageOk();
+      return storageOk(SecretMutationOutcome.Replaced);
     } finally {
       state.isSaving = false;
     }
   }
 
   async refreshPasswordEntriesList(): Promise<
-    Result<void, OAuthFailure | StorageOperationFailure>
+    Result<
+      PasswordEntriesRefreshSnapshot,
+      OAuthFailure | StorageOperationFailure
+    >
   > {
     const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return storageOk();
+      const snapshot: PasswordEntriesRefreshSnapshot = {
+        entries: state.passwordEntries,
+      };
+      return storageOk(snapshot);
     }
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
@@ -553,11 +583,12 @@ export class VaultSecretActions {
       for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
     }
-    return storageOk();
+    const snapshot: PasswordEntriesRefreshSnapshot = { entries: entries.value };
+    return storageOk(snapshot);
   }
 
   async refreshSecretsFromSession(): Promise<
-    Result<void, StorageOperationFailure>
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
   > {
     const state = this.state;
     if (!state.hasManager) {
@@ -584,7 +615,9 @@ export class VaultSecretActions {
   async loadSecretPage({
     query,
     requestedOffset,
-  }: SecretPageRequest): Promise<Result<void, StorageOperationFailure>> {
+  }: SecretPageRequest): Promise<
+    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.hasManager)
       return storageErr(
@@ -684,7 +717,13 @@ export class VaultSecretActions {
     state.secretPageOffset = offset;
     state.secretPageRequestOffset = offset;
     state.secretQuery = query;
-    return storageOk();
+    const snapshot: SecretPageRefreshSnapshot = {
+      displayedSecretCount: state.secrets.length,
+      totalSecretCount: state.secretTotal,
+      pageOffset: state.secretPageOffset,
+      query: state.secretQuery,
+    };
+    return storageOk(snapshot);
   }
 
   applyConnectedSecretPage({
@@ -742,13 +781,13 @@ export class VaultSecretActions {
     });
     if (result.isErr()) return storageErr(result.error);
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      return storageOk({
+      const codeView: AuthenticatorCodeView = {
         code: result.value.code,
         secondsRemaining: result.value.secondsRemaining,
         period: result.value.period,
         expiresAtUnixSeconds: result.value.expiresAtUnixSeconds,
-      });
+      };
+      return storageOk(codeView);
     } finally {
       result.value.free();
     }

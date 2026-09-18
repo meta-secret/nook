@@ -1,9 +1,13 @@
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { err as storageErr, ok as storageOk } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure as StorageOperationFailure,
+} from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type { ProjectionConflictRefreshSnapshot } from "$lib/vault/action-contexts";
 import {
   import_named_local_vault_blob,
   DeviceProtectionStatus,
@@ -79,14 +83,18 @@ export class SyncConflictActions {
     importedStoreId,
   }: ImportedProviderVaultIdentityActivation): Promise<void> {
     const state = this.state;
+    let completedStoreId: string;
     try {
       const completed = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            await admittedManager.value.activate_local_identity(identityId),
-          );
+          await admittedManager.value.activate_local_identity(identityId);
+          const outcome: ProviderVaultImportOutcome = {
+            kind: ProviderVaultImportOutcomeKind.Imported,
+            storeId: importedStoreId,
+          };
+          return storageOk(outcome);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -95,6 +103,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
+      completedStoreId = completed.value.storeId;
     } catch {
       state.errorMsg = state.t(
         I18N_KEYS.AuthStorageProviderVaultIdentitySelectionFailed,
@@ -105,7 +114,7 @@ export class SyncConflictActions {
     state.deviceId = "";
     state.devicePublicKey = "";
     state.clearIdentityProviderSession();
-    state.selectLoginVault(importedStoreId);
+    state.selectLoginVault(completedStoreId);
     try {
       const protectionStatus = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -192,31 +201,42 @@ export class SyncConflictActions {
     }
   }
 
-  async refreshReplacementConflicts() {
+  async refreshReplacementConflicts(): Promise<
+    Result<ProjectionConflictRefreshSnapshot, StorageOperationFailure>
+  > {
     const state = this.state;
     if (!state.hasManager) {
       state.clearProjectionConflicts();
-      return storageOk();
+      const emptySnapshot: ProjectionConflictRefreshSnapshot = {
+        replacementConflictCount: 0,
+        securityConflictCount: 0,
+      };
+      return storageOk(emptySnapshot);
     }
     const snapshot = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
       if (manager.isErr()) return storageErr(manager.error);
       let conflicts: NookReplacementConflict[] = [];
       try {
-        if (!manager.value.event_log_mode())
-          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-          return storageOk({
+        if (!manager.value.event_log_mode()) {
+          const conflictsSnapshot: Parameters<
+            typeof state.replaceProjectionConflicts
+          >[0] = {
             replacementConflicts: conflicts,
             securityConflicts: [] as NookSecurityConflict[],
-          });
+          };
+          return storageOk(conflictsSnapshot);
+        }
         conflicts = await manager.value.list_projection_conflicts();
         const securityConflicts =
           await manager.value.list_projection_security_conflicts();
-        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-        return storageOk({
+        const conflictsSnapshot: Parameters<
+          typeof state.replaceProjectionConflicts
+        >[0] = {
           replacementConflicts: conflicts,
           securityConflicts,
-        });
+        };
+        return storageOk(conflictsSnapshot);
       } catch (failure) {
         for (const conflict of conflicts) conflict.free();
         return storageErr(new NativeVaultStorageFailure(failure));
@@ -224,7 +244,11 @@ export class SyncConflictActions {
     });
     if (snapshot.isErr()) return storageErr(snapshot.error);
     state.replaceProjectionConflicts(snapshot.value);
-    return storageOk();
+    const refreshedSnapshot: ProjectionConflictRefreshSnapshot = {
+      replacementConflictCount: snapshot.value.replacementConflicts.length,
+      securityConflictCount: snapshot.value.securityConflicts.length,
+    };
+    return storageOk(refreshedSnapshot);
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
@@ -269,9 +293,8 @@ export class SyncConflictActions {
         const admittedManager = state.admitManager();
         if (admittedManager.isErr()) return storageErr(admittedManager.error);
         try {
-          return storageOk(
-            admittedManager.value.prepare_connect_from_local_cache(),
-          );
+          admittedManager.value.prepare_connect_from_local_cache();
+          return storageOk(RemoteVaultRecoveryState.ConnectFromCache);
         } catch (nativeFailure) {
           return storageErr(new NativeVaultStorageFailure(nativeFailure));
         }
@@ -280,8 +303,7 @@ export class SyncConflictActions {
         state.errorMsg = state.t(completed.error.translationKey);
         return;
       }
-      state.remoteVaultRecoveryState =
-        RemoteVaultRecoveryState.ConnectFromCache;
+      state.remoteVaultRecoveryState = completed.value;
       if (state.loginSetup.kind === LoginSetupKind.Active) {
         await state.loadDb();
         return;
@@ -331,7 +353,7 @@ export class SyncConflictActions {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-    return storageOk();
+    return storageOk(state.remoteVaultRecoveryState);
   }
 
   private async resumeConnectAfterSyncConflict({

@@ -44,7 +44,6 @@ export enum OAuthFailureKind {
 export class OAuthFailure {
   constructor(readonly kind: OAuthFailureKind) {}
   get translationKey() {
-    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- The default branch intentionally groups equivalent failures.
     switch (this.kind) {
       case OAuthFailureKind.GoogleConfiguration:
         return I18N_KEYS.ProviderSetupGoogleOauthUnconfigured;
@@ -79,7 +78,19 @@ export class OAuthFailure {
         return I18N_KEYS.ProviderSetupIcloudSharedIdentifierMissing;
       case OAuthFailureKind.SharedConnection:
         return I18N_KEYS.ProviderSetupIcloudSharedConnectFailed;
-      default:
+      case OAuthFailureKind.CloudKitScript:
+      case OAuthFailureKind.CloudKitUnavailable:
+      case OAuthFailureKind.CloudKitAuthentication:
+      case OAuthFailureKind.ControlUnavailable:
+      case OAuthFailureKind.TokenUnavailable:
+      case OAuthFailureKind.TimedOut:
+      case OAuthFailureKind.Cancelled:
+      case OAuthFailureKind.PopupBlocked:
+      case OAuthFailureKind.CleanupFailed:
+      case OAuthFailureKind.BrowserStorage:
+      case OAuthFailureKind.InvalidChallenge:
+      case OAuthFailureKind.InvalidConfiguration:
+      case OAuthFailureKind.ProviderPersistence:
         return I18N_KEYS.ProviderSetupIcloudSignInFailed;
     }
   }

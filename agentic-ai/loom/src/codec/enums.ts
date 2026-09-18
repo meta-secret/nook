@@ -5,17 +5,10 @@ export enum RequestFamily {
   CortexAudit = 'cortexAudit',
   CortexSessionClean = 'cortexSessionClean',
   SkillScaffold = 'skillScaffold',
-  AgentStats = 'agentStats',
   PrLand = 'prLand',
   DependencyPopularity = 'dependencyPopularity',
   ToolsList = 'toolsList',
   ToolsCall = 'toolsCall',
-}
-
-export enum AgentStatsOperation {
-  Assemble = 'assemble',
-  Validate = 'validate',
-  Publish = 'publish',
 }
 
 export enum PrLandOperation {

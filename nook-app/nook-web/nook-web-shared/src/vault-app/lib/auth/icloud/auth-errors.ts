@@ -32,8 +32,8 @@ type CloudKitRedirectDetails =
 
 type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
 
-type ExpectedCloudKitSignInFailureCheck = {
-  readonly error: unknown;
+export type ExpectedCloudKitSignInFailureCheck = {
+  readonly diagnostic: CloudKitFailureDiagnostic;
   readonly hasSignInControl: boolean;
 };
 
@@ -241,9 +241,9 @@ export class CloudKitFailureDiagnostic {
 export class CloudKitSetupFailure {
   constructor(private readonly request: ExpectedCloudKitSignInFailureCheck) {}
   get expected(): boolean {
-    const { error, hasSignInControl } = this.request;
+    const { diagnostic, hasSignInControl } = this.request;
     return (
-      new CloudKitFailureDiagnostic(error).signInFailureExpectation() ===
+      diagnostic.signInFailureExpectation() ===
         CloudKitSignInFailureExpectation.Expected && hasSignInControl
     );
   }

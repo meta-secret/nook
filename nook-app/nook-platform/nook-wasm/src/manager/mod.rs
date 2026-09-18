@@ -64,8 +64,9 @@ mod verified_access;
 pub use companion_pairing::{
     NookCompanionPairingApprovalAuthority, NookCompanionPairingCandidateFailure,
     NookCompanionPairingCandidateOutcome, NookCompanionPairingCandidateOutcomeState,
-    NookCompanionPairingExtensionEndpoint, NookPreparedCompanionPairingActivation,
-    NookPrevalidatedCompanionPairingApproval, NookStoredCompanionPairingActivationCandidate,
+    NookCompanionPairingExtensionEndpoint, NookExtensionDeviceApproval,
+    NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
+    NookStoredCompanionPairingActivationCandidate,
 };
 pub use companion_protocol::{
     NookCompanionExtensionEndpoint, NookDiscoveredCompanionExtensionEndpoint,
@@ -118,6 +119,12 @@ impl NookVaultManager {
     #[wasm_bindgen(getter, js_name = vaultStoreId)]
     pub fn vault_store_id(&self) -> String {
         self.vault.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultStoreIdPresence)]
+    pub fn vault_store_id_presence(&self) -> Result<crate::NookStoreIdPresence, JsError> {
+        crate::NookStoreIdPresence::from_raw(&self.vault.store_id)
+            .map_err(|error| JsError::new(&error.to_string()))
     }
 
     #[wasm_bindgen(getter, js_name = vaultVersion)]

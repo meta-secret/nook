@@ -534,8 +534,12 @@ class AuthenticatorInteraction {
   }
 }
 
-// eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-export const authenticatorInteraction = new AuthenticatorInteraction({
+const authenticatorInteractionDependencies: ConstructorParameters<
+  typeof AuthenticatorInteraction
+>[0] = {
   widgetState,
   pickerState,
-})
+}
+export const authenticatorInteraction = new AuthenticatorInteraction(
+  authenticatorInteractionDependencies,
+)

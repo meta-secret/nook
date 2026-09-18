@@ -3,7 +3,9 @@
 # Compile-only product graph. The rust-base and web-base stages are supplied as
 # named contexts by compile.docker-bake.hcl. Do not change this
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
-# tests, Clippy, and coverage as part of their dependency warm-up.
+# non-build validation as part of their dependency warm-up.
+
+ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured
 
 FROM rust-base AS compile-platform-manifests
 
@@ -59,8 +61,8 @@ RUN mkdir -p \
 # outside the 16 explicitly secret-mounted compiler vertices below.
 RUN --network=default RUSTC_WRAPPER= cargo fetch --locked
 
-# These sibling stages warm only ordinary library dependencies. No --tests,
-# --all-targets, test runner, Clippy, coverage, or test-only package is used.
+# These sibling stages warm only ordinary library dependencies. No validation
+# target, runner, or validation-only package is used.
 FROM compile-platform-manifests AS compile-native-dependencies
 
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
@@ -149,6 +151,58 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
+
+# Exact-source native build image for PR validation consumers. This stage only
+# performs the ordinary native cargo builds above. All validation and
+# repository policy run later in their own jobs.
+FROM compile-native-source AS pr-native-build
+
+WORKDIR /meta-secret/nook
+COPY .codex .codex
+COPY .cortex .cortex
+COPY .cursor .cursor
+COPY .github .github
+COPY .impeccable .impeccable
+COPY .task .task
+COPY .vale .vale
+COPY agentic-ai agentic-ai
+COPY docs docs
+COPY infra infra
+COPY nook-app nook-app
+COPY AGENTS.md CODEX.md LICENSE PRODUCT.md README.md ./
+COPY .dockerignore .gitignore .jscpd.json .vale.ini bun.lock deny.toml eslint.config.mjs package.json tsconfig.compile.json tsconfig.json ./
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "PR native build source snapshot" >/dev/null
+
+# BuildKit does not replay stdout for a cached compiler vertex. Re-emit the
+# persisted native compiler report from this per-job terminal vertex so cache
+# telemetry remains authoritative when the compiler layer is fully reused.
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
+      nook-sccache-report --replay compile-native-dependencies; \
+    fi
+
+# Trusted ARC consumers have a remote BuildKit API but no container runtime.
+# Import the producer's exact immutable Zot image, execute validation as a
+# normal solve vertex, then expose only the small validation handoff. The
+# default keeps every standalone Dockerfile resolution inside Zot; Bake
+# replaces it with the producer's run-and-commit-specific reference.
+FROM ${PR_NATIVE_IMAGE} AS pr-native-verify
+
+RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
+    --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    PLATFORM_ROOT=/meta-secret/nook/nook-app/nook-platform \
+    task --dir nook-app/nook-platform rust:ci:verify-built
+
+FROM scratch AS pr-native-verify-export
+
+COPY --from=pr-native-verify /ci-artifacts/ /
 
 FROM compile-wasm-dependencies AS compile-wasm-source
 
@@ -241,9 +295,10 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-# Copy only the Bun and Node runtimes from web-base into a source-free lineage;
-# package manifests enter in the sequential dependency stages below.
-FROM rust-base AS compile-node-dependency-toolchain
+# Continue the rooted dependency foundation from the completed Cargo graph.
+# This keeps Cargo fetch, native/WASM dependencies, and all stable Node/web
+# dependency installs in one exportable ancestry without a synthetic join.
+FROM compile-wasm-dependencies AS compile-node-dependency-toolchain
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
@@ -267,6 +322,25 @@ RUN cd nook-app/nook-web/nook-web-research \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-web-dependencies
 
+FROM compile-web-dependencies AS compile-web-extension-dependencies
+
+COPY nook-app/nook-web/nook-web-extension/package.json nook-app/nook-web/nook-web-extension/bun.lock ./nook-app/nook-web/nook-web-extension/
+RUN cd nook-app/nook-web/nook-web-extension \
+    && bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-web-extension-dependencies
+
+# Dependency compiler RUN output is absent when BuildKit restores the layer.
+# Bust only this terminal replay vertex per job so the rooted Phase A solve
+# emits the persisted reports without invalidating compiler objects.
+FROM compile-web-extension-dependencies AS compile-foundation
+
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
+      nook-sccache-report --replay compile-native-dependencies \
+      && nook-sccache-report --replay compile-wasm-dependencies; \
+    fi
+
 FROM web-base AS compile-web
 
 WORKDIR /meta-secret/nook
@@ -274,14 +348,15 @@ COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-we
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
+COPY --from=compile-web-extension-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules \
+  /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
 RUN mkdir -p \
       /meta-secret/nook/nook-app/nook-web/nook-vault-simple \
       /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel \
       /meta-secret/nook/nook-app/nook-web/nook-web-extension \
     && ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-simple/node_modules \
-    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
-    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
+    && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules
 # Keep policy, workflow, Cortex, and unrelated product changes out of every web
 # compiler key. The web workspace and its two imported legal documents are the
 # only repository sources consumed before compilation; generated WASM crosses
@@ -298,6 +373,15 @@ RUN mkdir -p \
     && cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
     && rm -rf /tmp/nook-wasm-handoff
+
+RUN cd nook-app/nook-web \
+    && node_modules/.bin/eslint --config eslint.compile-contracts.config.js \
+      "nook-web-extension/src/**/*.{ts,svelte}" \
+      "nook-web-shared/src/**/*.{ts,svelte}" \
+      "nook-web-app/src/**/*.{ts,svelte}" \
+      "nook-web-research/src/**/*.{ts,svelte}" \
+      "nook-vault-simple/**/*.{ts,svelte}" \
+      "nook-vault-sentinel/**/*.{ts,svelte}"
 
 RUN cd nook-app/nook-web/nook-web-app \
     && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
@@ -385,7 +469,7 @@ COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock agentic-ai/loom/tscon
 COPY agentic-ai/loom/src src
 # Loom's production modules import the tracked Cortex implementation contracts.
 # Keep those sources in the compile-only container without copying any nested
-# skill dependencies or running their test/verification scripts.
+# skill dependencies or running their validation scripts.
 COPY .cortex /meta-secret/nook/.cortex
 RUN bun install --frozen-lockfile --ignore-scripts \
     && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \

@@ -2,14 +2,15 @@
   import {
     SecretFailurePresentation,
     type SecretOperationResult,
-  } from '$lib/vault/secret-operation-failure'
+  } from "$lib/vault/secret-operation-failure";
+  import type { SecretMutationOutcome } from "$lib/vault/secrets";
   type SecretFieldCopy = {
-    readonly text: string
-    readonly id: string
-    readonly field: string
-  }
+    readonly text: string;
+    readonly id: string;
+    readonly field: string;
+  };
 
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
     Globe,
     Braces,
@@ -27,14 +28,14 @@
     Copy,
     Check,
     ChevronDown,
-  } from '@lucide/svelte'
-  import type { NookSecretListItem } from '$lib/nook'
-  import { SecretType } from '$lib/nook'
-  import { VaultEditDecision } from '$app-wasm'
-  import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
-  import AuthenticatorSecretDetail from './AuthenticatorSecretDetail.svelte'
-  import MarkdownContent from './MarkdownContent.svelte'
-  import SeedPhraseGrid from './SeedPhraseGrid.svelte'
+  } from "@lucide/svelte";
+  import type { NookSecretListItem } from "$lib/nook";
+  import { SecretType } from "$lib/nook";
+  import { VaultEditDecision } from "$app-wasm";
+  import type { VaultEditRestriction, VaultState } from "$lib/vault.svelte";
+  import AuthenticatorSecretDetail from "./AuthenticatorSecretDetail.svelte";
+  import MarkdownContent from "./MarkdownContent.svelte";
+  import SeedPhraseGrid from "./SeedPhraseGrid.svelte";
   import {
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
@@ -42,7 +43,7 @@
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type SecretReveal,
-  } from './secret-vault-state'
+  } from "./secret-vault-state";
 
   let {
     item,
@@ -61,29 +62,31 @@
     editRestriction = { decision: VaultEditDecision.Allowed },
     titleAsHeader = false,
   }: {
-    item: NookSecretListItem
-    index: number
-    expanded: boolean
-    reveal?: SecretReveal
-    authenticatorCode?: AuthenticatorCodePresentation
-    copiedNotice?: ClipboardNotice
-    onToggleExpand: (id: string) => void
-    onToggleReveal: (id: string) => Promise<void>
-    onEditItem: (item: NookSecretListItem) => Promise<void>
-    onDeleteSecret: (id: string) => Promise<SecretOperationResult<void>>
-    onCopyToClipboard: (args: SecretFieldCopy) => Promise<void>
-    onCopySecret: (id: string) => Promise<void>
-    vault: VaultState
-    editRestriction?: VaultEditRestriction
+    item: NookSecretListItem;
+    index: number;
+    expanded: boolean;
+    reveal?: SecretReveal;
+    authenticatorCode?: AuthenticatorCodePresentation;
+    copiedNotice?: ClipboardNotice;
+    onToggleExpand: (id: string) => void;
+    onToggleReveal: (id: string) => Promise<void>;
+    onEditItem: (item: NookSecretListItem) => Promise<void>;
+    onDeleteSecret: (
+      id: string,
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>;
+    onCopyToClipboard: (args: SecretFieldCopy) => Promise<void>;
+    onCopySecret: (id: string) => Promise<void>;
+    vault: VaultState;
+    editRestriction?: VaultEditRestriction;
     /** Use the title row as the card header (no duplicate group header). */
-    titleAsHeader?: boolean
-  } = $props()
+    titleAsHeader?: boolean;
+  } = $props();
 
   function isCopied(fieldKey: string): boolean {
     return (
       copiedNotice.kind === ClipboardNoticeKind.Visible &&
       copiedNotice.fieldKey === fieldKey
-    )
+    );
   }
 
   const summary = $derived.by(() => {
@@ -92,26 +95,26 @@
         item.username.trim() ||
         item.websiteUrl.trim() ||
         vault.t(I18N_KEYS.VaultTypesLogin)
-      )
+      );
     }
     if (item.type === SecretType.ApiKey) {
-      return item.websiteUrl.trim() || vault.t(I18N_KEYS.VaultTypesApiKey)
+      return item.websiteUrl.trim() || vault.t(I18N_KEYS.VaultTypesApiKey);
     }
     if (item.type === SecretType.SeedPhrase) {
-      const name = item.name.trim()
-      const words = item.seedWordCount
-      const label = name || vault.t(I18N_KEYS.VaultFieldsUnnamedSeedPhrase)
+      const name = item.name.trim();
+      const words = item.seedWordCount;
+      const label = name || vault.t(I18N_KEYS.VaultFieldsUnnamedSeedPhrase);
       if (words === 12 || words === 24) {
         const tArgs: Parameters<typeof vault.t>[0] = {
           key: I18N_KEYS.VaultFieldsWordsCount,
           replacements: { count: String(words) },
-        }
-        return `${label} · ${vault.t(tArgs)}`
+        };
+        return `${label} · ${vault.t(tArgs)}`;
       }
-      return label
+      return label;
     }
     if (item.type === SecretType.Authenticator) {
-      return item.account.trim() || item.issuer.trim()
+      return item.account.trim() || item.issuer.trim();
     }
     if (item.type === SecretType.Passkey) {
       return (
@@ -119,43 +122,43 @@
         item.passkeyUserName.trim() ||
         item.rpId.trim() ||
         vault.t(I18N_KEYS.VaultTypesPasskey)
-      )
+      );
     }
     if (item.type === SecretType.CreditCard) {
-      const last4 = item.last4.trim()
-      if (last4) return `•••• ${last4}`
-      return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
+      const last4 = item.last4.trim();
+      if (last4) return `•••• ${last4}`;
+      return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsUnnamedCard);
     }
     if (item.type === SecretType.FileAttachment) {
       return (
         item.fileName.trim() ||
         item.title.trim() ||
         vault.t(I18N_KEYS.VaultFieldsNoTitle)
-      )
+      );
     }
-    return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsNoTitle)
-  })
+    return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsNoTitle);
+  });
 
   const headerTitle = $derived.by(() => {
     if (item.type === SecretType.Login) {
-      return item.websiteHost || vault.t(I18N_KEYS.VaultFieldsNoWebsite)
+      return item.websiteHost || vault.t(I18N_KEYS.VaultFieldsNoWebsite);
     }
     if (item.type === SecretType.CreditCard) {
       return (
         item.title.trim() ||
         summary ||
         vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
-      )
+      );
     }
     if (item.type === SecretType.FileAttachment) {
       return (
         item.title.trim() ||
         item.fileName.trim() ||
         vault.t(I18N_KEYS.VaultFieldsNoTitle)
-      )
+      );
     }
-    return summary
-  })
+    return summary;
+  });
 
   const accountSubtitle = $derived(
     item.type === SecretType.Login
@@ -164,27 +167,27 @@
           item.title.trim() &&
           item.last4.trim()
         ? `•••• ${item.last4.trim()}`
-        : '',
-  )
+        : "",
+  );
 
   const cardExpiration = $derived.by(() => {
     const month =
       reveal.kind === SecretRevealKind.Revealed
         ? reveal.record.expirationMonth.trim()
-        : item.expirationMonth.trim()
+        : item.expirationMonth.trim();
     const year =
       reveal.kind === SecretRevealKind.Revealed
         ? reveal.record.expirationYear.trim()
-        : item.expirationYear.trim()
-    if (!month && !year) return ''
-    if (month && year) return `${month.padStart(2, '0')}/${year}`
-    return month || year
-  })
+        : item.expirationYear.trim();
+    if (!month && !year) return "";
+    if (month && year) return `${month.padStart(2, "0")}/${year}`;
+    return month || year;
+  });
 
   function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   function downloadFileAttachment() {
@@ -192,23 +195,23 @@
       reveal.kind !== SecretRevealKind.Revealed ||
       item.type !== SecretType.FileAttachment
     ) {
-      return
+      return;
     }
-    const binary = atob(reveal.record.contentBase64)
-    const bytes = new Uint8Array(binary.length)
+    const binary = atob(reveal.record.contentBase64);
+    const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index)
+      bytes[index] = binary.charCodeAt(index);
     }
     const BlobArgs: ConstructorParameters<typeof Blob>[1] = {
-      type: reveal.record.mimeType || 'application/octet-stream',
-    }
-    const blob = new Blob([bytes], BlobArgs)
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = reveal.record.fileName || item.fileName || 'secret-file'
-    link.click()
-    URL.revokeObjectURL(url)
+      type: reveal.record.mimeType || "application/octet-stream",
+    };
+    const blob = new Blob([bytes], BlobArgs);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = reveal.record.fileName || item.fileName || "secret-file";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 </script>
 
@@ -346,9 +349,9 @@
         <button
           type="button"
           onclick={async () => {
-            const result = await onDeleteSecret(item.id)
+            const result = await onDeleteSecret(item.id);
             if (result.isErr())
-              new SecretFailurePresentation(vault).show(result.error)
+              new SecretFailurePresentation(vault).show(result.error);
           }}
           aria-label={vault.t(I18N_KEYS.CommonDelete)}
           data-testid="delete-secret-btn"
@@ -384,9 +387,9 @@
                       >[0] = {
                         text: item.websiteUrl,
                         id: item.id,
-                        field: 'website',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs)
+                        field: "website",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -420,9 +423,9 @@
                       >[0] = {
                         text: item.username,
                         id: item.id,
-                        field: 'username',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs2)
+                        field: "username",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs2);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyUsername)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -448,7 +451,7 @@
               >
                 {reveal.kind === SecretRevealKind.Revealed
                   ? reveal.record.password
-                  : '••••••••••••••••'}
+                  : "••••••••••••••••"}
               </code>
               <button
                 type="button"
@@ -497,9 +500,9 @@
                       >[0] = {
                         text: item.websiteUrl,
                         id: item.id,
-                        field: 'website',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs3)
+                        field: "website",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs3);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -525,7 +528,7 @@
               >
                 {reveal.kind === SecretRevealKind.Revealed
                   ? reveal.record.primaryCredential
-                  : '••••••••••••••••'}
+                  : "••••••••••••••••"}
               </code>
               <button
                 type="button"
@@ -560,9 +563,9 @@
                       >[0] = {
                         text: item.expiresAt,
                         id: item.id,
-                        field: 'expires',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs4)
+                        field: "expires",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs4);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpirationDate)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -593,8 +596,8 @@
                     void (() => {
                       const onCopyToClipboardArgs5: Parameters<
                         typeof onCopyToClipboard
-                      >[0] = { text: item.name, id: item.id, field: 'name' }
-                      return onCopyToClipboard(onCopyToClipboardArgs5)
+                      >[0] = { text: item.name, id: item.id, field: "name" };
+                      return onCopyToClipboard(onCopyToClipboardArgs5);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyAccountName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -627,7 +630,7 @@
               {vault}
               value={reveal.kind === SecretRevealKind.Revealed
                 ? reveal.record.seed
-                : ''}
+                : ""}
               readonly
               revealed={reveal.kind === SecretRevealKind.Revealed}
             />
@@ -720,9 +723,9 @@
                       >[0] = {
                         text: item.cardholderName,
                         id: item.id,
-                        field: 'cardholder',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs6)
+                        field: "cardholder",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs6);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardholderName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -750,7 +753,7 @@
                   ? reveal.record.cardNumber
                   : item.last4.trim()
                     ? `•••• ${item.last4}`
-                    : '••••••••••••••••'}
+                    : "••••••••••••••••"}
               </code>
               {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.cardNumber}
                 <button
@@ -762,9 +765,9 @@
                       >[0] = {
                         text: reveal.record.cardNumber,
                         id: item.id,
-                        field: 'card-number',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs7)
+                        field: "card-number",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs7);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardNumber)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
@@ -797,9 +800,9 @@
                       >[0] = {
                         text: cardExpiration,
                         id: item.id,
-                        field: 'expiration',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs8)
+                        field: "expiration",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs8);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpiration)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
@@ -825,7 +828,7 @@
               >
                 {reveal.kind === SecretRevealKind.Revealed
                   ? reveal.record.cvv || vault.t(I18N_KEYS.CommonNone)
-                  : '•••'}
+                  : "•••"}
               </code>
               {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.cvv}
                 <button
@@ -837,9 +840,9 @@
                       >[0] = {
                         text: reveal.record.cvv,
                         id: item.id,
-                        field: 'cvv',
-                      }
-                      return onCopyToClipboard(onCopyToClipboardArgs9)
+                        field: "cvv",
+                      };
+                      return onCopyToClipboard(onCopyToClipboardArgs9);
                     })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCvv)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"

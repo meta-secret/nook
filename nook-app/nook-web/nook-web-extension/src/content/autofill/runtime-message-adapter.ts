@@ -82,6 +82,24 @@ export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
 
+type RuntimeMessageResponse =
+  | AuthenticationOutcomeResponse
+  | AuthenticationWorkflowRuntimeResponse
+  | AuthenticationWorkflowSnapshotResponse
+  | AuthenticatorBackupAttachResponse
+  | AuthenticatorCodeResponse
+  | AuthenticatorEnrollmentConfirmResponse
+  | AuthenticatorEnrollmentStageResponse
+  | AuthenticatorOptionsResponse
+  | AuthenticatorPickerOpenResponse
+  | AuthenticatorPreviewResponse
+  | GeneratedPasswordResponse
+  | LoginPickerOpenResponse
+  | WebsiteLoginOptions
+  | WebsiteLoginSaveActionResponse
+  | WebsiteLoginSaveOfferResponse
+  | WebsiteLoginSavePendingResponse
+
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
   loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
@@ -130,7 +148,7 @@ export type {
 
 export type RuntimeMessageResponseDecoder<Response> = (
   response: unknown,
-) => response is Response
+) => Response
 
 export type DecodedRuntimeMessageArgs<Response> = {
   message: ExtensionRuntimeRequest
@@ -143,22 +161,25 @@ class AuthenticationRuntimeTransport {
 
   private sendRuntimeMessage(
     message: ExtensionRuntimeRequest,
-  ): Promise<RuntimeMessageDelivery<unknown>> {
+  ): Promise<RuntimeMessageDelivery<RuntimeMessageResponse>> {
     return new Promise((resolve) => {
-      this.browser.chrome.runtime.sendMessage(message, (response: unknown) => {
-        if (this.browser.chrome.runtime.lastError) {
-          const unavailable: Parameters<typeof resolve>[0] = {
-            kind: RuntimeMessageDeliveryKind.Unavailable,
+      this.browser.chrome.runtime.sendMessage(
+        message,
+        (response: RuntimeMessageResponse) => {
+          if (this.browser.chrome.runtime.lastError) {
+            const unavailable: Parameters<typeof resolve>[0] = {
+              kind: RuntimeMessageDeliveryKind.Unavailable,
+            }
+            resolve(unavailable)
+            return
           }
-          resolve(unavailable)
-          return
-        }
-        const delivered: Parameters<typeof resolve>[0] = {
-          kind: RuntimeMessageDeliveryKind.Delivered,
-          response,
-        }
-        resolve(delivered)
-      })
+          const delivered: Parameters<typeof resolve>[0] = {
+            kind: RuntimeMessageDeliveryKind.Delivered,
+            response,
+          }
+          resolve(delivered)
+        },
+      )
     })
   }
 
@@ -169,19 +190,18 @@ class AuthenticationRuntimeTransport {
     RuntimeMessageDelivery<Response>
   > {
     const delivery = await this.sendRuntimeMessage(message)
-    if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response ||
-      typeof delivery.response !== 'object'
-    ) {
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return this.unavailable()
     }
-    return decode(delivery.response)
-      ? {
-          kind: RuntimeMessageDeliveryKind.Delivered,
-          response: delivery.response,
-        }
-      : this.unavailable()
+    try {
+      const response = decode(delivery.response)
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response,
+      }
+    } catch {
+      return this.unavailable()
+    }
   }
 
   private unavailable<Response>(): RuntimeMessageDelivery<Response> {

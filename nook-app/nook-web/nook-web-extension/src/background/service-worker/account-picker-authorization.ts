@@ -131,11 +131,15 @@ export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountP
   }
 }
 
-// eslint-disable-next-line max-params -- The WASM lifecycle transition requires its epoch and completion class.
-export async function completeAccountPickerAuthorizationCleanup(
-  authorizationGeneration: string,
-  evidence: CleanupEvidence,
-): Promise<CleanupTransitionOutcome> {
+export type CompleteAccountPickerAuthorizationCleanupRequest = {
+  readonly authorizationGeneration: string
+  readonly evidence: CleanupEvidence
+}
+
+export async function completeAccountPickerAuthorizationCleanup({
+  authorizationGeneration,
+  evidence,
+}: CompleteAccountPickerAuthorizationCleanupRequest): Promise<CleanupTransitionOutcome> {
   await initializedAccountPickerAuthorizationState()
   try {
     if (

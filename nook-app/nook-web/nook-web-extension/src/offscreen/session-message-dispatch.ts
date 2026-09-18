@@ -3,7 +3,7 @@ import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationCleanupKind,
-  type EnqueueSessionOperationArgs,
+  type EnqueueSessionOperationRequest,
   SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
@@ -25,11 +25,16 @@ import {
   type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
-  isCompanionIdentityDiscoverySessionTransportRequest,
-  isCompanionIdentityHandoffSessionTransportRequest,
+  decodeCompanionIdentityDiscoverySessionTransportRequest,
+  decodeCompanionIdentityHandoffSessionTransportRequest,
   parseExtensionSessionRequest,
   stageExtensionSessionSensitiveRequest,
 } from './session-request-adapter'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../lib/concrete-decoder'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -155,7 +160,7 @@ type ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs = {
 type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   message: Extract<
     ParsedExtensionSessionTransportRequest,
-    { type: ExtensionSessionMessageType.ImportVault }
+    { type: typeof ExtensionSessionMessageType.ImportVault }
   >
   priority: SessionOperationPriority
   requestedExpiry: RequestedQueueExpiry
@@ -213,7 +218,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       clearExtensionSessionSensitiveRequest(payloadResidency.request)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    const nookNamedArgs1_0: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs1_0: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           return err(
@@ -279,7 +284,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     new ProviderCredentialBuffer(providerCandidate).clear()
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
-    const nookNamedArgs1_1: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs1_1: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: async () => {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
@@ -346,7 +351,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private enqueueCompanionIdentityHandoff(
     message: CompanionIdentityHandoffSessionTransportRequest,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
+    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityHandoff(message),
       options: {
         priority: SessionOperationPriority.Interactive,
@@ -363,7 +368,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private enqueueCompanionIdentityDiscovery(
     message: CompanionIdentityDiscoverySessionTransportRequest,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
-    const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
+    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityDiscovery(message),
       options: {
         priority: SessionOperationPriority.Probe,
@@ -424,7 +429,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }
 
-    const nookNamedArgs0_5: EnqueueSessionOperationArgs<SessionResponse> = {
+    const nookNamedArgs0_5: EnqueueSessionOperationRequest<SessionResponse> = {
       operation: () => this.context.handleMessage(message),
       options: {
         priority,
@@ -466,10 +471,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
       if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
-        if (
-          !serviceWorkerSender ||
-          !isCompanionIdentityDiscoverySessionTransportRequest(message)
-        ) {
+        if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
             error: 'Forbidden companion identity discovery request.',
@@ -477,19 +479,34 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityDiscovery(message).then((result) =>
-          result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
-            sendResponse({ ok: false, error: failure.message }),
-          ),
-        )
+        void companionWasmReady.then(() => {
+          const decoded = runConcreteDecoder(
+            decodeCompanionIdentityDiscoverySessionTransportRequest,
+            message,
+          )
+          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
+            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Forbidden companion identity discovery request.',
+            }
+            sendResponse(forbiddenResponse)
+            return
+          }
+          void this.enqueueCompanionIdentityDiscovery(decoded.value).then(
+            (result) =>
+              result.match(sendResponse, (failure) => {
+                const response: Parameters<typeof sendResponse>[0] = {
+                  ok: false,
+                  error: failure.message,
+                }
+                sendResponse(response)
+              }),
+          )
+        })
         return true
       }
       if (message.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE) {
-        if (
-          !serviceWorkerSender ||
-          !isCompanionIdentityHandoffSessionTransportRequest(message)
-        ) {
+        if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
             error: 'Forbidden companion identity handoff request.',
@@ -497,12 +514,30 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityHandoff(message).then((result) =>
-          result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
-            sendResponse({ ok: false, error: failure.message }),
-          ),
-        )
+        void companionWasmReady.then(() => {
+          const decoded = runConcreteDecoder(
+            decodeCompanionIdentityHandoffSessionTransportRequest,
+            message,
+          )
+          if (decoded.kind === ConcreteDecoderResultKind.Rejected) {
+            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Forbidden companion identity handoff request.',
+            }
+            sendResponse(forbiddenResponse)
+            return
+          }
+          void this.enqueueCompanionIdentityHandoff(decoded.value).then(
+            (result) =>
+              result.match(sendResponse, (failure) => {
+                const response: Parameters<typeof sendResponse>[0] = {
+                  ok: false,
+                  error: failure.message,
+                }
+                sendResponse(response)
+              }),
+          )
+        })
         return true
       }
       void parseExtensionSessionRequest(message).then((parsed) => {

@@ -1,4 +1,6 @@
 import { err, ok, type Result } from 'neverthrow'
+import type { ExtensionSessionTransportRequest } from '../../offscreen/session-request-adapter'
+import type { ExtensionSessionResponse } from '../../offscreen/session'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -7,28 +9,50 @@ export enum ExtensionSessionTransportFailureKind {
   CreationFailed = 'extension-session-document-creation-failed',
   Closed = 'extension-session-document-closed',
   DeliveryFailed = 'extension-session-delivery-failed',
+  ResponseMissing = 'extension-session-response-missing',
   ClosureFailed = 'extension-session-document-closure-failed',
 }
 
 export class ExtensionSessionTransportFailure {
   constructor(readonly kind: ExtensionSessionTransportFailureKind) {}
+
+  toResult<Response, DecodeFailure = never>(): ExtensionSessionTransportResult<
+    Response,
+    DecodeFailure
+  > {
+    return err<Response, ExtensionSessionTransportFailure | DecodeFailure>(this)
+  }
+
   get response() {
     return { ok: false as const, reason: this.kind }
   }
 }
 
-export type ExtensionSessionTransportResult<T> = Result<
-  T,
-  ExtensionSessionTransportFailure
->
+export type ExtensionSessionTransportResult<
+  T = ExtensionSessionResponse,
+  DecodeFailure = never,
+> = Result<T, ExtensionSessionTransportFailure | DecodeFailure>
+
+export type ExtensionSessionTransportDelivery = {
+  readonly message: ExtensionSessionTransportRequest
+}
+
+export type DecodedExtensionSessionTransportDelivery<Response, DecodeFailure> =
+  {
+    readonly message: ExtensionSessionTransportRequest
+    readonly decodeResponse: (
+      response: ExtensionSessionResponse,
+    ) => Result<Response, DecodeFailure>
+  }
 
 /** Host wire values are admitted by the concrete Rust response decoder at the caller. */
 export interface ExtensionSessionTransport {
   sendMessage(
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    message: unknown,
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  ): Promise<ExtensionSessionTransportResult<unknown>>
+    delivery: ExtensionSessionTransportDelivery,
+  ): Promise<ExtensionSessionTransportResult>
+  sendMessage<Response, DecodeFailure>(
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
 }
 
 enum SessionDocumentAccess {
@@ -41,59 +65,96 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
   sendMessage(
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    message: unknown,
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-  ): Promise<ExtensionSessionTransportResult<unknown>> {
+    delivery: ExtensionSessionTransportDelivery,
+  ): Promise<ExtensionSessionTransportResult>
+  sendMessage<Response, DecodeFailure>(
+    delivery: DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<ExtensionSessionTransportResult<Response, DecodeFailure>>
+  sendMessage<Response = ExtensionSessionResponse, DecodeFailure = never>(
+    delivery:
+      | ExtensionSessionTransportDelivery
+      | DecodedExtensionSessionTransportDelivery<Response, DecodeFailure>,
+  ): Promise<
+    | ExtensionSessionTransportResult
+    | ExtensionSessionTransportResult<Response, DecodeFailure>
+  > {
+    const { message } = delivery
     if (this.access === SessionDocumentAccess.Revoked)
       return Promise.resolve(
-        err(
-          new ExtensionSessionTransportFailure(
-            ExtensionSessionTransportFailureKind.Closed,
-          ),
-        ),
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ).toResult<Response, DecodeFailure>(),
       )
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage(message, (response) => {
-          const nativeFailure = chrome.runtime.lastError
-          if (this.access === SessionDocumentAccess.Revoked) {
-            resolve(
-              err(
+        chrome.runtime.sendMessage(
+          message,
+          (response: ExtensionSessionResponse) => {
+            const nativeFailure = chrome.runtime.lastError
+            if (this.access === SessionDocumentAccess.Revoked) {
+              resolve(
                 new ExtensionSessionTransportFailure(
                   ExtensionSessionTransportFailureKind.Closed,
-                ),
-              ),
-            )
-          } else if (nativeFailure) {
-            resolve(
-              err(
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if (nativeFailure) {
+              resolve(
                 new ExtensionSessionTransportFailure(
                   ExtensionSessionTransportFailureKind.DeliveryFailed,
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if (
+              !response ||
+              typeof response !== 'object' ||
+              Array.isArray(response)
+            ) {
+              resolve(
+                new ExtensionSessionTransportFailure(
+                  ExtensionSessionTransportFailureKind.ResponseMissing,
+                ).toResult<Response, DecodeFailure>(),
+              )
+            } else if ('decodeResponse' in delivery) {
+              const decoded = delivery.decodeResponse(response)
+              resolve(
+                decoded.match(
+                  (decodedResponse) =>
+                    ok<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(decodedResponse),
+                  (failure) =>
+                    err<
+                      Response,
+                      ExtensionSessionTransportFailure | DecodeFailure
+                    >(failure),
                 ),
-              ),
-            )
-          } else {
-            resolve(ok(response))
-          }
-        })
+              )
+            } else {
+              resolve(
+                ok<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
+                  response,
+                ),
+              )
+            }
+          },
+        )
       } catch {
         resolve(
-          err(
-            new ExtensionSessionTransportFailure(
-              ExtensionSessionTransportFailureKind.DeliveryFailed,
-            ),
-          ),
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ).toResult<Response, DecodeFailure>(),
         )
       }
     })
   }
 
-  async close(): Promise<ExtensionSessionTransportResult<void>> {
+  async close(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     this.access = SessionDocumentAccess.Revoked
     try {
       await chrome.offscreen.closeDocument()
-      return ok()
+      return ok(ExtensionSessionDocumentStateKind.Closed)
     } catch {
       return err(
         new ExtensionSessionTransportFailure(
@@ -104,7 +165,7 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   }
 }
 
-enum ExtensionSessionDocumentStateKind {
+export enum ExtensionSessionDocumentStateKind {
   Unobserved = 'unobserved',
   ObservationFailed = 'observation-failed',
   Closed = 'closed',
@@ -133,7 +194,9 @@ type ExtensionSessionDocumentState =
     }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.Closing
-      readonly operation: Promise<ExtensionSessionTransportResult<void>>
+      readonly operation: Promise<
+        ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+      >
     }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.ClosureFailed
@@ -151,13 +214,18 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<OpenExtensionSessionDocument>
   > {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      await chrome.offscreen.createDocument({
+      type CreateCreateDocumentRequest = {
+        url: string
+        reasons: chrome.offscreen.Reason[]
+        justification: string
+      }
+      const createCreateDocumentRequest: CreateCreateDocumentRequest = {
         url: extensionSessionDocument,
         reasons: [chrome.offscreen.Reason.WORKERS],
         justification:
           'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-      })
+      }
+      await chrome.offscreen.createDocument(createCreateDocumentRequest)
     } catch {
       return err(
         new ExtensionSessionTransportFailure(
@@ -266,7 +334,9 @@ export class ExtensionSessionDocumentOwner {
 
   private async closeDocument(
     document: OpenExtensionSessionDocument,
-  ): Promise<ExtensionSessionTransportResult<void>> {
+  ): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     const closed = await document.close()
     this.state = closed.isOk()
       ? { kind: ExtensionSessionDocumentStateKind.Closed }
@@ -279,17 +349,24 @@ export class ExtensionSessionDocumentOwner {
   }
 
   private async closeUnobservedDocument(): Promise<
-    ExtensionSessionTransportResult<void>
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     try {
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      const contexts = await chrome.runtime.getContexts({
-        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-        documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
-      })
+      type CloseUnobservedDocumentGetContextsRequest = {
+        contextTypes: chrome.runtime.ContextType[]
+        documentUrls: string[]
+      }
+      const closeUnobservedDocumentGetContextsRequest: CloseUnobservedDocumentGetContextsRequest =
+        {
+          contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+          documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
+        }
+      const contexts = await chrome.runtime.getContexts(
+        closeUnobservedDocumentGetContextsRequest,
+      )
       if (contexts.length === 0) {
         this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
-        return ok()
+        return ok(ExtensionSessionDocumentStateKind.Closed)
       }
     } catch {
       const failure = new ExtensionSessionTransportFailure(
@@ -304,10 +381,12 @@ export class ExtensionSessionDocumentOwner {
     return this.closeDocument(new OpenExtensionSessionDocument())
   }
 
-  close(): Promise<ExtensionSessionTransportResult<void>> {
+  close(): Promise<
+    ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+  > {
     const state = this.state
     if (state.kind === ExtensionSessionDocumentStateKind.Closed)
-      return Promise.resolve(ok())
+      return Promise.resolve(ok(ExtensionSessionDocumentStateKind.Closed))
     if (state.kind === ExtensionSessionDocumentStateKind.Closing)
       return state.operation
     if (
@@ -328,7 +407,11 @@ export class ExtensionSessionDocumentOwner {
     const operation =
       state.kind === ExtensionSessionDocumentStateKind.Creating
         ? state.operation.then(
-            (created): Promise<ExtensionSessionTransportResult<void>> => {
+            (
+              created,
+            ): Promise<
+              ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
+            > => {
               if (created.isErr()) {
                 this.state =
                   created.error.kind ===

@@ -3,6 +3,10 @@ import {
   WebsiteLoginOptionsMessage as WebsiteLoginOptionsMessageSchema,
 } from '../../lib/login-fill-messages'
 import { NookWebsiteLoginSaveDecision } from '../../lib/login-save-messages'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
 import type { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type LoginOperationFailure = {
@@ -17,12 +21,12 @@ export type LoginSaveActionResponse =
 export function decodeWebsiteLoginFillResponse(
   response: unknown,
 ): WebsiteLoginFillResponse {
-  if (
-    response &&
-    typeof response === 'object' &&
-    WebsiteLoginOptionsMessageSchema.isWebsiteLoginFillResponse(response)
-  ) {
-    return response
+  const decoded = runConcreteDecoder(
+    WebsiteLoginOptionsMessageSchema.decodeWebsiteLoginFillResponse,
+    response,
+  )
+  if (decoded.kind === ConcreteDecoderResultKind.Decoded) {
+    return decoded.value
   }
   return { ok: false, reason: 'login-fill-session-invalid' }
 }
@@ -61,17 +65,42 @@ function loginOperationFailure(response: unknown): LoginOperationFailureDecode {
   return { kind: LoginOperationFailureDecodeKind.Invalid }
 }
 
-function isLoginSaveDecision(
-  decision: number,
-): decision is NookWebsiteLoginSaveDecision {
+enum LoginSaveDecisionDecodeKind {
+  Invalid = 'invalid',
+  Decoded = 'decoded',
+}
+
+type LoginSaveDecisionDecode =
+  | { kind: LoginSaveDecisionDecodeKind.Invalid }
+  | {
+      kind: LoginSaveDecisionDecodeKind.Decoded
+      decision: NookWebsiteLoginSaveDecision
+    }
+
+function decodeLoginSaveDecision(decision: number): LoginSaveDecisionDecode {
   switch (decision) {
     case NookWebsiteLoginSaveDecision.Create:
+      return {
+        kind: LoginSaveDecisionDecodeKind.Decoded,
+        decision: NookWebsiteLoginSaveDecision.Create,
+      }
     case NookWebsiteLoginSaveDecision.Update:
+      return {
+        kind: LoginSaveDecisionDecodeKind.Decoded,
+        decision: NookWebsiteLoginSaveDecision.Update,
+      }
     case NookWebsiteLoginSaveDecision.AlreadySaved:
+      return {
+        kind: LoginSaveDecisionDecodeKind.Decoded,
+        decision: NookWebsiteLoginSaveDecision.AlreadySaved,
+      }
     case NookWebsiteLoginSaveDecision.Invalid:
-      return true
+      return {
+        kind: LoginSaveDecisionDecodeKind.Decoded,
+        decision: NookWebsiteLoginSaveDecision.Invalid,
+      }
     default:
-      return false
+      return { kind: LoginSaveDecisionDecodeKind.Invalid }
   }
 }
 
@@ -86,19 +115,15 @@ export function decodeLoginSaveActionResponse(
     response &&
     typeof response === 'object' &&
     'ok' in response &&
-    response.ok === true &&
-    (!('decision' in response) ||
-      (typeof response.decision === 'number' &&
-        isLoginSaveDecision(response.decision)))
+    response.ok === true
   ) {
-    if ('decision' in response) {
-      const decision = response.decision
-      if (typeof decision === 'number' && isLoginSaveDecision(decision)) {
-        return { ok: true, decision }
+    if (!('decision' in response)) return { ok: true }
+    if (typeof response.decision === 'number') {
+      const decision = decodeLoginSaveDecision(response.decision)
+      if (decision.kind === LoginSaveDecisionDecodeKind.Decoded) {
+        return { ok: true, decision: decision.decision }
       }
-      return { ok: false, reason: 'login-save-session-invalid' }
     }
-    return { ok: true }
   }
   return { ok: false, reason: 'login-save-session-invalid' }
 }

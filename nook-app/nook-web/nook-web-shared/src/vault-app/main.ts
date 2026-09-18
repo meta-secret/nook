@@ -1,4 +1,4 @@
-import { mount } from "svelte";
+import { mount, type ComponentProps, type MountOptions } from "svelte";
 import { err, ok, type Result } from "neverthrow";
 import "./app.css";
 import { configured_vault_application, type VaultApplication } from "$app-wasm";
@@ -13,13 +13,19 @@ export enum VaultMountFailure {
   RenderUnavailable = "render-unavailable",
 }
 
+export enum VaultMountOutcome {
+  Mounted = "mounted",
+}
+
 class VaultAppMount {
   constructor(private readonly application: VaultApplication) {}
-  async mount(): Promise<Result<void, VaultMountFailure>> {
+  async mount(): Promise<Result<VaultMountOutcome, VaultMountFailure>> {
     const target = document.getElementById("app");
     if (!target) return err(VaultMountFailure.MissingTarget);
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    const startupShell = new VaultStartupShell({ target });
+    const startupShellRequest: ConstructorParameters<
+      typeof VaultStartupShell
+    >[0] = { target };
+    const startupShell = new VaultStartupShell(startupShellRequest);
     const ready = await vaultApplicationRuntime.ensureAppWasm(this.application);
     if (ready.isErr()) {
       startupShell.showUnavailable();
@@ -34,10 +40,10 @@ class VaultAppMount {
       }
       if (!target.isConnected || document.getElementById("app") !== target)
         return err(VaultMountFailure.DetachedTarget);
-      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-      mount(App, { target });
+      const mountOptions: MountOptions<ComponentProps<typeof App>> = { target };
+      mount(App, mountOptions);
       startupShell.remove();
-      return ok();
+      return ok(VaultMountOutcome.Mounted);
     } catch {
       startupShell.showUnavailable();
       return err(VaultMountFailure.RenderUnavailable);

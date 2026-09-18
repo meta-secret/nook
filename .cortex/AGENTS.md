@@ -201,10 +201,100 @@ Treat a new or changed unowned free function as a P1 finding. Follow
 [function ownership](shared/dynamic-skills/function-ownership.md) for owner
 selection, narrow external boundaries, and language-specific authorities.
 
-Every authored TypeScript, JavaScript, or Svelte source also follows the
-read-only [TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md)
-authority. It owns explicit absence, discriminated state, enum-backed closed
-vocabularies, and the prohibition on authored `null` or `undefined`.
+## Universal language authoring
+
+These routes apply by authored language, regardless of the owning team,
+directory, package, or artifact kind. They cover product code, tests, examples,
+configuration, build scripts, executable skills, Loom, and repository tooling.
+Loading a foreign-team language authority is read-only engineering policy. It
+does not transfer functional ownership or require loading that team's graph.
+
+### TypeScript-family code
+
+Every agent that authors TypeScript, JavaScript, TSX, JSX, or Svelte must load
+and apply the complete relevant authority set before editing.
+
+#### Required authorities
+
+- [Function ownership](shared/dynamic-skills/function-ownership.md) assigns
+  every authored function to a meaningful owner.
+- [Domain API integrity](shared/dynamic-skills/domain-api-integrity.md) governs
+  named domain types, concrete values, request APIs, typed failures, exhaustive
+  states, and schema evolution.
+- [TypeScript domain structure](teams/web-dev/dynamic-skills/typescript-domain-structure.md),
+  [TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md),
+  [concrete values](teams/web-dev/dynamic-skills/typescript-no-unknown.md),
+  [single parameters](teams/web-dev/dynamic-skills/typescript-single-parameter.md),
+  and [named call arguments](teams/web-dev/dynamic-skills/typescript-named-args.md)
+  form the universal TypeScript modeling baseline.
+- [TypeScript Effect Workflows](teams/web-dev/dynamic-skills/typescript-effect.md)
+  governs effectful workflows and their failure, service, resource,
+  concurrency, and boundary-decoding structure.
+- [Source file size](shared/dynamic-skills/source-file-size.md) governs source
+  structure.
+- [Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)
+  governs authored tests and regression evidence.
+- [Prefer popular libraries](shared/dynamic-skills/prefer-popular-libraries.md)
+  applies when adding a dependency or replacing commodity code.
+- [TypeScript and Rust automation only](shared/dynamic-skills/typescript-rust-automation-only.md)
+  also applies when the authored code is repository automation.
+
+#### Conditional authorities
+
+- Load [TypeScript enums over booleans](teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md)
+  for domain, state, policy, mode, configuration, or owned-contract booleans.
+- Load [Svelte state modeling](teams/web-dev/dynamic-skills/svelte-state-modeling.md)
+  for Svelte code.
+- Load [serial operation queues](teams/web-dev/dynamic-skills/typescript-serial-operation-queues.md)
+  for a serial asynchronous queue.
+- Load [UI design](teams/web-dev/dynamic-skills/ui-design-skills.md) for
+  user-visible copy or interaction.
+- Load [Rust-TypeScript separation](teams/dev-core/dynamic-skills/rust-typescript-code-separation.md)
+  and [WASM name coherence](teams/dev-core/dynamic-skills/rust-wasm-name-coherence.md)
+  for a Rust/WASM boundary.
+- Load [secret lifecycle](teams/security/dynamic-skills/secret-lifecycle.md) for
+  a secret-bearing value.
+
+### Rust code
+
+Every agent that authors Rust must load and apply the complete relevant
+authority set before editing. This includes product crates, tooling, tests,
+examples, build scripts, and repository automation.
+
+#### Required authorities
+
+- [Function ownership](shared/dynamic-skills/function-ownership.md) assigns
+  every authored function to a meaningful owner.
+- [Domain API integrity](shared/dynamic-skills/domain-api-integrity.md) governs
+  named domain types, concrete values, request APIs, typed failures, exhaustive
+  states, and schema evolution.
+- [Rust coding](teams/dev-core/dynamic-skills/rust-coding.md), including its
+  linked [action ownership and typestate](teams/dev-core/design-docs/rust-action-ownership.md),
+  governs Rust modeling and implementation.
+- [Typed newtypes](teams/dev-core/design-docs/typed-newtypes.md) governs domain
+  values and validated construction.
+- [Rust macro minimization](teams/dev-core/dynamic-skills/rust-macro-minimization.md)
+  governs authored macros and explicit implementation.
+- [Rust-TypeScript separation](teams/dev-core/dynamic-skills/rust-typescript-code-separation.md)
+  preserves language ownership even when the immediate change is Rust-only.
+- [Source file size](shared/dynamic-skills/source-file-size.md) governs source
+  structure.
+- [Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)
+  governs behavior-focused tests and regression evidence.
+- [Prefer popular libraries](shared/dynamic-skills/prefer-popular-libraries.md)
+  applies when adding a dependency or replacing commodity code.
+- [TypeScript and Rust automation only](shared/dynamic-skills/typescript-rust-automation-only.md)
+  also applies when the authored code is repository automation.
+
+#### Conditional authorities
+
+- Load [WASM name coherence](teams/dev-core/dynamic-skills/rust-wasm-name-coherence.md)
+  for a Rust/WASM boundary.
+- Load [secret lifecycle](teams/security/dynamic-skills/secret-lifecycle.md) for
+  a secret-bearing value.
+
+Missing a required language authority or failing to apply it is a P1 finding.
+The authoring packet fails closed until the complete relevant set is loaded.
 
 ### Domain APIs
 
@@ -366,7 +456,11 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Delivery Pipeline's PR Lifecycle Agent re-fetches and resolves that branch's
     latest committed head before each packetized push and remote invocation.
     A branch advance follows the latest head and reruns affected evidence.
-  - Completed features enter local dev through serialized local integration.
+  - Accepted feature changes enter local dev through serialized local
+    integration.
+  - Feature completion requires containment evidence after that integration.
+    Resolve canonical local `dev` after `dev:land` and verify that its commit
+    contains the accepted feature commit.
   - The dev manager alone publishes dev and requests full slow PR validation.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
@@ -685,12 +779,18 @@ merge is not an intermediate selection.
 ### Delivery completion
 
 Feature delivery completes after reviewed, remotely compiled changes merge
-into local dev through local integration. The manually run dev manager owns the
-slow delivery stage through snapshot publication, full dev PR validation, and
-guarded fast-forward promotion. Delivery Pipeline Team Gizmo routes authorized
-mechanics to the PR Lifecycle Agent for the owning controller. Promotion
-fast-forwards main to the tested dev SHA. A worker commit alone does not
-complete feature delivery. Every change passes through dev.
+into canonical local `dev` through local integration and containment is
+verified. Resolve both commits after `dev:land`, then require
+`git merge-base --is-ancestor <accepted-feature-commit> <resulting-dev-commit>`
+to succeed. No agent may call a feature complete, done, delivered, successful,
+or an equivalent terminal outcome before that proof. Review, compilation,
+acceptance, a worker commit, parent integration, or a successful `dev:land`
+invocation may describe only its own intermediate stage until containment is
+proved. The manually run dev manager owns the slow delivery stage through
+snapshot publication, full dev PR validation, and guarded fast-forward
+promotion. Delivery Pipeline Team Gizmo routes authorized mechanics to the PR
+Lifecycle Agent for the owning controller. Promotion fast-forwards main to the
+tested dev SHA. Every change passes through dev.
 
 ### Failed validation waves
 

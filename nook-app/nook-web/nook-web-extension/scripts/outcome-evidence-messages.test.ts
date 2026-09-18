@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Effect } from 'effect'
 import { AuthenticationOutcomeClassifyMessage as AuthenticationOutcomeClassifyMessageSchema } from '../src/lib/outcome-evidence-messages'
 
 const validObservation = {
@@ -14,30 +15,42 @@ const validObservation = {
 describe('outcome evidence messages', () => {
   test('accepts a bounded classify payload', () => {
     expect(
-      AuthenticationOutcomeClassifyMessageSchema.is({
-        type: 'nook:authentication-outcome-classify',
-        payload: { observation: validObservation, timeoutMs: 8_000 },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          AuthenticationOutcomeClassifyMessageSchema.decode({
+            type: 'nook:authentication-outcome-classify',
+            payload: { observation: validObservation, timeoutMs: 8_000 },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 
   test('rejects secret-bearing or malformed observations', () => {
     expect(
-      AuthenticationOutcomeClassifyMessageSchema.is({
-        type: 'nook:authentication-outcome-classify',
-        payload: {
-          observation: { ...validObservation, elapsedMs: -1 },
-        },
-      }),
-    ).toBe(false)
+      Effect.runSync(
+        Effect.either(
+          AuthenticationOutcomeClassifyMessageSchema.decode({
+            type: 'nook:authentication-outcome-classify',
+            payload: {
+              observation: { ...validObservation, elapsedMs: -1 },
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Left')
     expect(
-      AuthenticationOutcomeClassifyMessageSchema.is({
-        type: 'nook:authentication-outcome-classify',
-        payload: {
-          observation: { ...validObservation, password: 'x' },
-          timeoutMs: 8_000,
-        },
-      }),
-    ).toBe(true)
+      Effect.runSync(
+        Effect.either(
+          AuthenticationOutcomeClassifyMessageSchema.decode({
+            type: 'nook:authentication-outcome-classify',
+            payload: {
+              observation: { ...validObservation, password: 'x' },
+              timeoutMs: 8_000,
+            },
+          }),
+        ),
+      )._tag,
+    ).toBe('Right')
   })
 })

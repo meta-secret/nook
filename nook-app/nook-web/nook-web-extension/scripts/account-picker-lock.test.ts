@@ -31,10 +31,9 @@ function browserTab(
 class AuthorizationStorageFixture {
   readonly runtime = {}
   readonly session = {
-    get: (_key: string, callback: (items: Record<string, unknown>) => void) =>
-      callback({}),
-    set: (_items: Record<string, unknown>, callback: () => void) => callback(),
-    remove: (_key: string, callback: () => void) => callback(),
+    get: () => Promise.resolve({}),
+    set: () => Promise.resolve(),
+    remove: () => Promise.resolve(),
   }
 
   constructor() {
@@ -46,21 +45,23 @@ class AuthorizationStorageFixture {
     })
   }
 
-  holdRemoval(): Promise<() => void> {
+  holdRemoval(): Promise<(failure?: Error) => void> {
     return new Promise((resolve) => {
-      this.session.remove = (_key, callback) => resolve(callback)
+      this.session.remove = () =>
+        new Promise<void>((complete, reject) =>
+          resolve((failure) => (failure ? reject(failure) : complete())),
+        )
     })
   }
 
-  finishRemoval(callback: () => void): void {
-    this.session.remove = (_key, complete) => complete()
+  finishRemoval(callback: (failure?: Error) => void): void {
+    this.session.remove = () => Promise.resolve()
     callback()
   }
 
-  failRemoval(callback: () => void): void {
-    Object.assign(this.runtime, { lastError: { message: 'removal denied' } })
-    this.finishRemoval(callback)
-    Reflect.deleteProperty(this.runtime, 'lastError')
+  failRemoval(callback: (failure?: Error) => void): void {
+    this.session.remove = () => Promise.resolve()
+    callback(new Error('removal denied'))
   }
 }
 
@@ -80,7 +81,11 @@ describe('account picker authorization cleanup', () => {
             const frameId =
               typeof options.frameId === 'number' ? options.frameId : 0
             deliveries.push({ tabId, frameId })
-            return Promise.resolve({ ok: options.frameId === 7 })
+            return Promise.resolve(
+              options.frameId === 7
+                ? { ok: true }
+                : { ok: false, reason: 'frame-unavailable' },
+            )
           },
         },
       },
@@ -106,12 +111,18 @@ describe('account picker authorization cleanup', () => {
     const requestedFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
       tabId: 42,
       frameId: 7,
-      message: { type: 'selected' },
+      message: {
+        type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+        payload: { origin: 'https://example.test', requestId: 'request-7' },
+      },
     }
     const wrongFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
       tabId: 42,
       frameId: 3,
-      message: { type: 'selected' },
+      message: {
+        type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+        payload: { origin: 'https://example.test', requestId: 'request-3' },
+      },
     }
 
     expect(await AccountPickerPageTarget.send(requestedFrame)).toEqual({
@@ -119,6 +130,7 @@ describe('account picker authorization cleanup', () => {
     })
     expect(await AccountPickerPageTarget.send(wrongFrame)).toEqual({
       ok: false,
+      reason: 'frame-unavailable',
     })
     expect(deliveries).toEqual([
       { tabId: 42, frameId: 7 },
@@ -126,7 +138,7 @@ describe('account picker authorization cleanup', () => {
     ])
   })
 
-  test('rehydrates only picker records carrying a validated frame target', async () => {
+  test('rehydrates only stored values carrying a validated frame target', async () => {
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const stored = {
@@ -138,13 +150,7 @@ describe('account picker authorization cleanup', () => {
         allowedVaultStoreIds: ['vault-1'],
         expiresAt: Date.now() + 60_000,
       },
-      'nook.extension.login-picker.legacy-unframed': {
-        requestId: 'legacy-unframed',
-        origin: 'https://idmsa.apple.test',
-        tabId: 42,
-        allowedVaultStoreIds: ['vault-1'],
-        expiresAt: Date.now() + 60_000,
-      },
+      'nook.extension.login-picker.invalid': 'invalid-picker-record',
     }
 
     expect(
@@ -152,7 +158,7 @@ describe('account picker authorization cleanup', () => {
     ).toEqual({
       storageKeys: [
         'nook.extension.login-picker.framed',
-        'nook.extension.login-picker.legacy-unframed',
+        'nook.extension.login-picker.invalid',
       ],
       cancellations: [
         {
@@ -186,18 +192,28 @@ describe('account picker authorization cleanup', () => {
       await accountPickers.accountPickerSessions.loadLoginPicker(
         'persisted-request',
       )
+    const cleanupCompletion: Parameters<
+      typeof accountPickers.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await accountPickers.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
+      cleanupCompletion,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const overlapCompletion: Parameters<
+      typeof accountPickers.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await accountPickers.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Full,
+      overlapCompletion,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
@@ -214,10 +230,14 @@ describe('account picker authorization cleanup', () => {
     const storage = new AuthorizationStorageFixture()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
     const removal = storage.holdRemoval()
-    const completing = authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
-    )
+    const completion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
+    const completing =
+      authorization.completeAccountPickerAuthorizationCleanup(completion)
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
     storage.finishRemoval(callback)
@@ -227,9 +247,14 @@ describe('account picker authorization cleanup', () => {
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const overlapCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Full,
+      overlapCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -244,18 +269,27 @@ describe('account picker authorization cleanup', () => {
     const storage = new AuthorizationStorageFixture()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
     const removal = storage.holdRemoval()
-    const completing = authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Full,
-    )
+    const completion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
+    const completing =
+      authorization.completeAccountPickerAuthorizationCleanup(completion)
     const rejected = completing.catch((error: Error) => error)
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
     storage.failRemoval(callback)
     expect(await rejected).toEqual(new Error('removal denied'))
+    const overlapCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: overlap.authorizationGeneration,
+      evidence: CleanupEvidence.Partial,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      overlap.authorizationGeneration,
-      CleanupEvidence.Partial,
+      overlapCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -264,9 +298,14 @@ describe('account picker authorization cleanup', () => {
     ).toBe(false)
     const fullCleanup =
       await authorization.beginAccountPickerAuthorizationCleanup()
+    const fullCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: fullCleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Full,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      fullCleanup.authorizationGeneration,
-      CleanupEvidence.Full,
+      fullCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -281,10 +320,15 @@ describe('account picker authorization cleanup', () => {
     new AuthorizationStorageFixture()
     const old = await authorization.accountPickerAuthorizationGeneration()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
+    const staleCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: old,
+      evidence: CleanupEvidence.Full,
+    }
     const rejected =
       await authorization.completeAccountPickerAuthorizationCleanup(
-        old,
-        CleanupEvidence.Full,
+        staleCompletion,
       )
     expect(rejected).toHaveProperty('error')
     authorization.releaseAccountPickerAuthorizationCleanup(old)
@@ -293,9 +337,14 @@ describe('account picker authorization cleanup', () => {
         cleanup.authorizationGeneration,
       ),
     ).toBe(false)
+    const cleanupCompletion: Parameters<
+      typeof authorization.completeAccountPickerAuthorizationCleanup
+    >[0] = {
+      authorizationGeneration: cleanup.authorizationGeneration,
+      evidence: CleanupEvidence.Partial,
+    }
     await authorization.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      CleanupEvidence.Partial,
+      cleanupCompletion,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -312,10 +361,10 @@ describe('account picker authorization cleanup', () => {
         runtime: {},
         storage: {
           session: {
-            get: (
-              _key: string,
-              callback: (items: Record<string, boolean>) => void,
-            ) => callback({ 'nook.extension.account-picker-cleanup': true }),
+            get: () =>
+              Promise.resolve({
+                'nook.extension.account-picker-cleanup': true,
+              }),
           },
         },
       },
@@ -340,12 +389,11 @@ describe('account picker authorization cleanup', () => {
         runtime,
         storage: {
           session: {
-            get: (callback: (items: Record<string, boolean>) => void) => {
+            get: () => {
               if (rejectStorage) {
-                Object.assign(runtime, { lastError: { message: 'denied' } })
+                return Promise.reject(new Error('denied'))
               }
-              callback({})
-              Reflect.deleteProperty(runtime, 'lastError')
+              return Promise.resolve({})
             },
           },
         },
