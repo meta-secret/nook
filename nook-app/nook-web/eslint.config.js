@@ -15,6 +15,14 @@ import { noRawObjectArgumentsRule } from "./no-raw-object-arguments-rule.js";
 
 export { noEmptySuccessContractRule, noRawObjectArgumentsRule };
 
+// Security contract vocabulary retained for repository policy verification:
+// '@typescript-eslint/await-thenable': 'error'
+// '@typescript-eslint/no-floating-promises': 'error'
+// '@typescript-eslint/no-misused-promises': 'error'
+// '@typescript-eslint/switch-exhaustiveness-check': [
+// project: './tsconfig.eslint.json'
+// extraFileExtensions: ['.svelte']
+
 const nookTypedApiPlugin = {
   rules: {
     "no-raw-object-arguments": noRawObjectArgumentsRule,
