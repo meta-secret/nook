@@ -302,8 +302,8 @@ before acting.
 
 Every feature branch starts from freshly fetched \`origin/main\`. Gizmo Prime
 owns the full cycle through all required PR checks, squash merge to \`main\`,
-actual merged-state verification, and remote feature-branch deletion. Reviews
-and approvals are optional.
+actual merged-state verification, and remote feature-branch deletion.
+Reviews and approvals are optional.
 
 ## Owning contexts
 
