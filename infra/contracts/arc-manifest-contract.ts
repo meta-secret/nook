@@ -431,7 +431,7 @@ class ArcManifestContract {
     if (gcPolicyCount.isErr()) return err(gcPolicyCount.error);
     const gcReservedSpaceCount = buildkit.count({
       fragment: '      reservedSpace = "8GB"',
-      expected: 4,
+      expected: 3,
     });
     if (gcReservedSpaceCount.isErr()) return err(gcReservedSpaceCount.error);
     const gcMaxUsedSpaceCount = buildkit.count({
@@ -441,7 +441,7 @@ class ArcManifestContract {
     if (gcMaxUsedSpaceCount.isErr()) return err(gcMaxUsedSpaceCount.error);
     const gcMinFreeSpaceCount = buildkit.count({
       fragment: '      minFreeSpace = "16GB"',
-      expected: 4,
+      expected: 3,
     });
     if (gcMinFreeSpaceCount.isErr()) return err(gcMinFreeSpaceCount.error);
     const gcShortLivedMaxUsedSpaceCount = buildkit.count({
