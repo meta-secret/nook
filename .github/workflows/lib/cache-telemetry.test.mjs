@@ -13,6 +13,7 @@ import {
   CompilePhaseStatus,
 } from "./cache-scope-telemetry.mjs";
 import { resolveSccacheFallback } from "./cache-telemetry-fallback.mjs";
+import { BuildHistoryTelemetry } from "./build-history-telemetry.mjs";
 
 /** @typedef {import("./cache-telemetry-contracts.mjs").SccacheReport} SccacheReport */
 /** @typedef {{state: 'active' | 'fallback', reason: string}} FallbackState */
@@ -428,7 +429,7 @@ void test("maps history logs concurrently while preserving record order", async 
 
 void test("accepts raw Buildx progress JSON from either process stream", () => {
   assert.match(
-    CacheTelemetry.readHistoryEvents.toString(),
+    BuildHistoryTelemetry.readHistoryEvents.toString(),
     /events\.length > 0 \|\| \(status === 0/,
   );
   assert.deepEqual(

@@ -46,6 +46,23 @@ void test("publishes Buildx record identities in the telemetry baseline", async 
   }
 });
 
+void test("ignores non-record baseline entries at the JSON boundary", () => {
+  const baseline = BuildHistoryBaseline.parse({
+    text: JSON.stringify({
+      refs: [historyRecord.ref],
+      records: [historyRecord, "not-a-record", 42],
+      warnings: ["baseline warning"],
+    }),
+    normalize: (record) => CacheTelemetry.normalizeBuildRecord(record),
+  });
+
+  assert.deepEqual(baseline.records, [
+    CacheTelemetry.normalizeBuildRecord(historyRecord),
+  ]);
+  assert.deepEqual(baseline.refs, [historyRecord.ref]);
+  assert.deepEqual(baseline.warnings, ["baseline warning"]);
+});
+
 void test("keeps a completed successor that reuses a baseline Buildx ref", async () => {
   const originalListBuildHistory =
     CacheTelemetry.listBuildHistory.bind(CacheTelemetry);

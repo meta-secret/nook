@@ -1,8 +1,19 @@
 /** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryBaseline} BuildHistoryBaselineRecord */
 /** @typedef {import("./cache-telemetry-contracts.mjs").BuildHistoryRecord} BuildHistoryRecord */
+/** @typedef {import("./cache-telemetry-contracts.mjs").JsonRecord} JsonRecord */
 
 /** Owns Buildx history baseline publication and successor identity. */
 export class BuildHistoryBaseline {
+  /** @param {unknown} value @returns {value is JsonRecord} */
+  static isJsonRecord(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  /** @param {string} text @returns {unknown} */
+  static parseJson(text) {
+    return JSON.parse(text);
+  }
+
   /** @param {BuildHistoryRecord} record @returns {string} */
   static identity(record) {
     return [
@@ -19,27 +30,19 @@ export class BuildHistoryBaseline {
    * @returns {BuildHistoryBaselineRecord}
    */
   static parse({ text, normalize }) {
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    const parsed = BuildHistoryBaseline.parseJson(text);
+    if (!BuildHistoryBaseline.isJsonRecord(parsed))
       throw new Error("expected a JSON object");
-    const record = /** @type {Record<string, unknown>} */ (parsed);
-    const records = Array.isArray(record.records)
-      ? record.records
-          .filter(
-            (candidate) =>
-              Boolean(candidate) &&
-              typeof candidate === "object" &&
-              !Array.isArray(candidate),
-          )
-          .map((candidate) =>
-            normalize(/** @type {Record<string, unknown>} */ (candidate)),
-          )
+    const records = Array.isArray(parsed.records)
+      ? parsed.records
+          .filter((candidate) => BuildHistoryBaseline.isJsonRecord(candidate))
+          .map(normalize)
       : [];
-    const refs = Array.isArray(record.refs)
-      ? record.refs.filter((ref) => typeof ref === "string")
+    const refs = Array.isArray(parsed.refs)
+      ? parsed.refs.filter((ref) => typeof ref === "string")
       : [];
-    const warnings = Array.isArray(record.warnings)
-      ? record.warnings.filter((warning) => typeof warning === "string")
+    const warnings = Array.isArray(parsed.warnings)
+      ? parsed.warnings.filter((warning) => typeof warning === "string")
       : [];
     return { refs, records, warnings };
   }
