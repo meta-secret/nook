@@ -31,6 +31,18 @@
 
   type SecretListItemCollection = ReadonlyArray<NookSecretListItem>;
 
+  type SecretListItemComparison = readonly [
+    left: NookSecretListItem,
+    right: NookSecretListItem,
+  ];
+
+  type SecretGroup = {
+    readonly site: string;
+    readonly items: NookSecretListItem[];
+  };
+
+  type SecretGroupComparison = readonly [left: SecretGroup, right: SecretGroup];
+
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
     NookSecretTypeFilter,
@@ -120,7 +132,8 @@
   );
   let searchPattern = $derived(vault.secretQuery);
   let decryptedSecrets = $state<DecryptedSecrets>({});
-  let secretExposure = new SecretExposure({});
+  const initialDecryptedSecrets: DecryptedSecrets = {};
+  let secretExposure = new SecretExposure(initialDecryptedSecrets);
   let expandedSecrets = $state<Record<string, boolean>>({});
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
   let addSecretOpen = $state(false);
@@ -130,6 +143,16 @@
   let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating });
   let editLoadSequence = 0;
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({});
+
+  class SecretVaultOrdering {
+    static byType(...[left, right]: SecretListItemComparison): number {
+      return left.type - right.type;
+    }
+
+    static bySite(...[left, right]: SecretGroupComparison): number {
+      return left.site.localeCompare(right.site);
+    }
+  }
 
   const typeFilters: Array<{
     value: SecretType;
@@ -235,9 +258,9 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort((a, b) => a.type - b.type),
+        items: items.sort(SecretVaultOrdering.byType),
       }))
-      .sort((a, b) => a.site.localeCompare(b.site));
+      .sort(SecretVaultOrdering.bySite);
   });
 
   function notifyAddMode() {
@@ -286,7 +309,8 @@
 
   function resetTransientSecretViews() {
     secretExposure.free();
-    secretExposure = new SecretExposure({});
+    const clearedSecrets: DecryptedSecrets = {};
+    secretExposure = new SecretExposure(clearedSecrets);
     decryptedSecrets = {};
     authenticatorCodes = {};
   }
@@ -377,10 +401,11 @@
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       );
     }
-    return ok({
+    const notice: ClipboardNotice = {
       kind: ClipboardNoticeKind.Visible,
       fieldKey: `${id}-${field}`,
-    });
+    };
+    return ok(notice);
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {

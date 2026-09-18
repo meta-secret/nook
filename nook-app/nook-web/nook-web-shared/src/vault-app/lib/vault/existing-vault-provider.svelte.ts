@@ -69,41 +69,51 @@ export class ExistingVaultProviderDraft {
     } catch (failure) {
       return err(new NativeVaultStorageFailure(failure));
     }
-    if (readiness !== NookExistingVaultProviderReadiness.Ready)
-      return ok({ kind: readiness });
+    if (readiness !== NookExistingVaultProviderReadiness.Ready) {
+      const incomplete: ExistingVaultProviderPreparation = { kind: readiness };
+      return ok(incomplete);
+    }
     if (setupType === GITHUB_PROVIDER_TYPE) {
-      return ok({
+      const preparation: ExistingVaultProviderPreparation = {
         kind: readiness,
         provider: {
           setupType,
           githubPat: state.githubPat,
           githubRepo: state.githubRepo,
         },
-      });
+      };
+      return ok(preparation);
     }
     if (setupType === OAUTH_FILE_PROVIDER_TYPE) {
-      if (oauth.kind !== OAuthFileDraftKind.Configured)
-        return ok({
+      if (oauth.kind !== OAuthFileDraftKind.Configured) {
+        const missingOAuthFile: ExistingVaultProviderPreparation = {
           kind: NookExistingVaultProviderReadiness.MissingOauthFile,
-        });
-      return ok({
+        };
+        return ok(missingOAuthFile);
+      }
+      const preparation: ExistingVaultProviderPreparation = {
         kind: readiness,
         provider: { setupType, oauthFile: $state.snapshot(oauth.config) },
-      });
+      };
+      return ok(preparation);
     }
     if (setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
-      if (folder.kind !== LocalFolderDraftKind.Configured)
-        return ok({
+      if (folder.kind !== LocalFolderDraftKind.Configured) {
+        const missingLocalFolder: ExistingVaultProviderPreparation = {
           kind: NookExistingVaultProviderReadiness.MissingLocalFolder,
-        });
-      return ok({
+        };
+        return ok(missingLocalFolder);
+      }
+      const preparation: ExistingVaultProviderPreparation = {
         kind: readiness,
         provider: { setupType, localFolder: $state.snapshot(folder.config) },
-      });
+      };
+      return ok(preparation);
     }
-    return ok({
+    const preparation: ExistingVaultProviderPreparation = {
       kind: readiness,
       provider: { setupType: LOCAL_PROVIDER_TYPE },
-    });
+    };
+    return ok(preparation);
   }
 }

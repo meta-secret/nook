@@ -1,12 +1,15 @@
 import { Effect, Schema } from "effect";
 import * as ParseResult from "effect/ParseResult";
+import * as AST from "effect/SchemaAST";
 import {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
   type ExtensionPairingDelivery,
 } from "./extension-pairing-delivery";
 
-const strictDecodeOptions = { onExcessProperty: "error" } as const;
+const strictDecodeOptions: AST.ParseOptions = {
+  onExcessProperty: "error",
+};
 
 export type ExtensionRuntimeResponseValue =
   | string
@@ -20,29 +23,45 @@ export type ExtensionRuntimeResponseObject = {
 };
 
 const extensionRuntimeResponseValueSchema: Schema.Schema<ExtensionRuntimeResponseValue> =
-  Schema.suspend(() =>
-    Schema.Union(
+  Schema.suspend(() => {
+    const recursiveRecordFields: RuntimeResponseRecordFields = {
+      key: Schema.String,
+      value: extensionRuntimeResponseValueSchema,
+    };
+    return Schema.Union(
       Schema.String,
       Schema.Number,
       Schema.Boolean,
       Schema.mutable(Schema.Array(extensionRuntimeResponseValueSchema)),
-      Schema.Record({
-        key: Schema.String,
-        value: extensionRuntimeResponseValueSchema,
-      }),
-    ),
-  );
+      Schema.Record(recursiveRecordFields),
+    );
+  });
 
-const extensionRuntimeResponseObjectSchema = Schema.Record({
+type RuntimeResponseRecordFields = {
+  readonly key: typeof Schema.String;
+  readonly value: Schema.Schema<ExtensionRuntimeResponseValue>;
+};
+
+const runtimeResponseRecordFields: RuntimeResponseRecordFields = {
   key: Schema.String,
   value: extensionRuntimeResponseValueSchema,
-});
+};
+const extensionRuntimeResponseObjectSchema = Schema.Record(
+  runtimeResponseRecordFields,
+);
 
-export const AcceptedIdentityHandoffResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  envelope: Schema.String,
-  nextNonce: Schema.String.pipe(Schema.minLength(1)),
-});
+class AcceptedIdentityHandoffResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(true),
+      envelope: Schema.String,
+      nextNonce: Schema.String.pipe(Schema.minLength(1)),
+    };
+  }
+}
+export const AcceptedIdentityHandoffResponseSchema = Schema.Struct(
+  AcceptedIdentityHandoffResponseFields.build(),
+);
 
 export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
   typeof AcceptedIdentityHandoffResponseSchema
@@ -78,25 +97,51 @@ export class IdentityHandoffResponseDecoder {
 export const identityHandoffResponseDecoder =
   new IdentityHandoffResponseDecoder();
 
-const CompanionLauncherResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-});
+class CompanionLauncherResponseFields {
+  static build() {
+    return { ok: Schema.Literal(true) };
+  }
+}
+const CompanionLauncherResponseSchema = Schema.Struct(
+  CompanionLauncherResponseFields.build(),
+);
 
-const CompanionIdentityDiscoveryResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  status: extensionRuntimeResponseObjectSchema,
-});
+class CompanionIdentityDiscoveryResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(true),
+      status: extensionRuntimeResponseObjectSchema,
+    };
+  }
+}
+const CompanionIdentityDiscoveryResponseSchema = Schema.Struct(
+  CompanionIdentityDiscoveryResponseFields.build(),
+);
 
-const CompanionUnlockResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  requestId: Schema.String.pipe(Schema.minLength(1)),
-  vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-});
+class CompanionUnlockResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(true),
+      requestId: Schema.String.pipe(Schema.minLength(1)),
+      vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
+    };
+  }
+}
+const CompanionUnlockResponseSchema = Schema.Struct(
+  CompanionUnlockResponseFields.build(),
+);
 
-const CompanionIdentityHandoffResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  response: extensionRuntimeResponseObjectSchema,
-});
+class CompanionIdentityHandoffResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(true),
+      response: extensionRuntimeResponseObjectSchema,
+    };
+  }
+}
+const CompanionIdentityHandoffResponseSchema = Schema.Struct(
+  CompanionIdentityHandoffResponseFields.build(),
+);
 
 type CompanionLauncherResponse = Schema.Schema.Type<
   typeof CompanionLauncherResponseSchema
@@ -163,32 +208,75 @@ export class CompanionResponseDecoder {
 
 export const companionResponseDecoder = new CompanionResponseDecoder();
 
-const PairingDeliveredResponseSchema = Schema.Struct({
-  ok: Schema.Literal(true),
-  eventCount: Schema.Number.pipe(
-    Schema.filter(
-      (eventCount) => Number.isSafeInteger(eventCount) && eventCount >= 0,
-      { message: () => "eventCount must be a nonnegative safe integer" },
-    ),
-  ),
-});
-const PairingMigrationReasonResponseSchema = Schema.Struct({
-  reason: Schema.Literal("auth-provider-plaintext-migration-required"),
-});
-const PairingMigrationErrorResponseSchema = Schema.Struct({
-  error: Schema.Literal("auth-provider-plaintext-migration-required"),
-});
-const PairingRejectedReasonResponseSchema = Schema.Struct({
-  ok: Schema.Literal(false),
-  reason: Schema.Enums(ExtensionPairingRejectionReason),
-});
-const PairingRejectedErrorResponseSchema = Schema.Struct({
-  ok: Schema.Literal(false),
-  error: Schema.Enums(ExtensionPairingRejectionReason),
-});
-const PairingRejectedResponseSchema = Schema.Struct({
-  ok: Schema.Literal(false),
-});
+const eventCountFilterOptions: Schema.Annotations.Filter<number> = {
+  message: () => "eventCount must be a nonnegative safe integer",
+};
+class PairingDeliveredResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(true),
+      eventCount: Schema.Number.pipe(
+        Schema.filter(
+          (eventCount) => Number.isSafeInteger(eventCount) && eventCount >= 0,
+          eventCountFilterOptions,
+        ),
+      ),
+    };
+  }
+}
+const PairingDeliveredResponseSchema = Schema.Struct(
+  PairingDeliveredResponseFields.build(),
+);
+class PairingMigrationReasonResponseFields {
+  static build() {
+    return {
+      reason: Schema.Literal("auth-provider-plaintext-migration-required"),
+    };
+  }
+}
+const PairingMigrationReasonResponseSchema = Schema.Struct(
+  PairingMigrationReasonResponseFields.build(),
+);
+class PairingMigrationErrorResponseFields {
+  static build() {
+    return {
+      error: Schema.Literal("auth-provider-plaintext-migration-required"),
+    };
+  }
+}
+const PairingMigrationErrorResponseSchema = Schema.Struct(
+  PairingMigrationErrorResponseFields.build(),
+);
+class PairingRejectedReasonResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(false),
+      reason: Schema.Enums(ExtensionPairingRejectionReason),
+    };
+  }
+}
+const PairingRejectedReasonResponseSchema = Schema.Struct(
+  PairingRejectedReasonResponseFields.build(),
+);
+class PairingRejectedErrorResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(false),
+      error: Schema.Enums(ExtensionPairingRejectionReason),
+    };
+  }
+}
+const PairingRejectedErrorResponseSchema = Schema.Struct(
+  PairingRejectedErrorResponseFields.build(),
+);
+class PairingRejectedResponseFields {
+  static build() {
+    return { ok: Schema.Literal(false) };
+  }
+}
+const PairingRejectedResponseSchema = Schema.Struct(
+  PairingRejectedResponseFields.build(),
+);
 
 /** Owns admission of the extension's untrusted pairing acknowledgement. */
 export class PairingApprovalResponseDecoder {

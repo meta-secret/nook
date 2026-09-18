@@ -117,6 +117,9 @@ export class BrowserDataCleanupFailure extends VaultStorageFailure {
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class BrowserDataLifecycle {
+  private readonly sharedLockOptions: LockOptions = { mode: "shared" };
+  private readonly exclusiveLockOptions: LockOptions = { mode: "exclusive" };
+
   constructor(private readonly browser: typeof globalThis) {}
 
   captureLocalDataStorageGeneration(): Result<string, VaultStorageFailure> {
@@ -148,7 +151,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
-        { mode: "shared" },
+        this.sharedLockOptions,
         run,
       );
     } catch {
@@ -166,7 +169,7 @@ class BrowserDataLifecycle {
     try {
       return await this.browser.navigator.locks.request(
         LOCAL_DATA_STORAGE_LOCK,
-        { mode: "exclusive" },
+        this.exclusiveLockOptions,
         async () => {
           const result = await operation();
           try {
@@ -302,12 +305,13 @@ class BrowserDataLifecycle {
         return;
       handled.add(message.requestId);
       try {
-        channel.postMessage({
+        const seenMessage: LocalDataResetMessage = {
           type: LocalDataResetMessageType.Seen,
           requestId: message.requestId,
           senderId: message.senderId,
           responderId: TAB_ID,
-        } satisfies LocalDataResetMessage);
+        };
+        channel.postMessage(seenMessage);
       } catch {
         browserLogRuntime
           .createLogger("browser-data")
@@ -331,13 +335,14 @@ class BrowserDataLifecycle {
             failure: outcome.error.kind,
           };
       try {
-        channel.postMessage({
+        const readyMessage: LocalDataResetMessage = {
           type: LocalDataResetMessageType.Ready,
           requestId: message.requestId,
           senderId: message.senderId,
           responderId: TAB_ID,
           readiness,
-        } satisfies LocalDataResetMessage);
+        };
+        channel.postMessage(readyMessage);
       } catch {
         /* The requesting tab cannot acknowledge this peer and will fail its deadline. */
       }
@@ -455,10 +460,11 @@ class BrowserDataLifecycle {
       );
     }
     try {
-      channel.postMessage({
+      const reloadMessage: LocalDataResetMessage = {
         type: LocalDataResetMessageType.Reload,
         senderId: TAB_ID,
-      } satisfies LocalDataResetMessage);
+      };
+      channel.postMessage(reloadMessage);
       await new Promise((resolve) => setTimeout(resolve, 50));
       return ok(LocalDataRecoveryReloadOutcome.Requested);
     } catch {

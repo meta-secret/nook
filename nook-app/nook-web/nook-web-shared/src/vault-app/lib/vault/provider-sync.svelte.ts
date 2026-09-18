@@ -13,7 +13,10 @@ import type {
   SyncActionsContext,
 } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
-import { VaultStorageSynchronization } from "$lib/nook";
+import {
+  VaultStorageSynchronization,
+  type NookVaultSyncResult,
+} from "$lib/nook";
 import {
   NookEventLogSyncIssueState,
   NookLocalFolderHealth,
@@ -42,6 +45,11 @@ interface ProviderStoreMismatchConflict {
 
 interface LocalFolderProviderSync {
   readonly provider: StorageProvider;
+}
+
+interface ProviderSyncTimeoutRequest {
+  readonly promise: Promise<Result<NookVaultSyncResult, VaultStorageFailure>>;
+  readonly releaseLateValue: (result: NookVaultSyncResult) => void;
 }
 
 type ProviderSyncExecution = ProviderSyncRequest;
@@ -149,11 +157,14 @@ export class ProviderSyncActions {
     if (localYaml.isErr()) return err(localYaml.error);
     if (localYaml.value.trim()) {
       const revision = NookProviderSyncRevision.untracked();
-      const metadata = await state.updateProviderSyncMetadata({
+      const metadataRequest: Parameters<
+        typeof state.updateProviderSyncMetadata
+      >[0] = {
         providerId: provider.id,
         yaml: localYaml.value,
         revision,
-      });
+      };
+      const metadata = await state.updateProviderSyncMetadata(metadataRequest);
       if (metadata.isErr()) return err(metadata.error);
     }
     return ok(LocalFolderProviderSyncOutcome.Synchronized);
@@ -185,18 +196,24 @@ export class ProviderSyncActions {
         const issue = issueResult.issue();
         try {
           if (issue.isStoreMismatch) {
-            const staged = await this.stageProviderStoreMismatchConflict({
+            const conflictRequest: Parameters<
+              typeof this.stageProviderStoreMismatchConflict
+            >[0] = {
               provider,
               localStoreId: issue.localStoreId,
               remoteStoreId: issue.remoteStoreId,
-            });
+            };
+            const staged =
+              await this.stageProviderStoreMismatchConflict(conflictRequest);
             if (staged.isErr()) return err(staged.error);
             disposition = ProviderSyncOutcome.ConflictStaged;
-            if (visibility === ProviderSyncVisibility.Visible)
-              state.errorMsg = state.t({
+            if (visibility === ProviderSyncVisibility.Visible) {
+              const translation: Parameters<typeof state.t>[0] = {
                 key: I18N_KEYS.AuthStorageSyncConflictStoreIdBanner,
                 replacements: { provider: provider.label },
-              });
+              };
+              state.errorMsg = state.t(translation);
+            }
           } else if (
             issue.isMultipleStores &&
             provider.type === "local-folder"
@@ -261,67 +278,88 @@ export class ProviderSyncActions {
     if (visibility === ProviderSyncVisibility.Visible) state.errorMsg = "";
     try {
       if (provider.type === "local-folder") {
-        const synced = await this.syncLocalFolderProvider({ provider });
-        if (synced.isErr())
-          return await this.presentFailure({
+        const localSync: Parameters<typeof this.syncLocalFolderProvider>[0] = {
+          provider,
+        };
+        const synced = await this.syncLocalFolderProvider(localSync);
+        if (synced.isErr()) {
+          const failurePresentation: ProviderFailurePresentation = {
             provider,
             visibility,
             failureHandling,
             failure: synced.error,
-          });
+          };
+          return await this.presentFailure(failurePresentation);
+        }
       } else {
         const { mode, pat, repo } = state.providerWasmArgs(provider);
         const synced = await state.enqueueStorage(async () => {
           const admitted = state.admitManager();
           if (admitted.isErr()) return err(admitted.error);
-          return state.raceStorageTimeout({
-            promise: new VaultStorageSynchronization({
-              manager: admitted.value,
-              mode,
-              pat,
-              repo,
-            }).run(),
+          const synchronizationArgs: ConstructorParameters<
+            typeof VaultStorageSynchronization
+          >[0] = {
+            manager: admitted.value,
+            mode,
+            pat,
+            repo,
+          };
+          const timeoutRequest: ProviderSyncTimeoutRequest = {
+            promise: new VaultStorageSynchronization(synchronizationArgs).run(),
             releaseLateValue: (result) => result.free(),
-          });
+          };
+          return state.raceStorageTimeout(timeoutRequest);
         });
-        if (synced.isErr())
-          return await this.presentFailure({
+        if (synced.isErr()) {
+          const failurePresentation: ProviderFailurePresentation = {
             provider,
             visibility,
             failureHandling,
             failure: synced.error,
-          });
+          };
+          return await this.presentFailure(failurePresentation);
+        }
         const applied = state.applyVaultSyncResult(synced.value);
-        if (applied.isErr())
-          return this.presentFailure({
+        if (applied.isErr()) {
+          const failurePresentation: ProviderFailurePresentation = {
             provider,
             visibility,
             failureHandling,
             failure: applied.error,
-          });
+          };
+          return this.presentFailure(failurePresentation);
+        }
         let yaml: string;
         try {
           yaml = await read_local_vault_yaml();
         } catch (failure) {
-          return await this.presentFailure({
+          const nativeFailure = new NativeVaultStorageFailure(failure);
+          const failurePresentation: ProviderFailurePresentation = {
             provider,
             visibility,
             failureHandling,
-            failure: new NativeVaultStorageFailure(failure),
-          });
+            failure: nativeFailure,
+          };
+          return await this.presentFailure(failurePresentation);
         }
-        const metadata = await state.updateProviderSyncMetadata({
+        const metadataRequest: Parameters<
+          typeof state.updateProviderSyncMetadata
+        >[0] = {
           providerId,
           yaml,
           revision: NookProviderSyncRevision.untracked(),
-        });
-        if (metadata.isErr())
-          return await this.presentFailure({
+        };
+        const metadata =
+          await state.updateProviderSyncMetadata(metadataRequest);
+        if (metadata.isErr()) {
+          const failurePresentation: ProviderFailurePresentation = {
             provider,
             visibility,
             failureHandling,
             failure: metadata.error,
-          });
+          };
+          return await this.presentFailure(failurePresentation);
+        }
       }
       if (state.isAuthenticated) {
         const secretRefresh1 = await state.refreshSecretsFromSession();

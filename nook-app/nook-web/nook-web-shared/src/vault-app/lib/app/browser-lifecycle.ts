@@ -126,10 +126,15 @@ class VaultBrowserLifecycle {
             vault.enqueueStorage(async () => {
               const manager = vault.admitManager();
               if (manager.isErr()) return storageErr(manager.error);
-              return new AuthProviderPersistence({
+              const authProviderPersistenceRequest: ConstructorParameters<
+                typeof AuthProviderPersistence
+              >[0] = {
                 manager: manager.value,
                 snapshot,
-              }).save();
+              };
+              return new AuthProviderPersistence(
+                authProviderPersistenceRequest,
+              ).save();
             }),
           unselectedVaultScope,
         },

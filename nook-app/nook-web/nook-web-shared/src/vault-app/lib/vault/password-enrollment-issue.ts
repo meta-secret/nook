@@ -5,7 +5,7 @@ import {
 } from "$lib/vault/enrollment-issue-failure";
 import { SharedStorageGrantFailure } from "$lib/auth/oauth-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
-import { err as storageErr, ok as storageOk } from "neverthrow";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -71,6 +71,16 @@ type StorageChainReadiness = {
   readonly kind: StorageChainReadinessKind.Idle;
 };
 
+type StorageChainReadinessResult = Result<
+  StorageChainReadiness,
+  StorageOperationFailure
+>;
+
+type StorageChainReadinessRace = {
+  readonly promise: Promise<StorageChainReadinessResult>;
+  readonly releaseLateValue: (readiness: StorageChainReadiness) => void;
+};
+
 type ProviderEventOutboxFlush = {
   readonly providerType: StorageProvider["type"];
   readonly target: SharedStorageTarget;
@@ -116,8 +126,10 @@ export class PasswordEnrollmentIssue {
       const storageChainReadiness: StorageChainReadiness = {
         kind: StorageChainReadinessKind.Idle,
       };
-      const idleResult = storageOk(storageChainReadiness);
-      const waitForStorageRequest = {
+      const idleResult: StorageChainReadinessResult = storageOk(
+        storageChainReadiness,
+      );
+      const waitForStorageRequest: StorageChainReadinessRace = {
         promise: state.waitForStorageChain().then(() => idleResult),
         releaseLateValue: () => {},
       };

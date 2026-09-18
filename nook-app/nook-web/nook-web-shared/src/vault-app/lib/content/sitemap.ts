@@ -97,10 +97,13 @@ export class SitemapDocument {
   }
 
   private locationXml(entry: SitemapEntry): string {
-    const location = new PublicSiteLocation({
+    const publicSiteLocationRequest: ConstructorParameters<
+      typeof PublicSiteLocation
+    >[0] = {
       siteUrl: this.request.siteUrl,
       path: entry.path,
-    });
+    };
+    const location = new PublicSiteLocation(publicSiteLocationRequest);
     return location.url
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")

@@ -32,7 +32,7 @@ type CloudKitRedirectDetails =
 
 type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
 
-type ExpectedCloudKitSignInFailureCheck = {
+export type ExpectedCloudKitSignInFailureCheck = {
   readonly diagnostic: CloudKitFailureDiagnostic;
   readonly hasSignInControl: boolean;
 };

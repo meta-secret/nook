@@ -120,9 +120,14 @@ type CloudKitSharePermissionOptions = CloudKitSharePermission[];
 
 type CloudKitShortIdentifiers = string[];
 
-type CloudKitRecordSaveOptions = { zoneID: string | CloudKitZoneID };
+export type CloudKitRecordSaveOptions = { zoneID: string | CloudKitZoneID };
 
-type CloudKitSharePresentationOptions = {
+type CloudKitRecordSaveInput = readonly [
+  records: CloudKitRecordBatch,
+  options: CloudKitRecordSaveOptions,
+];
+
+export type CloudKitSharePresentationOptions = {
   record: CloudKitRecord;
   zoneID: string | CloudKitZoneID;
   shareTitle: string;
@@ -134,8 +139,7 @@ type CloudKitSharePresentationOptions = {
 export type CloudKitDatabase = {
   saveRecordZones: (zones: CloudKitRecordZones) => Promise<void>;
   saveRecords: (
-    records: CloudKitRecordBatch,
-    options: CloudKitRecordSaveOptions,
+    ...input: CloudKitRecordSaveInput
   ) => Promise<CloudKitRecordsResponse>;
   shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<void>;
 };
@@ -174,7 +178,7 @@ export type CloudKitAuthChallenge = {
   uuid?: string;
 };
 
-type CloudKitAuthSetupOptions = {
+export type CloudKitAuthSetupOptions = {
   grabAuthToken: boolean;
   persist: boolean;
 };
@@ -202,12 +206,19 @@ type ExternalCloudKitContainer = Omit<
   CloudKitContainer,
   "setUpAuth" | "fetchCurrentUserIdentity"
 > & {
-  setUpAuth: (options?: ExternalCloudKitAuthSetupOptions) => Promise<unknown>;
-  fetchCurrentUserIdentity?: () => Promise<unknown>;
+  setUpAuth: (
+    options?: ExternalCloudKitAuthSetupOptions,
+  ) => Promise<CloudKitUserIdentity>;
+  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
 };
 
+type CloudKitTokenWriteInput = readonly [
+  containerIdentifier: string,
+  authToken: string,
+];
+
 export type CloudKitAuthTokenStore = {
-  putToken: (containerIdentifier: string, authToken: string) => void;
+  putToken: (...input: CloudKitTokenWriteInput) => void;
   // CloudKit JS owns absent-token handling at this opaque host callback edge.
   getToken: (containerIdentifier: string) => unknown;
 };
@@ -250,13 +261,14 @@ export type WebAuthTokenLookup =
   | { kind: WebAuthTokenLookupKind.Unavailable }
   | { kind: WebAuthTokenLookupKind.Available; token: string };
 
-type CloudKitWebAuthTokenPersistence = {
+export type CloudKitWebAuthTokenPersistence = {
   readonly containerIdentifier: string;
   readonly token: WebAuthTokenLookup;
 };
 
 export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
-  putToken(containerIdentifier, authToken) {
+  putToken(...input) {
+    const [containerIdentifier, authToken] = input;
     log.debug("CloudKit putToken");
     const storeCloudKitWebAuthTokenArgs: Parameters<
       typeof cloudKitRuntime.storeCloudKitWebAuthToken
@@ -303,50 +315,89 @@ export class CloudKitUserIdentityDecoder {
     value: unknown,
   ): Effect.Effect<CloudKitUserIdentity, CloudKitUserIdentityDecodeFailure> {
     return Schema.decodeUnknown(CloudKitUserIdentitySchema)(value).pipe(
-      Effect.mapError((cause) => ({
-        kind: CloudKitUserIdentityDecodeFailureKind.Invalid,
-        cause,
-      })),
+      Effect.mapError((cause) => {
+        const failure: CloudKitUserIdentityDecodeFailure = {
+          kind: CloudKitUserIdentityDecodeFailureKind.Invalid,
+          cause,
+        };
+        return failure;
+      }),
     );
   }
 }
 
-const CloudKitUserIdentitySchema = Schema.Struct({
-  userRecordName: Schema.optionalWith(Schema.String, { exact: true }),
-  nameComponents: Schema.optionalWith(
-    Schema.Struct({
-      givenName: Schema.optionalWith(Schema.String, { exact: true }),
-      familyName: Schema.optionalWith(Schema.String, { exact: true }),
-    }),
-    { exact: true },
-  ),
-  lookupInfo: Schema.optionalWith(
-    Schema.Struct({
-      emailAddress: Schema.optionalWith(Schema.String, { exact: true }),
-    }),
-    { exact: true },
-  ),
-});
+type ExactOptionalFieldOptions = { readonly exact: true };
+const exactOptionalFieldOptions: ExactOptionalFieldOptions = { exact: true };
+const CloudKitGivenNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+const CloudKitFamilyNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+type CloudKitNameComponentFields = {
+  readonly givenName: typeof CloudKitGivenNameSchema;
+  readonly familyName: typeof CloudKitFamilyNameSchema;
+};
+const cloudKitNameComponentFields: CloudKitNameComponentFields = {
+  givenName: CloudKitGivenNameSchema,
+  familyName: CloudKitFamilyNameSchema,
+};
+const CloudKitNameComponentsSchema = Schema.Struct(cloudKitNameComponentFields);
+const CloudKitEmailAddressSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+type CloudKitLookupInfoFields = {
+  readonly emailAddress: typeof CloudKitEmailAddressSchema;
+};
+const cloudKitLookupInfoFields: CloudKitLookupInfoFields = {
+  emailAddress: CloudKitEmailAddressSchema,
+};
+const CloudKitLookupInfoSchema = Schema.Struct(cloudKitLookupInfoFields);
+const CloudKitUserRecordNameSchema = Schema.optionalWith(
+  Schema.String,
+  exactOptionalFieldOptions,
+);
+const CloudKitNameComponentsOptionalSchema = Schema.optionalWith(
+  CloudKitNameComponentsSchema,
+  exactOptionalFieldOptions,
+);
+const CloudKitLookupInfoOptionalSchema = Schema.optionalWith(
+  CloudKitLookupInfoSchema,
+  exactOptionalFieldOptions,
+);
+type CloudKitUserIdentityFields = {
+  readonly userRecordName: typeof CloudKitUserRecordNameSchema;
+  readonly nameComponents: typeof CloudKitNameComponentsOptionalSchema;
+  readonly lookupInfo: typeof CloudKitLookupInfoOptionalSchema;
+};
+const cloudKitUserIdentityFields: CloudKitUserIdentityFields = {
+  userRecordName: CloudKitUserRecordNameSchema,
+  nameComponents: CloudKitNameComponentsOptionalSchema,
+  lookupInfo: CloudKitLookupInfoOptionalSchema,
+};
+const CloudKitUserIdentitySchema = Schema.Struct(cloudKitUserIdentityFields);
+
+type CloudKitWebAuthTokenResult = Result<string, OAuthFailure>;
+type CloudKitWebAuthTokenListener = (
+  tokenResult: CloudKitWebAuthTokenResult,
+) => void;
 
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
-  addTokenListener(
-    listener: (token: Result<string, OAuthFailure>) => void,
-  ): void {
+  addTokenListener(listener: CloudKitWebAuthTokenListener): void {
     this.webAuthTokenListeners.add(listener);
   }
-  removeTokenListener(
-    listener: (token: Result<string, OAuthFailure>) => void,
-  ): void {
+  removeTokenListener(listener: CloudKitWebAuthTokenListener): void {
     this.webAuthTokenListeners.delete(listener);
   }
   clearTokenListeners(): void {
     this.webAuthTokenListeners.clear();
   }
 
-  private webAuthTokenListeners = new Set<
-    (token: Result<string, OAuthFailure>) => void
-  >();
+  private webAuthTokenListeners = new Set<CloudKitWebAuthTokenListener>();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
     const decoded = Effect.runSync(
       Effect.either(CloudKitUserIdentityDecoder.decode(value)),
@@ -592,11 +643,10 @@ class CloudKitRuntime {
       const raw = sessionStorage.getItem(
         `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
       );
-      return ok(
-        raw
-          ? this.normalizeWebAuthToken(JSON.parse(raw))
-          : { kind: WebAuthTokenLookupKind.Unavailable },
-      );
+      const token = raw
+        ? this.normalizeWebAuthToken(JSON.parse(raw))
+        : this.unavailableWebAuthToken();
+      return ok(token);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));
     }
@@ -653,8 +703,11 @@ class CloudKitRuntime {
           `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
         );
         if (existing) {
-          existing.addEventListener("load", loaded, { once: true });
-          existing.addEventListener("error", failed, { once: true });
+          const oneTimeListenerOptions: AddEventListenerOptions = {
+            once: true,
+          };
+          existing.addEventListener("load", loaded, oneTimeListenerOptions);
+          existing.addEventListener("error", failed, oneTimeListenerOptions);
           return;
         }
         const script = document.createElement("script");
@@ -668,6 +721,10 @@ class CloudKitRuntime {
         resolve(err(new OAuthFailure(OAuthFailureKind.CloudKitScript)));
       }
     });
+  }
+
+  private unavailableWebAuthToken(): WebAuthTokenLookup {
+    return { kind: WebAuthTokenLookupKind.Unavailable };
   }
 }
 
