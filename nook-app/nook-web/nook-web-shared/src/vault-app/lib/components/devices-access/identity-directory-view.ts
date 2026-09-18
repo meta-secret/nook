@@ -270,8 +270,11 @@ class NativeVaultAccess {
     }
   }
 }
+
+type NativeVaultAccessEntries = readonly NookDeviceVaultAccess[];
+
 class NativeVaultAccessList {
-  constructor(private readonly entries: NookDeviceVaultAccess[]) {}
+  constructor(private readonly entries: NativeVaultAccessEntries) {}
   read(): Result<VaultAccessView[], VaultStorageFailure> {
     const projected: VaultAccessView[] = [];
     let consumed = 0;
@@ -288,8 +291,11 @@ class NativeVaultAccessList {
     }
   }
 }
+
+type NativeIdentityMemberEntries = readonly NookIdentityMemberSnapshot[];
+
 class NativeIdentityMembers {
-  constructor(private readonly entries: NookIdentityMemberSnapshot[]) {}
+  constructor(private readonly entries: NativeIdentityMemberEntries) {}
   read(): Result<IdentityMemberView[], VaultStorageFailure> {
     const projected: IdentityMemberView[] = [];
     let consumed = 0;
