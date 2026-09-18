@@ -60,6 +60,10 @@ type ExtensionIdentityOperationOutcome = {
   status: ExtensionEventLogImportStatus
 }
 
+type RemoteEventFlushProviderSelection = Parameters<
+  typeof select_remote_event_flush_providers
+>[0]
+
 export type ExtensionVaultImportManager = Pick<
   NookVaultManager,
   | 'device_id'
@@ -294,7 +298,11 @@ export async function importExtensionVaultWithDependencies({
               saveArgs,
             )
           }
-          return ok({ ok: true, status })
+          const outcome: ExtensionIdentityOperationOutcome = {
+            ok: true,
+            status,
+          }
+          return ok(outcome)
         } catch {
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.Failed),
@@ -399,10 +407,11 @@ export async function flushPasskeyEventToProviders({
 > {
   try {
     const snapshot = await activeManager.load_auth_providers_snapshot()
-    const providers = select_remote_event_flush_providers({
+    const selection: RemoteEventFlushProviderSelection = {
       snapshot,
       vaultStoreId,
-    })
+    }
+    const providers = select_remote_event_flush_providers(selection)
     const deliveries = await Promise.allSettled(
       providers.map(async (provider) => {
         const args = provider_wasm_args(provider)

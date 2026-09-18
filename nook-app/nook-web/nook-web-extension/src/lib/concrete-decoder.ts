@@ -9,11 +9,21 @@ export type ConcreteDecoderResult<Value, Failure> =
   | { kind: ConcreteDecoderResultKind.Decoded; value: Value }
   | { kind: ConcreteDecoderResultKind.Rejected; failure: Failure }
 
-export function runConcreteDecoder<Input, Value, Failure>(
-  decode: (value: Input) => Effect.Effect<Value, Failure>,
-  value: Input,
-): ConcreteDecoderResult<Value, Failure> {
-  const result = Effect.runSync(Effect.either(decode(value)))
+export type ConcreteDecoderRequest<
+  TransportInput,
+  DecodedValue,
+  DecodeFailure,
+> = {
+  readonly decode: (
+    input: TransportInput,
+  ) => Effect.Effect<DecodedValue, DecodeFailure>
+  readonly value: TransportInput
+}
+
+export function runConcreteDecoder<TransportInput, DecodedValue, DecodeFailure>(
+  request: ConcreteDecoderRequest<TransportInput, DecodedValue, DecodeFailure>,
+): ConcreteDecoderResult<DecodedValue, DecodeFailure> {
+  const result = Effect.runSync(Effect.either(request.decode(request.value)))
   if (Either.isLeft(result)) {
     return {
       kind: ConcreteDecoderResultKind.Rejected,

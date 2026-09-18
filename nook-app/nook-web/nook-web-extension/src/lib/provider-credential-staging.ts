@@ -14,8 +14,12 @@ export enum ProviderCredentialFailure {
   AdmissionRejected = 'provider-admission-rejected',
 }
 
+export type ProviderCredentialDecoder = (
+  providers: StorageProvider[],
+) => Promise<StorageProvider[]>
+
 export type StageProviderCredentialsArgs = {
-  decode: (providers: StorageProvider[]) => Promise<StorageProvider[]>
+  decode: ProviderCredentialDecoder
 }
 
 enum SerializedProviderFieldAdmission {

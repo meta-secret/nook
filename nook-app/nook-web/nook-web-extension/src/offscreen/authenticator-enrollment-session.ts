@@ -42,6 +42,36 @@ type AuthenticatorEnrollmentMessageHandlingRequest = {
   dependencies: AuthenticatorEnrollmentSessionDependencies
 }
 
+type AuthenticatorEnrollmentPreviewResponse = {
+  readonly ok: true
+  readonly preview: {
+    readonly issuer: string
+    readonly account: string
+    readonly websiteUrl: string
+    readonly algorithm: string
+    readonly digits: number
+    readonly period: number
+  }
+}
+
+type AuthenticatorEnrollmentCodeResponse = {
+  readonly ok: true
+  readonly code: string
+  readonly expiresAt: number
+}
+
+type AuthenticatorEnrollmentConfirmationResponse = {
+  readonly ok: true
+  readonly secretId: string
+}
+
+type AuthenticatorBackupAttachmentResponse = {
+  readonly ok: true
+  readonly secretId: string
+  readonly backupCodesVerified: true
+  readonly reviewedInputPersisted: true
+}
+
 export async function handleAuthenticatorEnrollmentMessage({
   message,
   dependencies,
@@ -60,7 +90,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         await dependencies.ensureWasm()
         const preview = preview_otpauth_uri(payload.otpauthUri)
         try {
-          return ok({
+          const response: AuthenticatorEnrollmentPreviewResponse = {
             ok: true,
             preview: {
               issuer: preview.issuer,
@@ -70,7 +100,8 @@ export async function handleAuthenticatorEnrollmentMessage({
               digits: preview.digits,
               period: preview.period,
             },
-          })
+          }
+          return ok(response)
         } finally {
           preview.free()
         }
@@ -87,11 +118,12 @@ export async function handleAuthenticatorEnrollmentMessage({
         await dependencies.ensureWasm()
         const code = current_code_from_otpauth_uri(payload.otpauthUri)
         try {
-          return ok({
+          const response: AuthenticatorEnrollmentCodeResponse = {
             ok: true,
             code: code.code,
             expiresAt: code.expiresAtUnixSeconds * 1_000,
-          })
+          }
+          return ok(response)
         } finally {
           code.free()
         }
@@ -126,7 +158,11 @@ export async function handleAuthenticatorEnrollmentMessage({
         }
         const admission1 = await flushPasskeyEventToProviders(flushArgs)
         if (admission1.isErr()) return err(admission1.error)
-        return ok({ ok: true, secretId })
+        const response: AuthenticatorEnrollmentConfirmationResponse = {
+          ok: true,
+          secretId,
+        }
+        return ok(response)
       }
       case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
         const payload = message.payload
@@ -178,12 +214,13 @@ export async function handleAuthenticatorEnrollmentMessage({
             }
           const admission3 = await flushPasskeyEventToProviders(flushArgs)
           if (admission3.isErr()) return err(admission3.error)
-          return ok({
+          const response: AuthenticatorBackupAttachmentResponse = {
             ok: true,
             secretId: attachResult.secretId,
             backupCodesVerified: true,
             reviewedInputPersisted: true,
-          })
+          }
+          return ok(response)
         } finally {
           attachResult.free()
         }
