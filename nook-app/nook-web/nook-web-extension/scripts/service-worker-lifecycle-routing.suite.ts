@@ -107,8 +107,10 @@ describe('service worker routing', () => {
           >(ExtensionSessionDocumentStateKind.Closed),
         )
       },
-      completeAccountPickerAuthorizationCleanup: (generation) => {
-        events.push(`authorization-restored-${generation}`)
+      completeAccountPickerAuthorizationCleanup: ({
+        authorizationGeneration,
+      }) => {
+        events.push(`authorization-restored-${authorizationGeneration}`)
         return Promise.resolve(completedCleanup)
       },
     }
@@ -405,8 +407,10 @@ describe('service worker routing', () => {
       rebindStagedAuthenticatorEnrollmentsAuthorization: (generation) => {
         events.push(`enrollments-rebound-${generation}`)
       },
-      completeAccountPickerAuthorizationCleanup: (generation) => {
-        events.push(`authorization-restored-${generation}`)
+      completeAccountPickerAuthorizationCleanup: ({
+        authorizationGeneration,
+      }) => {
+        events.push(`authorization-restored-${authorizationGeneration}`)
         return Promise.resolve(completedCleanup)
       },
       refreshAuthenticationSurfaces: () => {

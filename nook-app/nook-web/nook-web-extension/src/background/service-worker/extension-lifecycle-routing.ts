@@ -396,8 +396,20 @@ export function recoverInterruptedAuthorizationCleanup(
           AuthorizationCleanupFailureKind.Rejected,
         ],
       }
-      const outcome = yield* Effect.tryPromise(moduleTryPromiseRequest8)
+      const completion = yield* Effect.either(
+        Effect.tryPromise(moduleTryPromiseRequest8),
+      )
+      if (Either.isLeft(completion)) {
+        dependencies.releaseAccountPickerAuthorizationCleanup(
+          cleanup.authorizationGeneration,
+        )
+        return yield* Effect.fail(completion.left)
+      }
+      const outcome = completion.right
       if ('error' in outcome) {
+        dependencies.releaseAccountPickerAuthorizationCleanup(
+          cleanup.authorizationGeneration,
+        )
         return yield* Effect.fail([AuthorizationCleanupFailureKind.Rejected])
       }
       return {
