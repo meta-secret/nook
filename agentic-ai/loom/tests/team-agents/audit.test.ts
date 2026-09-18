@@ -135,14 +135,14 @@ describe('canonical Cortex team authority', () => {
     expect(report.findings).toEqual([]);
     expect(report.authorityCount).toBe(6);
     expect(report.teamGizmoCount).toBe(6);
-    expect(report.teamInternalAgentCount).toBe(12);
+    expect(report.teamInternalAgentCount).toBe(11);
     expect(report.auditOk).toBe(true);
   });
 
   test('models every Team Gizmo and internal-agent hierarchy', () => {
     expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
     expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
-    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(12);
+    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(11);
 
     for (const gizmo of TEAM_GIZMO_CATALOG) {
       expect(gizmo.model).toBe('gpt-5.6-sol');
