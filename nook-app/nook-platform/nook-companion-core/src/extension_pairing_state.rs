@@ -491,6 +491,17 @@ impl ExtensionReadySetup {
     }
 }
 
+// Fixed browser booleans are admitted into distinct selection/access evidence.
+impl From<bool> for PairingSelection {
+    fn from(select: bool) -> Self {
+        if select {
+            Self::Select
+        } else {
+            Self::KeepCurrent
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -928,17 +939,6 @@ mod tests {
                 observed_at: "2026-07-25T00:00:04.000Z".to_owned(),
                 select: matches!(selection, PairingSelection::Select),
             }
-        }
-    }
-}
-
-// Fixed browser booleans are admitted into distinct selection/access evidence.
-impl From<bool> for PairingSelection {
-    fn from(select: bool) -> Self {
-        if select {
-            Self::Select
-        } else {
-            Self::KeepCurrent
         }
     }
 }
