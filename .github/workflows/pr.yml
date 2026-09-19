@@ -39,6 +39,9 @@ jobs:
         shell: bash
     env:
       CI: "true"
+      # Keep successful Bake solves compact. Buildx still reports terminal errors,
+      # and a failing target can be rerun with plain progress for diagnosis.
+      BUILDKIT_PROGRESS: quiet
       LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha }}
       SCCACHE_OPTIONAL: ${{ (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
       WASM_BUILD_MODE: dev

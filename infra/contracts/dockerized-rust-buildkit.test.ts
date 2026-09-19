@@ -28,6 +28,7 @@ class DockerizedRustBuildKitContract {
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
     expect(workflow).toContain("Connect trusted persistent BuildKit");
+    expect(workflow).toContain("BUILDKIT_PROGRESS: quiet");
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
     expect(workflow).not.toMatch(
