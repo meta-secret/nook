@@ -75,6 +75,9 @@ class DockerizedRustBuildKitContract {
       rustSourceStage,
       product.indexOf("FROM scratch AS pr-wasm-artifacts"),
     );
+    expect(rustVerification).toContain(
+      "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
+    );
     expect(rustVerification).not.toContain("COPY nook-app/nook-platform/ ./");
     for (const crate of [
       "nook-app-common",
@@ -117,6 +120,12 @@ class DockerizedRustBuildKitContract {
     expect(preflightDependencies).toContain(
       "cargo test --quiet --locked --test core_ownership --no-run",
     );
+    expect(preflightDependencies).toContain(
+      "cargo clippy --quiet --locked --all-targets",
+    );
+    expect(preflightDependencies).toContain(
+      "cargo build --quiet --locked --bin nook-preflight",
+    );
     const policySource = preflight.indexOf("FROM policy-tools AS policy-source");
     const preparedDependencies = preflight.indexOf(
       "RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts",
@@ -125,6 +134,12 @@ class DockerizedRustBuildKitContract {
     expect(preparedDependencies).toBeGreaterThan(policyTools);
     expect(policySource).toBeGreaterThan(preparedDependencies);
     expect(preflight).toContain("task tooling:static:prepared");
+    const preflightBuild = preflight.slice(
+      preflight.indexOf("FROM deps AS build"),
+      preflight.indexOf("FROM build AS test"),
+    );
+    expect(preflightBuild).toContain("cargo clippy --quiet --offline");
+    expect(preflightBuild).toContain("cargo build --quiet --offline");
     expect(
       preflight.slice(
         preflight.indexOf("FROM policy-source AS pr-verification"),

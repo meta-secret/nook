@@ -51,9 +51,10 @@ RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --recipe-path recipe.json \
-    && cargo chef cook --clippy --recipe-path recipe.json \
     && mkdir -p tests \
     && printf '#[test]\nfn dependency_warmup() {}\n' > tests/core_ownership.rs \
+    && cargo clippy --quiet --locked --all-targets -- -D warnings \
+    && cargo build --quiet --locked --bin nook-preflight \
     && cargo test --quiet --locked --test core_ownership --no-run \
     && rm -rf tests \
     && nook-sccache-report preflight-chef
@@ -77,8 +78,8 @@ COPY preflight/tests tests
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo fmt --check \
-    && cargo clippy --locked --all-targets -- -D warnings \
-    && cargo build --locked --bin nook-preflight \
+    && cargo clippy --quiet --offline --locked --all-targets -- -D warnings \
+    && cargo build --quiet --offline --locked --bin nook-preflight \
     && strip /meta-secret/preflight-target/debug/nook-preflight \
     && nook-sccache-report preflight-build
 

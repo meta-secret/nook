@@ -895,6 +895,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # binaries. Only the source-free dependency stage above precedes mutable code.
 FROM pr-rust-dependencies AS pr-rust-verify
 
+COPY nook-app/nook-platform/.cargo .cargo
+COPY nook-app/nook-platform/.config .config
+COPY nook-app/nook-platform/clippy.toml clippy.toml
+COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
