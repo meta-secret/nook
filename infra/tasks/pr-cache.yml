@@ -59,6 +59,18 @@ tasks:
           echo 'Mutable verification layer unexpectedly stayed cached' >&2
           exit 1
         fi
+        docker buildx bake --builder "$builder" --progress=plain \
+          --metadata-file "$output/changed-heavy.json" \
+          -f "$fixture" --set "*.context=$context" \
+          --allow="fs.read=$context" \
+          pr-proof-heavy 2>&1 | tee "$output/changed-heavy.log"
+        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/changed-heavy.log" | head -n 1)"
+        test -n "$fuzz_dependency_vertex"
+        grep -qx "$fuzz_dependency_vertex CACHED" "$output/changed-heavy.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/changed-heavy.log"; then
+          echo 'Source-only change unexpectedly reinstalled fuzz dependencies' >&2
+          exit 1
+        fi
         if grep -E 'importing cache manifest|exporting cache to registry' "$output/"*.log; then
           echo 'Unexpected registry cache transfer' >&2
           exit 1

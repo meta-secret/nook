@@ -25,8 +25,16 @@ RUN test "$FAIL_TESTS" = 0 \
     && printf 'tests and coverage\n' >/proof/tests \
     && echo pr-proof-test-compilation
 
+FROM rust-ecosystem-nightly AS rust-fuzz-deps
+COPY inputs/fuzz-dependencies.txt /fuzz/dependencies.txt
+RUN cat /fuzz/dependencies.txt >/fuzz/installed \
+    && sleep 1 \
+    && echo bake-sim-fuzz-dependencies
+
 FROM tests AS heavy
+COPY --from=rust-fuzz-deps /fuzz/installed /fuzz/installed
 RUN test -s /proof/tests \
+    && test -s /fuzz/installed \
     && printf 'browser and expensive checks\n' >/proof/heavy \
     && echo pr-proof-heavy
 

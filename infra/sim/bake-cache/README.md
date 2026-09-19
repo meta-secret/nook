@@ -11,7 +11,9 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
    rebuild and after mutable source content changes. The simulator mutates a
    small text input instead of using a revision argument, matching BuildKit's
    content-keyed production behavior without downloading real dependencies.
-5. An injected verification or test failure prevents the next phase invocation.
+5. The fuzz dependency-install vertex remains cached when mutable source
+   changes before the heavy phase is rebuilt.
+6. An injected verification or test failure prevents the next phase invocation.
 
 The proof starts a disposable Docker-container builder, retains local result
 files, per-phase logs and BuildKit metadata, and removes only its own builder.

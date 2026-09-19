@@ -443,7 +443,10 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         "AS rust-ecosystem-dependency-policy",
         "ARG POLICY_RUN_NONCE",
         "AS rust-ecosystem-nightly",
+        "AS rust-dylint-toolchain",
+        "AS rust-platform-manifests",
         "AS rust-dylint-deps",
+        "AS rust-fuzz-deps",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
@@ -475,7 +478,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
         !fixture.nightly_dockerfile.contains("rust-platform-nightly")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-ecosystem-nightly AS rust-dylint-deps")
+                .contains("FROM rust-dylint-toolchain AS rust-dylint-deps")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-deps AS rust-dylint-build")
@@ -496,7 +499,22 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .contains("FROM rust-dylint-native AS rust-dylint")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
+                .contains("FROM rust-platform-manifests AS rust-fuzz-deps")
+            && fixture
+                .nightly_dockerfile
+                .contains("FROM rust-fuzz-deps AS rust-fuzz-smoke")
+            && fixture
+                .nightly_dockerfile
+                .rfind("cargo fetch --manifest-path fuzz/Cargo.toml")
+                < fixture
+                    .nightly_dockerfile
+                    .rfind("COPY nook-app/nook-platform/ nook-app/nook-platform/")
+            && fixture
+                .nightly_dockerfile
+                .rfind("cargo fuzz build --fuzz-dir fuzz")
+                < fixture
+                    .nightly_dockerfile
+                    .rfind("COPY nook-app/nook-platform/ nook-app/nook-platform/")
             && fixture
                 .nightly_dockerfile
                 .contains("--manifest-path dylint/nook-domain-api/Cargo.toml --locked")

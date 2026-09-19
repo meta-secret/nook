@@ -173,7 +173,7 @@ class DockerizedRustBuildKitContract {
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dependencyStage = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
     );
     const dependencyBuild = nightly.indexOf(
       "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
@@ -296,18 +296,27 @@ class DockerizedRustBuildKitContract {
       "FROM rust-base AS rust-ecosystem-nightly",
     );
     const ecosystemEnd = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-ecosystem-nightly AS rust-dylint-toolchain",
       ecosystemStage,
+    );
+    const dylintDependencies = nightly.indexOf(
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
+      ecosystemEnd,
+    );
+    const dylintInstall = nightly.indexOf(
+      "cargo install cargo-dylint dylint-link",
+      ecosystemEnd,
     );
     const wrapperCopy = nightly.indexOf(
       "COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache",
-      ecosystemStage,
+      ecosystemEnd,
     );
     const wrapperMode = wrapper.indexOf(': "${SCCACHE_CLIENT_SIDE:=0}"');
     expect(ecosystemStage).toBeGreaterThanOrEqual(0);
     expect(ecosystemEnd).toBeGreaterThan(ecosystemStage);
-    expect(wrapperCopy).toBeGreaterThan(ecosystemStage);
-    expect(wrapperCopy).toBeLessThan(ecosystemEnd);
+    expect(dylintInstall).toBeGreaterThan(ecosystemEnd);
+    expect(wrapperCopy).toBeGreaterThan(dylintInstall);
+    expect(wrapperCopy).toBeLessThan(dylintDependencies);
     expect(wrapperMode).toBeGreaterThanOrEqual(0);
     expect(dockerignore).not.toContain(
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
@@ -562,7 +571,7 @@ class DockerizedRustBuildKitContract {
     expect(nightly).toContain("ENV CARGO_DYLINT_VERSION=6.0.1");
     expect(nightly).toContain("ENV DYLINT_NIGHTLY=nightly-2026-04-16");
     const dylintDependencies = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
     );
     const dylintSelfTest = nightly.indexOf(
       "FROM rust-dylint-build AS rust-dylint-self-test",
@@ -589,6 +598,11 @@ class DockerizedRustBuildKitContract {
     );
     expect(proof).toContain(
       "Source-only change unexpectedly reinstalled Dylint dependencies",
+    );
+    expect(simulator).toContain("bake-sim-fuzz-dependencies");
+    expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
+    expect(proof).toContain(
+      "Source-only change unexpectedly reinstalled fuzz dependencies",
     );
   }
 

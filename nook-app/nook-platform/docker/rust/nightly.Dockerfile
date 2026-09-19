@@ -5,10 +5,9 @@ FROM rust-base AS rust-ecosystem-nightly
 ENV DYLINT_NIGHTLY=nightly-2026-04-16
 ENV CARGO_FUZZ_VERSION=0.13.2
 ENV CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
-ENV CARGO_DYLINT_VERSION=6.0.1
 
-# cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
-# CI-only driver path, so install the pinned crates once into this image layer.
+# cargo-fuzz has a usable release binary, so the shared nightly stage remains
+# independent of the source-built Dylint CLI.
 RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
       --component clippy,rustfmt,llvm-tools-preview,rustc-dev
 
@@ -21,22 +20,25 @@ RUN curl -fsSL \
     && rm -rf /tmp/cargo-fuzz.tgz /tmp/cargo-fuzz \
     && cargo fuzz --version
 
+FROM rust-ecosystem-nightly AS rust-dylint-toolchain
+
+# cargo-dylint release binaries bake a CI-only driver path, so install the
+# pinned crates once in the Dylint-only lineage. Fuzz never inherits this.
+ENV CARGO_DYLINT_VERSION=6.0.1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
-
-# Keep the wrapper and reporter in this Dockerfile's own input graph. The
-# rust-base named context may be restored from a separate cache lineage;
-# copying the current repository files here makes their content part of the
-# nightly/Dylint ancestor key and propagates the resulting image into every
-# compiler vertex below without invalidating the toolchain installs above.
 COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
 COPY nook-app/nook-platform/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
-FROM rust-ecosystem-nightly AS rust-dylint-deps
+FROM rust-ecosystem-nightly AS rust-platform-manifests
+
+COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
+COPY nook-app/nook-platform/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
+RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/.cargo .cargo
@@ -53,8 +55,6 @@ COPY nook-app/nook-platform/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-platform/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm-composition-tests/Cargo.toml nook-wasm-composition-tests/Cargo.toml
-COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml
-COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock
 RUN mkdir -p \
       nook-app-common/src \
       nook-authenticator-domain/src \
@@ -66,7 +66,6 @@ RUN mkdir -p \
       nook-companion-wasm/src \
       nook-wasm/src \
       nook-wasm-composition-tests/src \
-      dylint/nook-domain-api/src \
     && touch \
       nook-app-common/src/lib.rs \
       nook-authenticator-domain/src/lib.rs \
@@ -77,11 +76,20 @@ RUN mkdir -p \
       nook-core/src/lib.rs \
       nook-companion-wasm/src/lib.rs \
       nook-wasm/src/lib.rs \
-      nook-wasm-composition-tests/src/lib.rs \
-      dylint/nook-domain-api/src/lib.rs
+      nook-wasm-composition-tests/src/lib.rs
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
-RUN cargo fetch --locked \
-    && cargo fetch --manifest-path dylint/nook-domain-api/Cargo.toml --locked
+RUN RUSTC_WRAPPER= cargo fetch --locked
+
+FROM rust-dylint-toolchain AS rust-dylint-deps
+
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY --from=rust-platform-manifests /meta-secret/nook/nook-app/nook-platform/ ./
+COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml dylint/nook-domain-api/Cargo.toml
+COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock
+RUN mkdir -p dylint/nook-domain-api/src \
+    && touch dylint/nook-domain-api/src/lib.rs
+ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
+RUN cargo fetch --manifest-path dylint/nook-domain-api/Cargo.toml --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked
@@ -156,7 +164,29 @@ FROM rust-dylint-native AS rust-dylint
 COPY --from=rust-dylint-self-test /meta-secret/nook/nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml /tmp/dylint-self-tested.toml
 COPY --from=rust-dylint-wasm /meta-secret/nook/nook-app/nook-platform/Cargo.toml /tmp/dylint-wasm-checked.toml
 
-FROM rust-ecosystem-nightly AS rust-fuzz-smoke
+FROM rust-platform-manifests AS rust-fuzz-deps
+
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/fuzz/Cargo.toml nook-app/nook-platform/fuzz/Cargo.lock fuzz/
+RUN mkdir -p fuzz/fuzz_targets \
+    && printf '%s\n' \
+      '#![no_main]' \
+      'use std::hint::black_box;' \
+      'use libfuzzer_sys::fuzz_target;' \
+      'fuzz_target!(|data: &[u8]| { black_box(data); });' \
+      >fuzz/fuzz_targets/wire_parsers.rs
+RUN RUSTC_WRAPPER= cargo fetch --manifest-path fuzz/Cargo.toml \
+      --locked --target x86_64-unknown-linux-gnu
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --manifest-path fuzz/Cargo.toml \
+      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo fuzz build --fuzz-dir fuzz \
+      --target x86_64-unknown-linux-gnu wire-parsers
+
+FROM rust-fuzz-deps AS rust-fuzz-smoke
 
 ARG FUZZ_SECONDS=20
 
@@ -168,7 +198,9 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy --manifest-path fuzz/Cargo.toml \
+    find nook-app-common nook-authenticator-domain nook-auth2 fuzz \
+      -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --manifest-path fuzz/Cargo.toml \
       --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
 
 RUN cargo metadata --manifest-path fuzz/Cargo.toml \
