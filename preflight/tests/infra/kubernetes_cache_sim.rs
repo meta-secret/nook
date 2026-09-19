@@ -173,7 +173,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     }
     assert!(
         contracts.contains("nook-buildkit.arc-runners.svc.cluster.local:1234"),
-        "the proof must use the production node-local BuildKit Service"
+        "the proof must use the production shared BuildKit Service"
     );
     let allowed = proof
         .find("name: \"cache-shard-allowed\"")

@@ -144,7 +144,7 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
     assert!(manifest.contains(r#"[registry."docker.io"]"#));
     assert!(manifest.contains(r#"mirrors = ["registry.dev.nokey.sh"]"#));
     assert!(!manifest.contains("registry-1.docker.io"));
-    assert!(manifest.contains("internalTrafficPolicy: Local"));
+    assert!(!manifest.contains("internalTrafficPolicy: Local"));
     assert!(manifest.contains("kind: StatefulSet"));
     assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 4);
 
@@ -377,15 +377,15 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         );
     }
     assert_eq!(buildkit.matches("kind: PersistentVolume\n").count(), 4);
-    assert!(buildkit.contains("internalTrafficPolicy: Local"));
-    assert!(buildkit.contains("replicas: 4"));
-    assert!(buildkit.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+    assert!(!buildkit.contains("internalTrafficPolicy: Local"));
+    assert!(buildkit.contains("replicas: 1"));
+    assert!(!buildkit.contains("requiredDuringSchedulingIgnoredDuringExecution"));
     assert_eq!(
         buildkit
             .matches("  labels:\n    app.kubernetes.io/name: nook-buildkit")
             .count(),
         4,
-        "all four BuildKit PVs must carry the operational status label"
+        "all retained BuildKit PVs must carry the operational status label"
     );
     assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
     for contract in [

@@ -119,7 +119,7 @@ runs:
       run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
 
     # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
-    # use the persistent rootless BuildKit shard on their Kubernetes node.
+    # use the shared persistent rootless BuildKit shard in the cluster.
     # The runner carries only client tooling and never receives a Docker daemon
     # or host runtime socket.
     # Taskfiles never pass --builder; the health wrapper selects it.
@@ -130,7 +130,7 @@ runs:
       with:
         driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
 
-    - name: Connect ARC Buildx to the node-local BuildKit shard
+    - name: Connect ARC Buildx to the shared persistent BuildKit shard
       id: arc-buildx
       if: ${{ startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
@@ -139,7 +139,7 @@ runs:
         case "${NOOK_BUILDKIT_ADDR:-}" in
           tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
           *)
-            echo "ARC BuildKit must use the node-local Kubernetes service" >&2
+            echo "ARC BuildKit must use the shared persistent Kubernetes service" >&2
             exit 2
             ;;
         esac
@@ -264,7 +264,7 @@ runs:
           read_only=1
         fi
 
-        # ARC retains its solved graph in the persistent shard for ordinary PR and
+        # ARC retains its solved graph in the shared persistent shard for ordinary PR and
         # validation jobs. Keep that node-local behavior everywhere except the
         # explicitly authorized remote build:compile handoff above.
         if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \

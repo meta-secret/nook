@@ -172,7 +172,7 @@ fn dockerized_loom_verify_mounts_the_inherited_sccache_credentials() -> anyhow::
     let dockerfile = root.read("preflight/Dockerfile");
     let loom_verify = dockerfile
         .split_once("FROM policy-source AS loom-verify\n")
-        .and_then(|(_, tail)| tail.split_once("\nFROM loom-verify AS repository-policy"))
+        .and_then(|(_, tail)| tail.split_once("\nFROM policy-source AS pr-verification"))
         .context("preflight Dockerfile must define the loom-verify stage")?
         .0;
     for secret in [

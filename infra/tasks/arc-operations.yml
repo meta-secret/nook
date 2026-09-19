@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 # ARC operational inspection and fallback controls.
 tasks:
@@ -31,7 +31,7 @@ tasks:
         REMOTE
 
   arc:buildkit:benchmark:
-    desc: Measure cold/warm node-local BuildKit reuse on every ARC node.
+    desc: Measure cold/warm reuse of the shared persistent BuildKit from every ARC node.
     silent: true
     cmds:
       - |

@@ -1,9 +1,9 @@
-version: '3'
+version: "3"
 
 # Real BuildKit simulator for the single-job PR phases.
 tasks:
   bake-cache:prove-pr:
-    desc: Prove cold/warm local BuildKit reuse and PR phase failure barriers without Zot.
+    desc: Prove shared local BuildKit utility reuse and PR phase failure barriers without Zot.
     preconditions:
       - sh: test "${NOOK_ARC_RUNNER:-}" != 1
         msg: This local Docker proof creates a disposable builder; never run it inside ARC.
@@ -31,6 +31,20 @@ tasks:
         test -s "$output/result/proof/heavy"
         grep -q ' CACHED' "$output/warm-verification.log"
         grep -q ' CACHED' "$output/warm-tests.log"
+        docker buildx bake --builder "$builder" --progress=plain \
+          --metadata-file "$output/changed-verification.json" \
+          -f "$fixture" --set "*.context=$repo_root/infra/sim/bake-cache" \
+          --set '*.args.SOURCE_REVISION=changed' \
+          pr-proof-verification 2>&1 | tee "$output/changed-verification.log"
+        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[tooling 2\/2\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 1\/1\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        test -n "$tooling_vertex"
+        test -n "$verification_vertex"
+        grep -qx "$tooling_vertex CACHED" "$output/changed-verification.log"
+        if grep -qx "$verification_vertex CACHED" "$output/changed-verification.log"; then
+          echo 'Mutable verification layer unexpectedly stayed cached' >&2
+          exit 1
+        fi
         if grep -E 'importing cache manifest|exporting cache to registry' "$output/"*.log; then
           echo 'Unexpected registry cache transfer' >&2
           exit 1

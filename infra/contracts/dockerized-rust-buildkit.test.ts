@@ -25,7 +25,9 @@ class DockerizedRustBuildKitContract {
   trustedRustConsumerUsesBuildKit(): void {
     const workflow = this.read(".github/workflows/pr.yml");
     const rootWorkflow = this.read(".github/workflows/ci.yml");
-    const dockerSetup = this.read(".github/actions/nook-docker-setup/action.yml");
+    const dockerSetup = this.read(
+      ".github/actions/nook-docker-setup/action.yml",
+    );
     const rustDockerTasks = this.read(
       "nook-app/nook-platform/docker/Taskfile.yml",
     );
@@ -53,9 +55,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("buildx bake");
     expect(tasks).toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
-    expect(tasks).toContain(
-      ".package_lines_percent.nook_domain_api | numbers",
-    );
+    expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).not.toContain(
       'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
     );
@@ -71,9 +71,9 @@ class DockerizedRustBuildKitContract {
     );
     expect(rustDependencyStage).toBeGreaterThanOrEqual(0);
     expect(rustSourceStage).toBeGreaterThan(rustDependencyStage);
-    expect(
-      product.slice(rustDependencyStage, rustSourceStage),
-    ).not.toContain("COPY nook-app/nook-platform/ ./");
+    expect(product.slice(rustDependencyStage, rustSourceStage)).not.toContain(
+      "COPY nook-app/nook-platform/ ./",
+    );
     const rustVerification = product.slice(
       rustSourceStage,
       product.indexOf("FROM scratch AS pr-wasm-artifacts"),
@@ -129,7 +129,9 @@ class DockerizedRustBuildKitContract {
     expect(preflightDependencies).toContain(
       "cargo build --quiet --locked --bin nook-preflight",
     );
-    const policySource = preflight.indexOf("FROM policy-tools AS policy-source");
+    const policySource = preflight.indexOf(
+      "FROM policy-tools AS policy-source",
+    );
     const preparedDependencies = preflight.indexOf(
       "RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts",
       policyTools,
@@ -155,9 +157,9 @@ class DockerizedRustBuildKitContract {
     expect(this.read("preflight/Taskfile.yml")).toContain(
       'buildx history logs "$ref"',
     );
-    expect(
-      this.read("nook-app/nook-web/nook-web-app/package.json"),
-    ).toContain("bash .github/scripts/jscpd-summary.sh");
+    expect(this.read("nook-app/nook-web/nook-web-app/package.json")).toContain(
+      "bash .github/scripts/jscpd-summary.sh",
+    );
   }
 
   dylintDependencyCacheAndSccacheMode(): void {
@@ -191,13 +193,28 @@ class DockerizedRustBuildKitContract {
     expect(nightly).toContain(
       "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock",
     );
-    expect(nightly).toContain("mkdir -p dylint/nook-domain-api/src");
+    expect(nightly).toContain("dylint/nook-domain-api/src \\");
+    expect(nightly).toContain("cargo fetch --locked");
     expect(dependencyBuild).toBeGreaterThan(dependencyStage);
     expect(sourceStage).toBeGreaterThan(dependencyBuild);
     expect(nightly.slice(dependencyStage, sourceStage)).not.toContain(
       "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
     );
     expect(sourceCopy).toBeGreaterThan(sourceStage);
+    const productDependencies = nightly.indexOf(
+      "FROM rust-dylint-build AS rust-dylint-product-deps",
+    );
+    const productSource = nightly.indexOf(
+      "FROM rust-dylint-product-deps AS rust-dylint-native",
+    );
+    expect(productDependencies).toBeGreaterThan(sourceCopy);
+    expect(productSource).toBeGreaterThan(productDependencies);
+    expect(nightly.slice(productDependencies, productSource)).toContain(
+      "cargo dylint --all -- --locked --all-targets",
+    );
+    expect(nightly.slice(productDependencies, productSource)).toContain(
+      "--target wasm32-unknown-unknown --all-targets",
+    );
     expect(product).toContain("ENV SCCACHE_CLIENT_SIDE=0");
     expect(product).not.toContain("ENV SCCACHE_CLIENT_SIDE=1");
     expect(wrapper).toContain(': "${SCCACHE_CLIENT_SIDE:=0}"');

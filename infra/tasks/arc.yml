@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   ARC_CHART_VERSION: 0.14.2
@@ -354,7 +354,6 @@ tasks:
         echo "ARC credential persisted under ~/.nook and synchronized to the encrypted k0s Secret"
         BASH
 
-
   arc:network:configure:
     desc: Configure BBR for registry transfers on the OVH controller and home worker.
     silent: true
@@ -584,7 +583,7 @@ tasks:
         REMOTE
 
   arc:deploy:
-    desc: Install ARC runners and one persistent rootless BuildKit shard per build node.
+    desc: Install ARC runners and one shared persistent rootless BuildKit shard.
     silent: true
     cmds:
       - task: arc:auth:sync

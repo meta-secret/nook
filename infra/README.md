@@ -192,11 +192,13 @@ Forks and Dependabot retain hosted routing.
 `task infra:arc:activate` configures the ARC routes.
 
 ARC Buildx uses the remote driver against
-`tcp://nook-buildkit.arc-runners.svc.cluster.local:1234`. BuildKit's local state
-persists across runner and builder Pod recreation. Zot remains the authenticated
-portable boundary for cold nodes and hosted builders.
+`tcp://nook-buildkit.arc-runners.svc.cluster.local:1234`. One shared BuildKit
+Pod retains its local state across every ARC workflow and Pod recreation, so a
+new runner cannot be routed to an unrelated cold shard. Zot remains the
+authenticated portable boundary for hosted builders and explicit handoffs.
 
-Every qualified build node owns one local PV and one BuildKit Pod. Rise-S has
+The retained local PV inventory allows the stateful solver to be placed on any
+qualified build node, but only one BuildKit Pod is active. Rise-S has
 placement tier `primary`. The home 7950X3D node is `secondary`. KS-6 is
 `overflow`. These tiers are preferences, so node pressure exposes the next
 eligible node. Soft hostname spreading balances equal-tier nodes without
@@ -207,7 +209,7 @@ overflow, so queued work cannot observe a weaker tier first.
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
 
-Each node's shared BuildKit Pod requests 4 CPU and 8 GiB and has no CPU or
+The shared BuildKit Pod requests 4 CPU and 8 GiB and has no CPU or
 memory limit. Large parallel solves may use available node memory. Disposable
 general runners, container coordinators, and job containers
 declare no resource requests or limits. Support init containers and

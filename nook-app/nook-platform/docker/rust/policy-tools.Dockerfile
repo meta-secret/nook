@@ -56,10 +56,13 @@ WORKDIR /meta-secret/nook
 # otherwise every workspace/run adds gigabytes and evicts warm product layers.
 # Seed from the tools home so any immutable Cargo inputs remain available.
 RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
+    --mount=type=cache,id=nook-policy-cargo-registry,target=/tmp/nook-policy-cargo/registry,sharing=locked \
+    --mount=type=cache,id=nook-policy-cargo-git,target=/tmp/nook-policy-cargo/git,sharing=locked \
+    --mount=type=cache,id=nook-policy-advisory-db,target=/tmp/nook-policy-cargo/advisory-db,sharing=locked \
     test -n "$WORKSPACE" \
     && test -n "$POLICY_RUN_NONCE" \
-    && trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-repository' EXIT \
-    && cp -a /usr/local/cargo /tmp/nook-policy-cargo \
+    && trap 'rm -rf /tmp/nook-policy-repository; find /tmp/nook-policy-cargo -mindepth 1 -maxdepth 1 ! -name registry ! -name git ! -name advisory-db -exec rm -rf {} +' EXIT \
+    && cp -a /usr/local/cargo/. /tmp/nook-policy-cargo/ \
     && cp -a /meta-secret/nook /tmp/nook-policy-repository \
     && WORKSPACE="/tmp/nook-policy-repository/$WORKSPACE" \
     && export CARGO_HOME=/tmp/nook-policy-cargo \

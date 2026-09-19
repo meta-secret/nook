@@ -138,7 +138,7 @@ class ArcManifestContract {
     ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
-        message: "ARC runner must use its node-local BuildKit service",
+        message: "ARC runner must use the shared persistent BuildKit service",
       });
     }
     const kubernetesNodeEnvironment = runner.env?.find(
@@ -264,7 +264,7 @@ class ArcManifestContract {
       "value: arc-runners",
       "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
       "/etc/nook-arc-hook/content.yaml",
-      "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+      "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
     ]);
     if (admittedContract5.isErr()) return err(admittedContract5.error);
     const admittedContract6 = containerRunners.forbidAll([
@@ -373,10 +373,8 @@ class ArcManifestContract {
     const admittedContract11 = buildkit.requireAll([
       "name: nook-buildkit-local-retain",
       "volumeBindingMode: WaitForFirstConsumer",
-      "internalTrafficPolicy: Local",
       "kind: StatefulSet",
-      "replicas: 4",
-      "requiredDuringSchedulingIgnoredDuringExecution:",
+      "replicas: 1",
       'nook.nokey.sh/arc-build: "true"',
       "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
       "--oci-worker-no-process-sandbox",
@@ -393,6 +391,8 @@ class ArcManifestContract {
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
     const admittedContract12 = buildkit.forbidAll([
+      "internalTrafficPolicy: Local",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
     ]);
@@ -438,7 +438,7 @@ class ArcManifestContract {
     if (admittedContract19.isErr()) return err(admittedContract19.error);
     const admittedContract20 = dockerSetup.requireAll([
       "driver remote",
-      "node-local BuildKit shard",
+      "shared persistent BuildKit shard",
       "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ]);
     if (admittedContract20.isErr()) return err(admittedContract20.error);
@@ -459,7 +459,7 @@ class ArcManifestContract {
     const admittedContract23 = runtimeSmoke.requireAll([
       "NOOK_ARC_RUNNER",
       "type=local,dest=$shared_dir",
-      "ARC node-local rootless BuildKit smoke passed",
+      "ARC shared rootless BuildKit smoke passed",
     ]);
     if (admittedContract23.isErr()) return err(admittedContract23.error);
     const admittedContract24 = runtimeSmoke.forbidAll([
@@ -477,7 +477,7 @@ class ArcManifestContract {
       "install -d -o 1000 -g 1000 -m 0700",
       "infra/k0s/manifests/arc/buildkit.yaml",
       "rollout status statefulset/nook-buildkit",
-      "one persistent rootless BuildKit shard per build node",
+      "one shared persistent rootless BuildKit shard",
       "for scale_set in nook-k0s nook-k0s-container",
       "helm uninstall nook-k0s-cache",
       "arc-build-nodes",
@@ -587,11 +587,11 @@ class ArcManifestContract {
       "inputs.full_e2e_requested",
       "name: Verify and preview",
       "'nook-k0s-container' || 'ubuntu-latest'",
-      "task ci:pr:verification",
-      "task ci:pr:tests",
-      "task ci:pr:heavy",
-      "task ci:pr:browser:full",
-      "task ci:pr:browser:auth",
+      "task --silent ci:pr:verification",
+      "task --silent ci:pr:tests",
+      "task --silent ci:pr:heavy",
+      "task --silent ci:pr:browser:full",
+      "task --silent ci:pr:browser:auth",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
       "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
       "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
@@ -604,7 +604,7 @@ class ArcManifestContract {
       "!inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'",
       "github.event.pull_request.head.repo.full_name == github.repository",
       "github.event.pull_request.user.login != 'dependabot[bot]'",
-      "run: task ci:pr:browser:auth",
+      "run: task --silent ci:pr:browser:auth",
     ]);
     if (admittedContract31.isErr()) return err(admittedContract31.error);
     const admittedContract32 = extensionTasks.requireAll([
@@ -660,7 +660,7 @@ class ArcManifestContract {
     ]);
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
-      "Publish from the already-selected node-local rootless BuildKit shard",
+      "Publish from the already-selected shared persistent rootless BuildKit shard",
       'cache_scope="nook-rust-wasm-deps-v6"',
       "compression=zstd,force-compression=true",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",

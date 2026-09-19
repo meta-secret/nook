@@ -52,7 +52,7 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
 }
 
 #[test]
-fn dependency_policy_discards_fresh_downloads_before_snapshotting() -> anyhow::Result<()> {
+fn dependency_policy_reuses_downloads_without_snapshotting_them() -> anyhow::Result<()> {
     DependencyPolicyCacheContract::load()?.assert_bounded_fresh_results()
 }
 
@@ -80,12 +80,12 @@ impl DependencyPolicyCacheContract {
             "policy must consume the owning toolchain declaration, not duplicate its pin"
         );
         let cleanup = policy
-            .find("trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-repository' EXIT")
+            .find("trap 'rm -rf /tmp/nook-policy-repository; find /tmp/nook-policy-cargo")
             .ok_or_else(|| {
-                anyhow::anyhow!("fresh policy downloads must be cleaned on shell exit")
+                anyhow::anyhow!("non-cache policy outputs must be cleaned on shell exit")
             })?;
         let seed = policy
-            .find("cp -a /usr/local/cargo /tmp/nook-policy-cargo")
+            .find("cp -a /usr/local/cargo/. /tmp/nook-policy-cargo/")
             .ok_or_else(|| anyhow::anyhow!("policy must preserve immutable Cargo inputs"))?;
         let cargo_home = policy
             .find("export CARGO_HOME=/tmp/nook-policy-cargo")
@@ -99,6 +99,16 @@ impl DependencyPolicyCacheContract {
             .find("&& cargo-audit audit --quiet")
             .ok_or_else(|| anyhow::anyhow!("cargo-audit invocation is missing"))?;
         assert!(cleanup < seed && seed < cargo_home && cargo_home < deny && deny < audit);
+        for cache_mount in [
+            "id=nook-policy-cargo-registry",
+            "id=nook-policy-cargo-git",
+            "id=nook-policy-advisory-db",
+        ] {
+            assert!(
+                policy.contains(cache_mount),
+                "policy must reuse {cache_mount} without snapshotting it"
+            );
+        }
         assert!(policy.contains("test -n \"$POLICY_RUN_NONCE\""));
         assert!(!policy.contains("|| true") && !policy.contains("--offline"));
         Ok(())
@@ -482,7 +492,10 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
                 .contains("FROM rust-dylint-build AS rust-dylint-self-test")
             && fixture
                 .nightly_dockerfile
-                .contains("FROM rust-dylint-build AS rust-dylint-native")
+                .contains("FROM rust-dylint-build AS rust-dylint-product-deps")
+            && fixture
+                .nightly_dockerfile
+                .contains("FROM rust-dylint-product-deps AS rust-dylint-native")
             && fixture
                 .nightly_dockerfile
                 .contains("FROM rust-dylint-native AS rust-dylint-wasm")
