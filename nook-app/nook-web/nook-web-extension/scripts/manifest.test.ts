@@ -133,6 +133,19 @@ describe('extension origin isolation', () => {
     ).toBe(true)
   })
 
+  test('keeps autofill enabled on the Namecheap login origin', () => {
+    const autofill = defaultManifest().content_scripts.find((script) =>
+      script.js.includes('content/autofill.js'),
+    )
+    if (!autofill) throw new Error('Autofill content script is not declared.')
+
+    expect(autofill.matches).toContain('<all_urls>')
+    expect(autofill.exclude_matches).not.toContain(
+      'https://www.namecheap.com/*',
+    )
+    expect(autofill.exclude_matches).not.toContain('https://namecheap.com/*')
+  })
+
   test('installs a MAIN-world authentication route hook at document start', () => {
     const scripts = defaultManifest().content_scripts
     expect(
