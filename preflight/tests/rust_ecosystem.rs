@@ -214,10 +214,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             .contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
             && fixture
                 .pr
-                .contains("github.event.pull_request.head.repo.full_name == github.repository")
-            && fixture
-                .pr
-                .contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
+                .contains(
+                    "runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'nook-k0s-container' || 'ubuntu-latest' }}",
+                )
             && fixture
                 .checks
                 .lines()
@@ -232,7 +231,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 })
                 .count()
                 == 3,
-        "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"
+        "trusted native/ecosystem Rust jobs must use their ARC execution class while forks fall back hosted"
     );
     assert!(fixture.entry.contains("branches: [main]"));
     assert!(
