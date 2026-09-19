@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { AuthenticationWorkflowRoutingResponse } from '../src/background/service-worker/authentication-workflow-routing'
 import {
   type WebsiteLoginMatchAvailability,
@@ -11,6 +12,13 @@ import {
   type WidgetVaultPresentation,
   type WidgetVaultPresentationProjectionArgs,
 } from '../src/content/autofill/widget-presentation-state'
+import { authenticationWidgetWorkflowKey } from '../src/content/autofill/widget-workflow-key'
+import type {
+  AuthenticationPageObservationFacts,
+  AuthenticationWorkflowSnapshot,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+await companionWasmReady
 
 const connectedVault: PilotVaultConnection = {
   kind: PilotVaultConnectionKind.Connected,
@@ -140,5 +148,73 @@ describe('authentication widget vault presentation', () => {
       expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Unavailable)
       expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Connected)
     }
+  })
+
+  test('replaces the widget when Rust-selected facts change', () => {
+    const snapshot = {
+      kind: 0,
+      stage: 0,
+      action: 4,
+      currentStep: 1,
+      totalSteps: 1,
+      observationIndex: 0,
+    } as AuthenticationWorkflowSnapshot
+    const loginMatches: WebsiteLoginMatchAvailability = {
+      kind: 'ready',
+      count: 1,
+    }
+    const vaultPresentation = new WidgetVaultPresentationProjection({
+      vaultConnection: connectedVault,
+      loginMatches,
+    }).state()
+    const factsFor = (
+      currentPasswordFieldCount: number,
+    ): AuthenticationPageObservationFacts => ({
+      fields: {
+        usernameFieldCount: 1,
+        currentPasswordFieldCount,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+        actionablePasswordFieldCount: currentPasswordFieldCount,
+        readonlyPasswordFieldCount: 0,
+      },
+      ceremony: {
+        oneTimeCodeProgression: 'advance-control-required',
+        oneTimeCodeHandlerSignal: '',
+        authenticationContext: {
+          authenticationUsername: 'explicit',
+          sourceOrigin: 'https://login.example.test',
+          formIdentity: 'login',
+          destinationIdentity: '/login',
+        },
+        manualCheckpoint: 'absent',
+        advanceControl: 'absent',
+      },
+      authenticator: {
+        authenticatorSetup: 'absent',
+        backupCodesCopy: '',
+        passkeyControl: 'absent',
+        passkeyAccountAvailability: 'unavailable',
+        matchingPasskeyAccountCount: 0,
+        detailedPasskeyControl: { kind: 'absent' },
+      },
+      credentialSubmission: { kind: 'absent' },
+      detailedAdvanceControl: { kind: 'absent' },
+    })
+    const initialKey = authenticationWidgetWorkflowKey({
+      snapshot,
+      loginMatches,
+      vaultPresentation,
+      facts: factsFor(0),
+    })
+    const refreshedKey = authenticationWidgetWorkflowKey({
+      snapshot,
+      loginMatches,
+      vaultPresentation,
+      facts: factsFor(1),
+    })
+
+    expect(refreshedKey).not.toBe(initialKey)
   })
 })

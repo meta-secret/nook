@@ -49,6 +49,7 @@ import type { PilotVaultConnection } from './workflow-ui'
 
 import { WorkflowCopy, workflowUi } from './workflow-ui'
 import { WidgetVaultPresentationProjection } from './widget-presentation-state'
+import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
@@ -173,18 +174,15 @@ class AuthenticationWidgetRenderer {
     const vaultPresentation = new WidgetVaultPresentationProjection(
       vaultPresentationRequest,
     ).state()
-    const workflowKey = [
-      snapshot.kind,
-      snapshot.stage,
-      snapshot.action,
-      snapshot.currentStep,
-      snapshot.totalSteps,
-      snapshot.observationIndex,
-      loginMatches.kind,
-      'count' in loginMatches ? loginMatches.count : 0,
-      vaultPresentation.kind,
-      'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
-    ].join(':')
+    const workflowKeyRequest: Parameters<
+      typeof authenticationWidgetWorkflowKey
+    >[0] = {
+      snapshot,
+      loginMatches,
+      vaultPresentation,
+      facts,
+    }
+    const workflowKey = authenticationWidgetWorkflowKey(workflowKeyRequest)
     const currentApproval: AuthenticationWorkflowApproval = {
       workflowKey,
       facts,
