@@ -6,8 +6,7 @@
 # Each browser solve is read-only. Headless UI demos are temporarily disabled while their
 # implementation remains available for later re-enable. Deploy the fast, unoptimized development
 # channel to Cloudflare
-# Pages only after web verify, web e2e, and the portable WASM cache proof succeed.
-# Extension e2e remains required for the workflow but does not gate the development deploy.
+# Pages only after web verify, both browser e2e suites, and the portable WASM cache proof succeed.
 # Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
@@ -559,7 +558,7 @@ jobs:
 
   deploy:
     name: Deploy development
-    needs: [web, web-e2e, wasm-cache-proof]
+    needs: [web, web-e2e, extension-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     environment:

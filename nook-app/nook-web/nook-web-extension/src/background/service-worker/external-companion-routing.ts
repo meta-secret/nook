@@ -1,5 +1,11 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  RuntimeMessageDecodeCauseKind,
+  RuntimeMessageDecodeFailureKind,
+  type RuntimeMessageDecodeFailure,
+} from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { isExtensionPairingApprovedMessageAdmissionFailure } from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -66,6 +72,21 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
+
+function pairingGrantDecodeFailureResponse(
+  failure: RuntimeMessageDecodeFailure,
+): MessageResponse {
+  if (
+    failure.kind !==
+      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant ||
+    failure.cause.kind !== RuntimeMessageDecodeCauseKind.ThrownValue ||
+    !isExtensionPairingApprovedMessageAdmissionFailure(failure.cause.detail)
+  ) {
+    return invalidPairingGrantResponse
+  }
+  return { ok: false, reason: failure.cause.detail }
+}
+
 export class ExternalCompanionRouter {
   constructor(private readonly request: ExternalCompanionRoutingRequest) {}
 
@@ -165,7 +186,7 @@ export class ExternalCompanionRouter {
       message,
     )
     if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
-      sendResponse(invalidPairingGrantResponse)
+      sendResponse(pairingGrantDecodeFailureResponse(pairingApproval.failure))
       return false
     }
     if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {

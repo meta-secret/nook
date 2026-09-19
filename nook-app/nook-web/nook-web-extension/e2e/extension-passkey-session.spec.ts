@@ -718,7 +718,7 @@ test('accepts the pairing grant after the extension session was locked', async (
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
     await expect(
-      simplePage.getByTestId('extension-connect-consent').getByRole('alert'),
+      simplePage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)
   } finally {
     await context.close()
@@ -882,7 +882,7 @@ test('re-approves an existing local vault after reload without event-log-access-
       reconnectPage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
     await expect(
-      reconnectPage.getByTestId('extension-connect-consent').getByRole('alert'),
+      reconnectPage.locator('[data-extension-pairing-rejection-reason]'),
     ).toHaveCount(0)
     await expect(
       reconnectPage.getByText('event-log-access-not-granted'),

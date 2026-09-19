@@ -125,7 +125,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Each browser E2E solve is read-only.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
-- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
+- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` only after both browser e2e
+  suites and the remaining required verification succeed.
 
 **`release.yml`**
 
