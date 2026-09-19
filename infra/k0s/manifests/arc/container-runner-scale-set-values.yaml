@@ -55,7 +55,7 @@ template:
     terminationGracePeriodSeconds: 60
     containers:
       - name: runner
-        image: ghcr.io/meta-secret/nook-arc-runner@sha256:6ffe620a5f1124526cb0c8b94962109a459b60b8d08c41d2aba1d397b8a03d5a
+        image: ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b
         command: ["/home/runner/run.sh"]
         env:
           - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER

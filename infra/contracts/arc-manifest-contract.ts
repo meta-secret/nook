@@ -232,7 +232,7 @@ class ArcManifestContract {
       "values: [primary]",
       "values: [secondary]",
       "values: [overflow]",
-      "ghcr.io/meta-secret/nook-arc-runner@sha256:6ffe620a5f1124526cb0c8b94962109a459b60b8d08c41d2aba1d397b8a03d5a",
+      "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
       "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
