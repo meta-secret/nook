@@ -24,10 +24,16 @@ class DockerizedRustBuildKitContract {
 
   trustedRustConsumerUsesBuildKit(): void {
     const workflow = this.read(".github/workflows/pr.yml");
+    const rootWorkflow = this.read(".github/workflows/ci.yml");
+    const dockerSetup = this.read(".github/actions/nook-docker-setup/action.yml");
     const tasks = this.read("nook-app/ci/pr.yml");
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
     expect(workflow).toContain("Connect trusted persistent BuildKit");
+    expect(rootWorkflow).toContain(
+      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    );
+    expect(dockerSetup).toContain("logout: false");
     expect(workflow).toContain("BUILDKIT_PROGRESS: quiet");
     expect(workflow).not.toContain("nook-cache-telemetry");
     expect(workflow).not.toContain("actions/upload-artifact");

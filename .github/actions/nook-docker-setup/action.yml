@@ -107,6 +107,9 @@ runs:
         registry: ${{ inputs.registry-host }}
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.registry-password }}
+        # Every ARC job runs in an ephemeral pod. Avoid a redundant post-job
+        # logout so cancellation can release the runner immediately.
+        logout: false
 
     - name: Preload hosted BuildKit from Zot
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}

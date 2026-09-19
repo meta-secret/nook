@@ -743,6 +743,11 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
     "utf8",
   );
   assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
+  const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  assert.match(
+    rootWorkflow,
+    /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
+  );
   assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.336\.0@sha256:/);
   assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
   assert.match(arcRunnerBake, /target "arc-runner-hooks-proof"/);
