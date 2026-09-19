@@ -172,13 +172,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(!pr.contains("    needs:"));
     assert!(!pr.contains("continue-on-error:"));
     assert!(!pr.contains("type=registry"));
-    assert!(pr.contains("task ci:pr:browser:auth"));
+    assert!(pr.contains("task --silent ci:pr:browser:auth"));
     assert!(pr.contains("steps.browser-scope.outputs.auth == 'true'"));
-    assert!(pr.contains("task web:research:verify"));
+    assert!(pr.contains("task --silent web:research:verify"));
     assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
     assert!(pr.contains("require-sccache: \"true\""));
-    assert!(pr.contains("run: node .github/workflows/lib/pr-cache-health.mjs"));
-    assert!(pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
+    assert!(!pr.contains("Preserve cache telemetry"));
+    assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
     let coverage = root.read(".github/actions/nook-pr-coverage/action.yml");
     assert!(coverage.contains("coverage/current/tools/nook-preflight"));
     assert!(coverage.contains("base-coverage-artifact.cjs"));
@@ -307,7 +307,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    assert!(pr.contains("task ci:pr:browser:prepare"));
+    assert!(pr.contains("task --silent ci:pr:browser:prepare"));
     assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
     assert!(!pr.contains("actions/download-artifact"));
     let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
