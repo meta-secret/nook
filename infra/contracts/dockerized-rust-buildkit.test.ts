@@ -26,6 +26,7 @@ class DockerizedRustBuildKitContract {
     const workflow = this.read(".github/workflows/pr.yml");
     const tasks = this.read("nook-app/ci/pr.yml");
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
+    const preflight = this.read("preflight/Dockerfile");
     expect(workflow).toContain("Connect trusted persistent BuildKit");
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
@@ -35,9 +36,21 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("buildx bake");
     expect(tasks).toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
+    expect(tasks).toContain(
+      "require(process.argv[1]).package_lines_percent.nook_domain_api",
+    );
+    expect(tasks).not.toContain(
+      'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
+    );
     expect(tasks).not.toMatch(/docker\s+(?:pull|run|create|start|exec)\b/);
     expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
+    expect(preflight).toContain(
+      "FROM policy-source AS pr-verification\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\",
+    );
+    expect(preflight).toContain(
+      "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
+    );
   }
 
   dylintDependencyCacheAndSccacheMode(): void {

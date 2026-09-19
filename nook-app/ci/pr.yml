@@ -84,7 +84,7 @@ tasks:
       - |
         set -euo pipefail
         mkdir -p '{{.PR_ARTIFACT_DIR}}/coverage' '{{.PR_ARTIFACT_DIR}}/browser'
-        floor="$(node -p 'require("./nook-app/nook-platform/nook-core/coverage-floor.json").package_lines_percent.nook_domain_api')"
+        floor="$(node -p 'require(process.argv[1]).package_lines_percent.nook_domain_api' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \

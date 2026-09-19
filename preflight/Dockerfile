@@ -130,7 +130,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 # The PR verification solve checks tooling without compiling/running test binaries.
 FROM policy-source AS pr-verification
-RUN task tooling:static \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task tooling:static \
     && task loom:format:check \
     && task loom:module-experts:validate \
     && task loom:structural-experts:validate \
