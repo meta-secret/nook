@@ -204,9 +204,12 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
     );
 
     let pull_request = root.read(".github/workflows/pr.yml");
+    let preview_action = root.read(".github/actions/nook-pr-preview/action.yml");
     assert!(
-        pull_request.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"),
-        "PR preview deploy must invoke the host Pages script"
+        pull_request.contains("uses: ./.github/actions/nook-pr-preview")
+            && preview_action
+                .contains("run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"),
+        "PR preview deploy action must invoke the host Pages script"
     );
     let pr_deploy_script = root.read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(

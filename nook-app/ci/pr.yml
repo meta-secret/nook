@@ -1,7 +1,7 @@
 version: "3"
 
 # Ordered phases in one GitHub job. Bake parallelizes independent targets on
-# the runner's node-local builder; only small outputs leave that builder.
+# the shared persistent builder; only small outputs leave that builder.
 tasks:
   ci:pr:runner:publish:
     desc: Publish the source-free PR runner once per tooling revision (not a PR phase).

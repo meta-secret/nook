@@ -153,10 +153,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let pr = root.read(".github/workflows/pr.yml");
     let mut previous = 0;
     for phase in [
-        "run: task ci:pr:verification\n",
-        "run: task ci:pr:tests\n",
-        "run: task ci:pr:heavy\n",
-        "run: task ci:pr:browser:full\n",
+        "run: task --silent ci:pr:verification\n",
+        "run: task --silent ci:pr:tests\n",
+        "run: task --silent ci:pr:heavy\n",
+        "run: task --silent ci:pr:browser:full\n",
         "uses: ./.github/actions/nook-pr-preview",
     ] {
         let position = pr

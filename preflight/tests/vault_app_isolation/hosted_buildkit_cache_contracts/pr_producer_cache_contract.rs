@@ -41,13 +41,13 @@ impl<'a> PrProducerCacheContract<'a> {
             );
         }
         let verification = pr
-            .find("run: task ci:pr:verification\n")
+            .find("run: task --silent ci:pr:verification\n")
             .context("missing verification")?;
         let tests = pr
-            .find("run: task ci:pr:tests\n")
+            .find("run: task --silent ci:pr:tests\n")
             .context("missing tests")?;
         let heavy = pr
-            .find("run: task ci:pr:heavy\n")
+            .find("run: task --silent ci:pr:heavy\n")
             .context("missing heavy phase")?;
         assert!(verification < tests && tests < heavy);
         assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
