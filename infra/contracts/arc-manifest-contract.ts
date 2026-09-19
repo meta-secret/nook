@@ -590,6 +590,8 @@ class ArcManifestContract {
       "task --silent ci:pr:verification",
       "task --silent ci:pr:tests",
       "task --silent ci:pr:heavy",
+      "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
+      "steps.browser-scope.outputs.validation == 'true'",
       "task --silent ci:pr:browser:full",
       "task --silent ci:pr:browser:auth",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
