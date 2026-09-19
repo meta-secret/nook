@@ -147,6 +147,13 @@ const WIDGET_PANEL_STYLES = `
     .vault-status[data-state='unavailable'] {
       color: oklch(0.78 0.05 70);
     }
+    .vault-status[data-state='vault-locked'],
+    .vault-status[data-state='no-matching-credential'],
+    .vault-status[data-state='unavailable'] {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+    }
     .mark {
       display: block;
       width: 52px;

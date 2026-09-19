@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  WebsiteLoginMatchAvailabilityKind,
   type WebsiteLoginMatchAvailability,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PilotVaultConnectionKind,
   WidgetVaultPresentationKind,
@@ -19,7 +18,7 @@ const connectedVault: PilotVaultConnection = {
 describe('authentication widget vault presentation', () => {
   test('keeps an unconnected vault distinct from runtime availability', () => {
     const loginMatches: WebsiteLoginMatchAvailability = {
-      kind: WebsiteLoginMatchAvailabilityKind.Ready,
+      kind: 'ready',
       count: 1,
     }
     const projectionRequest: WidgetVaultPresentationProjectionArgs = {
@@ -35,10 +34,10 @@ describe('authentication widget vault presentation', () => {
 
   test('projects a locked session separately from an unavailable session', () => {
     const lockedMatches: WebsiteLoginMatchAvailability = {
-      kind: WebsiteLoginMatchAvailabilityKind.Locked,
+      kind: 'locked',
     }
     const unavailableMatches: WebsiteLoginMatchAvailability = {
-      kind: WebsiteLoginMatchAvailabilityKind.Unavailable,
+      kind: 'unavailable',
     }
 
     const lockedRequest: WidgetVaultPresentationProjectionArgs = {
@@ -65,11 +64,11 @@ describe('authentication widget vault presentation', () => {
 
   test('distinguishes no matching credentials from an available credential', () => {
     const noMatch: WebsiteLoginMatchAvailability = {
-      kind: WebsiteLoginMatchAvailabilityKind.Ready,
+      kind: 'ready',
       count: 0,
     }
     const available: WebsiteLoginMatchAvailability = {
-      kind: WebsiteLoginMatchAvailabilityKind.Ready,
+      kind: 'ready',
       count: 1,
     }
 

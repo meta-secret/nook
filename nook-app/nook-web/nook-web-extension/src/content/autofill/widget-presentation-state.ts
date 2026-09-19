@@ -1,5 +1,4 @@
 import {
-  WebsiteLoginMatchAvailabilityKind,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -77,17 +76,17 @@ export class WidgetVaultPresentationProjection {
     }
 
     switch (loginMatches.kind) {
-      case WebsiteLoginMatchAvailabilityKind.Locked:
+      case 'locked':
         return {
           kind: WidgetVaultPresentationKind.Locked,
           vaultName: vaultConnection.vaultName,
         }
-      case WebsiteLoginMatchAvailabilityKind.Unavailable:
+      case 'unavailable':
         return {
           kind: WidgetVaultPresentationKind.Unavailable,
           vaultName: vaultConnection.vaultName,
         }
-      case WebsiteLoginMatchAvailabilityKind.Ready:
+      case 'ready':
         return loginMatches.count === 0
           ? {
               kind: WidgetVaultPresentationKind.NoMatchingCredential,
