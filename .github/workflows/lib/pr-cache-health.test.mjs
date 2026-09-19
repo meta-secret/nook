@@ -763,6 +763,7 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
     workflow,
     /run: node \.github\/workflows\/lib\/pr-cache-health\.mjs/,
   );
+  assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,
     /type=registry|actions\/download-artifact|needs\.rust/,

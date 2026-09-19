@@ -2,6 +2,10 @@ name: Nook Docker setup
 description: Task, Buildx, and authenticated registry BuildKit cache setup.
 
 inputs:
+  preinstalled-tooling:
+    description: Reuse the pinned Node.js and Task binaries already present in the job image.
+    required: false
+    default: "false"
   cache-write:
     description: Allow this workflow source to update the shared hosted BuildKit cache refs.
     required: false
@@ -65,11 +69,13 @@ runs:
   using: composite
   steps:
     - name: Provision Node.js for cache telemetry
+      if: ${{ inputs.preinstalled-tooling != 'true' }}
       uses: actions/setup-node@v7
       with:
         node-version: "24.19.0"
 
     - name: Setup Task
+      if: ${{ inputs.preinstalled-tooling != 'true' }}
       uses: go-task/setup-task@v2
       with:
         version: 3.52.0

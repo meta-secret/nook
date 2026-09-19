@@ -69,6 +69,7 @@ jobs:
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-docker-setup
         with:
+          preinstalled-tooling: "true"
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
