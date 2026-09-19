@@ -87,9 +87,31 @@ assert_source_contains "$driver_script" "database.objectStoreNames.contains('pai
 assert_source_order "$driver_script" 'const storage = await readExtensionStorage(context)' 'const popupPage = await context.newPage()'
 assert_source_contains "$driver_script" "device-protection-pin-unlock-btn"
 assert_source_contains "$driver_script" "device-protection-pin-unlock-input"
+assert_source_contains "$driver_script" "device-protection-create-new-choice"
+assert_source_contains "$driver_script" "device-protection-setup-btn"
 assert_source_contains "$driver_script" "approve-extension-device-btn"
 assert_source_contains "$driver_script" "authenticated-shell"
+assert_source_order \
+  "$driver_script" \
+  "device-protection-create-new-choice" \
+  "device-protection-setup-btn"
+assert_source_order "$driver_script" "device-protection-setup-btn" "device-protection-pin-input"
 assert_source_order "$driver_script" "await pinUnlock.click()" "await companionHome.waitFor"
 assert_source_order "$driver_script" "connect-simple-vault-btn" "approve-extension-device-btn"
+
+# An orphaned local vault must take the explicit Create-new workflow before
+# the driver submits a new vault name; it must not assume first-vault UI.
+assert_source_contains "$driver_script" "login-local-unlock-step"
+assert_source_contains "$driver_script" "login-vault-workflow-create"
+assert_source_contains "$driver_script" "login-vault-create-workflow"
+assert_source_contains "$driver_script" "login-vault-name-input"
+assert_source_contains "$driver_script" "login-create-additional-vault-btn"
+assert_source_contains "$driver_script" "Expected one visible Simple Vault create action"
+assert_source_order "$driver_script" "login-vault-workflow-create" "login-vault-create-workflow"
+assert_source_order "$driver_script" "login-vault-create-workflow" "login-vault-name-input"
+assert_source_order \
+  "$driver_script" \
+  "login-vault-create-workflow" \
+  "login-create-additional-vault-btn"
 
 echo 'Brave PIN vault setup selection tests passed'
