@@ -292,7 +292,6 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-key-inventory'),
     ).toContainText('PIN or passphrase')
-
     await personalIdentity.click()
     const generationBeforeActivation = await page.evaluate(() =>
       localStorage.getItem('nook-local-data-storage-generation'),
