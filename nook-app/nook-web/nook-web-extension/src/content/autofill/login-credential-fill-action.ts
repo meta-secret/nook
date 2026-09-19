@@ -181,7 +181,10 @@ export class LoginCredentialFillAction {
       const approvedFillRequest = filledRequest
       if (!approvedFillRequest) return false
 
-      await Promise.resolve()
+      // Page frameworks may apply input-event state updates in their own
+      // microtask. Cross the browser task boundary before rebuilding the
+      // untrusted DOM facts and activating the approved submit control.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       const submissionRevalidationRequest: ConstructorParameters<
         typeof RevalidatedAuthenticationAction
       >[0] = {

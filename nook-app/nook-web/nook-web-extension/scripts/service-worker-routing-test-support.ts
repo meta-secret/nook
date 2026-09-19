@@ -98,7 +98,7 @@ const routedVaultEvent = {
   signature: `ed25519:${'0'.repeat(128)}`,
 }
 
-const externalPairingMessage: ExternalCompanionMessage = {
+const externalPairingMessage = {
   type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
   payload: {
     vaultType: routedGrant.vaultType,
@@ -119,7 +119,7 @@ const externalPairingMessage: ExternalCompanionMessage = {
       event: routedVaultEvent,
     },
   ],
-}
+} satisfies ExternalCompanionMessage
 
 // Obtain the generated outcome variants from Rust rather than mirroring them.
 await companionWasmReady

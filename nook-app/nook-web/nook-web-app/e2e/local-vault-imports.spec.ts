@@ -760,10 +760,21 @@ test.describe('local vault', () => {
 
   test('decrypts paginated credentials only for reveal or secret copy', async ({
     page,
-    context,
   }) => {
     await disableVaultIdleLock(page)
-    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.evaluate(() => {
+      let text = ''
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          readText: () => Promise.resolve(text),
+          writeText: (value: string) => {
+            text = value
+            return Promise.resolve()
+          },
+        },
+      })
+    })
     const items = Array.from({ length: 55 }, (_, index) => ({
       type: 1,
       name: `Demand login ${index}`,

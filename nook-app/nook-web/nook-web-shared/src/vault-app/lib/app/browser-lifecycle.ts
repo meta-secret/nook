@@ -14,7 +14,10 @@ import {
 
 import { browserDataLifecycle } from "$lib/runtime/browser-data";
 
-import { configured_vault_application_name } from "$app-wasm";
+import {
+  configured_vault_application_name,
+  NookVaultArchitecture,
+} from "$app-wasm";
 
 import { LegalPageSelection } from "$lib/content/legal";
 
@@ -45,6 +48,7 @@ type AuthProviderDebugHooks = {
 
 type BrowserDebugHooks = {
   __nookVault: VaultState;
+  __nookVaultArchitecture: typeof NookVaultArchitecture;
   __nookConfiguredVaultApplication: string;
   __nookAuthProviders: AuthProviderDebugHooks;
 };
@@ -52,6 +56,7 @@ type BrowserDebugHooks = {
 declare global {
   interface Window {
     readonly __nookVault?: VaultState;
+    readonly __nookVaultArchitecture?: typeof NookVaultArchitecture;
   }
 }
 
@@ -106,6 +111,7 @@ class VaultBrowserLifecycle {
     if (vault.runtimeConfig.expose_debug_hooks()) {
       const debugHooks: BrowserDebugHooks = {
         __nookVault: vault,
+        __nookVaultArchitecture: NookVaultArchitecture,
         __nookConfiguredVaultApplication: configured_vault_application_name(),
         __nookAuthProviders: {
           activeVaultScope,

@@ -10,6 +10,7 @@ import {
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   enrollmentCodeFromLink,
+  localizeAppLinkForE2e,
   expandSettingsSection,
   flushNookLogPersistQueue,
   openLoginProviderSetup,
@@ -765,8 +766,9 @@ test.describe('vault architecture modes', () => {
           folderId: sharedFolder.id,
         },
       ])
+      const localLink = localizeAppLinkForE2e(joiner, link)
       await joiner.goto('about:blank')
-      await joiner.goto(link)
+      await joiner.goto(localLink)
       await expect(joiner.getByTestId('enrollment-scan-panel')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })

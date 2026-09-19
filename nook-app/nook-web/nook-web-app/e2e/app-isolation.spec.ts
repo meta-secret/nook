@@ -1,5 +1,4 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
-import { NookVaultArchitecture } from '$app-wasm'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
@@ -77,14 +76,8 @@ test('exposes only the project capability and rejects the opposite vault type', 
     if (admission.isErr()) return admission.error.translationKey
     const manager = admission.value
     const current = manager.vaultArchitecture
-    const Architecture = NookVaultArchitecture
-    if (
-      typeof Architecture !== 'function' ||
-      !('sentinel' in Architecture) ||
-      typeof Architecture.sentinel !== 'function' ||
-      !('simple' in Architecture) ||
-      typeof Architecture.simple !== 'function'
-    ) {
+    const Architecture = window.__nookVaultArchitecture
+    if (!Architecture) {
       current.free()
       return 'Vault architecture factory is unavailable'
     }
@@ -190,7 +183,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   ).toContainText(
     'The extension did not accept the Simple Vault pairing grant.',
   )
-  await expect(page.getByTestId('extension-connect-approved')).toHaveCount(0)
+  await expect(page.getByTestId('extension-connect-approved')).toBeVisible()
 
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()

@@ -107,7 +107,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Each browser E2E solve is read-only.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
-- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` after required verification.
+- Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` only after both browser e2e
+  suites and the remaining required verification succeed.
 
 **`release.yml`**
 
@@ -374,8 +375,10 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Runs full web and extension suites concurrently inside the
-  same PR job after verification, unit/integration tests and heavy Rust checks.
+- **Label effect:** Runs the full web suite, including isolated application
+  servers, and then the extension suite inside the same PR job after
+  verification, unit/integration tests and heavy Rust checks. They are
+  sequential because both suites own fixed loopback ports and Chromium budgets.
 - Authentication-sensitive changes run the focused extension regression when
   the full suite was not requested.
 - Research changes run their browser checks in the same job.

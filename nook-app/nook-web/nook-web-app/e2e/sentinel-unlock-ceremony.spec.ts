@@ -6,6 +6,7 @@ import {
   NookAppLogAttachmentName,
   attachNookLogsForTest,
   flushNookLogPersistQueue,
+  localizeAppLinkForE2e,
   readPersistedAppLogs,
   UI_TIMEOUT_MS,
   parseJson,
@@ -115,7 +116,9 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     expect(invitationLink).toContain('#sentinel-request=')
 
     async function connectParticipant(participantDevice: Page) {
-      await participantDevice.goto(invitationLink)
+      await participantDevice.goto(
+        localizeAppLinkForE2e(participantDevice, invitationLink),
+      )
       await expect(
         participantDevice.getByTestId('sentinel-genesis-participant-step'),
       ).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -158,7 +161,8 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       participantDevice: Page,
       participantName: string,
     ) {
-      await deviceA.goto(await connectParticipant(participantDevice))
+      const responseLink = await connectParticipant(participantDevice)
+      await deviceA.goto(localizeAppLinkForE2e(deviceA, responseLink))
       await expect(
         deviceA.getByTestId('sentinel-genesis-authentication-ready'),
       ).toBeVisible({ timeout: UI_TIMEOUT_MS })

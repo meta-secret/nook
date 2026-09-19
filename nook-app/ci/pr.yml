@@ -110,10 +110,10 @@ tasks:
         ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
 
   ci:pr:browser:full:
-    desc: Run web and extension suites concurrently on this runner.
-    deps:
-      - _ci:main:web:e2e-only
-      - _extension:test:e2e
+    desc: Run web and extension suites sequentially on this runner.
+    cmds:
+      - task: _ci:main:web:e2e-only
+      - task: _extension:test:e2e
 
   ci:pr:browser:auth:
     desc: Run the required focused real-extension authentication regression.

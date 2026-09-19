@@ -390,6 +390,15 @@ export function enrollmentCodeFromLink(link: string): string {
   return trimmed
 }
 
+/** Exercise a generated public app link against the Playwright preview host. */
+export function localizeAppLinkForE2e(page: Page, link: string): string {
+  const previewUrl = new URL(page.url())
+  const appUrl = new URL(link)
+  appUrl.protocol = previewUrl.protocol
+  appUrl.host = previewUrl.host
+  return appUrl.toString()
+}
+
 /** Open the onboard-device settings view with sync timers paused for e2e. */
 export async function openOnboardDevicePanel(page: Page) {
   await assertVaultReady(page)

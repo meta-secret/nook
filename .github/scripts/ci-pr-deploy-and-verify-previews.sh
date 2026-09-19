@@ -120,41 +120,64 @@ fi
 
 body="$(mktemp)"
 headers="$(mktemp)"
-site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
-retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
-site_ok=false
-if [ "$site_status" = "200" ] \
-  && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
-  && grep -Fq "$simple_url/" "$body" \
-  && grep -Fq "$sentinel_url/" "$body" \
-  && [ "$retired_status" = "404" ] \
-  && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
-  site_ok=true
-fi
+verify_pages_aliases() {
+  site_status="$(curl --connect-timeout 3 --max-time 8 -sS -o "$body" -w '%{http_code}' "$site_url/" || true)"
+  retired_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o /dev/null -w '%{http_code}' "$site_url/simple/" || true)"
+  site_ok=false
+  if [ "$site_status" = "200" ] \
+    && grep -Fq '<title>Nook — Keys, not accounts</title>' "$body" \
+    && grep -Fq "$simple_url/" "$body" \
+    && grep -Fq "$sentinel_url/" "$body" \
+    && [ "$retired_status" = "404" ] \
+    && tr -d '\r' < "$headers" | grep -Eiq '^cache-control:.*no-store'; then
+    site_ok=true
+  fi
 
-simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
-simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
-simple_ok=false
-if [ "$simple_status" = "200" ] \
-  && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
-  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-  && [ "$simple_extension" = "200" ]; then
-  simple_ok=true
-fi
+  simple_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$simple_url/" || true)"
+  simple_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$simple_url/extension-connect" || true)"
+  simple_ok=false
+  if [ "$simple_status" = "200" ] \
+    && grep -Fq '<meta name="nook-app-kind" content="simple"' "$body" \
+    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+    && [ "$simple_extension" = "200" ]; then
+    simple_ok=true
+  fi
 
-sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
-sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
-sentinel_ok=false
-if [ "$sentinel_status" = "200" ] \
-  && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
-  && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
-  && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
-  && [ "$sentinel_extension" = "404" ]; then
-  sentinel_ok=true
-fi
+  sentinel_status="$(curl --connect-timeout 3 --max-time 8 -sS -D "$headers" -o "$body" -w '%{http_code}' "$sentinel_url/" || true)"
+  sentinel_extension="$(curl --connect-timeout 3 --max-time 8 -sS -o /dev/null -w '%{http_code}' "$sentinel_url/extension-connect" || true)"
+  sentinel_ok=false
+  if [ "$sentinel_status" = "200" ] \
+    && grep -Fq '<meta name="nook-app-kind" content="sentinel"' "$body" \
+    && tr -d '\r' < "$headers" | grep -Eiq '^content-security-policy:' \
+    && tr -d '\r' < "$headers" | grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \
+    && [ "$sentinel_extension" = "404" ]; then
+    sentinel_ok=true
+  fi
 
-if [ "$site_ok" != true ] || [ "$simple_ok" != true ] || [ "$sentinel_ok" != true ]; then
+  [ "$site_ok" = true ] && [ "$simple_ok" = true ] && [ "$sentinel_ok" = true ]
+}
+
+verification_passed=false
+verification_attempts="${NOOK_PREVIEW_VERIFY_ATTEMPTS:-6}"
+verification_delay_seconds="${NOOK_PREVIEW_VERIFY_DELAY_SECONDS:-5}"
+if [[ ! "$verification_attempts" =~ ^[1-9][0-9]*$ ]] \
+  || [[ ! "$verification_delay_seconds" =~ ^[0-9]+$ ]]; then
+  echo "::error::Preview verification retry settings must be non-negative integers with at least one attempt"
+  exit 1
+fi
+for ((attempt = 1; attempt <= verification_attempts; attempt++)); do
+  if verify_pages_aliases; then
+    verification_passed=true
+    break
+  fi
+  if [ "$attempt" -lt "$verification_attempts" ]; then
+    echo "::notice::Pages aliases have not converged after verification attempt $attempt/$verification_attempts (site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
+    sleep "$verification_delay_seconds"
+  fi
+done
+
+if [ "$verification_passed" != true ]; then
   echo "::error::Isolated Pages aliases failed verification (site=$site_status/$retired_status, simple=$simple_status/$simple_extension, sentinel=$sentinel_status/$sentinel_extension)"
   exit 1
 fi

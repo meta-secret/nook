@@ -11,6 +11,7 @@ fixture_bin="$fixture_root/bin"
 helper_calls="$fixture_root/host-helper.calls"
 task_calls="$fixture_root/task.calls"
 verification_calls="$fixture_root/verification.calls"
+verification_retry_marker="$fixture_root/verification-retry"
 github_output="$fixture_root/github-output"
 mkdir -p "$fixture_bin"
 touch "$fixture_root/wrangler"
@@ -84,6 +85,13 @@ done
 status=200
 body=''
 response_headers=''
+fail_first_site_alias=false
+if [ "${NOOK_TEST_FAIL_FIRST_SITE_ALIAS:-}" = '1' ] \
+  && [[ "$url" == https://*.nokey-sh.pages.dev/ ]] \
+  && [ ! -e "$NOOK_TEST_VERIFICATION_RETRY_MARKER" ]; then
+  touch "$NOOK_TEST_VERIFICATION_RETRY_MARKER"
+  fail_first_site_alias=true
+fi
 case "$url" in
   https://*.nokey-sh.pages.dev/simple/)
     status=404
@@ -106,6 +114,9 @@ case "$url" in
     status=404
     ;;
 esac
+if [ "$fail_first_site_alias" = true ]; then
+  body='<title>Stale preview alias</title>'
+fi
 
 if [ -n "$output" ]; then
   printf '%s' "$body" > "$output"
@@ -178,6 +189,10 @@ if output="$(
     NOOK_TEST_HELPER_CALLS="$helper_calls" \
     NOOK_TEST_TASK_CALLS="$task_calls" \
     NOOK_TEST_VERIFICATION_CALLS="$verification_calls" \
+    NOOK_TEST_FAIL_FIRST_SITE_ALIAS=1 \
+    NOOK_TEST_VERIFICATION_RETRY_MARKER="$verification_retry_marker" \
+    NOOK_PREVIEW_VERIFY_ATTEMPTS=2 \
+    NOOK_PREVIEW_VERIFY_DELAY_SECONDS=0 \
     NOOK_HOST_PAGES_DEPLOY=1 \
     NOOK_WRANGLER_BIN="$fixture_root/wrangler" \
     NOOK_WRANGLER_VERSION=fixture \
@@ -194,6 +209,10 @@ else
   echo 'preview deploy extension contract test: deployment unexpectedly failed' >&2
   exit 1
 fi
+grep -Fq 'Pages aliases have not converged after verification attempt 1/2' <<< "$output" \
+  || { echo 'preview deploy extension contract test: alias verification did not retry' >&2; exit 1; }
+test -e "$verification_retry_marker" \
+  || { echo 'preview deploy extension contract test: retry fixture was not exercised' >&2; exit 1; }
 grep -Fxq \
   'pr-preview-branch|0123456789abcdef0123456789abcdef01234567|https://pr-preview-branch.nokey-sh.pages.dev/|https://pr-preview-branch.nokey-simple.pages.dev/|https://pr-preview-branch.nokey-sentinel.pages.dev/|https://deadbeef.nokey-sh.pages.dev/downloads/extension.json|https://deadbeef.nokey-sh.pages.dev/' \
   "$verification_calls" \

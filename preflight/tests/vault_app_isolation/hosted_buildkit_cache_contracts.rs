@@ -631,7 +631,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             )
             && !wasm_publish.contains("task ci:main:publish-wasm-cache")
             && wasm_proof.contains("needs: [wasm-cache-publish]")
-            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
+            && main.contains("needs: [web, web-e2e, extension-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
     assert!(
@@ -641,7 +641,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.starts_with(
-            "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
+            "    name: Deploy development\n    needs: [web, web-e2e, extension-e2e, wasm-cache-proof]"
         ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
         "the development deployment lane must use the general ARC scale set"
     );
