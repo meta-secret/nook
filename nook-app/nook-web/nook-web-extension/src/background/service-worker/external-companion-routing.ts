@@ -5,7 +5,10 @@ import {
   RuntimeMessageDecodeFailureKind,
   type RuntimeMessageDecodeFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { decodeExtensionPairingApprovedMessageAdmissionFailure } from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
+import {
+  decodeExtensionPairingApprovedMessageAdmissionFailure,
+  ExtensionPairingApprovedMessageAdmissionFailureDecodeKind,
+} from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -83,12 +86,13 @@ function pairingGrantDecodeFailureResponse(
   ) {
     return invalidPairingGrantResponse
   }
-  const reason = decodeExtensionPairingApprovedMessageAdmissionFailure(
+  const decoded = decodeExtensionPairingApprovedMessageAdmissionFailure(
     failure.cause.detail,
   )
-  return reason === undefined
-    ? invalidPairingGrantResponse
-    : { ok: false, reason }
+  return decoded.kind ===
+    ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Decoded
+    ? { ok: false, reason: decoded.value }
+    : invalidPairingGrantResponse
 }
 
 export class ExternalCompanionRouter {

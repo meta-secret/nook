@@ -23,10 +23,32 @@ const extensionPairingApprovedMessageAdmissionFailures = Object.values(
   ExtensionPairingApprovedMessageAdmissionFailure,
 );
 
+export enum ExtensionPairingApprovedMessageAdmissionFailureDecodeKind {
+  Decoded = "decoded",
+  Invalid = "invalid",
+}
+
+export type ExtensionPairingApprovedMessageAdmissionFailureDecodeOutcome =
+  | {
+      readonly kind: ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Decoded;
+      readonly value: ExtensionPairingApprovedMessageAdmissionFailure;
+    }
+  | {
+      readonly kind: ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Invalid;
+    };
+
 export function decodeExtensionPairingApprovedMessageAdmissionFailure(
   value: string,
-): ExtensionPairingApprovedMessageAdmissionFailure | undefined {
-  return extensionPairingApprovedMessageAdmissionFailures.find(
-    (failure) => failure === value,
-  );
+): ExtensionPairingApprovedMessageAdmissionFailureDecodeOutcome {
+  for (const failure of extensionPairingApprovedMessageAdmissionFailures) {
+    if (failure === value) {
+      return {
+        kind: ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Decoded,
+        value: failure,
+      };
+    }
+  }
+  return {
+    kind: ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Invalid,
+  };
 }
