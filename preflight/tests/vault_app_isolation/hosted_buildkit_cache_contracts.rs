@@ -541,8 +541,6 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && base_dockerfile.contains(
                 "cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json",
             )
-            && base_dockerfile.contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
-            && base_dockerfile.contains("/etc/nook-wasm-deps-cache-epoch")
             && base_dockerfile.contains("ENV CARGO_CHEF_VERSION=")
             && base_dockerfile.contains("ENV CARGO_CHEF_SHA256=")
             && base_dockerfile.contains(

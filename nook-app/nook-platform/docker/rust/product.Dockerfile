@@ -168,11 +168,6 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 RUN --network=default cargo fetch --locked
-# Stable epoch for the hosted WASM cook lineage. Bump when reseeding
-# nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
-# layer blobs — index-only refs to older scopes are not enough for PR restores.
-ENV NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
-RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
