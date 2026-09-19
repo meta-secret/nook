@@ -108,8 +108,8 @@ data:
     [worker.oci]
       gc = true
       reservedSpace = "8GB"
-      maxUsedSpace = "112GB"
-      minFreeSpace = "16GB"
+      maxUsedSpace = "120GB"
+      minFreeSpace = "8GB"
 
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]

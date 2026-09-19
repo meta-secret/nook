@@ -387,8 +387,8 @@ class ArcManifestContract {
       "[worker.oci]",
       "gc = true",
       'reservedSpace = "8GB"',
-      'maxUsedSpace = "112GB"',
-      'minFreeSpace = "16GB"',
+      'maxUsedSpace = "120GB"',
+      'minFreeSpace = "8GB"',
       'mirrors = ["registry.dev.nokey.sh"]',
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
