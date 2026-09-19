@@ -141,13 +141,22 @@ tasks:
         esac
         mv "$metadata/repository/.git" "$metadata/git"
         rmdir "$metadata/repository"
+        status=0
         PREFLIGHT_SOURCE_CONTEXT="{{.PREFLIGHT_SOURCE_ROOT}}" \
           {{.DOCKER}} buildx bake \
           {{.PREFLIGHT_BAKE_FILES}} \
           --allow="fs.read=$metadata" \
           --set "preflight-{{.POLICY_STAGE}}.args.LOOM_OWNERSHIP_FROM=$baseline" \
           --set "preflight-{{.POLICY_STAGE}}.contexts.repository-git=$metadata" \
-          preflight-{{.POLICY_STAGE}}
+          preflight-{{.POLICY_STAGE}} || status=$?
+        if [ "$status" -ne 0 ]; then
+          ref="$({{.DOCKER}} buildx history ls --format json \
+            | jq -sr 'map(select(.status == "Error" and (.name | contains("preflight ({{.POLICY_STAGE}})")))) | first | .ref // empty')"
+          if [ -n "$ref" ]; then
+            {{.DOCKER}} buildx history logs "$ref" || true
+          fi
+          exit "$status"
+        fi
 
   preflight:repository-policy:
     desc: Verify preflight, formatter contracts, and Loom inside Docker.

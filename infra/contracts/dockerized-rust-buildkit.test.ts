@@ -60,6 +60,9 @@ class DockerizedRustBuildKitContract {
     expect(preflight).toContain(
       "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
     );
+    expect(this.read("preflight/Taskfile.yml")).toContain(
+      'buildx history logs "$ref"',
+    );
     expect(
       this.read("nook-app/nook-web/nook-web-app/package.json"),
     ).toContain("bash .github/scripts/jscpd-summary.sh");
