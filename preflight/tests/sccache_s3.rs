@@ -593,10 +593,11 @@ fn assert_rust_build_cache_boundary() {
     assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY=") && !bake.contains("SCCACHE_S3_SECRET_KEY="));
     assert!(!bake.contains("SCCACHE_REDIS"));
     assert!(
-        sccache_tasks.contains("--var SCCACHE_S3_ACCESS_KEY_FILE=$access_file")
-            && sccache_tasks.contains("--var SCCACHE_S3_SECRET_KEY_FILE=$secret_file")
+        sccache_tasks.contains("env:\n  SCCACHE_S3_ACCESS_KEY_FILE:")
+            && sccache_tasks.contains("SCCACHE_S3_SECRET_KEY_FILE:")
             && sccache_tasks.contains("--allow=fs.read=$access_file")
             && sccache_tasks.contains("--allow=fs.read=$secret_file")
+            && !sccache_tasks.contains("--var SCCACHE_S3_")
             && !sccache_tasks.contains("--set '*.secrets")
             && !sccache_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
         "Bake must receive compiler credentials through stable secret IDs and runner-local files"
