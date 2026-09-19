@@ -76,7 +76,8 @@ pub use companion_protocol::{
 pub(crate) use device_protection::PendingExtensionIdentityEnrollment;
 pub use device_protection::{
     NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
-    NookExtensionIdentityHandoffContext, NookPendingExtensionIdentityHandoff,
+    NookExtensionIdentityHandoffContext, NookExtensionIdentityHandoffProviderOutcome,
+    NookExtensionIdentityHandoffProviderOutcomeState, NookPendingExtensionIdentityHandoff,
 };
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,

@@ -27,6 +27,46 @@ impl HandoffBinding {
     }
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookExtensionIdentityHandoffProviderOutcomeState {
+    RetryAfterUnlock,
+    RepairPairing,
+    Unavailable,
+}
+
+/// Typed classification of a rejected extension identity-handoff response.
+///
+/// The browser transport supplies a fixed provider reason tag. Rust owns its
+/// workflow meaning so web callers do not infer identity state from text or
+/// collapse a locked extension into a broken pairing.
+#[wasm_bindgen]
+pub struct NookExtensionIdentityHandoffProviderOutcome {
+    state: NookExtensionIdentityHandoffProviderOutcomeState,
+}
+
+#[wasm_bindgen]
+impl NookExtensionIdentityHandoffProviderOutcome {
+    pub fn classify_rejection(reason: &str) -> Self {
+        let state = match reason {
+            "extension-identity-unavailable" => {
+                NookExtensionIdentityHandoffProviderOutcomeState::RetryAfterUnlock
+            }
+            "extension-identity-handoff-not-issued" => {
+                NookExtensionIdentityHandoffProviderOutcomeState::RepairPairing
+            }
+            _ => NookExtensionIdentityHandoffProviderOutcomeState::Unavailable,
+        };
+        Self { state }
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookExtensionIdentityHandoffProviderOutcomeState {
+        self.state
+    }
+}
+
 /// The phase cannot be fabricated, cloned, defaulted, or deserialized.
 ///
 /// ```compile_fail,E0599
@@ -235,6 +275,45 @@ impl NookCommittedExtensionIdentityHandoff {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn provider_rejection_classifies_locked_extension_for_unlock_retry() {
+        let outcome = NookExtensionIdentityHandoffProviderOutcome::classify_rejection(
+            "extension-identity-unavailable",
+        );
+
+        assert_eq!(
+            outcome.state(),
+            NookExtensionIdentityHandoffProviderOutcomeState::RetryAfterUnlock
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn provider_rejection_requires_pairing_repair_when_handoff_was_not_issued() {
+        let outcome = NookExtensionIdentityHandoffProviderOutcome::classify_rejection(
+            "extension-identity-handoff-not-issued",
+        );
+
+        assert_eq!(
+            outcome.state(),
+            NookExtensionIdentityHandoffProviderOutcomeState::RepairPairing
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn provider_rejection_keeps_failed_and_unknown_responses_unavailable() {
+        for reason in [
+            "extension-identity-handoff-failed",
+            "future-provider-rejection",
+        ] {
+            let outcome = NookExtensionIdentityHandoffProviderOutcome::classify_rejection(reason);
+
+            assert_eq!(
+                outcome.state(),
+                NookExtensionIdentityHandoffProviderOutcomeState::Unavailable
+            );
+        }
+    }
 
     #[wasm_bindgen_test]
     fn lock_new_ceremony_and_foreign_manager_revoke_pending_handles() -> Result<(), JsError> {
