@@ -80,18 +80,19 @@ type AuthenticationMutationRecords = MutationRecord[]
 class NamecheapLoginDrawerActivation {
   constructor(private readonly gate: NamecheapWidgetDisplayGate) {}
 
-  observe(event: MouseEvent): void {
-    if (!new AuthenticationGesture(event).trusted) return
+  observe(event: MouseEvent): boolean {
+    if (!new AuthenticationGesture(event).trusted) return false
     const target = event.target
-    if (!(target instanceof Element)) return
+    if (!(target instanceof Element)) return false
     const control = target.closest(
       'a, button, input[type="button"], input[type="submit"], [role="button"]',
     )
-    if (!(control instanceof HTMLElement)) return
+    if (!(control instanceof HTMLElement)) return false
     const label =
       control instanceof HTMLInputElement ? control.value : control.textContent
-    if (label?.trim().toLowerCase() !== 'sign in') return
+    if (label?.trim().toLowerCase() !== 'sign in') return false
     this.gate.observeSignInGesture(new AuthenticationGesture(event))
+    return true
   }
 }
 
@@ -412,7 +413,10 @@ void companionWasmReady.then(async () => {
   )
   document.addEventListener(
     'click',
-    namecheapLoginDrawerActivation.observe.bind(namecheapLoginDrawerActivation),
+    (event) => {
+      if (!namecheapLoginDrawerActivation.observe(event)) return
+      authenticationScanRenderLifecycle.schedule()
+    },
     true,
   )
   void authenticationScanRenderLifecycle.scanAndRender()
