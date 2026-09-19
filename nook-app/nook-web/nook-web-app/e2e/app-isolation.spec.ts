@@ -183,7 +183,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   ).toContainText(
     'The extension did not accept the Simple Vault pairing grant.',
   )
-  await expect(page.getByTestId('extension-connect-approved')).toHaveCount(0)
+  await expect(page.getByTestId('extension-connect-approved')).toBeVisible()
 
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()

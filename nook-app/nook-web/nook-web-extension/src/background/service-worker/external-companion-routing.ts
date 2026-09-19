@@ -1,14 +1,9 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  RuntimeMessageDecodeCauseKind,
-  RuntimeMessageDecodeFailureKind,
-  type RuntimeMessageDecodeFailure,
+  ExtensionPairingApprovedGrantAdmission,
+  ExtensionPairingApprovedMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import {
-  decodeExtensionPairingApprovedMessageAdmissionFailure,
-  ExtensionPairingApprovedMessageAdmissionFailureDecodeKind,
-} from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -77,22 +72,19 @@ const invalidPairingGrantResponse: MessageResponse = {
 }
 
 function pairingGrantDecodeFailureResponse(
-  failure: RuntimeMessageDecodeFailure,
+  message: ExternalCompanionMessage,
 ): MessageResponse {
   if (
-    failure.kind !==
-      RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant ||
-    failure.cause.kind !== RuntimeMessageDecodeCauseKind.ThrownValue
+    message.type !==
+    ExtensionPairingApprovedMessageType.NookExtensionPairingApproved
   ) {
     return invalidPairingGrantResponse
   }
-  const decoded = decodeExtensionPairingApprovedMessageAdmissionFailure(
-    failure.cause.detail,
+  const admission = ExtensionPairingApprovedGrantAdmission.parse(
+    message.payload,
   )
-  return decoded.kind ===
-    ExtensionPairingApprovedMessageAdmissionFailureDecodeKind.Decoded
-    ? { ok: false, reason: decoded.value }
-    : invalidPairingGrantResponse
+  if (admission.isErr()) return { ok: false, reason: admission.error }
+  return invalidPairingGrantResponse
 }
 
 export class ExternalCompanionRouter {
@@ -194,7 +186,9 @@ export class ExternalCompanionRouter {
       message,
     )
     if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
-      sendResponse(pairingGrantDecodeFailureResponse(pairingApproval.failure))
+      sendResponse(
+        pairingGrantDecodeFailureResponse(message),
+      )
       return false
     }
     if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
