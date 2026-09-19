@@ -627,6 +627,12 @@ authenticator-domain to 90 percent.
 - Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
   pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable run tag on `nook-k0s-container`.
+- Main browser steps keep the Actions runner workspace as the hook-level
+  working directory, then enter `/meta-secret/nook` inside the shell command.
+  The prepared source path exists only in the job image; exposing it as the
+  hook working directory makes the runner-side action synchronizer attempt to
+  create that root-level path and fail with `EACCES` after otherwise passing
+  browser suites.
 - Main publishes the verified WASM artifact, completes Node verification, and
   exports the cache from that producer's job-scoped graph. The export step may
   report its failure without failing the producer so verified artifact

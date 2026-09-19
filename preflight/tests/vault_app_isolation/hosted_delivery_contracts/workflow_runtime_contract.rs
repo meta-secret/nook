@@ -69,6 +69,29 @@ impl WorkflowRuntimeContract<'_> {
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
         );
+        for (job, next_job, command) in [
+            (
+                "  web-e2e:\n",
+                "\n  extension-e2e:\n",
+                "task _ci:main:web:e2e-only",
+            ),
+            (
+                "  extension-e2e:\n",
+                "\n  ui-demos:\n",
+                "task _extension:test:e2e",
+            ),
+        ] {
+            let job = main
+                .split_once(job)
+                .and_then(|(_, remainder)| remainder.split_once(next_job).map(|(job, _)| job))
+                .expect("Main must retain its browser job boundaries");
+            assert!(
+                job.contains("cd /meta-secret/nook")
+                    && job.contains(command)
+                    && !job.contains("working-directory: /meta-secret/nook"),
+                "Main browser jobs must enter the prepared image source inside the script so the ARC hook keeps its runner-workspace working directory"
+            );
+        }
         self.assert_native_build_envelope();
         self.assert_wasm_build_envelope();
         self.assert_untrusted_boundaries();
