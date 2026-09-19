@@ -69,10 +69,10 @@ class DockerizedRustContract {
     const steps = jobContract.parse(workflow.jobs.validation).steps;
     let previous = -1;
     for (const command of [
-      "task ci:pr:verification",
-      "task ci:pr:tests",
-      "task ci:pr:heavy",
-      "task ci:pr:browser:full",
+      "task --silent ci:pr:verification",
+      "task --silent ci:pr:tests",
+      "task --silent ci:pr:heavy",
+      "task --silent ci:pr:browser:full",
     ]) {
       const index = steps.findIndex((step) => step.run === command);
       expect(index).toBeGreaterThan(previous);
