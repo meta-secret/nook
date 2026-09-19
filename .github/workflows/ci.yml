@@ -43,20 +43,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'dev' &&
-      github.event.pull_request.base.ref == 'main' &&
-      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-      (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
-      (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) ||
-      (!(github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'dev' &&
-      github.event.pull_request.base.ref == 'main') &&
-      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-      github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e'))))
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -124,6 +111,7 @@ jobs:
 
   policy:
     name: Repository policy
+    if: github.event_name == 'push'
     needs: scope
     uses: ./.github/workflows/repository-policy.yml
     secrets: inherit
@@ -132,12 +120,11 @@ jobs:
 
   pr:
     name: PR validation
-    needs: scope
     if: >-
       github.event_name == 'pull_request' &&
-      (needs.scope.outputs.dev-pr == 'true' ||
-      (needs.scope.outputs.product == 'true' &&
-      needs.scope.outputs.validation-requested == 'true'))
+      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
+      (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
+      github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e')
     permissions:
       actions: read
       contents: read
@@ -147,8 +134,8 @@ jobs:
     uses: ./.github/workflows/pr.yml
     secrets: inherit
     with:
-      validation_requested: ${{ needs.scope.outputs.validation-requested == 'true' }}
-      full_e2e_requested: ${{ needs.scope.outputs.full-e2e-requested == 'true' }}
+      validation_requested: ${{ github.event.pull_request.head.ref == 'dev' || contains(github.event.pull_request.labels.*.name, 'ci:validate') || contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}
+      full_e2e_requested: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}
       source_sha: ${{ github.event.pull_request.head.sha }}
 
   main:
@@ -167,7 +154,7 @@ jobs:
   research:
     name: Web research
     needs: scope
-    if: needs.scope.outputs.research == 'true'
+    if: github.event_name == 'push' && needs.scope.outputs.research == 'true'
     permissions:
       contents: read
       deployments: write
@@ -189,62 +176,3 @@ jobs:
     with:
       fuzz_seconds: "20"
       isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-
-  # Stable manager-facing check. The called PR workflow owns the full named
-  # suite; this job is the one exact-head conclusion used for promotion.
-  # Required caller gates: Repository policy and PR validation.
-  dev-promotion-readiness:
-    name: Dev promotion readiness
-    concurrency:
-      group: dev-promotion-readiness
-      cancel-in-progress: false
-    needs: [scope, policy, pr, research]
-    if: >-
-      always() &&
-      needs.scope.outputs.dev-pr == 'true'
-    permissions:
-      contents: read
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 2
-    steps:
-      - name: Require successful exact-head dev gates
-        env:
-          DEV_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          POLICY_RESULT: ${{ needs.policy.result }}
-          PR_RESULT: ${{ needs.pr.result }}
-          RESEARCH_REQUIRED: ${{ needs.scope.outputs.research }}
-          RESEARCH_RESULT: ${{ needs.research.result }}
-        run: |
-          set -euo pipefail
-          if [[ ! "$DEV_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Dev promotion requires the immutable PR head SHA; got: ${DEV_HEAD_SHA:-empty}" >&2
-            exit 1
-          fi
-          for gate in \
-            "Repository policy=$POLICY_RESULT" \
-            "PR validation=$PR_RESULT"
-          do
-            name="${gate%%=*}"
-            result="${gate#*=}"
-            if [ "$result" != "success" ]; then
-              echo "::error::$name finished with $result for dev PR head $DEV_HEAD_SHA"
-              exit 1
-            fi
-          done
-          if [ "$RESEARCH_REQUIRED" = "true" ] && [ "$RESEARCH_RESULT" != "success" ]; then
-            echo "::error::Web research finished with $RESEARCH_RESULT for dev PR head $DEV_HEAD_SHA"
-            exit 1
-          fi
-          {
-            echo "## Dev promotion readiness"
-            echo
-            echo "- Workflow: CI"
-            echo "- Run: ${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
-            echo "- PR head SHA: \`${DEV_HEAD_SHA}\`"
-            echo "- Repository policy: ${POLICY_RESULT}"
-            echo "- PR validation: ${PR_RESULT}"
-            if [ "$RESEARCH_REQUIRED" = "true" ]; then
-              echo "- Web research: ${RESEARCH_RESULT}"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "Dev promotion readiness passed for exact PR head $DEV_HEAD_SHA"

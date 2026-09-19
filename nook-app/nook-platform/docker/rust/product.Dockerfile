@@ -193,11 +193,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-clippy
 FROM chef-deps AS builder-wasm-deps
-
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
-    && nook-sccache-report wasm-release-test-dependencies
+# Test compilation belongs to builder-wasm-tests, requested only after PR verification.
 
 FROM builder-wasm-deps AS builder-core-deps
 
@@ -876,9 +872,30 @@ COPY --from=focused-web-artifacts-source /opt/nook/empty-coverage /coverage
 
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
 # unformatted source. Normal `task setup` includes this target in its parallel prepare group.
-FROM builder-debug AS rust-format-check
-
+FROM rust-base AS rust-format-check
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/ ./
 RUN cargo fmt --all -- --check
+
+# PR verification never inherits builder-core-deps: that graph precompiles tests.
+# Clippy checks test sources but does not codegen/link their executable binaries.
+FROM rust-format-check AS pr-rust-verify
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --locked --all-targets \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+      -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
+    && cargo build --locked \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    && nook-sccache-report pr-rust-verification
+ARG NOOK_SCCACHE_TELEMETRY_REPLAY
+RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay pr-rust-verification; fi
+
+FROM scratch AS pr-wasm-artifacts
+COPY --from=builder-wasm-build /opt/nook/wasm-handoff /nook-wasm
+COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /coverage/wasm-clippy-passed
 
 # Tiny host-export boundary for the web phase. `task setup` exports this scratch target to a
 # temporary host directory, then gives only that directory to the final web build as a named

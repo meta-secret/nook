@@ -182,10 +182,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fixture = RustEcosystemFixture::load()?;
 
     assert!(
-        fixture
-            .pr
-            .contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
-        "Labeled product PRs must call the shared Rust ecosystem checks"
+        fixture.pr.contains("run: task ci:pr:heavy"),
+        "Labeled product PRs must execute the heavy Rust ecosystem phase"
     );
     assert!(
         fixture

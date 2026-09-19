@@ -137,6 +137,10 @@ includes:
     taskfile: ci/Taskfile.yml
     dir: "{{.REPO_ROOT}}"
     flatten: true
+  pr-validation:
+    taskfile: ci/pr.yml
+    dir: "{{.REPO_ROOT}}"
+    flatten: true
 
 tasks:
   build:

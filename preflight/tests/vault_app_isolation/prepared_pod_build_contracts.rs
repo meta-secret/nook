@@ -136,7 +136,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     for workflow in [
         ".github/workflows/e2e-pr.yml",
         ".github/workflows/main.yml",
-        ".github/workflows/pr.yml",
         ".github/workflows/release.yml",
         ".github/workflows/remote.yml",
         ".github/workflows/web-research.yml",
@@ -160,7 +159,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
     let pr_workflow = root.read(".github/workflows/pr.yml");
-    let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
+    let pr_ui_demo = pr_workflow.as_str();
     assert!(
         !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
         "ARC container actions must receive PR identity explicitly instead of reading a missing event file"

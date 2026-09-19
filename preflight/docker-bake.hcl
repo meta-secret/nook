@@ -43,6 +43,12 @@ target "preflight-test" {
   output   = ["type=cacheonly"]
 }
 
+target "preflight-pr-verification" {
+  inherits = ["_preflight-common"]
+  target   = "pr-verification"
+  output   = ["type=cacheonly"]
+}
+
 target "preflight-cli-export" {
   inherits = ["_preflight-common"]
   target   = "cli-export"

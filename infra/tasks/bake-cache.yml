@@ -11,6 +11,7 @@ tasks:
     desc: Prove Bake registry cache hits on a fresh BuildKit builder against ephemeral Zot.
     silent: true
     cmds:
+      - task: bake-cache:prove-pr
       - |
         set -euo pipefail
         export PATH=/usr/bin:/bin

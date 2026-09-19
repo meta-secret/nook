@@ -1,7 +1,6 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { z } from "zod";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -24,104 +23,21 @@ class DockerizedRustBuildKitContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
   trustedRustConsumerUsesBuildKit(): void {
-    const workflow = z
-      .object({
-        jobs: z.record(
-          z.string(),
-          z.object({
-            steps: z
-              .array(
-                z.object({
-                  env: z
-                    .record(
-                      z.string(),
-                      z.union([z.string(), z.boolean(), z.number()]),
-                    )
-                    .optional(),
-                  if: z.string().optional(),
-                  run: z.string().optional(),
-                }),
-              )
-              .optional(),
-          }),
-        ),
-      })
-      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    const rustJob = z
-      .object({
-        steps: z.array(
-          z.object({
-            env: z
-              .record(
-                z.string(),
-                z.union([z.string(), z.boolean(), z.number()]),
-              )
-              .optional(),
-            if: z.string().optional(),
-            run: z.string().optional(),
-          }),
-        ),
-      })
-      .parse(workflow.jobs.rust);
-    const rustSteps = rustJob.steps;
-    expect(
-      rustSteps.filter(
-        (step) =>
-          typeof step.if === "string" &&
-          step.if.includes("needs.rust-build.outputs.produced == 'true'") &&
-          typeof step.run === "string" &&
-          /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
-      ),
-    ).toEqual([]);
-    const buildKitVerifySteps = z
-      .array(
-        z.object({
-          env: z.object({ DOCKER_RUST_IMAGE: z.string() }),
-          if: z.literal("needs.rust-build.outputs.produced == 'true'"),
-          run: z.string(),
-        }),
-      )
-      .parse(
-        rustSteps.filter(
-          (step) =>
-            step.if === "needs.rust-build.outputs.produced == 'true'" &&
-            typeof step.run === "string" &&
-            step.run.includes("task docker:ci:rust:verify-built-buildkit"),
-        ),
-      );
-    expect(buildKitVerifySteps).toHaveLength(1);
-    for (const step of buildKitVerifySteps) {
-      expect(step.env.DOCKER_RUST_IMAGE).toBe(
-        "${{ needs.rust-build.outputs.image }}",
-      );
-    }
-
-    const dockerTasks = this.read("nook-app/nook-platform/docker/Taskfile.yml");
-    expect(dockerTasks).toMatch(
-      /docker:ci:rust:verify-built-buildkit:[\s\S]*?buildx bake[\s\S]*?pr-native-verify/,
+    const workflow = this.read(".github/workflows/pr.yml");
+    const tasks = this.read("nook-app/ci/pr.yml");
+    const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
+    expect(workflow).toContain("Connect trusted persistent BuildKit");
+    expect(workflow).toContain("GHA_CACHE_ENABLED=");
+    expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
+    expect(workflow).not.toMatch(
+      /type=registry|needs\.rust-build|nook-pr-rust:|nook-pr-e2e:/,
     );
-    const bake = this.read(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
-    );
-    const dockerfile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
-    );
-    expect(bake).toContain('target "pr-native-verify"');
-    expect(bake).toContain("PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE");
-    expect(dockerfile).toContain(
-      "ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured",
-    );
-    const producerStart = dockerfile.indexOf(
-      "FROM compile-native-source AS pr-native-build",
-    );
-    const verifyStart = dockerfile.indexOf(
-      "FROM ${PR_NATIVE_IMAGE} AS pr-native-verify",
-    );
-    expect(producerStart).toBeGreaterThanOrEqual(0);
-    expect(verifyStart).toBeGreaterThan(producerStart);
-    const producer = dockerfile.slice(producerStart, verifyStart);
-    expect(producer).not.toContain("COPY . .");
-    expect(producer).toContain("COPY nook-app nook-app");
+    expect(tasks).toContain("buildx bake");
+    expect(tasks).toContain("coverage-export.output=type=local");
+    expect(tasks).toContain("pr-browser-artifacts.output=type=local");
+    expect(tasks).not.toMatch(/docker\s+(?:pull|run|create|start|exec)\b/);
+    expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
+    expect(bake).toContain('output = ["type=cacheonly"]');
   }
 
   dylintDependencyCacheAndSccacheMode(): void {

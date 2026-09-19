@@ -15,151 +15,58 @@ impl<'a> PrProducerCacheContract<'a> {
 
     pub(super) fn assert_contract(&self) -> anyhow::Result<()> {
         let pr = self.root.read(".github/workflows/pr.yml");
-        let bake = self
-            .root
-            .read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
+        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl");
+        let tasks = self.root.read("nook-app/ci/pr.yml");
+        assert_eq!(pr.matches("    runs-on:").count(), 1);
         for marker in [
-            "Build native Rust image",
-            "Publish git-scoped WASM BuildKit cache",
-            "Publish git-scoped web BuildKit cache",
-            "task ci:pr:rust-build-image",
-            "task ci:main:publish-wasm-cache",
-            "task ci:main:publish-web-cache",
+            "GHA_CACHE_ENABLED=",
+            "GHA_CACHE_WRITE_ENABLED=",
+            "NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0",
         ] {
             assert!(
                 pr.contains(marker),
-                "PR producers must publish warm local layers after verify: missing {marker}"
+                "PR cache transfers must be disabled: {marker}"
             );
         }
-        let steps = PrProducerSteps::read(&pr)?;
-        let ui_demo = section(&pr, "  ui-demo:\n", "\n  preview:\n");
-        let full_e2e = section(&pr, "  full-e2e-shard:\n", "\n  full-e2e:\n");
-        let browser_contract = PrBrowserContract { ui_demo, full_e2e };
-        assert!(
-            steps.cache_contract(&pr)? && browser_contract.is_satisfied()?,
-            "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
-        );
-        assert!(
-            pr.find("task ci:pr:rust-build-image") < pr.find("  rust-ecosystem:\n"),
-            "native cache production must precede the reusable ecosystem consumers"
-        );
-        assert!(
-            bake.contains("target \"pr-native-build\"")
-                && bake.contains("cache-to   = rust_native_source_cache_to"),
-            "the native producer must publish the exact-head BuildKit scope imported by cross-node Rust consumers"
-        );
+        for forbidden in [
+            "type=registry",
+            "nook-pr-rust:",
+            "nook-pr-e2e:",
+            "actions/download-artifact",
+            "uses: ./.github/workflows/",
+        ] {
+            assert!(
+                !pr.contains(forbidden),
+                "PR steps must not introduce a cross-job handoff: {forbidden}"
+            );
+        }
+        let verification = pr
+            .find("run: task ci:pr:verification\n")
+            .context("missing verification")?;
+        let tests = pr
+            .find("run: task ci:pr:tests\n")
+            .context("missing tests")?;
+        let heavy = pr
+            .find("run: task ci:pr:heavy\n")
+            .context("missing heavy phase")?;
+        assert!(verification < tests && tests < heavy);
+        assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
+        assert!(bake.contains("output = [\"type=cacheonly\"]"));
+        assert!(tasks.contains("coverage-export.output=type=local"));
+        assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
+        let product = self
+            .root
+            .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+        let wasm_dependencies = product
+            .split_once("FROM chef-deps AS builder-wasm-deps")
+            .and_then(|(_, tail)| tail.split_once("FROM builder-wasm-deps AS builder-core-deps"))
+            .context("WASM build dependencies must be separate from native test dependencies")?
+            .0;
+        assert!(!wasm_dependencies.contains("cargo build --tests"));
+        let proof = self.root.read("infra/tasks/pr-cache.yml");
+        assert!(proof.contains("bake-cache:prove-pr:"));
+        assert!(proof.contains("for temperature in cold warm"));
+        assert!(proof.contains("for failure in verification tests"));
         Ok(())
-    }
-}
-
-struct PrProducerSteps {
-    rust_publish: usize,
-    rust_verify: usize,
-    wasm_verify: usize,
-    wasm_publish: usize,
-    web_verify: usize,
-    web_publish: usize,
-}
-
-impl PrProducerSteps {
-    fn read(pr: &str) -> anyhow::Result<Self> {
-        Ok(Self {
-            rust_publish: pr
-                .find("task ci:pr:rust-build-image")
-                .context("PR Rust producer must publish its image and cache")?,
-            rust_verify: pr
-                .find("task docker:ci:rust:verify-built-buildkit")
-                .context("PR Rust consumer must verify the producer image")?,
-            wasm_verify: pr
-                .find("task ci:pr:wasm")
-                .context("PR WASM job must verify")?,
-            wasm_publish: pr
-                .find("task ci:main:publish-wasm-cache")
-                .context("PR WASM job must publish its cache")?,
-            web_verify: pr
-                .find("task ci:pr:web")
-                .context("PR web job must verify")?,
-            web_publish: pr
-                .find("task ci:main:publish-web-cache")
-                .context("PR web job must publish its cache")?,
-        })
-    }
-
-    fn cache_contract(&self, pr: &str) -> anyhow::Result<bool> {
-        Ok(self.rust_publish < self.rust_verify
-            && pr
-                .get(..self.rust_publish)
-                .context("PR Rust publication-to-verification section must have valid boundaries")?
-                .contains("PR_NATIVE_BUILD_OUTPUT: type=registry")
-            && pr.contains("nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}")
-            && self.wasm_verify < self.wasm_publish
-            && pr
-                .get(self.wasm_verify..self.wasm_publish)
-                .context("PR WASM verification-to-publication section must have valid boundaries")?
-                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && pr
-                .get(..self.wasm_publish)
-                .context("PR WASM pre-publication section must have a valid boundary")?
-                .contains(
-                    "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
-                )
-            && pr
-                .get(self.wasm_publish..)
-                .context("PR WASM publication section must have a valid boundary")?
-                .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && self.web_verify < self.web_publish
-            && pr
-                .get(self.web_verify..self.web_publish)
-                .context("PR web verification-to-publication section must have valid boundaries")?
-                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && pr
-                .get(..self.web_publish)
-                .context("PR web pre-publication section must have a valid boundary")?
-                .contains("ARC keeps the verified web graph local; Main remains reusable")
-            && pr
-                .get(self.web_publish..)
-                .context("PR web publication section must have a valid boundary")?
-                .contains("GHA_CACHE_WRITE_ENABLED: \"1\""))
-    }
-}
-
-struct PrBrowserContract<'a> {
-    ui_demo: &'a str,
-    full_e2e: &'a str,
-}
-
-impl PrBrowserContract<'_> {
-    fn is_satisfied(&self) -> anyhow::Result<bool> {
-        let ui_demo_verify = self
-            .ui_demo
-            .find("task _web:test:ui-demo")
-            .context("PR UI demo job must verify")?;
-        let full_e2e_verify = self
-            .full_e2e
-            .find("task _ci:main:web:e2e-only")
-            .context("each PR full-e2e shard must verify its browser half")?;
-        Ok(self.ui_demo.contains("runs-on: nook-k0s-container")
-            && self
-                .ui_demo
-                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && self
-                .ui_demo
-                .get(..ui_demo_verify)
-                .context("PR UI demo pre-verification section must have a valid boundary")?
-                .contains("needs.verify.outputs.ui-demo-required == 'true'")
-            && !self.ui_demo.contains("nook-docker-setup")
-            && !self.ui_demo.contains("publish-web-e2e-cache")
-            && self
-                .full_e2e
-                .get(..full_e2e_verify)
-                .context("PR full E2E pre-verification section must have a valid boundary")?
-                .contains("runs-on: nook-k0s-container")
-            && self
-                .full_e2e
-                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && self
-                .full_e2e
-                .contains("NOOK_E2E_SHARD: ${{ matrix.shard }}/2")
-            && !self.full_e2e.contains("task ci:main:publish-web-e2e-cache"))
     }
 }

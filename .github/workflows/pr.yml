@@ -1,8 +1,3 @@
-# PRs run the ordinary Rust/WASM/web validation, preview, and ecosystem gates; full browser
-# regression remains an explicit ci:full-e2e opt-in, while main owns the complete browser suites.
-# Central ci.yml owns event selection and cancellation. Dev callers pass an immutable source SHA,
-# keeping every checkout and evidence path on the PR head rather than a merge ref.
-
 name: PR
 
 on:
@@ -26,58 +21,50 @@ permissions:
   pull-requests: write
   issues: write
 
-env:
-  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
-  DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
-  DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-
 jobs:
-  validation-request:
-    name: Validate explicit CI request
-    if: inputs.validation_requested
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 2
-    outputs:
-      ui-demos-enabled: ${{ 'false' }}
+  validation:
+    name: Verify and preview
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'nook-k0s-container' || 'ubuntu-latest' }}
+    # Source-free Debian Trixie browser base, published only when tooling changes.
+    # Configure a public digest reference so secret-free fork jobs can pull it too.
+    container:
+      image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "true"
+      LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha }}
+      SCCACHE_OPTIONAL: ${{ (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
+      WASM_BUILD_MODE: dev
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+      VITE_BASE: /
+      VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+      VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+      VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+      VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+      NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+      NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+      NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
     steps:
-      - name: Reject unsupported label events
-        if: github.event.action == 'labeled'
-        env:
-          REQUESTED_LABEL: ${{ github.event.label.name }}
-        run: |
-          case "$REQUESTED_LABEL" in
-            ci:validate|ci:full-e2e) ;;
-            *)
-              echo "Unsupported PR validation label: $REQUESTED_LABEL" >&2
-              exit 1
-              ;;
-          esac
-
-  rust-build:
-    name: Build native Rust image
-    if: inputs.validation_requested
-    needs: validation-request
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    # The native image build can consume almost five minutes on a cold ARC
-    # worker. Leave bounded room for mandatory cache telemetry and cleanup.
-    timeout-minutes: 10
-    outputs:
-      image: ${{ steps.image.outputs.ref }}
-      produced: ${{ steps.image.outputs.produced }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Docker setup
-        if: >-
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          github.event.pull_request.user.login != 'dependabot[bot]'
+      - name: Materialize event metadata for the ARC job container
+        env:
+          PR_EVENT_JSON: ${{ toJSON(github.event) }}
+        run: |
+          printf '%s\n' "$PR_EVENT_JSON" > "$RUNNER_TEMP/pr-event.json"
+          echo "NOOK_GITHUB_EVENT_PATH=$RUNNER_TEMP/pr-event.json" >> "$GITHUB_ENV"
+          echo "PR_ARTIFACT_DIR=$RUNNER_TEMP/nook-pr-artifacts" >> "$GITHUB_ENV"
+      - name: Connect trusted persistent BuildKit
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
@@ -87,889 +74,129 @@ jobs:
           require-sccache: "true"
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: "true"
-      - name: Select exact image
-        id: image
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      - name: Install Task for secret-free hosted validation
+        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+      - name: Install Docker client in hosted job container
+        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
         run: |
-          echo "ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "produced=${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}" >> "$GITHUB_OUTPUT"
-      - name: Build native Rust only
-        if: steps.image.outputs.produced == 'true'
-        env:
-          DOCKER_RUST_IMAGE: ${{ steps.image.outputs.ref }}
-          PR_NATIVE_BUILD_OUTPUT: type=registry
-        run: task ci:pr:rust-build-image
-      - name: Preserve cache telemetry
-        if: always() && steps.image.outputs.produced == 'true'
-        uses: ./.github/actions/nook-cache-telemetry
-
-  rust-ecosystem:
-    name: Rust ecosystem
-    if: inputs.validation_requested
-    needs: rust-build
-    uses: ./.github/workflows/rust-ecosystem-checks.yml
-    secrets: inherit
-    with:
-      fuzz_seconds: "20"
-      isolated_cache_write: "true"
-      native_coverage_provided: true
-      source_sha: ${{ inputs.source_sha }}
-
-  rust:
-    name: Native Rust verification
-    if: inputs.validation_requested
-    needs: rust-build
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    outputs:
-      cache-build-expected: ${{ needs.rust-build.outputs.produced != 'true' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          require-sccache: "true"
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-
-      - name: Repository invariant preflight
-        run: task preflight
-      - name: Rust format, clippy, tests, and coverage through BuildKit
-        if: needs.rust-build.outputs.produced == 'true'
-        env:
-          CI: true
-          DOCKER_RUST_IMAGE: ${{ needs.rust-build.outputs.image }}
-        run: task docker:ci:rust:verify-built-buildkit CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
-      - name: Secret-free Rust format, clippy, tests, and coverage
-        if: needs.rust-build.outputs.produced != 'true'
-        run: >-
-          GHA_CACHE_WRITE_ENABLED=""
-          task ci:pr:rust
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
-        env:
-          CI: true
-      - name: Export repository policy tool
-        run: task preflight:export PREFLIGHT_OUTPUT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust/tools
-
-      - name: Upload Rust coverage handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-rust-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/rust
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  wasm:
-    name: WASM build and artifact
-    if: >-
-      inputs.validation_requested
-    needs: validation-request
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    outputs:
-      run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
-      cache-build-expected: ${{ steps.trusted-wasm.outputs.found != 'true' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          require-sccache: "true"
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-
-      - name: Derive WASM validation key
-        id: wasm-key
+          apt-get update
+          apt-get install --yes --no-install-recommends docker.io
+          # Use the GitHub-hosted runner's socket; do not start another daemon.
+      - name: Connect secret-free hosted BuildKit
+        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: docker/setup-buildx-action@v4
+      - uses: ./.github/actions/nook-node-setup
+      - name: Use the builder's local cache throughout this job
         run: |
-          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/ci.yml', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
-
-      - name: Locate trusted WASM handoff
-        id: trusted-wasm
-        uses: actions/github-script@v9
+          echo 'GHA_CACHE_ENABLED=' >> "$GITHUB_ENV"
+          echo 'GHA_CACHE_WRITE_ENABLED=' >> "$GITHUB_ENV"
+          echo 'NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0' >> "$GITHUB_ENV"
+      - name: Enforce UI demo contract
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
         env:
-          ARTIFACT_NAME: ${{ steps.wasm-key.outputs.value }}
-        with:
-          retries: 3
-          script: |
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              ...context.repo,
-              name: process.env.ARTIFACT_NAME,
-              per_page: 100,
-            })
-            for (const artifact of artifacts.sort((a, b) => b.id - a.id)) {
-              if (artifact.expired || !artifact.workflow_run?.id) continue
-              const { data: run } = await github.rest.actions.getWorkflowRun({
-                ...context.repo,
-                run_id: artifact.workflow_run.id,
-              })
-              const workflowPath = run.path?.replace(/@[^@]+$/, '')
-              if (
-                run.name === 'PR validation handoff' &&
-                workflowPath === '.github/workflows/pr-validation-handoff.yml' &&
-                run.head_branch === context.payload.repository.default_branch &&
-                run.status === 'completed' &&
-                run.conclusion === 'success' &&
-                run.event === 'workflow_run'
-              ) {
-                core.setOutput('found', 'true')
-                core.setOutput('artifact-id', String(artifact.id))
-                core.setOutput('run-id', String(run.id))
-                return
-              }
-            }
-            core.setOutput('found', 'false')
-
-      - name: Download trusted WASM handoff
-        if: steps.trusted-wasm.outputs.found == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          artifact-ids: ${{ steps.trusted-wasm.outputs.artifact-id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-          merge-multiple: true
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.trusted-wasm.outputs.run-id }}
-
-      - name: Validate trusted WASM handoff
-        if: steps.trusted-wasm.outputs.found == 'true'
-        env:
-          EXPECTED_KEY: ${{ steps.wasm-key.outputs.value }}
-        run: |
-          set -euo pipefail
-          dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
-          jq -e --arg key "$EXPECTED_KEY" \
-            '.schema_version == 1 and
-             .kind == "wasm" and
-             .input_key == $key and
-             .source_workflow == ".github/workflows/ci.yml" and
-             .producer_jobs_verified == true' \
-            "$dir/nook-validation-manifest.json" >/dev/null
-          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts nook-wasm-build-mode; do
-            test -s "$dir/$file"
-          done
-          for file in package.json nook_companion_wasm.js nook_companion_wasm.d.ts nook_companion_wasm_bg.wasm nook_companion_wasm_bg.wasm.d.ts; do
-            test -s "$dir/nook-companion-wasm/$file"
-          done
-
-      - name: Decide whether Node tests must run
-        id: decide-node-tests
-        run: |
-          if [ "${{ steps.trusted-wasm.outputs.found }}" = "true" ]; then
-            echo "run-node-tests=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run-node-tests=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: WASM clippy and build
-        if: steps.trusted-wasm.outputs.found != 'true'
-        run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          CI: true
-          WASM_BUILD_MODE: dev
-          GHA_CACHE_WRITE_ENABLED: ""
-
-      - name: Publish git-scoped WASM BuildKit cache
-        if: steps.trusted-wasm.outputs.found != 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified WASM graph local; Main and sccache remain reusable"
-            exit 0
-          fi
-          task ci:main:publish-wasm-cache
-        env:
-          GHA_CACHE_WRITE_ENABLED: "1"
-          WASM_BUILD_MODE: dev
-
-      - name: Stamp WASM handoff attempt
-        run: echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
-
-      # Publish as soon as build succeeds so web verification can start through needs.
-      - name: Upload built WASM handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  wasm-node-test:
-    name: WASM Node tests
-    if: >-
-      inputs.validation_requested
-    needs: wasm
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        if: needs.wasm.outputs.run-node-tests == 'true'
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Docker setup
-        if: needs.wasm.outputs.run-node-tests == 'true'
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          require-sccache: "true"
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-
-      - name: WASM Node tests
-        if: needs.wasm.outputs.run-node-tests == 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            GHA_CACHE_WRITE_ENABLED="" task ci:wasm:node-test
-          else
-            GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test
-          fi
-        env:
-          CI: true
-          WASM_BUILD_MODE: dev
-
-      - name: Trusted handoff already covered Node tests
-        if: needs.wasm.outputs.run-node-tests != 'true'
-        run: echo "Exact trusted WASM handoff already proved Node tests"
-
-      - name: Preserve cache telemetry
-        if: always() && needs.wasm.outputs.run-node-tests == 'true'
-        uses: ./.github/actions/nook-cache-telemetry
-
-  verify:
-    name: Web verification
-    timeout-minutes: 10
-    if: >-
-      inputs.validation_requested
-    needs: [validation-request, wasm]
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    outputs:
-      ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}
-      ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}
-      auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Enforce the UI demo contract
-        id: ui-demo-contract
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+      - name: Detect required browser regressions
+        id: browser-scope
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          git fetch "https://github.com/${{ github.repository }}.git" "$BASE_SHA" --depth=1
-          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-
-      # Authentication observation and scenario changes require the focused
-      # real-extension regression that exercises the provider fixtures.
-      - name: Detect authentication-sensitive browser changes
-        id: auth-sensitive-e2e-contract
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          required=false
+          auth=false
+          research=false
           while IFS= read -r -d '' path; do
             case "$path" in
-              nook-app/nook-web/nook-web-shared/src/extension/password-form* |\
-              nook-app/nook-web/nook-web-extension/src/content/autofill.ts |\
-              nook-app/nook-web/nook-web-extension/src/content/autofill/* |\
-              nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts |\
-              nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte |\
-              nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts)
-                required=true
-                ;;
+              nook-app/nook-web/nook-web-shared/src/extension/password-form*|nook-app/nook-web/nook-web-extension/src/content/autofill.ts|nook-app/nook-web/nook-web-extension/src/content/autofill/*|nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts) auth=true ;;
             esac
+            case "$path" in .github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/nook-web/nook-web-research/*) research=true ;; esac
           done < <(git diff --name-only -z "$BASE_SHA" HEAD)
-          echo "required=$required" >> "$GITHUB_OUTPUT"
-          echo "Authentication-sensitive extension e2e required: $required"
-
-      - name: Expose Actions Node.js runtime
-        uses: ./.github/actions/nook-node-setup
-
-      - name: Test Linear UI demo publishing helper
-        run: node --test .github/workflows/lib/linear-ui-demo.test.cjs
-
-      - name: Test Workbench issue publisher
-        run: node --test .github/scripts/workbench-publish.test.cjs
-
-      - name: Test cache telemetry collector
-        run: >-
-          node --test
-          .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs
-          .github/workflows/lib/cache-telemetry-baseline.test.mjs
-          .github/workflows/lib/cache-telemetry.test.mjs
-          .github/workflows/lib/cache-telemetry-split-log.test.mjs
-          .github/workflows/lib/compile-only-dockerfile.test.mjs
-
-      - name: Install Bun for registry cache descriptor tests
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      - name: Install repository script dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Test PR authored-line budget
-        run: bun test ./agentic-ai/loom/tests/pr-authored-budget.test.ts
-
-      - name: Test registry cache descriptor integrity
-        run: bun test ./infra/contracts/registry-cache-descriptor.test.ts
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          require-sccache: "true"
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-
-      - name: Download built WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: pr-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
-      - name: Confirm WASM handoff shape
+          echo "auth=$auth" >> "$GITHUB_OUTPUT"
+          echo "research=$research" >> "$GITHUB_OUTPUT"
+      - name: Verification — formatting, tooling, Rust, WASM and web
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        run: task ci:pr:verification
+      - name: Verification — policy-only PR
+        if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
+        run: task ci:pr:verification:tooling
+      - name: Tests and coverage — Rust, WASM, web, Loom and preflight
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        run: task ci:pr:tests
+      - name: Tests — policy-only PR
+        if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
+        run: task ci:pr:tests:policy
+      - name: Test delivery helpers
         run: |
-          set -euo pipefail
-          dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
-          test -s "$dir/nook_wasm.js"
-          test -s "$dir/nook_wasm_bg.wasm"
-          test -s "$dir/nook-companion-wasm/nook_companion_wasm.js"
-          test -s "$dir/nook-companion-wasm/nook_companion_wasm_bg.wasm"
-          test -s "$dir/nook-run-attempt"
-
-      - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+          node --test .github/scripts/workbench-publish.test.cjs
+          node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs .github/workflows/lib/base-coverage-artifact.test.cjs
+      - name: Heavy verification — fuzz and Kani
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        run: task ci:pr:heavy
+      - name: Export coverage reporter and stage local report
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
         run: |
-          set -euo pipefail
-          task ci:pr:web CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
-            VITE_BASE=/ \
-            VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
-            VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
-            VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
-            VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
-            WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
-          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
-          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
-          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
-          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
-          WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/pr-web-dist
-
-      - name: Publish git-scoped web BuildKit cache
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC keeps the verified web graph local; Main remains reusable"
-            exit 0
-          fi
-          task ci:main:publish-web-cache
-        env:
-          GHA_CACHE_WRITE_ENABLED: "1"
-
-      - name: Publish exact-source PR browser job image
-        if: >-
-          inputs.full_e2e_requested ||
-          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
-          steps.ui-demo-contract.outputs.required == 'true') ||
-          (steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          github.event.pull_request.user.login != 'dependabot[bot]')
-        run: >-
-          task web:e2e:kubernetes-image:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          CI: true
-          VITE_BASE: /
-          VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
-          VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-          WASM_BUILD_MODE: dev
-          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
-          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
-          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
-          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
-      - name: Upload preview dist handoff
-        uses: actions/upload-artifact@v7
+          task preflight:export PREFLIGHT_OUTPUT_DIR="$PR_ARTIFACT_DIR/coverage/tools"
+          mkdir -p coverage/current
+          cp -a "$PR_ARTIFACT_DIR/coverage/." coverage/current/
+      - name: Report coverage
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        uses: ./.github/actions/nook-pr-coverage
         with:
-          name: pr-web-dist-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/nook-ci-artifacts/pr-web-dist/nook-app/nook-web/nook-web-app/dist
-            ${{ runner.temp }}/nook-ci-artifacts/pr-web-dist/nook-app/nook-web/nook-vault-simple/dist
-            ${{ runner.temp }}/nook-ci-artifacts/pr-web-dist/nook-app/nook-web/nook-vault-sentinel/dist
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
+          source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      - name: Export web artifacts into this runner
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        run: task ci:pr:browser:prepare
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
-
-  cache-health:
-    if: always() && inputs.validation_requested
-    needs: [rust-build, rust-ecosystem, rust, wasm, wasm-node-test, verify]
-    uses: ./.github/workflows/pr-cache-health.yml
-    with:
-      source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-      jobs_json: >-
-        [{"id":"rust-build","result":"${{ needs.rust-build.result }}","buildExpected":${{ needs.rust-build.outputs.produced == 'true' }},"sccacheExpectation":"${{ needs.rust-build.outputs.produced == 'true' && 'required' || 'not_applicable' }}","readOnly":false},{"id":"dependency-policy","result":"${{ needs.rust-ecosystem.outputs.dependency-policy-result || 'cancelled' }}","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false},{"id":"deterministic-tests","result":"${{ needs.rust-ecosystem.outputs.deterministic-tests-result || 'cancelled' }}","buildExpected":true,"sccacheExpectation":"required","readOnly":false},{"id":"dylint","result":"${{ needs.rust-ecosystem.outputs.dylint-result || 'cancelled' }}","buildExpected":true,"sccacheExpectation":"required","readOnly":false},{"id":"rust","result":"${{ needs.rust.result }}","buildExpected":${{ needs.rust.outputs.cache-build-expected || 'true' }},"sccacheExpectation":"${{ (needs.rust.outputs.cache-build-expected || 'true') == 'true' && 'required' || 'not_applicable' }}","readOnly":false},{"id":"wasm","result":"${{ needs.wasm.result }}","buildExpected":${{ needs.wasm.outputs.cache-build-expected || 'true' }},"sccacheExpectation":"${{ (needs.wasm.outputs.cache-build-expected || 'true') == 'true' && 'required' || 'not_applicable' }}","readOnly":false},{"id":"wasm-node-test","result":"${{ needs.wasm-node-test.result }}","buildExpected":${{ needs.wasm.outputs.run-node-tests == 'true' }},"sccacheExpectation":"${{ needs.wasm.outputs.run-node-tests == 'true' && 'required' || 'not_applicable' }}","readOnly":false},{"id":"verify","result":"${{ needs.verify.result }}","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false}]
-  ui-demo:
-    name: Headless UI demo
-    if: >-
-      needs.validation-request.outputs.ui-demos-enabled == 'true' &&
-      needs.verify.outputs.ui-demo-required == 'true' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      inputs.validation_requested
-    needs: [validation-request, verify]
-    runs-on: nook-k0s-container
-    timeout-minutes: 10
-    container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-      credentials:
-        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-    steps:
-      - name: Record headless UI demo
-        id: record-ui-demo
-        if: needs.verify.outputs.ui-demo-required == 'true'
-        working-directory: /meta-secret/nook
-        run: task _web:test:ui-demo
+      - name: Enforce compiler cache health without an artifact round trip
+        if: always() && (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
         env:
-          CI: true
-          NOOK_UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
-          UI_DEMO_SPECS: ${{ needs.verify.outputs.ui-demo-specs }}
-
-      - name: Upload UI demo video
-        if: always() && needs.verify.outputs.ui-demo-required == 'true'
+          NOOK_PR_CACHE_TELEMETRY_DIR: ${{ runner.temp }}/nook-cache-telemetry
+          NOOK_PR_CACHE_HEALTH_JSON: ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
+          NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
+          NOOK_PR_CACHE_JOBS: '[{"id":"validation","result":"${{ job.status }}","buildExpected":true,"sccacheExpectation":"required","readOnly":true}]'
+        run: node .github/workflows/lib/pr-cache-health.mjs
+      - name: Full browser and extension suites
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && inputs.full_e2e_requested
+        run: task ci:pr:browser:full
+      - name: Authentication-sensitive extension regression
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
+        run: task ci:pr:browser:auth
+      - name: Web research verification and browser tests
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && steps.browser-scope.outputs.research == 'true'
+        run: task web:research:verify
+      - name: Restore verified production artifacts after browser tests
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        run: |
+          # These are generated trees in this ephemeral checkout, never sources.
+          rm -rf nook-app/nook-web/nook-web-app/dist nook-app/nook-web/nook-vault-simple/dist nook-app/nook-web/nook-vault-sentinel/dist nook-app/nook-web/nook-web-extension/dist
+          cp -a "$PR_ARTIFACT_DIR/browser/nook-app/." nook-app/
+      - name: Deploy and report preview
+        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: ./.github/actions/nook-pr-preview
+        with:
+          cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          source-sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+      - name: Deploy and report research preview
+        if: steps.browser-scope.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: ./.github/actions/nook-pr-research-preview
+        with:
+          cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+      - name: Preserve reports and browser diagnostics
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ui-demo-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
-          path: ui-demo
-          retention-days: 90
+          name: pr-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-pr-artifacts/coverage
+            coverage/nook-core-summary.md
+            **/test-results
+            **/playwright-report
+            ${{ runner.temp }}/nook-pr-cache-health
           if-no-files-found: warn
-          overwrite: true
-
-      - name: Link UI demo from the pull request
-        if: always() && needs.verify.outputs.ui-demo-required == 'true'
-        uses: actions/github-script@v9
-        env:
-          DEMO_OUTCOME: ${{ steps.record-ui-demo.outcome }}
-          DEMO_SPECS: ${{ needs.verify.outputs.ui-demo-specs }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        with:
-          retries: 3
-          script: |
-            const marker = '<!-- nook-ui-demo -->'
-            const issueNumber = Number(process.env.PR_NUMBER)
-            const artifactName = `ui-demo-pr-${issueNumber}-${process.env.PR_HEAD_SHA}`
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            const body = [
-              marker,
-              '### UI demo',
-              '',
-              `- Result: **${process.env.DEMO_OUTCOME}**`,
-              `- Video artifact: [${artifactName}](${runUrl}#artifacts)`,
-              '- Linear archive: publishing from the trusted post-workflow',
-              `- Demo spec: \`${process.env.DEMO_SPECS}\``,
-              '',
-              'The demo runs in headless Chromium. Playwright assertions are authoritative; the video is a review aid for humans and AI.',
-            ].join('\n')
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            })
-            const existing = comments.find((comment) => comment.body?.startsWith(marker))
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              })
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body,
-              })
-            }
-
-  extension-e2e:
-    name: Extension e2e
-    if: >-
-      always() &&
-      needs.verify.result == 'success' &&
-      (inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true') &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      inputs.validation_requested
-    needs: [validation-request, verify]
-    runs-on: nook-k0s-container
-    timeout-minutes: 180
-    container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-      credentials:
-        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-    steps:
-      - name: Run full extension suite
-        if: inputs.full_e2e_requested
-        working-directory: /meta-secret/nook
-        run: task _extension:test:e2e
-        env:
-          CI: true
-      - name: Run the focused real-extension authentication regression
-        if: ${{ !inputs.full_e2e_requested }}
-        working-directory: /meta-secret/nook
-        run: task _extension:test:e2e:file
-        env:
-          CI: true
-          E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
-
-  preview:
-    name: Verify and preview
-    if: >-
-      always() &&
-      inputs.validation_requested
-    # Native must succeed before the merge gate check can go green. A green
-    # preview with a failed Native job previously allowed false readiness.
-    needs:
-      [
-        validation-request,
-        rust,
-        wasm,
-        verify,
-        wasm-node-test,
-        ui-demo,
-        extension-e2e,
-      ]
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    steps:
-      - name: Enforce required verification results
-        env:
-          NATIVE_RESULT: ${{ needs.rust.result }}
-          WASM_RESULT: ${{ needs.wasm.result }}
-          WEB_RESULT: ${{ needs.verify.result }}
-          WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
-          UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}
-          UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
-          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
-          AUTH_SENSITIVE_E2E_REQUIRED: ${{ needs.verify.outputs.auth-sensitive-e2e-required }}
-          EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}
-          FULL_E2E_REQUESTED: ${{ inputs.full_e2e_requested }}
-        run: |
-          set -euo pipefail
-          failed=0
-          for dependency in \
-            "Native Rust=$NATIVE_RESULT" \
-            "WASM build=$WASM_RESULT" \
-            "Web verification=$WEB_RESULT" \
-            "WASM Node tests=$WASM_NODE_RESULT"
-          do
-            name="${dependency%%=*}"
-            result="${dependency#*=}"
-            if [ "$result" != "success" ]; then
-              echo "::error::$name finished with $result"
-              failed=1
-            fi
-          done
-          echo "Headless UI demo=$UI_DEMO_RESULT (enabled=$UI_DEMOS_ENABLED, required=$UI_DEMO_REQUIRED)"
-          if [ "$UI_DEMOS_ENABLED" = "true" ] \
-            && [ "$UI_DEMO_REQUIRED" = "true" ] \
-            && [ "$UI_DEMO_RESULT" != "success" ]; then
-            echo "::error::Headless UI demo finished with $UI_DEMO_RESULT"
-            failed=1
-          fi
-          echo "Extension e2e=$EXTENSION_E2E_RESULT (full=$FULL_E2E_REQUESTED, auth=$AUTH_SENSITIVE_E2E_REQUIRED)"
-          if { [ "$FULL_E2E_REQUESTED" = "true" ] || [ "$AUTH_SENSITIVE_E2E_REQUIRED" = "true" ]; } \
-            && [ "$EXTENSION_E2E_RESULT" != "success" ]; then
-            echo "::error::Extension e2e finished with $EXTENSION_E2E_RESULT"
-            failed=1
-          fi
-          test "$failed" -eq 0
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Setup Node for host Pages deploy
-        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-
-      - name: Download preview dist handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: pr-web-dist-${{ github.run_id }}
-          # upload-artifact roots at the least common ancestor of the dist paths
-          # (nook-app/nook-web), so restore into that directory.
-          path: nook-app/nook-web
-
-      - name: Confirm preview dist handoff
-        run: |
-          set -euo pipefail
-          test -d nook-app/nook-web/nook-web-app/dist
-          test -d nook-app/nook-web/nook-web-app/dist/site
-          test -d nook-app/nook-web/nook-vault-simple/dist
-          test -d nook-app/nook-web/nook-vault-sentinel/dist
-
-      - name: Deploy and verify Pages previews
-        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
-        id: deploy-all
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-          DEPLOYMENT_TAG: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          NOOK_HOST_PAGES_DEPLOY: "1"
-        run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
-
-      - name: Preserve the secret-free hosted validation boundary
-        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
-        run: echo "Credentialed preview deployment is intentionally skipped for untrusted source"
-
-      - name: Comment preview URL on PR
-        if: steps.deploy-all.outcome == 'success'
-        uses: actions/github-script@v9
-        env:
-          PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
-          SITE_PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
-          SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
-          SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
-          EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
-        with:
-          retries: 3
-          script: |
-            const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
-            const withBackoff = async (label, request) => {
-              let lastError
-              for (let attempt = 1; attempt <= 5; attempt += 1) {
-                try {
-                  return await request()
-                } catch (error) {
-                  lastError = error
-                  if (attempt === 5) break
-                  const delaySeconds = attempt * 15
-                  core.warning(`${label} failed on attempt ${attempt}; retrying in ${delaySeconds}s`)
-                  await sleep(delaySeconds * 1000)
-                }
-              }
-              throw lastError
-            }
-            const marker = '### Preview deployed'
-            const root = process.env.PREVIEW_URL.replace(/\/$/, '')
-            const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
-            const simple = process.env.SIMPLE_PREVIEW_URL.replace(/\/$/, '')
-            const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
-            const extension = process.env.EXTENSION_PREVIEW_URL
-            const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/\n- Browser extension: ${extension}`
-            const commentQuery = await withBackoff('Listing preview comments', () => github.graphql(`
-              query($owner: String!, $repo: String!, $number: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $number) {
-                    id
-                    comments(last: 100) {
-                      nodes { id body }
-                    }
-                  }
-                }
-              }
-            `, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              number: context.payload.pull_request.number,
-            }))
-            const pullRequest = commentQuery.repository.pullRequest
-            const existing = pullRequest.comments.nodes.find((comment) => comment.body?.startsWith(marker))
-            if (existing) {
-              await withBackoff('Updating the preview comment', () => github.graphql(`
-                mutation($id: ID!, $body: String!) {
-                  updateIssueComment(input: { id: $id, body: $body }) {
-                    issueComment { id }
-                  }
-                }
-              `, { id: existing.id, body }))
-            } else {
-              await withBackoff('Creating the preview comment', () => github.graphql(`
-                mutation($subjectId: ID!, $body: String!) {
-                  addComment(input: { subjectId: $subjectId, body: $body }) {
-                    commentEdge { node { id } }
-                  }
-                }
-              `, { subjectId: pullRequest.id, body }))
-            }
-
-      - name: Record github-pages deployment
-        if: steps.deploy-all.outcome == 'success'
-        uses: actions/github-script@v9
-        env:
-          PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
-          UNIFIED_PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
-          SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
-          SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
-          EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
-        with:
-          retries: 3
-          script: |
-            const previewUrl = process.env.PREVIEW_URL
-            if (!previewUrl) {
-              throw new Error('Cloudflare preview deploy succeeded but did not emit preview_url')
-            }
-
-            const deployment = await github.rest.repos.createDeployment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.payload.pull_request.head.sha,
-              environment: 'github-pages',
-              auto_merge: false,
-              required_contexts: [],
-              transient_environment: true,
-              production_environment: false,
-              description: `PR #${context.payload.pull_request.number} preview`,
-              payload: {
-                pull_request: context.payload.pull_request.number,
-                preview_url: previewUrl,
-                unified_preview_url: process.env.UNIFIED_PREVIEW_URL,
-                simple_preview_url: process.env.SIMPLE_PREVIEW_URL,
-                sentinel_preview_url: process.env.SENTINEL_PREVIEW_URL,
-                extension_preview_url: process.env.EXTENSION_PREVIEW_URL,
-              },
-            })
-
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: deployment.data.id,
-              state: 'success',
-              environment: 'github-pages',
-              environment_url: previewUrl,
-              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              description: 'Cloudflare Pages preview deployed',
-              auto_inactive: false,
-            })
-
-  coverage:
-    name: Rust coverage report
-    if: >-
-      inputs.validation_requested
-    needs: rust
-    uses: ./.github/workflows/pr-coverage.yml
-    secrets: inherit
-    with:
-      source_sha: ${{ inputs.source_sha }}
-
-  full-e2e-shard:
-    name: Full browser e2e shard (${{ matrix.shard }}/2)
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      inputs.full_e2e_requested
-    needs: verify
-    runs-on: nook-k0s-container
-    timeout-minutes: 180
-    container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-      credentials:
-        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - name: Local-provider web e2e from built WASM
-        working-directory: /meta-secret/nook
-        run: task _ci:main:web:e2e-only
-        env:
-          CI: true
-          NOOK_E2E_SHARD: ${{ matrix.shard }}/2
-          VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-
-  full-e2e:
-    name: Full browser e2e (main fix)
-    if: >-
-      always() &&
-      inputs.validation_requested &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      inputs.full_e2e_requested
-    needs: [full-e2e-shard, wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
-    steps:
-      - name: Require both browser shards
-        env:
-          SHARD_RESULT: ${{ needs.full-e2e-shard.result }}
-        run: test "$SHARD_RESULT" = "success"
+          retention-days: 15

@@ -97,6 +97,10 @@ export class PrCacheHealth {
       const hasAvailableImport = imports.availability.some(
         (candidate) => candidate.available,
       );
+      // A registry import is not required for persistent node-local builders.
+      // Actual cached BuildKit steps provide the same warm-cache evidence.
+      const hasWarmCache =
+        hasAvailableImport || record.buildkit.cached_steps > 0;
       switch (job.sccacheExpectation) {
         case SccacheExpectation.Required:
           if (record.sccache.runtime_mode === "UNAVAILABLE")
@@ -119,12 +123,10 @@ export class PrCacheHealth {
             record.sccache.remote_writes === 0
           )
             reasons.push(`${job.id}:sccache_remote_writes_missing`);
-          if (
-            record.sccache.publication_status === "pending_verification"
-          ) {
-            if (hasAvailableImport && record.sccache.cache_hits === 0) {
+          if (record.sccache.publication_status === "pending_verification") {
+            if (hasWarmCache && record.sccache.cache_hits === 0) {
               reasons.push(`${job.id}:sccache_next_head_zero_hits`);
-            } else if (!hasAvailableImport) {
+            } else if (!hasWarmCache) {
               warnings.push(`${job.id}:publication_pending_verification`);
             }
           }
@@ -154,14 +156,14 @@ export class PrCacheHealth {
       if (
         job.buildExpected &&
         steps >= this.minimumCompletedSteps &&
-        !hasAvailableImport
+        !hasWarmCache
       ) {
         warnings.push(`${job.id}:cold_cache_no_available_imports`);
       }
       if (
         job.buildExpected &&
         steps >= this.minimumCompletedSteps &&
-        hasAvailableImport
+        hasWarmCache
       ) {
         if (typeof buildkitHitRate !== "number") {
           reasons.push(`${job.id}:buildkit_cache_rate_missing`);

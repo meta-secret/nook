@@ -709,10 +709,10 @@ fn assert_release_wasm_cache_contract(root: &Path) {
         !core_dockerfile.contains("wasm-dependency-test")
             && !core_dockerfile
                 .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm")
-            && dependency_dockerfile.contains(
+            && !dependency_dockerfile.contains(
                 "cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm",
             ),
-        "the manifest-only WASM boundary must prewarm release tests without compiling a second debug graph"
+        "the manifest-only WASM boundary must not compile tests before PR verification"
     );
     assert!(
         (root)

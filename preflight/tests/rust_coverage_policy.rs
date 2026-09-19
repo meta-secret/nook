@@ -211,16 +211,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         central_ci.contains("on:\n  pull_request:")
             && central_ci.contains("push:\n    branches: [main]")
     );
-    assert!(central_ci.contains("dev-promotion-readiness:"));
-    assert!(central_ci.contains("group: dev-promotion-readiness"));
-    assert!(central_ci.contains("cancel-in-progress: false"));
-    assert!(central_ci.contains("needs: [scope, policy, pr, research]"));
-    assert!(central_ci.contains("POLICY_RESULT: ${{ needs.policy.result }}"));
-    assert!(central_ci.contains("PR_RESULT: ${{ needs.pr.result }}"));
-    assert!(central_ci.contains("\"Repository policy=$POLICY_RESULT\""));
-    assert!(central_ci.contains("\"PR validation=$PR_RESULT\""));
-    assert!(central_ci.contains("if [ \"$result\" != \"success\" ]; then"));
-    assert!(central_ci.contains("Dev promotion readiness passed for exact PR head $DEV_HEAD_SHA"));
+    assert!(!central_ci.contains("dev-promotion-readiness:"));
+    assert!(central_ci.contains("uses: ./.github/workflows/pr.yml"));
+    assert!(central_ci.contains("github.event.pull_request.head.ref == 'dev'"));
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
@@ -229,7 +222,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         .split_once("FROM deps AS coverage-deps")
         .and_then(|(_, remainder)| {
             remainder
-                .split_once("FROM coverage-deps AS build")
+                .split_once("FROM deps AS build")
                 .map(|(stage, _)| stage)
         })
         .context("preflight coverage dependencies must be a bounded source-free stage")?;

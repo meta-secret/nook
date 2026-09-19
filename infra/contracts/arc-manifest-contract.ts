@@ -431,7 +431,7 @@ class ArcManifestContract {
     const admittedContract19 = network.requireAll([
       "name: arc-runner-default-deny-ingress",
       "name: arc-runner-to-buildkit",
-      'values: ["arc-runner", "arc-buildkit-benchmark"]',
+      'values: ["arc-runner", "arc-job-container", "arc-buildkit-benchmark"]',
       "port: 1234",
     ]);
     if (admittedContract19.isErr()) return err(admittedContract19.error);
@@ -538,7 +538,7 @@ class ArcManifestContract {
       "uses: ./.github/workflows/web-research.yml",
       "github.event_name == 'push' && 'main'",
       "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
-      "needs.scope.outputs.validation-requested == 'true'",
+      "contains(github.event.pull_request.labels.*.name, 'ci:validate')",
       "persist-credentials: false",
     ]);
     if (centralRouting.isErr()) return err(centralRouting.error);
@@ -581,54 +581,29 @@ class ArcManifestContract {
     if (admittedContract29.isErr()) return err(admittedContract29.error);
     const admittedContract30 = prWorkflow.requireAll([
       "workflow_call:",
+      "  validation:",
       "inputs.validation_requested",
-      "full-e2e-shard:",
-      "name: Full browser e2e shard (${{ matrix.shard }}/2)",
-      "fail-fast: false",
-      "shard: [1, 2]",
-      "NOOK_E2E_SHARD: ${{ matrix.shard }}/2",
-      "full-e2e:",
-      "name: Full browser e2e (main fix)",
-      "needs: [full-e2e-shard, wasm]",
-      "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
-      "Publish exact-source PR browser job image",
-      "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
-      "runs-on: nook-k0s-container",
-      "task _ci:main:web:e2e-only",
-      "task _extension:test:e2e",
-      "task _web:test:ui-demo",
-      "auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}",
-      "name: Detect authentication-sensitive browser changes",
-      "steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&\n          github.event.pull_request.head.repo.full_name == github.repository &&\n          github.event.pull_request.user.login != 'dependabot[bot]'",
+      "inputs.full_e2e_requested",
+      "name: Verify and preview",
+      "'nook-k0s-container' || 'ubuntu-latest'",
+      "task ci:pr:verification",
+      "task ci:pr:tests",
+      "task ci:pr:heavy",
+      "task ci:pr:browser:full",
+      "task ci:pr:browser:auth",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
       "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
       "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
       "nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts",
       "nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte",
       "nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts",
-      "extension-e2e:",
-      "name: Extension e2e",
-      "needs: [validation-request, verify]",
-      "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
-      "EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}",
-      "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
-      "WASM Node tests=$WASM_NODE_RESULT",
-      "needs:\n      [\n        validation-request,\n        rust,\n        wasm,\n        verify,\n        wasm-node-test,\n        ui-demo,\n        extension-e2e,\n      ]",
-      "Extension e2e finished with $EXTENSION_E2E_RESULT",
-      "task _extension:test:e2e:file",
     ]);
     if (admittedContract30.isErr()) return err(admittedContract30.error);
     const admittedContract31 = authSensitiveJob.requireAll([
-      "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
-      "if: inputs.full_e2e_requested",
-      "if: ${{ !inputs.full_e2e_requested }}",
-      "needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
+      "!inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'",
       "github.event.pull_request.head.repo.full_name == github.repository",
       "github.event.pull_request.user.login != 'dependabot[bot]'",
-      "runs-on: nook-k0s-container",
-      "image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
-      "run: task _extension:test:e2e:file",
-      "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
+      "run: task ci:pr:browser:auth",
     ]);
     if (admittedContract31.isErr()) return err(admittedContract31.error);
     const admittedContract32 = extensionTasks.requireAll([

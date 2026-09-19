@@ -346,53 +346,23 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         !e2e_pr.contains("NOOK_SCCACHE_") && !e2e_pr.contains("sccache-access-key:"),
         "arbitrary-ref e2e must remain secret-free"
     );
-    for (job_name, start, end) in [
-        (
-            "Build native Rust image",
-            "\n  rust-build:\n",
-            "\n  rust-ecosystem:\n",
-        ),
-        ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
-        (
-            "WASM build and artifact",
-            "\n  wasm:\n",
-            "\n  wasm-node-test:\n",
-        ),
-        ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
-        ("Web verification", "\n  verify:\n", "\n  cache-health:\n"),
-    ] {
-        let job = pr
-            .split_once(start)
-            .and_then(|(_, tail)| tail.split_once(end))
-            .map(|(job, _)| job)
-            .with_context(|| format!("PR workflow must keep the {job_name} job"))?;
-        for credential in compiler_credentials {
-            assert!(
-                job.contains(credential),
-                "Rust-producing PR job {job_name} must receive {credential}"
-            );
-        }
-        assert!(
-            job.contains("require-sccache: \"true\""),
-            "trusted compiler job {job_name} must fail closed without writable sccache"
-        );
-    }
+    assert_eq!(pr_docker_setups, 1, "one PR job owns all compiler work");
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            5,
-            "only the five trusted PR compiler jobs may receive {credential}"
+            1,
+            "only the trusted PR validation job may receive {credential}"
         );
     }
     assert_eq!(
         pr.matches("require-sccache: \"true\"").count(),
-        5,
+        1,
         "every trusted PR compiler job must require writable sccache"
     );
     assert_eq!(
         pr.matches("isolated-cache-write: \"true\"").count(),
-        pr_docker_setups,
-        "PR Docker jobs must write only isolated remote-buildcache scopes"
+        0,
+        "PR validation must not export registry cache"
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
 
