@@ -70,6 +70,10 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
+const eventLogImportFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'event-log-import-failed',
+}
 
 function pairingGrantDecodeFailureResponse(
   message: ExternalCompanionMessage,
@@ -84,7 +88,7 @@ function pairingGrantDecodeFailureResponse(
     message.payload,
   )
   if (admission.isErr()) return { ok: false, reason: admission.error }
-  return invalidPairingGrantResponse
+  return eventLogImportFailureResponse
 }
 
 export class ExternalCompanionRouter {

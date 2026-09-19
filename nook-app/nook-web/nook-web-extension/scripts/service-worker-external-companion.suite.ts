@@ -191,6 +191,29 @@ describe('external companion routing', () => {
     },
   )
 
+  test('reports event-log import failure for a valid grant with invalid event records', async () => {
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const message = { ...externalPairingMessage, eventLogRecords: [] }
+
+    expect(
+      await new ExternalCompanionRouter({
+        dependencies: externalDependencies,
+        message,
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }).route(),
+    ).toBe(false)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'event-log-import-failed',
+    })
+  })
+
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =
