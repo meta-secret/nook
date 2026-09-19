@@ -38,18 +38,24 @@ tasks:
         # Execute the same sequential shell barrier with actual failing solves.
         # The next phase must never be invoked after either earlier phase fails.
         for failure in verification tests; do
-          if (
-            if [ "$failure" = verification ]; then
-              docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
-                --set "*.context=$repo_root/infra/sim/bake-cache" \
-                --set '*.args.FAIL_VERIFICATION=1' pr-proof-verification || exit "$?"
-            else
-              docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
-                --set "*.context=$repo_root/infra/sim/bake-cache" \
-                --set '*.args.FAIL_TESTS=1' pr-proof-tests || exit "$?"
-            fi
-            printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
-          ) >"$output/failure-$failure.log" 2>&1; then
+          set +e
+          if [ "$failure" = verification ]; then
+            docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
+              --set "*.context=$repo_root/infra/sim/bake-cache" \
+              --set '*.args.FAIL_VERIFICATION=1' pr-proof-verification \
+              >"$output/failure-$failure.log" 2>&1 \
+              && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
+            status="$?"
+          else
+            docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
+              --set "*.context=$repo_root/infra/sim/bake-cache" \
+              --set '*.args.FAIL_TESTS=1' pr-proof-tests \
+              >"$output/failure-$failure.log" 2>&1 \
+              && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
+            status="$?"
+          fi
+          set -e
+          if [ "$status" -eq 0 ]; then
             echo 'Expected the real BuildKit solve to fail' >&2
             exit 1
           fi

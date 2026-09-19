@@ -1,6 +1,6 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS hooks
+FROM registry.dev.nokey.sh/library/node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS hooks
 
 ADD --checksum=sha256:3ed29df5e340209ff43447749184b7c041ec7bf98ece88bfd1cf5ad53781790d \
   https://codeload.github.com/actions/runner-container-hooks/tar.gz/d21e5b430e78919ed73b7690a377723bf2a34d8e \
