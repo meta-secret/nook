@@ -722,7 +722,28 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
 
 void test("one PR job retains cache diagnostics without registry handoffs", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
+  const workspaceSync = fs.readFileSync(
+    ".github/actions/nook-arc-workspace-sync/action.yml",
+    "utf8",
+  );
   assert.equal(workflow.match(/^    runs-on:/gm)?.length, 1);
+  const checkout = workflow.indexOf("uses: actions/checkout@v7");
+  const checkoutSync = workflow.indexOf(
+    "uses: meta-secret/nook/.github/actions/nook-arc-workspace-sync@e07eafb28bda705ddfd1d6fb073a7ff5321a1017",
+  );
+  const localDockerSetup = workflow.indexOf(
+    "uses: ./.github/actions/nook-docker-setup",
+  );
+  assert.ok(checkout >= 0 && checkoutSync > checkout);
+  assert.ok(
+    localDockerSetup > checkoutSync,
+    "the novolume checkout sync must precede repository-local actions",
+  );
+  assert.match(
+    workspaceSync,
+    /image: docker:\/\/ghcr\.io\/meta-secret\/nook-pr-runner@sha256:[a-f0-9]{64}/,
+  );
+  assert.match(workspaceSync, /entrypoint: \/usr\/bin\/true/);
   assert.equal(
     workflow.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)
       ?.length,
