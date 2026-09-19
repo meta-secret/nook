@@ -35,7 +35,7 @@ class DockerizedRustBuildKitContract {
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     expect(workflow).toContain("Connect trusted persistent BuildKit");
     expect(rootWorkflow).toContain(
@@ -164,10 +164,10 @@ class DockerizedRustBuildKitContract {
 
   dylintDependencyCacheAndSccacheMode(): void {
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const wrapper = this.read(
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
@@ -226,10 +226,10 @@ class DockerizedRustBuildKitContract {
 
   remoteCompileUsesTwoPhaseFoundation(): void {
     const bake = this.read(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+      "nook-app/nook-platform/docker/rust/compile/docker-bake.hcl",
     );
     const dockerfile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
     );
     const script = this.read(".github/scripts/compile-remote.sh");
     const phaseA = script.indexOf('"${bake_args[@]}" build-compile-foundation');
@@ -281,7 +281,7 @@ class DockerizedRustBuildKitContract {
   }
 
   dylintWrapperContentInvalidatesBuildGraph(): void {
-    const nightlyPath = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    const nightlyPath = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
     const nightly = this.read(nightlyPath);
     const bake = this.read(
       "nook-app/nook-platform/docker/rust/docker-bake.hcl",
@@ -290,7 +290,7 @@ class DockerizedRustBuildKitContract {
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dockerignore = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile.dockerignore",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile.dockerignore",
     );
     const ecosystemStage = nightly.indexOf(
       "FROM rust-base AS rust-ecosystem-nightly",
@@ -332,8 +332,11 @@ class DockerizedRustBuildKitContract {
     );
     expect(dylintTarget).toBeGreaterThanOrEqual(0);
     expect(dylintTargetEnd).toBeGreaterThan(dylintTarget);
+    expect(bake).toContain(
+      'rust_nightly_dockerfile = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"',
+    );
     expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
-      "docker/rust/nightly.Dockerfile",
+      "dockerfile = rust_nightly_dockerfile",
     );
 
     const dylintBuild = nightly.indexOf(
@@ -356,7 +359,7 @@ class DockerizedRustBuildKitContract {
 
   wasmNodeCompilerSecretsWithoutReplayCacheBusters(): void {
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const selectText = (request: RequiredCompilerTextSelection): string => {
       const value = request.sections[request.index];
@@ -513,7 +516,7 @@ class DockerizedRustBuildKitContract {
       'node-version: "24.19.0"',
     );
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     expect(nightly).not.toContain("nook-sccache-report --replay");
     expect(nightly).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
@@ -535,7 +538,7 @@ class DockerizedRustBuildKitContract {
 
   compilerGraphsDoNotConsumeTelemetryReplayArgument(): void {
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const baseStart = product.indexOf(
       "\nFROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base\n",
@@ -548,7 +551,7 @@ class DockerizedRustBuildKitContract {
     );
     expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     expect(
-      this.read("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+      this.read("nook-app/nook-platform/docker/rust/compile/Dockerfile"),
     ).not.toContain(
       "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
@@ -563,7 +566,7 @@ class DockerizedRustBuildKitContract {
     );
     const proof = this.read("infra/tasks/pr-cache.yml");
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
     expect(dependencyFingerprint).toContain("dylint-link=6.0.1");

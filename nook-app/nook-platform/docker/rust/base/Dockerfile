@@ -1,10 +1,11 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-# Product Rust/WASM lineage. Dependencies and source leaves stay in this
-# Dockerfile so cache keys use stable internal stages across fresh builders.
+# Rust foundation and product lineage. Dependencies and source leaves stay in
+# this base Dockerfile so cache keys use stable internal stages across fresh
+# builders.
 # rust-platform overlays real platform sources on cooked builder-core-deps (one directory COPY).
 # Focused nook-rust-* leaves and ecosystem deterministic extend internal stages.
-# Other ecosystem gates live as sibling Dockerfiles in this directory.
+# Other ecosystem gates live under ecosystem/ and consume rust-base through Bake.
 # The web lineage lives under nook-web/docker and must not inherit Cargo target/ or the Rust toolchain.
 
 # Pin floating registry tags by digest. Unpinned `rust` tags move under us and rewrite the

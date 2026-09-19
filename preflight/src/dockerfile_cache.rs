@@ -129,7 +129,7 @@ mod tests {
             "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
         )?;
         fs::write(
-            root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"),
+            root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
         )?;
         fs::write(
@@ -152,7 +152,7 @@ mod tests {
                     line: 3,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-platform/docker/rust/product.Dockerfile",),
+                    path: PathBuf::from("nook-app/nook-platform/docker/rust/base/Dockerfile",),
                     line: 2,
                 },
             ]

@@ -1,7 +1,7 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
 # Compile-only product graph. The rust-base and web-base stages are supplied as
-# named contexts by compile.docker-bake.hcl. Do not change this
+# named contexts by compile/docker-bake.hcl. Do not change this
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
 # non-build validation as part of their dependency warm-up.
 

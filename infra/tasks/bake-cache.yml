@@ -321,8 +321,8 @@ tasks:
         proof_log="$(mktemp)"
 
         echo "== Rust source-boundary cache proof =="
-        product_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/product.Dockerfile"
-        nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+        product_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/base/Dockerfile"
+        nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"
         rust_source_block="$(mktemp)"
         awk '
           /^FROM builder-wasm-deps AS builder-wasm-source-base$/ { capture = 1 }

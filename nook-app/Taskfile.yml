@@ -91,7 +91,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-platform/nook-wasm/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/compile/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'

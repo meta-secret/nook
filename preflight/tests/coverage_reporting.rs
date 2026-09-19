@@ -21,7 +21,7 @@ fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
         "nook-app/nook-platform/nook-replication/src/lib.rs",
         "nook-app/nook-platform/nook-event-log/src/lib.rs",
         "nook-app/nook-platform/nook-companion-core/src/lib.rs",
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+        "nook-app/nook-platform/docker/rust/base/Dockerfile",
     ]);
     assert!(source.coverage_inputs_changed);
     assert!(source.base_coverage_required);
@@ -34,7 +34,7 @@ fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
     assert!(portable_foundations.base_coverage_required);
 
     let build_only = CoverageInputChanges::classify_coverage_inputs([
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+        "nook-app/nook-platform/docker/rust/base/Dockerfile",
         "nook-app/nook-platform/nook-core/docker-bake.hcl",
     ]);
     assert!(build_only.coverage_inputs_changed);

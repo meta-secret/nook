@@ -25,7 +25,7 @@ variable "WASM_BUILD_MODE" {
 target "builder-wasm" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "builder-wasm"
   platforms  = ["linux/amd64"]
   args = {
@@ -41,7 +41,7 @@ target "builder-wasm" {
 target "builder-wasm-node-compiler" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "builder-wasm-node-compiler"
   platforms  = ["linux/amd64"]
   cache-from = rust_wasm_source_cache_from
@@ -50,7 +50,7 @@ target "builder-wasm-node-compiler" {
 
 target "_nook-rust-fast-common" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "nook-rust-fast"
   platforms  = ["linux/amd64"]
   cache-from = rust_wasm_deps_cache_from
@@ -59,7 +59,7 @@ target "_nook-rust-fast-common" {
 target "rust-format-check" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "rust-format-check"
   platforms  = ["linux/amd64"]
   cache-from = rust_native_source_cache_from
@@ -68,7 +68,7 @@ target "rust-format-check" {
 target "wasm-export" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "wasm-export"
   platforms  = ["linux/amd64"]
   args = {
@@ -81,7 +81,7 @@ target "wasm-export" {
 target "focused-web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "focused-web-artifacts"
   platforms  = ["linux/amd64"]
   cache-from = rust_wasm_source_cache_from
@@ -92,7 +92,7 @@ target "focused-web-artifacts" {
 target "web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "web-artifacts"
   platforms  = ["linux/amd64"]
   args = {
@@ -106,7 +106,7 @@ target "web-artifacts" {
 target "_nook-rust-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "nook-rust"
   platforms  = ["linux/amd64"]
   args = {
@@ -123,7 +123,7 @@ target "_nook-rust-common" {
 target "_nook-rust-browser-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
   target     = "nook-rust-browser"
   platforms  = ["linux/amd64"]
   args = {

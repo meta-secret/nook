@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 const compileDockerfilePath = path.resolve(
-  "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+  "nook-app/nook-platform/docker/rust/compile/Dockerfile",
 );
 
 const forbiddenOperationPatterns = [

@@ -142,7 +142,7 @@ class DockerizedRustContract {
     const pr = this.read("nook-app/ci/pr.yml");
     const checks = this.read(".github/workflows/rust-ecosystem-checks.yml");
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     expect(pr).toContain("NATIVE_COVERAGE_PROVIDED=true");
     expect(checks).toContain("type: boolean\n        default: false");
@@ -251,7 +251,7 @@ class DockerizedRustContract {
 
   compileExtensionUsesOwnFrozenDependencies(): void {
     const compile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
     );
     const extensionDependencyStage = compile.indexOf(
       "FROM compile-web-dependencies AS compile-web-extension-dependencies",

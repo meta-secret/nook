@@ -26,6 +26,11 @@ compile_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${compile_source_cache_ref}",
 ]
 
+// Compile is the one Rust lineage with two foundations. Keep this path and
+// the two target contexts together so the directory layout and BuildKit graph
+// stay visibly aligned.
+compile_dockerfile = "nook-app/nook-platform/docker/rust/compile/Dockerfile"
+
 // Every entry point uses one solve contract. Bake applies CLI overrides after
 // inheritance, so callers also mirror overrides on each named target.
 compile_solve_args = {
@@ -53,7 +58,7 @@ compile_foundation_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACH
 target "build-compile-foundation" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  dockerfile = compile_dockerfile
   target     = "compile-foundation"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -72,7 +77,7 @@ target "build-compile-foundation" {
 target "build-compile" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  dockerfile = compile_dockerfile
   target     = "compile"
   platforms  = ["linux/amd64"]
   contexts = {

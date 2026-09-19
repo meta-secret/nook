@@ -64,7 +64,7 @@ impl DependencyPolicyCacheContract {
     fn load() -> anyhow::Result<Self> {
         Ok(Self {
             dockerfile: RepositoryFixture::repository_root()
-                .read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?,
+                .read("nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile")?,
         })
     }
 
@@ -140,9 +140,9 @@ impl RustEcosystemFixture {
             .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
             .map_or_else(String::new, |(job, _)| job.to_owned());
         let rust_dockerfiles = [
-            "nook-app/nook-platform/docker/rust/product.Dockerfile",
-            "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
-            "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+            "nook-app/nook-platform/docker/rust/base/Dockerfile",
+            "nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile",
+            "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
         ]
         .into_iter()
         .map(|path| root.read(path))
@@ -159,7 +159,7 @@ impl RustEcosystemFixture {
             dylint_manifest: root
                 .read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?,
             rust_base_dockerfile: root
-                .read("nook-app/nook-platform/docker/rust/product.Dockerfile")?,
+                .read("nook-app/nook-platform/docker/rust/base/Dockerfile")?,
             rust_dockerfiles,
             rust_bake: root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?,
             replication: root
@@ -172,7 +172,7 @@ impl RustEcosystemFixture {
             preflight_tasks: root.read("preflight/Taskfile.yml")?,
             root_tasks: root.read("Taskfile.yml")?,
             nightly_dockerfile: root
-                .read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?,
+                .read("nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile")?,
             preflight_bake: root.read("preflight/docker-bake.hcl")?,
             root,
         })
@@ -545,7 +545,7 @@ fn rust_ecosystem_dockerfiles_keep_split_toolchain_ownership() -> anyhow::Result
     ] {
         assert!(
             !fixture.rust_base_dockerfile.contains(forbidden),
-            "product.Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
+            "base/Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
         );
     }
     for target in [
@@ -701,9 +701,12 @@ fn rust_ecosystem_build_cache_lineage_stays_owned_by_each_leaf() -> anyhow::Resu
             && !fixture.rust_bake.contains("rust-platform-nightly")
             && fixture
                 .rust_bake
-                .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
+                .matches("dockerfile = rust_nightly_dockerfile")
                 .count()
                 == 2
+            && fixture.rust_bake.contains(
+                "rust_nightly_dockerfile = \"nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile\"",
+            )
             && !fixture
                 .rust_bake
                 .contains("rust-platform = \"target:rust-platform\"")
