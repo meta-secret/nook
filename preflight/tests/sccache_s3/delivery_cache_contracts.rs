@@ -42,7 +42,8 @@ impl RepositoryFixture {
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
-    assert!(setup.contains("docker/login-action@v4"));
+    assert!(setup.contains("--password-stdin"));
+    assert!(!setup.contains("docker/login-action"));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(!setup.contains("cache-selection"));

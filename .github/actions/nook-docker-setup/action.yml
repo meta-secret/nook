@@ -102,14 +102,16 @@ runs:
         ensure_minimum fs.inotify.max_user_watches 10485760
 
     - name: Login to Nook OCI registry
-      uses: docker/login-action@v4
-      with:
-        registry: ${{ inputs.registry-host }}
-        username: ${{ inputs.registry-username }}
-        password: ${{ inputs.registry-password }}
-        # Every ARC job runs in an ephemeral pod. Avoid a redundant post-job
-        # logout so cancellation can release the runner immediately.
-        logout: false
+      shell: bash
+      env:
+        NOOK_REGISTRY_PASSWORD: ${{ inputs.registry-password }}
+      run: |
+        # The job container is ephemeral. A direct login avoids registering an
+        # action post-step that would delay cancellation only to perform logout.
+        printf '%s' "$NOOK_REGISTRY_PASSWORD" | docker login \
+          "${{ inputs.registry-host }}" \
+          --username "${{ inputs.registry-username }}" \
+          --password-stdin
 
     - name: Preload hosted BuildKit from Zot
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}

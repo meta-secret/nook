@@ -71,7 +71,7 @@ fn assert_docker_setup_contract(root: &Path) {
         "Preload hosted BuildKit from Zot",
         "docker pull \"${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1\"",
         "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
-        "docker/login-action@v4",
+        "--password-stdin",
         "registry-username",
         "registry-password",
         "registry.dev.nokey.sh",

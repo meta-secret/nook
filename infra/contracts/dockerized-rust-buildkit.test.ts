@@ -39,7 +39,8 @@ class DockerizedRustBuildKitContract {
     expect(rootWorkflow).toContain(
       "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
     );
-    expect(dockerSetup).toContain("logout: false");
+    expect(dockerSetup).toContain("--password-stdin");
+    expect(dockerSetup).not.toContain("docker/login-action");
     expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
     expect(workflow).toContain("task --silent ci:pr:verification");
     expect(workflow).not.toContain("nook-cache-telemetry");
@@ -74,9 +75,29 @@ class DockerizedRustBuildKitContract {
       rustSourceStage,
       product.indexOf("FROM scratch AS pr-wasm-artifacts"),
     );
-    expect(rustVerification).toContain("COPY nook-app/nook-platform/ ./");
-    expect(rustVerification).toContain("cargo clippy --quiet --offline");
-    expect(rustVerification).toContain("cargo build --quiet --offline");
+    expect(rustVerification).not.toContain("COPY nook-app/nook-platform/ ./");
+    for (const crate of [
+      "nook-app-common",
+      "nook-authenticator-domain",
+      "nook-replication",
+      "nook-auth2",
+      "nook-event-log",
+      "nook-companion-core",
+      "nook-core",
+      "nook-companion-wasm",
+      "nook-wasm",
+      "nook-wasm-composition-tests",
+    ]) {
+      expect(rustVerification).toContain(
+        `COPY nook-app/nook-platform/${crate} ${crate}`,
+      );
+    }
+    expect(
+      rustVerification.match(/cargo clippy --quiet --offline/g)?.length,
+    ).toBe(9);
+    expect(
+      rustVerification.match(/cargo build --quiet --offline/g)?.length,
+    ).toBe(7);
     expect(rustDockerTasks).toContain(
       'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy',
     );

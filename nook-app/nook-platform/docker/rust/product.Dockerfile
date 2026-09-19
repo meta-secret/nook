@@ -894,16 +894,68 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # PR verification never inherits builder-core-deps: that graph precompiles test
 # binaries. Only the source-free dependency stage above precedes mutable code.
 FROM pr-rust-dependencies AS pr-rust-verify
-COPY nook-app/nook-platform/ ./
+
+COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy --quiet --offline --locked --all-targets \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
-      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
-      -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
-    && cargo build --quiet --offline --locked \
-      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
-      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-app-common
+
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-authenticator-domain -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-authenticator-domain
+
+COPY nook-app/nook-platform/nook-replication nook-replication
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-replication -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-replication
+
+COPY nook-app/nook-platform/nook-auth2 nook-auth2
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-auth2 -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-auth2
+
+COPY nook-app/nook-platform/nook-event-log nook-event-log
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-event-log -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-event-log
+
+COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-companion-core
+
+COPY nook-app/nook-platform/nook-core nook-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-core
+
+COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-wasm -- -D warnings
+
+COPY nook-app/nook-platform/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-wasm nook-wasm-composition-tests -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-wasm-composition-tests -- -D warnings \
     && nook-sccache-report pr-rust-verification
 ARG NOOK_SCCACHE_TELEMETRY_REPLAY
 RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay pr-rust-verification; fi
