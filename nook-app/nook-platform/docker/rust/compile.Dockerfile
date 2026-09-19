@@ -9,11 +9,10 @@ FROM rust-base AS compile-platform-manifests
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 
-# Compiler objects are the cross-commit cache boundary. Keep debug/source-path
-# metadata independent of the checkout identity and disable incremental object
-# layouts, which sccache cannot reuse reliably across clean BuildKit vertices.
+# Compiler objects are the cross-commit cache boundary. Disable incremental
+# object layouts, which sccache cannot reuse reliably across clean BuildKit
+# vertices.
 ENV CARGO_INCREMENTAL=0
-ENV RUSTFLAGS="--remap-path-prefix=/meta-secret/nook=/workspace"
 # The inherited rust-base value is a stable, read-only key input only. Every
 # compiler vertex below must replace it from the mounted runtime secret before
 # starting sccache, so publish and verification share identical BuildKit keys.
