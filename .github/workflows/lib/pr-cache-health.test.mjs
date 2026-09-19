@@ -761,10 +761,9 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
   );
   assert.match(arcContainerHook, /mountPath: \/home\/runner\/_work/);
   assert.match(workflow, /safe\.directory "\$GITHUB_WORKSPACE"/);
-  assert.equal(
-    workflow.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)
-      ?.length,
-    undefined,
+  assert.doesNotMatch(
+    workflow,
+    /uses: \.\/\.github\/actions\/nook-cache-telemetry/,
   );
   assert.doesNotMatch(workflow, /actions\/upload-artifact/);
   assert.doesNotMatch(workflow, /pr-cache-health\.mjs/);
