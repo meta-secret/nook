@@ -251,7 +251,7 @@ mod tests {
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn saved_login_capability_export_rejects_impossible_snapshots() {
+    fn saved_login_capability_export_preserves_classifier_contract() {
         let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
             kind: nook_companion_core::AuthenticationWorkflowKind::Login,
             stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
@@ -268,7 +268,7 @@ mod tests {
             authentication_workflow_saved_login_capability(valid),
             nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
         );
-        assert!(!authentication_workflow_requires_login_match_availability(
+        assert!(authentication_workflow_requires_login_match_availability(
             valid
         ));
         assert!(authentication_workflow_requires_login_match_availability(

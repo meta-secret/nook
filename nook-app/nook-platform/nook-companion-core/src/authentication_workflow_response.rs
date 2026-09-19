@@ -435,6 +435,38 @@ mod tests {
     }
 
     #[test]
+    fn saved_login_workflows_retain_locked_and_zero_match_availability() -> anyhow::Result<()> {
+        let snapshot = r#"{
+            "kind":0,
+            "stage":0,
+            "action":0,
+            "currentStep":1,
+            "totalSteps":3,
+            "approvalRequirement":"explicit-user-approval",
+            "savedLoginCapability":"fill-saved-login",
+            "observationIndex":0
+        }"#;
+
+        for availability in [r#"{"kind":"locked"}"#, r#"{"kind":"ready","count":0}"#] {
+            let json = format!(
+                r#"{{"workflow":{{"ok":true,"snapshot":{snapshot}}},"loginMatches":{availability}}}"#
+            );
+            let wire = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
+            let response =
+                AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(
+                    wire,
+                )?;
+            let AuthenticationWorkflowSnapshotResponse::Matched { snapshot, .. } =
+                response.workflow
+            else {
+                return Err(anyhow::anyhow!("saved-login workflow must be matched"));
+            };
+            assert!(snapshot.requires_login_match_availability());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn enforces_the_rust_snapshot_contract() -> anyhow::Result<()> {
         let valid = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":0}}"#,
