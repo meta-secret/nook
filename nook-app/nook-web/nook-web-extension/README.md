@@ -154,7 +154,8 @@ task extension:setup:brave PR=410
 ```
 
 This uses PIN instead of an OS passkey so the ceremony is scriptable. Re-running
-skips automation when the profile is already paired; later launches can use
+revalidates extension pairing storage so a stale setup marker is repaired;
+later launches can use
 `task extension:run:brave CHANNEL=dev` on the same profile. Production is
 rejected because the task creates vault data.
 

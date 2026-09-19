@@ -190,7 +190,9 @@ async function main() {
   }
 
   // Force the extension popup onto the PIN fallback (no OS passkey ceremony).
+  // Simple Vault still needs WebAuthn to boot and unlock its own vault.
   await context.addInitScript(() => {
+    if (globalThis.location?.protocol !== 'chrome-extension:') return
     Object.defineProperty(window, 'PublicKeyCredential', {
       configurable: true,
       get: () => false,

@@ -81,29 +81,6 @@ setup_marker_path() {
   printf '%s/.nook-pin-vault-setup\n' "$profile_dir"
 }
 
-launch_already_paired() {
-  local extension_dir="$1"
-  local profile_dir="$2"
-  local simple_vault_url="$3"
-  local pin="$4"
-  local marker vault_name
-  marker="$(setup_marker_path "$profile_dir")"
-  vault_name="$(tr -d '\n' <"$marker" 2>/dev/null || true)"
-  [ -n "$vault_name" ] || vault_name='(paired)'
-
-  printf 'Profile already paired (%s). Launching Brave without re-running setup…\n' "$vault_name"
-  launch_browser brave "$extension_dir" "$profile_dir" >/dev/null
-  printf '\nBrave is ready.\n'
-  printf '  Simple Vault: %s\n' "$simple_vault_url"
-  printf '  Profile:      %s\n' "$profile_dir"
-  printf '  PIN:          %s\n' "$pin"
-  if [ -n "${PR:-}" ]; then
-    printf '  Later launches: PR=%s task extension:run:brave\n' "$PR"
-  else
-    printf '  Later launches: CHANNEL=%s task extension:run:brave\n' "$CHANNEL"
-  fi
-}
-
 main() {
   validate_setup_selection
   resolve_selection
@@ -123,11 +100,6 @@ main() {
   printf 'extension_dir=%s\n' "$extension_dir"
   printf 'simple_vault_url=%s\n' "$simple_vault_url"
   printf 'profile_dir=%s\n' "$profile_dir"
-
-  if [ -f "$marker" ]; then
-    launch_already_paired "$extension_dir" "$profile_dir" "$simple_vault_url" "$pin"
-    return 0
-  fi
 
   ensure_playwright
   cdp_port="$(pick_free_port)"
@@ -149,13 +121,16 @@ main() {
     NOOK_EXTENSION_SETUP_VAULT_NAME="$vault_name" \
     node "$DRIVER"
 
-  printf '%s\n' "$vault_name" >"$marker"
+  # Keep the marker as a human-readable hint, never as pairing authority.
+  if [ ! -f "$marker" ]; then
+    printf '%s\n' "$vault_name" >"$marker"
+  fi
 
-  printf '\nBrave PIN vault setup complete.\n'
+  printf '\nBrave PIN vault setup/validation complete.\n'
   printf '  Simple Vault: %s\n' "$simple_vault_url"
   printf '  Profile:      %s\n' "$profile_dir"
   printf '  PIN:          %s\n' "$pin"
-  printf '  Re-run skips automation when this profile is already paired.\n'
+  printf '  Pairing storage is revalidated on every setup run.\n'
   if [ -n "${PR:-}" ]; then
     printf '  Later launches: PR=%s task extension:run:brave\n' "$PR"
   else
