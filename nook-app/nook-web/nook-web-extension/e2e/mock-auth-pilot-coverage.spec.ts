@@ -146,6 +146,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         context: paired.context,
         url: `${mockAuth.origin}/login-with-hidden-header`,
       })
+      await expectPilotNamecheapDirectRouteSuccess({
+        context: paired.context,
+        url: `${mockAuth.origin}/myaccount/login/`,
+      })
 
       // Facebook: aria-hidden ancestor must not block CSS-visible email/pass.
       await expectPilotPlainSuccess(
@@ -866,16 +870,20 @@ async function expectPilotPlainSuccess(
   await page.close()
 }
 
+type NamecheapPilotRequest = {
+  readonly context: BrowserContext
+  readonly url: string
+}
+
 async function expectPilotNamecheapShellSuccess({
   context,
   url,
-}: {
-  readonly context: BrowserContext
-  readonly url: string
-}): Promise<void> {
+}: NamecheapPilotRequest): Promise<void> {
   const page = await context.newPage()
   await page.goto(url)
   const widget = page.locator('#nook-auth-widget')
+  await expect(widget).toHaveCount(0)
+  await page.locator('#header-sign-in').click()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
@@ -898,5 +906,16 @@ async function expectPilotNamecheapShellSuccess({
       ),
     )
     .toBe(expectedEvidence)
+  await page.close()
+}
+
+async function expectPilotNamecheapDirectRouteSuccess({
+  context,
+  url,
+}: NamecheapPilotRequest): Promise<void> {
+  const page = await context.newPage()
+  await page.goto(url)
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await page.close()
 }

@@ -19,6 +19,11 @@ import {
   passwordFormInteraction,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { simpleVaultRuntime } from '../lib/simple-vault-runtime'
+import {
+  AuthenticationGesture,
+  NamecheapWidgetDisplayEligibility,
+  NamecheapWidgetDisplayGate,
+} from '../lib/auth-widget-policy'
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
@@ -70,6 +75,25 @@ type AuthenticationScanRenderLifecycleRequest = {
 }
 
 type AuthenticationMutationRecords = MutationRecord[]
+
+/** Owns trusted recognition of Namecheap's same-document Sign in drawer control. */
+class NamecheapLoginDrawerActivation {
+  constructor(private readonly gate: NamecheapWidgetDisplayGate) {}
+
+  observe(event: MouseEvent): void {
+    if (!new AuthenticationGesture(event).trusted) return
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const control = target.closest(
+      'a, button, input[type="button"], input[type="submit"], [role="button"]',
+    )
+    if (!(control instanceof HTMLElement)) return
+    const label =
+      control instanceof HTMLInputElement ? control.value : control.textContent
+    if (label?.trim().toLowerCase() !== 'sign in') return
+    this.gate.observeSignInGesture(new AuthenticationGesture(event))
+  }
+}
 
 class AuthenticationScanRenderLifecycle {
   constructor(
@@ -153,6 +177,19 @@ class AuthenticationScanRenderLifecycle {
     if (workflowForms.length === 0) {
       removeScannedWidget()
       return AuthenticationScanOutcome.Removed
+    }
+    const namecheapDisplayRequest: Parameters<
+      typeof namecheapWidgetDisplayGate.eligibility
+    >[0] = {
+      hostname: location.hostname,
+      pathname: location.pathname,
+    }
+    if (
+      namecheapWidgetDisplayGate.eligibility(namecheapDisplayRequest) ===
+      NamecheapWidgetDisplayEligibility.AwaitingTrustedActivation
+    ) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Suppressed
     }
 
     const classifiedRequest: ConstructorParameters<
@@ -331,6 +368,10 @@ const authenticationScanRenderLifecycleRequest: AuthenticationScanRenderLifecycl
 const authenticationScanRenderLifecycle = new AuthenticationScanRenderLifecycle(
   authenticationScanRenderLifecycleRequest,
 )
+const namecheapWidgetDisplayGate = new NamecheapWidgetDisplayGate()
+const namecheapLoginDrawerActivation = new NamecheapLoginDrawerActivation(
+  namecheapWidgetDisplayGate,
+)
 
 function handleViewportChange(): void {
   if (widgetState.host.kind !== WidgetHostKind.Attached) return
@@ -367,6 +408,11 @@ void companionWasmReady.then(async () => {
   document.addEventListener(
     'submit',
     loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    true,
+  )
+  document.addEventListener(
+    'click',
+    namecheapLoginDrawerActivation.observe.bind(namecheapLoginDrawerActivation),
     true,
   )
   void authenticationScanRenderLifecycle.scanAndRender()
