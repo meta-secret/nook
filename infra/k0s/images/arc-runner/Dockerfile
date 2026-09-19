@@ -26,4 +26,5 @@ USER runner
 FROM arc-runner AS proof
 
 RUN grep -F "Synchronizing repository actions" /home/runner/k8s-novolume/index.js \
+  && grep -F "Synchronizing downloaded action" /home/runner/k8s-novolume/index.js \
   && grep -F "execCpFromPod" /home/runner/k8s-novolume/index.js

@@ -16,7 +16,7 @@ tasks:
   ci:arc:runner:publish:
     desc: Build, prove, and publish the ARC runner with the pinned container-hook repair.
     vars:
-      ARC_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v1" .ARC_RUNNER_IMAGE}}'
+      ARC_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v2" .ARC_RUNNER_IMAGE}}'
     env:
       GHA_CACHE_ENABLED: ""
       GHA_CACHE_WRITE_ENABLED: ""

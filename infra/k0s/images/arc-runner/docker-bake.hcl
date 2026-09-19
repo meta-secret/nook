@@ -1,5 +1,5 @@
 variable "ARC_RUNNER_IMAGE" {
-  default = "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v1"
+  default = "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v2"
 }
 
 target "arc-runner" {

@@ -1,11 +1,49 @@
 diff --git a/packages/k8s/src/hooks/run-script-step.ts b/packages/k8s/src/hooks/run-script-step.ts
-index 1db2bb2..d387f8a 100644
+index 1db2bb2..2e04aa1 100644
 --- a/packages/k8s/src/hooks/run-script-step.ts
 +++ b/packages/k8s/src/hooks/run-script-step.ts
-@@ -92,6 +92,22 @@ export async function runScriptStep(
-     }
-   }
- 
+@@ -73,0 +74,40 @@ export async function runScriptStep(
++  // The runner downloads marketplace actions into its private _actions tree,
++  // while kubernetes-novolume executes their Node entrypoints in the job pod.
++  // Copy each immutable action checkout once, immediately before first use.
++  const actionPrefix = '/__w/_actions/'
++  const actionEntrypoint = [entryPoint, ...(entryPointArgs ?? [])].find(value =>
++    value.startsWith(actionPrefix)
++  )
++  if (actionEntrypoint) {
++    const actionSegments = actionEntrypoint
++      .slice(actionPrefix.length)
++      .split('/')
++    if (actionSegments.length < 4) {
++      throw new Error(`invalid downloaded action path: ${actionEntrypoint}`)
++    }
++    const actionRelativePath = actionSegments.slice(0, 3).join('/')
++    const containerActionPath = `${actionPrefix}${actionRelativePath}`
++    const runnerActionPath = `${workdir}/_actions/${actionRelativePath}`
++    let actionPresent = true
++    try {
++      await execPodStep(
++        ['test', '-d', containerActionPath],
++        state.jobPod,
++        JOB_CONTAINER_NAME
++      )
++    } catch {
++      actionPresent = false
++    }
++    if (!actionPresent) {
++      core.debug(
++        `Synchronizing downloaded action '${runnerActionPath}' to '${containerActionPath}'`
++      )
++      await execPodStep(
++        ['mkdir', '-p', containerActionPath],
++        state.jobPod,
++        JOB_CONTAINER_NAME
++      )
++      await execCpToPod(state.jobPod, runnerActionPath, containerActionPath)
++    }
++  }
++
+@@ -94,0 +135,16 @@ export async function runScriptStep(
 +  // kubernetes-novolume keeps the checkout only in the job pod. The runner
 +  // resolves repository-local actions from its own workspace before invoking
 +  // this hook, so synchronize the small action-definition tree after checkout.
@@ -22,7 +60,3 @@ index 1db2bb2..d387f8a 100644
 +    )
 +  }
 +
-   try {
-     core.debug(
-       `Copying from job pod '${state.jobPod}' ${containerTemp} to ${runnerTemp}`
-       `Copying from job pod '${state.jobPod}' ${containerTemp} to ${runnerTemp}`

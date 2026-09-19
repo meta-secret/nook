@@ -743,6 +743,8 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
   assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
   assert.match(arcRunnerBake, /target "arc-runner-hooks-proof"/);
   assert.match(arcRunnerPatch, /Synchronizing repository actions/);
+  assert.match(arcRunnerPatch, /Synchronizing downloaded action/);
+  assert.match(arcRunnerPatch, /execCpToPod/);
   assert.match(arcRunnerPatch, /`\$\{args\.workingDirectory\}\/\.github`/);
   assert.match(
     arcRunnerValues,
