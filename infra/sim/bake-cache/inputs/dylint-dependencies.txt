@@ -1,0 +1,3 @@
+cargo-dylint=6.0.1
+dylint-link=6.0.1
+nightly=nightly-2026-04-16

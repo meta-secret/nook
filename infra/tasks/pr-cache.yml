@@ -29,18 +29,28 @@ tasks:
         test -s "$output/result/proof/verification"
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
-        grep -q ' CACHED' "$output/warm-verification.log"
+        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        test -n "$dependency_vertex"
+        grep -qx "$dependency_vertex CACHED" "$output/warm-verification.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/warm-verification.log"; then
+          echo 'Warm verification unexpectedly reinstalled Dylint dependencies' >&2
+          exit 1
+        fi
         grep -q ' CACHED' "$output/warm-tests.log"
         docker buildx bake --builder "$builder" --progress=plain \
           --metadata-file "$output/changed-verification.json" \
           -f "$fixture" --set "*.context=$repo_root/infra/sim/bake-cache" \
           --set '*.args.SOURCE_REVISION=changed' \
           pr-proof-verification 2>&1 | tee "$output/changed-verification.log"
-        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[tooling 2\/2\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
         verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 1\/1\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
         test -n "$tooling_vertex"
         test -n "$verification_vertex"
         grep -qx "$tooling_vertex CACHED" "$output/changed-verification.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/changed-verification.log"; then
+          echo 'Source-only change unexpectedly reinstalled Dylint dependencies' >&2
+          exit 1
+        fi
         if grep -qx "$verification_vertex CACHED" "$output/changed-verification.log"; then
           echo 'Mutable verification layer unexpectedly stayed cached' >&2
           exit 1

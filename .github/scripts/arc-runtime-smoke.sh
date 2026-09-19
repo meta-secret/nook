@@ -17,4 +17,4 @@ printf '%s\n' \
   docker buildx build --output "type=local,dest=$shared_dir" -
 
 test "$(cat "$shared_dir/result")" = arc-runtime-ok
-echo "ARC shared rootless BuildKit smoke passed"
+echo "ARC node-local rootless BuildKit smoke passed"

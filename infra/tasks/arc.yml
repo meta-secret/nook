@@ -583,7 +583,7 @@ tasks:
         REMOTE
 
   arc:deploy:
-    desc: Install ARC runners and one shared persistent rootless BuildKit shard.
+    desc: Install ARC runners and one persistent rootless BuildKit shard per build node.
     silent: true
     cmds:
       - task: arc:auth:sync

@@ -558,6 +558,35 @@ class DockerizedRustBuildKitContract {
     );
   }
 
+  prCacheProofCoversDylintDependencyReuse(): void {
+    const simulator = this.read(
+      "infra/sim/bake-cache/pr-pipeline.Dockerfile",
+    );
+    const dependencyFingerprint = this.read(
+      "infra/sim/bake-cache/inputs/dylint-dependencies.txt",
+    );
+    const proof = this.read("infra/tasks/pr-cache.yml");
+    const nightly = this.read(
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+    );
+    expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
+    expect(dependencyFingerprint).toContain("dylint-link=6.0.1");
+    expect(dependencyFingerprint).toContain("nightly=nightly-2026-04-16");
+    expect(nightly).toContain("ARG CARGO_DYLINT_VERSION=6.0.1");
+    expect(nightly).toContain("ARG DYLINT_NIGHTLY=nightly-2026-04-16");
+    expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
+      simulator.indexOf("ARG SOURCE_REVISION"),
+    );
+    expect(simulator).toContain("bake-sim-cargo-dylint-dependencies");
+    expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
+    expect(proof).toContain(
+      "Warm verification unexpectedly reinstalled Dylint dependencies",
+    );
+    expect(proof).toContain(
+      "Source-only change unexpectedly reinstalled Dylint dependencies",
+    );
+  }
+
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
@@ -588,4 +617,8 @@ test(
 test(
   "shared rust-base cache key excludes per-run sccache telemetry replay",
   contract.sharedRustBaseDoesNotConsumeTelemetryReplayArgument.bind(contract),
+);
+test(
+  "local PR cache proof covers Dylint dependency reuse",
+  contract.prCacheProofCoversDylintDependencyReuse.bind(contract),
 );

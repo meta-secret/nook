@@ -19,7 +19,7 @@
 #
 # Playwright browsers are pre-installed in the web e2e base image.
 # Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts. ARC reuses
-# the shared persistent BuildKit shard and publishes verified portable layers to Zot.
+# the persistent BuildKit shard on the selected node and publishes verified portable layers to Zot.
 # PR, release, and browser-only jobs remain secret-free.
 
 name: Main
@@ -124,7 +124,7 @@ jobs:
     if: inputs.product_changed
     outputs:
       cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
-    # Publish only from the verified job's shared persistent BuildKit shard.
+    # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     permissions:

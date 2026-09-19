@@ -134,6 +134,7 @@ metadata:
   name: nook-buildkit
   namespace: arc-runners
 spec:
+  internalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: nook-buildkit
   ports:
@@ -149,10 +150,7 @@ metadata:
 spec:
   serviceName: nook-buildkit-headless
   podManagementPolicy: Parallel
-  # All ARC jobs share one stateful solver. A multi-replica Service would route
-  # successive workflow runs to unrelated content stores and make warm local
-  # cache look randomly cold once registry cache transfer is disabled.
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app.kubernetes.io/name: nook-buildkit
@@ -169,6 +167,13 @@ spec:
           operator: Equal
           value: preparing
           effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: nook-buildkit
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 120

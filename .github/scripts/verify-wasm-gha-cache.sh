@@ -123,7 +123,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       exit 2
       ;;
   esac
-  # Publish from the already-selected shared persistent rootless BuildKit shard.
+  # Publish from the already-selected node-local rootless BuildKit shard.
   # The repair solve never imports the ref it is replacing.
   # Independent inputs may accelerate it, while a miss rebuilds from source.
   case "${NOOK_BUILDKIT_REMOTE:-}" in

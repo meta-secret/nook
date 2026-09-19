@@ -31,7 +31,7 @@ tasks:
         REMOTE
 
   arc:buildkit:benchmark:
-    desc: Measure cold/warm reuse of the shared persistent BuildKit from every ARC node.
+    desc: Measure cold/warm reuse of the node-local persistent BuildKit from every ARC node.
     silent: true
     cmds:
       - |

@@ -138,7 +138,7 @@ class ArcManifestContract {
     ) {
       return err({
         kind: OperationalContractFailureKind.Requirement,
-        message: "ARC runner must use the shared persistent BuildKit service",
+        message: "ARC runner must use its node-local BuildKit service",
       });
     }
     const kubernetesNodeEnvironment = runner.env?.find(
@@ -373,8 +373,10 @@ class ArcManifestContract {
     const admittedContract11 = buildkit.requireAll([
       "name: nook-buildkit-local-retain",
       "volumeBindingMode: WaitForFirstConsumer",
+      "internalTrafficPolicy: Local",
       "kind: StatefulSet",
-      "replicas: 1",
+      "replicas: 4",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
       'nook.nokey.sh/arc-build: "true"',
       "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
       "--oci-worker-no-process-sandbox",
@@ -391,8 +393,6 @@ class ArcManifestContract {
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
     const admittedContract12 = buildkit.forbidAll([
-      "internalTrafficPolicy: Local",
-      "requiredDuringSchedulingIgnoredDuringExecution:",
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
     ]);
@@ -438,7 +438,7 @@ class ArcManifestContract {
     if (admittedContract19.isErr()) return err(admittedContract19.error);
     const admittedContract20 = dockerSetup.requireAll([
       "driver remote",
-      "shared persistent BuildKit shard",
+      "node-local BuildKit shard",
       "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ]);
     if (admittedContract20.isErr()) return err(admittedContract20.error);
@@ -459,7 +459,7 @@ class ArcManifestContract {
     const admittedContract23 = runtimeSmoke.requireAll([
       "NOOK_ARC_RUNNER",
       "type=local,dest=$shared_dir",
-      "ARC shared rootless BuildKit smoke passed",
+      "ARC node-local rootless BuildKit smoke passed",
     ]);
     if (admittedContract23.isErr()) return err(admittedContract23.error);
     const admittedContract24 = runtimeSmoke.forbidAll([
@@ -477,7 +477,7 @@ class ArcManifestContract {
       "install -d -o 1000 -g 1000 -m 0700",
       "infra/k0s/manifests/arc/buildkit.yaml",
       "rollout status statefulset/nook-buildkit",
-      "one shared persistent rootless BuildKit shard",
+      "one persistent rootless BuildKit shard per build node",
       "for scale_set in nook-k0s nook-k0s-container",
       "helm uninstall nook-k0s-cache",
       "arc-build-nodes",
@@ -660,7 +660,7 @@ class ArcManifestContract {
     ]);
     if (admittedContract45.isErr()) return err(admittedContract45.error);
     const admittedContract46 = wasmCacheProof.requireAll([
-      "Publish from the already-selected shared persistent rootless BuildKit shard",
+      "Publish from the already-selected node-local rootless BuildKit shard",
       'cache_scope="nook-rust-wasm-deps-v6"',
       "compression=zstd,force-compression=true",
       "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
