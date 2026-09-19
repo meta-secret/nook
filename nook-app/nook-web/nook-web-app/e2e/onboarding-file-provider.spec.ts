@@ -10,6 +10,7 @@ import {
   disableVaultIdleLock,
   expandSettingsSection,
   installGoogleOAuthMock,
+  localizeAppLinkForE2e,
   openLoginProviderSetup,
   openOnboardDevicePanel,
   openStorageSettings,
@@ -102,8 +103,9 @@ test.describe('file sync provider onboarding', () => {
     expect(enrollmentLink).toContain('#enroll=')
 
     await connectCleanBrowserToFileProvider(deviceB, target)
+    const localEnrollmentLink = localizeAppLinkForE2e(deviceB, enrollmentLink)
     await deviceB.goto('about:blank')
-    await deviceB.goto(enrollmentLink)
+    await deviceB.goto(localEnrollmentLink)
     await expect(deviceB.getByTestId('enrollment-scan-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -236,8 +238,12 @@ test.describe('Google Drive provider modes', () => {
       })
       await collaborator.goto('/app/')
       await clearBrowserVault(collaborator)
+      const localEnrollmentLink = localizeAppLinkForE2e(
+        collaborator,
+        enrollmentLink,
+      )
       await collaborator.goto('about:blank')
-      await collaborator.goto(enrollmentLink)
+      await collaborator.goto(localEnrollmentLink)
       await expect(
         collaborator.getByTestId('enrollment-scan-panel'),
       ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })

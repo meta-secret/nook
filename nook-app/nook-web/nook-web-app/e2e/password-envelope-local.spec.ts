@@ -17,6 +17,7 @@ import {
   selectLoginUnlockMethod,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
+  localizeAppLinkForE2e,
   uniqueSecretKey,
   parseJson,
   readStringProperty,
@@ -329,7 +330,7 @@ test.describe('enrollment link deep link (local)', () => {
     await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
     })
-    await pageB.goto(link)
+    await pageB.goto(localizeAppLinkForE2e(pageA, link))
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -394,7 +395,7 @@ test.describe('enrollment link deep link (local)', () => {
     await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
     })
-    await pageB.goto(link)
+    await pageB.goto(localizeAppLinkForE2e(pageA, link))
 
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
