@@ -52,6 +52,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --recipe-path recipe.json \
     && cargo chef cook --clippy --recipe-path recipe.json \
+    && mkdir -p tests \
+    && printf '#[test]\nfn dependency_warmup() {}\n' > tests/core_ownership.rs \
+    && cargo test --quiet --locked --test core_ownership --no-run \
+    && rm -rf tests \
     && nook-sccache-report preflight-chef
 
 # Prewarm the coverage-instrumented dependency graph against dummy crate roots.

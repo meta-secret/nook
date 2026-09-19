@@ -68,6 +68,13 @@ class DockerizedRustBuildKitContract {
       "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
     );
     const policyTools = preflight.indexOf("FROM deps AS policy-tools");
+    const preflightDependencies = preflight.slice(
+      preflight.indexOf("FROM rust-base AS deps"),
+      preflight.indexOf("FROM deps AS coverage-deps"),
+    );
+    expect(preflightDependencies).toContain(
+      "cargo test --quiet --locked --test core_ownership --no-run",
+    );
     const policySource = preflight.indexOf("FROM policy-tools AS policy-source");
     const preparedDependencies = preflight.indexOf(
       "RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts",
