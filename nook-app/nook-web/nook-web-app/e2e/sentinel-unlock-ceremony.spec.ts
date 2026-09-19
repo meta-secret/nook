@@ -161,7 +161,8 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       participantDevice: Page,
       participantName: string,
     ) {
-      await deviceA.goto(await connectParticipant(participantDevice))
+      const responseLink = await connectParticipant(participantDevice)
+      await deviceA.goto(localizeAppLinkForE2e(deviceA, responseLink))
       await expect(
         deviceA.getByTestId('sentinel-genesis-authentication-ready'),
       ).toBeVisible({ timeout: UI_TIMEOUT_MS })
