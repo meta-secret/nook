@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { AuthenticationWorkflowRoutingResponse } from '../src/background/service-worker/authentication-workflow-routing'
 import {
   type WebsiteLoginMatchAvailability,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -7,12 +8,18 @@ import {
   WidgetVaultPresentationKind,
   WidgetVaultPresentationProjection,
   type PilotVaultConnection,
+  type WidgetVaultPresentation,
   type WidgetVaultPresentationProjectionArgs,
 } from '../src/content/autofill/widget-presentation-state'
 
 const connectedVault: PilotVaultConnection = {
   kind: PilotVaultConnectionKind.Connected,
   vaultName: 'Mock auth vault',
+}
+
+type WidgetRoutingPresentationCase = {
+  response: AuthenticationWorkflowRoutingResponse
+  expected: WidgetVaultPresentation
 }
 
 describe('authentication widget vault presentation', () => {
@@ -92,5 +99,46 @@ describe('authentication widget vault presentation', () => {
       kind: WidgetVaultPresentationKind.CredentialAvailable,
       vaultName: connectedVault.vaultName,
     })
+  })
+
+  test('maps typed routing outcomes to locked and no-match widget states', () => {
+    const routingCases: ReadonlyArray<WidgetRoutingPresentationCase> = [
+      {
+        response: {
+          workflow: { ok: true },
+          loginMatches: { kind: 'locked' },
+          selectedFacts: { state: 'notApplicable' },
+        },
+        expected: {
+          kind: WidgetVaultPresentationKind.Locked,
+          vaultName: connectedVault.vaultName,
+        },
+      },
+      {
+        response: {
+          workflow: { ok: true },
+          loginMatches: { kind: 'ready', count: 0 },
+          selectedFacts: { state: 'notApplicable' },
+        },
+        expected: {
+          kind: WidgetVaultPresentationKind.NoMatchingCredential,
+          vaultName: connectedVault.vaultName,
+        },
+      },
+    ]
+
+    for (const routingCase of routingCases) {
+      const projectionRequest: WidgetVaultPresentationProjectionArgs = {
+        vaultConnection: connectedVault,
+        loginMatches: routingCase.response.loginMatches,
+      }
+      const presentation = new WidgetVaultPresentationProjection(
+        projectionRequest,
+      ).state()
+
+      expect(presentation).toEqual(routingCase.expected)
+      expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Unavailable)
+      expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Connected)
+    }
   })
 })
