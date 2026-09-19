@@ -77,7 +77,8 @@ COPY preflight/src src
 COPY preflight/tests tests
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo fmt --check \
+    find src tests -type f -name '*.rs' -exec touch {} + \
+    && cargo fmt --check \
     && cargo clippy --quiet --offline --locked --all-targets -- -D warnings \
     && cargo build --quiet --offline --locked --bin nook-preflight \
     && strip /meta-secret/preflight-target/debug/nook-preflight \

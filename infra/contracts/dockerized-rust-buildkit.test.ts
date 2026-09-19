@@ -138,6 +138,9 @@ class DockerizedRustBuildKitContract {
       preflight.indexOf("FROM deps AS build"),
       preflight.indexOf("FROM build AS test"),
     );
+    expect(preflightBuild).toContain(
+      "find src tests -type f -name '*.rs' -exec touch {} +",
+    );
     expect(preflightBuild).toContain("cargo clippy --quiet --offline");
     expect(preflightBuild).toContain("cargo build --quiet --offline");
     expect(
