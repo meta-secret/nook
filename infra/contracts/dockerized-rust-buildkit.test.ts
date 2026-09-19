@@ -557,50 +557,31 @@ class DockerizedRustBuildKitContract {
     );
   }
 
-  prCacheProofCoversDylintDependencyReuse(): void {
+  prCacheProofCoversChefDependencyReuse(): void {
     const simulator = this.read(
       "infra/sim/bake-cache/pr-pipeline.Dockerfile",
     );
-    const dependencyFingerprint = this.read(
-      "infra/sim/bake-cache/inputs/dylint-dependencies.txt",
+    const chefDependencies = this.read(
+      "infra/sim/bake-cache/inputs/chef-dependencies.txt",
     );
     const proof = this.read("infra/tasks/pr-cache.yml");
-    const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
+    expect(chefDependencies).toContain(
+      "Cargo.toml and Cargo.lock fixture",
     );
-    expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
-    expect(dependencyFingerprint).toContain("dylint-link=6.0.1");
-    expect(dependencyFingerprint).toContain("nightly=nightly-2026-04-16");
-    expect(nightly).toContain("ENV CARGO_DYLINT_VERSION=6.0.1");
-    expect(nightly).toContain("ENV DYLINT_NIGHTLY=nightly-2026-04-16");
-    const dylintDependencies = nightly.indexOf(
-      "FROM rust-dylint-toolchain AS rust-dylint-deps",
-    );
-    const dylintSelfTest = nightly.indexOf(
-      "FROM rust-dylint-build AS rust-dylint-self-test",
-    );
-    expect(dylintDependencies).toBeGreaterThanOrEqual(0);
-    expect(dylintSelfTest).toBeGreaterThan(dylintDependencies);
-    expect(nightly.slice(0, dylintSelfTest)).not.toContain(
-      "NOOK_SCCACHE_TELEMETRY_REPLAY",
-    );
-    expect(
-      nightly.slice(dylintDependencies, dylintSelfTest),
-    ).not.toContain("RUST_DYLINT_COVERAGE_FLOOR");
-    expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
+    expect(simulator.indexOf("COPY inputs/chef-dependencies.txt")).toBeLessThan(
       simulator.indexOf("COPY inputs/compile-web-source.txt"),
     );
     expect(simulator).not.toContain("SOURCE_REVISION");
     expect(proof).toContain(
       'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
     );
-    expect(simulator).toContain("bake-sim-cargo-dylint-dependencies");
+    expect(simulator).toContain("bake-sim-cargo-chef-wasm-release");
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
     expect(proof).toContain(
-      "Warm verification unexpectedly reinstalled Dylint dependencies",
+      "Warm verification unexpectedly recooked WASM dependencies",
     );
     expect(proof).toContain(
-      "Source-only change unexpectedly reinstalled Dylint dependencies",
+      "Source-only change unexpectedly recooked WASM dependencies",
     );
     expect(simulator).toContain("bake-sim-fuzz-dependencies");
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
@@ -641,6 +622,6 @@ test(
   contract.compilerGraphsDoNotConsumeTelemetryReplayArgument.bind(contract),
 );
 test(
-  "local PR cache proof covers Dylint dependency reuse",
-  contract.prCacheProofCoversDylintDependencyReuse.bind(contract),
+  "local PR cache proof covers Cargo Chef dependency reuse",
+  contract.prCacheProofCoversChefDependencyReuse.bind(contract),
 );
