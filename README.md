@@ -662,10 +662,10 @@ Logs and BuildKit metadata remain in the printed temporary output directory.
 The existing `task infra:bake-cache:prove` runs this local-cache proof before
 its registry-portability scenarios. No custom cache-validity model is used.
 
-Before enabling the new PR path, publish the source-free runner with
-`task ci:pr:runner:publish PR_RUNNER_IMAGE=ghcr.io/OWNER/nook-pr-runner:VERSION`
-using an authorized operator login. Make that infrastructure package publicly
-readable for secret-free forks, then set the repository variable
+Before enabling the new PR path, publish the source-free runner through the
+trusted remote ARC workflow with `task remote TASK_NAME=ci:pr:runner:publish`.
+The workflow uses package-write only for this publication; PR jobs receive
+package-read and authenticate the job container with their scoped token. Then set the repository variable
 `NOOK_PR_RUNNER_IMAGE` to its immutable `ghcr.io/...@sha256:...` digest.
 This image uses the same Debian Trixie ABI as the exported preflight reporter,
 with system Chromium, ffmpeg, Xvfb, Bun, Node and Task, but no product source.

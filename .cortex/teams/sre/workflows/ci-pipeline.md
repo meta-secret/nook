@@ -275,9 +275,10 @@ different node; this is not cross-run placement affinity.
 
 The ARC container hook injects a Docker client, not a daemon or socket, and
 allows job Pods to reach their node-local BuildKit Service. Publish the
-source-free `web-e2e-base` through `task ci:pr:runner:publish`, make its registry
-package public for secret-free forks, and configure `NOOK_PR_RUNNER_IMAGE`
-with the immutable digest. Deploy that hook
+source-free `web-e2e-base` through the trusted remote
+`ci:pr:runner:publish` task and configure `NOOK_PR_RUNNER_IMAGE` with its
+immutable GHCR digest. PR jobs authenticate with their scoped package-read
+token, including secret-free forks. Deploy that hook
 and NetworkPolicy before enabling the workflow. Main, release and explicit
 remote workflows retain their existing image and portable Zot contracts.
 PR solves disable registry cache imports and exports; compiler-object sccache,

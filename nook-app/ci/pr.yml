@@ -5,8 +5,8 @@ version: "3"
 tasks:
   ci:pr:runner:publish:
     desc: Publish the source-free PR runner once per tooling revision (not a PR phase).
-    requires:
-      vars: [PR_RUNNER_IMAGE]
+    vars:
+      PR_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-pr-runner:trixie-v1" .PR_RUNNER_IMAGE}}'
     env:
       GHA_CACHE_ENABLED: ""
       GHA_CACHE_WRITE_ENABLED: ""

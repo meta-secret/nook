@@ -17,6 +17,7 @@ on:
 permissions:
   actions: read
   contents: read
+  packages: read
   deployments: write
   pull-requests: write
   issues: write
@@ -26,9 +27,12 @@ jobs:
     name: Verify and preview
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'nook-k0s-container' || 'ubuntu-latest' }}
     # Source-free Debian Trixie browser base, published only when tooling changes.
-    # Configure a public digest reference so secret-free fork jobs can pull it too.
+    # Configure an immutable digest; the scoped Actions token can read its repository package.
     container:
       image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 240
     defaults:
       run:
