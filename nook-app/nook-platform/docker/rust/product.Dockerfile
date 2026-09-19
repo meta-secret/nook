@@ -877,16 +877,31 @@ WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/ ./
 RUN cargo fmt --all -- --check
 
-# PR verification never inherits builder-core-deps: that graph precompiles tests.
-# Clippy checks test sources but does not codegen/link their executable binaries.
-FROM rust-format-check AS pr-rust-verify
+# Prepare the exact PR verification dependency graph before mutable sources are
+# copied. Clippy checks dummy test roots but does not codegen/link test binaries.
+FROM chef-deps AS pr-rust-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy --locked --all-targets \
+    cargo clippy --quiet --offline --locked --all-targets \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
       -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
-    && cargo build --locked \
+    && cargo build --quiet --offline --locked \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    && nook-sccache-report pr-rust-dependencies
+
+# PR verification never inherits builder-core-deps: that graph precompiles test
+# binaries. Only the source-free dependency stage above precedes mutable code.
+FROM pr-rust-dependencies AS pr-rust-verify
+COPY nook-app/nook-platform/ ./
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --quiet --offline --locked --all-targets \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+      -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
+    && cargo build --quiet --offline --locked \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
     && nook-sccache-report pr-rust-verification
