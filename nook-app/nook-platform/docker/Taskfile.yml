@@ -275,9 +275,6 @@ tasks:
         -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
         -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
         --set '*.context={{.REPO_ROOT}}'
-        --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
-        --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
-        --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
         --set "*.output=type=cacheonly"
         preflight-test
 
@@ -349,7 +346,9 @@ tasks:
       - task: docker:ecosystem:policy-tools
       - task: dylint:dependency-policy
       - task: rust:dependency-policy
-      - task: preflight:dependency-policy
+      # This aggregate is flattened through nested includes. Resolve the root
+      # graph explicitly so the sibling preflight include is always visible.
+      - task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy
       - task: fuzz:dependency-policy
 
   docker:ecosystem:smoke:

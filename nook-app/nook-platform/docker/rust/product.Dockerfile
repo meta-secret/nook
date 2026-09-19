@@ -7,52 +7,41 @@
 # Other ecosystem gates live as sibling Dockerfiles in this directory.
 # The web lineage lives under nook-web/docker and must not inherit Cargo target/ or the Rust toolchain.
 
-# Global ARGs used ONLY by the FROM lines below. A pre-FROM ARG is not visible inside any stage's
-# RUN/ENV — to use one there you must re-declare it in that stage. Only args that parameterize a
-# base image live here; CLI-version args are declared in the stage that consumes them.
-ARG RUST_VERSION=1.97
-ARG DEBIAN_RELEASE=trixie
 # Pin floating registry tags by digest. Unpinned `rust` tags move under us and rewrite the
 # rust-base digest, which orphans every downstream cargo-chef cook layer in the hosted GHA cache
 # and forces PRs to redownload crates on an otherwise unchanged Cargo.lock.
-ARG RUST_DIGEST=sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
-ARG RUST_IMAGE=registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}
+FROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base
 
-FROM ${RUST_IMAGE} AS rust-base
-
-# Pinned CLI versions, declared once here because they are used only inside this stage's RUNs
-# (a pre-FROM ARG would not be visible in RUN). Override with --build-arg / bake args.
-ARG TASK_VERSION=3.52.0
-ARG WASM_PACK_VERSION=0.15.0
-ARG LLVM_COV_VERSION=0.8.7
-ARG SCCACHE_VERSION=0.17.0
-ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
-ARG SCCACHE_S3_MODE=external
-ARG SCCACHE_S3_RW_MODE=READ_WRITE
-ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
-ARG SCCACHE_BUCKET=nook-sccache
+# Pinned tool and service configuration is image-owned and cannot be overridden
+# by an external build argument.
+ENV TASK_VERSION=3.52.0
+ENV WASM_PACK_VERSION=0.15.0
+ENV LLVM_COV_VERSION=0.8.7
+ENV SCCACHE_VERSION=0.17.0
+ENV SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
+ENV SCCACHE_S3_MODE=external
+ENV SCCACHE_S3_RW_MODE=READ_WRITE
+ENV SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
+ENV SCCACHE_BUCKET=nook-sccache
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
 # avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
-ARG BINARYEN_VERSION=131
+ENV BINARYEN_VERSION=131
 # Node binary only — required for wasm-pack test --node. Pin version + sha256 so rust-base does
 # not track a floating Node image digest. npm/npx are intentionally omitted.
-ARG NODE_VERSION=24.19.0
-ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
+ENV NODE_VERSION=24.19.0
+ENV NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
 # cargo-chef binary only — pin the musl release tarball instead of copying from a full
 # Rust-based helper image just to obtain one CLI.
-ARG CARGO_CHEF_VERSION=0.1.77
-ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
+ENV CARGO_CHEF_VERSION=0.1.77
+ENV CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/nook-platform/target). The heavy
 # target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
 # the slim web image.
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
-ENV NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}
-ENV SCCACHE_S3_RW_MODE=${SCCACHE_S3_RW_MODE}
-ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}
-ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
+ENV NOOK_SCCACHE_S3_MODE=external
 ENV SCCACHE_REGION=auto
 ENV SCCACHE_S3_USE_SSL=true
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
@@ -182,7 +171,7 @@ RUN --network=default cargo fetch --locked
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
 # nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
 # layer blobs — index-only refs to older scopes are not enough for PR restores.
-ARG NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
+ENV NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
 RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -193,11 +182,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-clippy
 FROM chef-deps AS builder-wasm-deps
-
-RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
-    && nook-sccache-report wasm-release-test-dependencies
+# Test compilation belongs to builder-wasm-tests, requested only after PR verification.
 
 FROM builder-wasm-deps AS builder-core-deps
 
@@ -268,7 +253,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-coverage-dependencies
 
 FROM builder-wasm-deps AS wasm-coverage-toolchain
-ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
+ENV WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
 RUN rustup toolchain install "${WASM_COVERAGE_NIGHTLY}" --component llvm-tools-preview \
     && rustup target add --toolchain "${WASM_COVERAGE_NIGHTLY}" wasm32-unknown-unknown
 
@@ -277,11 +262,10 @@ RUN rustup toolchain install "${WASM_COVERAGE_NIGHTLY}" --component llvm-tools-p
 # browser OS packages, Bun, Chromium, and chromedriver before any real Rust source is copied.
 FROM wasm-coverage-toolchain AS builder-wasm-node-deps
 
-ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
-ARG BUN_VERSION=1.3.14
-ARG PLAYWRIGHT_VERSION=1.55.0
-ARG PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
-ARG PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
+ENV BUN_VERSION=1.3.14
+ENV PLAYWRIGHT_VERSION=1.55.0
+ENV PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
+ENV PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
 ENV BUN_INSTALL=/usr/local/bun PATH="/usr/local/bun/bin:${PATH}" PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright CHROMEDRIVER=/usr/local/bin/chromedriver
 
 RUN apt-get update \
@@ -678,18 +662,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     touch nook-app-common/src/i18n.rs \
     && cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm \
     && nook-sccache-report wasm-source-nook-wasm
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi
-
 FROM builder-wasm-source-base AS builder-companion-wasm-source
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm \
     && nook-sccache-report wasm-source-companion-wasm
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-companion-wasm; fi
-
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
 # therefore a different Cargo feature/unit graph (dev-dependencies). Compiling that test graph here
@@ -703,9 +681,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
     && install -D /dev/null /opt/nook/wasm-clippy-passed
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-clippy; fi
-
 FROM builder-nook-wasm-source AS builder-nook-wasm-build
 
 # Emit nook-wasm independently; the companion package has its own source and compiler leaf below.
@@ -742,9 +717,6 @@ RUN case "$WASM_BUILD_MODE" in \
          && echo "$stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook-wasm-build-mode \
          && mkdir -p /opt/nook/wasm-handoff \
          && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ )
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-nook-wasm; fi
-
 FROM builder-companion-wasm-source AS builder-companion-wasm-build
 
 ARG WASM_BUILD_MODE=dev
@@ -776,9 +748,6 @@ RUN case "$WASM_BUILD_MODE" in \
          && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
          && cp -a ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
               /opt/nook/wasm-handoff/nook-companion-wasm/ )
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-build-companion-wasm; fi
-
 FROM builder-nook-wasm-build AS builder-wasm-build
 
 COPY --from=builder-companion-wasm-build \
@@ -796,12 +765,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-release-tests; fi
-
 FROM builder-wasm-node-deps AS builder-wasm-handoff
-
-ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
 
 # Join the real source and normal release-test artifacts only after every Node-specific dependency.
 COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/ /meta-secret/nook/nook-app/nook-platform/
@@ -820,9 +784,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --release -p nook-wasm \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-node-test-and-coverage; fi
-
 # wasm-pack's Node tests are compiler-bearing. Keep their sccache authority in
 # an isolated source-derived stage; the browser/runtime stage below consumes
 # only the result stamp and never receives cache credentials.
@@ -848,9 +809,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
     && touch /opt/nook/wasm-coverage-passed \
     && nook-sccache-report wasm-node-compiler
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-node-compiler; fi
-
 FROM builder-wasm-handoff AS builder-wasm
 COPY --from=builder-wasm-node-compiler /opt/nook/wasm-node-tests-passed /opt/nook/wasm-node-tests-passed
 COPY --from=builder-wasm-node-compiler /opt/nook/wasm-bindgen-test-runner /opt/nook/wasm-bindgen-test-runner
@@ -876,9 +834,98 @@ COPY --from=focused-web-artifacts-source /opt/nook/empty-coverage /coverage
 
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
 # unformatted source. Normal `task setup` includes this target in its parallel prepare group.
-FROM builder-debug AS rust-format-check
-
+FROM rust-base AS rust-format-check
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/ ./
 RUN cargo fmt --all -- --check
+
+# Prepare the exact PR verification dependency graph before mutable sources are
+# copied. Clippy checks dummy test roots but does not codegen/link test binaries.
+FROM chef-deps AS pr-rust-dependencies
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --quiet --offline --locked --all-targets \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+      -p nook-companion-wasm -p nook-wasm-composition-tests -- -D warnings \
+    && cargo build --quiet --offline --locked \
+      -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
+      -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
+    && nook-sccache-report pr-rust-dependencies
+
+# PR verification never inherits builder-core-deps: that graph precompiles test
+# binaries. Only the source-free dependency stage above precedes mutable code.
+FROM pr-rust-dependencies AS pr-rust-verify
+
+COPY nook-app/nook-platform/.cargo .cargo
+COPY nook-app/nook-platform/.config .config
+COPY nook-app/nook-platform/clippy.toml clippy.toml
+COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
+COPY nook-app/nook-platform/nook-app-common nook-app-common
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-app-common -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-app-common
+
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-authenticator-domain -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-authenticator-domain
+
+COPY nook-app/nook-platform/nook-replication nook-replication
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-replication -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-replication
+
+COPY nook-app/nook-platform/nook-auth2 nook-auth2
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-auth2 -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-auth2
+
+COPY nook-app/nook-platform/nook-event-log nook-event-log
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-event-log -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-event-log
+
+COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-companion-core
+
+COPY nook-app/nook-platform/nook-core nook-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-core -- -D warnings \
+    && cargo build --quiet --offline --locked -p nook-core
+
+COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-companion-wasm -- -D warnings
+
+COPY nook-app/nook-platform/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-wasm nook-wasm-composition-tests -type f -name '*.rs' -exec touch {} + \
+    && cargo clippy --quiet --offline --locked --all-targets -p nook-wasm-composition-tests -- -D warnings \
+    && nook-sccache-report pr-rust-verification
+FROM scratch AS pr-wasm-artifacts
+COPY --from=builder-wasm-build /opt/nook/wasm-handoff /nook-wasm
+COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /coverage/wasm-clippy-passed
 
 # Tiny host-export boundary for the web phase. `task setup` exports this scratch target to a
 # temporary host directory, then gives only that directory to the final web build as a named
@@ -934,7 +981,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # the dedicated mode=max BuildKit scope owned by the rust-kani Bake target.
 FROM rust-base AS rust-kani-toolchain
 
-ARG KANI_VERSION=0.67.0
+ENV KANI_VERSION=0.67.0
 
 RUN RUSTC_WRAPPER= cargo +stable install --locked \
       --version "${KANI_VERSION}" kani-verifier \

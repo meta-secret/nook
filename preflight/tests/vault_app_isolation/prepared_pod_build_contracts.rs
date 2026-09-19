@@ -136,7 +136,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     for workflow in [
         ".github/workflows/e2e-pr.yml",
         ".github/workflows/main.yml",
-        ".github/workflows/pr.yml",
         ".github/workflows/release.yml",
         ".github/workflows/remote.yml",
         ".github/workflows/web-research.yml",
@@ -160,7 +159,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
     let pr_workflow = root.read(".github/workflows/pr.yml");
-    let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
+    let pr_ui_demo = pr_workflow.as_str();
     assert!(
         !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
         "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
@@ -204,10 +203,12 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         );
     }
 
-    let pr_browser_image = section(
-        &pr_workflow,
-        "      - name: Publish exact-source PR browser job image\n",
-        "\n      - name: Upload preview dist handoff",
+    assert!(
+        pr_workflow.contains("run: task --silent ci:pr:browser:prepare")
+            && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
+            && !pr_workflow.contains("Publish exact-source PR browser job image")
+            && !pr_workflow.contains("Upload preview dist handoff"),
+        "PR must export verified browser artifacts locally and deploy them in the same job"
     );
     for required in [
         "VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev",
@@ -215,11 +216,11 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev",
         "VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev",
         "NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}",
-        "NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}",
+        "NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.event.pull_request.head.sha }}",
     ] {
         assert!(
-            pr_browser_image.contains(required),
-            "PR browser image must preserve preview configuration: {required}"
+            pr_workflow.contains(required),
+            "PR browser artifact build must preserve preview configuration: {required}"
         );
     }
     Ok(())

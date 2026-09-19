@@ -1,9 +1,8 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.7
 
-ARG DEBIAN_RELEASE=trixie
-FROM registry.dev.nokey.sh/library/debian:${DEBIAN_RELEASE}-slim
+FROM registry.dev.nokey.sh/library/debian:trixie-slim
 
-ARG MKCERT_VERSION=1.4.4
+ENV MKCERT_VERSION=1.4.4
 ARG TARGETARCH
 
 RUN apt-get update \

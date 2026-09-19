@@ -51,15 +51,16 @@ export class DockerizedRustE2eContract {
       "bun run test:e2e:unstable || failed=1",
     );
     expect(webPackage.scripts["test:e2e"]).toContain('exit "$failed"');
+    const workflowJobSchema = z.object({
+      "timeout-minutes": z.union([z.number(), z.string()]).optional(),
+      strategy: z
+        .object({ "fail-fast": z.boolean().optional() })
+        .optional(),
+    });
     const workflowSchema = z.object({
       jobs: z.record(
         z.string(),
-        z.object({
-          "timeout-minutes": z.union([z.number(), z.string()]).optional(),
-          strategy: z
-            .object({ "fail-fast": z.boolean().optional() })
-            .optional(),
-        }),
+        workflowJobSchema,
       ),
     });
     const pr = workflowSchema.parse(
@@ -74,9 +75,10 @@ export class DockerizedRustE2eContract {
     const manual = workflowSchema.parse(
       Bun.YAML.parse(this.read(".github/workflows/e2e-pr.yml")),
     );
-    expect(pr.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);
-    expect(pr.jobs["full-e2e-shard"]?.["timeout-minutes"]).toBe(180);
-    expect(pr.jobs["full-e2e-shard"]?.strategy?.["fail-fast"]).toBe(false);
+    expect(Object.keys(pr.jobs)).toEqual(["validation"]);
+    const validation = workflowJobSchema.parse(pr.jobs.validation);
+    expect(validation["timeout-minutes"]).toBe(240);
+    expect(Object.keys(validation)).not.toContain("strategy");
     expect(main.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(main.jobs["extension-e2e"]?.["timeout-minutes"]).toBe(180);
     expect(remote.jobs["web-e2e"]?.["timeout-minutes"]).toBe(180);

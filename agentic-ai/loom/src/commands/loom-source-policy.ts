@@ -218,6 +218,7 @@ class LoomSourcePolicyCommand {
       cmd: [
         'cargo',
         'test',
+        '--quiet',
         '--locked',
         '--manifest-path',
         manifestPath,

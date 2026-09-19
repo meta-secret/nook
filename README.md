@@ -598,8 +598,8 @@ inspection and recovery workflow.
 UI-facing pull requests must add or update a focused
 `e2e/demos/*.demo.spec.ts`. Headless demo execution and recording are
 temporarily disabled in GitHub workflows. The implementation and focused-spec
-requirement remain available for later re-enable. The normal PR browser-image
-producer also skips unless full E2E is requested. Demo specs may pause briefly
+requirement remain available for later re-enable. PR browser suites run directly in the validation runner; no PR-specific
+browser image is published. Demo specs may pause briefly
 at meaningful UI states; regression e2e remains full-speed. From `nook-app/`,
 `cargo ui-demo` is an alias for `task ui:demo`.
 
@@ -620,20 +620,28 @@ change, update this README in the same change (see
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
-producers run in disposable ordinary ARC Pods. The Docker CLI connects to the
-persistent rootless BuildKit shard on the selected node. ARC runners receive no
-Docker daemon, Podman API, DinD process, host runtime socket, host path, or Kata
-runtime. ARC keeps its warm WASM source graph, while one narrow GitHub-hosted
-job alone publishes the portable WASM dependency ref. Zot proves child manifest
-digests and sizes, then streams every declared blob to verify its size and SHA-256 before a fresh
-builder verifies dependency-vertex hits. Development deployment waits for both.
+Trusted PR validation uses one ordinary ARC job Pod on `nook-k0s-container`.
+All steps use one checkout and the persistent rootless BuildKit shard on that
+Pod's node. Rust and web solves run in BuildKit; Playwright runs directly in the
+job Pod. The hook supplies a Docker CLI only: no daemon, runtime socket, DinD,
+host path, or privileged job container. The runner uses a pinned infrastructure
+Debian browser image, not an image published for each Nook PR.
 
-The `nook-buildkit` StatefulSet keeps one 128 GiB local shard on each qualified
-node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs
-share BuildKit's content-addressed store. Zot carries portable cache refs between
-nodes and hosted runners. A cold node imports referenced blobs once. Later jobs
-reuse the hydrated local state.
+The one-job phases are `ci:pr:verification`, `ci:pr:tests`, then
+`ci:pr:heavy` and optional browser suites. Verification includes formatting,
+Loom/tooling checks, Clippy, TypeScript checks/lint and product builds before
+expensive test compilation. Independent work runs concurrently within each
+phase. Coverage reporting and preview publication stay in the same job.
+The phase definitions live in `nook-app/ci/pr.yml` and
+`nook-app/ci/pr.docker-bake.hcl`; coverage/preview use composite actions,
+not reusable workflows that allocate additional runners.
+
+PRs do not import/export registry layer caches or publish intermediate Nook
+images. Local outputs contain coverage and browser/deployment files only.
+Later PRs can land on another node: warm cross-run locality is not guaranteed.
+Main, release and explicit remote workflows retain their existing portable Zot
+cache/image contracts. The node-local Service prevents cross-node BuildKit
+traffic, and sccache remains the shared compiler-object cache.
 
 `task infra:arc:deploy` temporarily quarantines every declared build node from
 new ARC scheduling while it converges host prerequisites. It persists
@@ -642,15 +650,32 @@ new ARC scheduling while it converges host prerequisites. It persists
 verifies every host before reactivating any node. Operators need passwordless
 sudo for `sysctl`, `install`, and the existing k0s administration commands.
 
-Fork PRs, Dependabot PRs, releases, and unsupported
-runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
-Pull requests use exact-SHA refs under `nook/remote-buildcache`.
-Same-repository PR jobs may publish only exact-SHA generations under
-`nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM writer
-publishes Main's dedicated, complete WASM dependency boundary so it does not
-compete with the larger native dependency lineage. ARC publishes verified
-native/WASM source state and the native dependency ref. Merely consuming those
-targets as BuildKit contexts does not run their cache exporters.
+Fork and Dependabot PRs use secret-free GitHub-hosted containers and a hosted
+builder. Trusted PRs keep the full sccache credential tuple, telemetry and
+zero-hit health gate. No cluster infrastructure or registry ACLs are changed
+by the workflow itself.
+
+`task infra:bake-cache:prove-pr` is the Docker-backed PR simulator proof.
+It creates a disposable builder and runs real cold/warm verification, test and
+heavy solves without Zot, checks their outputs and verifies failure barriers.
+Logs and BuildKit metadata remain in the printed temporary output directory.
+The existing `task infra:bake-cache:prove` runs this local-cache proof before
+its registry-portability scenarios. No custom cache-validity model is used.
+
+Before enabling the new PR path, publish the source-free runner through the
+trusted remote ARC workflow with `task remote TASK_NAME=ci:pr:runner:publish`.
+The workflow uses package-write only for this publication; PR jobs receive
+package-read and authenticate the job container with their scoped token. Then set the repository variable
+`NOOK_PR_RUNNER_IMAGE` to its immutable `ghcr.io/...@sha256:...` digest.
+This image uses the same Debian Trixie ABI as the exported preflight reporter,
+with system Chromium, ffmpeg, Xvfb, Bun, Node and Task, but no product source.
+It is rebuilt only when the runtime tooling changes.
+Deploy the updated ARC container hook and
+BuildKit ingress policy. Job containers need the injected Docker client and
+node-local BuildKit access. Required-check settings should reference
+`PR validation / Verify and preview`; obsolete split-job checks must be
+removed by an administrator. Neither deployment nor settings changes are
+performed automatically by this feature.
 
 `task infra:kubernetes-cache:prove` is the local portable Kubernetes integration
 proof. It creates three k3d agents and patches the production Zot, rootless
@@ -674,33 +699,11 @@ source-sensitive compiler outputs whenever credentials are available.
 Same-repository Main, PR, Rust ecosystem, and Remote jobs mount those
 credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
 cache Cargo downloads or Docker layers.
-PR CI also uploads the small native coverage and generated WASM handoffs. After
-the complete PR workflow succeeds, default-branch-only
-`pr-validation-handoff.yml` verifies the source run and required jobs, validates
-both artifact shapes, recreates the validated base/head merge tree, adds
-provenance, and republishes them under exact hashes of their Rust, toolchain,
-Docker, Task, and workflow inputs. Promotion requires the immutable PR snapshot
-on the completed workflow-run event; post-merge and manual fallbacks are not
-accepted. If promotion cannot prove that provenance, later PRs treat the
-artifact as a cache miss and run the producers. Later PRs accept only trusted
-promoted artifacts by ID;
-PR-writable caches can never bypass validation. Repository invariant preflight
-still runs on every head, and an exact trusted handoff skips only Rust/WASM
-validation already completed for identical inputs. The handoff remains reusable
-across PR commits while those exact validation inputs stay unchanged.
-The required PR workflow budget is four to five minutes for both exact handoff
-hits and ordinary source-changing validation. On a handoff miss, native and
-WASM validation execute against Main's dependency cache while preview setup
-runs concurrently and waits only at the first WASM-consuming step. A successful
-run is promoted only after the whole workflow succeeds.
-Measure that budget from the first required job start through the last required
-job completion, with GitHub-hosted runner queue time reported separately.
-The authenticated Zot registry in [`infra/`](infra/) publishes BuildKit cache
-manifests. ARC jobs connect to the persistent
-rootless BuildKit shard on the same k0s node, so warm solves avoid an external
-data path while retaining the public TLS registry identity for portable cache
-fallback. Details:
-[`.cortex/shared/architecture/system.md`](.cortex/shared/architecture/system.md) §7.
+PR CI uploads coverage reports and diagnostics for inspection, but no sibling
+job downloads its outputs. Only a trusted Main baseline may be downloaded for
+coverage comparison. The old exact-input artifact-promotion workflow is
+removed: Docker/BuildKit owns reuse of unchanged verification layers.
+No new performance budget is claimed until cold/warm measurements are run.
 
 After changing Rust dependencies, commit the updated lockfile:
 

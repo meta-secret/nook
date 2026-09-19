@@ -25,7 +25,7 @@ spec:
             matchExpressions:
               - key: nook.nokey.sh/role
                 operator: In
-                values: ["arc-runner", "arc-buildkit-benchmark"]
+                values: ["arc-runner", "arc-job-container", "arc-buildkit-benchmark"]
       ports:
         - protocol: TCP
           port: 1234

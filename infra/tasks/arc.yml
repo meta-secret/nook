@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   ARC_CHART_VERSION: 0.14.2
@@ -353,7 +353,6 @@ tasks:
         ssh -o BatchMode=yes "$ssh_target" "$ssh_command" < "$token_file"
         echo "ARC credential persisted under ~/.nook and synchronized to the encrypted k0s Secret"
         BASH
-
 
   arc:network:configure:
     desc: Configure BBR for registry transfers on the OVH controller and home worker.

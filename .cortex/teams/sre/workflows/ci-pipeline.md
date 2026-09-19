@@ -20,17 +20,17 @@ branches, PRs, product validation, or recursive Main builds. See
 [`ci.yml`](../../../../.github/workflows/ci.yml) owns PR, Main, scheduled,
 and manual ecosystem execution in one Actions run named `CI`.
 
-- A secret-free classifier reads changed paths without executing source.
-- Repository policy runs on PR changes and Main pushes.
+- Main's secret-free classifier reads changed paths without executing source.
+- PR policy runs inside the single validation job; Main keeps its policy workflow.
 - A validation label activates product checks for subsequent PR commits.
 - The router reads current labels to avoid stale event ordering.
 - Removing the validation label disables product checks on later pushes.
 - Main product work retains its separate path selection.
 - PR replacement and close events use native concurrency.
-- Base-only edits and close events start no classifier or validation jobs.
+- PR base-branch changes revalidate; close events start no validation job.
 - Main runs remain serialized to protect cache publication.
-- Runner jobs have a ten-minute maximum. The three Rust ecosystem jobs use
-  five minutes. Existing shorter limits remain in place.
+- The consolidated PR job has a 240-minute envelope including browser suites.
+  Other workflows retain their individual bounded job limits.
 - Privileged completion publishers remain separate trusted workflows.
 - Manual remote execution and release workflows remain separate.
 - Operators may dispatch `main.yml` directly on `main` with
@@ -54,29 +54,19 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`pr.yml`**
 
-- Web verification has a ten-minute job limit.
-- Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
-- Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
-- Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
-- Deterministic tests, fuzz smoke, and Kani share one runner and run concurrently.
-- Each check reports its result; any failure fails the shared job.
-- PR native coverage owns replication unit tests with snapshot updates disabled.
-- The deterministic check retains doctests and Loom.
-- Other callers retain the full deterministic suite by default.
-- Unlabeled pushes skip product validation.
-- `ci:validate` or `ci:full-e2e` remains active across subsequent commits.
-- Headless UI-demo execution is temporarily disabled.
-- The UI-demo contract and focused spec requirement remain active.
-- New UI-demo artifacts are not published.
-- Internal harness plus isolated native Pages aliases.
-- `github-pages` deployment status.
-- `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
-- Keep independent long-running gates on separate ARC Pods.
-- Combine jobs only when measured setup savings exceed lost parallelism.
+- One runner owns verification, tests/coverage, heavy gates, browser checks and preview.
+- `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
+- Verification completes before test compilation; failure stops later phases.
+- Labels `ci:validate` and `ci:full-e2e` persist across commits.
+- Dev PRs and research changes request product validation automatically.
+- Policy-only PRs run tooling verification, preflight and Loom in the same job.
+- UI-demo execution remains disabled, with its focused-spec contract retained.
+- Coverage and Pages preview use same-runner composite actions.
+- No intermediate Nook image or registry layer cache is transferred for PR validation.
 
 **`repository-policy.yml`**
 
-- Runs preflight and Loom policy for every pull request and Main push.
+- Runs preflight and Loom policy for Main pushes; PR policy runs in the single PR job.
 - Validates the checked-out tree without fetching or comparing a base SHA and
   without classifying changed paths.
 - Delegates repository-owned commands to the repository-policy Task surfaces;
@@ -95,14 +85,6 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Checks and builds the isolated research package.
 - Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
 - Records the deployment and comments the PR preview URL.
-
-**`pr-validation-handoff.yml`**
-
-- Runs from trusted default-branch code.
-- Publishes only completed CI runs with successful opted-in product verification.
-- Verifies the successful source run and required jobs.
-- Validates native/WASM artifact shapes, attaches provenance.
-- Publishes exact-input handoffs that later PRs may trust.
 
 **`linear-ui-demo.yml`**
 
@@ -204,8 +186,7 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: workflow-triggered preview or branch execution.
   - Cancel active run: Workflow-owned; untrusted validation remains isolated
     from trusted ARC work.
-- **Stateful publishers (`dev-pr-manager.yml`, `release.yml`, and
-  `pr-validation-handoff.yml`)**
+- **Stateful publishers (`dev-pr-manager.yml` and `release.yml`)**
   - Scope: publisher-specific group or source run identity.
   - Cancel active run: No.
   - Reason: Do not interrupt PR promotion, release deployment, or evidence
@@ -292,46 +273,22 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
-producers use the configured ARC scale set. Focused `preflight`,
-`rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
-Trusted browser runtime jobs use `nook-k0s-container`. ARC's Kubernetes
-lifecycle hooks create a regular job Pod from the exact image built by the
-general scale set. Fork and Dependabot pull requests retain GitHub-hosted
-isolation. The typed placement inventory prohibits every other hosted route.
-ARC scales single-use Pods instead of queueing work on one persistent Docker
-host.
-Main's portable WASM cache writer/proof uses the general ARC scale set.
+Trusted PRs use one `nook-k0s-container` job, named
+`PR validation / Verify and preview`. Every step stays on that runner and
+its selected persistent node-local BuildKit shard. Fork and Dependabot PRs
+use a secret-free GitHub-hosted job container. Future runs can select a
+different node; this is not cross-run placement affinity.
 
-**Zot cache policy:**
-
-- Cold or cross-node delivery builds restore distinct private Zot BuildKit cache refs.
-- Main ARC producers publish shared Zot refs after verification. Persistent
-  node-local BuildKit shards accelerate repeated solves.
-- Every registry exporter in the shared Rust/WASM Bake family forces zstd
-  compression. Cache scope generations rotate together when that format
-  changes, so a new writer never imports mixed-compression metadata from the
-  retired generation.
-- Trusted PR jobs that publish registry cache write only immutable git-commit scopes
-  and cannot replace Main.
-- Trusted ARC PR verification reuses the persistent BuildKit shard on its node.
-- Exact-SHA handoffs retain commit-scoped registry identity.
-- Native ARC exports that handoff during the verified solves. A second
-  post-verification solve is prohibited because it reconstructs the same Rust
-  graphs before exporting them.
-- A cold PR scope restores trusted Main or a dependency-fingerprint scope.
-- Once an exact PR scope exists, setup imports that scope alone.
-- BuildKit merges cache importers; list order is not fallback precedence.
-- Exact-input handoffs own repeat-run acceleration without mutable branch refs.
-- WASM consumers read the verified dependency ref instead of competing with the larger native dependency lineage.
-- Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
-- The verified Main ARC solve owns the WASM dependency exporter.
-- Only a `push` event on `refs/heads/main` may write the shared scopes.
-- Release, agent, and manual workflows are read-only unless they use an
-  explicitly isolated git-commit publisher.
-- Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
-  their exact scope is absent, and cannot replace shared Main manifests.
-- The legacy registered `nook` runner is not used.
+The ARC container hook injects a Docker client, not a daemon or socket, and
+allows job Pods to reach their node-local BuildKit Service. Publish the
+source-free `web-e2e-base` through the trusted remote
+`ci:pr:runner:publish` task and configure `NOOK_PR_RUNNER_IMAGE` with its
+immutable GHCR digest. PR jobs authenticate with their scoped package-read
+token, including secret-free forks. Deploy that hook
+and NetworkPolicy before enabling the workflow. Main, release and explicit
+remote workflows retain their existing image and portable Zot contracts.
+PR solves disable registry cache imports and exports; compiler-object sccache,
+telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 
 **Focused remote jobs:**
 
@@ -383,55 +340,33 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - Main publishes the portable WASM dependency fingerprint from its verified ARC solve.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
-**Exact-input handoffs:**
+**Single-job PR phases:**
 
-- Split native and WASM producers restore small validated handoffs by exact input hash.
-- Keys cover Rust sources and manifests, toolchain and Docker definitions, Task entry points, Docker setup, and the PR workflow itself.
-- PR workflows upload only same-run artifacts.
-- After the entire run succeeds, default-branch-only `pr-validation-handoff.yml`:
-  - verifies the source workflow and all required jobs;
-  - recreates the validated base/head merge tree;
-  - validates artifact shapes, adds provenance;
-  - republishes immutable trusted artifacts.
-- The current attempt must contain a successful consumer.
-- Each producer must succeed in the current attempt when scheduled.
-- A failed-job rerun that omits an already-successful producer may reuse that producer job and run-stable artifact from an earlier attempt.
-- Promotion requires the immutable PR snapshot attached to the completed workflow-run event.
-- There is no post-merge or manual fallback to mutable PR metadata.
-- A later PR skips a producer only after resolving an exact artifact by ID and verifying that its successful workflow run used this trusted default-branch promotion workflow.
-- PR-writable caches never bypass required validation.
-- Repository invariant preflight still runs on every PR head.
-- On a native producer miss, preflight must finish before the native application Docker solve begins.
-- `Web verification` declares `needs` on the WASM build producer.
-- It downloads the run-stable WASM artifact directly after that job succeeds.
-- The disabled `Headless UI demo` job retains its WASM producer dependency.
-- Its implementation remains available for later re-enable.
-- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It retains the UI-demo job in `needs` so the skipped result remains visible.
-- A disabled or non-required skip is permitted.
-- An enabled, required UI-demo failure blocks preview and readiness.
-- That keeps the merge-gate check red when Native fails.
-- Preview deploys from a host dist handoff with pinned wrangler.
-- No consumer polls GitHub for a sibling producer.
-- Changed inputs must execute and complete the full workflow before a new handoff can be promoted.
-- If promotion cannot prove its provenance, consumers treat the artifact as a miss and run the producers.
-- The required-job budget is four to five minutes for exact handoff hits and ordinary source-changing PRs.
-- Measure it from the first required job start through the last required job completion.
-- Report GitHub-hosted runner queue time separately.
+- `nook-app/ci/pr.yml` owns sequential verification, tests/coverage and heavy phases.
+- Verification runs formatting, Loom/tooling checks, Clippy, TypeScript checks,
+  lint and product builds before test-binary compilation.
+- Bake and Task run independent work concurrently within each phase.
+- Rust/WASM/web tests, Loom tests and preflight coverage follow verification.
+- Fuzz/Kani and requested browser suites follow tests.
+- Browser/deployment files and coverage are exported locally, never passed via
+  per-PR registry images or GitHub artifact downloads to sibling jobs.
+- Composite coverage and preview actions run on the same runner. A failure
+  skips downstream phases and leaves the single required check failed.
+- Policy-only PRs use the same job without the product/browser phases.
+- The trusted artifact-promotion workflow is removed. BuildKit is the cache authority.
+- `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
+  verification/test failure barriers. The full Bake proof includes it.
+- Update required-check settings to the single job before removing obsolete checks.
+- No performance improvement is asserted without measured proof execution.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
-PR web solves normally use browser-free `web-base`. Explicitly requested
-browser e2e builds `web-e2e-base` with Debian's
-`chromium` and `ffmpeg` packages. Playwright uses `/usr/bin/chromium`.
-Its revisioned recording path links to `/usr/bin/ffmpeg`. Do not install its
-bundled Chromium and headless-shell payload. That payload creates a roughly
-1.3 GB image layer on cold runners, or about 432 MB compressed.
-The preparation solve runs once. The small final web-image solve retries once
-after the known immediate BuildKit frontend/Dockerfile-load flake, without
-repeating the multi-minute Rust/WASM and dependency graph.
+PR web solves use browser-free `web-base`. The job itself uses a digest-pinned,
+source-free Debian Trixie `web-e2e-base` infrastructure image with system
+Chromium, ffmpeg and Xvfb. The ABI matches the exported Rust reporter.
+Publish this stable runner only on tooling changes, never per PR.
 The ARC S3 health probe is a separate uncached solve. It retries once only when
 the Dockerfile frontend vertex itself reports a transient authorization TLS
 timeout. Later build vertices and genuine S3 health failures fail closed.
@@ -440,31 +375,14 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and selects the full suite in the existing `Extension e2e` job.
-- **WASM artifact sharing:**
-  - A dedicated producer verifies WASM once and uploads only its generated package.
-  - Preview and both browser jobs download that artifact instead of recompiling Rust.
-- **Parallel browser jobs:**
-  - Two web shards run deterministic halves of every fully-parallel local-provider and split-app Playwright project.
-  - Extension e2e runs independently in a third Kubernetes job Pod.
-  - Browser commands execute directly inside the exact-source image built by
-    the verified PR web job.
-- **Exact-head cache policy:**
-  - PR browser consumers publish only isolated exact-head cache refs.
-  - Each consumer probes its exact browser ref.
-  - An available exact ref is imported alone.
-  - A missing exact ref falls back to the browser-image seed owned by trusted Main.
-  - Neither web shard nor its join writes a low-reuse exact-head browser cache.
-  - Trusted Main remains the reusable browser-image seed.
-  - The disabled UI-demo publisher retains its exact-run image implementation
-    for later re-enable.
-- **Readiness requirement:**
-  - Adding or removing the label retriggers PR Actions for the current head.
-  - A labeled PR cannot be ready while this job is queued, failing, or cancelled.
-- **Extension e2e environment:**
-  - Extension e2e starts an automatically selected Xvfb display.
-  - It waits for readiness and prevents resets between Playwright retries.
-  - It uses one Kubernetes job Pod so persistent-context smoke does not compete with headed Chromium tests.
+- **Label effect:** Runs full web and extension suites concurrently inside the
+  same PR job after verification, unit/integration tests and heavy Rust checks.
+- Authentication-sensitive changes run the focused extension regression when
+  the full suite was not requested.
+- Research changes run their browser checks in the same job.
+- All requested suites must succeed before preview deployment.
+- Extension tests keep their automatically selected Xvfb display and existing
+  one-worker setting; web suites retain Playwright's internal parallelism.
 
 ### Runner allocation
 
@@ -657,40 +575,14 @@ authenticator-domain to 90 percent.
 - Coverage-floor updates require complete independent hosted package results;
   the portable aggregate diagnostic is not an update authority.
 
-**PR CI split:**
+**PR CI locality and reruns:**
 
-- PR CI uses independent native Rust and WASM producers.
-- Trusted native Rust first publishes an exact-source, run-attempt-scoped image
-  and its BuildKit cache before any format, clippy, test, or coverage consumer
-  starts. Native verification consumes that image through BuildKit, and the
-  sibling Rust ecosystem jobs import the same exact-head cache on their nodes.
-- Fork and Dependabot validation remains secret-free and runs the existing
-  native verification path without publishing or transporting the large image.
-- Native verification uploads its small coverage handoff after consuming the
-  producer image.
-- The WASM build producer runs clippy/build once and uploads the generated package under a run-stable artifact name.
-- `WASM Node tests` depends on that build job and finishes the producer gate.
-- `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
-- It can run browser-free web validation while Node tests continue.
-- It exports host dist trees for preview deploy.
-- The disabled `Headless UI demo` job retains its WASM build dependency and
-  changed-spec implementation.
-- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It also retains the UI-demo job in `needs` for observable skip handling.
-- A disabled or non-required skip is permitted.
-- An enabled, required demo failure blocks preview.
-- Optional web and extension e2e consumers start after the exact-source browser image is ready.
-- Node verification runs concurrently and remains mandatory for preview and readiness.
-- One Extension e2e job selects the full suite when requested, otherwise the focused authentication regression.
-- Preview requires the extension result when either full or authentication coverage is required.
-- A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
-
-**Rerun and artifact rules:**
-
-- `needs` reuses a successful producer omitted from a failed-job-only rerun.
-- Consumers download the exact-head run artifact after that producer edge is satisfied.
-- Do not serialize the **PR** producers or move Rust coverage into preview: a cold Rust cache must not dominate the PR web critical path.
-- Coverage reporting must depend on the native producer instead of starting from the preview job.
+- One job retains one checkout and one persistent BuildKit connection.
+- Rust/WASM/web verification precedes tests, then heavy gates and browsers.
+- Generated files are exported locally; reporting and deployment allocate no runners.
+- Failed-job reruns repeat the single job; BuildKit decides which layers reuse cache.
+- There is no artifact-promotion bypass or sibling-job polling.
+- Future runs may select another node and start cold.
 
 **Main serialization:**
 
@@ -743,7 +635,7 @@ authenticator-domain to 90 percent.
   The portable proof and development deployment remain gated by successful
   cache publication.
 - Main's portable WASM cache writer uses an ARC solve. Static
-  contracts require the release, clippy, and test dependency vertices in its
+  contracts require the release and clippy dependency vertices in its
   exact Dockerfile lineage. Zot then proves child manifest digest/size plus
   every declared blob's size and SHA-256 by streaming it completely. The
   separate Bake+Zot simulation proves clean-builder import behavior. Main does
@@ -752,19 +644,10 @@ authenticator-domain to 90 percent.
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
-- PR CI assigns native Rust to one runner and WASM to another.
-- The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
-- Required Node tests continue on the producer; preview deployment is blocked until that producer succeeds.
-- PR browser-e2e consumers wait for the browser image producer.
-- Required Node verification remains a separate preview and readiness gate.
-- Native Rust separately uploads the coverage handoff consumed by the small Rust-dependent reporting job.
-- The preview job never waits for native coverage.
-- It runs without browser e2e. Trusted sources deploy Cloudflare previews and
-  record a successful `github-pages` deployment status for the PR head SHA.
-- Fork and Dependabot validation remains secret-free. It never attempts a
-  credentialed preview deployment.
-- A `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs.
-- The preview deploy reuses that prepared sealed image and must not declare another `setup` dependency.
+- PR CI keeps one runner and local BuildKit state without registry cache transfer.
+- Requested browsers run after successful verification and tests.
+- Preview restores exported production artifacts after E2E.
+- Fork/Dependabot validation remains secret-free and never deploys previews.
 - PR coverage always checks the current portable Rust artifact against the floor.
 - Changed Rust/Cargo/source inputs reuse the exact base commit's trusted Main artifact when available.
 - Missing or unchanged base coverage reuses the current artifact for comparison without another Docker solve.

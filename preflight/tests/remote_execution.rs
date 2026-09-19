@@ -119,8 +119,5 @@ fn pull_request_cache_credentials_cannot_write_main_scopes() {
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
     assert_eq!(pr.matches("cache-write: \"false\"").count(), docker_setups);
-    assert_eq!(
-        pr.matches("isolated-cache-write: \"true\"").count(),
-        docker_setups
-    );
+    assert_eq!(pr.matches("isolated-cache-write: \"true\"").count(), 0);
 }

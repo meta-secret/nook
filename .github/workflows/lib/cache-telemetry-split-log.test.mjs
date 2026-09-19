@@ -180,7 +180,7 @@ void test("registry verifier persists both compile-cache availability observatio
   );
 });
 
-void test("Phase A replays cached dependency compiler reports in its rooted graph", () => {
+void test("Phase A keeps its rooted graph free of per-run telemetry cache busters", () => {
   const dockerfile = fs.readFileSync(
     path.resolve("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
     "utf8",
@@ -193,17 +193,7 @@ void test("Phase A replays cached dependency compiler reports in its rooted grap
     dockerfile,
     /FROM compile-web-extension-dependencies AS compile-foundation/,
   );
-  assert.match(
-    dockerfile,
-    /nook-sccache-report --replay compile-native-dependencies/,
-  );
-  assert.match(
-    dockerfile,
-    /nook-sccache-report --replay compile-wasm-dependencies/,
-  );
+  assert.doesNotMatch(dockerfile, /nook-sccache-report --replay/);
   assert.match(bake, /target\s+= "compile-foundation"/);
-  assert.match(
-    bake,
-    /NOOK_SCCACHE_TELEMETRY_REPLAY\s+= NOOK_SCCACHE_TELEMETRY_REPLAY/,
-  );
+  assert.doesNotMatch(bake, /NOOK_SCCACHE_TELEMETRY_REPLAY/);
 });

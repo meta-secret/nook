@@ -199,6 +199,9 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                 });
             let trusted_formatter_context =
                 path == ".github/formatting/ci.Dockerfile" && reference == "formatter-tools";
+            let trusted_arc_runner_base = path == "infra/k0s/images/arc-runner/Dockerfile"
+                && resolved
+                    == "ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda";
             if trusted_formatter_context {
                 let bake = RepositoryFixture::repository_root().read(".github/formatting/ci.hcl");
                 assert!(bake.contains("formatter-tools = \"target:formatter-tools\""));
@@ -210,6 +213,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                 resolved == "scratch"
                     || stages.contains(reference)
                     || trusted_formatter_context
+                    || trusted_arc_runner_base
                     || matches!(
                         reference,
                         "rust-base" | "web-base" | "web-runtime" | "web-deps" | "wasm-deps"
@@ -381,7 +385,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             .matches("  labels:\n    app.kubernetes.io/name: nook-buildkit")
             .count(),
         4,
-        "all four BuildKit PVs must carry the operational status label"
+        "all retained BuildKit PVs must carry the operational status label"
     );
     assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
     for contract in [

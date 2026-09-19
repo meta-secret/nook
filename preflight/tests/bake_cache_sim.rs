@@ -263,7 +263,7 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(!dockerfile.to_ascii_lowercase().contains("hive"));
     assert!(!dockerfile.contains("ci-agent"));
     assert!(bake.contains("target \"compile-warm\""));
-    assert!(bake.contains("SIMULATED_SCCACHE_TELEMETRY_REPLAY"));
+    assert!(!bake.contains("SIMULATED_SCCACHE_TELEMETRY_REPLAY"));
     assert!(bake.contains("target \"compile-toolchain-context\""));
     assert!(bake.contains("COMPILE_PARENT_SOURCE_SCOPE"));
     assert!(bake.contains("nook-bake-sim-compile-${COMPILE_SOURCE_SCOPE}"));
@@ -285,13 +285,8 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(setup.contains("git rev-parse --verify HEAD^1"));
     assert!(setup.contains("GHA_CACHE_PARENT_SCOPE_SUFFIX"));
     assert!(setup.contains("Verify Docker cache refs and blobs"));
-    let pr_native = compile
-        .split_once("FROM compile-native-source AS pr-native-build")
-        .and_then(|(_, stages)| stages.split_once("FROM ${PR_NATIVE_IMAGE} AS pr-native-verify"))
-        .map(|(stage, _)| stage)
-        .expect("PR native compiler image stage must exist");
-    assert!(pr_native.contains("ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled"));
-    assert!(pr_native.contains("nook-sccache-report --replay compile-native-dependencies"));
+    assert!(!compile.contains("NOOK_SCCACHE_TELEMETRY_REPLAY"));
+    assert!(!compile.contains("nook-sccache-report --replay"));
     assert!(setup.contains("class BuildKitCacheAccessVerifier"));
     assert!(setup.contains("await this.verifyRegistryAvailability();"));
     assert!(setup.contains("async verifyCacheRef(scopeSuffix)"));
@@ -308,26 +303,14 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     assert!(workflow.contains("build:compile' && 5 || 360"));
     assert!(runtime_proof.contains("Scenario AA: cold compile cache seeds exact head"));
     assert!(runtime_proof.contains("Scenario AB: successor head imports parent lineage"));
-    assert!(
-        runtime_proof.contains("replay-aa-${suffix}")
-            && runtime_proof.contains("replay-ab-${suffix}")
-    );
+    assert!(!runtime_proof.contains("SIMULATED_SCCACHE_TELEMETRY_REPLAY"));
     assert!(
         runtime_proof
             .contains("require_cached_step \"$proof_log\" \"bake-sim-compile-cargo-fetch\"")
     );
 
-    let rust_base_start = product
-        .find("FROM ${RUST_IMAGE} AS rust-base")
-        .expect("product rust-base stage is missing");
-    let rust_base_end = product[rust_base_start + 1..]
-        .find("\nFROM ")
-        .map(|offset| rust_base_start + 1 + offset)
-        .expect("product rust-base end is missing");
-    assert!(
-        !product[rust_base_start..rust_base_end].contains("NOOK_SCCACHE_TELEMETRY_REPLAY"),
-        "per-run replay argument must not vary the shared rust-base lineage"
-    );
+    assert!(!product.contains("NOOK_SCCACHE_TELEMETRY_REPLAY"));
+    assert!(!product.contains("nook-sccache-report --replay"));
 }
 
 fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {

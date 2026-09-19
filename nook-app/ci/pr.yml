@@ -1,0 +1,123 @@
+version: "3"
+
+# Ordered phases in one GitHub job. Bake parallelizes independent targets on
+# the runner node's persistent builder; only small outputs leave that builder.
+tasks:
+  ci:pr:runner:publish:
+    desc: Publish the source-free PR runner once per tooling revision (not a PR phase).
+    vars:
+      PR_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-pr-runner:trixie-v1" .PR_RUNNER_IMAGE}}'
+    env:
+      GHA_CACHE_ENABLED: ""
+      GHA_CACHE_WRITE_ENABLED: ""
+    cmds:
+      - '{{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --set "web-e2e-base.output=type=registry" --set "web-e2e-base.tags={{.PR_RUNNER_IMAGE}}" web-e2e-base'
+
+  ci:arc:runner:publish:
+    desc: Build, prove, and publish the ARC runner with the pinned container-hook repair.
+    vars:
+      ARC_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v2" .ARC_RUNNER_IMAGE}}'
+    env:
+      GHA_CACHE_ENABLED: ""
+      GHA_CACHE_WRITE_ENABLED: ""
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        --allow=fs.read={{.REPO_ROOT}}
+        -f {{.REPO_ROOT}}/infra/k0s/images/arc-runner/docker-bake.hcl
+        --set 'arc-runner.context={{.REPO_ROOT}}'
+        --set 'arc-runner-hooks-proof.context={{.REPO_ROOT}}'
+        --set 'arc-runner.output=type=registry'
+        --set 'arc-runner.tags={{.ARC_RUNNER_IMAGE}}'
+        arc-runner arc-runner-hooks-proof
+
+  ci:pr:verification:
+    desc: Verify tooling, formatting, Rust, WASM and web before compiling tests.
+    cmds:
+      - task: ci:pr:verification:early
+      - task --parallel ci:pr:verification:product docker:ecosystem:dependency-policy
+
+  ci:pr:verification:early:
+    deps:
+      - ci:pr:verification:format
+      - ci:pr:verification:tooling
+
+  ci:pr:verification:format:
+    cmds:
+      - '{{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --set "rust-format-check.output=type=cacheonly" rust-format-check'
+
+  ci:pr:verification:tooling:
+    cmds:
+      - task: preflight:policy:run
+        vars: { POLICY_STAGE: pr-verification }
+
+  ci:pr:verification:product:
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-verification }
+
+  ci:pr:tests:
+    desc: Run unit/integration tests and coverage after verification succeeds.
+    cmds:
+      - task --parallel ci:pr:tests:product ci:pr:tests:policy
+
+  ci:pr:tests:product:
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-tests }
+
+  ci:pr:tests:policy:
+    cmds:
+      - task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:repository-policy
+
+  ci:pr:heavy:
+    desc: Run fuzz and Kani only after unit/integration tests succeed.
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-heavy }
+
+  ci:pr:bake:
+    internal: true
+    requires:
+      vars: [PR_BAKE_TARGET, PR_ARTIFACT_DIR]
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p '{{.PR_ARTIFACT_DIR}}/coverage' '{{.PR_ARTIFACT_DIR}}/browser'
+        floor="$(jq -er '.package_lines_percent.nook_domain_api | numbers' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+          -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
+          --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
+          --set 'coverage-export.output=type=local,dest={{.PR_ARTIFACT_DIR}}/coverage' \
+          --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \
+          --set "rust-dylint-self-test.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
+          --set 'rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED=true' \
+          --set 'builder-wasm.output=type=cacheonly' \
+          '{{.PR_BAKE_TARGET}}'
+
+  ci:pr:browser:prepare:
+    desc: Export built web artifacts and dependencies into this runner's checkout.
+    requires:
+      vars: [PR_ARTIFACT_DIR]
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-browser-artifacts }
+      - cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.REPO_ROOT}}/nook-app/'
+      - test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'
+      - |
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
+        install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
+        ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
+
+  ci:pr:browser:full:
+    desc: Run web and extension suites concurrently on this runner.
+    deps:
+      - _ci:main:web:e2e-only
+      - _extension:test:e2e
+
+  ci:pr:browser:auth:
+    desc: Run the required focused real-extension authentication regression.
+    env:
+      E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
+    cmds:
+      - task: _extension:test:e2e:file

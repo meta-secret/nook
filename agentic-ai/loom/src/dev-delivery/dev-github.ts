@@ -47,7 +47,7 @@ export const DevDeliveryContract = {
   },
   promotion: {
     workflowName: 'CI',
-    requiredJobs: ['Dev promotion readiness'],
+    requiredJobs: ['PR validation / Verify and preview'],
   },
   pagesEnvironment: 'github-pages',
 } as const;

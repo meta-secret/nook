@@ -6,10 +6,10 @@
 
 FROM rust-base AS rust-ecosystem-policy-tools
 
-ARG CARGO_DENY_VERSION=0.20.2
-ARG CARGO_DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
-ARG CARGO_AUDIT_VERSION=0.22.2
-ARG CARGO_AUDIT_SHA256=7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428
+ENV CARGO_DENY_VERSION=0.20.2
+ENV CARGO_DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+ENV CARGO_AUDIT_VERSION=0.22.2
+ENV CARGO_AUDIT_SHA256=7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
@@ -54,12 +54,13 @@ WORKDIR /meta-secret/nook
 # The nonce must refresh policy checks, but their fetched crates and advisory
 # databases are not reusable outputs. Keep them out of each immutable result:
 # otherwise every workspace/run adds gigabytes and evicts warm product layers.
-# Seed from the tools home so any immutable Cargo inputs remain available.
+# Keep Cargo's registry, git, and advisory database in one writable cache mount;
+# cargo-audit atomically replaces its database and cannot target a mount point.
 RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
+    --mount=type=cache,id=nook-policy-cargo-home,target=/tmp/nook-policy-cargo,sharing=locked \
     test -n "$WORKSPACE" \
     && test -n "$POLICY_RUN_NONCE" \
-    && trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-repository' EXIT \
-    && cp -a /usr/local/cargo /tmp/nook-policy-cargo \
+    && trap 'rm -rf /tmp/nook-policy-repository' EXIT \
     && cp -a /meta-secret/nook /tmp/nook-policy-repository \
     && WORKSPACE="/tmp/nook-policy-repository/$WORKSPACE" \
     && export CARGO_HOME=/tmp/nook-policy-cargo \

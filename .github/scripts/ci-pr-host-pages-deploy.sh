@@ -6,7 +6,7 @@
 #   CF_PAGES_PROJECT_NAME, CF_PAGES_DIST_DIR
 # Optional env:
 #   CF_PAGES_PRODUCTION_BRANCH (default: main)
-#   NOOK_WRANGLER_VERSION (default: 4.114.0)
+#   NOOK_WRANGLER_VERSION (default: 4.120.0; static-dist fallback only)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,7 +19,8 @@ cd "$ROOT"
 : "${CF_PAGES_DIST_DIR:?CF_PAGES_DIST_DIR is required}"
 
 production_branch="${CF_PAGES_PRODUCTION_BRANCH:-main}"
-wrangler_version="${NOOK_WRANGLER_VERSION:-4.114.0}"
+wrangler_version="${NOOK_WRANGLER_VERSION:-4.120.0}"
+wrangler_bin="${NOOK_WRANGLER_BIN:-$ROOT/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler}"
 deploy_dir="$CF_PAGES_DIST_DIR"
 case "$deploy_dir" in
   /*) ;;
@@ -31,7 +32,13 @@ if [ ! -d "$deploy_dir" ]; then
 fi
 
 wrangler() {
-  npx --yes "wrangler@${wrangler_version}" "$@"
+  if [ -f "$wrangler_bin" ]; then
+    node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler "$@"
+  else
+    # Main's deployment handoff deliberately contains only static dist files,
+    # not the 1 GB dependency tree. Its setup-node step supplies pinned npx.
+    npx --yes "wrangler@${wrangler_version}" "$@"
+  fi
 }
 
 wrangler pages project create "$CF_PAGES_PROJECT_NAME" \
