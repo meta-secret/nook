@@ -300,6 +300,7 @@ class ArcManifestContract {
       "mountPath: /mnt/externals",
       "mountPath: /mnt/work",
       "mountPath: /mnt/github",
+      "mountPath: /home/runner/_work",
       "chmod -R g+rwX /mnt/work/nook",
     ]);
     if (admittedContract7.isErr()) return err(admittedContract7.error);

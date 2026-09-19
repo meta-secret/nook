@@ -100,6 +100,11 @@ data:
             - name: NOOK_BUILDKIT_ADDR
               value: tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
           volumeMounts:
+            # Composite-action expressions resolve against the runner-side
+            # workspace path. Mount the same work volume at that alias so
+            # local action scripts and their helper modules stay reachable.
+            - name: work
+              mountPath: /home/runner/_work
             - name: docker-client
               mountPath: /usr/local/bin/docker
               subPath: docker

@@ -738,6 +738,10 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
     "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
     "utf8",
   );
+  const arcContainerHook = fs.readFileSync(
+    "infra/k0s/manifests/arc/container-hook.yaml",
+    "utf8",
+  );
   assert.equal(workflow.match(/^    runs-on:/gm)?.length, 1);
   assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.336\.0@sha256:/);
   assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
@@ -750,6 +754,8 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
     arcRunnerValues,
     /image: ghcr\.io\/meta-secret\/nook-arc-runner@sha256:[0-9a-f]{64}/,
   );
+  assert.match(arcContainerHook, /mountPath: \/home\/runner\/_work/);
+  assert.match(workflow, /safe\.directory "\$GITHUB_WORKSPACE"/);
   assert.equal(
     workflow.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)
       ?.length,

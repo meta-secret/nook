@@ -62,6 +62,7 @@ jobs:
         env:
           PR_EVENT_JSON: ${{ toJSON(github.event) }}
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           printf '%s\n' "$PR_EVENT_JSON" > "$RUNNER_TEMP/pr-event.json"
           echo "NOOK_GITHUB_EVENT_PATH=$RUNNER_TEMP/pr-event.json" >> "$GITHUB_ENV"
           echo "PR_ARTIFACT_DIR=$RUNNER_TEMP/nook-pr-artifacts" >> "$GITHUB_ENV"
