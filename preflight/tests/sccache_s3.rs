@@ -60,9 +60,6 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "SeaweedFS S3 is unavailable",
         "Refusing to compile without a healthy remote sccache backend",
         "SeaweedFS S3 sccache is healthy",
-        "--set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'",
-        "--set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'",
-        "--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'",
     ] {
         assert!(
             sccache_tasks.contains(required),
@@ -103,9 +100,9 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     }
 
     let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
-    assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
-    assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(!bake.contains("variable \"SCCACHE_ENDPOINT\""));
+    assert!(!bake.contains("variable \"SCCACHE_BUCKET\""));
+    assert!(!bake.contains("variable \"SCCACHE_S3_MODE\""));
     assert!(bake.contains("variable \"SCCACHE_S3_ACCESS_KEY_FILE\""));
     assert!(bake.contains("variable \"SCCACHE_S3_SECRET_KEY_FILE\""));
     assert!(bake.contains("sccache_secrets ="));
@@ -116,10 +113,10 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
 
     let rust_base = RepositoryFixture::repository_root()
         .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
-    assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
-    assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
-    assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
-    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
+    assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
+    assert!(rust_base.contains("ENV SCCACHE_BUCKET=nook-sccache"));
+    assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
+    assert!(!rust_base.contains("ARG SCCACHE_"));
     assert!(rust_base.contains("SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock"));
 
     for path in [
@@ -596,11 +593,11 @@ fn assert_rust_build_cache_boundary() {
     let rust_base = RepositoryFixture::repository_root()
         .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
-    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
+    assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
 
-    assert!(bake.contains("SCCACHE_S3_MODE") && bake.contains("= SCCACHE_S3_MODE"));
-    assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
+    assert!(!bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(!app_tasks.contains("*.args.SCCACHE_"));
 
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);

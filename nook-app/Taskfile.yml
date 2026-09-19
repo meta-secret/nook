@@ -94,9 +94,6 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
-    --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
-    --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
-    --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'

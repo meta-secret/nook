@@ -10,22 +10,6 @@
 //   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
 // Callers pass all files via NOOK_BAKE_FILES / PREFLIGHT_BAKE_FILES (bake has no `include`).
 
-variable "SCCACHE_ENDPOINT" {
-  default = "https://sccache.dev.nokey.sh"
-}
-
-variable "SCCACHE_BUCKET" {
-  default = "nook-sccache"
-}
-
-variable "SCCACHE_S3_MODE" {
-  default = "external"
-}
-
-variable "SCCACHE_S3_RW_MODE" {
-  default = "READ_WRITE"
-}
-
 // Secret values never enter Bake definitions or cache keys. Callers provide
 // runner-local file paths; credential paths are populated only when the
 // trusted cache credential pair exists. Every target that can be solved as a

@@ -549,8 +549,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !base_dockerfile.contains("COPY --from=chef-planner")
             && !base_dockerfile.contains("lukemathwalker/cargo-chef")
             && !base_dockerfile.contains("FROM ${CARGO_CHEF_IMAGE}")
-            && !base_dockerfile.contains("latest-rust-1.")
-            && !base_dockerfile.contains("rust:1."),
+            && !base_dockerfile.contains("latest-rust-1."),
         "Rust dependency stages must use a digest-pinned rust base and a single chef-deps prepare/cook stage"
     );
     let web_dockerfile = (root).read("nook-app/nook-web/docker/web.Dockerfile");

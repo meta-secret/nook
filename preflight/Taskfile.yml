@@ -6,9 +6,6 @@ vars:
   PREFLIGHT_SOURCE_ROOT:
     sh: 'if [ -n "${PREFLIGHT_SOURCE_ROOT:-}" ]; then printf "%s" "$PREFLIGHT_SOURCE_ROOT"; else printf "%s" "{{.REPO_ROOT}}"; fi'
   DOCKER: '{{default "docker" .DOCKER}}'
-  SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
-  SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
-  SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
   SCCACHE_S3_ACCESS_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
@@ -43,9 +40,6 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
     -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
-    --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
-    --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
-    --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
 
 tasks:
   preflight:
