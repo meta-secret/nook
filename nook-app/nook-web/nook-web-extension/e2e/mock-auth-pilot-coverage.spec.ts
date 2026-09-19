@@ -84,6 +84,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const loginWidget = loginPage.locator('#nook-auth-widget')
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        loginWidget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveAttribute('data-state', 'no-matching-credential')
       await loginWidget
         .getByRole('button', { name: 'Continue with Nook' })
         .click()
@@ -734,6 +737,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveAttribute('data-state', 'credential-available')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(loginPage.getByRole('alert')).toHaveText(
         'Invalid username or password.',
@@ -770,6 +776,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveAttribute('data-state', 'vault-locked')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(
         widget.getByText(

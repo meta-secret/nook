@@ -48,6 +48,7 @@ import { authenticationWidgetShell } from './widget-shell'
 import type { PilotVaultConnection } from './workflow-ui'
 
 import { WorkflowCopy, workflowUi } from './workflow-ui'
+import { WidgetVaultPresentationProjection } from './widget-presentation-state'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
@@ -80,6 +81,8 @@ class AuthenticationWidgetRenderer {
       workflowUi.removeWidget()
       return
     }
+    const vaultPresentation =
+      WidgetVaultPresentationProjection.forConnection(vaultConnection)
     const workflowKey = [
       'enrollment',
       snapshot.action,
@@ -87,8 +90,8 @@ class AuthenticationWidgetRenderer {
       snapshot.totalSteps,
       hints.qr ? 'qr' : '',
       hints.backupCodes ? 'backup' : '',
-      vaultConnection.connected ? 'connected' : 'disconnected',
-      ((v) => (v ? v : ''))(vaultConnection.vaultName),
+      vaultPresentation.kind,
+      'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
     ].join(':')
     if (this.ui.pickerState.login.kind === LoginPickerKind.Open) {
       loginPasskeyInteraction.cancelPendingLoginPickerRequest()
@@ -111,7 +114,7 @@ class AuthenticationWidgetRenderer {
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
       copy: authenticationWidgetShell.enrollmentCopy(hints),
-      vaultConnection,
+      vaultPresentation,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -164,6 +167,12 @@ class AuthenticationWidgetRenderer {
       workflowUi.removeWidget()
       return
     }
+    const vaultPresentationRequest: ConstructorParameters<
+      typeof WidgetVaultPresentationProjection
+    >[0] = { vaultConnection, loginMatches }
+    const vaultPresentation = new WidgetVaultPresentationProjection(
+      vaultPresentationRequest,
+    ).state()
     const workflowKey = [
       snapshot.kind,
       snapshot.stage,
@@ -173,8 +182,8 @@ class AuthenticationWidgetRenderer {
       snapshot.observationIndex,
       loginMatches.kind,
       'count' in loginMatches ? loginMatches.count : 0,
-      vaultConnection.connected ? 'connected' : 'disconnected',
-      ((v) => (v ? v : ''))(vaultConnection.vaultName),
+      vaultPresentation.kind,
+      'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
     ].join(':')
     const currentApproval: AuthenticationWorkflowApproval = {
       workflowKey,
@@ -226,7 +235,7 @@ class AuthenticationWidgetRenderer {
             new SelectedEnrollmentPresentation(snapshot.action).hints,
           )
         : WorkflowCopy.forKind(snapshot.kind),
-      vaultConnection,
+      vaultPresentation,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }

@@ -31,6 +31,9 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveText(/Connected to Mock auth vault/)
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveAttribute('data-state', 'credential-available')
       // Single matching login fills and submits without an account chooser.
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

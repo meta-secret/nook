@@ -27,7 +27,11 @@ import {
   authenticationWidgetPosition,
 } from './widget-position'
 
-import type { PilotVaultConnection, WorkflowCopy } from './workflow-ui'
+import type { WorkflowCopy } from './workflow-ui'
+import {
+  WidgetVaultPresentationKind,
+  type WidgetVaultPresentation,
+} from './widget-presentation-state'
 
 import { WIDGET_HOST_ID, workflowUi } from './workflow-ui'
 
@@ -133,10 +137,14 @@ const WIDGET_PANEL_STYLES = `
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .vault-status[data-connected='true'] {
+    .vault-status[data-state='vault-connected'],
+    .vault-status[data-state='credential-available'] {
       color: oklch(0.82 0.04 155);
     }
-    .vault-status[data-connected='false'] {
+    .vault-status[data-state='vault-not-connected'],
+    .vault-status[data-state='vault-locked'],
+    .vault-status[data-state='no-matching-credential'],
+    .vault-status[data-state='unavailable'] {
       color: oklch(0.78 0.05 70);
     }
     .mark {
@@ -282,7 +290,7 @@ type CreateWidgetMarkArgs = {
 
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
-  vaultConnection: PilotVaultConnection
+  vaultPresentation: WidgetVaultPresentation
   currentStep: number
   totalSteps: number
 }
@@ -390,7 +398,7 @@ class AuthenticationWidgetShell {
 
   createWidgetShell({
     copy,
-    vaultConnection,
+    vaultPresentation,
     currentStep,
     totalSteps,
   }: CreateWidgetShellArgs): WidgetShell {
@@ -461,8 +469,12 @@ class AuthenticationWidgetShell {
     const vaultStatus = document.createElement('p')
     vaultStatus.className = 'vault-status'
     vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
-    vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
-    vaultStatus.textContent = workflowUi.vaultConnectionLabel(vaultConnection)
+    vaultStatus.dataset.connected =
+      vaultPresentation.kind === WidgetVaultPresentationKind.NotConnected
+        ? 'false'
+        : 'true'
+    vaultStatus.dataset.state = vaultPresentation.kind
+    vaultStatus.textContent = workflowUi.vaultConnectionLabel(vaultPresentation)
 
     const description = document.createElement('p')
     description.className = 'description'

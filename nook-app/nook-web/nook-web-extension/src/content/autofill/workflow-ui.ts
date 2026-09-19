@@ -14,12 +14,16 @@ import {
   ExtensionSetupLoadKind,
 } from '../../lib/pairing-state'
 
+import {
+  PilotVaultConnectionKind,
+  type PilotVaultConnection,
+  WidgetVaultPresentationKind,
+  type WidgetVaultPresentation,
+} from './widget-presentation-state'
+
 import { WidgetHostKind, saveOfferState, widgetState } from './state'
 
-export type PilotVaultConnection = {
-  connected: boolean
-  vaultName?: string
-}
+export type { PilotVaultConnection } from './widget-presentation-state'
 
 export const WIDGET_HOST_ID = 'nook-auth-widget'
 
@@ -164,21 +168,34 @@ class WorkflowUi {
   async loadPilotVaultConnection(): Promise<PilotVaultConnection> {
     const setup = await extensionPairingStateLoader.loadExtensionSetupState()
     return setup.kind === ExtensionSetupLoadKind.Ready
-      ? { connected: true, vaultName: setup.setup.selectedVaultName }
-      : { connected: false }
+      ? {
+          kind: PilotVaultConnectionKind.Connected,
+          vaultName: setup.setup.selectedVaultName,
+        }
+      : { kind: PilotVaultConnectionKind.NotConnected }
   }
 
-  vaultConnectionLabel(connection: PilotVaultConnection): string {
-    if (connection.connected && connection.vaultName) {
-      const nookTypedArgs0_1: Parameters<
-        typeof this.translatedMessageWithSubstitution
-      >[0] = {
-        key: BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
-        substitution: connection.vaultName,
+  vaultConnectionLabel(presentation: WidgetVaultPresentation): string {
+    switch (presentation.kind) {
+      case WidgetVaultPresentationKind.NotConnected:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected)
+      case WidgetVaultPresentationKind.Locked:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue)
+      case WidgetVaultPresentationKind.NoMatchingCredential:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch)
+      case WidgetVaultPresentationKind.Unavailable:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
+      case WidgetVaultPresentationKind.Connected:
+      case WidgetVaultPresentationKind.CredentialAvailable: {
+        const nookTypedArgs0_1: Parameters<
+          typeof this.translatedMessageWithSubstitution
+        >[0] = {
+          key: BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
+          substitution: presentation.vaultName,
+        }
+        return this.translatedMessageWithSubstitution(nookTypedArgs0_1)
       }
-      return this.translatedMessageWithSubstitution(nookTypedArgs0_1)
     }
-    return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected)
   }
 
   removeWidget(): void {
