@@ -3,15 +3,13 @@
 # Web/e2e lineage. Independent of the Rust toolchain and Cargo target/. Bun owns package installs;
 # a pinned Node binary is present only for Playwright workers.
 
-ARG DEBIAN_RELEASE=trixie
+FROM registry.dev.nokey.sh/library/debian:trixie-slim AS web-base
 
-FROM registry.dev.nokey.sh/library/debian:${DEBIAN_RELEASE}-slim AS web-base
-
-ARG BUN_VERSION=1.3.14
-ARG TASK_VERSION=3.52.0
+ENV BUN_VERSION=1.3.14
+ENV TASK_VERSION=3.52.0
 # Node binary only — Playwright workers need it. Pin version + sha256; npm/npx stay out.
-ARG NODE_VERSION=24.19.0
-ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
+ENV NODE_VERSION=24.19.0
+ENV NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"

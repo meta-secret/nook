@@ -2,11 +2,10 @@
 
 FROM rust-base AS rust-ecosystem-nightly
 
-ARG DYLINT_NIGHTLY=nightly-2026-04-16
-ARG CARGO_FUZZ_VERSION=0.13.2
-ARG CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
-ARG CARGO_DYLINT_VERSION=6.0.1
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
+ENV DYLINT_NIGHTLY=nightly-2026-04-16
+ENV CARGO_FUZZ_VERSION=0.13.2
+ENV CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
+ENV CARGO_DYLINT_VERSION=6.0.1
 
 # cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
 # CI-only driver path, so install the pinned crates once into this image layer.
@@ -38,8 +37,6 @@ COPY nook-app/nook-platform/docker/sccache-report.sh /usr/local/bin/nook-sccache
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 FROM rust-ecosystem-nightly AS rust-dylint-deps
-
-ARG DYLINT_NIGHTLY=nightly-2026-04-16
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/.cargo .cargo
@@ -91,9 +88,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 FROM rust-dylint-deps AS rust-dylint-build
 
-ARG DYLINT_NIGHTLY=nightly-2026-04-16
-ARG RUST_DYLINT_COVERAGE_FLOOR
-
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
@@ -134,9 +128,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       --locked --fail-under-lines "${RUST_DYLINT_COVERAGE_FLOOR:?}" \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && nook-sccache-report rust-dylint-self-test
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-self-test; fi
-
 FROM rust-dylint-product-deps AS rust-dylint-native
 
 WORKDIR /meta-secret/nook
@@ -154,9 +145,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
       -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
     && nook-sccache-report rust-dylint-native
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-native; fi
-
 FROM rust-dylint-native AS rust-dylint-wasm
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -164,9 +152,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo dylint --all -- --locked --target wasm32-unknown-unknown --all-targets \
       -p nook-wasm -p nook-companion-wasm -p nook-wasm-composition-tests \
     && nook-sccache-report rust-dylint-wasm
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay rust-dylint-wasm; fi
-
 FROM rust-dylint-native AS rust-dylint
 COPY --from=rust-dylint-self-test /meta-secret/nook/nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml /tmp/dylint-self-tested.toml
 COPY --from=rust-dylint-wasm /meta-secret/nook/nook-app/nook-platform/Cargo.toml /tmp/dylint-wasm-checked.toml
@@ -174,7 +159,6 @@ COPY --from=rust-dylint-wasm /meta-secret/nook/nook-app/nook-platform/Cargo.toml
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke
 
 ARG FUZZ_SECONDS=20
-ARG DYLINT_NIGHTLY=nightly-2026-04-16
 
 WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/

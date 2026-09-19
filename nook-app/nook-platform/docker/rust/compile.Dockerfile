@@ -179,14 +179,6 @@ RUN test -f nook-app/Taskfile.yml \
     && git add -A \
     && git commit -q -m "PR native build source snapshot" >/dev/null
 
-# BuildKit does not replay stdout for a cached compiler vertex. Re-emit the
-# persisted native compiler report from this per-job terminal vertex so cache
-# telemetry remains authoritative when the compiler layer is fully reused.
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
-      nook-sccache-report --replay compile-native-dependencies; \
-    fi
-
 # Trusted ARC consumers have a remote BuildKit API but no container runtime.
 # Import the producer's exact immutable Zot image, execute validation as a
 # normal solve vertex, then expose only the small validation handoff. The
@@ -330,16 +322,7 @@ RUN cd nook-app/nook-web/nook-web-extension \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-web-extension-dependencies
 
-# Dependency compiler RUN output is absent when BuildKit restores the layer.
-# Bust only this terminal replay vertex per job so the rooted Phase A solve
-# emits the persisted reports without invalidating compiler objects.
 FROM compile-web-extension-dependencies AS compile-foundation
-
-ARG NOOK_SCCACHE_TELEMETRY_REPLAY=disabled
-RUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then \
-      nook-sccache-report --replay compile-native-dependencies \
-      && nook-sccache-report --replay compile-wasm-dependencies; \
-    fi
 
 FROM web-base AS compile-web
 

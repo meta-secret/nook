@@ -34,13 +34,9 @@ grep -Fq '"baked_runtime_mode":"READ_WRITE"' "$fixture_dir/zero-writes.log"
 grep -Fq '"runtime_mode":"READ_WRITE"' "$fixture_dir/zero-writes.log"
 grep -Fq '"runtime_mode_source":"runtime_secret"' "$fixture_dir/zero-writes.log"
 test -s "$fixture_dir/reports/publication.json"
-NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
-  bash "$report" --replay publication >"$fixture_dir/replayed.log"
-grep -Fq 'NOOK_SCCACHE_STATS {"stage":"publication"' "$fixture_dir/replayed.log"
-grep -Fq '"cache_misses":275' "$fixture_dir/replayed.log"
 if NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
   FAKE_SCCACHE_STATS="$fixture_dir/zero-writes.json" \
-  NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+  NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
   NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
   SCCACHE_CLIENT_SIDE=0 \
   SCCACHE_S3_RW_MODE=READ_WRITE \
@@ -69,7 +65,7 @@ cat >"$fixture_dir/authoritative-hits.json" <<'EOF'
 EOF
 NOOK_SCCACHE_REPORT_BINARY="$fixture_dir/sccache" \
 FAKE_SCCACHE_STATS="$fixture_dir/authoritative-hits.json" \
-NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
+NOOK_SCCACHE_RUNTIME_MODE_FILE="$fixture_dir/publish-mode" \
 NOOK_SCCACHE_REPORT_DIR="$fixture_dir/reports" \
 SCCACHE_CLIENT_SIDE=0 \
 SCCACHE_S3_RW_MODE=READ_WRITE \

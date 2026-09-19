@@ -531,12 +531,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     );
     let base_dockerfile = (root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(
-        base_dockerfile.contains("ARG RUST_VERSION=")
-            && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
-            && base_dockerfile.contains("ARG RUST_DIGEST=sha256:")
-            && base_dockerfile
-                .contains("RUST_IMAGE=registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
-            && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
+        base_dockerfile.contains("FROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base")
             && base_dockerfile.contains("FROM rust-base AS chef-deps")
             && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")
             && base_dockerfile.contains(
@@ -544,8 +539,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             )
             && base_dockerfile.contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
             && base_dockerfile.contains("/etc/nook-wasm-deps-cache-epoch")
-            && base_dockerfile.contains("ARG CARGO_CHEF_VERSION=")
-            && base_dockerfile.contains("ARG CARGO_CHEF_SHA256=")
+            && base_dockerfile.contains("ENV CARGO_CHEF_VERSION=")
+            && base_dockerfile.contains("ENV CARGO_CHEF_SHA256=")
             && base_dockerfile.contains(
                 "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/",
             )

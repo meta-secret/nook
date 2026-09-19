@@ -345,7 +345,7 @@ class DockerizedRustBuildKitContract {
     );
   }
 
-  wasmNodeCompilerSecretsAndDylintTelemetryRuntime(): void {
+  wasmNodeCompilerSecretsWithoutReplayCacheBusters(): void {
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
@@ -463,22 +463,8 @@ class DockerizedRustBuildKitContract {
         "--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines",
       ),
     );
-    expect(nodeCompilerStage).toContain(
-      "nook-sccache-report --replay wasm-node-compiler",
-    );
-    expect(nodeCompilerStage).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
-    for (const stageName of [
-      "wasm-source-nook-wasm",
-      "wasm-source-companion-wasm",
-      "wasm-clippy",
-      "wasm-build-nook-wasm",
-      "wasm-build-companion-wasm",
-      "wasm-release-tests",
-      "wasm-node-test-and-coverage",
-      "wasm-node-compiler",
-    ]) {
-      expect(product).toContain("nook-sccache-report --replay " + stageName);
-    }
+    expect(product).not.toContain("nook-sccache-report --replay");
+    expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     const handoffStageRange: DockerfileStageRange = {
       content: product,
       startMarker: "FROM builder-wasm-node-deps AS builder-wasm-handoff",
@@ -488,7 +474,7 @@ class DockerizedRustBuildKitContract {
     for (const descendant of [handoffStage, nodeCompilerStage]) {
       const descendantMounts: CompilerMountExpectation = {
         stage: descendant,
-        runCount: 2,
+        runCount: 1,
       };
       assertCompilerMounts(descendantMounts);
       expect(descendant).not.toContain("RUSTC_WRAPPER=");
@@ -520,41 +506,42 @@ class DockerizedRustBuildKitContract {
     const nightly = this.read(
       "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     );
-    for (const stageName of [
-      "rust-dylint-self-test",
-      "rust-dylint-native",
-      "rust-dylint-wasm",
-    ]) {
-      expect(nightly).toContain("nook-sccache-report --replay " + stageName);
-    }
+    expect(nightly).not.toContain("nook-sccache-report --replay");
+    expect(nightly).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     const report = this.read("nook-app/nook-platform/docker/sccache-report.sh");
     expect(report).toContain(
       'report_dir="${NOOK_SCCACHE_REPORT_DIR:-/opt/nook/sccache-reports}"',
     );
-    expect(report).toContain('if [ "$stage" = --replay ]; then');
+    expect(report).not.toContain('if [ "$stage" = --replay ]; then');
     expect(report).toContain(
       'printf \'%s\\n\' "$report" >"$report_dir/$stage.json"',
     );
-    const bake = this.read("nook-app/docker-bake.hcl");
-    expect(bake).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
-    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
-      "NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}",
+    expect(this.read("nook-app/docker-bake.hcl")).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
   }
 
-  sharedRustBaseDoesNotConsumeTelemetryReplayArgument(): void {
+  compilerGraphsDoNotConsumeTelemetryReplayArgument(): void {
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    const baseStart = product.indexOf("\nFROM ${RUST_IMAGE} AS rust-base\n");
+    const baseStart = product.indexOf(
+      "\nFROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base\n",
+    );
     const baseEnd = product.indexOf("\nFROM ", baseStart + 1);
     expect(baseStart).toBeGreaterThanOrEqual(0);
     expect(baseEnd).toBeGreaterThan(baseStart);
     expect(product.slice(baseStart, baseEnd)).not.toContain(
       "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
-    expect(product).toContain(
-      'ARG NOOK_SCCACHE_TELEMETRY_REPLAY\nRUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi',
+    expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
+    expect(
+      this.read("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    ).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
   }
 
@@ -572,8 +559,22 @@ class DockerizedRustBuildKitContract {
     expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
     expect(dependencyFingerprint).toContain("dylint-link=6.0.1");
     expect(dependencyFingerprint).toContain("nightly=nightly-2026-04-16");
-    expect(nightly).toContain("ARG CARGO_DYLINT_VERSION=6.0.1");
-    expect(nightly).toContain("ARG DYLINT_NIGHTLY=nightly-2026-04-16");
+    expect(nightly).toContain("ENV CARGO_DYLINT_VERSION=6.0.1");
+    expect(nightly).toContain("ENV DYLINT_NIGHTLY=nightly-2026-04-16");
+    const dylintDependencies = nightly.indexOf(
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+    );
+    const dylintSelfTest = nightly.indexOf(
+      "FROM rust-dylint-build AS rust-dylint-self-test",
+    );
+    expect(dylintDependencies).toBeGreaterThanOrEqual(0);
+    expect(dylintSelfTest).toBeGreaterThan(dylintDependencies);
+    expect(nightly.slice(0, dylintSelfTest)).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+    expect(
+      nightly.slice(dylintDependencies, dylintSelfTest),
+    ).not.toContain("RUST_DYLINT_COVERAGE_FLOOR");
     expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
       simulator.indexOf("ARG SOURCE_REVISION"),
     );
@@ -611,12 +612,12 @@ test(
   contract.dylintWrapperContentInvalidatesBuildGraph.bind(contract),
 );
 test(
-  "WASM Node compilers retain secrets and Dylint telemetry has Node",
-  contract.wasmNodeCompilerSecretsAndDylintTelemetryRuntime.bind(contract),
+  "WASM Node compilers retain secrets without replay cache busters",
+  contract.wasmNodeCompilerSecretsWithoutReplayCacheBusters.bind(contract),
 );
 test(
-  "shared rust-base cache key excludes per-run sccache telemetry replay",
-  contract.sharedRustBaseDoesNotConsumeTelemetryReplayArgument.bind(contract),
+  "compiler graphs exclude per-run sccache telemetry replay",
+  contract.compilerGraphsDoNotConsumeTelemetryReplayArgument.bind(contract),
 );
 test(
   "local PR cache proof covers Dylint dependency reuse",

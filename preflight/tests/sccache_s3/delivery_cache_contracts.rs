@@ -159,37 +159,6 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
 }
 
 #[test]
-fn missing_optional_sccache_replay_report_does_not_fail_a_successful_build() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let reporter = root.join("nook-app/nook-platform/docker/sccache-report.sh");
-    let report_dir = tempfile::tempdir()?;
-
-    let missing = Command::new("bash")
-        .arg(&reporter)
-        .args(["--replay", "wasm-node-compiler"])
-        .env("NOOK_SCCACHE_REPORT_DIR", report_dir.path())
-        .output()?;
-    assert!(
-        missing.status.success(),
-        "optional telemetry replay must not overturn a successful compiler/test stage"
-    );
-    assert!(
-        String::from_utf8_lossy(&missing.stderr)
-            .contains("persisted report is unavailable for wasm-node-compiler"),
-        "missing replay telemetry must remain observable"
-    );
-
-    let invalid = Command::new("bash")
-        .arg(&reporter)
-        .args(["--replay", "invalid/stage"])
-        .env("NOOK_SCCACHE_REPORT_DIR", report_dir.path())
-        .output()?;
-    assert_eq!(invalid.status.code(), Some(2));
-
-    Ok(())
-}
-
-#[test]
 fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> {
     let shared = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     for secret_id in ["id=sccache_s3_access_key", "id=sccache_s3_secret_key"] {

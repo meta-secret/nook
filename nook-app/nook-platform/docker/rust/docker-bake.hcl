@@ -169,12 +169,6 @@ target "rust-base" {
   dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-base"
   platforms  = ["linux/amd64"]
-  args = {
-    SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
-    SCCACHE_BUCKET   = SCCACHE_BUCKET
-    SCCACHE_S3_MODE  = SCCACHE_S3_MODE
-    SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
-  }
 }
 
 // Read-only warmer for the rust-base Zot scope (docker:rust-base).
