@@ -60,11 +60,15 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
     );
     assert!(
-        web_app_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT")
-            && web_image.contains("ARG NOOK_SOURCE_REVISION=")
-            && web_image.contains("/opt/nook/source-revision")
-            && web_image.find("/opt/nook/source-revision") < web_image.find("COPY . ."),
-        "sealed web source COPY must have a commit-specific parent cache key"
+        !web_app_bake.contains("NOOK_SOURCE_REVISION")
+            && !web_image.contains("NOOK_SOURCE_REVISION")
+            && !web_image.contains("/opt/nook/source-revision")
+            && web_image.contains("BuildKit keys COPY from the source content")
+            && web_image.find("ARG NOOK_EXTENSION_COMMIT=")
+                > web_image.find("FROM nook-web-source AS nook-web-build")
+            && web_image.find("ARG VITE_BASE=/")
+                > web_image.find("FROM nook-web-source AS nook-web-build"),
+        "sealed web source must use BuildKit's content key and keep deployment arguments after the shared source graph"
     );
     assert!(
         rust_toolchain_bake.contains("target \"rust-base-publish\"")

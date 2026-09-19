@@ -576,7 +576,11 @@ class DockerizedRustBuildKitContract {
       nightly.slice(dylintDependencies, dylintSelfTest),
     ).not.toContain("RUST_DYLINT_COVERAGE_FLOOR");
     expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
-      simulator.indexOf("ARG SOURCE_REVISION"),
+      simulator.indexOf("COPY inputs/compile-web-source.txt"),
+    );
+    expect(simulator).not.toContain("SOURCE_REVISION");
+    expect(proof).toContain(
+      'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
     );
     expect(simulator).toContain("bake-sim-cargo-dylint-dependencies");
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');

@@ -9,11 +9,12 @@ RUN cat /tooling/dylint-dependencies.txt >/tooling/installed \
 
 FROM rust-ecosystem-nightly AS verification
 ARG FAIL_VERIFICATION=0
-ARG SOURCE_REVISION=initial
+COPY inputs/compile-web-source.txt /source/compile-web-source.txt
 RUN test "$FAIL_VERIFICATION" = 0 \
     && test -s /tooling/installed \
+    && test -s /source/compile-web-source.txt \
     && mkdir /proof \
-    && printf '%s\n' "$SOURCE_REVISION" >/proof/source-revision \
+    && sha256sum /source/compile-web-source.txt >/proof/source-content \
     && printf 'verified\n' >/proof/verification \
     && echo pr-proof-verification
 

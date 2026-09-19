@@ -9,19 +9,6 @@
 
 FROM web-runtime AS nook-web-source
 
-# Production Vite base path (GitHub Pages / Cloudflare use "/").
-ARG VITE_BASE=/
-ARG VITE_SITE_URL=
-ARG VITE_PUBLIC_APP_URL=
-ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
-ARG VITE_SIMPLE_APP_URL=
-ARG VITE_SENTINEL_APP_URL=
-ARG NOOK_EXTENSION_CHANNEL=production
-ARG NOOK_EXTENSION_VERSION=1.0.0
-ARG NOOK_EXTENSION_COMMIT=
-ARG NOOK_SOURCE_REVISION=
-ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
-
 WORKDIR /meta-secret/nook
 
 # Only these small outputs cross the Rust/web boundary. The Rust target/, Cargo registry, and
@@ -42,11 +29,8 @@ COPY --from=web-artifacts /coverage /opt/nook/coverage
 # Workspace source, copied as late as possible so the cached web dependency layers above are never
 # invalidated by a source edit. .dockerignore excludes target/, node_modules, dist/, and the
 # generated wasm pkg placeholders so the handoff below is the sole WASM source of truth.
-# The revision barrier changes COPY's parent for every commit. This prevents a
-# final-image cache imported from Main from supplying a stale source snapshot.
-RUN test "${#NOOK_SOURCE_REVISION}" -eq 40 \
-    && case "$NOOK_SOURCE_REVISION" in *[!0-9a-f]*) exit 1 ;; esac \
-    && printf '%s\n' "$NOOK_SOURCE_REVISION" >/opt/nook/source-revision
+# BuildKit keys COPY from the source content. Do not add a commit/revision
+# barrier here: it would invalidate identical source on every workflow run.
 COPY . .
 
 RUN test -f nook-app/Taskfile.yml \
@@ -105,6 +89,14 @@ RUN CI=1 task _unit:parallel
 # nook-app/nook-web/nook-web-extension/dist for manual browser loading.
 FROM nook-web-source AS nook-web-build
 
+# Production Vite base path (GitHub Pages / Cloudflare use "/"). Keep each
+# build argument after the shared source/verification graph so deployment
+# metadata cannot invalidate checks or tests.
+ARG VITE_BASE=/
+ARG VITE_SITE_URL=
+ARG VITE_PUBLIC_APP_URL=
+ARG VITE_SIMPLE_APP_URL=
+ARG VITE_SENTINEL_APP_URL=
 RUN cd nook-app/nook-web/nook-web-app \
     && VITE_BASE="${VITE_BASE}" \
     VITE_SITE_URL="${VITE_SITE_URL}" \
@@ -112,6 +104,11 @@ RUN cd nook-app/nook-web/nook-web-app \
     VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
     VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
     bun run build
+ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
+ARG NOOK_EXTENSION_CHANNEL=production
+ARG NOOK_EXTENSION_VERSION=1.0.0
+ARG NOOK_EXTENSION_COMMIT=
+ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
 RUN cd nook-app/nook-web/nook-web-extension \
     && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
     NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
