@@ -1,0 +1,9 @@
+name: Synchronize ARC workspace
+description: >-
+  Trigger the kubernetes-novolume container-action path that copies /__w back
+  to the ARC runner before repository-local actions are resolved.
+
+runs:
+  using: docker
+  image: docker://ghcr.io/meta-secret/nook-pr-runner@sha256:36a069fac48495855997c5dc384c737856d516b16d47a4cce7cd9d512ca780e0
+  entrypoint: /usr/bin/true
