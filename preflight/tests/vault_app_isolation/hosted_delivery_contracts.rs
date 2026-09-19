@@ -319,7 +319,8 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         deploy_script.contains("deploy_pages()")
             && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
-            && deploy_script.contains("npx --yes \"wrangler@${NOOK_WRANGLER_VERSION}\" --version",)
+            && deploy_script.contains("node \"$wrangler_bin\" --version")
+            && deploy_script.contains("Dependency-locked Wrangler is missing")
             && deploy_script.contains("ci-pr-host-pages-deploy.sh")
             && deploy_script.contains(">\"$log\" 2>&1 &")
             && deploy_script.contains("unified_pid=$!")
@@ -328,14 +329,15 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && deploy_script.contains("sentinel_pid=$!")
             && deploy_script.contains("\"$deploy_dir/unified.log\"")
             && deploy_script.contains("wait_for_deploy"),
-        "independent Cloudflare preview uploads must prewarm pinned Wrangler, run concurrently, and all succeed before alias verification"
+        "independent Cloudflare preview uploads must use verified locked Wrangler, run concurrently, and all succeed before alias verification"
     );
     let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
     assert!(
-        host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
-            && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.114.0")
+        host_deploy.contains("node \"$wrangler_bin\"")
+            && host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
+            && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.120.0")
             && host_deploy.contains("pages deploy"),
-        "host Pages deploy must pin wrangler and deploy from the extracted dist tree"
+        "host Pages deploy must prefer locked Wrangler and retain a pinned static-dist fallback"
     );
     assert!(
         ci_tasks.contains("node \"{{.WEB_ROOT}}/node_modules/.bin/wrangler\"")

@@ -13,6 +13,7 @@ task_calls="$fixture_root/task.calls"
 verification_calls="$fixture_root/verification.calls"
 github_output="$fixture_root/github-output"
 mkdir -p "$fixture_bin"
+touch "$fixture_root/wrangler"
 
 cat > "$fixture_bin/bash" <<'EOF'
 #!/bin/bash
@@ -40,7 +41,7 @@ if [ "${1:-}" = "$NOOK_TEST_VERIFY_DEPLOYMENT" ]; then
 fi
 exec "$NOOK_TEST_REAL_BASH" "$@"
 EOF
-cat > "$fixture_bin/npx" <<'EOF'
+cat > "$fixture_bin/node" <<'EOF'
 #!/bin/bash
 printf 'wrangler fixture\n'
 EOF
@@ -116,7 +117,7 @@ if [ "$write_format" = '%{http_code}' ]; then
   printf '%s' "$status"
 fi
 EOF
-chmod +x "$fixture_bin/bash" "$fixture_bin/npx" "$fixture_bin/task"
+chmod +x "$fixture_bin/bash" "$fixture_bin/node" "$fixture_bin/task"
 chmod +x "$fixture_bin/curl"
 
 if output="$(env -u PR_NUMBER -u HEAD_SHA DEPLOYMENT_TAG=preview-branch bash "$script" 2>&1)"; then
@@ -152,6 +153,7 @@ if output="$(
     NOOK_TEST_HELPER_CALLS="$helper_calls" \
     NOOK_TEST_TASK_CALLS="$task_calls" \
     NOOK_HOST_PAGES_DEPLOY=1 \
+    NOOK_WRANGLER_BIN="$fixture_root/wrangler" \
     NOOK_WRANGLER_VERSION=fixture \
     DEPLOYMENT_TAG=preview-branch \
     HEAD_SHA=0123456789abcdef0123456789abcdef01234567 \
@@ -177,6 +179,7 @@ if output="$(
     NOOK_TEST_TASK_CALLS="$task_calls" \
     NOOK_TEST_VERIFICATION_CALLS="$verification_calls" \
     NOOK_HOST_PAGES_DEPLOY=1 \
+    NOOK_WRANGLER_BIN="$fixture_root/wrangler" \
     NOOK_WRANGLER_VERSION=fixture \
     DEPLOYMENT_TAG=preview-branch \
     HEAD_SHA=0123456789abcdef0123456789abcdef01234567 \
