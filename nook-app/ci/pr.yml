@@ -103,9 +103,9 @@ tasks:
       - task: ci:pr:bake
         vars: { PR_BAKE_TARGET: pr-browser-artifacts }
       - cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.REPO_ROOT}}/nook-app/'
-      - test -e nook-app/nook-web/node_modules || ln -s nook-web-app/node_modules nook-app/nook-web/node_modules
+      - test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'
       - |
-        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' './nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
         install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
         ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
 

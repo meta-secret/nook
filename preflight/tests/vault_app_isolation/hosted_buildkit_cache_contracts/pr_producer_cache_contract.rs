@@ -54,6 +54,12 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(bake.contains("output = [\"type=cacheonly\"]"));
         assert!(tasks.contains("coverage-export.output=type=local"));
         assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
+        assert!(tasks.contains(
+            "test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'",
+        ));
+        assert!(tasks.contains(
+            "'{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json'",
+        ));
         let product = self
             .root
             .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
