@@ -150,10 +150,12 @@ tasks:
           --set "preflight-{{.POLICY_STAGE}}.contexts.repository-git=$metadata" \
           preflight-{{.POLICY_STAGE}} || status=$?
         if [ "$status" -ne 0 ]; then
-          ref="$({{.DOCKER}} buildx history ls --format json \
-            | jq -sr 'map(select(.status == "Error" and (.name | contains("preflight ({{.POLICY_STAGE}})")))) | first | .ref // empty')"
-          if [ -n "$ref" ]; then
-            {{.DOCKER}} buildx history logs "$ref" || true
+          if [ "${BUILDKIT_PROGRESS:-}" = quiet ]; then
+            ref="$({{.DOCKER}} buildx history ls --format json \
+              | jq -sr 'map(select(.status == "Error" and (.name | contains("preflight ({{.POLICY_STAGE}})")))) | first | .ref // empty')"
+            if [ -n "$ref" ]; then
+              {{.DOCKER}} buildx history logs "$ref" || true
+            fi
           fi
           exit "$status"
         fi

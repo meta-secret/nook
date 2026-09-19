@@ -39,9 +39,9 @@ jobs:
         shell: bash
     env:
       CI: "true"
-      # Keep successful Bake solves compact. Buildx still reports terminal errors,
-      # and a failing target can be rerun with plain progress for diagnosis.
-      BUILDKIT_PROGRESS: quiet
+      # Keep Bake vertices visible while high-volume tool output is summarized
+      # at its source (for example, jscpd prints only its final table).
+      BUILDKIT_PROGRESS: plain
       LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha }}
       SCCACHE_OPTIONAL: ${{ (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
       WASM_BUILD_MODE: dev
@@ -126,27 +126,27 @@ jobs:
           echo "research=$research" >> "$GITHUB_OUTPUT"
       - name: Verification — formatting, tooling, Rust, WASM and web
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
-        run: task ci:pr:verification
+        run: task --silent ci:pr:verification
       - name: Verification — policy-only PR
         if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
-        run: task ci:pr:verification:tooling
+        run: task --silent ci:pr:verification:tooling
       - name: Tests and coverage — Rust, WASM, web, Loom and preflight
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
-        run: task ci:pr:tests
+        run: task --silent ci:pr:tests
       - name: Tests — policy-only PR
         if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
-        run: task ci:pr:tests:policy
+        run: task --silent ci:pr:tests:policy
       - name: Test delivery helpers
         run: |
           node --test .github/scripts/workbench-publish.test.cjs
           node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs .github/workflows/lib/base-coverage-artifact.test.cjs
       - name: Heavy verification — fuzz and Kani
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
-        run: task ci:pr:heavy
+        run: task --silent ci:pr:heavy
       - name: Export coverage reporter and stage local report
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
         run: |
-          task preflight:export PREFLIGHT_OUTPUT_DIR="$PR_ARTIFACT_DIR/coverage/tools"
+          task --silent preflight:export PREFLIGHT_OUTPUT_DIR="$PR_ARTIFACT_DIR/coverage/tools"
           mkdir -p coverage/current
           cp -a "$PR_ARTIFACT_DIR/coverage/." coverage/current/
       - name: Report coverage
@@ -156,16 +156,16 @@ jobs:
           source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       - name: Export web artifacts into this runner
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
-        run: task ci:pr:browser:prepare
+        run: task --silent ci:pr:browser:prepare
       - name: Full browser and extension suites
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && inputs.full_e2e_requested
-        run: task ci:pr:browser:full
+        run: task --silent ci:pr:browser:full
       - name: Authentication-sensitive extension regression
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
-        run: task ci:pr:browser:auth
+        run: task --silent ci:pr:browser:auth
       - name: Web research verification and browser tests
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && steps.browser-scope.outputs.research == 'true'
-        run: task web:research:verify
+        run: task --silent web:research:verify
       - name: Restore verified production artifacts after browser tests
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
         run: |

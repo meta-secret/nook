@@ -34,7 +34,8 @@ class DockerizedRustBuildKitContract {
       "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
     );
     expect(dockerSetup).toContain("logout: false");
-    expect(workflow).toContain("BUILDKIT_PROGRESS: quiet");
+    expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
+    expect(workflow).toContain("task --silent ci:pr:verification");
     expect(workflow).not.toContain("nook-cache-telemetry");
     expect(workflow).not.toContain("actions/upload-artifact");
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
