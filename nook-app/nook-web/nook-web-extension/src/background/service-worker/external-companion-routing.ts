@@ -186,9 +186,7 @@ export class ExternalCompanionRouter {
       message,
     )
     if (pairingApproval.kind === ConcreteDecoderResultKind.Rejected) {
-      sendResponse(
-        pairingGrantDecodeFailureResponse(message),
-      )
+      sendResponse(pairingGrantDecodeFailureResponse(message))
       return false
     }
     if (eventLogRecordsSnapshot.kind === SerializedWireSnapshotKind.Missing) {
