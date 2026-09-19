@@ -44,7 +44,7 @@ if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
   fi
   # Prove the exported, lockfile-resolved CLI before four deploy processes use it.
   # No package-manager install or mutable registry lookup belongs in this path.
-  node "$wrangler_bin" --version >/dev/null
+  node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler --version >/dev/null
 fi
 
 deploy_pages() {

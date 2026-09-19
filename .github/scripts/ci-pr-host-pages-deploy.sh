@@ -33,7 +33,7 @@ fi
 
 wrangler() {
   if [ -f "$wrangler_bin" ]; then
-    node "$wrangler_bin" "$@"
+    node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler "$@"
   else
     # Main's deployment handoff deliberately contains only static dist files,
     # not the 1 GB dependency tree. Its setup-node step supplies pinned npx.

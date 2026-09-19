@@ -319,7 +319,9 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         deploy_script.contains("deploy_pages()")
             && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
-            && deploy_script.contains("node \"$wrangler_bin\" --version")
+            && deploy_script.contains(
+                "node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler --version",
+            )
             && deploy_script.contains("Dependency-locked Wrangler is missing")
             && deploy_script.contains("ci-pr-host-pages-deploy.sh")
             && deploy_script.contains(">\"$log\" 2>&1 &")
@@ -333,7 +335,8 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
     assert!(
-        host_deploy.contains("node \"$wrangler_bin\"")
+        host_deploy
+            .contains("node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler \"$@\"",)
             && host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
             && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.120.0")
             && host_deploy.contains("pages deploy"),
