@@ -86,10 +86,11 @@ impl WorkflowRuntimeContract<'_> {
                 .and_then(|(_, remainder)| remainder.split_once(next_job).map(|(job, _)| job))
                 .expect("Main must retain its browser job boundaries");
             assert!(
-                job.contains("cd /meta-secret/nook")
+                job.contains("cp -R /meta-secret/nook/.github \"$GITHUB_WORKSPACE/.github\"")
+                    && job.contains("cd /meta-secret/nook")
                     && job.contains(command)
                     && !job.contains("working-directory: /meta-secret/nook"),
-                "Main browser jobs must enter the prepared image source inside the script so the ARC hook keeps its runner-workspace working directory"
+                "Main browser jobs must seed the runner workspace action tree before entering the prepared image source inside the script"
             );
         }
         self.assert_native_build_envelope();

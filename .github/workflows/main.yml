@@ -436,6 +436,7 @@ jobs:
     steps:
       - name: Local-provider web e2e
         run: |
+          cp -R /meta-secret/nook/.github "$GITHUB_WORKSPACE/.github"
           cd /meta-secret/nook
           task _ci:main:web:e2e-only
         env:
@@ -460,6 +461,7 @@ jobs:
     steps:
       - name: Extension e2e
         run: |
+          cp -R /meta-secret/nook/.github "$GITHUB_WORKSPACE/.github"
           cd /meta-secret/nook
           task _extension:test:e2e
         env:
