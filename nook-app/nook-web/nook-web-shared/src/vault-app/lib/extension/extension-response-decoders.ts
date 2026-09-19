@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 import * as ParseResult from "effect/ParseResult";
 import * as AST from "effect/SchemaAST";
+import { NookExtensionIdentityHandoffProviderOutcome } from "$app-wasm";
+import type { NookExtensionIdentityHandoffProviderOutcomeState } from "$app-wasm";
 import {
   ExtensionPairingDeliveryKind,
   ExtensionPairingRejectionReason,
@@ -67,6 +69,30 @@ export type AcceptedIdentityHandoffResponse = Schema.Schema.Type<
   typeof AcceptedIdentityHandoffResponseSchema
 >;
 
+class RejectedIdentityHandoffResponseFields {
+  static build() {
+    return {
+      ok: Schema.Literal(false),
+      reason: Schema.String,
+    };
+  }
+}
+const RejectedIdentityHandoffResponseSchema = Schema.Struct(
+  RejectedIdentityHandoffResponseFields.build(),
+);
+
+type RejectedIdentityHandoffResponseInput = Schema.Schema.Type<
+  typeof RejectedIdentityHandoffResponseSchema
+>;
+
+export type RejectedIdentityHandoffResponse = {
+  readonly ok: false;
+  readonly state: NookExtensionIdentityHandoffProviderOutcomeState;
+};
+
+export type IdentityHandoffResponse =
+  AcceptedIdentityHandoffResponse | RejectedIdentityHandoffResponse;
+
 export enum ExtensionResponseDecodeFailureKind {
   InvalidResponse = "invalid-response",
 }
@@ -81,16 +107,33 @@ export class ExtensionResponseDecodeFailure {
 export class IdentityHandoffResponseDecoder {
   decode(
     value?: ExtensionRuntimeResponseObject,
-  ): Effect.Effect<
-    AcceptedIdentityHandoffResponse,
-    ExtensionResponseDecodeFailure
-  > {
-    return Schema.decodeUnknown(AcceptedIdentityHandoffResponseSchema)(
-      value,
-      strictDecodeOptions,
-    ).pipe(
+  ): Effect.Effect<IdentityHandoffResponse, ExtensionResponseDecodeFailure> {
+    const accepted = Schema.decodeUnknown(
+      AcceptedIdentityHandoffResponseSchema,
+    )(value, strictDecodeOptions).pipe(
       Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
     );
+    const rejected = Schema.decodeUnknown(
+      RejectedIdentityHandoffResponseSchema,
+    )(value, strictDecodeOptions).pipe(
+      Effect.map(
+        (
+          response: RejectedIdentityHandoffResponseInput,
+        ): RejectedIdentityHandoffResponse => {
+          const outcome =
+            NookExtensionIdentityHandoffProviderOutcome.classify_rejection(
+              response.reason,
+            );
+          try {
+            return { ok: false, state: outcome.state };
+          } finally {
+            outcome.free();
+          }
+        },
+      ),
+      Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
+    );
+    return accepted.pipe(Effect.orElse(() => rejected));
   }
 }
 
