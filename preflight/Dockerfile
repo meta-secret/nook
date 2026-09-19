@@ -114,6 +114,14 @@ COPY .github/formatting/package.json .github/formatting/bun.lock ./.github/forma
 RUN bun install --cwd .github/formatting --frozen-lockfile --ignore-scripts
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock ./agentic-ai/loom/
 RUN bun install --cwd agentic-ai/loom --frozen-lockfile
+COPY .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/
+COPY .cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/
+COPY .cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/
+COPY .cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/package.json ./.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/
+COPY .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/package.json ./.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/
+RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts; do \
+      bun install --cwd "$directory" --frozen-lockfile --ignore-scripts; \
+    done
 
 FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
@@ -132,7 +140,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 FROM policy-source AS pr-verification
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    task tooling:static \
+    task tooling:static:prepared \
     && task loom:format:check \
     && task loom:module-experts:validate \
     && task loom:structural-experts:validate \

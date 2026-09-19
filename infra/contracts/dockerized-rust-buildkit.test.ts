@@ -61,6 +61,21 @@ class DockerizedRustBuildKitContract {
     expect(preflight).toContain(
       "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
     );
+    const policyTools = preflight.indexOf("FROM deps AS policy-tools");
+    const policySource = preflight.indexOf("FROM policy-tools AS policy-source");
+    const preparedDependencies = preflight.indexOf(
+      "RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts",
+      policyTools,
+    );
+    expect(preparedDependencies).toBeGreaterThan(policyTools);
+    expect(policySource).toBeGreaterThan(preparedDependencies);
+    expect(preflight).toContain("task tooling:static:prepared");
+    expect(
+      preflight.slice(
+        preflight.indexOf("FROM policy-source AS pr-verification"),
+        preflight.indexOf("FROM loom-verify AS repository-policy"),
+      ),
+    ).not.toContain("bun install");
     expect(this.read("preflight/Taskfile.yml")).toContain(
       'buildx history logs "$ref"',
     );

@@ -23,6 +23,24 @@ tasks:
         done
         exit "$failed"
 
+  tooling:static:prepared:
+    desc: Run repository tooling checks after a cached image layer has installed dependencies.
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - |
+        failed=0
+        for directory in . agentic-ai/loom .cortex/teams/ai/dynamic-skills/*/scripts; do
+          test -f "$directory/package.json" || continue
+          if [ ! -d "$directory/node_modules" ]; then
+            printf 'missing prepared dependencies: %s/node_modules\n' "$directory" >&2
+            failed=1
+            continue
+          fi
+          bun run --cwd "$directory" lint || failed=1
+          bun run --cwd "$directory" check || failed=1
+        done
+        exit "$failed"
+
   web:static:
     desc: Check every web surface after preparing the required WASM contracts, without production builds.
     deps: [setup:web:focused]
