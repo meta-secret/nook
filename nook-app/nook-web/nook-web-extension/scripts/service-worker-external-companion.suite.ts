@@ -166,28 +166,28 @@ describe('external companion routing', () => {
       },
       reason: 'invalid-pairing-grant-providers',
     },
-  ])('preserves the specific pairing rejection for an invalid $name', async ({
-    payload,
-    reason,
-  }) => {
-    const { ExternalCompanionRouter } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const sendResponse = mock(() => {})
-    const message = { ...externalPairingMessage, payload }
+  ])(
+    'preserves the specific pairing rejection for an invalid $name',
+    async ({ payload, reason }) => {
+      const { ExternalCompanionRouter } =
+        await import('../src/background/service-worker/external-companion-routing')
+      const sendResponse = mock(() => {})
+      const message = { ...externalPairingMessage, payload }
 
-    expect(
-      await new ExternalCompanionRouter({
-        dependencies: externalDependencies,
-        message,
-        sender: {
-          id: 'simple-vault',
-          url: 'https://simple.example.test/',
-        },
-        sendResponse,
-      }).route(),
-    ).toBe(false)
-    expect(sendResponse).toHaveBeenCalledWith({ ok: false, reason })
-  })
+      expect(
+        await new ExternalCompanionRouter({
+          dependencies: externalDependencies,
+          message,
+          sender: {
+            id: 'simple-vault',
+            url: 'https://simple.example.test/',
+          },
+          sendResponse,
+        }).route(),
+      ).toBe(false)
+      expect(sendResponse).toHaveBeenCalledWith({ ok: false, reason })
+    },
+  )
 
   test('keeps an authorized external launcher response channel open', async () => {
     openCompanionLauncher.mockClear()
