@@ -120,7 +120,7 @@ mod tests {
     fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
         fs::create_dir_all(root.join("nested"))?;
-        fs::create_dir_all(root.join("nook-app/nook-platform/docker/rust"))?;
+        fs::create_dir_all(root.join("nook-app/nook-platform/docker/rust/base"))?;
         fs::create_dir_all(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
         )?;
