@@ -30,6 +30,13 @@ on:
       product_changed:
         required: true
         type: boolean
+  workflow_dispatch:
+    inputs:
+      product_changed:
+        description: Run the complete Main product validation and development deployment
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read

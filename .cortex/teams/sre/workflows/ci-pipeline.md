@@ -33,6 +33,9 @@ and manual ecosystem execution in one Actions run named `CI`.
   five minutes. Existing shorter limits remain in place.
 - Privileged completion publishers remain separate trusted workflows.
 - Manual remote execution and release workflows remain separate.
+- Operators may dispatch `main.yml` directly on `main` with
+  `product_changed=true` to rerun the complete Main product validation and
+  gated development deployment without creating a source commit.
 
 ## Workflow map
 
@@ -112,6 +115,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 **`main.yml`**
 
+- Runs from the central CI caller after a product-changing Main push or from an
+  explicit `workflow_dispatch` with `product_changed=true`.
 - Owns merged-head ecosystem cache seeding and local cache telemetry.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
@@ -148,7 +153,7 @@ flowchart LR
   pr_yml --> pr_deployment[github-pages deployment status]
 
   merge[Manager fast-forwards tested dev SHA to main] --> ci_yml
-  ci_yml --> main_yml[main.yml reusable]
+  ci_yml --> main_yml[main.yml reusable or manual]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
