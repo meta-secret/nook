@@ -2,18 +2,38 @@ use nook_preflight::dockerfile_cache::DockerfileRepository;
 use std::{env, fs, path::PathBuf};
 
 #[test]
-fn dockerfiles_do_not_use_buildkit_cache_mounts() -> anyhow::Result<()> {
+fn dockerfiles_only_use_the_approved_stateful_policy_cache_mount() -> anyhow::Result<()> {
     let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     );
 
     let violations = DockerfileRepository::new(&repository_root).dockerfile_cache_mounts()?;
+    let policy_path = PathBuf::from("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile");
+    let (approved, forbidden): (Vec<_>, Vec<_>) = violations
+        .into_iter()
+        .partition(|violation| violation.path == policy_path);
+
+    assert_eq!(
+        approved.len(),
+        1,
+        "policy checks must use exactly one shared Cargo-home cache mount"
+    );
+    let policy = fs::read_to_string(repository_root.join(&policy_path))?;
+    let approved_line = approved
+        .first()
+        .and_then(|violation| policy.lines().nth(violation.line.saturating_sub(1)))
+        .unwrap_or_default();
+    assert_eq!(
+        approved_line.trim(),
+        "--mount=type=cache,id=nook-policy-cargo-home,target=/tmp/nook-policy-cargo,sharing=locked \\",
+        "the sole cache mount must remain the locked stateful policy Cargo home"
+    );
 
     assert!(
-        violations.is_empty(),
-        "Dockerfile cache mounts are prohibited; use ordinary immutable Docker layers instead:\n{}",
-        violations
+        forbidden.is_empty(),
+        "unapproved Dockerfile cache mounts are prohibited; use ordinary immutable Docker layers instead:\n{}",
+        forbidden
             .iter()
             .map(|violation| format!("{}:{}", violation.path.display(), violation.line))
             .collect::<Vec<_>>()

@@ -4,7 +4,6 @@ use std::{
     env, fs,
     ops::Deref,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 struct RepositoryFixture {
@@ -42,7 +41,8 @@ impl RepositoryFixture {
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
-    assert!(setup.contains("docker/login-action@v4"));
+    assert!(setup.contains("--password-stdin"));
+    assert!(!setup.contains("docker/login-action"));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(!setup.contains("cache-selection"));
@@ -147,48 +147,12 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     }
 
     let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
-    let buildkit_jobs = pr
-        .matches("uses: ./.github/actions/nook-docker-setup")
-        .count();
     assert!(
-        pr.matches("uses: ./.github/actions/nook-cache-telemetry")
-            .count()
-            == buildkit_jobs,
-        "every Buildx-backed PR job must preserve cache telemetry"
+        !pr.contains("uses: ./.github/actions/nook-cache-telemetry"),
+        "PR validation must not spend a minute collecting cache telemetry artifacts"
     );
     let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(main.contains("uses: ./.github/actions/nook-cache-telemetry"));
-
-    Ok(())
-}
-
-#[test]
-fn missing_optional_sccache_replay_report_does_not_fail_a_successful_build() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let reporter = root.join("nook-app/nook-platform/docker/sccache-report.sh");
-    let report_dir = tempfile::tempdir()?;
-
-    let missing = Command::new("bash")
-        .arg(&reporter)
-        .args(["--replay", "wasm-node-compiler"])
-        .env("NOOK_SCCACHE_REPORT_DIR", report_dir.path())
-        .output()?;
-    assert!(
-        missing.status.success(),
-        "optional telemetry replay must not overturn a successful compiler/test stage"
-    );
-    assert!(
-        String::from_utf8_lossy(&missing.stderr)
-            .contains("persisted report is unavailable for wasm-node-compiler"),
-        "missing replay telemetry must remain observable"
-    );
-
-    let invalid = Command::new("bash")
-        .arg(&reporter)
-        .args(["--replay", "invalid/stage"])
-        .env("NOOK_SCCACHE_REPORT_DIR", report_dir.path())
-        .output()?;
-    assert_eq!(invalid.status.code(), Some(2));
 
     Ok(())
 }

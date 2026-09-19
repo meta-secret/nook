@@ -1,0 +1,109 @@
+name: Publish research PR preview
+description: Reuse the verified research dist in the consolidated PR job.
+inputs:
+  cloudflare-token:
+    required: true
+    description: Pages API token.
+  cloudflare-account:
+    required: true
+    description: Pages account.
+runs:
+  using: composite
+  steps:
+    - name: Deploy to Cloudflare Pages
+      id: deploy
+      env:
+        CF_PAGES_PROJECT_NAME: nook-web-research
+        RESEARCH_DIR: nook-app/nook-web/nook-web-research
+        WRANGLER_VERSION: 4.110.0
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        EVENT_NAME: ${{ github.event_name }}
+      shell: bash
+      run: task web:research:deploy
+
+    - name: Comment preview URL on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v9
+      env:
+        PREVIEW_URL: ${{ steps.deploy.outputs.deployment_url }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      with:
+        retries: 3
+        script: |
+          const marker = '### Web research preview'
+          const body = `${marker}\n\n${process.env.PREVIEW_URL}`
+          const issueNumber = Number(process.env.PR_NUMBER)
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: issueNumber,
+            per_page: 100,
+          })
+          const existing = comments.find((comment) => comment.body?.startsWith(marker))
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            })
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            })
+          }
+
+    - name: Record GitHub deployment
+      uses: actions/github-script@v9
+      env:
+        RESEARCH_URL: https://web-research.nkey.app
+        DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        DEPLOY_BRANCH: ${{ steps.deploy.outputs.deploy_branch }}
+        DEPLOY_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        EVENT_NAME: ${{ github.event_name }}
+      with:
+        retries: 3
+        script: |
+          const isPreview = process.env.EVENT_NAME === 'pull_request'
+          const ref = process.env.DEPLOY_REF
+          const environment = isPreview ? 'github-pages' : 'web-research'
+          const environmentUrl = isPreview
+            ? process.env.DEPLOYMENT_URL
+            : process.env.RESEARCH_URL
+
+          const deployment = await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref,
+            environment,
+            auto_merge: false,
+            required_contexts: [],
+            transient_environment: isPreview,
+            production_environment: !isPreview,
+            description: isPreview
+              ? `Web research preview from ${process.env.DEPLOY_BRANCH}`
+              : 'Web research production deployment',
+            payload: {
+              pages_url: process.env.DEPLOYMENT_URL,
+              custom_url: environmentUrl,
+            },
+          })
+
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: deployment.data.id,
+            state: 'success',
+            environment,
+            environment_url: environmentUrl,
+            log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            description: isPreview
+              ? 'Cloudflare Pages research preview deployed'
+              : 'Cloudflare Pages research site deployed',
+            auto_inactive: false,
+          })

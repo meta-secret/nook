@@ -46,10 +46,6 @@ variable "SIMULATED_SCCACHE_RUNTIME_MODE_FILE" {
   default = ""
 }
 
-variable "SIMULATED_SCCACHE_TELEMETRY_REPLAY" {
-  default = "disabled"
-}
-
 // BuildKit imports the immutable exact current and first-parent refs. An
 // expected absent ref is an ordinary cache miss; the transport-health check
 // and the actual cache export remain fail-fast.
@@ -95,8 +91,5 @@ target "compile-toolchain-context" {
   dockerfile = "compile-warm.Dockerfile"
   target = "compile-toolchain-image"
   platforms = ["linux/amd64"]
-  args = {
-    SIMULATED_SCCACHE_TELEMETRY_REPLAY = SIMULATED_SCCACHE_TELEMETRY_REPLAY
-  }
   output = ["type=cacheonly"]
 }

@@ -142,16 +142,16 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
   - New commit dependency results persist in Zot.
   - Trusted Main and local writers populate SeaweedFS.
-  - `pr.yml` mounts SeaweedFS sccache for same-repository jobs.
-  - `pr.yml` exports only git-commit `nook/remote-buildcache/**` refs.
-  - Main restore stays available.
-  - `pr.yml` starts only for `ci:validate` or `ci:full-e2e` label events.
-  - It then runs native Rust, shared Rust ecosystem gates, and one verified-WASM producer independently.
-  - Its small generated artifact feeds parallel preview and optional Main-fix consumers.
-  - Main-fix web e2e runs as two deterministic Playwright shards, while extension e2e remains an independent artifact consumer.
-  - Each Main-fix browser consumer builds only the browser image.
-  - A stable `Full browser e2e (main fix)` join requires both web shards and remains free of a low-reuse post-test cache rebuild.
-  - Main-fix consumers do not repeat Rust/WASM or web verification.
+  - `pr.yml` is one validation job with sequential verification, tests/coverage,
+    heavy checks and optional browser phases; independent tasks run concurrently.
+  - Trusted runs use `nook-k0s-container` and one persistent node-local BuildKit
+    connection. Fork/Dependabot runs remain hosted and secret-free.
+  - PRs mount SeaweedFS sccache but disable registry layer-cache imports/exports
+    and per-PR runnable-image publication.
+  - Modular Taskfiles and composite reporting/deploy actions retain one runner.
+  - `ci:full-e2e` enables full web and extension suites inside that job.
+  - Verification must finish before compiling expensive test binaries.
+  - Docker-backed cold/warm/failure proof: `task infra:bake-cache:prove-pr`.
   - **`main.yml`** serializes the cache-writing native → WASM → web lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
   - The portable WASM cache writer/proof selects the general ARC scale set.

@@ -90,6 +90,15 @@ RUN CI=1 timeout --kill-after=10s 10m task _ci:pr \
     && install -d /opt/nook \
     && touch /opt/nook/web-verified
 
+# One PR runner requests these phases in separate solves. Tests cannot start
+# while Rust, tooling, or web verification is still in progress.
+FROM nook-web-source AS pr-web-verification
+RUN task _format:check \
+    && task --parallel web:static:container _lint:parallel _compile:parallel
+
+FROM pr-web-verification AS pr-web-tests
+RUN CI=1 task _unit:parallel
+
 # Build the production web dist and browser extension at image time so both artifacts are present in
 # every container. The Cloudflare preview deploy and GitHub Pages extraction read
 # nook-app/nook-web/nook-web-app/dist; the extension bundle can be extracted from
@@ -125,6 +134,15 @@ FROM scratch AS nook-web-deploy-artifacts
 COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-web-app/dist /nook-app/nook-web/nook-web-app/dist
 COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist /nook-app/nook-web/nook-vault-simple/dist
 COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist /nook-app/nook-web/nook-vault-sentinel/dist
+
+# Small runtime handoff to the existing runner, never a registry image. Keep
+# Cargo artifacts and the image's synthetic Git metadata inside BuildKit.
+FROM nook-web-deploy-artifacts AS pr-browser-artifacts
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /nook-app/nook-web/nook-web-app/node_modules
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules /nook-app/nook-web/nook-web-research/node_modules
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm /nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-web-extension/dist /nook-app/nook-web/nook-web-extension/dist
 
 # Hosted PR CI selects this target. Copying the marker creates an explicit BuildKit dependency on
 # the sibling verification stage while preserving the same sealed runtime image and build outputs.

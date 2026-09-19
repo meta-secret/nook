@@ -55,6 +55,7 @@ on:
 permissions:
   actions: read
   contents: read
+  packages: write
 
 concurrency:
   group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}-${{ inputs.dispatch_nonce || 'default' }}
@@ -162,6 +163,13 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: "true"
           publish-compile-cache: ${{ inputs.publish_compile_cache }}
+      - name: Connect GHCR for runner publication
+        if: (inputs.tasks || inputs.task) == 'ci:pr:runner:publish' || (inputs.tasks || inputs.task) == 'ci:arc:runner:publish'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Confirm prepared build-only environment
         if: (inputs.tasks || inputs.task) == 'build:compile'
         run: |

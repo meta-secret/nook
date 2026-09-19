@@ -51,8 +51,12 @@ RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --recipe-path recipe.json \
-    && cargo chef cook --tests --recipe-path recipe.json \
-    && cargo chef cook --clippy --recipe-path recipe.json \
+    && mkdir -p tests \
+    && printf '#[test]\nfn dependency_warmup() {}\n' > tests/core_ownership.rs \
+    && cargo clippy --quiet --locked --all-targets -- -D warnings \
+    && cargo build --quiet --locked --bin nook-preflight \
+    && cargo test --quiet --locked --test core_ownership --no-run \
+    && rm -rf tests \
     && nook-sccache-report preflight-chef
 
 # Prewarm the coverage-instrumented dependency graph against dummy crate roots.
@@ -67,21 +71,23 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run \
     && nook-sccache-report preflight-coverage-dependencies
 
-FROM coverage-deps AS build
+FROM deps AS build
 
 COPY preflight/src src
 COPY preflight/tests tests
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo fmt --check \
-    && cargo clippy --locked --all-targets -- -D warnings \
-    && cargo test --locked --no-run \
-    && cargo build --locked --bin nook-preflight \
+    find src tests -type f -name '*.rs' -exec touch {} + \
+    && cargo fmt --check \
+    && cargo clippy --quiet --offline --locked --all-targets -- -D warnings \
+    && cargo build --quiet --offline --locked --bin nook-preflight \
     && strip /meta-secret/preflight-target/debug/nook-preflight \
     && nook-sccache-report preflight-build
 
 FROM build AS test
 
+# Test-only dependency warming must not be reachable from PR verification.
+COPY --from=coverage-deps /meta-secret/preflight-target/llvm-cov-target /meta-secret/preflight-target/llvm-cov-target
 COPY --from=repository-source / /meta-secret/nook
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
@@ -114,6 +120,14 @@ COPY .github/formatting/package.json .github/formatting/bun.lock ./.github/forma
 RUN bun install --cwd .github/formatting --frozen-lockfile --ignore-scripts
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock ./agentic-ai/loom/
 RUN bun install --cwd agentic-ai/loom --frozen-lockfile
+COPY .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/
+COPY .cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/
+COPY .cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/package.json ./.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/
+COPY .cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/package.json ./.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/
+COPY .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/package.json ./.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/
+RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts; do \
+      bun install --cwd "$directory" --frozen-lockfile --ignore-scripts; \
+    done
 
 FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
@@ -128,9 +142,21 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     task loom:verify
 
+# The PR verification solve checks tooling without compiling/running test binaries.
+FROM policy-source AS pr-verification
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    task tooling:static:prepared \
+    && task loom:format:check \
+    && task loom:module-experts:validate \
+    && task loom:structural-experts:validate \
+    && task loom:cortex-audit
+COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /usr/local/bin/nook-preflight
+
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \
-    && task loom:cortex-audit
+    && task loom:cortex-audit \
+    && bun test ./agentic-ai/loom/tests/pr-authored-budget.test.ts ./infra/contracts/registry-cache-descriptor.test.ts
 # The full preflight/coverage solve is shared with preflight-test, not repeated.
 COPY --from=test /meta-secret/nook/preflight/Cargo.toml /tmp/preflight-verified.toml
 

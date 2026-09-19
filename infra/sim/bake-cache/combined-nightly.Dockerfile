@@ -44,9 +44,15 @@ RUN cat /tmp/consumer.txt >/opt/consumer-stamp \
   && sleep 1 \
   && echo bake-sim-consumer-expensive
 
+# Dylint's tool and product dependency graph must remain independent of product
+# source and contains no per-run operational build arguments.
+FROM parent AS dylint-dependencies
+RUN sleep 1 \
+  && echo bake-sim-dylint-product-dependencies-expensive
+
 # Dylint's standalone lint crate is independent of product source. Keep its
 # expensive self-test before the product-wide source boundary.
-FROM parent AS dylint-self-test
+FROM dylint-dependencies AS dylint-self-test
 COPY inputs/crate-a.txt /tmp/dylint-crate.txt
 RUN cat /tmp/dylint-crate.txt >/opt/dylint-self-test-stamp \
   && sleep 1 \

@@ -411,38 +411,25 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-    - Trusted same-repository PRs run native Rust on a fresh ARC Pod.
-    - Fork and Dependabot checks remain GitHub-hosted and secret-free.
-      Trusted verified WASM producers use ARC.
-    - The WASM producer uploads one small run-stable package.
-    - That package is consumed by `PR / Verify and preview`.
-    - Main-fix PRs carrying `ci:full-e2e` feed two deterministic local-provider web shards plus an independent extension browser job.
-    - A stable browser join requires both web shards without rebuilding a low-reuse exact-head browser cache afterward.
-    - `Verify and preview` uses `always()`.
-    - It fails explicitly when any required producer or consumer fails.
-    - The established required check cannot be skipped by dependency failure.
-    - `Verify and preview` also needs Native Rust verification.
-    - A failed Native job must keep the merge-gate check from going green.
-    - `Verify and preview` never waits for native coverage.
-    - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
-    - Repeated failures still fail the gate.
-    - The Repository policy job owns preflight and Loom checks in one automatic
-      PR run without base-SHA comparison or changed-path classification.
-    - Its workflow is Actions-only setup and trust wiring; repository-owned
-      operations run through `.task/ci-workflows.yml`.
-    - Its `pr-preflight` cache covers `preflight/target` and the Cargo registry.
-    - The source-architecture proof requires cache restore before the first
-      preflight Cargo task.
+
+    - One `PR validation / Verify and preview` job owns the complete PR gate.
+    - Trusted PRs use one ARC job Pod and node-local persistent BuildKit;
+      fork/Dependabot PRs remain hosted and secret-free.
+    - Verification precedes test compilation, then tests/coverage precede heavy
+      checks and requested browsers. Independent tasks run concurrently per phase.
+    - No per-PR registry image or layer-cache transfer is used.
+    - Policy-only PRs run tooling verification and policy tests in the same job.
+    - A required step failure skips downstream work and fails the single check.
+    - Full browser suites run inside this job for `ci:full-e2e`; focused
+      authentication-sensitive extension regressions remain required.
+    - Compiler-cache telemetry and its zero-hit gate remain enforced.
 
     #### Coverage reporting
-    - Native coverage uses a run-stable artifact name consumed by a separate `needs: rust` report job.
-    - That job downloads the current attempt directly.
+    - Native coverage is exported locally and reported by a composite action in the same job.
     - When changed covered sources require a base comparison, it accepts an unexpired exact-commit artifact from an authenticated Main push.
     - This works even while that workflow is still running or if a later unrelated Main job fails.
     - If no trusted base artifact exists, it preserves the absolute coverage floor without cold-building the base revision.
-    - The trusted-handoff promoter inspects every run attempt.
-    - It requires the current successful consumer.
-    - It accepts an earlier successful producer only when the current attempt omitted that producer.
+    - The old trusted-handoff promoter is removed; BuildKit owns validation-layer reuse.
     - It validates the reused run-stable artifact before publication.
 
     #### Release workflow

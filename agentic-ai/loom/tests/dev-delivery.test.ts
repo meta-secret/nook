@@ -221,7 +221,7 @@ test('publication CI policy rejects active attempts and permits terminal attempt
 
 test('promotion contract keeps the stable aggregate readiness gate', () => {
   expect(DevDeliveryContract.promotion.requiredJobs).toEqual([
-    'Dev promotion readiness',
+    'PR validation / Verify and preview',
   ]);
 });
 

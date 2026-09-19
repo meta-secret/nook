@@ -98,8 +98,10 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
     let root = RepositoryFixture::repository_root();
     let central_ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
     let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
+    let pr_workflow = fs::read_to_string(root.join(".github/workflows/pr.yml"))?;
     let preflight_dockerfile = fs::read_to_string(root.join("preflight/Dockerfile"))?;
     let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
+    let pr_taskfile = fs::read_to_string(root.join("nook-app/ci/pr.yml"))?;
 
     assert!(
         !root
@@ -124,16 +126,24 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
             ),
         "central CI must route every authored PR tree to repository policy"
     );
-    let policy_route = central_ci
-        .split_once("\n  policy:\n")
-        .and_then(|(_, remainder)| remainder.split_once("\n  pr:\n"))
+    let pr_route = central_ci
+        .split_once("\n  pr:\n")
+        .and_then(|(_, remainder)| remainder.split_once("\n  main:\n"))
         .map(|(route, _)| route)
-        .ok_or_else(|| anyhow::anyhow!("central CI must define repository policy routing"))?;
+        .ok_or_else(|| anyhow::anyhow!("central CI must define consolidated PR routing"))?;
     assert!(
-        policy_route.contains("needs: scope")
-            && policy_route.contains("uses: ./.github/workflows/repository-policy.yml")
-            && !policy_route.contains("if:"),
-        "central CI must call repository policy without a path or label condition"
+        pr_route.contains("uses: ./.github/workflows/pr.yml")
+            && !pr_route.contains("paths:")
+            && !pr_route.contains("paths-ignore:")
+            && pr_workflow.contains("run: task --silent ci:pr:verification")
+            && pr_workflow.contains("run: task --silent ci:pr:verification:tooling")
+            && pr_workflow.contains("run: task --silent ci:pr:tests")
+            && pr_workflow.contains("run: task --silent ci:pr:tests:policy")
+            && pr_taskfile.contains("ci:pr:verification:tooling:")
+            && pr_taskfile.contains("task: preflight:policy:run")
+            && pr_taskfile.contains("ci:pr:tests:policy:")
+            && pr_taskfile.contains("preflight:repository-policy"),
+        "every consolidated PR route must execute repository policy in both product and policy-only paths"
     );
     assert!(workflow.contains("workflow_call:"));
     assert!(

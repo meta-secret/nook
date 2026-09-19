@@ -1,7 +1,6 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { z } from "zod";
 
 interface RequiredCompilerTextSelection {
   readonly sections: readonly string[];
@@ -24,104 +23,143 @@ class DockerizedRustBuildKitContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
   trustedRustConsumerUsesBuildKit(): void {
-    const workflow = z
-      .object({
-        jobs: z.record(
-          z.string(),
-          z.object({
-            steps: z
-              .array(
-                z.object({
-                  env: z
-                    .record(
-                      z.string(),
-                      z.union([z.string(), z.boolean(), z.number()]),
-                    )
-                    .optional(),
-                  if: z.string().optional(),
-                  run: z.string().optional(),
-                }),
-              )
-              .optional(),
-          }),
-        ),
-      })
-      .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    const rustJob = z
-      .object({
-        steps: z.array(
-          z.object({
-            env: z
-              .record(
-                z.string(),
-                z.union([z.string(), z.boolean(), z.number()]),
-              )
-              .optional(),
-            if: z.string().optional(),
-            run: z.string().optional(),
-          }),
-        ),
-      })
-      .parse(workflow.jobs.rust);
-    const rustSteps = rustJob.steps;
-    expect(
-      rustSteps.filter(
-        (step) =>
-          typeof step.if === "string" &&
-          step.if.includes("needs.rust-build.outputs.produced == 'true'") &&
-          typeof step.run === "string" &&
-          /\bdocker\s+(?:pull|run|create|start|exec)\b/.test(step.run),
-      ),
-    ).toEqual([]);
-    const buildKitVerifySteps = z
-      .array(
-        z.object({
-          env: z.object({ DOCKER_RUST_IMAGE: z.string() }),
-          if: z.literal("needs.rust-build.outputs.produced == 'true'"),
-          run: z.string(),
-        }),
-      )
-      .parse(
-        rustSteps.filter(
-          (step) =>
-            step.if === "needs.rust-build.outputs.produced == 'true'" &&
-            typeof step.run === "string" &&
-            step.run.includes("task docker:ci:rust:verify-built-buildkit"),
-        ),
-      );
-    expect(buildKitVerifySteps).toHaveLength(1);
-    for (const step of buildKitVerifySteps) {
-      expect(step.env.DOCKER_RUST_IMAGE).toBe(
-        "${{ needs.rust-build.outputs.image }}",
+    const workflow = this.read(".github/workflows/pr.yml");
+    const rootWorkflow = this.read(".github/workflows/ci.yml");
+    const dockerSetup = this.read(
+      ".github/actions/nook-docker-setup/action.yml",
+    );
+    const rustDockerTasks = this.read(
+      "nook-app/nook-platform/docker/Taskfile.yml",
+    );
+    const tasks = this.read("nook-app/ci/pr.yml");
+    const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
+    const preflight = this.read("preflight/Dockerfile");
+    const product = this.read(
+      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    expect(workflow).toContain("Connect trusted persistent BuildKit");
+    expect(rootWorkflow).toContain(
+      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    );
+    expect(dockerSetup).toContain("--password-stdin");
+    expect(dockerSetup).not.toContain("docker/login-action");
+    expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
+    expect(workflow).toContain("task --silent ci:pr:verification");
+    expect(workflow).not.toContain("nook-cache-telemetry");
+    expect(workflow).not.toContain("actions/upload-artifact");
+    expect(workflow).toContain("GHA_CACHE_ENABLED=");
+    expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
+    expect(workflow).not.toMatch(
+      /type=registry|needs\.rust-build|nook-pr-rust:|nook-pr-e2e:/,
+    );
+    expect(tasks).toContain("buildx bake");
+    expect(tasks).toContain("coverage-export.output=type=local");
+    expect(tasks).toContain("pr-browser-artifacts.output=type=local");
+    expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
+    expect(tasks).not.toContain(
+      'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
+    );
+    expect(tasks).not.toMatch(/docker\s+(?:pull|run|create|start|exec)\b/);
+    expect(tasks).toContain(
+      'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:repository-policy',
+    );
+    const rustDependencyStage = product.indexOf(
+      "FROM chef-deps AS pr-rust-dependencies",
+    );
+    const rustSourceStage = product.indexOf(
+      "FROM pr-rust-dependencies AS pr-rust-verify",
+    );
+    expect(rustDependencyStage).toBeGreaterThanOrEqual(0);
+    expect(rustSourceStage).toBeGreaterThan(rustDependencyStage);
+    expect(product.slice(rustDependencyStage, rustSourceStage)).not.toContain(
+      "COPY nook-app/nook-platform/ ./",
+    );
+    const rustVerification = product.slice(
+      rustSourceStage,
+      product.indexOf("FROM scratch AS pr-wasm-artifacts"),
+    );
+    expect(rustVerification).toContain(
+      "COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./",
+    );
+    expect(rustVerification).not.toContain("COPY nook-app/nook-platform/ ./");
+    for (const crate of [
+      "nook-app-common",
+      "nook-authenticator-domain",
+      "nook-replication",
+      "nook-auth2",
+      "nook-event-log",
+      "nook-companion-core",
+      "nook-core",
+      "nook-companion-wasm",
+      "nook-wasm",
+      "nook-wasm-composition-tests",
+    ]) {
+      expect(rustVerification).toContain(
+        `COPY nook-app/nook-platform/${crate} ${crate}`,
       );
     }
-
-    const dockerTasks = this.read("nook-app/nook-platform/docker/Taskfile.yml");
-    expect(dockerTasks).toMatch(
-      /docker:ci:rust:verify-built-buildkit:[\s\S]*?buildx bake[\s\S]*?pr-native-verify/,
+    expect(
+      rustVerification.match(/cargo clippy --quiet --offline/g)?.length,
+    ).toBe(9);
+    expect(
+      rustVerification.match(/cargo build --quiet --offline/g)?.length,
+    ).toBe(7);
+    expect(rustDockerTasks).toContain(
+      'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy',
     );
-    const bake = this.read(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
+    expect(bake).toContain('output = ["type=cacheonly"]');
+    expect(preflight).toContain(
+      "FROM policy-source AS pr-verification\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\",
     );
-    const dockerfile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+    expect(preflight).toContain(
+      "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
     );
-    expect(bake).toContain('target "pr-native-verify"');
-    expect(bake).toContain("PR_NATIVE_IMAGE = DOCKER_RUST_IMAGE");
-    expect(dockerfile).toContain(
-      "ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured",
+    const policyTools = preflight.indexOf("FROM deps AS policy-tools");
+    const preflightDependencies = preflight.slice(
+      preflight.indexOf("FROM rust-base AS deps"),
+      preflight.indexOf("FROM deps AS coverage-deps"),
     );
-    const producerStart = dockerfile.indexOf(
-      "FROM compile-native-source AS pr-native-build",
+    expect(preflightDependencies).toContain(
+      "cargo test --quiet --locked --test core_ownership --no-run",
     );
-    const verifyStart = dockerfile.indexOf(
-      "FROM ${PR_NATIVE_IMAGE} AS pr-native-verify",
+    expect(preflightDependencies).toContain(
+      "cargo clippy --quiet --locked --all-targets",
     );
-    expect(producerStart).toBeGreaterThanOrEqual(0);
-    expect(verifyStart).toBeGreaterThan(producerStart);
-    const producer = dockerfile.slice(producerStart, verifyStart);
-    expect(producer).not.toContain("COPY . .");
-    expect(producer).toContain("COPY nook-app nook-app");
+    expect(preflightDependencies).toContain(
+      "cargo build --quiet --locked --bin nook-preflight",
+    );
+    const policySource = preflight.indexOf(
+      "FROM policy-tools AS policy-source",
+    );
+    const preparedDependencies = preflight.indexOf(
+      "RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts",
+      policyTools,
+    );
+    expect(preparedDependencies).toBeGreaterThan(policyTools);
+    expect(policySource).toBeGreaterThan(preparedDependencies);
+    expect(preflight).toContain("task tooling:static:prepared");
+    const preflightBuild = preflight.slice(
+      preflight.indexOf("FROM deps AS build"),
+      preflight.indexOf("FROM build AS test"),
+    );
+    expect(preflightBuild).toContain(
+      "find src tests -type f -name '*.rs' -exec touch {} +",
+    );
+    expect(preflightBuild).toContain("cargo clippy --quiet --offline");
+    expect(preflightBuild).toContain("cargo build --quiet --offline");
+    expect(
+      preflight.slice(
+        preflight.indexOf("FROM policy-source AS pr-verification"),
+        preflight.indexOf("FROM loom-verify AS repository-policy"),
+      ),
+    ).not.toContain("bun install");
+    expect(this.read("preflight/Taskfile.yml")).toContain(
+      'buildx history logs "$ref"',
+    );
+    expect(this.read("nook-app/nook-web/nook-web-app/package.json")).toContain(
+      "bash .github/scripts/jscpd-summary.sh",
+    );
   }
 
   dylintDependencyCacheAndSccacheMode(): void {
@@ -155,13 +193,31 @@ class DockerizedRustBuildKitContract {
     expect(nightly).toContain(
       "COPY nook-app/nook-platform/dylint/nook-domain-api/Cargo.lock dylint/nook-domain-api/Cargo.lock",
     );
-    expect(nightly).toContain("mkdir -p dylint/nook-domain-api/src");
+    expect(nightly).toContain("dylint/nook-domain-api/src \\");
+    expect(nightly).toContain("cargo fetch --locked");
     expect(dependencyBuild).toBeGreaterThan(dependencyStage);
     expect(sourceStage).toBeGreaterThan(dependencyBuild);
     expect(nightly.slice(dependencyStage, sourceStage)).not.toContain(
       "COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/",
     );
     expect(sourceCopy).toBeGreaterThan(sourceStage);
+    const productDependencies = nightly.indexOf(
+      "FROM rust-dylint-build AS rust-dylint-product-deps",
+    );
+    const productSource = nightly.indexOf(
+      "FROM rust-dylint-product-deps AS rust-dylint-native",
+    );
+    expect(productDependencies).toBeGreaterThan(sourceCopy);
+    expect(productSource).toBeGreaterThan(productDependencies);
+    expect(nightly.slice(productDependencies, productSource)).toContain(
+      "cargo dylint --all -- --locked --all-targets",
+    );
+    expect(nightly.slice(productDependencies, productSource)).toContain(
+      "--target wasm32-unknown-unknown --all-targets",
+    );
+    expect(nightly.slice(productSource)).toContain(
+      "-type f -name '*.rs' -exec touch {} +",
+    );
     expect(product).toContain("ENV SCCACHE_CLIENT_SIDE=0");
     expect(product).not.toContain("ENV SCCACHE_CLIENT_SIDE=1");
     expect(wrapper).toContain(': "${SCCACHE_CLIENT_SIDE:=0}"');
@@ -289,7 +345,7 @@ class DockerizedRustBuildKitContract {
     );
   }
 
-  wasmNodeCompilerSecretsAndDylintTelemetryRuntime(): void {
+  wasmNodeCompilerSecretsWithoutReplayCacheBusters(): void {
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
@@ -407,22 +463,8 @@ class DockerizedRustBuildKitContract {
         "--target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines",
       ),
     );
-    expect(nodeCompilerStage).toContain(
-      "nook-sccache-report --replay wasm-node-compiler",
-    );
-    expect(nodeCompilerStage).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
-    for (const stageName of [
-      "wasm-source-nook-wasm",
-      "wasm-source-companion-wasm",
-      "wasm-clippy",
-      "wasm-build-nook-wasm",
-      "wasm-build-companion-wasm",
-      "wasm-release-tests",
-      "wasm-node-test-and-coverage",
-      "wasm-node-compiler",
-    ]) {
-      expect(product).toContain("nook-sccache-report --replay " + stageName);
-    }
+    expect(product).not.toContain("nook-sccache-report --replay");
+    expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     const handoffStageRange: DockerfileStageRange = {
       content: product,
       startMarker: "FROM builder-wasm-node-deps AS builder-wasm-handoff",
@@ -432,7 +474,7 @@ class DockerizedRustBuildKitContract {
     for (const descendant of [handoffStage, nodeCompilerStage]) {
       const descendantMounts: CompilerMountExpectation = {
         stage: descendant,
-        runCount: 2,
+        runCount: 1,
       };
       assertCompilerMounts(descendantMounts);
       expect(descendant).not.toContain("RUSTC_WRAPPER=");
@@ -464,41 +506,85 @@ class DockerizedRustBuildKitContract {
     const nightly = this.read(
       "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     );
-    for (const stageName of [
-      "rust-dylint-self-test",
-      "rust-dylint-native",
-      "rust-dylint-wasm",
-    ]) {
-      expect(nightly).toContain("nook-sccache-report --replay " + stageName);
-    }
+    expect(nightly).not.toContain("nook-sccache-report --replay");
+    expect(nightly).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     const report = this.read("nook-app/nook-platform/docker/sccache-report.sh");
     expect(report).toContain(
       'report_dir="${NOOK_SCCACHE_REPORT_DIR:-/opt/nook/sccache-reports}"',
     );
-    expect(report).toContain('if [ "$stage" = --replay ]; then');
+    expect(report).not.toContain('if [ "$stage" = --replay ]; then');
     expect(report).toContain(
       'printf \'%s\\n\' "$report" >"$report_dir/$stage.json"',
     );
-    const bake = this.read("nook-app/docker-bake.hcl");
-    expect(bake).toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
-    expect(this.read(".github/actions/nook-docker-setup/action.yml")).toContain(
-      "NOOK_SCCACHE_TELEMETRY_REPLAY=${GITHUB_RUN_ID:-local}",
+    expect(this.read("nook-app/docker-bake.hcl")).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+    expect(this.read(".github/actions/nook-docker-setup/action.yml")).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
   }
 
-  sharedRustBaseDoesNotConsumeTelemetryReplayArgument(): void {
+  compilerGraphsDoNotConsumeTelemetryReplayArgument(): void {
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    const baseStart = product.indexOf("\nFROM ${RUST_IMAGE} AS rust-base\n");
+    const baseStart = product.indexOf(
+      "\nFROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base\n",
+    );
     const baseEnd = product.indexOf("\nFROM ", baseStart + 1);
     expect(baseStart).toBeGreaterThanOrEqual(0);
     expect(baseEnd).toBeGreaterThan(baseStart);
     expect(product.slice(baseStart, baseEnd)).not.toContain(
       "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
-    expect(product).toContain(
-      'ARG NOOK_SCCACHE_TELEMETRY_REPLAY\nRUN if [ "$NOOK_SCCACHE_TELEMETRY_REPLAY" != disabled ]; then nook-sccache-report --replay wasm-source-nook-wasm; fi',
+    expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
+    expect(
+      this.read("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    ).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+  }
+
+  prCacheProofCoversDylintDependencyReuse(): void {
+    const simulator = this.read(
+      "infra/sim/bake-cache/pr-pipeline.Dockerfile",
+    );
+    const dependencyFingerprint = this.read(
+      "infra/sim/bake-cache/inputs/dylint-dependencies.txt",
+    );
+    const proof = this.read("infra/tasks/pr-cache.yml");
+    const nightly = this.read(
+      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+    );
+    expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
+    expect(dependencyFingerprint).toContain("dylint-link=6.0.1");
+    expect(dependencyFingerprint).toContain("nightly=nightly-2026-04-16");
+    expect(nightly).toContain("ENV CARGO_DYLINT_VERSION=6.0.1");
+    expect(nightly).toContain("ENV DYLINT_NIGHTLY=nightly-2026-04-16");
+    const dylintDependencies = nightly.indexOf(
+      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+    );
+    const dylintSelfTest = nightly.indexOf(
+      "FROM rust-dylint-build AS rust-dylint-self-test",
+    );
+    expect(dylintDependencies).toBeGreaterThanOrEqual(0);
+    expect(dylintSelfTest).toBeGreaterThan(dylintDependencies);
+    expect(nightly.slice(0, dylintSelfTest)).not.toContain(
+      "NOOK_SCCACHE_TELEMETRY_REPLAY",
+    );
+    expect(
+      nightly.slice(dylintDependencies, dylintSelfTest),
+    ).not.toContain("RUST_DYLINT_COVERAGE_FLOOR");
+    expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
+      simulator.indexOf("ARG SOURCE_REVISION"),
+    );
+    expect(simulator).toContain("bake-sim-cargo-dylint-dependencies");
+    expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
+    expect(proof).toContain(
+      "Warm verification unexpectedly reinstalled Dylint dependencies",
+    );
+    expect(proof).toContain(
+      "Source-only change unexpectedly reinstalled Dylint dependencies",
     );
   }
 
@@ -526,10 +612,14 @@ test(
   contract.dylintWrapperContentInvalidatesBuildGraph.bind(contract),
 );
 test(
-  "WASM Node compilers retain secrets and Dylint telemetry has Node",
-  contract.wasmNodeCompilerSecretsAndDylintTelemetryRuntime.bind(contract),
+  "WASM Node compilers retain secrets without replay cache busters",
+  contract.wasmNodeCompilerSecretsWithoutReplayCacheBusters.bind(contract),
 );
 test(
-  "shared rust-base cache key excludes per-run sccache telemetry replay",
-  contract.sharedRustBaseDoesNotConsumeTelemetryReplayArgument.bind(contract),
+  "compiler graphs exclude per-run sccache telemetry replay",
+  contract.compilerGraphsDoNotConsumeTelemetryReplayArgument.bind(contract),
+);
+test(
+  "local PR cache proof covers Dylint dependency reuse",
+  contract.prCacheProofCoversDylintDependencyReuse.bind(contract),
 );

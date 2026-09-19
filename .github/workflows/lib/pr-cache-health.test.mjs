@@ -543,6 +543,11 @@ void test("defers incomplete client-side writes but keeps changed-head zero hits
   });
   const coldPending = telemetry("rust", {
     sccache: pending.sccache,
+    buildkit: {
+      ...pending.buildkit,
+      cached_steps: 0,
+      cache_hit_rate_percent: 0,
+    },
     cache_scope: {
       ...pending.cache_scope,
       imports: {
@@ -715,135 +720,95 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("PR workflow covers every BuildKit-producing job without another build", () => {
+void test("one PR job avoids telemetry and registry handoffs", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
-  const cacheHealthWorkflow = fs.readFileSync(
-    ".github/workflows/pr-cache-health.yml",
+  const arcRunnerDockerfile = fs.readFileSync(
+    "infra/k0s/images/arc-runner/Dockerfile",
     "utf8",
   );
-  const ecosystem = fs.readFileSync(
-    ".github/workflows/rust-ecosystem-checks.yml",
+  const arcRunnerBake = fs.readFileSync(
+    "infra/k0s/images/arc-runner/docker-bake.hcl",
     "utf8",
   );
-  const telemetryAction = fs.readFileSync(
-    ".github/actions/nook-cache-telemetry/action.yml",
+  const arcRunnerPatch = fs.readFileSync(
+    "infra/k0s/images/arc-runner/runner-container-hooks-v0.8.1.patch",
     "utf8",
   );
-  const productDockerfile = fs.readFileSync(
-    "nook-app/nook-platform/docker/rust/product.Dockerfile",
+  const arcRunnerValues = fs.readFileSync(
+    "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
     "utf8",
   );
+  const arcContainerHook = fs.readFileSync(
+    "infra/k0s/manifests/arc/container-hook.yaml",
+    "utf8",
+  );
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
+  const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(
-    workflow,
-    /cache-health:\n[\s\S]*needs: \[rust-build, rust-ecosystem, rust, wasm, wasm-node-test, verify\]/,
+    rootWorkflow,
+    /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
   );
-  assert.match(workflow, /uses: \.\/\.github\/workflows\/pr-cache-health\.yml/);
+  assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.336\.0@sha256:/);
+  assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
+  assert.match(arcRunnerBake, /target "arc-runner-hooks-proof"/);
+  assert.match(arcRunnerPatch, /Synchronizing repository actions/);
+  assert.match(arcRunnerPatch, /Synchronizing downloaded action/);
+  assert.match(arcRunnerPatch, /execCpToPod/);
+  assert.match(arcRunnerPatch, /`\$\{args\.workingDirectory\}\/\.github`/);
   assert.match(
-    cacheHealthWorkflow,
-    /node \.github\/workflows\/lib\/pr-cache-health\.mjs/,
+    arcRunnerValues,
+    /image: ghcr\.io\/meta-secret\/nook-arc-runner@sha256:[0-9a-f]{64}/,
   );
+  assert.match(arcContainerHook, /mountPath: \/home\/runner\/_work/);
+  assert.match(workflow, /safe\.directory "\$GITHUB_WORKSPACE"/);
   assert.doesNotMatch(
     workflow,
-    /cache-health:[\s\S]*docker buildx (?:build|bake)/,
+    /uses: \.\/\.github\/actions\/nook-cache-telemetry/,
   );
-  assert.doesNotMatch(cacheHealthWorkflow, /docker buildx (?:build|bake)/);
-  assert.equal(
-    ecosystem.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)
-      ?.length,
-    3,
-  );
-  for (const result of [
-    "dependency-policy-result",
-    "deterministic-tests-result",
-    "dylint-result",
-  ]) {
-    assert.match(
-      workflow,
-      new RegExp(
-        `needs\\.rust-ecosystem\\.outputs\\.${result} \\|\\| 'cancelled'`,
-      ),
-    );
-  }
+  assert.doesNotMatch(workflow, /actions\/upload-artifact/);
+  assert.doesNotMatch(workflow, /pr-cache-health\.mjs/);
+  assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,
-    /\{"id":"(?:dependency-policy|deterministic-tests|dylint)","result":"\$\{\{ needs\.rust-ecosystem\.result \}\}/,
+    /type=registry|actions\/download-artifact|needs\.rust/,
   );
-  assert.match(
-    ecosystem,
-    /dependency-policy-result:[\s\S]*jobs\.dependency-policy\.outputs\.cache-result/,
-  );
-  assert.match(
-    ecosystem,
-    /deterministic-tests-result:[\s\S]*jobs\.deterministic-tests\.outputs\.cache-result/,
-  );
-  assert.match(
-    ecosystem,
-    /dylint-result:[\s\S]*jobs\.dylint\.outputs\.cache-result/,
-  );
-  assert.match(telemetryAction, /NOOK_CACHE_TELEMETRY_JOB_STATUS:/);
-  assert.match(
-    telemetryAction,
-    /if timeout 15s[\s\S]*start --output "\$baseline"; then/,
-  );
-  assert.match(telemetryAction, /baseline_collection_timeout:15s/);
-  assert.match(
-    telemetryAction,
-    /cache telemetry baseline unavailable[\s\S]*unavailable[\s\S]*--output "\$output"/i,
-  );
-  assert.match(
-    workflow,
-    /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\}/,
-  );
-  assert.match(
-    workflow,
-    /"id":"dependency-policy","result":"[^"]*","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"deterministic-tests","result":"[^"]*","buildExpected":true,"sccacheExpectation":"required","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"dylint","result":"[^"]*","buildExpected":true,"sccacheExpectation":"required","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"rust","result":"\$\{\{ needs\.rust\.result \}\}","buildExpected":\$\{\{ needs\.rust\.outputs\.cache-build-expected \|\| 'true' \}\},"sccacheExpectation":"\$\{\{ \(needs\.rust\.outputs\.cache-build-expected \|\| 'true'\) == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"wasm","result":"\$\{\{ needs\.wasm\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.cache-build-expected \|\| 'true' \}\},"sccacheExpectation":"\$\{\{ \(needs\.wasm\.outputs\.cache-build-expected \|\| 'true'\) == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"wasm-node-test","result":"\$\{\{ needs\.wasm-node-test\.result \}\}","buildExpected":\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' \}\},"sccacheExpectation":"\$\{\{ needs\.wasm\.outputs\.run-node-tests == 'true' && 'required' \|\| 'not_applicable' \}\}","readOnly":false/,
-  );
-  assert.match(
-    workflow,
-    /"id":"verify","result":"\$\{\{ needs\.verify\.result \}\}","buildExpected":true,"sccacheExpectation":"not_required","readOnly":false/,
-  );
-  const wasmNodeJob = workflow.slice(
-    workflow.indexOf("  wasm-node-test:"),
-    workflow.indexOf("  verify:", workflow.indexOf("  wasm-node-test:")),
-  );
-  for (const input of [
-    "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
-    "sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}",
-    "sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}",
-    "sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}",
-    'require-sccache: "true"',
+  for (const credential of [
+    "NOOK_SCCACHE_ACCESS_KEY",
+    "NOOK_SCCACHE_SECRET_KEY",
+    "NOOK_SCCACHE_ENDPOINT",
+    "NOOK_SCCACHE_BUCKET",
   ]) {
-    assert.match(
-      wasmNodeJob,
-      new RegExp(input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-    );
+    assert.ok(workflow.includes(credential));
   }
-  assert.match(
-    productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm-node-compiler\n(?:#.*\n|\n)*RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n[ ]{4}--mount=type=secret,id=sccache_s3_secret_key,required=false/,
-  );
-  assert.match(
-    productDockerfile,
-    /FROM builder-wasm-handoff AS builder-wasm\nCOPY --from=builder-wasm-node-compiler/,
+  assert.match(workflow, /require-sccache: "true"/);
+});
+
+void test("warm local BuildKit keeps the zero-hit compiler gate without registry imports", () => {
+  const record = telemetry("validation", {
+    cache_scope: {
+      ...telemetry("validation").cache_scope,
+      imports: { probes_complete: true, availability: [] },
+    },
+    sccache: {
+      ...telemetry("validation").sccache,
+      publication_status: "pending_verification",
+      cache_hits: 0,
+    },
+  });
+  const model = new PrCacheHealth().evaluate({
+    jobs: [
+      {
+        id: "validation",
+        result: "success",
+        buildExpected: true,
+        sccacheExpectation: SccacheExpectation.Required,
+        readOnly: true,
+      },
+    ],
+    telemetry: [record],
+  });
+  assert.equal(model.gate.verdict, "fail");
+  assert.ok(
+    model.gate.reasons.includes("validation:sccache_next_head_zero_hits"),
   );
 });

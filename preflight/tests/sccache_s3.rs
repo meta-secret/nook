@@ -60,9 +60,6 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "SeaweedFS S3 is unavailable",
         "Refusing to compile without a healthy remote sccache backend",
         "SeaweedFS S3 sccache is healthy",
-        "--set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'",
-        "--set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'",
-        "--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'",
     ] {
         assert!(
             sccache_tasks.contains(required),
@@ -103,9 +100,9 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     }
 
     let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
-    assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
-    assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(!bake.contains("variable \"SCCACHE_ENDPOINT\""));
+    assert!(!bake.contains("variable \"SCCACHE_BUCKET\""));
+    assert!(!bake.contains("variable \"SCCACHE_S3_MODE\""));
     assert!(bake.contains("variable \"SCCACHE_S3_ACCESS_KEY_FILE\""));
     assert!(bake.contains("variable \"SCCACHE_S3_SECRET_KEY_FILE\""));
     assert!(bake.contains("sccache_secrets ="));
@@ -116,10 +113,10 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
 
     let rust_base = RepositoryFixture::repository_root()
         .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
-    assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
-    assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
-    assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
-    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
+    assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
+    assert!(rust_base.contains("ENV SCCACHE_BUCKET=nook-sccache"));
+    assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
+    assert!(!rust_base.contains("ARG SCCACHE_"));
     assert!(rust_base.contains("SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock"));
 
     for path in [
@@ -172,7 +169,7 @@ fn dockerized_loom_verify_mounts_the_inherited_sccache_credentials() -> anyhow::
     let dockerfile = root.read("preflight/Dockerfile");
     let loom_verify = dockerfile
         .split_once("FROM policy-source AS loom-verify\n")
-        .and_then(|(_, tail)| tail.split_once("\nFROM loom-verify AS repository-policy"))
+        .and_then(|(_, tail)| tail.split_once("\nFROM policy-source AS pr-verification"))
         .context("preflight Dockerfile must define the loom-verify stage")?
         .0;
     for secret in [
@@ -346,53 +343,23 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         !e2e_pr.contains("NOOK_SCCACHE_") && !e2e_pr.contains("sccache-access-key:"),
         "arbitrary-ref e2e must remain secret-free"
     );
-    for (job_name, start, end) in [
-        (
-            "Build native Rust image",
-            "\n  rust-build:\n",
-            "\n  rust-ecosystem:\n",
-        ),
-        ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
-        (
-            "WASM build and artifact",
-            "\n  wasm:\n",
-            "\n  wasm-node-test:\n",
-        ),
-        ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
-        ("Web verification", "\n  verify:\n", "\n  cache-health:\n"),
-    ] {
-        let job = pr
-            .split_once(start)
-            .and_then(|(_, tail)| tail.split_once(end))
-            .map(|(job, _)| job)
-            .with_context(|| format!("PR workflow must keep the {job_name} job"))?;
-        for credential in compiler_credentials {
-            assert!(
-                job.contains(credential),
-                "Rust-producing PR job {job_name} must receive {credential}"
-            );
-        }
-        assert!(
-            job.contains("require-sccache: \"true\""),
-            "trusted compiler job {job_name} must fail closed without writable sccache"
-        );
-    }
+    assert_eq!(pr_docker_setups, 1, "one PR job owns all compiler work");
     for credential in compiler_credentials {
         assert_eq!(
             pr.matches(credential).count(),
-            5,
-            "only the five trusted PR compiler jobs may receive {credential}"
+            1,
+            "only the trusted PR validation job may receive {credential}"
         );
     }
     assert_eq!(
         pr.matches("require-sccache: \"true\"").count(),
-        5,
+        1,
         "every trusted PR compiler job must require writable sccache"
     );
     assert_eq!(
         pr.matches("isolated-cache-write: \"true\"").count(),
-        pr_docker_setups,
-        "PR Docker jobs must write only isolated remote-buildcache scopes"
+        0,
+        "PR validation must not export registry cache"
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
 
@@ -554,47 +521,17 @@ fn assert_sccache_mount_pair(run: &str, run_index: usize, path: &str, purpose: &
 
 fn assert_sccache_report_mounts(dockerfile: &str, path: &str) {
     let mut report_runs = 0;
-    let mut replay_runs = 0;
     for (run_index, run) in dockerfile_run_instructions(dockerfile).iter().enumerate() {
-        let has_replay_report = run.contains("nook-sccache-report --replay ");
-        let has_report = run
-            .split("nook-sccache-report ")
-            .skip(1)
-            .any(|suffix| !suffix.starts_with("--replay "));
-        if !has_replay_report && !has_report {
+        if !run.contains("nook-sccache-report ") {
             continue;
         }
-
-        if has_replay_report {
-            assert!(
-                !has_report,
-                "replay report RUN #{run_index} in {path} must not also query sccache"
-            );
-            replay_runs += 1;
-            assert_eq!(
-                run.matches(SCCACHE_ACCESS_MOUNT).count(),
-                0,
-                "replay report RUN #{run_index} in {path} must not mount the sccache access key"
-            );
-            assert_eq!(
-                run.matches(SCCACHE_SECRET_MOUNT).count(),
-                0,
-                "replay report RUN #{run_index} in {path} must not mount the sccache secret key"
-            );
-        }
-        if has_report {
-            report_runs += 1;
-            assert_sccache_mount_pair(run, run_index, path, "reported compiler");
-        }
+        report_runs += 1;
+        assert_sccache_mount_pair(run, run_index, path, "reported compiler");
     }
 
     assert!(
         report_runs > 0,
         "{path} must contain at least one non-replay sccache report RUN"
-    );
-    assert!(
-        replay_runs > 0,
-        "{path} must contain at least one replay-only sccache report RUN"
     );
 }
 
@@ -656,11 +593,11 @@ fn assert_rust_build_cache_boundary() {
     let rust_base = RepositoryFixture::repository_root()
         .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
-    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
+    assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
 
-    assert!(bake.contains("SCCACHE_S3_MODE") && bake.contains("= SCCACHE_S3_MODE"));
-    assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
+    assert!(!bake.contains("variable \"SCCACHE_S3_MODE\""));
+    assert!(!app_tasks.contains("*.args.SCCACHE_"));
 
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);
@@ -699,10 +636,9 @@ mod sccache_report_mount_tests {
             "RUN --mount=type=secret,id=sccache_s3_access_key,required=false \\\n",
             "    --mount=type=secret,id=sccache_s3_secret_key,required=false \\\n",
             "    cargo install cargo-dylint dylint-link --locked\n",
-            "RUN if [ \"$REPLAY\" != disabled ]; then nook-sccache-report --replay compiler; fi\n",
         );
 
-        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 4);
+        assert_eq!(dockerfile_run_instructions(dockerfile).len(), 3);
         assert_sccache_report_mounts(dockerfile, "fixture.Dockerfile");
         assert_dylint_toolchain_install_mounts(dockerfile, "fixture.Dockerfile");
     }

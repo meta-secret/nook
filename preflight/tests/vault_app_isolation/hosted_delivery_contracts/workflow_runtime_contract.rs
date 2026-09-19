@@ -10,7 +10,6 @@ impl WorkflowRuntimeContract<'_> {
     pub(super) fn assert_contract(&self) {
         let root = self.root;
         for workflow in [
-            ".github/workflows/pr.yml",
             ".github/workflows/main.yml",
             ".github/workflows/release.yml",
         ] {
@@ -31,7 +30,7 @@ impl WorkflowRuntimeContract<'_> {
         let ecosystem = root.read(".github/workflows/rust-ecosystem-checks.yml");
         let ecosystem_entry = root.read(".github/workflows/ci.yml");
         assert!(
-            pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
+            pr.contains("'nook-k0s-container' || 'ubuntu-latest'")
                 && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                 && release.contains("runs-on: nook-k0s-container")
                 && pr
@@ -78,43 +77,23 @@ impl WorkflowRuntimeContract<'_> {
     fn assert_native_build_envelope(&self) {
         let root = self.root;
         let pr = root.read(".github/workflows/pr.yml");
-        let native_job = pr
-            .split_once("  rust:\n")
-            .and_then(|(_, jobs)| jobs.split_once("\n  wasm:\n"))
-            .map(|(job, _)| job)
-            .unwrap_or_else(|| panic!("PR workflow must define a Native Rust producer job"));
-        assert!(
-            native_job.contains("timeout-minutes: 10"),
-            "PR Native Rust producer must retain its bounded 10-minute execution envelope"
-        );
+        assert_eq!(pr.matches("    runs-on:").count(), 1);
+        assert!(pr.contains("timeout-minutes: 240"));
     }
 
     fn assert_wasm_build_envelope(&self) {
         let root = self.root;
-        for (workflow, end_marker, required_steps) in [
-            (
-                ".github/workflows/pr.yml",
-                "  wasm-node-test:\n",
-                [
-                    "name: WASM build and artifact",
-                    "Publish git-scoped WASM BuildKit cache",
-                    "Stamp WASM handoff attempt",
-                    "Upload built WASM handoff",
-                    "uses: ./.github/actions/nook-cache-telemetry",
-                ],
-            ),
-            (
-                ".github/workflows/main.yml",
-                "  wasm-cache-publish:\n",
-                [
-                    "name: WASM verification and artifact",
-                    "Publish verified WASM BuildKit cache",
-                    "Stamp WASM run attempt",
-                    "Upload WASM handoff",
-                    "uses: ./.github/actions/nook-cache-telemetry",
-                ],
-            ),
-        ] {
+        for (workflow, end_marker, required_steps) in [(
+            ".github/workflows/main.yml",
+            "  wasm-cache-publish:\n",
+            [
+                "name: WASM verification and artifact",
+                "Publish verified WASM BuildKit cache",
+                "Stamp WASM run attempt",
+                "Upload WASM handoff",
+                "uses: ./.github/actions/nook-cache-telemetry",
+            ],
+        )] {
             let workflow_source = root.read(workflow);
             let wasm_job = workflow_source
                 .split_once("  wasm:\n")

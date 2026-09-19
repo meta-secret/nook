@@ -228,6 +228,8 @@ fn loom_workflow_audits_every_cortex_change() {
     let root = RepositoryFixture::repository_root();
     let entrypoint = root.read(".github/workflows/ci.yml");
     let workflow = root.read(".github/workflows/repository-policy.yml");
+    let pr_workflow = root.read(".github/workflows/pr.yml");
+    let pr_tasks = root.read("nook-app/ci/pr.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
         entrypoint.contains("pull_request:")
@@ -236,7 +238,13 @@ fn loom_workflow_audits_every_cortex_change() {
             && !entrypoint.contains("paths:")
             && !entrypoint.contains("paths-ignore:")
             && entrypoint.contains(
-                "  policy:\n    name: Repository policy\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
+                "  policy:\n    name: Repository policy\n    if: github.event_name == 'push'\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
+            )
+            && entrypoint.contains("    uses: ./.github/workflows/pr.yml")
+            && pr_workflow.contains("run: task --silent ci:pr:tests")
+            && pr_workflow.contains("run: task --silent ci:pr:tests:policy")
+            && pr_tasks.contains(
+                "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
             )
             && workflow.contains("workflow_call:"),
         "repository policy must validate every PR and Main tree"

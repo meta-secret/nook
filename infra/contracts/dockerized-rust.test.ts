@@ -53,100 +53,46 @@ class DockerizedRustContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
   previewGates(): void {
+    const stepContract = z.object({
+      run: z.string().optional(),
+      uses: z.string().optional(),
+      if: z.string().optional(),
+      "continue-on-error": z.boolean().optional(),
+    });
+    const jobContract = z.object({ steps: z.array(stepContract) });
     const workflow = z
       .object({
-        jobs: z.record(
-          z.string(),
-          z.object({
-            needs: z.union([z.string(), z.array(z.string())]).optional(),
-            if: z.string().optional(),
-            steps: z
-              .array(
-                z.object({
-                  run: z.string().optional(),
-                  if: z.string().optional(),
-                }),
-              )
-              .optional(),
-          }),
-        ),
+        jobs: z.record(z.string(), jobContract),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
-    const preview = z
-      .object({
-        needs: z.array(z.string()),
-        steps: z
-          .tuple([z.object({ run: z.string() })])
-          .rest(z.object({ run: z.string().optional() })),
-      })
-      .parse(workflow.jobs.preview);
-    const script = preview.steps[0].run;
-    expect(preview.needs).toContain("wasm-node-test");
-    expect(preview.needs).toContain("extension-e2e");
-    expect(Object.keys(workflow.jobs)).not.toContain(
-      "auth-sensitive-extension-e2e",
-    );
-    expect(Object.keys(workflow.jobs)).not.toContain("full-extension-e2e");
-    const extension = z
-      .object({
-        if: z.string(),
-        steps: z.array(
-          z.object({ if: z.string().optional(), run: z.string().optional() }),
-        ),
-      })
-      .parse(workflow.jobs["extension-e2e"]);
-    expect(extension.if).toContain("always()");
-    expect(extension.if).toContain("needs.verify.result == 'success'");
-    expect(extension.if).toContain(
-      "inputs.full_e2e_requested || needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
-    );
-    expect(extension.steps).toEqual([
-      { if: "inputs.full_e2e_requested", run: "task _extension:test:e2e" },
-      {
-        if: "${{ !inputs.full_e2e_requested }}",
-        run: "task _extension:test:e2e:file",
-      },
-    ]);
-    for (const job of ["extension-e2e", "full-e2e-shard"]) {
-      const dependent = z
-        .object({ needs: z.union([z.string(), z.array(z.string())]) })
-        .parse(workflow.jobs[job]);
-      const needs =
-        typeof dependent.needs === "string"
-          ? [dependent.needs]
-          : dependent.needs;
-      expect(needs).not.toContain("wasm-node-test");
-      expect(needs).toContain("verify");
+    expect(Object.keys(workflow.jobs)).toEqual(["validation"]);
+    const steps = jobContract.parse(workflow.jobs.validation).steps;
+    let previous = -1;
+    for (const command of [
+      "task --silent ci:pr:verification",
+      "task --silent ci:pr:tests",
+      "task --silent ci:pr:heavy",
+      "task --silent ci:pr:browser:full",
+    ]) {
+      const index = steps.findIndex((step) => step.run === command);
+      expect(index).toBeGreaterThan(previous);
+      const step = stepContract.parse(steps[index]);
+      expect(step.if).not.toContain("always()");
+      expect(step["continue-on-error"]).not.toBe(true);
+      previous = index;
     }
-    for (const full of ["true", "false"]) {
-      for (const auth of ["true", "false"]) {
-        for (const result of ["success", "failure", "cancelled", "skipped"]) {
-          for (const node of ["success", "failure", "cancelled", "skipped"]) {
-            const run = spawnSync("bash", ["-c", script], {
-              encoding: "utf8",
-              env: {
-                ...process.env,
-                NATIVE_RESULT: "success",
-                WASM_RESULT: "success",
-                WEB_RESULT: "success",
-                WASM_NODE_RESULT: node,
-                UI_DEMOS_ENABLED: "false",
-                UI_DEMO_REQUIRED: "false",
-                UI_DEMO_RESULT: "skipped",
-                AUTH_SENSITIVE_E2E_REQUIRED: auth,
-                FULL_E2E_REQUESTED: full,
-                EXTENSION_E2E_RESULT: result,
-              },
-            });
-            expect(run.status === 0, run.stdout).toBe(
-              (result === "success" ||
-                (full === "false" && auth === "false")) &&
-                node === "success",
-            );
-          }
-        }
-      }
-    }
+    const preview = steps.findIndex(
+      (step) => step.uses === "./.github/actions/nook-pr-preview",
+    );
+    expect(preview).toBeGreaterThan(previous);
+    const previewStep = stepContract.parse(steps[preview]);
+    expect(previewStep.if).not.toContain("always()");
+    expect(previewStep.if).toContain(
+      "github.event.pull_request.head.repo.full_name == github.repository",
+    );
+    expect(this.read("nook-app/ci/pr.yml")).toContain(
+      "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
+    );
   }
 
   ecosystemResults(): void {
@@ -193,12 +139,12 @@ class DockerizedRustContract {
   }
 
   coverageAndExporter(): void {
-    const pr = this.read(".github/workflows/pr.yml");
+    const pr = this.read("nook-app/ci/pr.yml");
     const checks = this.read(".github/workflows/rust-ecosystem-checks.yml");
     const product = this.read(
       "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    expect(pr).toContain("native_coverage_provided: true");
+    expect(pr).toContain("NATIVE_COVERAGE_PROVIDED=true");
     expect(checks).toContain("type: boolean\n        default: false");
     expect(product).toContain("ARG NATIVE_COVERAGE_PROVIDED=false");
     expect(product).toContain(

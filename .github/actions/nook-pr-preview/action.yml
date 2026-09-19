@@ -1,0 +1,155 @@
+name: Publish PR preview
+description: Deploy and report the verified local preview artifacts.
+inputs:
+  cloudflare-token:
+    required: true
+    description: Pages API token.
+  cloudflare-account:
+    required: true
+    description: Pages account.
+  source-sha:
+    required: true
+    description: Validated source revision.
+runs:
+  using: composite
+  steps:
+    - name: Deploy and verify Pages previews
+      if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+      id: deploy-all
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account }}
+        DEPLOYMENT_TAG: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ inputs.source-sha }}
+        NOOK_HOST_PAGES_DEPLOY: "1"
+      shell: bash
+      run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
+
+    - name: Preserve the secret-free hosted validation boundary
+      if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
+      shell: bash
+      run: echo "Credentialed preview deployment is intentionally skipped for untrusted source"
+
+    - name: Comment preview URL on PR
+      if: steps.deploy-all.outcome == 'success'
+      uses: actions/github-script@v9
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
+        SITE_PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
+        SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
+        SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
+        EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
+      with:
+        retries: 3
+        script: |
+          const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+          const withBackoff = async (label, request) => {
+            let lastError
+            for (let attempt = 1; attempt <= 5; attempt += 1) {
+              try {
+                return await request()
+              } catch (error) {
+                lastError = error
+                if (attempt === 5) break
+                const delaySeconds = attempt * 15
+                core.warning(`${label} failed on attempt ${attempt}; retrying in ${delaySeconds}s`)
+                await sleep(delaySeconds * 1000)
+              }
+            }
+            throw lastError
+          }
+          const marker = '### Preview deployed'
+          const root = process.env.PREVIEW_URL.replace(/\/$/, '')
+          const site = process.env.SITE_PREVIEW_URL.replace(/\/$/, '')
+          const simple = process.env.SIMPLE_PREVIEW_URL.replace(/\/$/, '')
+          const sentinel = process.env.SENTINEL_PREVIEW_URL.replace(/\/$/, '')
+          const extension = process.env.EXTENSION_PREVIEW_URL
+          const body = `${marker}\n\n- Unified internal test harness: ${root}/\n- Site: ${site}/\n- Simple Vault: ${simple}/\n- Sentinel Vault: ${sentinel}/\n- Browser extension: ${extension}`
+          const commentQuery = await withBackoff('Listing preview comments', () => github.graphql(`
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $number) {
+                  id
+                  comments(last: 100) {
+                    nodes { id body }
+                  }
+                }
+              }
+            }
+          `, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            number: Number(process.env.PR_NUMBER),
+          }))
+          const pullRequest = commentQuery.repository.pullRequest
+          const existing = pullRequest.comments.nodes.find((comment) => comment.body?.startsWith(marker))
+          if (existing) {
+            await withBackoff('Updating the preview comment', () => github.graphql(`
+              mutation($id: ID!, $body: String!) {
+                updateIssueComment(input: { id: $id, body: $body }) {
+                  issueComment { id }
+                }
+              }
+            `, { id: existing.id, body }))
+          } else {
+            await withBackoff('Creating the preview comment', () => github.graphql(`
+              mutation($subjectId: ID!, $body: String!) {
+                addComment(input: { subjectId: $subjectId, body: $body }) {
+                  commentEdge { node { id } }
+                }
+              }
+            `, { subjectId: pullRequest.id, body }))
+          }
+
+    - name: Record github-pages deployment
+      if: steps.deploy-all.outcome == 'success'
+      uses: actions/github-script@v9
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        PREVIEW_URL: ${{ steps.deploy-all.outputs.site_url }}
+        UNIFIED_PREVIEW_URL: ${{ steps.deploy-all.outputs.preview_url }}
+        SIMPLE_PREVIEW_URL: ${{ steps.deploy-all.outputs.simple_url }}
+        SENTINEL_PREVIEW_URL: ${{ steps.deploy-all.outputs.sentinel_url }}
+        EXTENSION_PREVIEW_URL: ${{ steps.deploy-all.outputs.extension_url }}
+      with:
+        retries: 3
+        script: |
+          const previewUrl = process.env.PREVIEW_URL
+          if (!previewUrl) {
+            throw new Error('Cloudflare preview deploy succeeded but did not emit preview_url')
+          }
+
+          const deployment = await github.rest.repos.createDeployment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: process.env.SOURCE_SHA,
+            environment: 'github-pages',
+            auto_merge: false,
+            required_contexts: [],
+            transient_environment: true,
+            production_environment: false,
+            description: `PR #${Number(process.env.PR_NUMBER)} preview`,
+            payload: {
+              pull_request: Number(process.env.PR_NUMBER),
+              preview_url: previewUrl,
+              unified_preview_url: process.env.UNIFIED_PREVIEW_URL,
+              simple_preview_url: process.env.SIMPLE_PREVIEW_URL,
+              sentinel_preview_url: process.env.SENTINEL_PREVIEW_URL,
+              extension_preview_url: process.env.EXTENSION_PREVIEW_URL,
+            },
+          })
+
+          await github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: deployment.data.id,
+            state: 'success',
+            environment: 'github-pages',
+            environment_url: previewUrl,
+            log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            description: 'Cloudflare Pages preview deployed',
+            auto_inactive: false,
+          })

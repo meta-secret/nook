@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Linter } from 'eslint'
 import namedSuccessEslintConfig from '../../eslint.named-success.config.js'
 import { namedSuccessContractBaseline } from '../../named-success-contract-baseline.js'
+
+// Every case initializes type-aware ESLint services. Parallel PR phases can
+// briefly push one otherwise-fast fixture beyond Bun's 5-second default.
+setDefaultTimeout(15_000)
 
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const svelteFixturePath = fileURLToPath(

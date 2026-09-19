@@ -385,8 +385,10 @@ export class SkillProviderConfigRuntimeScenario {
         'fixture_root=/tmp/nook-ephemeral',
       )
       .replace(/\bdocker_bin="\$\{DOCKER:-docker\}"/gu, 'docker_bin=docker')
-      .replace(/PATH=(?:"[^"]*"|'[^']*'|[^\s;]+)/gu, (assignment) =>
-        protectedPath.test(assignment) ? assignment : 'NOOK_AUDITED_PATH=1',
+      .replace(
+        /(?<![A-Za-z0-9_])PATH=(?:"[^"]*"|'[^']*'|[^\s;]+)/gu,
+        (assignment) =>
+          protectedPath.test(assignment) ? assignment : 'NOOK_AUDITED_PATH=1',
       );
     return normalized.replace(
       /\btrap\s+[^\n;]+\s+(?:ERR|EXIT|INT|TERM)(?=;|\s|$)/gu,
