@@ -53,15 +53,43 @@ assert_source_not_contains() {
     return 1
   fi
 }
+assert_source_order() {
+  local source_file="$1"
+  local first="$2"
+  local second="$3"
+  local first_line second_line
+  first_line="$(grep -nF "$first" "$source_file" | cut -d: -f1 | head -1)"
+  second_line="$(grep -nF "$second" "$source_file" | cut -d: -f1 | head -1)"
+  [ -n "$first_line" ] && [ -n "$second_line" ] && [ "$first_line" -lt "$second_line" ] || {
+    echo "expected $source_file to order '$first' before '$second'" >&2
+    return 1
+  }
+}
 
 # A marker is only a setup hint. The driver must still inspect extension
 # storage so a stale marker can repair pairing after a profile reset.
 assert_source_not_contains "$setup_script" 'if [ -f "$marker" ]; then'
 assert_source_contains "$setup_script" 'NOOK_EXTENSION_SETUP_CDP_URL="$cdp_url"'
+assert_source_contains "$setup_script" 'if [ ! -f "$marker" ]; then'
+assert_source_contains "$setup_script" 'Pairing storage is revalidated on every setup run.'
+assert_source_order "$setup_script" 'NOOK_EXTENSION_REMOTE_DEBUGGING_PORT="$cdp_port"' 'node "$DRIVER"'
 
 # Keep Simple Vault WebAuthn intact while forcing the extension popup through
 # the PIN path, matching e2e/helpers/pin-device.ts.
 assert_source_contains "$driver_script" "globalThis.location?.protocol !== 'chrome-extension:'"
-assert_source_not_contains "$driver_script" "Object.defineProperty(window, 'PublicKeyCredential'"
+assert_source_order "$driver_script" "globalThis.location?.protocol !== 'chrome-extension:'" "Object.defineProperty(window, 'PublicKeyCredential'"
+assert_source_contains "$driver_script" "indexedDB.deleteDatabase('nook_extension')"
+assert_source_contains "$driver_script" "database.objectStoreNames.contains('pairing')"
+
+# Preserve the restart → PIN unlock → pairing lifecycle. These contracts are
+# intentionally static: the browser product flow is exercised by the human
+# Brave check, which is not run from this worktree.
+assert_source_order "$driver_script" 'const storage = await readExtensionStorage(context)' 'const popupPage = await context.newPage()'
+assert_source_contains "$driver_script" "device-protection-pin-unlock-btn"
+assert_source_contains "$driver_script" "device-protection-pin-unlock-input"
+assert_source_contains "$driver_script" "approve-extension-device-btn"
+assert_source_contains "$driver_script" "authenticated-shell"
+assert_source_order "$driver_script" "await pinUnlock.click()" "await companionHome.waitFor"
+assert_source_order "$driver_script" "connect-simple-vault-btn" "approve-extension-device-btn"
 
 echo 'Brave PIN vault setup selection tests passed'
