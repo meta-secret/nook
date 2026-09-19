@@ -329,29 +329,31 @@ test.describe('devices and access dashboard', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                readonly devicesAccessIdentityTransitionPending: boolean
-                readonly providersLoaded: boolean
-                readonly providers: Array<{ readonly id: string }>
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const vault = (
+              window as Window & {
+                __nookVault?: {
+                  readonly devicesAccessIdentityTransitionPending: boolean
+                  readonly providersLoaded: boolean
+                  readonly providers: Array<{ readonly id: string }>
+                }
               }
-            }
-          ).__nookVault
-          return {
-            transitionPending: ((...[v = true]) => v)(
-              vault?.devicesAccessIdentityTransitionPending,
-            ),
-            providersLoaded: ((v) => (v ? v : false))(vault?.providersLoaded),
-            personalProviderRecovered: ((v) => (v ? v : false))(
-              vault?.providers.some(
-                (provider) => provider.id === 'personal-remote-provider',
+            ).__nookVault
+            return {
+              transitionPending: ((...[v = true]) => v)(
+                vault?.devicesAccessIdentityTransitionPending,
               ),
-            ),
-          }
-        }),
+              providersLoaded: ((v) => (v ? v : false))(vault?.providersLoaded),
+              personalProviderRecovered: ((v) => (v ? v : false))(
+                vault?.providers.some(
+                  (provider) => provider.id === 'personal-remote-provider',
+                ),
+              ),
+            }
+          }),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .toEqual({
         transitionPending: false,
