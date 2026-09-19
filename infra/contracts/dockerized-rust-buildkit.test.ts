@@ -29,6 +29,8 @@ class DockerizedRustBuildKitContract {
     const preflight = this.read("preflight/Dockerfile");
     expect(workflow).toContain("Connect trusted persistent BuildKit");
     expect(workflow).toContain("BUILDKIT_PROGRESS: quiet");
+    expect(workflow).not.toContain("nook-cache-telemetry");
+    expect(workflow).not.toContain("actions/upload-artifact");
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
     expect(workflow).not.toMatch(
@@ -52,6 +54,9 @@ class DockerizedRustBuildKitContract {
     expect(preflight).toContain(
       "--mount=type=secret,id=sccache_s3_secret_key,required=false \\",
     );
+    expect(
+      this.read("nook-app/nook-web/nook-web-app/package.json"),
+    ).toContain("bash .github/scripts/jscpd-summary.sh");
   }
 
   dylintDependencyCacheAndSccacheMode(): void {

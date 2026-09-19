@@ -157,17 +157,6 @@ jobs:
       - name: Export web artifacts into this runner
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
         run: task ci:pr:browser:prepare
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-      - name: Enforce compiler cache health without an artifact round trip
-        if: always() && (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
-        env:
-          NOOK_PR_CACHE_TELEMETRY_DIR: ${{ runner.temp }}/nook-cache-telemetry
-          NOOK_PR_CACHE_HEALTH_JSON: ${{ runner.temp }}/nook-pr-cache-health/cache-health.json
-          NOOK_PR_CACHE_HEALTH_MARKDOWN: ${{ runner.temp }}/nook-pr-cache-health/cache-health.md
-          NOOK_PR_CACHE_JOBS: '[{"id":"validation","result":"${{ job.status }}","buildExpected":true,"sccacheExpectation":"required","readOnly":true}]'
-        run: node .github/workflows/lib/pr-cache-health.mjs
       - name: Full browser and extension suites
         if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && inputs.full_e2e_requested
         run: task ci:pr:browser:full
@@ -196,16 +185,3 @@ jobs:
         with:
           cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
-      - name: Preserve reports and browser diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-validation-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/nook-pr-artifacts/coverage
-            coverage/nook-core-summary.md
-            **/test-results
-            **/playwright-report
-            ${{ runner.temp }}/nook-pr-cache-health
-          if-no-files-found: warn
-          retention-days: 15

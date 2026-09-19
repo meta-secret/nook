@@ -720,7 +720,7 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("one PR job retains cache diagnostics without registry handoffs", () => {
+void test("one PR job avoids telemetry and registry handoffs", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
   const arcRunnerDockerfile = fs.readFileSync(
     "infra/k0s/images/arc-runner/Dockerfile",
@@ -759,16 +759,10 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
   assert.equal(
     workflow.match(/uses: \.\/\.github\/actions\/nook-cache-telemetry/g)
       ?.length,
-    1,
+    undefined,
   );
-  assert.match(
-    workflow,
-    /"id":"validation","result":"\$\{\{ job.status \}\}","buildExpected":true,"sccacheExpectation":"required","readOnly":true/,
-  );
-  assert.match(
-    workflow,
-    /run: node \.github\/workflows\/lib\/pr-cache-health\.mjs/,
-  );
+  assert.doesNotMatch(workflow, /actions\/upload-artifact/);
+  assert.doesNotMatch(workflow, /pr-cache-health\.mjs/);
   assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,

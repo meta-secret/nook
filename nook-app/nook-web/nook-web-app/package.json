@@ -22,7 +22,7 @@
     "lint": "bun run security && bun run unused && bun run duplicates && cd .. && node_modules/.bin/eslint --config eslint.config.js *.js nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel && node_modules/.bin/prettier --check nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel",
     "security": "bun audit --prod --audit-level=high",
     "unused": "knip --reporter compact",
-    "duplicates": "cd ../../.. && nook-app/nook-web/node_modules/.bin/jscpd --config .jscpd.json nook-app preflight",
+    "duplicates": "cd ../../.. && bash .github/scripts/jscpd-summary.sh nook-app/nook-web/node_modules/.bin/jscpd --config .jscpd.json nook-app preflight",
     "format": "prettier --write . ../nook-web-shared/src/vault-app ../nook-vault-simple ../nook-vault-sentinel",
     "format:check": "prettier --check . ../nook-web-shared/src/vault-app ../nook-vault-simple ../nook-vault-sentinel",
     "test": "vitest run --passWithNoTests",
