@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1
-# Cheap stand-in for rust-ecosystem-nightly's pinned cargo-dylint install.
-# The dependency fingerprint is copied before every mutable source input.
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS rust-ecosystem-nightly
-COPY inputs/dylint-dependencies.txt /tooling/dylint-dependencies.txt
-RUN cat /tooling/dylint-dependencies.txt >/tooling/installed \
+# Cheap stand-in for `chef-deps`' WASM release cook. The manifest-only
+# dependency input is copied before every mutable verification source input.
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS chef-deps
+COPY inputs/chef-dependencies.txt /chef/dependencies.txt
+RUN cat /chef/dependencies.txt >/chef/cooked \
     && sleep 1 \
-    && echo bake-sim-cargo-dylint-dependencies
+    && echo bake-sim-cargo-chef-wasm-release
 
-FROM rust-ecosystem-nightly AS verification
+FROM chef-deps AS verification
 ARG FAIL_VERIFICATION=0
 COPY inputs/compile-web-source.txt /source/compile-web-source.txt
 RUN test "$FAIL_VERIFICATION" = 0 \
-    && test -s /tooling/installed \
+    && test -s /chef/cooked \
     && test -s /source/compile-web-source.txt \
     && mkdir /proof \
     && sha256sum /source/compile-web-source.txt >/proof/source-content \
@@ -25,7 +25,7 @@ RUN test "$FAIL_TESTS" = 0 \
     && printf 'tests and coverage\n' >/proof/tests \
     && echo pr-proof-test-compilation
 
-FROM rust-ecosystem-nightly AS rust-fuzz-deps
+FROM chef-deps AS rust-fuzz-deps
 COPY inputs/fuzz-dependencies.txt /fuzz/dependencies.txt
 RUN cat /fuzz/dependencies.txt >/fuzz/installed \
     && sleep 1 \
