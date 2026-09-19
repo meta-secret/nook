@@ -162,7 +162,9 @@ describe('external companion routing', () => {
       name: 'provider payload',
       payload: {
         ...externalPairingMessage.payload,
-        providers: [{ githubPat: 'malformed-secret' }],
+        providers: [{ githubPat: 'malformed-secret' }] as {
+          githubPat: string
+        }[],
       },
       reason: 'invalid-pairing-grant-providers',
     },
