@@ -1,0 +1,28 @@
+diff --git a/packages/k8s/src/hooks/run-script-step.ts b/packages/k8s/src/hooks/run-script-step.ts
+index 1db2bb2..d387f8a 100644
+--- a/packages/k8s/src/hooks/run-script-step.ts
++++ b/packages/k8s/src/hooks/run-script-step.ts
+@@ -92,6 +92,22 @@ export async function runScriptStep(
+     }
+   }
+ 
++  // kubernetes-novolume keeps the checkout only in the job pod. The runner
++  // resolves repository-local actions from its own workspace before invoking
++  // this hook, so synchronize the small action-definition tree after checkout.
++  const runnerRepository = args.workingDirectory.replace(/^\/__w/, workdir)
++  if (!fs.existsSync(`${runnerRepository}/.github`)) {
++    fs.mkdirSync(runnerRepository, { recursive: true })
++    core.debug(
++      `Synchronizing repository actions from '${state.jobPod}' to '${runnerRepository}'`
++    )
++    await execCpFromPod(
++      state.jobPod,
++      `${args.workingDirectory}/.github`,
++      runnerRepository
++    )
++  }
++
+   try {
+     core.debug(
+       `Copying from job pod '${state.jobPod}' ${containerTemp} to ${runnerTemp}`
+       `Copying from job pod '${state.jobPod}' ${containerTemp} to ${runnerTemp}`

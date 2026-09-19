@@ -13,6 +13,24 @@ tasks:
     cmds:
       - '{{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --set "web-e2e-base.output=type=registry" --set "web-e2e-base.tags={{.PR_RUNNER_IMAGE}}" web-e2e-base'
 
+  ci:arc:runner:publish:
+    desc: Build, prove, and publish the ARC runner with the pinned container-hook repair.
+    vars:
+      ARC_RUNNER_IMAGE: '{{default "ghcr.io/meta-secret/nook-arc-runner:2.336.0-hooks-v1" .ARC_RUNNER_IMAGE}}'
+    env:
+      GHA_CACHE_ENABLED: ""
+      GHA_CACHE_WRITE_ENABLED: ""
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        --allow=fs.read={{.REPO_ROOT}}
+        -f {{.REPO_ROOT}}/infra/k0s/images/arc-runner/docker-bake.hcl
+        --set 'arc-runner.context={{.REPO_ROOT}}'
+        --set 'arc-runner-hooks-proof.context={{.REPO_ROOT}}'
+        --set 'arc-runner.output=type=registry'
+        --set 'arc-runner.tags={{.ARC_RUNNER_IMAGE}}'
+        arc-runner arc-runner-hooks-proof
+
   ci:pr:verification:
     desc: Verify tooling, formatting, Rust, WASM and web before compiling tests.
     cmds:

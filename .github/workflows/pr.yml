@@ -58,15 +58,6 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      # runner-container-hooks kubernetes-novolume currently copies checkout
-      # into the job pod but synchronizes only _temp back after script actions.
-      # Its container-action path performs the required full /__w -> runner
-      # sync before the runner resolves our repository-local actions. This
-      # remote reference is deliberately pinned to the commit that introduced
-      # the source-free action; a local reference cannot resolve before sync.
-      - name: Synchronize checkout for repository-local actions
-        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
-        uses: meta-secret/nook/.github/actions/nook-arc-workspace-sync@e07eafb28bda705ddfd1d6fb073a7ff5321a1017
       - name: Materialize event metadata for the ARC job container
         env:
           PR_EVENT_JSON: ${{ toJSON(github.event) }}
