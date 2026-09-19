@@ -215,6 +215,9 @@ class DockerizedRustBuildKitContract {
     expect(nightly.slice(productDependencies, productSource)).toContain(
       "--target wasm32-unknown-unknown --all-targets",
     );
+    expect(nightly.slice(productSource)).toContain(
+      "-type f -name '*.rs' -exec touch {} +",
+    );
     expect(product).toContain("ENV SCCACHE_CLIENT_SIDE=0");
     expect(product).not.toContain("ENV SCCACHE_CLIENT_SIDE=1");
     expect(wrapper).toContain(': "${SCCACHE_CLIENT_SIDE:=0}"');

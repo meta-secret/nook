@@ -80,13 +80,10 @@ impl DependencyPolicyCacheContract {
             "policy must consume the owning toolchain declaration, not duplicate its pin"
         );
         let cleanup = policy
-            .find("trap 'rm -rf /tmp/nook-policy-repository; find /tmp/nook-policy-cargo")
+            .find("trap 'rm -rf /tmp/nook-policy-repository' EXIT")
             .ok_or_else(|| {
                 anyhow::anyhow!("non-cache policy outputs must be cleaned on shell exit")
             })?;
-        let seed = policy
-            .find("cp -a /usr/local/cargo/. /tmp/nook-policy-cargo/")
-            .ok_or_else(|| anyhow::anyhow!("policy must preserve immutable Cargo inputs"))?;
         let cargo_home = policy
             .find("export CARGO_HOME=/tmp/nook-policy-cargo")
             .ok_or_else(|| {
@@ -98,17 +95,12 @@ impl DependencyPolicyCacheContract {
         let audit = policy
             .find("&& cargo-audit audit --quiet")
             .ok_or_else(|| anyhow::anyhow!("cargo-audit invocation is missing"))?;
-        assert!(cleanup < seed && seed < cargo_home && cargo_home < deny && deny < audit);
-        for cache_mount in [
-            "id=nook-policy-cargo-registry",
-            "id=nook-policy-cargo-git",
-            "id=nook-policy-advisory-db",
-        ] {
-            assert!(
-                policy.contains(cache_mount),
-                "policy must reuse {cache_mount} without snapshotting it"
-            );
-        }
+        assert!(cleanup < cargo_home && cargo_home < deny && deny < audit);
+        assert!(
+            policy.contains("id=nook-policy-cargo-home")
+                && policy.contains("target=/tmp/nook-policy-cargo,sharing=locked"),
+            "policy must reuse one writable Cargo home without snapshotting it"
+        );
         assert!(policy.contains("test -n \"$POLICY_RUN_NONCE\""));
         assert!(!policy.contains("|| true") && !policy.contains("--offline"));
         Ok(())

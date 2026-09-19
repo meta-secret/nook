@@ -143,6 +143,11 @@ WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
+RUN find \
+      nook-app-common nook-authenticator-domain nook-auth2 nook-replication \
+      nook-event-log nook-companion-core nook-core nook-companion-wasm \
+      nook-wasm nook-wasm-composition-tests \
+      -type f -name '*.rs' -exec touch {} +
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo dylint --all -- --locked --all-targets \
