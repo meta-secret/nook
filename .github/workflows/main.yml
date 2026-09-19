@@ -435,8 +435,9 @@ jobs:
       pull-requests: read
     steps:
       - name: Local-provider web e2e
-        working-directory: /meta-secret/nook
-        run: task _ci:main:web:e2e-only
+        run: |
+          cd /meta-secret/nook
+          task _ci:main:web:e2e-only
         env:
           CI: true
           VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
@@ -458,8 +459,9 @@ jobs:
       pull-requests: read
     steps:
       - name: Extension e2e
-        working-directory: /meta-secret/nook
-        run: task _extension:test:e2e
+        run: |
+          cd /meta-secret/nook
+          task _extension:test:e2e
         env:
           CI: true
 
