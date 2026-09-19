@@ -182,7 +182,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fixture = RustEcosystemFixture::load()?;
 
     assert!(
-        fixture.pr.contains("run: task ci:pr:heavy"),
+        fixture.pr.contains("run: task --silent ci:pr:heavy"),
         "Labeled product PRs must execute the heavy Rust ecosystem phase"
     );
     assert!(
@@ -328,7 +328,7 @@ fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ci:cache:publish:rust-base",
-        "task: preflight:dependency-policy",
+        "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:dependency-policy",
         "task: fuzz:dependency-policy",
         "preflight-test",
         "GHA_CACHE_WRITE_ENABLED",
