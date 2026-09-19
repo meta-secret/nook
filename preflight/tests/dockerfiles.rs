@@ -9,7 +9,8 @@ fn dockerfiles_only_use_the_approved_stateful_policy_cache_mount() -> anyhow::Re
     );
 
     let violations = DockerfileRepository::new(&repository_root).dockerfile_cache_mounts()?;
-    let policy_path = PathBuf::from("nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile");
+    let policy_path =
+        PathBuf::from("nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile");
     let (approved, forbidden): (Vec<_>, Vec<_>) = violations
         .into_iter()
         .partition(|violation| violation.path == policy_path);
