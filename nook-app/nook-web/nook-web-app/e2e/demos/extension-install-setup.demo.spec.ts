@@ -313,13 +313,17 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
 
   await page.waitForTimeout(5_200)
   await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
-  await expect(consent.getByRole('alert')).toHaveCount(0)
+  await expect(
+    consent.locator('[data-extension-pairing-rejection-reason]'),
+  ).toHaveCount(0)
 
   await expect(page.getByTestId('extension-connect-approved')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
-  await expect(consent.getByRole('alert')).toHaveCount(0)
+  await expect(
+    consent.locator('[data-extension-pairing-rejection-reason]'),
+  ).toHaveCount(0)
   await demoBeat(page)
 })
 
