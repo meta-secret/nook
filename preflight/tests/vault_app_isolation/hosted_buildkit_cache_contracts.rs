@@ -581,8 +581,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
-        rust_bake
-            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"")
+        rust_bake.contains("dockerfile = \"nook-app/nook-platform/docker/rust/base/Dockerfile\"")
             && rust_bake.contains("target \"rust-base\"")
             && !rust_bake.contains("web.Dockerfile")
             && web_bake.contains("dockerfile = \"nook-app/nook-web/docker/web.Dockerfile\"")
@@ -698,8 +697,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification and WASM source gates must remain siblings while Node tooling precedes the real-source join and release-profile tests"
     );
-    let dependency_dockerfile =
-        (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+    let dependency_dockerfile = (root).read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     let core_dockerfile = dependency_dockerfile.as_str();
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
