@@ -4,7 +4,6 @@ use std::{
     env, fs,
     ops::Deref,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 struct RepositoryFixture {

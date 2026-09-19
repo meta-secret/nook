@@ -309,13 +309,6 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
             .contains("require_cached_step \"$proof_log\" \"bake-sim-compile-cargo-fetch\"")
     );
 
-    let rust_base_start = product
-        .find(" AS rust-base")
-        .expect("product rust-base stage is missing");
-    let rust_base_end = product[rust_base_start + 1..]
-        .find("\nFROM ")
-        .map(|offset| rust_base_start + 1 + offset)
-        .expect("product rust-base end is missing");
     assert!(!product.contains("NOOK_SCCACHE_TELEMETRY_REPLAY"));
     assert!(!product.contains("nook-sccache-report --replay"));
 }
