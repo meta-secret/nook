@@ -60,6 +60,9 @@ class DockerizedRustBuildKitContract {
       'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
     );
     expect(tasks).not.toMatch(/docker\s+(?:pull|run|create|start|exec)\b/);
+    expect(tasks).toContain(
+      'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:repository-policy',
+    );
     const rustDependencyStage = product.indexOf(
       "FROM chef-deps AS pr-rust-dependencies",
     );

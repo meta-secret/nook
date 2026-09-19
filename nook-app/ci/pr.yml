@@ -68,7 +68,7 @@ tasks:
 
   ci:pr:tests:policy:
     cmds:
-      - task: preflight:repository-policy
+      - task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:repository-policy
 
   ci:pr:heavy:
     desc: Run fuzz and Kani only after unit/integration tests succeed.
