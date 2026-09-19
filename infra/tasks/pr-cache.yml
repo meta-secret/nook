@@ -32,11 +32,11 @@ tasks:
         test -s "$output/result/proof/verification"
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
-        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
         test -n "$dependency_vertex"
         grep -qx "$dependency_vertex CACHED" "$output/warm-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/warm-verification.log"; then
-          echo 'Warm verification unexpectedly reinstalled Dylint dependencies' >&2
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/warm-verification.log"; then
+          echo 'Warm verification unexpectedly recooked WASM dependencies' >&2
           exit 1
         fi
         grep -q ' CACHED' "$output/warm-tests.log"
@@ -46,13 +46,13 @@ tasks:
           -f "$fixture" --set "*.context=$context" \
           --allow="fs.read=$context" \
           pr-proof-verification 2>&1 | tee "$output/changed-verification.log"
-        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
         verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 2\/2\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
         test -n "$tooling_vertex"
         test -n "$verification_vertex"
         grep -qx "$tooling_vertex CACHED" "$output/changed-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/changed-verification.log"; then
-          echo 'Source-only change unexpectedly reinstalled Dylint dependencies' >&2
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/changed-verification.log"; then
+          echo 'Source-only change unexpectedly recooked WASM dependencies' >&2
           exit 1
         fi
         if grep -qx "$verification_vertex CACHED" "$output/changed-verification.log"; then
