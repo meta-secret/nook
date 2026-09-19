@@ -103,77 +103,84 @@ jobs:
           echo 'GHA_CACHE_ENABLED=' >> "$GITHUB_ENV"
           echo 'GHA_CACHE_WRITE_ENABLED=' >> "$GITHUB_ENV"
           echo 'NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0' >> "$GITHUB_ENV"
-      - name: Enforce UI demo contract
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-      - name: Detect required browser regressions
+      - name: Detect required validation and browser regressions
         id: browser-scope
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          VALIDATION_REQUESTED: ${{ inputs.validation_requested }}
         run: |
           set -euo pipefail
           auth=false
+          validation="$VALIDATION_REQUESTED"
           research=false
           while IFS= read -r -d '' path; do
             case "$path" in
+              .cortex/*|.cursor/*|.vale.ini|.vale/*|.github/workflows/repository-policy.yml|.github/workflows/web-research.yml|agentic-ai/*|nook-app/nook-web/nook-web-research/*) ;;
+              *) validation=true ;;
+            esac
+            case "$path" in
               nook-app/nook-web/nook-web-shared/src/extension/password-form*|nook-app/nook-web/nook-web-extension/src/content/autofill.ts|nook-app/nook-web/nook-web-extension/src/content/autofill/*|nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts) auth=true ;;
             esac
-            case "$path" in .github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/nook-web/nook-web-research/*) research=true ;; esac
+            case "$path" in .github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/nook-web/nook-web-research/*) research=true; validation=true ;; esac
           done < <(git diff --name-only -z "$BASE_SHA" HEAD)
           echo "auth=$auth" >> "$GITHUB_OUTPUT"
+          echo "validation=$validation" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
+      - name: Enforce UI demo contract
+        if: steps.browser-scope.outputs.validation == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
       - name: Verification — formatting, tooling, Rust, WASM and web
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: task --silent ci:pr:verification
       - name: Verification — policy-only PR
-        if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
+        if: steps.browser-scope.outputs.validation != 'true'
         run: task --silent ci:pr:verification:tooling
       - name: Tests and coverage — Rust, WASM, web, Loom and preflight
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: task --silent ci:pr:tests
       - name: Tests — policy-only PR
-        if: ${{ !inputs.validation_requested && steps.browser-scope.outputs.research != 'true' }}
+        if: steps.browser-scope.outputs.validation != 'true'
         run: task --silent ci:pr:tests:policy
       - name: Test delivery helpers
         run: |
           node --test .github/scripts/workbench-publish.test.cjs
           node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs .github/workflows/lib/base-coverage-artifact.test.cjs
       - name: Heavy verification — fuzz and Kani
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: task --silent ci:pr:heavy
       - name: Export coverage reporter and stage local report
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: |
           task --silent preflight:export PREFLIGHT_OUTPUT_DIR="$PR_ARTIFACT_DIR/coverage/tools"
           mkdir -p coverage/current
           cp -a "$PR_ARTIFACT_DIR/coverage/." coverage/current/
       - name: Report coverage
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         uses: ./.github/actions/nook-pr-coverage
         with:
           source_sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
       - name: Export web artifacts into this runner
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: task --silent ci:pr:browser:prepare
       - name: Full browser and extension suites
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && inputs.full_e2e_requested
+        if: steps.browser-scope.outputs.validation == 'true' && inputs.full_e2e_requested
         run: task --silent ci:pr:browser:full
       - name: Authentication-sensitive extension regression
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
+        if: steps.browser-scope.outputs.validation == 'true' && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
         run: task --silent ci:pr:browser:auth
       - name: Web research verification and browser tests
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && steps.browser-scope.outputs.research == 'true'
+        if: steps.browser-scope.outputs.validation == 'true' && steps.browser-scope.outputs.research == 'true'
         run: task --silent web:research:verify
       - name: Restore verified production artifacts after browser tests
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true')
+        if: steps.browser-scope.outputs.validation == 'true'
         run: |
           # These are generated trees in this ephemeral checkout, never sources.
           rm -rf nook-app/nook-web/nook-web-app/dist nook-app/nook-web/nook-vault-simple/dist nook-app/nook-web/nook-vault-sentinel/dist nook-app/nook-web/nook-web-extension/dist
           cp -a "$PR_ARTIFACT_DIR/browser/nook-app/." nook-app/
       - name: Deploy and report preview
-        if: (inputs.validation_requested || steps.browser-scope.outputs.research == 'true') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
+        if: steps.browser-scope.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-preview
         with:
           cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}

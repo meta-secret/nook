@@ -227,9 +227,9 @@ fn compile_cache_sim_reuses_exact_commit_lineage_for_new_heads() {
     let root = RepositoryFixture::repository_root();
     let dockerfile = root.read("infra/sim/bake-cache/compile-warm.Dockerfile");
     let bake = root.read("infra/sim/bake-cache/compile-warm.docker-bake.hcl");
-    let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
-    let compile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
-    let production_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
+    let product = root.read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+    let compile = root.read("nook-app/nook-platform/docker/rust/compile/Dockerfile");
+    let production_bake = root.read("nook-app/nook-platform/docker/rust/compile/docker-bake.hcl");
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");
     let workflow = root.read(".github/workflows/remote.yml");
     let runtime_proof = root.read("infra/tasks/bake-cache.yml");

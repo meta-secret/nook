@@ -108,24 +108,24 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     }
 
     let rust_base = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+        .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
     let product = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+        .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     assert!(
         product.contains("nook-sccache-report"),
-        "product.Dockerfile must report compiler cache outcomes"
+        "rust/base/Dockerfile must report compiler cache outcomes"
     );
     assert!(
         RepositoryFixture::repository_root()
-            .read("nook-app/nook-platform/docker/rust/product.Dockerfile")
+            .read("nook-app/nook-platform/docker/rust/base/Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 12
     );
     assert!(
         RepositoryFixture::repository_root()
-            .read("nook-app/nook-platform/docker/rust/product.Dockerfile")
+            .read("nook-app/nook-platform/docker/rust/base/Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 3

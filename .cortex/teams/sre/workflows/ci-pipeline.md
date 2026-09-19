@@ -321,7 +321,7 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
   source leaf, even when the exact importer is listed first.
 - An exact-only importer replays the leaf across both linked and internal parents.
 - Product dependency and source stages therefore live together in
-  `nook-app/nook-platform/docker/rust/product.Dockerfile`.
+  `nook-app/nook-platform/docker/rust/base/Dockerfile`.
 - Product source Bake targets must not override those internal stages with
   `target:` contexts.
 - Standalone dependency restore and publisher targets use the same Dockerfile.

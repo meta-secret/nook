@@ -387,8 +387,8 @@ class ArcManifestContract {
       "[worker.oci]",
       "gc = true",
       'reservedSpace = "8GB"',
-      'maxUsedSpace = "112GB"',
-      'minFreeSpace = "16GB"',
+      'maxUsedSpace = "120GB"',
+      'minFreeSpace = "8GB"',
       'mirrors = ["registry.dev.nokey.sh"]',
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);
@@ -590,6 +590,8 @@ class ArcManifestContract {
       "task --silent ci:pr:verification",
       "task --silent ci:pr:tests",
       "task --silent ci:pr:heavy",
+      "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
+      "steps.browser-scope.outputs.validation == 'true'",
       "task --silent ci:pr:browser:full",
       "task --silent ci:pr:browser:auth",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",

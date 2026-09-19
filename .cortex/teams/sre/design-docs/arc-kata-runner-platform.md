@@ -102,7 +102,8 @@ Each replica uses:
 - rootless BuildKit `v0.32.2`;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
-- garbage collection with a 112 GB maximum-use target;
+- garbage collection with a 120 GB maximum-use target and 8 GB free-space
+  target (while retaining an 8 GB reserved floor);
 - a 4 CPU request;
 - an 8 GiB memory request; and
 - no CPU or memory limits.

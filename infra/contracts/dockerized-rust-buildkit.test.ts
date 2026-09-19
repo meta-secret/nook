@@ -35,7 +35,7 @@ class DockerizedRustBuildKitContract {
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     expect(workflow).toContain("Connect trusted persistent BuildKit");
     expect(rootWorkflow).toContain(
@@ -164,16 +164,16 @@ class DockerizedRustBuildKitContract {
 
   dylintDependencyCacheAndSccacheMode(): void {
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const wrapper = this.read(
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dependencyStage = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
     );
     const dependencyBuild = nightly.indexOf(
       "cargo build --manifest-path dylint/nook-domain-api/Cargo.toml --locked",
@@ -226,10 +226,10 @@ class DockerizedRustBuildKitContract {
 
   remoteCompileUsesTwoPhaseFoundation(): void {
     const bake = this.read(
-      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+      "nook-app/nook-platform/docker/rust/compile/docker-bake.hcl",
     );
     const dockerfile = this.read(
-      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+      "nook-app/nook-platform/docker/rust/compile/Dockerfile",
     );
     const script = this.read(".github/scripts/compile-remote.sh");
     const phaseA = script.indexOf('"${bake_args[@]}" build-compile-foundation');
@@ -281,7 +281,7 @@ class DockerizedRustBuildKitContract {
   }
 
   dylintWrapperContentInvalidatesBuildGraph(): void {
-    const nightlyPath = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    const nightlyPath = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
     const nightly = this.read(nightlyPath);
     const bake = this.read(
       "nook-app/nook-platform/docker/rust/docker-bake.hcl",
@@ -290,24 +290,33 @@ class DockerizedRustBuildKitContract {
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
     );
     const dockerignore = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile.dockerignore",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile.dockerignore",
     );
     const ecosystemStage = nightly.indexOf(
       "FROM rust-base AS rust-ecosystem-nightly",
     );
     const ecosystemEnd = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-ecosystem-nightly AS rust-dylint-toolchain",
       ecosystemStage,
+    );
+    const dylintDependencies = nightly.indexOf(
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
+      ecosystemEnd,
+    );
+    const dylintInstall = nightly.indexOf(
+      "cargo install cargo-dylint dylint-link",
+      ecosystemEnd,
     );
     const wrapperCopy = nightly.indexOf(
       "COPY nook-app/nook-platform/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache",
-      ecosystemStage,
+      ecosystemEnd,
     );
     const wrapperMode = wrapper.indexOf(': "${SCCACHE_CLIENT_SIDE:=0}"');
     expect(ecosystemStage).toBeGreaterThanOrEqual(0);
     expect(ecosystemEnd).toBeGreaterThan(ecosystemStage);
-    expect(wrapperCopy).toBeGreaterThan(ecosystemStage);
-    expect(wrapperCopy).toBeLessThan(ecosystemEnd);
+    expect(dylintInstall).toBeGreaterThan(ecosystemEnd);
+    expect(wrapperCopy).toBeGreaterThan(dylintInstall);
+    expect(wrapperCopy).toBeLessThan(dylintDependencies);
     expect(wrapperMode).toBeGreaterThanOrEqual(0);
     expect(dockerignore).not.toContain(
       "nook-app/nook-platform/docker/sccache-wrapper.sh",
@@ -323,8 +332,11 @@ class DockerizedRustBuildKitContract {
     );
     expect(dylintTarget).toBeGreaterThanOrEqual(0);
     expect(dylintTargetEnd).toBeGreaterThan(dylintTarget);
+    expect(bake).toContain(
+      'rust_nightly_dockerfile = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"',
+    );
     expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
-      "docker/rust/nightly.Dockerfile",
+      "dockerfile = rust_nightly_dockerfile",
     );
 
     const dylintBuild = nightly.indexOf(
@@ -347,7 +359,7 @@ class DockerizedRustBuildKitContract {
 
   wasmNodeCompilerSecretsWithoutReplayCacheBusters(): void {
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const selectText = (request: RequiredCompilerTextSelection): string => {
       const value = request.sections[request.index];
@@ -504,7 +516,7 @@ class DockerizedRustBuildKitContract {
       'node-version: "24.19.0"',
     );
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     expect(nightly).not.toContain("nook-sccache-report --replay");
     expect(nightly).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
@@ -526,7 +538,7 @@ class DockerizedRustBuildKitContract {
 
   compilerGraphsDoNotConsumeTelemetryReplayArgument(): void {
     const product = this.read(
-      "nook-app/nook-platform/docker/rust/product.Dockerfile",
+      "nook-app/nook-platform/docker/rust/base/Dockerfile",
     );
     const baseStart = product.indexOf(
       "\nFROM registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769 AS rust-base\n",
@@ -539,7 +551,7 @@ class DockerizedRustBuildKitContract {
     );
     expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     expect(
-      this.read("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+      this.read("nook-app/nook-platform/docker/rust/compile/Dockerfile"),
     ).not.toContain(
       "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
@@ -554,7 +566,7 @@ class DockerizedRustBuildKitContract {
     );
     const proof = this.read("infra/tasks/pr-cache.yml");
     const nightly = this.read(
-      "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
     );
     expect(dependencyFingerprint).toContain("cargo-dylint=6.0.1");
     expect(dependencyFingerprint).toContain("dylint-link=6.0.1");
@@ -562,7 +574,7 @@ class DockerizedRustBuildKitContract {
     expect(nightly).toContain("ENV CARGO_DYLINT_VERSION=6.0.1");
     expect(nightly).toContain("ENV DYLINT_NIGHTLY=nightly-2026-04-16");
     const dylintDependencies = nightly.indexOf(
-      "FROM rust-ecosystem-nightly AS rust-dylint-deps",
+      "FROM rust-dylint-toolchain AS rust-dylint-deps",
     );
     const dylintSelfTest = nightly.indexOf(
       "FROM rust-dylint-build AS rust-dylint-self-test",
@@ -576,7 +588,11 @@ class DockerizedRustBuildKitContract {
       nightly.slice(dylintDependencies, dylintSelfTest),
     ).not.toContain("RUST_DYLINT_COVERAGE_FLOOR");
     expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
-      simulator.indexOf("ARG SOURCE_REVISION"),
+      simulator.indexOf("COPY inputs/compile-web-source.txt"),
+    );
+    expect(simulator).not.toContain("SOURCE_REVISION");
+    expect(proof).toContain(
+      'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
     );
     expect(simulator).toContain("bake-sim-cargo-dylint-dependencies");
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
@@ -585,6 +601,11 @@ class DockerizedRustBuildKitContract {
     );
     expect(proof).toContain(
       "Source-only change unexpectedly reinstalled Dylint dependencies",
+    );
+    expect(simulator).toContain("bake-sim-fuzz-dependencies");
+    expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
+    expect(proof).toContain(
+      "Source-only change unexpectedly reinstalled fuzz dependencies",
     );
   }
 

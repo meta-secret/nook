@@ -47,8 +47,9 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
 )]
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
     let root = repository_root()?;
-    let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
-    let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
+    let product = read(&root.join("nook-app/nook-platform/docker/rust/base/Dockerfile"))?;
+    let nightly =
+        read(&root.join("nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"))?;
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let wasm_bake = read(&root.join("nook-app/nook-platform/nook-wasm/docker-bake.hcl"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
