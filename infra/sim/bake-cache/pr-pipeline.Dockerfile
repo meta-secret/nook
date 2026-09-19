@@ -1,7 +1,15 @@
 # syntax=docker/dockerfile:1
-# Cheap stand-in for `chef-deps`' WASM release cook. The manifest-only
-# dependency input is copied before every mutable verification source input.
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS chef-deps
+# Cheap stand-in for Dylint's immutable product-dependency layer. The
+# dependency input is copied before the Cargo Chef and source inputs.
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS dylint-deps
+COPY inputs/dylint-dependencies.txt /dylint/dependencies.txt
+RUN cp /dylint/dependencies.txt /dylint/installed \
+    && sleep 1 \
+    && echo bake-sim-cargo-dylint-product-dependencies
+
+# Cheap stand-in for `chef-deps`' WASM release cook. Both immutable dependency
+# stages remain before every mutable verification source input.
+FROM dylint-deps AS chef-deps
 COPY inputs/chef-dependencies.txt /chef/dependencies.txt
 RUN cat /chef/dependencies.txt >/chef/cooked \
     && sleep 1 \
@@ -11,6 +19,7 @@ FROM chef-deps AS verification
 ARG FAIL_VERIFICATION=0
 COPY inputs/compile-web-source.txt /source/compile-web-source.txt
 RUN test "$FAIL_VERIFICATION" = 0 \
+    && test -s /dylint/installed \
     && test -s /chef/cooked \
     && test -s /source/compile-web-source.txt \
     && mkdir /proof \
