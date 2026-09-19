@@ -18,15 +18,14 @@ class DockerizedRustCacheRegistryContract {
       "sccache_secrets = concat(sccache_credentials, sccache_runtime_secrets)",
     );
     expect(compile).toContain(
-      'export SCCACHE_RUNTIME_MODE_FILE="$runtime_mode_file"',
+      "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}",
     );
     expect(compile).toContain(
-      'export SCCACHE_S3_ACCESS_KEY_FILE="$access_key_file"',
+      "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}",
     );
     expect(compile).toContain(
-      'export SCCACHE_S3_SECRET_KEY_FILE="$secret_key_file"',
+      "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}",
     );
-    expect(compile).not.toContain("--var=");
     expect(compile).not.toContain(
       "--set=build-compile.secrets=id=sccache_runtime_mode",
     );

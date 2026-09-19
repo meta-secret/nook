@@ -53,26 +53,20 @@ class DockerizedRustContract {
   private readonly root = resolve(import.meta.dir, "../..");
 
   previewGates(): void {
+    const stepContract = z.object({
+      run: z.string().optional(),
+      uses: z.string().optional(),
+      if: z.string().optional(),
+      "continue-on-error": z.boolean().optional(),
+    });
+    const jobContract = z.object({ steps: z.array(stepContract) });
     const workflow = z
       .object({
-        jobs: z.record(
-          z.string(),
-          z.object({
-            steps: z.array(
-              z.object({
-                run: z.string().optional(),
-                uses: z.string().optional(),
-                if: z.string().optional(),
-                "continue-on-error": z.boolean().optional(),
-              }),
-            ),
-          }),
-        ),
+        jobs: z.record(z.string(), jobContract),
       })
       .parse(Bun.YAML.parse(this.read(".github/workflows/pr.yml")));
     expect(Object.keys(workflow.jobs)).toEqual(["validation"]);
-    const steps = workflow.jobs.validation?.steps;
-    expect(steps).toBeDefined();
+    const steps = jobContract.parse(workflow.jobs.validation).steps;
     let previous = -1;
     for (const command of [
       "task ci:pr:verification",
@@ -80,19 +74,20 @@ class DockerizedRustContract {
       "task ci:pr:heavy",
       "task ci:pr:browser:full",
     ]) {
-      const index = steps?.findIndex((step) => step.run === command) ?? -1;
+      const index = steps.findIndex((step) => step.run === command);
       expect(index).toBeGreaterThan(previous);
-      expect(steps?.[index]?.if).not.toContain("always()");
-      expect(steps?.[index]?.["continue-on-error"]).not.toBe(true);
+      const step = stepContract.parse(steps[index]);
+      expect(step.if).not.toContain("always()");
+      expect(step["continue-on-error"]).not.toBe(true);
       previous = index;
     }
-    const preview =
-      steps?.findIndex(
-        (step) => step.uses === "./.github/actions/nook-pr-preview",
-      ) ?? -1;
+    const preview = steps.findIndex(
+      (step) => step.uses === "./.github/actions/nook-pr-preview",
+    );
     expect(preview).toBeGreaterThan(previous);
-    expect(steps?.[preview]?.if).not.toContain("always()");
-    expect(steps?.[preview]?.if).toContain(
+    const previewStep = stepContract.parse(steps[preview]);
+    expect(previewStep.if).not.toContain("always()");
+    expect(previewStep.if).toContain(
       "github.event.pull_request.head.repo.full_name == github.repository",
     );
     expect(this.read("nook-app/ci/pr.yml")).toContain(

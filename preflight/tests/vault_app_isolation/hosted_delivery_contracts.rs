@@ -120,7 +120,7 @@ fn assert_docker_setup_contract(root: &Path) {
     for required in [
         "automountServiceAccountToken: false",
         "name: install-docker-client",
-        "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
+        "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
         "name: NOOK_BUILDKIT_REMOTE",
         "name: NOOK_BUILDKIT_ADDR",
         "value: tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",

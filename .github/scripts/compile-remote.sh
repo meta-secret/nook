@@ -41,7 +41,6 @@ if [ "$runtime_mode" != READ_WRITE ]; then
 fi
 printf '%s\n' "$runtime_mode" >"$runtime_mode_file"
 chmod 600 "$runtime_mode_file"
-export SCCACHE_RUNTIME_MODE_FILE="$runtime_mode_file"
 trap 'rm -f -- "$runtime_mode_file"' EXIT
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
@@ -91,20 +90,19 @@ access_key_file="${SCCACHE_S3_ACCESS_KEY_FILE:-}"
 secret_key_file="${SCCACHE_S3_SECRET_KEY_FILE:-}"
 bake_args+=(
   "--allow=fs.read=${runtime_mode_file}"
+  "--var=SCCACHE_RUNTIME_MODE_FILE=${runtime_mode_file}"
 )
 if [ -n "$access_key_file" ] && [ -r "$access_key_file" ] \
   && [ -n "$secret_key_file" ] && [ -r "$secret_key_file" ]; then
   bake_args+=(
     "--allow=fs.read=${access_key_file}"
     "--allow=fs.read=${secret_key_file}"
+    "--var=SCCACHE_S3_ACCESS_KEY_FILE=${access_key_file}"
+    "--var=SCCACHE_S3_SECRET_KEY_FILE=${secret_key_file}"
   )
-  export SCCACHE_S3_ACCESS_KEY_FILE="$access_key_file"
-  export SCCACHE_S3_SECRET_KEY_FILE="$secret_key_file"
 elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
   echo "build:compile requires readable SCCACHE_S3_ACCESS_KEY_FILE and SCCACHE_S3_SECRET_KEY_FILE in hosted CI" >&2
   exit 2
-else
-  unset SCCACHE_S3_ACCESS_KEY_FILE SCCACHE_S3_SECRET_KEY_FILE
 fi
 
 raw_build_log="${RUNNER_TEMP:-/tmp}/nook-build-compile.raw.log"

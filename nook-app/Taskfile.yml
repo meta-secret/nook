@@ -72,6 +72,8 @@ vars:
       if [ -n "$access_file" ] && [ -r "$access_file" ] &&
          [ -n "$secret_file" ] && [ -r "$secret_file" ]; then
         secrets="--allow=fs.read=$access_file --allow=fs.read=$secret_file";
+        secrets="$secrets --var SCCACHE_S3_ACCESS_KEY_FILE=$access_file";
+        secrets="$secrets --var SCCACHE_S3_SECRET_KEY_FILE=$secret_file";
       fi;
       printf '%s' "$secrets"
   GIT_COMMIT_ID:
@@ -96,22 +98,6 @@ vars:
     --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
     --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
-
-env:
-  SCCACHE_S3_ACCESS_KEY_FILE:
-    sh: >-
-      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-      if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
-        printf '%s' "$access_file";
-      fi
-  SCCACHE_S3_SECRET_KEY_FILE:
-    sh: >-
-      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-      if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
-        printf '%s' "$secret_file";
-      fi
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'

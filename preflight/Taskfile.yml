@@ -31,6 +31,8 @@ vars:
       if [ -n "$access_file" ] && [ -r "$access_file" ] &&
          [ -n "$secret_file" ] && [ -r "$secret_file" ]; then
         secrets="--allow=fs.read=$access_file --allow=fs.read=$secret_file";
+        secrets="$secrets --var SCCACHE_S3_ACCESS_KEY_FILE=$access_file";
+        secrets="$secrets --var SCCACHE_S3_SECRET_KEY_FILE=$secret_file";
       fi;
       printf '%s' "$secrets"
   PREFLIGHT_BAKE_FILES: >-
@@ -44,22 +46,6 @@ vars:
     --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
     --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
     --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
-
-env:
-  SCCACHE_S3_ACCESS_KEY_FILE:
-    sh: >-
-      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-      if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
-        printf '%s' "$access_file";
-      fi
-  SCCACHE_S3_SECRET_KEY_FILE:
-    sh: >-
-      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-      if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
-        printf '%s' "$secret_file";
-      fi
 
 tasks:
   preflight:

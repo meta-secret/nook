@@ -233,7 +233,7 @@ class ArcManifestContract {
       "values: [secondary]",
       "values: [overflow]",
       "ghcr.io/meta-secret/nook-arc-runner@sha256:64dc2f6c9e51f560165bacf3b21e87875be70271830924dae3fe0dae4407e10b",
-      "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
+      "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
     const admittedContract2 = runners.forbid("maxSkew: 5");

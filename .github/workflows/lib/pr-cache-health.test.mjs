@@ -742,7 +742,7 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
     "infra/k0s/manifests/arc/container-hook.yaml",
     "utf8",
   );
-  assert.equal(workflow.match(/^    runs-on:/gm)?.length, 1);
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
   assert.match(arcRunnerDockerfile, /FROM ghcr\.io\/actions\/actions-runner:2\.336\.0@sha256:/);
   assert.match(arcRunnerDockerfile, /FROM arc-runner AS proof/);
   assert.match(arcRunnerBake, /target "arc-runner-hooks-proof"/);
