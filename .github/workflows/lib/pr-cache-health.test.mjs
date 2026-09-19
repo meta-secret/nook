@@ -725,7 +725,7 @@ void test("one PR job retains cache diagnostics without registry handoffs", () =
   assert.equal(workflow.match(/^    runs-on:/gm)?.length, 1);
   const checkout = workflow.indexOf("uses: actions/checkout@v7");
   const checkoutSync = workflow.indexOf(
-    "uses: docker://registry.dev.nokey.sh/library/alpine:3.22.1@sha256:",
+    "uses: lunarmodules/busted@af850114b636fefaf3b6565a86844d0e029de93a",
   );
   const localDockerSetup = workflow.indexOf(
     "uses: ./.github/actions/nook-docker-setup",
