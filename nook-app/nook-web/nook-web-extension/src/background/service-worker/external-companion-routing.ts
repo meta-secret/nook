@@ -5,7 +5,7 @@ import {
   RuntimeMessageDecodeFailureKind,
   type RuntimeMessageDecodeFailure,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { isExtensionPairingApprovedMessageAdmissionFailure } from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
+import { decodeExtensionPairingApprovedMessageAdmissionFailure } from '../../../../nook-web-shared/src/extension/extension-pairing-admission-failure'
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -79,12 +79,16 @@ function pairingGrantDecodeFailureResponse(
   if (
     failure.kind !==
       RuntimeMessageDecodeFailureKind.ExtensionPairingApprovedGrant ||
-    failure.cause.kind !== RuntimeMessageDecodeCauseKind.ThrownValue ||
-    !isExtensionPairingApprovedMessageAdmissionFailure(failure.cause.detail)
+    failure.cause.kind !== RuntimeMessageDecodeCauseKind.ThrownValue
   ) {
     return invalidPairingGrantResponse
   }
-  return { ok: false, reason: failure.cause.detail }
+  const reason = decodeExtensionPairingApprovedMessageAdmissionFailure(
+    failure.cause.detail,
+  )
+  return reason === undefined
+    ? invalidPairingGrantResponse
+    : { ok: false, reason }
 }
 
 export class ExternalCompanionRouter {

@@ -19,12 +19,14 @@ export enum ExtensionPairingApprovedMessageAdmissionFailure {
   VaultType = "invalid-pairing-grant-vault-type",
 }
 
-const extensionPairingApprovedMessageAdmissionFailures = new Set<string>(
-  Object.values(ExtensionPairingApprovedMessageAdmissionFailure),
+const extensionPairingApprovedMessageAdmissionFailures = Object.values(
+  ExtensionPairingApprovedMessageAdmissionFailure,
 );
 
-export function isExtensionPairingApprovedMessageAdmissionFailure(
+export function decodeExtensionPairingApprovedMessageAdmissionFailure(
   value: string,
-): value is ExtensionPairingApprovedMessageAdmissionFailure {
-  return extensionPairingApprovedMessageAdmissionFailures.has(value);
+): ExtensionPairingApprovedMessageAdmissionFailure | undefined {
+  return extensionPairingApprovedMessageAdmissionFailures.find(
+    (failure) => failure === value,
+  );
 }
