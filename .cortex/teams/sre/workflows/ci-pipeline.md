@@ -375,8 +375,10 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Runs full web and extension suites concurrently inside the
-  same PR job after verification, unit/integration tests and heavy Rust checks.
+- **Label effect:** Runs the full web suite, including isolated application
+  servers, and then the extension suite inside the same PR job after
+  verification, unit/integration tests and heavy Rust checks. They are
+  sequential because both suites own fixed loopback ports and Chromium budgets.
 - Authentication-sensitive changes run the focused extension regression when
   the full suite was not requested.
 - Research changes run their browser checks in the same job.
