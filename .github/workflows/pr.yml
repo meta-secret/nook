@@ -32,7 +32,7 @@ jobs:
       image: ${{ vars.NOOK_PR_RUNNER_IMAGE }}
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ github.token }}
     timeout-minutes: 240
     defaults:
       run:
@@ -93,7 +93,7 @@ jobs:
         run: |
           apt-get update
           apt-get install --yes --no-install-recommends docker.io
-          # Use the GitHub-hosted runner's socket; do not start another daemon.
+          # Use the GitHub-hosted runner socket; do not start another daemon.
       - name: Connect secret-free hosted BuildKit
         if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
         uses: docker/setup-buildx-action@v4
