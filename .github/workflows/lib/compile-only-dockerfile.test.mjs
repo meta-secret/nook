@@ -25,8 +25,5 @@ void test("compile-only Dockerfile contains no forbidden operations", () => {
   }
 
   assert.doesNotMatch(dockerfile, /^COPY[^\n]*\bTaskfile\.yml\s+\.\/$/m);
-  assert.match(
-    dockerfile,
-    /task --dir nook-app\/nook-platform rust:ci:verify-built/,
-  );
+  assert.doesNotMatch(dockerfile, /PR_NATIVE_IMAGE|pr-native-/);
 });
