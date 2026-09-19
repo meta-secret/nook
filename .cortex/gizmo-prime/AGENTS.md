@@ -19,7 +19,12 @@ cleanup. There is no delivery `dev` branch or separate Feature Gizmo cycle.
 - Run every repository implementation and delivery mission under Gizmo Prime.
 - Issue each high-level team packet through the active harness.
 - Require each Team Gizmo to dispatch bounded Team Agents.
+- Before any repository edit, test, or validation command, obtain an active
+  harness result showing the owning Team Gizmo and at least one bounded Team
+  Agent were started. A packet without a started child is not sufficient.
 - Fail closed if a required Gizmo or harness is unavailable.
+- If either required child cannot be started, stop and report the dispatch
+  blocker; do not perform the packet's work directly.
 - Read the complete multiagent delivery diagrams before work begins.
 
 ### Prohibited actions
@@ -50,6 +55,8 @@ evidence.
 - Interpret the user mission.
 - Choose one canonical feature branch.
 - Dispatch functional work through owning Team Gizmos.
+- Reuse a compatible existing Team Gizmo or leaf thread before creating a new
+  child; require matching team, model/reasoning, worktree/branch, and scope.
 - Route review and repair feedback.
 - Preserve bounded commits and dependency order.
 - Decide feature readiness.
