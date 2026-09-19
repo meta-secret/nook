@@ -26,6 +26,9 @@ class DockerizedRustBuildKitContract {
     const workflow = this.read(".github/workflows/pr.yml");
     const rootWorkflow = this.read(".github/workflows/ci.yml");
     const dockerSetup = this.read(".github/actions/nook-docker-setup/action.yml");
+    const rustDockerTasks = this.read(
+      "nook-app/nook-platform/docker/Taskfile.yml",
+    );
     const tasks = this.read("nook-app/ci/pr.yml");
     const bake = this.read("nook-app/ci/pr.docker-bake.hcl");
     const preflight = this.read("preflight/Dockerfile");
@@ -53,6 +56,9 @@ class DockerizedRustBuildKitContract {
       'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
     );
     expect(tasks).not.toMatch(/docker\s+(?:pull|run|create|start|exec)\b/);
+    expect(rustDockerTasks).toContain(
+      'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy',
+    );
     expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
     expect(preflight).toContain(
