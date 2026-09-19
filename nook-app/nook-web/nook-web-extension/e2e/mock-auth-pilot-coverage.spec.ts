@@ -776,6 +776,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
           'Unlock Nook in the companion window, then click Continue with Nook again.',
         ),
       ).toBeVisible({ timeout: 15_000 })
+      await expect(
+        widget.getByRole('button', { name: 'Open vault' }),
+      ).toBeVisible()
 
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
 
