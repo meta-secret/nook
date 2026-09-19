@@ -67,6 +67,7 @@ test.describe('application logging', () => {
     await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await addSecret(page, 'log-test-key', 'log-test-value')
+    await forceVaultQuiescentForE2e(page)
     await page.getByTestId('header-lock-vault-btn').click()
     await authorizeDeviceProtection(page)
 
