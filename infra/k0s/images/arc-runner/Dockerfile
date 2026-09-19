@@ -19,7 +19,7 @@ RUN apt-get update \
 
 FROM ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda AS arc-runner
 
-COPY --from=hooks --chown=runner:runner /source/packages/k8s/index.js /home/runner/k8s-novolume/index.js
+COPY --from=hooks --chown=runner:runner /source/packages/k8s/dist/index.js /home/runner/k8s-novolume/index.js
 
 USER runner
 
