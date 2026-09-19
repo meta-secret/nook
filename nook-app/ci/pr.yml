@@ -84,7 +84,7 @@ tasks:
       - |
         set -euo pipefail
         mkdir -p '{{.PR_ARTIFACT_DIR}}/coverage' '{{.PR_ARTIFACT_DIR}}/browser'
-        floor="$(node -p 'require(process.argv[1]).package_lines_percent.nook_domain_api' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
+        floor="$(jq -er '.package_lines_percent.nook_domain_api | numbers' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
@@ -105,7 +105,7 @@ tasks:
       - cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.REPO_ROOT}}/nook-app/'
       - test -e nook-app/nook-web/node_modules || ln -s nook-web-app/node_modules nook-app/nook-web/node_modules
       - |
-        revision="$(node -p "require('./nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json').browsers.find((browser) => browser.name === 'ffmpeg').revision")"
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' './nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
         install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
         ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
 

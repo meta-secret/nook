@@ -54,7 +54,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(
-      "require(process.argv[1]).package_lines_percent.nook_domain_api",
+      ".package_lines_percent.nook_domain_api | numbers",
     );
     expect(tasks).not.toContain(
       'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
