@@ -192,15 +192,13 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         authenticationAdvanceControlSelector,
       ),
     ).flatMap((control) => {
-      if (!(
-        control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement
-      ))
-        return [];
+      const controlScope =
+        authenticationSubmissionControls.associatedAuthenticationForm(control);
       const isInScope =
         observation.formScope.kind === PasswordFormScopeKind.Owned
-          ? control.form === observation.formScope.owner
-          : !control.form;
+          ? controlScope.kind === PasswordFormScopeKind.Owned &&
+            controlScope.owner === observation.formScope.owner
+          : controlScope.kind === PasswordFormScopeKind.Unowned;
       return isInScope ? [control] : [];
     });
   }
@@ -825,7 +823,11 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       approvedAdvanceControlRequest,
     );
     if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
-    if (!approved.matches(semanticSubmitControlSelector)) {
+    if (
+      !approved.matches(semanticSubmitControlSelector) ||
+      (!(approved instanceof HTMLButtonElement) &&
+        !(approved instanceof HTMLInputElement))
+    ) {
       approved.click();
       return {
         kind: OwnedAdvanceControlActivationKind.Activated,

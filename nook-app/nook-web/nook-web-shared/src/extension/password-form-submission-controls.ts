@@ -53,7 +53,7 @@ export type PasswordFormScopeQuery =
       formScope: PasswordFormScope;
     };
 
-export type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
+export type LoginAdvanceControl = HTMLElement;
 
 export type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
   usernameField: HTMLInputElement;
@@ -136,7 +136,7 @@ export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 type SemanticSubmitControlList = HTMLElement[];
 
 export const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"]';
+  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"], [role="button"]';
 
 export const semanticSubmitControlSelector =
   'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
@@ -651,6 +651,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }: AuthenticationRouteDestinationRequest): string {
     if (
       control &&
+      (control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
       this.controlHasNativeSubmitSemantics(control) &&
       control.hasAttribute("formaction")
     ) {
@@ -662,13 +664,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   private authenticationControlDestination(
     control: LoginAdvanceControl,
   ): string {
-    if (!control.form) {
+    const controlForm = this.associatedAuthenticationForm(control);
+    if (controlForm.kind !== PasswordFormScopeKind.Owned) {
       return this.boundedAuthenticationDestination(
         ((v) => (v ? v : ""))(control.ownerDocument.defaultView?.location.href),
       );
     }
     const request: AuthenticationRouteDestinationRequest = {
-      form: control.form,
+      form: controlForm.owner,
       control,
     };
     return this.authenticationRouteDestination(request);
@@ -678,17 +681,21 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     request: AuthenticationRouteControlRequest,
   ): boolean {
     const { control, controlLabel, query } = request;
-    const form = control.form;
+    const controlForm = this.associatedAuthenticationForm(control);
+    const form =
+      controlForm.kind === PasswordFormScopeKind.Owned
+        ? controlForm.owner
+        : false;
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const identityContainer =
-      !form &&
-      query.kind === PasswordFormQueryKind.Scoped &&
-      query.formScope.kind === PasswordFormScopeKind.Unowned &&
-      query.root instanceof Element
+    const identityContainer: Element | undefined = form
+      ? form
+      : query.kind === PasswordFormQueryKind.Scoped &&
+          query.formScope.kind === PasswordFormScopeKind.Unowned &&
+          query.root instanceof Element
         ? query.root
-        : form;
+        : undefined;
     const formIdentity = [
       ((v) => (v ? v : ""))(identityContainer?.id),
       ((v) => (v ? v : ""))(identityContainer?.getAttribute("name")),
@@ -793,11 +800,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       ),
     );
     for (const control of controls) {
-      if (
-        ownedScope.kind === PasswordFormScopeKind.Owned &&
-        control.form !== ownedScope.owner
-      ) {
-        continue;
+      const controlScope = this.associatedAuthenticationForm(control);
+      if (ownedScope.kind === PasswordFormScopeKind.Owned) {
+        if (
+          controlScope.kind !== PasswordFormScopeKind.Owned ||
+          controlScope.owner !== ownedScope.owner
+        ) {
+          continue;
+        }
       }
       if (this.controlIsInert(control)) {
         continue;

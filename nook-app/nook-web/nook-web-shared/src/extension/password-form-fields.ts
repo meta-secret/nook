@@ -145,7 +145,7 @@ const oneTimeCodeCandidateSelector = [
 ].join(",");
 
 const loginAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]';
+  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"], [role="button"]';
 
 type OneTimeCodeFieldList = HTMLInputElement[];
 

@@ -131,7 +131,7 @@ describe('DOM-backed companion authentication simulation', () => {
         <input id="identifierId" name="identifier" autocomplete="username webauthn" aria-label="Email or phone">
         <input name="hiddenPassword" type="password" tabindex="-1" aria-hidden="true" hidden>
         <button type="button">Create account</button>
-        <div id="identifierNext"><button type="button">Next</button></div>
+        <div id="identifierNext" role="button"><div>Next</div></div>
       </main>`,
     }
     const request: DomAuthenticationSimulationRequest = {
@@ -171,10 +171,7 @@ describe('DOM-backed companion authentication simulation', () => {
 
     const wrongControlRequest: DomAuthenticationSimulationRequest = {
       fixture: {
-        html: fixture.html.replace(
-          '>Next</button>',
-          '>Create account</button>',
-        ),
+        html: fixture.html.replace('>Next</div>', '>Create account</div>'),
       },
       credentials: FAKE_CREDENTIALS,
     }
