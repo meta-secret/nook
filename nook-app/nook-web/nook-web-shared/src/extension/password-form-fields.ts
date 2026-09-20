@@ -144,8 +144,9 @@ const oneTimeCodeCandidateSelector = [
   'input[type="password"]',
 ].join(",");
 
+// Google renders the identifier-step Next activation as a roleless wrapper.
 const loginAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"], [role="button"]';
+  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"], [role="button"], #identifierNext';
 
 type OneTimeCodeFieldList = HTMLInputElement[];
 
@@ -166,8 +167,9 @@ export type PasskeyControlCandidate = {
 const passkeyControlSelector =
   '[data-nook-passkey-control], button, a[href], [role="button"], input[type="button"], input[type="submit"]';
 
+// Keep the same wrapper eligible when finding the nearest unowned auth scope.
 const formlessTypeButtonSelector =
-  'button[type="button"], input[type="button"], [role="button"]';
+  'button[type="button"], input[type="button"], [role="button"], #identifierNext';
 
 export type LocalOwnedFormAdjacencyRequest = {
   control: HTMLElement;
