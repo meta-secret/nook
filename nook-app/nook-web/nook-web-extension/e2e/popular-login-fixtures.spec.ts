@@ -579,4 +579,216 @@ test.describe('popular login fixture coverage', () => {
       await mockAuth.close()
     }
   })
+
+  test('keeps phone, PIN, tel, and password-then-OTP shells eligible with owned fields', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Targeted auth shell detector vault',
+    })
+    try {
+      for (const templateId of [
+        'phone-first',
+        'pin-login',
+        'tel-password',
+        'password-then-otp',
+      ]) {
+        const template = requiredShellTemplate(templateId)
+        expect(template.pilotExpectation).toBe(
+          ShellTemplatePilotExpectation.ContinueWithNook,
+        )
+        const firstStep = template.steps[0]
+        if (!firstStep) throw new Error(`template ${templateId} has no first step`)
+
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          `${templateId}-login`,
+        )
+        const form = page.locator('#login_form')
+        await expect(form).toHaveCount(1)
+        await expect(form.locator('input')).toHaveCount(firstStep.fields.length)
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await expect(
+          widget.getByRole('button', { name: 'Continue with Nook' }),
+        ).toBeVisible()
+
+        for (const field of firstStep.fields) {
+          if (!field.name || !field.type || !field.autocomplete) {
+            throw new Error(`template ${templateId} has an incomplete field`)
+          }
+          const input = form.locator(`[name="${field.name}"]`)
+          await expect(input).toHaveCount(1)
+          await expect(input).toHaveAttribute('type', field.type)
+          await expect(input).toHaveAttribute(
+            'autocomplete',
+            field.autocomplete,
+          )
+          await expect(input).toHaveValue('')
+          const ownerId = await input.evaluate((element) => {
+            if (!(element instanceof HTMLInputElement) || !element.form) {
+              return 'missing-form-owner'
+            }
+            return element.form.id
+          })
+          expect(ownerId).toBe('login_form')
+        }
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('fills and submits phone, PIN, tel, and password-then-OTP shells by their owned steps', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Targeted auth shell success vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+      await saveVaultAuthenticator(
+        paired.vaultPage,
+        'Password then OTP',
+        'alice@nook.test',
+        'JBSWY3DPEHPK3PXP',
+      )
+
+      for (const templateId of ['phone-first', 'pin-login', 'tel-password']) {
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget
+          .getByRole('button', { name: 'Continue with Nook' })
+          .click()
+
+        if (templateId === 'phone-first') {
+          await expect(page.locator('[name="phone"]')).toHaveValue(
+            'alice@nook.test',
+          )
+          await expect(page.locator('[name="password"]')).toBeVisible()
+          await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+          await expect(widget.getByText('Ready to sign in')).toBeVisible()
+          await widget
+            .getByRole('button', { name: 'Continue with Nook' })
+            .click()
+        }
+
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await page.close()
+      }
+
+      const passwordThenOtpPage = await paired.context.newPage()
+      await passwordThenOtpPage.goto(
+        `${mockAuth.origin}/template/password-then-otp`,
+      )
+      const passwordThenOtpWidget = passwordThenOtpPage.locator(
+        '#nook-auth-widget',
+      )
+      await expect(
+        passwordThenOtpWidget.getByText('Ready to sign in'),
+      ).toBeVisible()
+      await passwordThenOtpWidget
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      await expect(
+        passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
+      ).toBeVisible()
+      await expect(
+        passwordThenOtpPage.getByTestId('mock-auth-success'),
+      ).toHaveCount(0)
+      await expect(
+        passwordThenOtpWidget.getByText('Fill your 2FA code'),
+      ).toBeVisible()
+
+      const pickerPromise = paired.context.waitForEvent('page')
+      await passwordThenOtpWidget
+        .getByRole('button', { name: 'Fill 2FA code' })
+        .click()
+      const picker = await pickerPromise
+      await picker.waitForURL(/intent=authenticator-picker/)
+      await picker
+        .getByRole('button', { name: /Password then OTP/ })
+        .click()
+      await expect(
+        passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
+      ).toHaveValue(/^\d{6}$/)
+      await passwordThenOtpPage.getByRole('button', { name: 'Verify' }).click()
+      await expect(
+        passwordThenOtpPage.getByTestId('mock-auth-success'),
+      ).toHaveText('Authentication complete', { timeout: 20_000 })
+      await passwordThenOtpPage.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('rejects wrong passwords without a fake success on the targeted shells', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Targeted auth shell rejection vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'wrong-password',
+      )
+
+      for (const templateId of [
+        'phone-first',
+        'pin-login',
+        'tel-password',
+        'password-then-otp',
+      ]) {
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget
+          .getByRole('button', { name: 'Continue with Nook' })
+          .click()
+        if (templateId === 'phone-first') {
+          await expect(page.locator('[name="password"]')).toBeVisible()
+          await expect(widget.getByText('Ready to sign in')).toBeVisible()
+          await widget
+            .getByRole('button', { name: 'Continue with Nook' })
+            .click()
+        }
+        await expect(page.getByRole('alert')).toHaveText(
+          'Invalid username or password.',
+        )
+        await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
 })
