@@ -3,7 +3,13 @@
     DetectionFixtureRenderKind,
     type DetectionFixtureRenderState,
   } from '../lib/detection-fixture-state'
-  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
+  import {
+    completePlainLogin,
+    plainLoginIsValid,
+    PlainLoginResult,
+    type PlainLoginCredentials,
+  } from '../lib/plain-login'
+  import { navigate } from '../lib/navigation'
   import {
     getSiteFixture,
     getTemplateFixture,
@@ -22,6 +28,7 @@
   } = $props()
 
   let stepIndex = $state(0)
+  let previousUsername = $state('')
   let error = $state('')
 
   const renderState: DetectionFixtureRenderState = $derived.by(() => {
@@ -50,6 +57,11 @@
   const wrapAriaHidden = $derived(
     renderState.kind === DetectionFixtureRenderKind.Ready &&
       renderState.fixture.quirks.includes('aria-hidden-ancestor'),
+  )
+  const selectedAccountDisplay = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('selected-account-display') &&
+      renderState.step.fields.some((field) => field.type === 'password'),
   )
 
   function fieldSelector(field: SiteFixtureField): string {
@@ -90,8 +102,18 @@
   function advanceOrComplete(form: HTMLFormElement): void {
     if (renderState.kind === DetectionFixtureRenderKind.Missing) return
     const { fixture, step } = renderState
+    const isOneTimeCodeStep = step.fields.some(
+      (field) => field.autocomplete === 'one-time-code',
+    )
+    if (isOneTimeCodeStep) {
+      const oneTimeCode = readUsername(form)
+      if (!/^\d{6}$/u.test(oneTimeCode)) return
+      navigate('/plain/success')
+      return
+    }
     const hasPassword = step.fields.some((field) => field.type === 'password')
     if (!hasPassword && stepIndex < fixture.steps.length - 1) {
+      previousUsername = readUsername(form)
       stepIndex += 1
       error = ''
       return
@@ -101,8 +123,33 @@
       return
     }
     const username = readUsername(form)
+    const hasUsernameField = step.fields.some(
+      (field) => field.type !== 'password',
+    )
+    const submittedUsername = hasUsernameField ? username : previousUsername
     const password = readPassword(form)
-    if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
+    const credentials: PlainLoginCredentials = {
+      username: submittedUsername,
+      password,
+    }
+    if (!plainLoginIsValid(credentials)) {
+      error = 'Invalid username or password.'
+      return
+    }
+    const nextStep = fixture.steps[stepIndex + 1]
+    const nextStepIsOneTimeCode = nextStep
+      ? nextStep.fields.some((field) => field.autocomplete === 'one-time-code')
+      : false
+    if (nextStepIsOneTimeCode) {
+      previousUsername = submittedUsername
+      stepIndex += 1
+      error = ''
+      return
+    }
+    if (
+      completePlainLogin(submittedUsername, password) ===
+      PlainLoginResult.Invalid
+    ) {
       error = 'Invalid username or password.'
     }
   }
@@ -139,6 +186,7 @@
         inputmode={field.inputmode}
         placeholder={field.placeholder}
         aria-label={field['aria-label']}
+        aria-hidden={field['aria-hidden']}
         data-qa={field['data-qa']}
         data-testid={field['data-testid']}
       /></label
@@ -152,6 +200,7 @@
       inputmode={field.inputmode}
       placeholder={field.placeholder}
       aria-label={field['aria-label']}
+      aria-hidden={field['aria-hidden']}
       data-qa={field['data-qa']}
       data-testid={field['data-testid']}
     />
@@ -205,6 +254,9 @@
   <main>
     <h1>{label}</h1>
     <p data-testid="mock-auth-scenario">{label}-login</p>
+    {#if selectedAccountDisplay}
+      <p data-testid="google-selected-account">{previousUsername}</p>
+    {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}

@@ -14,6 +14,7 @@ export type SiteFixtureField = {
   label?: string
   placeholder?: string
   'aria-label'?: string
+  'aria-hidden'?: string
   'data-qa'?: string
   'data-testid'?: string
 }
@@ -255,6 +256,12 @@ class SiteFixtureCatalogAdmission {
     if ('aria-label' in value) {
       field['aria-label'] = this.decodeString(value['aria-label'], 'aria-label')
     }
+    if ('aria-hidden' in value) {
+      field['aria-hidden'] = this.decodeString(
+        value['aria-hidden'],
+        'aria-hidden',
+      )
+    }
     if ('data-qa' in value) {
       field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -452,6 +459,9 @@ export function renderFixtureHtml(
           : '',
         field['aria-label']
           ? `aria-label="${escapeAttr(field['aria-label'])}"`
+          : '',
+        field['aria-hidden']
+          ? `aria-hidden="${escapeAttr(field['aria-hidden'])}"`
           : '',
         field['data-qa'] ? `data-qa="${escapeAttr(field['data-qa'])}"` : '',
         field['data-testid']

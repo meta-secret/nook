@@ -199,6 +199,11 @@
     "source": "research",
     "template": "member-id-password"
   },
+  "anthropic-console": {
+    "loginUrl": "https://www.anthropic.com/login",
+    "source": "research",
+    "template": "email-first"
+  },
   "apple": {
     "loginUrl": "https://appleid.apple.com/sign-in",
     "source": "capture",
