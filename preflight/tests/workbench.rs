@@ -123,7 +123,9 @@ fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
         "PR CI must invoke the consolidated PR test phase"
     );
     assert!(
-        delivery_helpers.contains("node --test .github/scripts/workbench-publish.test.cjs"),
+        delivery_helpers.contains(
+            "cd \"{{.REPO_ROOT}}\" && node --test .github/scripts/workbench-publish.test.cjs",
+        ),
         "the consolidated PR test phase must invoke the issue publisher contract suite"
     );
     assert!(
