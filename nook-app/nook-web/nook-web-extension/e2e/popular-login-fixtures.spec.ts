@@ -494,6 +494,85 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
+  test('audits Instagram owned fields, success, and wrong-password rejection', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Instagram login audit vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+      const successPage = await paired.context.newPage()
+      await successPage.goto(`${mockAuth.origin}/template/instagram`)
+      const form = successPage.locator('#login_form')
+      const username = form.locator('input[name="username"]')
+      const password = form.locator('input[name="password"]')
+      await expect(username).toHaveAttribute('autocomplete', 'username')
+      await expect(password).toHaveAttribute('autocomplete', 'current-password')
+      await expect(
+        form.evaluate((element) =>
+          Array.from(element.querySelectorAll('input')).every(
+            (input) => input.form === element,
+          ),
+        ),
+      ).toBe(true)
+      await successPage
+        .locator('#nook-auth-widget')
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      await expect(successPage.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      await successPage.close()
+
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('rejects wrong Instagram passwords without a success outcome', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Instagram rejection audit vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'wrong-password',
+      )
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/template/instagram`)
+      await page
+        .locator('#nook-auth-widget')
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      await expect(page.getByRole('alert')).toHaveText(
+        'Invalid username or password.',
+        { timeout: 20_000 },
+      )
+      await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('progresses identifier-first templates through success and wrong-password evidence', async ({
     browserName,
   }, testInfo) => {
