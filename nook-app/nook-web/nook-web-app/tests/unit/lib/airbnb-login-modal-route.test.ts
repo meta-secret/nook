@@ -22,10 +22,17 @@ enum AirbnbFormPresentationKind {
   Document = 'document',
 }
 
+enum AirbnbPageSurfaceKind {
+  IsolatedModal = 'isolated-modal',
+  HomepageShell = 'homepage-shell',
+}
+
 type AirbnbFormFixture = {
   readonly action: AirbnbFormAction
   readonly presentation: AirbnbFormPresentationKind
+  readonly pageSurface: AirbnbPageSurfaceKind
   readonly dialogAttributes: string
+  readonly dialogAncestorAttributes: string
   readonly formAttributes: string
   readonly fieldMarkup: string
   readonly submitMarkup: string
@@ -49,7 +56,9 @@ const AIRBNB_CONTINUE_CONTROL =
 const AIRBNB_DEFAULT_FIXTURE: AirbnbFormFixture = {
   action: { kind: AirbnbFormActionKind.Omitted },
   presentation: AirbnbFormPresentationKind.Modal,
+  pageSurface: AirbnbPageSurfaceKind.IsolatedModal,
   dialogAttributes: '',
+  dialogAncestorAttributes: '',
   formAttributes: '',
   fieldMarkup: AIRBNB_IDENTITY_FIELD,
   submitMarkup: AIRBNB_CONTINUE_CONTROL,
@@ -67,11 +76,22 @@ function installAirbnbForm(fixture: AirbnbFormFixture): HTMLFormElement {
     ? ` ${fixture.dialogAttributes}`
     : ''
   const form = `<form${actionMarkup}${formAttributes}>${fixture.fieldMarkup}${fixture.submitMarkup}</form>`
+  const dialog = `<div role="dialog"${dialogAttributes}>${form}</div>`
+  const wrappedDialog = fixture.dialogAncestorAttributes
+    ? `<section ${fixture.dialogAncestorAttributes}>${dialog}</section>`
+    : dialog
+  const homepageShell = `<form action="/homes" aria-label="Search"><input type="search" aria-label="Where"></form>${wrappedDialog}`
   document.body.innerHTML =
     fixture.presentation === AirbnbFormPresentationKind.Document
       ? form
-      : `<div role="dialog"${dialogAttributes}>${form}</div>`
-  const installed = document.querySelector('form')
+      : fixture.pageSurface === AirbnbPageSurfaceKind.HomepageShell
+        ? `<main>${homepageShell}</main>`
+        : wrappedDialog
+  const formSelector =
+    fixture.pageSurface === AirbnbPageSurfaceKind.HomepageShell
+      ? '[role="dialog"] form'
+      : 'form'
+  const installed = document.querySelector(formSelector)
   if (!(installed instanceof HTMLFormElement)) {
     throw new Error('expected Airbnb form fixture')
   }
@@ -107,6 +127,23 @@ describe('Airbnb homepage login modal route detector', () => {
       ...AIRBNB_DEFAULT_FIXTURE,
       action: { kind: AirbnbFormActionKind.Explicit, value: '/' },
     }
+    expect(observeInstalledForm(fixture)).toEqual({
+      kind: AirbnbLoginModalRouteKind.Present,
+      destinationIdentity: 'https://www.airbnb.com/login',
+    })
+  })
+
+  test('accepts the modal in the homepage shell beside unrelated search controls', () => {
+    const fixture: AirbnbFormFixture = {
+      ...AIRBNB_DEFAULT_FIXTURE,
+      pageSurface: AirbnbPageSurfaceKind.HomepageShell,
+    }
+    const form = installAirbnbForm(fixture)
+
+    expect(form.closest('[role="dialog"]')).toBeInstanceOf(HTMLElement)
+    expect(document.querySelector('form[aria-label="Search"]')).toBeInstanceOf(
+      HTMLFormElement,
+    )
     expect(observeInstalledForm(fixture)).toEqual({
       kind: AirbnbLoginModalRouteKind.Present,
       destinationIdentity: 'https://www.airbnb.com/login',
@@ -237,6 +274,17 @@ describe('Airbnb homepage login modal route detector', () => {
       dialogAttributes: 'inert',
     }
     expect(observeInstalledForm(inertFixture)).toEqual({
+      kind: AirbnbLoginModalRouteKind.Absent,
+    })
+  })
+
+  test('rejects a modal nested below a hidden ancestor', () => {
+    const fixture: AirbnbFormFixture = {
+      ...AIRBNB_DEFAULT_FIXTURE,
+      dialogAncestorAttributes: 'aria-hidden="true"',
+    }
+
+    expect(observeInstalledForm(fixture)).toEqual({
       kind: AirbnbLoginModalRouteKind.Absent,
     })
   })
