@@ -15,12 +15,15 @@ tasks:
         builder="nook-pr-proof-$(date +%s)-$$"
         trap 'docker buildx rm -f "$builder" >/dev/null 2>&1' EXIT
         docker buildx create --name "$builder" --driver docker-container --bootstrap
-        fixture="$repo_root/infra/sim/bake-cache/pr-pipeline.docker-bake.hcl"
+        context="$output/context"
+        cp -R "$repo_root/infra/sim/bake-cache" "$context"
+        fixture="$context/pr-pipeline.docker-bake.hcl"
         for temperature in cold warm; do
           for phase in verification tests heavy; do
             docker buildx bake --builder "$builder" --progress=plain \
               --metadata-file "$output/$temperature-$phase.json" \
-              -f "$fixture" --set "*.context=$repo_root/infra/sim/bake-cache" \
+              -f "$fixture" --set "*.context=$context" \
+              --allow="fs.read=$context" \
               --allow="fs.write=$output" \
               --set "pr-proof-heavy.output=type=local,dest=$output/result" \
               "pr-proof-$phase" 2>&1 | tee "$output/$temperature-$phase.log"
@@ -29,30 +32,62 @@ tasks:
         test -s "$output/result/proof/verification"
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
-        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        grep -q 'exporting to image' "$output/cold-verification.log"
+        if grep -q 'exporting cache' "$output/cold-verification.log"; then
+          echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2
+          exit 1
+        fi
+        dylint_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[dylint-deps 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 2\/2\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        test -n "$dylint_dependency_vertex"
         test -n "$dependency_vertex"
+        grep -qx "$dylint_dependency_vertex CACHED" "$output/warm-verification.log"
         grep -qx "$dependency_vertex CACHED" "$output/warm-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/warm-verification.log"; then
-          echo 'Warm verification unexpectedly reinstalled Dylint dependencies' >&2
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-product-dependencies$' "$output/warm-verification.log"; then
+          echo 'Warm verification unexpectedly rebuilt Dylint product dependencies' >&2
+          exit 1
+        fi
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/warm-verification.log"; then
+          echo 'Warm verification unexpectedly recooked WASM dependencies' >&2
           exit 1
         fi
         grep -q ' CACHED' "$output/warm-tests.log"
+        printf 'changed source\n' >>"$context/inputs/compile-web-source.txt"
         docker buildx bake --builder "$builder" --progress=plain \
           --metadata-file "$output/changed-verification.json" \
-          -f "$fixture" --set "*.context=$repo_root/infra/sim/bake-cache" \
-          --set '*.args.SOURCE_REVISION=changed' \
+          -f "$fixture" --set "*.context=$context" \
+          --allow="fs.read=$context" \
           pr-proof-verification 2>&1 | tee "$output/changed-verification.log"
-        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-ecosystem-nightly 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
-        verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 1\/1\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        dylint_tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[dylint-deps 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 2\/2\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 2\/2\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
+        test -n "$dylint_tooling_vertex"
         test -n "$tooling_vertex"
         test -n "$verification_vertex"
+        grep -qx "$dylint_tooling_vertex CACHED" "$output/changed-verification.log"
         grep -qx "$tooling_vertex CACHED" "$output/changed-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-dependencies$' "$output/changed-verification.log"; then
-          echo 'Source-only change unexpectedly reinstalled Dylint dependencies' >&2
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-product-dependencies$' "$output/changed-verification.log"; then
+          echo 'Source-only change unexpectedly rebuilt Dylint product dependencies' >&2
+          exit 1
+        fi
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/changed-verification.log"; then
+          echo 'Source-only change unexpectedly recooked WASM dependencies' >&2
           exit 1
         fi
         if grep -qx "$verification_vertex CACHED" "$output/changed-verification.log"; then
           echo 'Mutable verification layer unexpectedly stayed cached' >&2
+          exit 1
+        fi
+        docker buildx bake --builder "$builder" --progress=plain \
+          --metadata-file "$output/changed-heavy.json" \
+          -f "$fixture" --set "*.context=$context" \
+          --allow="fs.read=$context" \
+          pr-proof-heavy 2>&1 | tee "$output/changed-heavy.log"
+        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/changed-heavy.log" | head -n 1)"
+        test -n "$fuzz_dependency_vertex"
+        grep -qx "$fuzz_dependency_vertex CACHED" "$output/changed-heavy.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/changed-heavy.log"; then
+          echo 'Source-only change unexpectedly reinstalled fuzz dependencies' >&2
           exit 1
         fi
         if grep -E 'importing cache manifest|exporting cache to registry' "$output/"*.log; then
@@ -65,14 +100,16 @@ tasks:
           set +e
           if [ "$failure" = verification ]; then
             docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
-              --set "*.context=$repo_root/infra/sim/bake-cache" \
+              --set "*.context=$context" \
+              --allow="fs.read=$context" \
               --set '*.args.FAIL_VERIFICATION=1' pr-proof-verification \
               >"$output/failure-$failure.log" 2>&1 \
               && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
             status="$?"
           else
             docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
-              --set "*.context=$repo_root/infra/sim/bake-cache" \
+              --set "*.context=$context" \
+              --allow="fs.read=$context" \
               --set '*.args.FAIL_TESTS=1' pr-proof-tests \
               >"$output/failure-$failure.log" 2>&1 \
               && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"

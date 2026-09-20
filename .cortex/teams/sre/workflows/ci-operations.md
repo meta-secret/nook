@@ -87,7 +87,7 @@ Docker setup selects probes by the graph consumed by that job (`native`,
 execute all of those graphs. The cache-export wrapper reports preparation,
 registry-send, and total export seconds separately. A concurrent-map panic is
 an actionable shard fault, and the native Main lane warns when BuildKit usage
-reaches 100 GB ahead of the configured 112 GB GC maximum.
+reaches 108 GB ahead of the configured 120 GB GC maximum.
 The portable WASM proof uses `wasm-proof` to compute the immutable dependency
 fingerprint. It performs no availability probes because the proof owns its
 explicit repair and verification refs.

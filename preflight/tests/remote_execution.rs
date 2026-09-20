@@ -76,9 +76,8 @@ fn remote_workflow_uses_only_scoped_external_credentials() {
 #[test]
 fn focused_build_images_seal_source_and_dependency_artifacts() {
     let root = RepositoryFixture::repository_root();
-    let dockerfile = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
-    let dockerignore =
-        root.read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
+    let dockerfile = root.read("nook-app/nook-platform/docker/rust/base/Dockerfile");
+    let dockerignore = root.read("nook-app/nook-platform/docker/rust/base/Dockerfile.dockerignore");
     for ignored in [
         "**/docker-bake.hcl",
         "**/target",

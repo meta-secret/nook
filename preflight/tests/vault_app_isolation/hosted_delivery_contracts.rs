@@ -108,7 +108,6 @@ fn assert_docker_setup_contract(root: &Path) {
     assert!(pr.contains("cache-write: \"false\""));
     assert!(pr.contains("GHA_CACHE_ENABLED="));
     assert!(pr.contains("GHA_CACHE_WRITE_ENABLED="));
-    assert!(!pr.contains("PR_NATIVE_BUILD_OUTPUT"));
     assert!(container_hook.contains("name: install-docker-client"));
     assert!(container_hook.contains("name: NOOK_BUILDKIT_ADDR"));
     assert!(

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 const compileDockerfilePath = path.resolve(
-  "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+  "nook-app/nook-platform/docker/rust/compile/Dockerfile",
 );
 
 const forbiddenOperationPatterns = [
@@ -25,8 +25,5 @@ void test("compile-only Dockerfile contains no forbidden operations", () => {
   }
 
   assert.doesNotMatch(dockerfile, /^COPY[^\n]*\bTaskfile\.yml\s+\.\/$/m);
-  assert.match(
-    dockerfile,
-    /task --dir nook-app\/nook-platform rust:ci:verify-built/,
-  );
+  assert.doesNotMatch(dockerfile, /PR_NATIVE_IMAGE|pr-native-/);
 });

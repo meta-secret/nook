@@ -1,10 +1,11 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-# Product Rust/WASM lineage. Dependencies and source leaves stay in this
-# Dockerfile so cache keys use stable internal stages across fresh builders.
+# Rust foundation and product lineage. Dependencies and source leaves stay in
+# this base Dockerfile so cache keys use stable internal stages across fresh
+# builders.
 # rust-platform overlays real platform sources on cooked builder-core-deps (one directory COPY).
 # Focused nook-rust-* leaves and ecosystem deterministic extend internal stages.
-# Other ecosystem gates live as sibling Dockerfiles in this directory.
+# Other ecosystem gates live under ecosystem/ and consume rust-base through Bake.
 # The web lineage lives under nook-web/docker and must not inherit Cargo target/ or the Rust toolchain.
 
 # Pin floating registry tags by digest. Unpinned `rust` tags move under us and rewrite the
@@ -168,11 +169,6 @@ RUN mkdir -p \
       nook-wasm-composition-tests/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 RUN --network=default cargo fetch --locked
-# Stable epoch for the hosted WASM cook lineage. Bump when reseeding
-# nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
-# layer blobs — index-only refs to older scopes are not enough for PR restores.
-ENV NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
-RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \

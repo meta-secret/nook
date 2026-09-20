@@ -1,0 +1,2 @@
+cargo-fuzz=0.13.2
+fuzz-lock=locked

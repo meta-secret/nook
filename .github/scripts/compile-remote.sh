@@ -14,7 +14,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 cd "$repo_root"
 
-compile_dockerfile="${repo_root}/nook-app/nook-platform/docker/rust/compile.Dockerfile"
+compile_dockerfile="${repo_root}/nook-app/nook-platform/docker/rust/compile/Dockerfile"
 active_compile_dockerfile="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "$compile_dockerfile")"
 forbidden_compile_patterns=(
   'cargo[[:space:]]+test'
@@ -60,7 +60,7 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-platform/nook-wasm/docker-bake.hcl"
   -f "${repo_root}/nook-app/nook-web/docker/toolchain.docker-bake.hcl"
   -f "${repo_root}/nook-app/nook-web/nook-web-app/docker-bake.hcl"
-  -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
+  -f "${repo_root}/nook-app/nook-platform/docker/rust/compile/docker-bake.hcl"
   --set "*.context=${repo_root}"
   # Stable value only: secret availability controls remote access and the
   # runtime secret preserves an identical compiler-vertex command shape.

@@ -182,11 +182,11 @@ void test("registry verifier persists both compile-cache availability observatio
 
 void test("Phase A keeps its rooted graph free of per-run telemetry cache busters", () => {
   const dockerfile = fs.readFileSync(
-    path.resolve("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    path.resolve("nook-app/nook-platform/docker/rust/compile/Dockerfile"),
     "utf8",
   );
   const bake = fs.readFileSync(
-    path.resolve("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"),
+    path.resolve("nook-app/nook-platform/docker/rust/compile/docker-bake.hcl"),
     "utf8",
   );
   assert.match(

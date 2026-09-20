@@ -160,13 +160,24 @@ rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
+// -----------------------------------------------------------------------------
+// Rust Dockerfile dependency graph. These paths are the graph's physical
+// hierarchy; the target contexts below are the actual BuildKit edges.
+//
+// rust-base is the shared foundation. Product, nightly, and policy targets
+// consume it. The compile graph is kept in compile/docker-bake.hcl because it
+// also consumes the independent web-base foundation.
+rust_base_dockerfile = "nook-app/nook-platform/docker/rust/base/Dockerfile"
+rust_nightly_dockerfile = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile"
+rust_policy_dockerfile = "nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile"
+
 // Context parent for ecosystem/product leaves. No cache-from and no cache-to:
 // importing the short rust-base index while nesting nightly/policy orphans their
 // expensive RUNs even after Main nightly FALLBACK restored them.
 target "rust-base" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = rust_base_dockerfile
   target     = "rust-base"
   platforms  = ["linux/amd64"]
 }
@@ -186,7 +197,7 @@ target "rust-base-publish" {
 
 target "rust-ecosystem-policy-tools" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile"
+  dockerfile = rust_policy_dockerfile
   target     = "rust-ecosystem-policy-tools"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -199,7 +210,7 @@ target "rust-ecosystem-policy-tools" {
 
 target "rust-ecosystem-dependency-policy" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile"
+  dockerfile = rust_policy_dockerfile
   target     = "rust-ecosystem-dependency-policy"
   platforms  = ["linux/amd64"]
   args = {
@@ -216,7 +227,7 @@ target "rust-ecosystem-dependency-policy" {
 target "rust-fuzz-smoke" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+  dockerfile = rust_nightly_dockerfile
   target     = "rust-fuzz-smoke"
   platforms  = ["linux/amd64"]
   args = {
@@ -233,7 +244,7 @@ target "rust-fuzz-smoke" {
 target "rust-dylint" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+  dockerfile = rust_nightly_dockerfile
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -241,7 +252,8 @@ target "rust-dylint" {
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to
-  output     = ["type=cacheonly"]
+  tags       = ["nook-rust-dylint:local"]
+  output     = ["type=image,push=false"]
 }
 
 target "rust-dylint-build" {
@@ -271,7 +283,7 @@ target "rust-dylint-wasm" {
 target "rust-ecosystem-deterministic" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = rust_base_dockerfile
   target     = "rust-ecosystem-deterministic"
   platforms  = ["linux/amd64"]
   cache-from = rust_ecosystem_deterministic_cache_from
@@ -281,7 +293,7 @@ target "rust-ecosystem-deterministic" {
 
 target "rust-kani" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  dockerfile = rust_base_dockerfile
   target     = "rust-kani"
   platforms  = ["linux/amd64"]
   cache-from = rust_ecosystem_kani_cache_from

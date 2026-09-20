@@ -62,7 +62,7 @@ impl<'a> PrProducerCacheContract<'a> {
         ));
         let product = self
             .root
-            .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+            .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
         let wasm_dependencies = product
             .split_once("FROM chef-deps AS builder-wasm-deps")
             .and_then(|(_, tail)| tail.split_once("FROM builder-wasm-deps AS builder-core-deps"))

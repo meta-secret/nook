@@ -112,7 +112,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(!bake.contains("SCCACHE_REDIS"));
 
     let rust_base = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+        .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
     assert!(rust_base.contains("ENV SCCACHE_BUCKET=nook-sccache"));
     assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
@@ -123,7 +123,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "nook-app/Taskfile.yml",
         "nook-app/nook-platform/docker/Taskfile.yml",
         "nook-app/docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+        "nook-app/nook-platform/docker/rust/base/Dockerfile",
     ] {
         assert!(
             !RepositoryFixture::repository_root()
@@ -591,7 +591,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(!wrapper.contains("REDIS"));
 
     let rust_base = RepositoryFixture::repository_root()
-        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+        .read("nook-app/nook-platform/docker/rust/base/Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("ENV NOOK_SCCACHE_S3_MODE=external"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
@@ -599,7 +599,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(!bake.contains("variable \"SCCACHE_S3_MODE\""));
     assert!(!app_tasks.contains("*.args.SCCACHE_"));
 
-    let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
+    let path = "nook-app/nook-platform/docker/rust/base/Dockerfile";
     let dockerfile = RepositoryFixture::repository_root().read(path);
     // Replay-only terminal reads consume the persisted report from a cached
     // compiler layer and intentionally do not receive cache credentials. The
@@ -609,7 +609,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
     assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
 
-    let nightly_path = "nook-app/nook-platform/docker/rust/nightly.Dockerfile";
+    let nightly_path = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
     let nightly = RepositoryFixture::repository_root().read(nightly_path);
     assert_sccache_report_mounts(&nightly, nightly_path);
     assert_dylint_toolchain_install_mounts(&nightly, nightly_path);

@@ -1,21 +1,18 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
 # Compile-only product graph. The rust-base and web-base stages are supplied as
-# named contexts by compile.docker-bake.hcl. Do not change this
+# named contexts by compile/docker-bake.hcl. Do not change this
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
 # non-build validation as part of their dependency warm-up.
-
-ARG PR_NATIVE_IMAGE=registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-rust:unconfigured
 
 FROM rust-base AS compile-platform-manifests
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 
-# Compiler objects are the cross-commit cache boundary. Keep debug/source-path
-# metadata independent of the checkout identity and disable incremental object
-# layouts, which sccache cannot reuse reliably across clean BuildKit vertices.
+# Compiler objects are the cross-commit cache boundary. Disable incremental
+# object layouts, which sccache cannot reuse reliably across clean BuildKit
+# vertices.
 ENV CARGO_INCREMENTAL=0
-ENV RUSTFLAGS="--remap-path-prefix=/meta-secret/nook=/workspace"
 # The inherited rust-base value is a stable, read-only key input only. Every
 # compiler vertex below must replace it from the mounted runtime secret before
 # starting sccache, so publish and verification share identical BuildKit keys.
@@ -151,50 +148,6 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
-
-# Exact-source native build image for PR validation consumers. This stage only
-# performs the ordinary native cargo builds above. All validation and
-# repository policy run later in their own jobs.
-FROM compile-native-source AS pr-native-build
-
-WORKDIR /meta-secret/nook
-COPY .codex .codex
-COPY .cortex .cortex
-COPY .cursor .cursor
-COPY .github .github
-COPY .impeccable .impeccable
-COPY .task .task
-COPY .vale .vale
-COPY agentic-ai agentic-ai
-COPY docs docs
-COPY infra infra
-COPY nook-app nook-app
-COPY AGENTS.md CODEX.md LICENSE PRODUCT.md README.md ./
-COPY .dockerignore .gitignore .jscpd.json .vale.ini bun.lock deny.toml eslint.config.mjs package.json tsconfig.compile.json tsconfig.json ./
-
-RUN test -f nook-app/Taskfile.yml \
-    && git init -q \
-    && git config user.email nook@local \
-    && git config user.name nook \
-    && git add -A \
-    && git commit -q -m "PR native build source snapshot" >/dev/null
-
-# Trusted ARC consumers have a remote BuildKit API but no container runtime.
-# Import the producer's exact immutable Zot image, execute validation as a
-# normal solve vertex, then expose only the small validation handoff. The
-# default keeps every standalone Dockerfile resolution inside Zot; Bake
-# replaces it with the producer's run-and-commit-specific reference.
-FROM ${PR_NATIVE_IMAGE} AS pr-native-verify
-
-RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
-    --mount=type=secret,id=sccache_s3_access_key,required=false \
-    --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    PLATFORM_ROOT=/meta-secret/nook/nook-app/nook-platform \
-    task --dir nook-app/nook-platform rust:ci:verify-built
-
-FROM scratch AS pr-native-verify-export
-
-COPY --from=pr-native-verify /ci-artifacts/ /
 
 FROM compile-wasm-dependencies AS compile-wasm-source
 

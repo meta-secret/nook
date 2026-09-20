@@ -7,9 +7,9 @@ import {
 import { resolve } from "node:path";
 
 enum DockerfileFrontendConsumer {
-  RustNightly = "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
-  RustPolicyTools = "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
-  RustProduct = "nook-app/nook-platform/docker/rust/product.Dockerfile",
+  RustNightly = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile",
+  RustPolicyTools = "nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile",
+  RustProduct = "nook-app/nook-platform/docker/rust/base/Dockerfile",
   SccacheHealth = "nook-app/nook-platform/docker/sccache-health.Dockerfile",
   WebToolchain = "nook-app/nook-web/docker/toolchain.Dockerfile",
   Web = "nook-app/nook-web/docker/web.Dockerfile",
