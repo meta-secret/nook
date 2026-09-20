@@ -9,7 +9,6 @@ ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
 WORKDIR /meta-secret/nook/preflight
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
-    && printf 'fn main() {}\n' > src/main.rs \
     && printf '\n' > src/lib.rs
 # cargo-chef currently copies the package edition onto every generated target,
 # which Cargo now deprecates. Keep the package edition and strip only those
@@ -45,7 +44,6 @@ WORKDIR /meta-secret/nook/preflight
 COPY --from=chef /meta-secret/nook/preflight/recipe.json recipe.json
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
-    && printf 'fn main() {}\n' > src/main.rs \
     && printf '\n' > src/lib.rs
 RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -54,7 +52,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && mkdir -p tests \
     && printf '#[test]\nfn dependency_warmup() {}\n' > tests/core_ownership.rs \
     && cargo clippy --quiet --locked --all-targets -- -D warnings \
-    && cargo build --quiet --locked --bin nook-preflight \
     && cargo test --quiet --locked --test core_ownership --no-run \
     && rm -rf tests \
     && nook-sccache-report preflight-chef
@@ -80,8 +77,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     find src tests -type f -name '*.rs' -exec touch {} + \
     && cargo fmt --check \
     && cargo clippy --quiet --offline --locked --all-targets -- -D warnings \
-    && cargo build --quiet --offline --locked --bin nook-preflight \
-    && strip /meta-secret/preflight-target/debug/nook-preflight \
     && nook-sccache-report preflight-build
 
 FROM build AS test
@@ -96,10 +91,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
     && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" \
     && nook-sccache-report preflight-test-and-coverage
-
-FROM scratch AS cli-export
-
-COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight
 
 # Policy uses the same compiled preflight graph as product validation. Rust,
 # including Cargo metadata discovery and formatter fixtures, stays in BuildKit.
@@ -151,7 +142,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && task loom:module-experts:validate \
     && task loom:structural-experts:validate \
     && task loom:cortex-audit
-COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /usr/local/bin/nook-preflight
 
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \

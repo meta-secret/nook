@@ -33,7 +33,7 @@ tasks:
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
         grep -q 'exporting to image' "$output/cold-verification.log"
-        grep -q 'pr-proof-coverage' "$output/cold-post-tests.log"
+        grep -q 'pr-proof-coverage' "$output/cold-tests.log"
         grep -q 'pr-proof-browser' "$output/cold-post-tests.log"
         if grep -q 'exporting cache' "$output/cold-verification.log"; then
           echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2

@@ -79,7 +79,7 @@ tasks:
     desc: Run local workflow and artifact delivery contracts.
     cmds:
       - cd "{{.REPO_ROOT}}" && node --test .github/scripts/workbench-publish.test.cjs
-      - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs .github/workflows/lib/base-coverage-artifact.test.cjs
+      - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs
 
   ci:pr:heavy:
     desc: Run fuzz and Kani only after unit/integration tests succeed.
@@ -87,19 +87,10 @@ tasks:
       - task: ci:pr:bake
         vars: { PR_BAKE_TARGET: pr-heavy }
 
-  ci:pr:coverage:export:
-    desc: Export coverage artifacts after tests succeed.
-    requires:
-      vars: [PR_ARTIFACT_DIR]
-    cmds:
-      - task --silent --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:export PREFLIGHT_OUTPUT_DIR="{{.PR_ARTIFACT_DIR}}/coverage/tools"
-      - mkdir -p "{{.REPO_ROOT}}/coverage/current"
-      - cp -a "{{.PR_ARTIFACT_DIR}}/coverage/." "{{.REPO_ROOT}}/coverage/current/"
-
   ci:pr:post-tests:
-    desc: Prepare heavy checks and browser/coverage artifacts concurrently after tests succeed.
+    desc: Prepare heavy checks and browser artifacts concurrently after tests succeed.
     cmds:
-      - task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare
+      - task --parallel ci:pr:heavy ci:pr:browser:prepare
 
   ci:pr:bake:
     internal: true
@@ -108,12 +99,12 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        mkdir -p '{{.PR_ARTIFACT_DIR}}/coverage' '{{.PR_ARTIFACT_DIR}}/browser'
+        mkdir -p '{{.PR_ARTIFACT_DIR}}/browser'
         floor="$(jq -er '.package_lines_percent.nook_domain_api | numbers' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
-          --set 'coverage-export.output=type=local,dest={{.PR_ARTIFACT_DIR}}/coverage' \
+          --set 'coverage-export.output=type=cacheonly' \
           --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \
           --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
           --set 'rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED=true' \

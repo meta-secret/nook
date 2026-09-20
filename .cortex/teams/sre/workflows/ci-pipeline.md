@@ -61,7 +61,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Dev PRs and research changes request product validation automatically.
 - Policy-only PRs run tooling verification, preflight and Loom in the same job.
 - UI-demo execution remains disabled, with its focused-spec contract retained.
-- Coverage and Pages preview use same-runner composite actions.
+- Pages preview uses a same-runner composite action; coverage remains inside
+  the Docker/BuildKit solve.
 - No intermediate Nook image or registry layer cache is transferred for PR validation.
 
 **`repository-policy.yml`**
@@ -348,14 +349,16 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
   lint and product builds before test-binary compilation.
 - Bake and Task run independent work concurrently within each phase.
 - Rust/WASM/web tests, Loom tests and delivery-helper contracts follow verification.
-- After tests succeed, `ci:pr:post-tests` runs heavy verification, coverage export,
-  and browser-artifact preparation concurrently on the same runner and BuildKit
+- The `ci:pr:tests` Bake solve retains Docker-side coverage generation and
+  per-package floor enforcement with a cache-only coverage output.
+- After tests succeed, `ci:pr:post-tests` runs heavy verification and
+  browser-artifact preparation concurrently on the same runner and BuildKit
   connection.
-- Coverage reporting and requested browser suites begin after that fan-out joins.
-- Browser/deployment files and coverage are exported locally, never passed via
-  per-PR registry images or GitHub artifact downloads to sibling jobs.
-- Composite coverage and preview actions run on the same runner. A failure
-  skips downstream phases and leaves the single required check failed.
+- Requested browser suites begin after that fan-out joins. Browser/deployment
+  files are exported locally; PR coverage artifacts, downloads, uploads and
+  comments are not created.
+- Preview actions run on the same runner. A failure skips downstream phases
+  and leaves the single required check failed.
 - Policy-only PRs use the same job without the product/browser phases.
 - The trusted artifact-promotion workflow is removed. BuildKit is the cache authority.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
@@ -598,26 +601,9 @@ authenticator-domain to 90 percent.
 - ARC jobs reuse the persistent BuildKit content store on their selected node.
 - Verified Main ARC jobs publish portable source, tool, and WASM dependency refs.
 - Zot exports provide cold-node recovery.
-- `task docker:extract:coverage` remains a copy-only path that invokes neither BuildKit nor Rust tests.
-- It also serves workflows that already have a sealed `nook-web:local` image, including main's commit-keyed coverage artifact.
-- `task setup` gets those files into the slim web image through the same temporary host artifact directory as generated WASM.
-- It does not copy them directly from the multi-GB Rust builder snapshot.
-
-**Main artifact handoff:**
-
-- After Main's native lane succeeds, `main.yml` uploads those four files plus a manifest as `nook-core-auth-coverage-<commit SHA>`.
-- PR lookup trusts that commit-keyed artifact as soon as it exists, even while later Main jobs are still running or after an unrelated later job fails.
-- It authenticates the workflow, push event, default branch, and exact SHA before use.
-- A PR with changed Rust coverage inputs downloads and validates that artifact instead of rebuilding the base app image.
-- If the artifact is missing or invalid, the report reuses the floor-validated current coverage as its comparison and emits a warning.
-- It never launches a second cold Docker coverage build.
-- PRs without Rust/Cargo/source changes — including changes only to coverage reporting plumbing — also reuse current coverage because the measured source is unchanged.
-
-**Coverage input detection:**
-
-- Compares the merge-base diff between the pull request event's explicit base and head SHAs.
-- Must not compare the base to the checked-out synthetic merge; Main can advance after the event snapshot.
-- Must not use a two-dot snapshot diff; a behind-base branch would then count Main-only changes as pull request changes.
+Main no longer stages or uploads a commit-keyed coverage artifact for PR
+comparison. Repository coverage remains enforced by the Docker/BuildKit
+coverage solve and package floors in the verified Rust graph.
 
 ## Agent host vs GitHub-hosted execution
 
@@ -664,9 +650,8 @@ authenticator-domain to 90 percent.
 - Requested browsers run after successful verification and tests.
 - Preview restores exported production artifacts after E2E.
 - Fork/Dependabot validation remains secret-free and never deploys previews.
-- PR coverage always checks the current portable Rust artifact against the floor.
-- Changed Rust/Cargo/source inputs reuse the exact base commit's trusted Main artifact when available.
-- Missing or unchanged base coverage reuses the current artifact for comparison without another Docker solve.
+- PR Rust tests enforce each package's coverage floor inside the Docker/BuildKit
+  solve; no base revision comparison or PR coverage report is produced.
 - Use remote CI as the **sole PR product validation gate**.
 
 **Gizmo remote commands:**

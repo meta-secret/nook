@@ -239,9 +239,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert_eq!(target_envs, 2);
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
-    let preflight_export =
-        "COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight";
-    assert!(preflight.contains(preflight_export));
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));

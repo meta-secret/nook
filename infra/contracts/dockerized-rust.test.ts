@@ -92,7 +92,12 @@ class DockerizedRustContract {
     );
     const prTasks = this.read("nook-app/ci/pr.yml");
     expect(prTasks).toContain(
-      "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+      "task --parallel ci:pr:heavy ci:pr:browser:prepare",
+    );
+    expect(prTasks).toContain("coverage-export.output=type=cacheonly");
+    expect(prTasks).not.toContain("coverage-export.output=type=local");
+    expect(this.read(".github/workflows/pr.yml")).not.toContain(
+      "nook-pr-coverage",
     );
     expect(prTasks).toContain(
       "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",

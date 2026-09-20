@@ -608,10 +608,20 @@ class ArcManifestContract {
       "nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts",
     ]);
     if (admittedContract30.isErr()) return err(admittedContract30.error);
+    const admittedContract30a = prWorkflow.forbid("nook-pr-coverage");
+    if (admittedContract30a.isErr()) return err(admittedContract30a.error);
     const admittedContract30b = prTasks.require(
-      "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+      "task --parallel ci:pr:heavy ci:pr:browser:prepare",
     );
     if (admittedContract30b.isErr()) return err(admittedContract30b.error);
+    const admittedContract30c = prTasks.require(
+      "coverage-export.output=type=cacheonly",
+    );
+    if (admittedContract30c.isErr()) return err(admittedContract30c.error);
+    const admittedContract30d = prTasks.forbid(
+      "coverage-export.output=type=local",
+    );
+    if (admittedContract30d.isErr()) return err(admittedContract30d.error);
     const admittedContract31 = authSensitiveJob.requireAll([
       "!inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'",
       "github.event.pull_request.head.repo.full_name == github.repository",

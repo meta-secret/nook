@@ -53,7 +53,8 @@ class DockerizedRustBuildKitContract {
       /type=registry|needs\.rust-build|nook-pr-rust:|nook-pr-e2e:/,
     );
     expect(tasks).toContain("buildx bake");
-    expect(tasks).toContain("coverage-export.output=type=local");
+    expect(tasks).toContain("coverage-export.output=type=cacheonly");
+    expect(tasks).not.toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
@@ -136,9 +137,6 @@ class DockerizedRustBuildKitContract {
     expect(preflightDependencies).toContain(
       "cargo clippy --quiet --locked --all-targets",
     );
-    expect(preflightDependencies).toContain(
-      "cargo build --quiet --locked --bin nook-preflight",
-    );
     const policySource = preflight.indexOf(
       "FROM policy-tools AS policy-source",
     );
@@ -156,8 +154,16 @@ class DockerizedRustBuildKitContract {
     expect(preflightBuild).toContain(
       "find src tests -type f -name '*.rs' -exec touch {} +",
     );
+    expect(preflightBuild).toContain("cargo fmt --check");
     expect(preflightBuild).toContain("cargo clippy --quiet --offline");
-    expect(preflightBuild).toContain("cargo build --quiet --offline");
+    expect(preflightBuild).not.toContain("cargo build");
+    const preflightCoverage = preflight.slice(
+      preflight.indexOf("FROM build AS test"),
+      preflight.indexOf("FROM registry.dev.nokey.sh/oven/bun:"),
+    );
+    expect(preflightCoverage).toContain(
+      "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines",
+    );
     expect(
       preflight.slice(
         preflight.indexOf("FROM policy-source AS pr-verification"),
@@ -615,7 +621,7 @@ class DockerizedRustBuildKitContract {
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
     expect(proof).toContain("for phase in verification tests post-tests");
     expect(proof).toContain('"pr-proof-$phase"');
-    expect(proof).toContain("cold-post-tests.log");
+    expect(proof).toContain("cold-tests.log");
     expect(proof).toContain(
       "Warm post-test solve unexpectedly reinstalled fuzz dependencies",
     );

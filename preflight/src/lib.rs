@@ -1,4 +1,3 @@
-pub mod coverage;
 pub mod dockerfile_cache;
 mod javascript_literals;
 mod javascript_scopes;

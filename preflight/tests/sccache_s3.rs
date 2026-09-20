@@ -363,12 +363,6 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
 
-    let coverage = RepositoryFixture::repository_root().read(".github/workflows/pr-coverage.yml");
-    assert!(
-        !coverage.contains("nook-cache-telemetry"),
-        "artifact-only coverage must not publish compiler-cache telemetry"
-    );
-
     let ecosystem =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml");
     let ecosystem_docker_setups = ecosystem

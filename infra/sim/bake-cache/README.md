@@ -4,8 +4,9 @@
 BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
 
 1. Verification succeeds before test compilation is requested.
-2. Tests succeed before the independent post-test fan-out (heavy work,
-   coverage staging, and browser-artifact export) is requested.
+2. Tests, including Docker-side coverage generation and floor enforcement,
+   succeed before the independent post-test fan-out (heavy work and
+   browser-artifact export) is requested.
 3. Repeating those solves on the same builder reuses Docker layers without any
    registry cache import/export or intermediate image publication.
 4. The Dylint product-dependency and manifest-only Cargo Chef WASM release-cook
@@ -16,8 +17,9 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
    dependencies, while preserving production's dependency-before-source ordering.
 6. The fuzz dependency-install vertex remains cached on the warm post-test solve.
 7. An injected verification or test failure prevents the next phase invocation.
-   The post-test fan-out is joined before coverage reporting or browser suites
-   begin, while those browser suites remain sequential on the runner.
+   The post-test fan-out is joined before browser suites begin, while those
+   browser suites remain sequential on the runner. Coverage is never exported
+   for a redundant PR report.
 
 The proof starts a disposable Docker-container builder, retains local result
 files, per-phase logs and BuildKit metadata, and removes only its own builder.

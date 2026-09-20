@@ -36,16 +36,11 @@ impl PrDeliveryScenario<'_> {
         assert!(pr.contains("task --silent ci:pr:browser:auth"));
         assert!(pr.contains("steps.browser-scope.outputs.auth == 'true'"));
         assert!(pr.contains("task --silent web:research:verify"));
-        assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
+        assert!(!pr.contains("nook-pr-coverage"));
         assert!(pr.contains("require-sccache: \"true\""));
         assert!(!pr.contains("Preserve cache telemetry"));
         assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
-        let coverage = self
-            .root
-            .read(".github/actions/nook-pr-coverage/action.yml");
-        assert!(coverage.contains("coverage/current/tools/nook-preflight"));
-        assert!(coverage.contains("base-coverage-artifact.cjs"));
-        assert_preflight_reporter_contract(self.root);
+        assert_preflight_build_contract(self.root);
         Ok(())
     }
 
@@ -55,9 +50,7 @@ impl PrDeliveryScenario<'_> {
         let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
         assert!(
             pr.contains("run: task --silent ci:pr:post-tests")
-                && post_tests.contains(
-                    "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
-                )
+                && post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare")
         );
     }
 }
@@ -208,12 +201,7 @@ fn assert_docker_setup_contract(root: &Path) {
     }
 }
 
-fn assert_preflight_reporter_contract(root: &Path) {
-    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-    assert!(
-        ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
-        "native PR CI must export the preflight reporter with its coverage artifact"
-    );
+fn assert_preflight_build_contract(root: &Path) {
     let preflight_dockerfile = (root).read("preflight/Dockerfile");
     for required in [
         "FROM rust-base AS chef",
@@ -223,13 +211,10 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "cargo chef prepare --recipe-path recipe.json",
         "cargo chef cook --recipe-path recipe.json",
         "cargo clippy --quiet --locked --all-targets -- -D warnings",
-        "cargo build --quiet --locked --bin nook-preflight",
         "cargo test --quiet --locked --test core_ownership --no-run",
         "--mount=type=secret,id=sccache_s3_access_key,required=false",
         "nook-sccache-report preflight-chef",
         "nook-sccache-report preflight-build",
-        "FROM scratch AS cli-export",
-        "target/debug/nook-preflight /nook-preflight",
     ] {
         assert!(
             preflight_dockerfile.contains(required),
@@ -254,7 +239,6 @@ fn assert_preflight_reporter_contract(root: &Path) {
     let preflight_bake = (root).read("preflight/docker-bake.hcl");
     for required in [
         "target \"preflight-test\"",
-        "target \"preflight-cli-export\"",
         "rust-base = \"target:rust-base\"",
         "inherits   = [\"_sccache\"]",
         "dockerfile = \"preflight/Dockerfile\"",
@@ -266,19 +250,12 @@ fn assert_preflight_reporter_contract(root: &Path) {
     }
     let preflight_tasks = (root).read("preflight/Taskfile.yml");
     for required in [
-        "preflight:export:",
-        "preflight-cli-export",
         "preflight-test",
         "PREFLIGHT_BAKE_FILES",
         "preflight/docker-bake.hcl",
         "nook-app/nook-platform/docker/rust/docker-bake.hcl",
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
-        "PREFLIGHT_OUTPUT_PARENT:",
-        "dirname \"{{.PREFLIGHT_OUTPUT_DIR}}\"",
-        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_PARENT}}\"",
-        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_DIR}}\"",
-        "mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'",
     ] {
         assert!(
             preflight_tasks.contains(required),
@@ -332,7 +309,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
+    assert!(!pr.contains("nook-pr-coverage"));
     assert!(!pr.contains("actions/download-artifact"));
     let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
     assert!(deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"));

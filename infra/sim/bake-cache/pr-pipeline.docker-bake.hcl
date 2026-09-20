@@ -7,17 +7,12 @@ target "pr-proof-verification" {
 }
 target "pr-proof-tests" {
   inherits = ["pr-proof-verification"]
-  target = "tests"
+  target = "coverage-export"
+  output = ["type=cacheonly"]
 }
 target "pr-proof-heavy" {
   inherits = ["pr-proof-verification"]
   target = "result"
-}
-
-target "pr-proof-coverage" {
-  inherits = ["pr-proof-verification"]
-  target = "coverage-export"
-  output = ["type=cacheonly"]
 }
 
 target "pr-proof-browser" {
@@ -27,5 +22,5 @@ target "pr-proof-browser" {
 }
 
 group "pr-proof-post-tests" {
-  targets = ["pr-proof-heavy", "pr-proof-coverage", "pr-proof-browser"]
+  targets = ["pr-proof-heavy", "pr-proof-browser"]
 }

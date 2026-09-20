@@ -55,14 +55,10 @@ impl<'a> PrProducerCacheContract<'a> {
             .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
             .map(|(task, _)| task)
             .context("missing post-test task block")?;
-        assert!(
-            post_tests_task.contains(
-                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
-            )
-        );
+        assert!(post_tests_task.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare"));
         let heavy = tasks
             .split_once("  ci:pr:heavy:\n")
-            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:coverage:export:"))
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:post-tests:"))
             .map(|(task, _)| task)
             .context("missing heavy task block")?;
         assert!(heavy.contains("PR_BAKE_TARGET: pr-heavy"));
@@ -74,7 +70,7 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(!bake.contains(
             "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint-wasm\"]"
         ));
-        assert!(tasks.contains("coverage-export.output=type=local"));
+        assert!(tasks.contains("coverage-export.output=type=cacheonly"));
         assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
         assert!(tasks.contains(
             "test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'",

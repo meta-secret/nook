@@ -156,6 +156,17 @@ tasks:
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
       - task: registry-cache:publish:native
 
+  docker:ci:rust:verify:
+    desc: Run native Rust formatting and coverage floors without exporting report artifacts.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}}
+        --set "coverage-export.output=type=cacheonly"
+        --set "rust-format-check.output=type=cacheonly"
+        ci-rust
+      - task: registry-cache:publish:native
+
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
     deps: [sccache:ensure, registry-cache:ensure]
