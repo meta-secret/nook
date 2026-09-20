@@ -619,7 +619,12 @@ class DockerizedRustBuildKitContract {
       "Source-only change unexpectedly recooked WASM dependencies",
     );
     expect(simulator).toContain("bake-sim-fuzz-dependencies");
+    expect(simulator).toContain("FROM tests AS coverage-export");
+    expect(simulator).toContain("FROM tests AS browser-artifacts");
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
+    expect(proof).toContain("pr-proof-post-tests");
+    expect(proof).toContain("cold-post-tests.log");
+    expect(proof).toContain("changed-post-tests.log");
     expect(proof).toContain(
       "Source-only change unexpectedly reinstalled fuzz dependencies",
     );

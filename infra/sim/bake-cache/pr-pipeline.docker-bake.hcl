@@ -13,3 +13,19 @@ target "pr-proof-heavy" {
   inherits = ["pr-proof-verification"]
   target = "result"
 }
+
+target "pr-proof-coverage" {
+  inherits = ["pr-proof-verification"]
+  target = "coverage-export"
+  output = ["type=cacheonly"]
+}
+
+target "pr-proof-browser" {
+  inherits = ["pr-proof-verification"]
+  target = "browser-artifacts"
+  output = ["type=cacheonly"]
+}
+
+group "pr-proof-post-tests" {
+  targets = ["pr-proof-heavy", "pr-proof-coverage", "pr-proof-browser"]
+}

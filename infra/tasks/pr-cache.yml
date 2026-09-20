@@ -19,7 +19,7 @@ tasks:
         cp -R "$repo_root/infra/sim/bake-cache" "$context"
         fixture="$context/pr-pipeline.docker-bake.hcl"
         for temperature in cold warm; do
-          for phase in verification tests heavy; do
+          for phase in verification tests post-tests; do
             docker buildx bake --builder "$builder" --progress=plain \
               --metadata-file "$output/$temperature-$phase.json" \
               -f "$fixture" --set "*.context=$context" \
@@ -33,6 +33,8 @@ tasks:
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
         grep -q 'exporting to image' "$output/cold-verification.log"
+        grep -q 'pr-proof-coverage' "$output/cold-post-tests.log"
+        grep -q 'pr-proof-browser' "$output/cold-post-tests.log"
         if grep -q 'exporting cache' "$output/cold-verification.log"; then
           echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2
           exit 1
@@ -79,14 +81,14 @@ tasks:
           exit 1
         fi
         docker buildx bake --builder "$builder" --progress=plain \
-          --metadata-file "$output/changed-heavy.json" \
+          --metadata-file "$output/changed-post-tests.json" \
           -f "$fixture" --set "*.context=$context" \
           --allow="fs.read=$context" \
-          pr-proof-heavy 2>&1 | tee "$output/changed-heavy.log"
-        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/changed-heavy.log" | head -n 1)"
+          pr-proof-post-tests 2>&1 | tee "$output/changed-post-tests.log"
+        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/changed-post-tests.log" | head -n 1)"
         test -n "$fuzz_dependency_vertex"
-        grep -qx "$fuzz_dependency_vertex CACHED" "$output/changed-heavy.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/changed-heavy.log"; then
+        grep -qx "$fuzz_dependency_vertex CACHED" "$output/changed-post-tests.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/changed-post-tests.log"; then
           echo 'Source-only change unexpectedly reinstalled fuzz dependencies' >&2
           exit 1
         fi

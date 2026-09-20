@@ -47,5 +47,15 @@ RUN test -s /proof/tests \
     && printf 'browser and expensive checks\n' >/proof/heavy \
     && echo pr-proof-heavy
 
+# These two outputs model the independent post-test tasks that run alongside
+# the heavy target on the same persistent BuildKit builder.
+FROM tests AS coverage-export
+RUN printf 'coverage artifacts\n' >/proof/coverage \
+    && echo pr-proof-coverage
+
+FROM tests AS browser-artifacts
+RUN printf 'browser artifacts\n' >/proof/browser \
+    && echo pr-proof-browser
+
 FROM scratch AS result
 COPY --from=heavy /proof /proof
