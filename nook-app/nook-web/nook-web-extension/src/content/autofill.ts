@@ -396,6 +396,7 @@ class AuthenticationScanRenderLifecycle {
       return
     }
     this.invalidateRenderedAuthenticationAction()
+    this.request.scanState.invalidatePendingScan()
     removeScannedWidget()
     this.schedule()
   }

@@ -3,6 +3,7 @@ import {
   AuthenticationControlActivationDisposition,
   authenticationControlActivationDisposition,
 } from '../src/content/autofill/authentication-action-lifecycle'
+import { scanState } from '../src/content/autofill/state'
 
 describe('authentication control activation lifecycle', () => {
   test('invalidates a stale page control before the pending rescan', () => {
@@ -32,5 +33,14 @@ describe('authentication control activation lifecycle', () => {
         AuthenticationControlActivationDisposition.Ignore,
       )
     }
+  })
+
+  test('invalidates a pending scan generation with the stale control', () => {
+    const staleGeneration = scanState.sequence
+
+    scanState.invalidatePendingScan()
+
+    expect(scanState.sequence).not.toBe(staleGeneration)
+    scanState.sequence = staleGeneration
   })
 })
