@@ -40,6 +40,9 @@ protecting a real product trust boundary.
     boundary.
 - Use Docker and BuildKit directly for Docker layer-cache behavior.
   - Docker and BuildKit are the sole authority for Docker layer-cache validity.
+  - Use ordinary BuildKit image, layer, history, and garbage-collection
+    semantics for retention. Do not manually pin build records or create a
+    custom pin/unpin lifecycle.
   - Import available BuildKit cache, run the actual Docker build to validate
     and reuse layers, then export the updated cache.
   - Dockerfiles, Bake HCL, and Docker or BuildKit-backed simulations and proofs
@@ -128,6 +131,9 @@ evidence, or validation results.
 - **Docker layer-cache authority**
   - Treat agent-authored reproductions of Docker or BuildKit cache
     functionality as P1 violations.
+  - Do not manually pin BuildKit build records.
+  - Do not create scripts, workflows, controllers, state, or operational
+    procedures that implement a custom BuildKit pin/unpin lifecycle.
   - This prohibition applies only to Rust, application, or other custom code
     that computes cache keys, invalidates dependencies, selects caches, or
     decides layer reuse without invoking Docker or BuildKit.
