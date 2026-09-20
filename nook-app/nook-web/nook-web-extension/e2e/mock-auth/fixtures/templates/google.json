@@ -1,8 +1,6 @@
 {
   "id": "google",
-  "quirks": [
-    "selected-account-display"
-  ],
+  "quirks": ["selected-account-display"],
   "steps": [
     {
       "fields": [
