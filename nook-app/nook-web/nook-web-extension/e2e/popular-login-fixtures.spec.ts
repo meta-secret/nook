@@ -82,15 +82,19 @@ const singleStepPasswordTemplates = continueWithNookTemplateIds.filter(
   },
 )
 
-type CredentialPairTemplateId =
-  | 'account-number-password'
-  | 'dual-identity-password'
-  | 'employee-id-password'
-  | 'member-id-password'
-  | 'email-password'
-  | 'username-password'
+enum CredentialPairTemplateId {
+  AccountNumberPassword = 'account-number-password',
+  DualIdentityPassword = 'dual-identity-password',
+  EmployeeIdPassword = 'employee-id-password',
+  MemberIdPassword = 'member-id-password',
+  EmailPassword = 'email-password',
+  UsernamePassword = 'username-password',
+}
 
-type CredentialPairInputType = 'email' | 'text'
+enum CredentialPairInputType {
+  Email = 'email',
+  Text = 'text',
+}
 
 type CredentialPairFieldExpectation = {
   readonly identityName: string
@@ -104,49 +108,49 @@ type CredentialPairFieldExpectation = {
 const credentialPairFieldExpectations: Readonly<
   Record<CredentialPairTemplateId, CredentialPairFieldExpectation>
 > = {
-  'account-number-password': {
+  [CredentialPairTemplateId.AccountNumberPassword]: {
     identityName: 'accountNumber',
-    identityType: 'text',
+    identityType: CredentialPairInputType.Text,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
     passwordAutocomplete: 'current-password',
   },
-  'dual-identity-password': {
+  [CredentialPairTemplateId.DualIdentityPassword]: {
     identityName: 'email',
-    identityType: 'email',
+    identityType: CredentialPairInputType.Email,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
     passwordAutocomplete: 'current-password',
   },
-  'employee-id-password': {
+  [CredentialPairTemplateId.EmployeeIdPassword]: {
     identityName: 'employeeId',
-    identityType: 'text',
+    identityType: CredentialPairInputType.Text,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
     passwordAutocomplete: 'current-password',
   },
-  'member-id-password': {
+  [CredentialPairTemplateId.MemberIdPassword]: {
     identityName: 'memberId',
-    identityType: 'text',
+    identityType: CredentialPairInputType.Text,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
     passwordAutocomplete: 'current-password',
   },
-  'email-password': {
+  [CredentialPairTemplateId.EmailPassword]: {
     identityName: 'email',
-    identityType: 'email',
+    identityType: CredentialPairInputType.Email,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
     passwordAutocomplete: 'current-password',
   },
-  'username-password': {
+  [CredentialPairTemplateId.UsernamePassword]: {
     identityName: 'username',
-    identityType: 'text',
+    identityType: CredentialPairInputType.Text,
     identityAutocomplete: 'username',
     passwordName: 'password',
     passwordType: 'password',
@@ -155,12 +159,12 @@ const credentialPairFieldExpectations: Readonly<
 }
 
 const credentialPairTemplateIds: readonly CredentialPairTemplateId[] = [
-  'account-number-password',
-  'dual-identity-password',
-  'employee-id-password',
-  'member-id-password',
-  'email-password',
-  'username-password',
+  CredentialPairTemplateId.AccountNumberPassword,
+  CredentialPairTemplateId.DualIdentityPassword,
+  CredentialPairTemplateId.EmployeeIdPassword,
+  CredentialPairTemplateId.MemberIdPassword,
+  CredentialPairTemplateId.EmailPassword,
+  CredentialPairTemplateId.UsernamePassword,
 ]
 
 test.describe('popular login fixture coverage', () => {
@@ -370,7 +374,7 @@ test.describe('popular login fixture coverage', () => {
         await expect(identity).toHaveValue('')
         await expect(password).toHaveValue('')
 
-        if (templateId === 'dual-identity-password') {
+        if (templateId === CredentialPairTemplateId.DualIdentityPassword) {
           const phone = page.locator('#login_form [name="phone"]')
           await expect(phone).toHaveAttribute('type', 'tel')
           await expect(phone).toHaveAttribute('autocomplete', 'tel')
@@ -398,7 +402,7 @@ test.describe('popular login fixture coverage', () => {
           'Authentication complete',
           { timeout: 20_000 },
         )
-        if (templateId === 'dual-identity-password') {
+        if (templateId === CredentialPairTemplateId.DualIdentityPassword) {
           await expect
             .poll(() =>
               page.evaluate(
@@ -452,7 +456,7 @@ test.describe('popular login fixture coverage', () => {
           expectation.passwordAutocomplete,
         )
 
-        if (templateId === 'dual-identity-password') {
+        if (templateId === CredentialPairTemplateId.DualIdentityPassword) {
           const phone = page.locator('#login_form [name="phone"]')
           await expect(phone).toHaveValue('')
           await page.evaluate(() => {
@@ -476,7 +480,7 @@ test.describe('popular login fixture coverage', () => {
           { timeout: 20_000 },
         )
         await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
-        if (templateId === 'dual-identity-password') {
+        if (templateId === CredentialPairTemplateId.DualIdentityPassword) {
           await expect
             .poll(() =>
               page.evaluate(
