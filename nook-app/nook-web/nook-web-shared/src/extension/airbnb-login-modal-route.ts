@@ -63,7 +63,8 @@ class AirbnbLoginModalRouteDetector {
     pageUrl,
   }: AirbnbLoginModalHomepageActionRequest): boolean {
     if (!form.hasAttribute("action")) return false;
-    return this.formResolvesToHomepage({ form, pageUrl });
+    const request: AirbnbLoginModalHomepageActionRequest = { form, pageUrl };
+    return this.formResolvesToHomepage(request);
   }
 
   private formHasOmittedHomepageAction({
@@ -71,7 +72,8 @@ class AirbnbLoginModalRouteDetector {
     pageUrl,
   }: AirbnbLoginModalHomepageActionRequest): boolean {
     if (form.hasAttribute("action")) return false;
-    return this.formResolvesToHomepage({ form, pageUrl });
+    const request: AirbnbLoginModalHomepageActionRequest = { form, pageUrl };
+    return this.formResolvesToHomepage(request);
   }
 
   private formResolvesToHomepage({
