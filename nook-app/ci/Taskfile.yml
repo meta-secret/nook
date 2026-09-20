@@ -32,9 +32,6 @@ tasks:
     cmds:
       - task: preflight
       - task: docker:ci:rust:export
-      - task: preflight:export
-        vars:
-          PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'
 
   ci:pr:wasm:
     desc: WASM clippy and build for the split hosted PR pipeline.

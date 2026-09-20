@@ -137,9 +137,6 @@ class DockerizedRustBuildKitContract {
     expect(preflightDependencies).toContain(
       "cargo clippy --quiet --locked --all-targets",
     );
-    expect(preflightDependencies).toContain(
-      "cargo build --quiet --locked --bin nook-preflight",
-    );
     const policySource = preflight.indexOf(
       "FROM policy-tools AS policy-source",
     );

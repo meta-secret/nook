@@ -225,8 +225,11 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
 
     let preflight = root.read("preflight/Taskfile.yml");
-    let format_contract =
-        root.task_body(&preflight, "preflight:format-contract", "preflight:export");
+    let format_contract = root.task_body(
+        &preflight,
+        "preflight:format-contract",
+        "preflight:dependency-policy",
+    );
     assert!(
         format_contract
             .contains("bun test \"{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts\"")

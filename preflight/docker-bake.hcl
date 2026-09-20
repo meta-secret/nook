@@ -49,11 +49,6 @@ target "preflight-pr-verification" {
   output   = ["type=cacheonly"]
 }
 
-target "preflight-cli-export" {
-  inherits = ["_preflight-common"]
-  target   = "cli-export"
-}
-
 target "preflight-repository-policy" {
   inherits = ["_preflight-common"]
   target   = "repository-policy"
