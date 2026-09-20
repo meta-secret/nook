@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   launchPairedPinExtension,
   saveVaultLogin,
+  saveVaultAuthenticator,
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import { readFileSync } from 'node:fs'
@@ -515,13 +516,12 @@ test.describe('popular login fixture coverage', () => {
       const password = form.locator('input[name="password"]')
       await expect(username).toHaveAttribute('autocomplete', 'username')
       await expect(password).toHaveAttribute('autocomplete', 'current-password')
-      await expect(
-        form.evaluate((element) =>
-          Array.from(element.querySelectorAll('input')).every(
-            (input) => input.form === element,
-          ),
+      const inputsOwnedByForm = await form.evaluate((element) =>
+        Array.from(element.querySelectorAll('input')).every(
+          (input) => input.form === element,
         ),
-      ).toBe(true)
+      )
+      expect(inputsOwnedByForm).toBe(true)
       await successPage
         .locator('#nook-auth-widget')
         .getByRole('button', { name: 'Continue with Nook' })
@@ -696,7 +696,13 @@ test.describe('popular login fixture coverage', () => {
         ).toBeVisible()
 
         for (const field of firstStep.fields) {
-          if (!field.name || !field.type || !field.autocomplete) {
+          if (
+            !('name' in field) ||
+            typeof field.name !== 'string' ||
+            !field.name ||
+            !field.type ||
+            !field.autocomplete
+          ) {
             throw new Error(`template ${templateId} has an incomplete field`)
           }
           const input = form.locator(`[name="${field.name}"]`)
