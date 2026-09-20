@@ -21,14 +21,6 @@
     {
       "fields": [
         {
-          "type": "email",
-          "name": "identifier",
-          "id": "identifierId",
-          "autocomplete": "username",
-          "placeholder": "Email or phone",
-          "aria-label": "Email or phone"
-        },
-        {
           "type": "password",
           "name": "Passwd",
           "autocomplete": "current-password",
