@@ -83,11 +83,6 @@ tasks:
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/docker-prune-stale.sh"
 
-  ci:main:stage-coverage:
-    desc: Stage commit-keyed nook-core/auth coverage artifacts.
-    cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/ci-main-stage-coverage.sh"
-
   web:research:install:
     desc: Install web-research catalog dependencies.
     cmds:

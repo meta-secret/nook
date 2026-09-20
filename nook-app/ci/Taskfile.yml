@@ -21,7 +21,7 @@ tasks:
 
   _ci:main:rust:host:
     cmds:
-      - task: docker:ci:rust:export
+      - task: docker:ci:rust:verify
 
   _ci:pr:rust:host:
     # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.

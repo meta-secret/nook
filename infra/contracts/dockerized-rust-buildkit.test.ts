@@ -53,7 +53,8 @@ class DockerizedRustBuildKitContract {
       /type=registry|needs\.rust-build|nook-pr-rust:|nook-pr-e2e:/,
     );
     expect(tasks).toContain("buildx bake");
-    expect(tasks).toContain("coverage-export.output=type=local");
+    expect(tasks).toContain("coverage-export.output=type=cacheonly");
+    expect(tasks).not.toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
@@ -615,7 +616,7 @@ class DockerizedRustBuildKitContract {
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
     expect(proof).toContain("for phase in verification tests post-tests");
     expect(proof).toContain('"pr-proof-$phase"');
-    expect(proof).toContain("cold-post-tests.log");
+    expect(proof).toContain("cold-tests.log");
     expect(proof).toContain(
       "Warm post-test solve unexpectedly reinstalled fuzz dependencies",
     );

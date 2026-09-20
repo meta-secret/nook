@@ -148,7 +148,7 @@ It does not establish deliberate ISP throttling or a defective MTU.
   - Used by: PR preview deploy; main development deploy and domain verification
   - Scope: Account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`.
 - **`GITHUB_TOKEN`**
-  - Used by: PR comments, deployment records, portable Rust coverage comment
+  - Used by: PR preview comments and deployment records
 
 **Cloudflare credentials**
 

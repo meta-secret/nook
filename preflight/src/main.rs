@@ -1,7 +1,3 @@
-use nook_preflight::coverage::{
-    CoverageArtifact, CoverageArtifactValidation, CoverageInputChanges, CoverageReport,
-    CoverageReportComparison, CoverageRevisionComparison,
-};
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -34,48 +30,6 @@ impl PreflightCommand {
     fn execute(self) -> io::Result<()> {
         let Self { command, options } = self;
         match command.as_str() {
-            "coverage-inputs" => {
-                let repository = PreflightCommand::required_path(&options, "--repository")?;
-                let base = PreflightCommand::required_utf8(&options, "--base")?;
-                let head = PreflightCommand::required_utf8(&options, "--head")?;
-                let github_output = PreflightCommand::required_path(&options, "--github-output")?;
-                CoverageInputChanges::try_from(CoverageRevisionComparison {
-                    repository: &repository,
-                    base,
-                    head,
-                })?
-                .write_github_outputs(&github_output)
-            }
-            "validate-coverage-artifact" => {
-                let directory = PreflightCommand::required_path(&options, "--directory")?;
-                let commit = PreflightCommand::required_utf8(&options, "--commit")?;
-                let github_output = PreflightCommand::required_path(&options, "--github-output")?;
-                let validation = CoverageArtifact {
-                    directory: &directory,
-                    expected_commit: commit,
-                }
-                .validate();
-                if let CoverageArtifactValidation::Invalid { reason } = &validation {
-                    eprintln!(
-                        "::warning::Base coverage artifact is unavailable or invalid: {reason}; using coverage-only fallback"
-                    );
-                }
-                validation.write_github_outputs(&github_output)
-            }
-            "coverage-report" => {
-                let current = PreflightCommand::required_path(&options, "--current")?;
-                let base = PreflightCommand::required_path(&options, "--base")?;
-                let github_output = PreflightCommand::required_path(&options, "--github-output")?;
-                let github_summary = PreflightCommand::required_path(&options, "--github-summary")?;
-                let markdown = PreflightCommand::required_path(&options, "--markdown")?;
-                let report = CoverageReport::try_from(CoverageReportComparison {
-                    current_directory: &current,
-                    base_directory: &base,
-                })?;
-                report.write_github_outputs(&github_output)?;
-                report.write_markdown(&markdown)?;
-                report.append_github_summary(&github_summary)
-            }
             _ => Err(PreflightCommand::usage(&format!(
                 "unknown command {command}"
             ))),
@@ -144,9 +98,7 @@ impl PreflightCommand {
             format!(
                 "{message}\n\
              usage:\n\
-             \x20 nook-preflight coverage-inputs --repository PATH --base SHA --head SHA --github-output PATH\n\
-             \x20 nook-preflight validate-coverage-artifact --directory PATH --commit SHA --github-output PATH\n\
-             \x20 nook-preflight coverage-report --current PATH --base PATH --github-output PATH --github-summary PATH --markdown PATH"
+             \x20 nook-preflight <preflight-command> [options]"
             ),
         )
     }

@@ -424,13 +424,13 @@ Use this workflow for quality, CI, and deployment changes.
       authentication-sensitive extension regressions remain required.
     - Compiler-cache telemetry and its zero-hit gate remain enforced.
 
-    #### Coverage reporting
-    - Native coverage is exported locally and reported by a composite action in the same job.
-    - When changed covered sources require a base comparison, it accepts an unexpired exact-commit artifact from an authenticated Main push.
-    - This works even while that workflow is still running or if a later unrelated Main job fails.
-    - If no trusted base artifact exists, it preserves the absolute coverage floor without cold-building the base revision.
-    - The old trusted-handoff promoter is removed; BuildKit owns validation-layer reuse.
-    - It validates the reused run-stable artifact before publication.
+    #### Coverage enforcement
+    - Native coverage runs inside the Docker/BuildKit solve and enforces the
+      package floors in the same verification graph.
+    - PR validation uses a cache-only coverage output and does not perform a
+      base comparison, artifact handoff, upload, or PR comment.
+    - The old trusted-handoff promoter and Main comparison artifact are removed;
+      BuildKit owns validation-layer reuse and package-floor enforcement.
 
     #### Release workflow
     - Release checks out the requested source first.
@@ -483,16 +483,14 @@ Use this workflow for quality, CI, and deployment changes.
     - After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../../ai/design-docs/core-beliefs.md#10-grow-cortex-dynamically).
     - When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../../../README.md) in the same PR ([AGENTS.md — Keep the root README current](../../../../AGENTS.md#keep-the-root-readme-current)).
 18. **Troubleshooting web/e2e/CI failures:** After test output and static analysis, **always check persisted app logs** — they are the most important source of truth for vault, sync, and WASM behavior. See [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
-19. **Coverage reporting:**
-    - `task rust:coverage:export` exports baked portable Rust coverage artifacts locally (`summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`).
-    - PR CI uploads those files plus the stripped Linux `nook-preflight` reporter directly from the native Rust runner.
-    - The Rust-dependent `Rust coverage report` job downloads them directly without occupying the independent preview runner.
-    - It asks `nook-preflight` to classify changed coverage inputs.
-    - It validates a trusted commit-keyed Main artifact when available.
-    - It parses cargo-llvm-cov's structured JSON, writes typed GitHub outputs, and renders the Markdown summary.
-    - A missing exact-base artifact reuses current coverage for the comparison while preserving the absolute floor.
-    - PR CI must not cold-build the base revision a second time.
-    - The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment.
+19. **Coverage enforcement:**
+    - Docker/BuildKit runs the portable Rust coverage graph in PR and Main
+      verification and enforces every package floor from
+      `nook-core/coverage-floor.json`.
+    - PR validation keeps the coverage output cache-only: it does not export,
+      download, upload, or comment on a redundant coverage report.
+    - Main no longer publishes a commit-keyed coverage artifact for PR
+      comparison.
     - Human-readable coverage tables must not be scraped with shell.
     - `nook-app/nook-platform/nook-core/coverage-floor.json` exhaustively classifies every Cargo package.
     - PR #1319 staged companion WASM at 18%, authenticator-domain at 87%, and `nook-wasm` at 51%.

@@ -15,9 +15,7 @@ impl PreparedPodBuildScenario<'_> {
                 && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
                 && !pr_workflow.contains("Publish exact-source PR browser job image")
                 && !pr_workflow.contains("Upload preview dist handoff")
-                && post_tests.contains(
-                    "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
-                ),
+                && post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare"),
             "PR must fan out verified artifacts locally and deploy them in the same job"
         );
     }

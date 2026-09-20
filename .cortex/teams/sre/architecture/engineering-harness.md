@@ -120,10 +120,10 @@ legacy registered `nook` runner is not used.
 - It permits that skip while demos are disabled or not required.
 - An enabled, required UI-demo failure blocks preview.
 - It deploys from the exported host dist handoff.
-- Rust coverage reporting is a separate native-dependent job.
-- That job downloads the completed handoff directly.
-- Preview waits for Native verification.
-- Preview still does not wait for native coverage.
+- Rust coverage floors run inside the native Docker/BuildKit verification solve.
+- No separate PR coverage handoff or reporting job is required.
+- Preview waits for Native verification, which includes the floor-enforced
+  coverage solve.
 - Preview does not poll sibling jobs.
 - The overall gate requires the required producer jobs.
 - Producer failures are reported explicitly.
