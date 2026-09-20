@@ -439,6 +439,17 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     }
   }
 
+  private hasLoginPathContext(field: HTMLInputElement): boolean {
+    const observation = new NookLoginContextObservation(
+      "",
+      [],
+      "",
+      ((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location.pathname),
+    );
+    const result = has_login_context(observation);
+    observation.free();
+    return result;
+  }
   private pageInputObservation({
     field,
     loginContext,
@@ -782,7 +793,9 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     };
     if (
       this.containerHasUnambiguousAuthenticationActivation(container) &&
-      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest)
+      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest) &&
+      (!this.containerHasGenericTypeButtonControls(container) ||
+        this.hasLoginPathContext(field))
     ) {
       return true;
     }
