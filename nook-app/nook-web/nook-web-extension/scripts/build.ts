@@ -17,7 +17,11 @@ import {
   ExtensionManifestBuildKind,
 } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
-import { extensionEntrypointBuildPolicy } from './build-contract'
+import {
+  ExtensionDiagnosticBuildAvailability,
+  ExtensionDiagnosticBuildPolicy,
+  extensionEntrypointBuildPolicy,
+} from './build-contract'
 
 await companionWasmReady
 
@@ -42,6 +46,11 @@ const simpleVaultDefine = {
 const deployment = extensionChannelIdentity(
   process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production',
 )
+const extensionDiagnosticBuildPolicy = new ExtensionDiagnosticBuildPolicy()
+const extensionDiagnosticsEnabled =
+  extensionDiagnosticBuildPolicy.availability({
+    channel: deployment.channel,
+  }) === ExtensionDiagnosticBuildAvailability.Enabled
 const requestedVersion =
   process.env.NOOK_EXTENSION_VERSION?.trim() || packageJson.version
 const manifestVersion = requestedVersion.match(/^\d+\.\d+\.\d+/)?.[0]
@@ -160,6 +169,9 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     naming: '[name].js',
     define: {
       ...simpleVaultDefine,
+      __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__: JSON.stringify(
+        extensionDiagnosticsEnabled,
+      ),
       ...(await companionWasmBytesDefine(entrypoint)),
     },
   })

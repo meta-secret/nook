@@ -1,3 +1,28 @@
+import {
+  ExtensionReleaseChannel,
+  type ExtensionChannel,
+} from './channel-identity'
+
+export enum ExtensionDiagnosticBuildAvailability {
+  Disabled = 'disabled',
+  Enabled = 'enabled',
+}
+
+export type ExtensionDiagnosticBuildRequest = {
+  readonly channel: ExtensionChannel
+}
+
+/** Owns the build-time production gate for browser diagnostics. */
+export class ExtensionDiagnosticBuildPolicy {
+  availability({
+    channel,
+  }: ExtensionDiagnosticBuildRequest): ExtensionDiagnosticBuildAvailability {
+    return channel === ExtensionReleaseChannel.Production
+      ? ExtensionDiagnosticBuildAvailability.Disabled
+      : ExtensionDiagnosticBuildAvailability.Enabled
+  }
+}
+
 export enum ExtensionEntrypointBuildFormat {
   Classic = 'iife',
   Module = 'esm',
