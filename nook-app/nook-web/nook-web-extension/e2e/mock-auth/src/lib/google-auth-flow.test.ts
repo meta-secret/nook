@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+
+import googleTemplate from '../../fixtures/templates/google.json'
 import {
   GOOGLE_AUTH_MOCK_PASSWORD,
   GOOGLE_AUTH_MOCK_USERNAME,
@@ -8,6 +10,27 @@ import {
 } from './google-auth-flow'
 
 describe('Google authentication mock', () => {
+  test('models the password challenge as selected account plus password only', () => {
+    expect(googleTemplate.quirks).toContain('selected-account-display')
+    expect(googleTemplate.steps).toHaveLength(2)
+
+    const passwordStep = googleTemplate.steps[1]
+    if (!passwordStep) throw new Error('Google password step is missing')
+
+    expect(passwordStep.fields).toEqual([
+      {
+        type: 'password',
+        name: 'Passwd',
+        autocomplete: 'current-password',
+        placeholder: 'Enter your password',
+        'aria-label': 'Enter your password',
+      },
+    ])
+    expect(passwordStep.fields).not.toContainEqual(
+      expect.objectContaining({ name: 'identifier' }),
+    )
+  })
+
   test('advances the identifier-first branch and completes its password step', () => {
     const identifier = GoogleAuthMockScenario.transition({
       state: GoogleAuthMockScenario.initialState(),
