@@ -92,7 +92,7 @@ tasks:
     requires:
       vars: [PR_ARTIFACT_DIR]
     cmds:
-      - task --silent preflight:export PREFLIGHT_OUTPUT_DIR="{{.PR_ARTIFACT_DIR}}/coverage/tools"
+      - task --silent --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:export PREFLIGHT_OUTPUT_DIR="{{.PR_ARTIFACT_DIR}}/coverage/tools"
       - mkdir -p "{{.REPO_ROOT}}/coverage/current"
       - cp -a "{{.PR_ARTIFACT_DIR}}/coverage/." "{{.REPO_ROOT}}/coverage/current/"
 

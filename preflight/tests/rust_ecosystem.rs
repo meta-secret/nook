@@ -228,6 +228,18 @@ impl RustEcosystemFixture {
             heavy.contains("PR_BAKE_TARGET: pr-heavy"),
             "The post-test fan-out must retain the heavy Bake target"
         );
+        let coverage_export = self
+            .pr_tasks
+            .split_once("  ci:pr:coverage:export:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:post-tests:"))
+            .map(|(task, _)| task)
+            .ok_or_else(|| anyhow::anyhow!("coverage export PR task block is missing"))?;
+        assert!(
+            coverage_export.contains(
+                "task --silent --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:export PREFLIGHT_OUTPUT_DIR=\"{{.PR_ARTIFACT_DIR}}/coverage/tools\"",
+            ),
+            "coverage export must delegate preflight:export through the repository root Taskfile"
+        );
         Ok(())
     }
 }
