@@ -208,12 +208,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(page.getByTestId('google-selected-account')).toHaveText(
         'alice@nook.test',
       )
-      await expect(page.locator('#login_form #identifierId')).toHaveAttribute(
-        'autocomplete',
-        'username',
+      await expect(page.locator('#login_form #identifierId')).toHaveCount(0)
+      await expect(page.locator('#login_form [name="Passwd"]')).toHaveAttribute(
+        'type',
+        'password',
       )
-      await expect(page.locator('#login_form #identifierId')).toHaveValue(
-        'alice@nook.test',
+      await expect(page.locator('#login_form [name="Passwd"]')).toHaveAttribute(
+        'autocomplete',
+        'current-password',
       )
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible()

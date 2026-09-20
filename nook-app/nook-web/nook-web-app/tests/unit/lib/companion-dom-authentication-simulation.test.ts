@@ -228,7 +228,7 @@ describe('DOM-backed companion authentication simulation', () => {
     const ownedRequest: DomAuthenticationSimulationRequest = {
       fixture: {
         html: `<main><form id="login_form" method="post" action="/auth/login">
-          <input id="identifierId" name="identifier" type="email" autocomplete="username" placeholder="Email or phone" aria-label="Email or phone">
+          <p data-testid="google-selected-account">dom-user@example.test</p>
           <input id="password-input" name="Passwd" type="password" autocomplete="current-password" aria-label="Enter your password">
           <div id="passwordNext"><button type="submit">Next</button></div>
         </form></main>`,
@@ -248,8 +248,8 @@ describe('DOM-backed companion authentication simulation', () => {
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'Next',
     })
-    expect(fieldValue('#identifierId')).toBe(FAKE_CREDENTIALS.username)
-    expect(fieldValue('#password-input')).toBe(FAKE_CREDENTIALS.password)
+    expect(fieldValue('#identifierId')).toBe(false)
+    expect(fieldValue('[name="Passwd"]')).toBe(FAKE_CREDENTIALS.password)
   })
 
   test('runs the ChatGPT GET and OpenAI POST identifier forms', () => {
