@@ -87,12 +87,19 @@ test.describe('popular login fixture coverage', () => {
 
   test('configured catalog sites map to shared templates; CI covers unique shells only', () => {
     expect(catalog).toHaveLength(1000)
-    expect(siteShellCount()).toBe(999)
+    expect(siteShellCount()).toBe(1000)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(100)
     expect(continueWithNookTemplateIds).toHaveLength(templateIds.length - 1)
     expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
     const catalogIds = new Set(catalog.map((site) => site.id))
+    const mappedSiteIds = new Set(listSiteShellIds())
+    for (const catalogEntry of catalog) {
+      expect(
+        mappedSiteIds.has(catalogEntry.id),
+        `catalog site ${catalogEntry.id} has no mock-auth shell`,
+      ).toBe(true)
+    }
     for (const siteId of listSiteShellIds()) {
       expect(catalogIds.has(siteId)).toBe(true)
       expect(resolveSiteFixture(siteId)?.template).toBeTruthy()
