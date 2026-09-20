@@ -84,37 +84,51 @@ function backupCodePilotStubArgs(messages: Record<string, ChromeMessage>) {
 function installConnectedDemoRuntimeOverrides(noMatching: boolean): void {
   const runtime = chrome.runtime
   const sendMessage = runtime.sendMessage.bind(runtime)
-  runtime.sendMessage = (message, callback) => {
-    sendMessage(message, (response) => {
-      if (
-        message.type === 'nook:extension-pairing-state-query' &&
-        typeof response === 'object' &&
-        response
-      ) {
-        const typedResponse = response as {
-          setup: Record<string, unknown>
+
+  Reflect.set(
+    runtime,
+    'sendMessage',
+    (message: unknown, callback?: (response: unknown) => void): void => {
+      sendMessage(message, (response: unknown) => {
+        if (
+          message &&
+          typeof message === 'object' &&
+          'type' in message &&
+          typeof message.type === 'string' &&
+          message.type === 'nook:extension-pairing-state-query' &&
+          response &&
+          typeof response === 'object' &&
+          'setup' in response &&
+          typeof response.setup === 'object' &&
+          response.setup
+        ) {
+          callback?.({
+            ...response,
+            setup: {
+              ...response.setup,
+              selectedVaultStoreId: 'store_abcdefghijk',
+            },
+          })
+          return
         }
-        callback?.({
-          ...typedResponse,
-          setup: {
-            ...typedResponse.setup,
-            selectedVaultStoreId: 'store_abcdefghijk',
-          },
-        })
-        return
-      }
-      if (
-        noMatching &&
-        message.type === 'nook:authentication-workflow-snapshot' &&
-        typeof response === 'object' &&
-        response
-      ) {
-        callback?.({ ...response, loginMatches: { kind: 'ready', count: 0 } })
-        return
-      }
-      callback?.(response)
-    })
-  }
+        if (
+          noMatching &&
+          message &&
+          typeof message === 'object' &&
+          'type' in message &&
+          typeof message.type === 'string' &&
+          message.type === 'nook:authentication-workflow-snapshot' &&
+          response &&
+          typeof response === 'object' &&
+          response
+        ) {
+          callback?.({ ...response, loginMatches: { kind: 'ready', count: 0 } })
+          return
+        }
+        callback?.(response)
+      })
+    },
+  )
 }
 
 test('approve backup-code extraction only after a fresh Pilot decision', async ({

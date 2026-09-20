@@ -151,14 +151,16 @@ describe('authentication widget vault presentation', () => {
   })
 
   test('replaces the widget when Rust-selected facts change', () => {
-    const snapshot = {
+    const snapshot: AuthenticationWorkflowSnapshot = {
       kind: 0,
       stage: 0,
       action: 4,
       currentStep: 1,
       totalSteps: 1,
       observationIndex: 0,
-    } as AuthenticationWorkflowSnapshot
+      approvalRequirement: 'explicit-user-approval',
+      savedLoginCapability: 'fill-saved-login',
+    }
     const loginMatches: WebsiteLoginMatchAvailability = {
       kind: 'ready',
       count: 1,
