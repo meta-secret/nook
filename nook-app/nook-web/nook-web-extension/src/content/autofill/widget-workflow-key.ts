@@ -2,6 +2,7 @@ import {
   bind_authentication_page_observation_facts,
   type AuthenticationObservationBindingToken,
   type AuthenticationPageObservationFacts,
+  type AuthenticationPageObservationFactsBatch,
   type AuthenticationWorkflowSnapshot,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -22,8 +23,11 @@ export function authenticationWidgetWorkflowKey({
   vaultPresentation,
   facts,
 }: AuthenticationWidgetWorkflowKeyRequest): string {
+  const factsBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [facts],
+  }
   const factsBindingToken: AuthenticationObservationBindingToken =
-    bind_authentication_page_observation_facts({ observations: [facts] })
+    bind_authentication_page_observation_facts(factsBatch)
   return [
     snapshot.kind,
     snapshot.stage,
