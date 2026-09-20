@@ -46,10 +46,26 @@ impl<'a> PrProducerCacheContract<'a> {
         let tests = pr
             .find("run: task --silent ci:pr:tests\n")
             .context("missing tests")?;
-        let heavy = pr
-            .find("run: task --silent ci:pr:heavy\n")
-            .context("missing heavy phase")?;
-        assert!(verification < tests && tests < heavy);
+        let post_tests = pr
+            .find("run: task --silent ci:pr:post-tests\n")
+            .context("missing post-test phase")?;
+        assert!(verification < tests && tests < post_tests);
+        let post_tests_task = tasks
+            .split_once("  ci:pr:post-tests:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
+            .map(|(task, _)| task)
+            .context("missing post-test task block")?;
+        assert!(
+            post_tests_task.contains(
+                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+            )
+        );
+        let heavy = tasks
+            .split_once("  ci:pr:heavy:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:coverage:export:"))
+            .map(|(task, _)| task)
+            .context("missing heavy task block")?;
+        assert!(heavy.contains("PR_BAKE_TARGET: pr-heavy"));
         assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
         assert!(bake.contains("output = [\"type=cacheonly\"]"));
         assert!(bake.contains(

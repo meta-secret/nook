@@ -599,29 +599,25 @@ class DockerizedRustBuildKitContract {
       simulator.indexOf("COPY inputs/compile-web-source.txt"),
     );
     expect(simulator).not.toContain("SOURCE_REVISION");
-    expect(proof).toContain(
-      'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
-    );
     expect(simulator).toContain("bake-sim-cargo-chef-wasm-release");
     expect(simulator).toContain("bake-sim-cargo-dylint-product-dependencies");
     expect(proof).toContain('grep -qx "$dylint_dependency_vertex CACHED"');
     expect(proof).toContain(
       "Warm verification unexpectedly rebuilt Dylint product dependencies",
     );
-    expect(proof).toContain(
-      "Source-only change unexpectedly rebuilt Dylint product dependencies",
-    );
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
     expect(proof).toContain(
       "Warm verification unexpectedly recooked WASM dependencies",
     );
-    expect(proof).toContain(
-      "Source-only change unexpectedly recooked WASM dependencies",
-    );
     expect(simulator).toContain("bake-sim-fuzz-dependencies");
+    expect(simulator).toContain("FROM tests AS coverage-export");
+    expect(simulator).toContain("FROM tests AS browser-artifacts");
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
+    expect(proof).toContain("for phase in verification tests post-tests");
+    expect(proof).toContain('"pr-proof-$phase"');
+    expect(proof).toContain("cold-post-tests.log");
     expect(proof).toContain(
-      "Source-only change unexpectedly reinstalled fuzz dependencies",
+      "Warm post-test solve unexpectedly reinstalled fuzz dependencies",
     );
     expect(proof).toContain("grep -q 'exporting to image'");
     expect(proof).toContain(

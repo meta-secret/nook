@@ -627,11 +627,13 @@ job Pod. The hook supplies a Docker CLI only: no daemon, runtime socket, DinD,
 host path, or privileged job container. The runner uses a pinned infrastructure
 Debian browser image, not an image published for each Nook PR.
 
-The one-job phases are `ci:pr:verification`, `ci:pr:tests`, then
-`ci:pr:heavy` and optional browser suites. Verification includes formatting,
-Loom/tooling checks, Clippy, TypeScript checks/lint and product builds before
-expensive test compilation. Independent work runs concurrently within each
-phase. Coverage reporting and preview publication stay in the same job.
+The one-job phases are `ci:pr:verification`, `ci:pr:tests`, then the joined
+`ci:pr:post-tests` barrier. That barrier runs heavy checks, coverage export and
+browser-artifact preparation concurrently before optional browser suites.
+Verification includes formatting, Loom/tooling checks, Clippy, TypeScript
+checks/lint and product builds before expensive test compilation. Independent
+work runs concurrently within each phase. Coverage reporting and preview
+publication stay in the same job.
 The phase definitions live in `nook-app/ci/pr.yml` and
 `nook-app/ci/pr.docker-bake.hcl`; coverage/preview use composite actions,
 not reusable workflows that allocate additional runners.

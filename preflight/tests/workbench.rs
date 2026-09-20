@@ -23,6 +23,66 @@ impl RepositoryFixture {
         }
     }
 }
+
+struct PrWorkbenchScenario {
+    root: RepositoryFixture,
+}
+
+impl PrWorkbenchScenario {
+    fn repository() -> Self {
+        Self {
+            root: RepositoryFixture::repository_root(),
+        }
+    }
+
+    fn task_body<'a>(&self, taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
+        let start_marker = format!("  {task}:\n");
+        let end_marker = format!("  {next_task}:\n");
+        let start = taskfile
+            .find(&start_marker)
+            .unwrap_or_else(|| panic!("missing task {task}"));
+        let body = taskfile
+            .get(start..)
+            .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
+        let end = body
+            .find(&end_marker)
+            .unwrap_or_else(|| panic!("missing following task {next_task}"));
+        body.get(..end)
+            .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
+    }
+
+    fn assert_issue_publisher_delivery_contract(&self) {
+        let root = &self.root;
+        let pr_workflow = root.read(".github/workflows/pr.yml");
+        let pr_tasks = root.read("nook-app/ci/pr.yml");
+        let publisher_suite = root.read(".github/scripts/workbench-publish.test.cjs");
+        let product_tests = self.task_body(&pr_tasks, "ci:pr:tests", "ci:pr:tests:product");
+        let delivery_helpers = self.task_body(&pr_tasks, "ci:pr:delivery-helpers", "ci:pr:heavy");
+
+        assert!(
+            pr_workflow.contains("run: task --silent ci:pr:tests\n"),
+            "PR CI must invoke the consolidated PR test phase"
+        );
+        assert!(
+            product_tests.contains(
+                "task --parallel ci:pr:tests:product ci:pr:tests:policy ci:pr:delivery-helpers",
+            ),
+            "the consolidated PR test phase must fan out product tests through delivery helpers"
+        );
+        assert!(
+            delivery_helpers.contains(
+                "cd \"{{.REPO_ROOT}}\" && node --test .github/scripts/workbench-publish.test.cjs",
+            ),
+            "the consolidated PR test phase must invoke the issue publisher contract suite"
+        );
+        assert!(
+            publisher_suite.contains("rejects non-issue Workbench destination")
+                && publisher_suite.contains("requires the expected SHA")
+                && publisher_suite.contains("rejects an issue update with a stale expected SHA"),
+            "the publisher suite must guard issue-only paths and expected-SHA updates"
+        );
+    }
+}
 impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
@@ -108,20 +168,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
 #[test]
 fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
-    let pr_workflow = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
-    let publisher_suite =
-        RepositoryFixture::repository_root().read(".github/scripts/workbench-publish.test.cjs");
-
-    assert!(
-        pr_workflow.contains("node --test .github/scripts/workbench-publish.test.cjs"),
-        "PR CI must invoke the issue publisher contract suite"
-    );
-    assert!(
-        publisher_suite.contains("rejects non-issue Workbench destination")
-            && publisher_suite.contains("requires the expected SHA")
-            && publisher_suite.contains("rejects an issue update with a stale expected SHA"),
-        "the publisher suite must guard issue-only paths and expected-SHA updates"
-    );
+    PrWorkbenchScenario::repository().assert_issue_publisher_delivery_contract();
 }
 
 #[test]

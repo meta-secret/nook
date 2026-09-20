@@ -342,12 +342,16 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 
 **Single-job PR phases:**
 
-- `nook-app/ci/pr.yml` owns sequential verification, tests/coverage and heavy phases.
+- `nook-app/ci/pr.yml` owns ordered verification and test barriers, then the
+  joined post-test fan-out.
 - Verification runs formatting, Loom/tooling checks, Clippy, TypeScript checks,
   lint and product builds before test-binary compilation.
 - Bake and Task run independent work concurrently within each phase.
-- Rust/WASM/web tests, Loom tests and preflight coverage follow verification.
-- Fuzz/Kani and requested browser suites follow tests.
+- Rust/WASM/web tests, Loom tests and delivery-helper contracts follow verification.
+- After tests succeed, `ci:pr:post-tests` runs heavy verification, coverage export,
+  and browser-artifact preparation concurrently on the same runner and BuildKit
+  connection.
+- Coverage reporting and requested browser suites begin after that fan-out joins.
 - Browser/deployment files and coverage are exported locally, never passed via
   per-PR registry images or GitHub artifact downloads to sibling jobs.
 - Composite coverage and preview actions run on the same runner. A failure
@@ -580,7 +584,8 @@ authenticator-domain to 90 percent.
 **PR CI locality and reruns:**
 
 - One job retains one checkout and one persistent BuildKit connection.
-- Rust/WASM/web verification precedes tests, then heavy gates and browsers.
+- Rust/WASM/web verification precedes tests; after tests, heavy gates and artifact
+  preparation run as a joined concurrent fan-out before browsers.
 - Generated files are exported locally; reporting and deployment allocate no runners.
 - Failed-job reruns repeat the single job; BuildKit decides which layers reuse cache.
 - There is no artifact-promotion bypass or sibling-job polling.
