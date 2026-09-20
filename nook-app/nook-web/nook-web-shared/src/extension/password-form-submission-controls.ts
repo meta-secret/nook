@@ -3,6 +3,7 @@ import {
   isAirbnbLoginModalContinueControl,
   observeAirbnbLoginModalRoute,
   type AirbnbLoginModalContinueControlRequest,
+  type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
 import {
@@ -150,7 +151,8 @@ export class AuthenticationSubmissionDestination {
     const owner =
       authenticationSubmissionControls.associatedAuthenticationForm(control);
     if (owner.kind !== PasswordFormScopeKind.Owned) return "omitted";
-    const airbnbRoute = observeAirbnbLoginModalRoute({ form: owner.owner });
+    const routeRequest: AirbnbLoginModalRouteRequest = { form: owner.owner };
+    const airbnbRoute = observeAirbnbLoginModalRoute(routeRequest);
     if (airbnbRoute.kind === AirbnbLoginModalRouteKind.Present) {
       return "omitted";
     }
@@ -234,7 +236,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }
 
   private formDestinationIdentity(form: HTMLFormElement): string {
-    const airbnbRoute = observeAirbnbLoginModalRoute({ form });
+    const routeRequest: AirbnbLoginModalRouteRequest = { form };
+    const airbnbRoute = observeAirbnbLoginModalRoute(routeRequest);
     if (airbnbRoute.kind === AirbnbLoginModalRouteKind.Present) {
       return airbnbRoute.destinationIdentity;
     }

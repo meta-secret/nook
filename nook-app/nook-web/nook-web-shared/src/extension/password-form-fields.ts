@@ -2,6 +2,7 @@ import { AuthenticationInputSurface } from "./authentication-input-surface";
 import {
   AirbnbLoginModalRouteKind,
   observeAirbnbLoginModalRoute,
+  type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
 import { companionWasmReady } from "./companion-ready";
 import {
@@ -426,7 +427,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
             ((v) => (v ? v : ""))(form.getAttribute("action")),
             form.name,
           ].join(" ")
-      : "",
+        : "",
       ancestorIdentities,
       authenticationAdvanceControlLabel,
       `${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.hostname)}`,
@@ -454,10 +455,13 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
 
   private authenticationFieldIdentityText(field: HTMLInputElement): string {
     const form = field.form;
+    if (!form) {
+      return this.rawFieldIdentityText(field);
+    }
+    const routeRequest: AirbnbLoginModalRouteRequest = { form };
     if (
-      !form ||
-      observeAirbnbLoginModalRoute({ form }).kind !==
-        AirbnbLoginModalRouteKind.Present
+      observeAirbnbLoginModalRoute(routeRequest).kind !==
+      AirbnbLoginModalRouteKind.Present
     ) {
       return this.rawFieldIdentityText(field);
     }

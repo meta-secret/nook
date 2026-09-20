@@ -10,7 +10,7 @@ export type AirbnbLoginModalRouteObservation =
       destinationIdentity: string;
     };
 
-type AirbnbLoginModalRouteRequest = {
+export type AirbnbLoginModalRouteRequest = {
   form: HTMLFormElement;
 };
 
@@ -178,8 +178,9 @@ export function isAirbnbLoginModalContinueControl({
   form,
   control,
 }: AirbnbLoginModalContinueControlRequest): boolean {
+  const routeRequest: AirbnbLoginModalRouteRequest = { form };
   if (
-    observeAirbnbLoginModalRoute({ form }).kind !==
+    observeAirbnbLoginModalRoute(routeRequest).kind !==
     AirbnbLoginModalRouteKind.Present
   ) {
     return false;
