@@ -60,7 +60,7 @@
   <div role="dialog" aria-label="Log in or sign up">
     <button type="button" aria-label="Close"></button>
     <h1>Log in or sign up</h1>
-    <form action="/" data-testid="airbnb-auth-form" onsubmit={activateContinue}>
+    <form data-testid="airbnb-auth-form" onsubmit={activateContinue}>
       <label for="phone-or-email">Phone number or email</label>
       <input
         id="phone-or-email"

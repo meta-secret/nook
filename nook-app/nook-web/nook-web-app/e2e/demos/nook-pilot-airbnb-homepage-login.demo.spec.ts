@@ -27,7 +27,7 @@ test('detect and fill the Airbnb homepage login modal', async ({ page }) => {
           <div role="dialog" aria-label="Log in or sign up">
             <button type="button" aria-label="Close"></button>
             <h1>Log in or sign up</h1>
-            <form action="/" data-testid="airbnb-auth-form">
+            <form data-testid="airbnb-auth-form">
               <label for="phone-or-email">Phone number or email</label>
               <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
               <button type="submit">Continue</button>

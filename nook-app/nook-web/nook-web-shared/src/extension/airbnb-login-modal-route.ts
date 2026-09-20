@@ -43,20 +43,13 @@ class AirbnbLoginModalRouteDetector {
       form,
       pageUrl: page.location.href,
     };
-    if (!this.formHasHomepageAction(homepageActionRequest)) {
+    if (
+      !this.formHasHomepageAction(homepageActionRequest) &&
+      !this.formHasOmittedHomepageAction(homepageActionRequest)
+    ) {
       return { kind: AirbnbLoginModalRouteKind.Absent };
     }
-    if (!this.formHasEmptyIdentity(form)) {
-      return { kind: AirbnbLoginModalRouteKind.Absent };
-    }
-    const dialog = form.closest('[role="dialog"]');
-    if (!(dialog instanceof HTMLElement) || !this.dialogIsRendered(dialog)) {
-      return { kind: AirbnbLoginModalRouteKind.Absent };
-    }
-    if (!this.hasAirbnbIdentityField(form)) {
-      return { kind: AirbnbLoginModalRouteKind.Absent };
-    }
-    if (!this.hasAirbnbContinueControl(form)) {
+    if (!this.hasStrictAirbnbModalEvidence(form)) {
       return { kind: AirbnbLoginModalRouteKind.Absent };
     }
     return {
@@ -70,6 +63,21 @@ class AirbnbLoginModalRouteDetector {
     pageUrl,
   }: AirbnbLoginModalHomepageActionRequest): boolean {
     if (!form.hasAttribute("action")) return false;
+    return this.formResolvesToHomepage({ form, pageUrl });
+  }
+
+  private formHasOmittedHomepageAction({
+    form,
+    pageUrl,
+  }: AirbnbLoginModalHomepageActionRequest): boolean {
+    if (form.hasAttribute("action")) return false;
+    return this.formResolvesToHomepage({ form, pageUrl });
+  }
+
+  private formResolvesToHomepage({
+    form,
+    pageUrl,
+  }: AirbnbLoginModalHomepageActionRequest): boolean {
     try {
       const action = new URL(form.action, pageUrl);
       const page = form.ownerDocument.defaultView;
@@ -83,6 +91,17 @@ class AirbnbLoginModalRouteDetector {
     } catch {
       return false;
     }
+  }
+
+  private hasStrictAirbnbModalEvidence(form: HTMLFormElement): boolean {
+    if (!this.formHasEmptyIdentity(form)) return false;
+    const dialog = form.closest('[role="dialog"]');
+    return (
+      dialog instanceof HTMLElement &&
+      this.dialogIsRendered(dialog) &&
+      this.hasAirbnbIdentityField(form) &&
+      this.hasAirbnbContinueControl(form)
+    );
   }
 
   private formHasEmptyIdentity(form: HTMLFormElement): boolean {

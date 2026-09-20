@@ -75,7 +75,7 @@ describe('DOM-backed companion authentication simulation', () => {
           <div role="dialog" aria-label="Log in or sign up">
             <button type="button" aria-label="Close"></button>
             <h1>Log in or sign up</h1>
-            <form action="/" data-testid="airbnb-auth-form">
+            <form data-testid="airbnb-auth-form">
               <label for="phone-or-email">Phone number or email</label>
               <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
               <button type="submit">Continue</button>
@@ -108,6 +108,8 @@ describe('DOM-backed companion authentication simulation', () => {
       '[data-testid="airbnb-auth-form"]',
     )
     if (!selectedForm) throw new Error('expected Airbnb modal form')
+    expect(selectedForm.hasAttribute('action')).toBe(false)
+    expect(selectedForm.action).toBe('https://www.airbnb.com/')
     const [observation] = passwordFormInteraction
       .summarizeAuthenticationWorkflowForms()
       .filter(

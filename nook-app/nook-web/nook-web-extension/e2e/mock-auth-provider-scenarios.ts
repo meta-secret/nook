@@ -729,7 +729,7 @@ export class MockAuthProviderScenarios {
         const primary = form.getByRole('button', { name: 'Continue' })
         await expect(page.locator('form')).toHaveCount(2)
         await expect(form).not.toHaveAttribute('method')
-        await expect(form).toHaveAttribute('action', '/')
+        await expect(form).not.toHaveAttribute('action')
         await expect(form).toHaveJSProperty('method', 'get')
         await expect(form).toHaveJSProperty('action', airbnbUrl)
         await expect(form.locator('input')).toHaveCount(1)
