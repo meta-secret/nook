@@ -24,16 +24,18 @@ test('detect and fill the Airbnb homepage login modal', async ({ page }) => {
           <form action="/homes" aria-label="Search">
             <input type="search" aria-label="Where">
           </form>
-          <div role="dialog" aria-label="Log in or sign up">
-            <button type="button" aria-label="Close"></button>
-            <h1>Log in or sign up</h1>
-            <form data-testid="airbnb-auth-form">
-              <label for="phone-or-email">Phone number or email</label>
-              <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
-              <button type="submit" class="airbnb-continue-button">Continue</button>
-            </form>
-            <button type="button" aria-label="Continue with Google"></button>
-            <button type="button" aria-label="Continue with Apple"></button>
+          <section id="airbnb-modal-shell" hidden>
+            <div role="dialog" aria-label="Log in or sign up">
+              <button type="button" aria-label="Close"></button>
+              <h1>Log in or sign up</h1>
+              <form data-testid="airbnb-auth-form">
+                <label for="phone-or-email">Phone number or email</label>
+                <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
+                <button type="submit" class="airbnb-continue-button">Continue</button>
+              </form>
+              <button type="button" aria-label="Continue with Google"></button>
+              <button type="button" aria-label="Continue with Apple"></button>
+            </div>
           </div>
           <p id="site-status" role="status"></p>
           <script>
@@ -66,6 +68,11 @@ test('detect and fill the Airbnb homepage login modal', async ({ page }) => {
   const widget = page.locator('#nook-auth-widget')
   await expect(page).toHaveURL('https://www.airbnb.com/')
   await expect(page.locator('form')).toHaveCount(2)
+  await expect(widget).toHaveCount(0)
+
+  await page
+    .locator('#airbnb-modal-shell')
+    .evaluate((element) => element.removeAttribute('hidden'))
   await expect(page.locator('[role="dialog"]')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
