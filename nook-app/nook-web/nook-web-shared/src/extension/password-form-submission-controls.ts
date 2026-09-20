@@ -2,6 +2,7 @@ import {
   AirbnbLoginModalRouteKind,
   isAirbnbLoginModalContinueControl,
   observeAirbnbLoginModalRoute,
+  type AirbnbLoginModalContinueControlRequest,
 } from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
 import {
@@ -370,13 +371,15 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     if (
       (control instanceof HTMLButtonElement ||
         control instanceof HTMLInputElement) &&
-      control.form &&
-      isAirbnbLoginModalContinueControl({
+      control.form
+    ) {
+      const continueControlRequest: AirbnbLoginModalContinueControlRequest = {
         form: control.form,
         control,
-      })
-    ) {
-      return "";
+      };
+      if (isAirbnbLoginModalContinueControl(continueControlRequest)) {
+        return "";
+      }
     }
     const namedValue =
       (control instanceof HTMLButtonElement ||
