@@ -355,18 +355,12 @@ test.describe('popular login fixture coverage', () => {
         const password = page.locator(
           `#login_form [name="${expectation.passwordName}"]`,
         )
-        await expect(identity).toHaveAttribute(
-          'type',
-          expectation.identityType,
-        )
+        await expect(identity).toHaveAttribute('type', expectation.identityType)
         await expect(identity).toHaveAttribute(
           'autocomplete',
           expectation.identityAutocomplete,
         )
-        await expect(password).toHaveAttribute(
-          'type',
-          expectation.passwordType,
-        )
+        await expect(password).toHaveAttribute('type', expectation.passwordType)
         await expect(password).toHaveAttribute(
           'autocomplete',
           expectation.passwordAutocomplete,
@@ -537,7 +531,6 @@ test.describe('popular login fixture coverage', () => {
         { timeout: 20_000 },
       )
       await successPage.close()
-
     } finally {
       await paired.context.close()
       await mockAuth.close()
@@ -684,7 +677,8 @@ test.describe('popular login fixture coverage', () => {
           ShellTemplatePilotExpectation.ContinueWithNook,
         )
         const firstStep = template.steps[0]
-        if (!firstStep) throw new Error(`template ${templateId} has no first step`)
+        if (!firstStep)
+          throw new Error(`template ${templateId} has no first step`)
 
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
@@ -757,9 +751,7 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget
-          .getByRole('button', { name: 'Continue with Nook' })
-          .click()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
 
         if (templateId === 'phone-first') {
           await expect(page.locator('[name="phone"]')).toHaveValue(
@@ -784,9 +776,8 @@ test.describe('popular login fixture coverage', () => {
       await passwordThenOtpPage.goto(
         `${mockAuth.origin}/template/password-then-otp`,
       )
-      const passwordThenOtpWidget = passwordThenOtpPage.locator(
-        '#nook-auth-widget',
-      )
+      const passwordThenOtpWidget =
+        passwordThenOtpPage.locator('#nook-auth-widget')
       await expect(
         passwordThenOtpWidget.getByText('Ready to sign in'),
       ).toBeVisible()
@@ -809,9 +800,7 @@ test.describe('popular login fixture coverage', () => {
         .click()
       const picker = await pickerPromise
       await picker.waitForURL(/intent=authenticator-picker/)
-      await picker
-        .getByRole('button', { name: /Password then OTP/ })
-        .click()
+      await picker.getByRole('button', { name: /Password then OTP/ }).click()
       await expect(
         passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
@@ -853,9 +842,7 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget
-          .getByRole('button', { name: 'Continue with Nook' })
-          .click()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
         if (templateId === 'phone-first') {
           await expect(page.locator('[name="password"]')).toBeVisible()
           await expect(widget.getByText('Ready to sign in')).toBeVisible()

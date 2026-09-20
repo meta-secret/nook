@@ -18,9 +18,7 @@ export type PlainLoginCredentials = {
   readonly password: string
 }
 
-export function plainLoginIsValid(
-  credentials: PlainLoginCredentials,
-): boolean {
+export function plainLoginIsValid(credentials: PlainLoginCredentials): boolean {
   const fixtureAccount = findPlainMockAuthAccount(
     credentials.username,
     credentials.password,
