@@ -5,7 +5,8 @@
     "form-action-omitted",
     "input-name-omitted",
     "visible-associated-label",
-    "provider-alternatives-outside-form"
+    "provider-alternatives-outside-form",
+    "login-modal-on-homepage"
   ],
   "steps": [
     {
@@ -19,6 +20,7 @@
       ],
       "submit": {
         "type": "submit",
+        "class": "airbnb-continue-button",
         "label": "Continue"
       }
     }

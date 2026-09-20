@@ -781,10 +781,11 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toHaveAttribute('data-state', 'vault-locked')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(
-        widget.getByText(
-          'Unlock Nook in the companion window, then click Continue with Nook again.',
-        ),
-      ).toBeVisible({ timeout: 15_000 })
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText(
+        'Unlock Nook in the companion window, then click Continue with Nook again.',
+        { timeout: 15_000 },
+      )
       await expect(
         widget.getByRole('button', { name: 'Open vault' }),
       ).toBeVisible()

@@ -27,6 +27,7 @@ export type SiteFixtureSubmit = {
   type: SiteFixtureSubmitType
   name?: string
   id?: string
+  class?: string
   label: string
   'data-qa'?: string
 }
@@ -297,6 +298,7 @@ class SiteFixtureCatalogAdmission {
     }
     if ('name' in value) submit.name = this.decodeString(value.name, 'name')
     if ('id' in value) submit.id = this.decodeString(value.id, 'id')
+    if ('class' in value) submit.class = this.decodeString(value.class, 'class')
     if ('data-qa' in value) {
       submit['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -472,6 +474,7 @@ export function renderFixtureHtml(
     `type="${submitType}"`,
     step.submit.name ? `name="${escapeAttr(step.submit.name)}"` : '',
     step.submit.id ? `id="${escapeAttr(step.submit.id)}"` : '',
+    step.submit.class ? `class="${escapeAttr(step.submit.class)}"` : '',
     step.submit['data-qa']
       ? `data-qa="${escapeAttr(step.submit['data-qa'])}"`
       : '',

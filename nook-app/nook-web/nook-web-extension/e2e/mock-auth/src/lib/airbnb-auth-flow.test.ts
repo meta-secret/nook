@@ -80,6 +80,7 @@ describe('Airbnb authentication mock', () => {
         'input-name-omitted',
         'visible-associated-label',
         'provider-alternatives-outside-form',
+        'login-modal-on-homepage',
       ],
       steps: [
         {
@@ -91,7 +92,11 @@ describe('Airbnb authentication mock', () => {
               label: 'Phone number or email',
             },
           ],
-          submit: { type: 'submit', label: 'Continue' },
+          submit: {
+            type: 'submit',
+            class: 'airbnb-continue-button',
+            label: 'Continue',
+          },
         },
       ],
     })

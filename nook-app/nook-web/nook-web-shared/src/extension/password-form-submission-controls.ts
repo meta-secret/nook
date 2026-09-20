@@ -1,3 +1,10 @@
+import {
+  AirbnbLoginModalRouteKind,
+  isAirbnbLoginModalContinueControl,
+  observeAirbnbLoginModalRoute,
+  type AirbnbLoginModalContinueControlRequest,
+  type AirbnbLoginModalRouteRequest,
+} from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
 import {
   authentication_advance_control_is_safe,
@@ -143,10 +150,13 @@ export class AuthenticationSubmissionDestination {
     if (control.hasAttribute("formaction")) return "authored";
     const owner =
       authenticationSubmissionControls.associatedAuthenticationForm(control);
-    return owner.kind === PasswordFormScopeKind.Owned &&
-      owner.owner.hasAttribute("action")
-      ? "authored"
-      : "omitted";
+    if (owner.kind !== PasswordFormScopeKind.Owned) return "omitted";
+    const routeRequest: AirbnbLoginModalRouteRequest = { form: owner.owner };
+    const airbnbRoute = observeAirbnbLoginModalRoute(routeRequest);
+    if (airbnbRoute.kind === AirbnbLoginModalRouteKind.Present) {
+      return "omitted";
+    }
+    return owner.owner.hasAttribute("action") ? "authored" : "omitted";
   }
 }
 
@@ -225,9 +235,18 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       : ((v) => (v ? v : ""))(form.ownerDocument.defaultView?.location.href);
   }
 
+  private formDestinationIdentity(form: HTMLFormElement): string {
+    const routeRequest: AirbnbLoginModalRouteRequest = { form };
+    const airbnbRoute = observeAirbnbLoginModalRoute(routeRequest);
+    if (airbnbRoute.kind === AirbnbLoginModalRouteKind.Present) {
+      return airbnbRoute.destinationIdentity;
+    }
+    return this.rawFormDestinationIdentity(form);
+  }
+
   ownedFormDestinationIdentity(form: HTMLFormElement): string {
     return this.boundedAuthenticationDestination(
-      this.rawFormDestinationIdentity(form),
+      this.formDestinationIdentity(form),
     );
   }
 
@@ -251,10 +270,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         control instanceof HTMLInputElement) &&
       control.form
     ) {
-      return this.rawFormDestinationIdentity(control.form);
+      return this.formDestinationIdentity(control.form);
     }
     return formScope.kind === PasswordFormScopeKind.Owned
-      ? this.rawFormDestinationIdentity(formScope.owner)
+      ? this.formDestinationIdentity(formScope.owner)
       : this.browser.location.href;
   }
 
@@ -352,6 +371,19 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }
 
   controlMachineIdentity(control: HTMLElement): string {
+    if (
+      (control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
+      control.form
+    ) {
+      const continueControlRequest: AirbnbLoginModalContinueControlRequest = {
+        form: control.form,
+        control,
+      };
+      if (isAirbnbLoginModalContinueControl(continueControlRequest)) {
+        return "";
+      }
+    }
     const namedValue =
       (control instanceof HTMLButtonElement ||
         control instanceof HTMLInputElement) &&
