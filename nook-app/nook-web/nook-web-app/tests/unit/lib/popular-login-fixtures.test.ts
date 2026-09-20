@@ -99,14 +99,12 @@ describe('popular login shell templates', () => {
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(catalog.length)
     expect(
-      templateIds
-        .map((templateId) => fixtureCatalog.pilotExpectation(templateId))
-        .filter(
-          (expectation) =>
-            expectation ===
-            SiteFixturePilotExpectation.FailClosedAlternateAuthentication,
-        ),
-    ).toEqual([SiteFixturePilotExpectation.FailClosedAlternateAuthentication])
+      templateIds.filter(
+        (templateId) =>
+          fixtureCatalog.pilotExpectation(templateId) ===
+          SiteFixturePilotExpectation.FailClosedAlternateAuthentication,
+      ),
+    ).toEqual(['email-password-aria-hidden', 'enterprise-sso-email'])
     const catalogIds = new Set(catalog.map((site) => site.id))
     for (const siteId of fixtureCatalog.siteIds) {
       expect(catalogIds.has(siteId)).toBe(true)
@@ -132,6 +130,14 @@ describe('popular login shell templates', () => {
       document.body.innerHTML = fixtureCatalog.renderStep(fixture, 0)
       const observations =
         passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+      if (
+        fixtureCatalog.pilotExpectation(templateId) ===
+        SiteFixturePilotExpectation.FailClosedAlternateAuthentication &&
+        templateId === 'email-password-aria-hidden'
+      ) {
+        expect(observations).toHaveLength(0)
+        return
+      }
       expect(observations.length).toBeGreaterThan(0)
       const summary = observations[0]?.summary
       expect(summary).toBeTruthy()

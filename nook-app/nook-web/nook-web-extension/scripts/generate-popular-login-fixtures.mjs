@@ -26,7 +26,7 @@ const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 const legacySitesDir = path.join(fixturesRoot, 'sites')
 
-/** @typedef {{ name?: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'data-qa'?: string, 'data-testid'?: string }} Field */
+/** @typedef {{ name?: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'aria-hidden'?: string, 'data-qa'?: string, 'data-testid'?: string }} Field */
 /** @typedef {{ fields: Field[], submit: { type?: string, name?: string, id?: string, label: string } }} Step */
 /** @typedef {{ quirks: string[], steps: Step[] }} LoginShell */
 /** @typedef {{ emailName?: string, emailType?: string, passName?: string, emailAutocomplete?: string, quirks?: string[], submitLabel?: string }} EmailPasswordOptions */

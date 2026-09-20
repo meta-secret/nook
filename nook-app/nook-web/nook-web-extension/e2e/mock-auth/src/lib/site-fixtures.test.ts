@@ -33,8 +33,11 @@ describe('mock-auth Pilot expectation catalog', () => {
       }
     }
 
-    expect(continueWithNookTemplateCount).toBe(29)
-    expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
+    expect(continueWithNookTemplateCount).toBe(28)
+    expect(failClosedTemplateIds).toEqual([
+      'email-password-aria-hidden',
+      'enterprise-sso-email',
+    ])
   })
 
   test('keeps the Airbnb identity label structural and associated', () => {

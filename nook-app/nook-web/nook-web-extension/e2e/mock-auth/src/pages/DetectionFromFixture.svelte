@@ -186,6 +186,7 @@
         inputmode={field.inputmode}
         placeholder={field.placeholder}
         aria-label={field['aria-label']}
+        aria-hidden={field['aria-hidden']}
         data-qa={field['data-qa']}
         data-testid={field['data-testid']}
       /></label
@@ -199,6 +200,7 @@
       inputmode={field.inputmode}
       placeholder={field.placeholder}
       aria-label={field['aria-label']}
+      aria-hidden={field['aria-hidden']}
       data-qa={field['data-qa']}
       data-testid={field['data-testid']}
     />

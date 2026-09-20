@@ -6,7 +6,7 @@
   "booking": "continue-with-nook",
   "dual-identity-password": "continue-with-nook",
   "email-first": "continue-with-nook",
-  "email-password-aria-hidden": "continue-with-nook",
+  "email-password-aria-hidden": "fail-closed-alternate-authentication",
   "email-password": "continue-with-nook",
   "employee-id-password": "continue-with-nook",
   "enterprise-sso-email": "fail-closed-alternate-authentication",
