@@ -32,6 +32,11 @@ tasks:
         test -s "$output/result/proof/verification"
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
+        grep -q 'exporting to image' "$output/cold-verification.log"
+        if grep -q 'exporting cache' "$output/cold-verification.log"; then
+          echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2
+          exit 1
+        fi
         dylint_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[dylint-deps 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
         dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 2\/2\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
         test -n "$dylint_dependency_vertex"

@@ -350,12 +350,12 @@ fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
         .map(|(_, task)| task)
         .ok_or_else(|| anyhow::anyhow!("Dylint task block is missing"))?;
     assert!(
-        dylint_task.contains("rust-dylint-self-test.args.RUST_DYLINT_COVERAGE_FLOOR")
-            && dylint_task.contains("rust-dylint-native.args.RUST_DYLINT_COVERAGE_FLOOR")
-            && dylint_task.contains("rust-dylint-wasm.args.RUST_DYLINT_COVERAGE_FLOOR")
-            && dylint_task.contains("rust-dylint-self-test rust-dylint-native rust-dylint-wasm")
-            && !dylint_task.contains("for stage in self-test native wasm"),
-        "Dylint must solve self-test, native, and WASM branches together so their shared graph is built once"
+        dylint_task.contains("rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR")
+            && dylint_task.contains("rust-dylint")
+            && !dylint_task.contains("rust-dylint-self-test.args")
+            && !dylint_task.contains("rust-dylint-native.args")
+            && !dylint_task.contains("rust-dylint-wasm.args"),
+        "Dylint must solve its aggregate image target so successful verification remains a normal BuildKit image"
     );
     assert!(
         !dylint_task.contains("task: docker:rust-base"),

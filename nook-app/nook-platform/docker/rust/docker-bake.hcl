@@ -252,7 +252,8 @@ target "rust-dylint" {
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to
-  output     = ["type=cacheonly"]
+  tags       = ["nook-rust-dylint:local"]
+  output     = ["type=image,push=false"]
 }
 
 target "rust-dylint-build" {

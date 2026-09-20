@@ -339,6 +339,15 @@ class DockerizedRustBuildKitContract {
     expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
       "dockerfile = rust_nightly_dockerfile",
     );
+    expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
+      'tags       = ["nook-rust-dylint:local"]',
+    );
+    expect(bake.slice(dylintTarget, dylintTargetEnd)).toContain(
+      'output     = ["type=image,push=false"]',
+    );
+    expect(bake.slice(dylintTarget, dylintTargetEnd)).not.toContain(
+      "type=cacheonly",
+    );
 
     const dylintBuild = nightly.indexOf(
       "FROM rust-dylint-deps AS rust-dylint-build",
@@ -604,6 +613,13 @@ class DockerizedRustBuildKitContract {
     expect(proof).toContain(
       "Source-only change unexpectedly reinstalled fuzz dependencies",
     );
+    expect(proof).toContain("grep -q 'exporting to image'");
+    expect(proof).toContain(
+      "Dylint verification unexpectedly used a cache-only/export-cache result",
+    );
+    expect(
+      this.read("infra/sim/bake-cache/pr-pipeline.docker-bake.hcl"),
+    ).toContain('output = ["type=image,push=false"]');
   }
 
   private read(path: string): string {
