@@ -241,4 +241,90 @@ test.describe('popular login fixture coverage', () => {
       await mockAuth.close()
     }
   })
+
+  test('progresses identifier-first templates through success and wrong-password evidence', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Popular identifier-first templates vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      for (const templateId of [
+        'email-first',
+        'username-first',
+        'google',
+        'microsoft',
+        'slack',
+      ]) {
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.locator('input[type="password"]')).toBeVisible()
+        await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+        if (templateId === 'google') {
+          await expect(page.getByTestId('google-selected-account')).toHaveText(
+            'alice@nook.test',
+          )
+          await expect(page.locator('[name="identifier"]')).toHaveCount(0)
+        }
+
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('does not report success for a wrong password on identifier-first templates', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Popular identifier-first wrong-password vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'wrong-password',
+      )
+
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/template/google`)
+      const widget = page.locator('#nook-auth-widget')
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.locator('input[type="password"]')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByRole('alert')).toHaveText(
+        'Invalid username or password.',
+      )
+      await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
 })
