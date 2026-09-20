@@ -82,6 +82,87 @@ const singleStepPasswordTemplates = continueWithNookTemplateIds.filter(
   },
 )
 
+type CredentialPairTemplateId =
+  | 'account-number-password'
+  | 'dual-identity-password'
+  | 'employee-id-password'
+  | 'member-id-password'
+  | 'email-password'
+  | 'username-password'
+
+type CredentialPairInputType = 'email' | 'text'
+
+type CredentialPairFieldExpectation = {
+  readonly identityName: string
+  readonly identityType: CredentialPairInputType
+  readonly identityAutocomplete: string
+  readonly passwordName: string
+  readonly passwordType: 'password'
+  readonly passwordAutocomplete: string
+}
+
+const credentialPairFieldExpectations: Readonly<
+  Record<CredentialPairTemplateId, CredentialPairFieldExpectation>
+> = {
+  'account-number-password': {
+    identityName: 'accountNumber',
+    identityType: 'text',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+  'dual-identity-password': {
+    identityName: 'email',
+    identityType: 'email',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+  'employee-id-password': {
+    identityName: 'employeeId',
+    identityType: 'text',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+  'member-id-password': {
+    identityName: 'memberId',
+    identityType: 'text',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+  'email-password': {
+    identityName: 'email',
+    identityType: 'email',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+  'username-password': {
+    identityName: 'username',
+    identityType: 'text',
+    identityAutocomplete: 'username',
+    passwordName: 'password',
+    passwordType: 'password',
+    passwordAutocomplete: 'current-password',
+  },
+}
+
+const credentialPairTemplateIds: readonly CredentialPairTemplateId[] = [
+  'account-number-password',
+  'dual-identity-password',
+  'employee-id-password',
+  'member-id-password',
+  'email-password',
+  'username-password',
+]
+
 test.describe('popular login fixture coverage', () => {
   test.describe.configure({ timeout: 180_000 })
 
@@ -234,6 +315,177 @@ test.describe('popular login fixture coverage', () => {
           'Authentication complete',
           { timeout: 20_000 },
         )
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('audits credential-pair field ownership and successful submission', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Credential pair field audit vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      for (const templateId of credentialPairTemplateIds) {
+        const expectation = credentialPairFieldExpectations[templateId]
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+
+        const identity = page.locator(
+          `#login_form [name="${expectation.identityName}"]`,
+        )
+        const password = page.locator(
+          `#login_form [name="${expectation.passwordName}"]`,
+        )
+        await expect(identity).toHaveAttribute(
+          'type',
+          expectation.identityType,
+        )
+        await expect(identity).toHaveAttribute(
+          'autocomplete',
+          expectation.identityAutocomplete,
+        )
+        await expect(password).toHaveAttribute(
+          'type',
+          expectation.passwordType,
+        )
+        await expect(password).toHaveAttribute(
+          'autocomplete',
+          expectation.passwordAutocomplete,
+        )
+        await expect(identity).toHaveValue('')
+        await expect(password).toHaveValue('')
+
+        if (templateId === 'dual-identity-password') {
+          const phone = page.locator('#login_form [name="phone"]')
+          await expect(phone).toHaveAttribute('type', 'tel')
+          await expect(phone).toHaveAttribute('autocomplete', 'tel')
+          await expect(phone).toHaveValue('')
+          await page.evaluate(() => {
+            const phone = document.querySelector<HTMLInputElement>(
+              '#login_form [name="phone"]',
+            )
+            if (!(phone instanceof HTMLInputElement)) {
+              throw new Error('dual identity phone decoy is missing')
+            }
+            phone.addEventListener('input', () => {
+              sessionStorage.setItem('credential-pair-phone-input', 'touched')
+            })
+          })
+        }
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await expect(
+          widget.getByRole('button', { name: 'Continue with Nook' }),
+        ).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        if (templateId === 'dual-identity-password') {
+          await expect
+            .poll(() =>
+              page.evaluate(
+                (key) => sessionStorage.getItem(key) || '',
+                'credential-pair-phone-input',
+              ),
+            )
+            .toBe('')
+        }
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('rejects wrong passwords on every credential-pair template', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Credential pair rejection audit vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'wrong-password',
+      )
+
+      for (const templateId of credentialPairTemplateIds) {
+        const expectation = credentialPairFieldExpectations[templateId]
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        const identity = page.locator(
+          `#login_form [name="${expectation.identityName}"]`,
+        )
+        const password = page.locator(
+          `#login_form [name="${expectation.passwordName}"]`,
+        )
+        await expect(identity).toHaveAttribute(
+          'autocomplete',
+          expectation.identityAutocomplete,
+        )
+        await expect(password).toHaveAttribute(
+          'autocomplete',
+          expectation.passwordAutocomplete,
+        )
+
+        if (templateId === 'dual-identity-password') {
+          const phone = page.locator('#login_form [name="phone"]')
+          await expect(phone).toHaveValue('')
+          await page.evaluate(() => {
+            const phone = document.querySelector<HTMLInputElement>(
+              '#login_form [name="phone"]',
+            )
+            if (!(phone instanceof HTMLInputElement)) {
+              throw new Error('dual identity phone decoy is missing')
+            }
+            phone.addEventListener('input', () => {
+              sessionStorage.setItem('credential-pair-phone-input', 'touched')
+            })
+          })
+        }
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByRole('alert')).toHaveText(
+          'Invalid username or password.',
+          { timeout: 20_000 },
+        )
+        await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
+        if (templateId === 'dual-identity-password') {
+          await expect
+            .poll(() =>
+              page.evaluate(
+                (key) => sessionStorage.getItem(key) || '',
+                'credential-pair-phone-input',
+              ),
+            )
+            .toBe('')
+        }
         await page.close()
       }
     } finally {
