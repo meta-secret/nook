@@ -367,15 +367,12 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }
 
   controlMachineIdentity(control: HTMLElement): string {
-    const form =
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-        ? control.form
-        : null;
     if (
-      form &&
+      (control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
+      control.form &&
       isAirbnbLoginModalContinueControl({
-        form,
+        form: control.form,
         control,
       })
     ) {
