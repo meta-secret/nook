@@ -185,6 +185,45 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('[name="hiddenPassword"]')).toBe('')
   })
 
+  test('detects a native Google identifier button beside account creation', () => {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main>
+          <h1>Sign in</h1><p>Use your Google Account</p>
+          <label for="identifierId">Email or phone</label>
+          <input id="identifierId" name="identifier" autocomplete="username webauthn" aria-label="Email or phone">
+          <input name="hiddenPassword" type="password" tabindex="-1" aria-hidden="true" hidden>
+          <button type="button">Create account</button>
+          <button id="identifierNext" type="button" class="VfPpkd-LgbsSe">Next</button>
+        </main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+
+    window.history.replaceState(
+      {},
+      '',
+      '/v3/signin/identifier?flowName=GlifWebSignIn',
+    )
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      observationCount: 1,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      detailedAdvanceControlKind: 'observed',
+      credentialSubmissionKind: 'absent',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+    })
+    expect(fieldValue('#identifierId')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('[name="hiddenPassword"]')).toBe('')
+  })
+
   test('requires the captured Google username and submit semantics for its password continuation', () => {
     window.history.replaceState({}, '', '/v3/signin/challenge/pwd')
     const formLessRequest: DomAuthenticationSimulationRequest = {
