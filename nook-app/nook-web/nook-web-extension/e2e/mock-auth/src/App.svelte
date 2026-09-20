@@ -59,7 +59,8 @@
     location.hostname === 'www.netflix.com' && pathname === '/login',
   )
   const isAirbnbLogin = $derived(
-    location.hostname === 'www.airbnb.com' && pathname === '/login',
+    location.hostname === 'www.airbnb.com' &&
+      (pathname === '/' || pathname === '/login'),
   )
   const isBookingLogin = $derived(
     location.hostname === 'account.booking.com' && pathname === '/sign-in',

@@ -76,10 +76,11 @@ describe('Airbnb authentication mock', () => {
       id: 'airbnb',
       quirks: [
         'form-method-omitted',
-        'form-action-omitted',
+        'form-action-homepage',
         'input-name-omitted',
         'visible-associated-label',
         'provider-alternatives-outside-form',
+        'login-modal-on-homepage',
       ],
       steps: [
         {

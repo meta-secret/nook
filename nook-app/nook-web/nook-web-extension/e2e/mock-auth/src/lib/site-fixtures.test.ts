@@ -43,6 +43,7 @@ describe('mock-auth Pilot expectation catalog', () => {
       throw new Error('Airbnb shell template is missing')
     }
     expect(airbnbTemplate.quirks).toContain('visible-associated-label')
+    expect(airbnbTemplate.quirks).toContain('login-modal-on-homepage')
     const step = airbnbTemplate.steps[0]
     if (!step) throw new Error('Airbnb shell step is missing')
     const field = step.fields[0]

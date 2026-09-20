@@ -716,7 +716,7 @@ export class MockAuthProviderScenarios {
           )
           await route.fulfill({ response: localResponse })
         })
-        const airbnbUrl = 'https://www.airbnb.com/login'
+        const airbnbUrl = 'https://www.airbnb.com/'
         await page.goto(airbnbUrl)
         expect(interceptedAirbnbRequestCount).toBeGreaterThan(0)
         await expect(page).toHaveURL(airbnbUrl)
@@ -727,12 +727,13 @@ export class MockAuthProviderScenarios {
         const form = page.getByTestId('airbnb-auth-form')
         const identity = form.getByLabel('Phone number or email')
         const primary = form.getByRole('button', { name: 'Continue' })
-        await expect(page.locator('form')).toHaveCount(1)
+        await expect(page.locator('form')).toHaveCount(2)
         await expect(form).not.toHaveAttribute('method')
-        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveAttribute('action', '/')
         await expect(form).toHaveJSProperty('method', 'get')
         await expect(form).toHaveJSProperty('action', airbnbUrl)
         await expect(form.locator('input')).toHaveCount(1)
+        await expect(identity).toHaveAttribute('id', 'phone-or-email')
         await expect(identity).toHaveAttribute('type', 'text')
         await expect(identity).not.toHaveAttribute('name')
         await expect(identity).not.toHaveAttribute('aria-label')
@@ -751,7 +752,12 @@ export class MockAuthProviderScenarios {
             ),
           ).toBe(true)
         }
-        await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+        await expect(page.locator('[role="dialog"]')).toHaveCount(1)
+        await expect(
+          page.locator('[role="dialog"]').getByRole('heading', {
+            name: 'Log in or sign up',
+          }),
+        ).toBeVisible()
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
