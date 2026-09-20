@@ -32,3 +32,10 @@ portability.
 
 The proof fails if a warm or source-only rebuild executes the dependency marker
 instead of reporting that exact BuildKit vertex as `CACHED`.
+
+For a production warm-cache check, open a PR that does not change Rust, web,
+Docker, Bake, or dependency inputs and compare its consolidated validation run
+with the preceding run on the same ARC node. A warm run must show cached
+BuildKit vertices without Cargo dependency downloads or Rust dependency
+compilation. Runner placement is part of the evidence: results from different
+nodes do not prove or disprove reuse of a node-local BuildKit cache.
