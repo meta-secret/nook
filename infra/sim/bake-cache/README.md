@@ -10,7 +10,8 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
 4. The Dylint product-dependency and manifest-only Cargo Chef WASM release-cook
    vertices remain cached both on a warm rebuild and after mutable source
    content changes. The Dylint stand-in uses the same immutable
-   dependency-before-source layer architecture as production.
+   dependency-before-source layer architecture and named image output as
+   production; it fails if verification falls back to a cache-only output.
 5. The simulator uses small text inputs instead of downloading real
    dependencies, while preserving production's dependency-before-source ordering.
 6. The fuzz dependency-install vertex remains cached when mutable source
