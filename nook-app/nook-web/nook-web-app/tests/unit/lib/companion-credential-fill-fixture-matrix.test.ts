@@ -245,8 +245,8 @@ describe('canonical mock-auth credential-fill matrix', () => {
     expect(templateResults.size).toBe(templateIds.length)
     const siteIds = listSiteFixtureIds()
     const catalogSiteIds = Object.keys(siteShells).sort()
-    expect(catalogSiteIds).toHaveLength(999)
-    expect(siteIds).toHaveLength(999)
+    expect(catalogSiteIds).toHaveLength(1000)
+    expect(siteIds).toHaveLength(1000)
     expect(siteIds).toEqual(catalogSiteIds)
     for (const siteId of siteIds) {
       const lookup = getSiteFixture(siteId)

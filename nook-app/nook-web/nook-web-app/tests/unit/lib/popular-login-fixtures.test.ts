@@ -95,7 +95,7 @@ describe('popular login shell templates', () => {
 
   test('configured sites map to shared catalog templates (no per-site shell copies)', () => {
     expect(catalog).toHaveLength(1000)
-    expect(fixtureCatalog.siteIds).toHaveLength(999)
+    expect(fixtureCatalog.siteIds).toHaveLength(1000)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(catalog.length)
     expect(
