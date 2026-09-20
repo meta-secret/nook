@@ -241,13 +241,29 @@ fn loom_workflow_audits_every_cortex_change() {
                 "  policy:\n    name: Repository policy\n    if: github.event_name == 'push'\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
             )
             && entrypoint.contains("    uses: ./.github/workflows/pr.yml")
-            && pr_workflow.contains("run: task --silent ci:pr:tests")
-            && pr_workflow.contains("run: task --silent ci:pr:tests:policy")
-            && pr_tasks.contains(
-                "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+            && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+            && pr_workflow.contains(
+                "run: task --silent ci:pr:tests:policy-with-delivery-helpers\n",
             )
             && workflow.contains("workflow_call:"),
         "repository policy must validate every PR and Main tree"
+    );
+    let policy_only = task_body(
+        &pr_tasks,
+        "ci:pr:tests:policy-with-delivery-helpers",
+        "ci:pr:delivery-helpers",
+    );
+    assert!(
+        policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
+            && task_body(
+                &pr_tasks,
+                "ci:pr:tests:policy",
+                "ci:pr:tests:policy-with-delivery-helpers"
+            )
+            .contains(
+                "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy"
+            ),
+        "policy-only PR workflow must delegate to the named policy task"
     );
     assert!(
         workflow.contains("fetch-depth: 0")

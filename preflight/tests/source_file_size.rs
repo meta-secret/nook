@@ -18,6 +18,27 @@ impl RepositoryFixture {
             ),
         }
     }
+
+    fn task_body<'a>(
+        &self,
+        taskfile: &'a str,
+        task: &str,
+        next_task: &str,
+    ) -> anyhow::Result<&'a str> {
+        let start_marker = format!("  {task}:\n");
+        let end_marker = format!("  {next_task}:\n");
+        let start = taskfile
+            .find(&start_marker)
+            .ok_or_else(|| anyhow::anyhow!("missing task {task}"))?;
+        let body = taskfile
+            .get(start..)
+            .ok_or_else(|| anyhow::anyhow!("task {task} begins outside a UTF-8 boundary"))?;
+        let end = body
+            .find(&end_marker)
+            .ok_or_else(|| anyhow::anyhow!("missing following task {next_task}"))?;
+        body.get(..end)
+            .ok_or_else(|| anyhow::anyhow!("task {task} ends outside a UTF-8 boundary"))
+    }
 }
 impl Deref for RepositoryFixture {
     type Target = PathBuf;
@@ -138,15 +159,33 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
             && pr_workflow.contains("VALIDATION_REQUESTED: ${{ inputs.validation_requested }}")
             && pr_workflow.contains("*) validation=true ;;")
             && pr_workflow.contains("if: steps.browser-scope.outputs.validation == 'true'")
-            && pr_workflow.contains("run: task --silent ci:pr:verification")
-            && pr_workflow.contains("run: task --silent ci:pr:verification:tooling")
-            && pr_workflow.contains("run: task --silent ci:pr:tests")
-            && pr_workflow.contains("run: task --silent ci:pr:tests:policy")
+            && pr_workflow.contains("run: task --silent ci:pr:verification\n")
+            && pr_workflow.contains("run: task --silent ci:pr:verification:tooling\n")
+            && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+            && pr_workflow
+                .contains("run: task --silent ci:pr:tests:policy-with-delivery-helpers\n")
             && pr_taskfile.contains("ci:pr:verification:tooling:")
             && pr_taskfile.contains("task: preflight:policy:run")
-            && pr_taskfile.contains("ci:pr:tests:policy:")
-            && pr_taskfile.contains("preflight:repository-policy"),
+            && pr_taskfile.contains("ci:pr:tests:policy:"),
         "every consolidated PR route must execute repository policy in both product and policy-only paths"
+    );
+    let policy_only = root.task_body(
+        &pr_taskfile,
+        "ci:pr:tests:policy-with-delivery-helpers",
+        "ci:pr:delivery-helpers",
+    )?;
+    assert!(
+        policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
+            && root
+                .task_body(
+                    &pr_taskfile,
+                    "ci:pr:tests:policy",
+                    "ci:pr:tests:policy-with-delivery-helpers",
+                )?
+                .contains(
+                    "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy"
+                ),
+        "policy-only PR tests must delegate to the policy dependency and delivery helpers"
     );
     assert!(workflow.contains("workflow_call:"));
     assert!(

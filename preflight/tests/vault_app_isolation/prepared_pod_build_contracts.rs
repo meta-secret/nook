@@ -1,6 +1,28 @@
 use super::hosted_delivery_contracts;
 use super::*;
 
+struct PreparedPodBuildScenario<'a> {
+    root: &'a Path,
+}
+
+impl PreparedPodBuildScenario<'_> {
+    fn assert_pr_post_test_fanout(&self) {
+        let pr_workflow = self.root.read(".github/workflows/pr.yml");
+        let pr_tasks = self.root.read("nook-app/ci/pr.yml");
+        let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
+        assert!(
+            pr_workflow.contains("run: task --silent ci:pr:post-tests")
+                && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
+                && !pr_workflow.contains("Publish exact-source PR browser job image")
+                && !pr_workflow.contains("Upload preview dist handoff")
+                && post_tests.contains(
+                    "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+                ),
+            "PR must fan out verified artifacts locally and deploy them in the same job"
+        );
+    }
+}
+
 #[test]
 #[expect(
     clippy::too_many_lines,
@@ -12,6 +34,10 @@ use super::*;
 )]
 fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
+    PreparedPodBuildScenario {
+        root: root.as_ref(),
+    }
+    .assert_pr_post_test_fanout();
     let release = root.read(".github/workflows/release.yml");
     assert_eq!(
         release.matches("WASM_BUILD_MODE: prod").count(),
@@ -159,11 +185,8 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
     let pr_workflow = root.read(".github/workflows/pr.yml");
-    let pr_tasks = root.read("nook-app/ci/pr.yml");
-    let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
-    let pr_ui_demo = pr_workflow.as_str();
     assert!(
-        !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
+        !pr_workflow.contains("context.payload") && !pr_workflow.contains("context.issue"),
         "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
     );
     assert!(
@@ -205,16 +228,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         );
     }
 
-    assert!(
-        pr_workflow.contains("run: task --silent ci:pr:post-tests")
-            && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
-            && !pr_workflow.contains("Publish exact-source PR browser job image")
-            && !pr_workflow.contains("Upload preview dist handoff")
-            && post_tests.contains(
-                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
-            ),
-        "PR must fan out verified artifacts locally and deploy them in the same job"
-    );
     for required in [
         "VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev",
         "VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev",

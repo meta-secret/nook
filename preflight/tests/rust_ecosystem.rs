@@ -179,58 +179,63 @@ impl RustEcosystemFixture {
             root,
         })
     }
+
+    fn assert_pr_phase_barriers_and_post_test_fanout(&self) -> anyhow::Result<()> {
+        let phase_markers = [
+            "run: task --silent ci:pr:verification\n",
+            "run: task --silent ci:pr:tests\n",
+            "run: task --silent ci:pr:post-tests\n",
+        ];
+        let mut previous_phase = None;
+        for marker in phase_markers {
+            let guarded_marker = format!(
+                "if: steps.browser-scope.outputs.validation == 'true'\n        {}",
+                marker.trim_end()
+            );
+            let phase = self
+                .pr
+                .find(marker)
+                .unwrap_or_else(|| panic!("PR workflow is missing phase barrier: {marker}"));
+            assert!(
+                self.pr.contains(&guarded_marker),
+                "Product PR phase must retain its validation guard: {marker}"
+            );
+            assert!(
+                previous_phase.is_none_or(|previous| previous < phase),
+                "PR workflow phase barriers must remain ordered: {marker}"
+            );
+            previous_phase = Some(phase);
+        }
+        let post_tests = self
+            .pr_tasks
+            .split_once("  ci:pr:post-tests:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
+            .map(|(task, _)| task)
+            .ok_or_else(|| anyhow::anyhow!("post-test PR task block is missing"))?;
+        assert!(
+            post_tests.contains(
+                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+            ),
+            "The post-test barrier must execute heavy verification and stage coverage/browser artifacts concurrently"
+        );
+        let heavy = self
+            .pr_tasks
+            .split_once("  ci:pr:heavy:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:coverage:export:"))
+            .map(|(task, _)| task)
+            .ok_or_else(|| anyhow::anyhow!("heavy PR task block is missing"))?;
+        assert!(
+            heavy.contains("PR_BAKE_TARGET: pr-heavy"),
+            "The post-test fan-out must retain the heavy Bake target"
+        );
+        Ok(())
+    }
 }
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let fixture = RustEcosystemFixture::load()?;
-
-    let phase_markers = [
-        "run: task --silent ci:pr:verification\n",
-        "run: task --silent ci:pr:tests\n",
-        "run: task --silent ci:pr:post-tests\n",
-    ];
-    let mut previous_phase = None;
-    for marker in phase_markers {
-        let guarded_marker = format!(
-            "if: steps.browser-scope.outputs.validation == 'true'\n        {}",
-            marker.trim_end()
-        );
-        let phase = fixture
-            .pr
-            .find(marker)
-            .unwrap_or_else(|| panic!("PR workflow is missing phase barrier: {marker}"));
-        assert!(
-            fixture.pr.contains(&guarded_marker),
-            "Product PR phase must retain its validation guard: {marker}"
-        );
-        assert!(
-            previous_phase.is_none_or(|previous| previous < phase),
-            "PR workflow phase barriers must remain ordered: {marker}"
-        );
-        previous_phase = Some(phase);
-    }
-    let post_tests = fixture
-        .pr_tasks
-        .split_once("  ci:pr:post-tests:\n")
-        .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
-        .map(|(task, _)| task)
-        .ok_or_else(|| anyhow::anyhow!("post-test PR task block is missing"))?;
-    assert!(
-        post_tests
-            .contains("task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",),
-        "The post-test barrier must execute heavy verification and stage coverage/browser artifacts concurrently"
-    );
-    let heavy = fixture
-        .pr_tasks
-        .split_once("  ci:pr:heavy:\n")
-        .and_then(|(_, rest)| rest.split_once("\n  ci:pr:coverage:export:"))
-        .map(|(task, _)| task)
-        .ok_or_else(|| anyhow::anyhow!("heavy PR task block is missing"))?;
-    assert!(
-        heavy.contains("PR_BAKE_TARGET: pr-heavy"),
-        "The post-test fan-out must retain the heavy Bake target"
-    );
+    fixture.assert_pr_phase_barriers_and_post_test_fanout()?;
     assert!(
         fixture
             .entry
