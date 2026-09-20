@@ -154,7 +154,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     for phase in [
         "run: task --silent ci:pr:verification\n",
         "run: task --silent ci:pr:tests\n",
-        "run: task --silent ci:pr:heavy\n",
+        "run: task --silent ci:pr:post-tests\n",
         "run: task --silent ci:pr:browser:full\n",
         "uses: ./.github/actions/nook-pr-preview",
     ] {
@@ -163,7 +163,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             .with_context(|| format!("missing PR phase: {phase}"))?;
         assert!(
             position > previous,
-            "verification, tests, heavy work and preview must be ordered"
+            "verification, tests, post-test fan-out, browser work and preview must be ordered"
         );
         previous = position;
     }
@@ -270,6 +270,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let pr = (root).read(".github/workflows/pr.yml");
+    let pr_tasks = (root).read("nook-app/ci/pr.yml");
     let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
     let preflight = rust_host
@@ -308,7 +309,13 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    assert!(pr.contains("task --silent ci:pr:browser:prepare"));
+    let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
+    assert!(
+        pr.contains("task --silent ci:pr:post-tests")
+            && post_tests.contains(
+                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+            )
+    );
     assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
     assert!(!pr.contains("actions/download-artifact"));
     let deploy = root.read(".github/actions/nook-pr-preview/action.yml");

@@ -159,6 +159,8 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
     );
     let pr_workflow = root.read(".github/workflows/pr.yml");
+    let pr_tasks = root.read("nook-app/ci/pr.yml");
+    let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
     let pr_ui_demo = pr_workflow.as_str();
     assert!(
         !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
@@ -204,11 +206,14 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     }
 
     assert!(
-        pr_workflow.contains("run: task --silent ci:pr:browser:prepare")
+        pr_workflow.contains("run: task --silent ci:pr:post-tests")
             && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
             && !pr_workflow.contains("Publish exact-source PR browser job image")
-            && !pr_workflow.contains("Upload preview dist handoff"),
-        "PR must export verified browser artifacts locally and deploy them in the same job"
+            && !pr_workflow.contains("Upload preview dist handoff")
+            && post_tests.contains(
+                "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+            ),
+        "PR must fan out verified artifacts locally and deploy them in the same job"
     );
     for required in [
         "VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev",
