@@ -118,7 +118,7 @@
   <DetectionCombined />
 {:else if pathname === '/spa'}
   <DetectionSpa />
-{:else if pathname === '/login-with-hidden-header'}
+{:else if pathname === '/login-with-hidden-header' || pathname === '/myaccount/login/'}
   <DetectionHiddenHeaderLogin />
 {:else if pathname === '/' || pathname === '/microsoft-consumer'}
   <DetectionMicrosoftConsumer />

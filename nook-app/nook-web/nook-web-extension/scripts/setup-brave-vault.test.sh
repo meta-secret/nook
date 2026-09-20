@@ -35,4 +35,83 @@ assert_equal() {
 }
 assert_equal "$marker" '/tmp/nook-profile-fixture/.nook-pin-vault-setup'
 
+setup_script="$SCRIPT_DIR/setup-brave-vault.sh"
+driver_script="$SCRIPT_DIR/setup-brave-vault.mjs"
+assert_source_contains() {
+  local source_file="$1"
+  local expected="$2"
+  grep -Fq "$expected" "$source_file" || {
+    echo "expected $source_file to contain: $expected" >&2
+    return 1
+  }
+}
+assert_source_not_contains() {
+  local source_file="$1"
+  local unexpected="$2"
+  if grep -Fq "$unexpected" "$source_file"; then
+    echo "expected $source_file not to contain: $unexpected" >&2
+    return 1
+  fi
+}
+assert_source_order() {
+  local source_file="$1"
+  local first="$2"
+  local second="$3"
+  local first_line second_line
+  first_line="$(grep -nF "$first" "$source_file" | cut -d: -f1 | head -1)"
+  second_line="$(grep -nF "$second" "$source_file" | cut -d: -f1 | head -1)"
+  [ -n "$first_line" ] && [ -n "$second_line" ] && [ "$first_line" -lt "$second_line" ] || {
+    echo "expected $source_file to order '$first' before '$second'" >&2
+    return 1
+  }
+}
+
+# A marker is only a setup hint. The driver must still inspect extension
+# storage so a stale marker can repair pairing after a profile reset.
+assert_source_not_contains "$setup_script" 'if [ -f "$marker" ]; then'
+assert_source_contains "$setup_script" 'NOOK_EXTENSION_SETUP_CDP_URL="$cdp_url"'
+assert_source_contains "$setup_script" 'if [ ! -f "$marker" ]; then'
+assert_source_contains "$setup_script" 'Pairing storage is revalidated on every setup run.'
+assert_source_order "$setup_script" 'NOOK_EXTENSION_REMOTE_DEBUGGING_PORT="$cdp_port"' 'node "$DRIVER"'
+
+# Keep Simple Vault WebAuthn intact while forcing the extension popup through
+# the PIN path, matching e2e/helpers/pin-device.ts.
+assert_source_contains "$driver_script" "globalThis.location?.protocol !== 'chrome-extension:'"
+assert_source_order "$driver_script" "globalThis.location?.protocol !== 'chrome-extension:'" "Object.defineProperty(window, 'PublicKeyCredential'"
+assert_source_contains "$driver_script" "indexedDB.deleteDatabase('nook_extension')"
+assert_source_contains "$driver_script" "database.objectStoreNames.contains('pairing')"
+
+# Preserve the restart → PIN unlock → pairing lifecycle. These contracts are
+# intentionally static: the browser product flow is exercised by the human
+# Brave check, which is not run from this worktree.
+assert_source_order "$driver_script" 'const storage = await readExtensionStorage(context)' 'const popupPage = await context.newPage()'
+assert_source_contains "$driver_script" "device-protection-pin-unlock-btn"
+assert_source_contains "$driver_script" "device-protection-pin-unlock-input"
+assert_source_contains "$driver_script" "device-protection-create-new-choice"
+assert_source_contains "$driver_script" "device-protection-setup-btn"
+assert_source_contains "$driver_script" "approve-extension-device-btn"
+assert_source_contains "$driver_script" "authenticated-shell"
+assert_source_order \
+  "$driver_script" \
+  "device-protection-create-new-choice" \
+  "device-protection-setup-btn"
+assert_source_order "$driver_script" "device-protection-setup-btn" "device-protection-pin-input"
+assert_source_order "$driver_script" "await pinUnlock.click()" "await companionHome.waitFor"
+assert_source_order "$driver_script" "connect-simple-vault-btn" "approve-extension-device-btn"
+
+# An orphaned local vault must take the explicit Create-new workflow before
+# the driver submits a new vault name; it must not assume first-vault UI.
+assert_source_contains "$driver_script" "login-local-unlock-step"
+assert_source_contains "$driver_script" "login-vault-workflow-create"
+assert_source_contains "$driver_script" "login-vault-create-workflow"
+assert_source_contains "$driver_script" "login-vault-name-input"
+assert_source_contains "$driver_script" "login-create-additional-vault-btn"
+assert_source_contains "$driver_script" "Expected one visible Simple Vault create action"
+assert_source_order "$driver_script" "login-vault-workflow-create" "login-vault-create-workflow"
+assert_source_order "$driver_script" "login-vault-create-workflow" "login-vault-name-input"
+assert_source_order \
+  "$driver_script" \
+  "login-vault-create-workflow" \
+  "login-create-additional-vault-btn"
+
 echo 'Brave PIN vault setup selection tests passed'

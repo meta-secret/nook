@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   CompactProgressState,
   AuthenticationGesture,
+  NamecheapWidgetDisplayEligibility,
+  NamecheapWidgetDisplayGate,
   SavedOptionOrdinal,
 } from '../src/lib/auth-widget-policy'
 
@@ -26,5 +28,37 @@ describe('Nook Pilot in-page authorization policy', () => {
   test('uses non-secret ordinals for enrollment backup choices', () => {
     expect(new SavedOptionOrdinal(0).label).toBe('1')
     expect(new SavedOptionOrdinal(2).label).toBe('3')
+  })
+
+  test('keeps the Namecheap landing login drawer suppressed until trusted Sign in activation', () => {
+    const gate = new NamecheapWidgetDisplayGate()
+    const landingRequest = {
+      hostname: 'www.namecheap.com',
+      pathname: '/',
+    }
+
+    expect(gate.eligibility(landingRequest)).toBe(
+      NamecheapWidgetDisplayEligibility.AwaitingTrustedActivation,
+    )
+    gate.observeSignInGesture(new AuthenticationGesture({ isTrusted: false }))
+    expect(gate.eligibility(landingRequest)).toBe(
+      NamecheapWidgetDisplayEligibility.AwaitingTrustedActivation,
+    )
+    gate.observeSignInGesture(new AuthenticationGesture({ isTrusted: true }))
+    expect(gate.eligibility(landingRequest)).toBe(
+      NamecheapWidgetDisplayEligibility.EligibleAfterTrustedActivation,
+    )
+  })
+
+  test('admits a visible Namecheap authentication route without a prior drawer activation', () => {
+    const gate = new NamecheapWidgetDisplayGate()
+    const authenticationRouteRequest = {
+      hostname: 'www.namecheap.com',
+      pathname: '/myaccount/login/',
+    }
+
+    expect(gate.eligibility(authenticationRouteRequest)).toBe(
+      NamecheapWidgetDisplayEligibility.EligibleOnAuthenticationRoute,
+    )
   })
 })

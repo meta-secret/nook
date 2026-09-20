@@ -81,6 +81,56 @@ function backupCodePilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
+function installConnectedDemoRuntimeOverrides(noMatching: boolean): void {
+  const runtime = chrome.runtime
+  const sendMessage = runtime.sendMessage.bind(runtime)
+
+  Reflect.set(
+    runtime,
+    'sendMessage',
+    (message: unknown, callback?: (response: unknown) => void): void => {
+      sendMessage(message, (response: unknown) => {
+        if (
+          message &&
+          typeof message === 'object' &&
+          'type' in message &&
+          typeof message.type === 'string' &&
+          message.type === 'nook:extension-pairing-state-query' &&
+          response &&
+          typeof response === 'object' &&
+          'setup' in response &&
+          typeof response.setup === 'object' &&
+          response.setup
+        ) {
+          callback?.({
+            ...response,
+            setup: {
+              ...response.setup,
+              selectedVaultStoreId: 'store_abcdefghijk',
+            },
+          })
+          return
+        }
+        if (
+          noMatching &&
+          message &&
+          typeof message === 'object' &&
+          'type' in message &&
+          typeof message.type === 'string' &&
+          message.type === 'nook:authentication-workflow-snapshot' &&
+          response &&
+          typeof response === 'object' &&
+          response
+        ) {
+          callback?.({ ...response, loginMatches: { kind: 'ready', count: 0 } })
+          return
+        }
+        callback?.(response)
+      })
+    },
+  )
+}
+
 test('approve backup-code extraction only after a fresh Pilot decision', async ({
   page,
 }) => {
@@ -275,13 +325,16 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
       })
   })
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await page.evaluate(installConnectedDemoRuntimeOverrides, false)
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
+  const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
+  await expect(vaultStatus).toHaveAttribute('data-state', 'vault-locked')
+  await expect(vaultStatus).toHaveText(
+    'Unlock Nook in the companion window, then click Continue with Nook again.',
   )
   await expect
     .poll(() =>
@@ -299,11 +352,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(
-    widget.getByText(
-      'Unlock Nook in the companion window, then click Continue with Nook again.',
-    ),
-  ).toBeVisible()
+  await expect(widget.locator('p.description')).toHaveText(
+    'Unlock Nook in the companion window, then click Continue with Nook again.',
+  )
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
@@ -325,6 +376,45 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByText('Nook Pilot · 3/3')).toBeVisible()
   await expect(widget.getByText('Verifying sign-in')).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('Secure sign-in submitted')
+  await demoBeat(page)
+})
+
+test('shows no matching credentials as a distinct Pilot state', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = loginPilotStubArgs(messages)
+
+  await page.addInitScript(installDemoChromeStub, stubArgs)
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head><title>No matching login</title></head>
+      <body>
+        <main>
+          <h1>Welcome back</h1>
+          <form method="post">
+            <input aria-label="Email" autocomplete="username" type="email" />
+            <input aria-label="Password" autocomplete="current-password" type="password" />
+            <button type="submit">Sign in</button>
+          </form>
+        </main>
+  </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await page.evaluate(installConnectedDemoRuntimeOverrides, true)
+  await injectPilotAutofill(page)
+
+  const widget = page.locator('#nook-auth-widget')
+  const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(vaultStatus).toHaveAttribute(
+    'data-state',
+    'no-matching-credential',
+  )
+  await expect(vaultStatus).toHaveText(
+    'No saved login matches this site yet. Open the vault to add one.',
+  )
   await demoBeat(page)
 })
 

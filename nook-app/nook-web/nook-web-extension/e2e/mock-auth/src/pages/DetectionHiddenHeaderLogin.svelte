@@ -4,6 +4,11 @@
   const SUBMISSION_EVIDENCE_KEY = 'namecheap-submission-evidence'
 
   let error = $state('')
+  let loginDrawerOpen = $state(false)
+
+  function openLoginDrawer(): void {
+    loginDrawerOpen = true
+  }
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
@@ -47,23 +52,28 @@
 
 <form id="aspnetForm" method="post" action="/auth/login" {onsubmit}>
   <header>
-    <div class="gb-dropdown__holder gb-is-opened signin-popover">
-      <input
-        id="header-username"
-        name="LoginUserName"
-        title="Your username"
-        autocomplete="on"
-        value="header-user"
-      />
-      <input
-        id="header-password"
-        name="LoginPassword"
-        title="Your password"
-        type="password"
-        autocomplete="on"
-        value="header-password"
-      />
-    </div>
+    <button id="header-sign-in" type="button" onclick={openLoginDrawer}>
+      Sign in
+    </button>
+    {#if loginDrawerOpen}
+      <div class="gb-dropdown__holder gb-is-opened signin-popover">
+        <input
+          id="header-username"
+          name="LoginUserName"
+          title="Your username"
+          autocomplete="on"
+          value="header-user"
+        />
+        <input
+          id="header-password"
+          name="LoginPassword"
+          title="Your password"
+          type="password"
+          autocomplete="on"
+          value="header-password"
+        />
+      </div>
+    {/if}
     <input
       id="account-search"
       name="search"

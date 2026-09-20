@@ -15,9 +15,34 @@ import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extensio
 
 afterEach(() => {
   document.body.replaceChildren()
+  window.history.replaceState({}, '', '/')
 })
 
 describe('popular-site login shells', () => {
+  test('classifies the live Namecheap ASP.NET login control shape', () => {
+    window.history.replaceState({}, '', '/myaccount/login/')
+    document.body.innerHTML = `<form id="aspnetForm" name="aspnetForm" method="post" action="./"><fieldset class="loginForm"><div data-field="username"><label for="LoginUserName">Username</label><input type="text" name="LoginUserName" maxlength="20" title="Your username" autocomplete="on" placeholder="Username" /></div><div data-field="password"><label for="LoginPassword">Password</label><div><input type="password" name="LoginPassword" maxlength="100" title="Your password" placeholder="Password" autocomplete="on" /></div></div><a href="/myaccount/login/passwordrecovery/">Forgot username or password?</a><input type="submit" name="ctl00$ctl00$ctl00$ctl00$base_content$web_base_content$home_content$page_content_left$ctl02$LoginButton" value="Sign in" id="ctl00_ctl00_ctl00_ctl00_base_content_web_base_content_home_content_page_content_left_ctl02_LoginButton" class="gb-btn gb-btn--primary gb-btn--block nc_login_submit gb-btn--lg" /><input name="hidden_LoginPassword" type="hidden" /></fieldset></form>`
+
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    const [observation] = observations
+    if (!observation) throw new Error('expected Namecheap login observation')
+
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+    })
+    const match = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(match)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
+    if (!('snapshot' in match)) throw new Error('expected matched workflow')
+    expect(match.snapshot.kind).toBe(AuthenticationWorkflowKind.Login)
+  })
+
   test('isolates and classifies the Namecheap login inside its page-wide form', () => {
     document.body.innerHTML = `<style>.gb-dropdown__holder { display: none; }</style><form id="aspnetForm" method="post"><header><div class="gb-dropdown__holder"><input data-ncid="input-login-username" name="LoginUserName" title="Username" /><input data-ncid="input-login-password" name="LoginPassword" title="Password" type="password" /></div><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><div class="gb-scope loginBox nc_login"><div class="gb-panel"><div class="gb-panel__body"><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" class="gb-form-control nc_username nc_username_required" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" class="nc_password nc_password_required handlereturn gb-form-control" /><input id="login-submit" type="submit" value="Sign in" class="nc_login_submit" /></fieldset></div></div></div>
       <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="button">Use a passkey</button><button type="submit">Subscribe</button></footer></form>`

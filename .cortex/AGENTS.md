@@ -20,8 +20,10 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`.
     `web-dev`, and `delivery-pipeline`.
   - Each team has exactly one `gizmo` at `teams/<team>/gizmo/`.
   - Every Team Gizmo reports to Gizmo Prime.
+- **Gizmo Prime**
+  - Uses `gpt-5.6-terra` with `low` reasoning.
 - **Team Gizmos**
-  - Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.
+  - Every Team Gizmo uses `gpt-5.6-terra` with `low` reasoning.
   - It requests Fast mode with `service_tier: fast`.
   - Fast mode resolves as `priority`.
   - Each Team Gizmo owns one team worktree for its packet.
@@ -344,6 +346,37 @@ or relax any repository scope, ownership, or handoff rule.
 
 The active harness owns dynamic admission capacity and actual spawn results.
 
+### Prime delegation invariant
+
+For every worker-executable implementation or review mission, delegation must
+be observable before repository work begins. Gizmo Prime must start the owning
+Team Gizmo through the active harness, and that Team Gizmo must start at least
+one bounded Team Agent through the active harness before any implementation,
+test, or validation command is run. A parent agent's tool availability or a
+written packet is not evidence that a child was started.
+
+If either required child cannot be created or the harness returns no started
+child, the owning Gizmo stops and reports the dispatch blocker. It must not
+continue by implementing, testing, or validating the packet itself. A
+successful dispatch records the child task identity, team scope, and returned
+harness status as ordinary coordination evidence.
+
+### Reuse-first delegation
+
+Before creating a new child, Gizmo inventories active and idle agents visible
+to the current harness and attempts to reuse a compatible existing thread. A
+thread is compatible only when its team identity, model/reasoning assignment,
+canonical feature worktree and branch, and bounded scope match the new packet,
+with no conflicting task still active. Reuse uses the harness follow-up
+operation and records the returned status just like a new dispatch.
+
+The normal mission shape is one reusable Team Gizmo per team and one leaf per
+bounded worker scope. A completed or archived entry in the UI is historical
+unless the harness explicitly reactivates that same thread; its label or prior
+agent type alone is not evidence that it can be reused. Create a new child
+only when no compatible thread can be reactivated or when the new scope would
+conflict with the existing thread.
+
 - Gizmo immediately attempts every dependency-ready Team Gizmo with a
   disjoint scope concurrently. It uses the active harness's current admission
   result.
@@ -368,6 +401,8 @@ The active harness owns dynamic admission capacity and actual spawn results.
     the active harness.
   - The Team Gizmo decomposes only its team's mechanics and dispatches each
     internal Team Agent through the active harness.
+  - The Team Gizmo must return the started Team Agent identity before work
+    begins; a missing child is a blocker, not permission for direct work.
   - This includes implementation and review fixes.
   - Gizmo Prime stops the task and reports the blocker when a required Team
     Agent cannot be created or started.

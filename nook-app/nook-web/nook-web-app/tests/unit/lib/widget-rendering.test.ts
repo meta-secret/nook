@@ -7,6 +7,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import { PilotVaultConnectionKind } from '../../../../nook-web-extension/src/content/autofill/widget-presentation-state'
 import type { AuthenticationWorkflowSnapshotView } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 
 const actions = vi.hoisted(() => ({
@@ -255,7 +256,10 @@ function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
       workflow,
       facts,
       loginMatches,
-      vaultConnection: { connected: true, vaultName: 'Personal' },
+      vaultConnection: {
+        kind: PilotVaultConnectionKind.Connected,
+        vaultName: 'Personal',
+      },
     }
   authenticationWidgetRenderer.renderWidget(args)
 }
@@ -340,7 +344,10 @@ describe('authenticator enrollment workflow', () => {
       workflow,
       facts,
       loginMatches: { kind: 'unavailable' },
-      vaultConnection: { connected: true, vaultName: 'Personal' },
+      vaultConnection: {
+        kind: PilotVaultConnectionKind.Connected,
+        vaultName: 'Personal',
+      },
     }
 
     authenticationWidgetRenderer.renderWidget(args)

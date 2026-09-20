@@ -19,6 +19,11 @@ import {
   passwordFormInteraction,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { simpleVaultRuntime } from '../lib/simple-vault-runtime'
+import {
+  AuthenticationGesture,
+  NamecheapWidgetDisplayEligibility,
+  NamecheapWidgetDisplayGate,
+} from '../lib/auth-widget-policy'
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
@@ -30,6 +35,10 @@ import {
   AUTHENTICATION_VIEWPORT_EVENTS,
   authenticationSurfaceObservation,
 } from './autofill/authentication-surface-observation'
+import {
+  AuthenticationControlActivationDisposition,
+  authenticationControlActivationDisposition,
+} from './autofill/authentication-action-lifecycle'
 import {
   RuntimeMessageDeliveryKind,
   loginPasskeyInteraction,
@@ -70,6 +79,26 @@ type AuthenticationScanRenderLifecycleRequest = {
 }
 
 type AuthenticationMutationRecords = MutationRecord[]
+
+/** Owns trusted recognition of Namecheap's same-document Sign in drawer control. */
+class NamecheapLoginDrawerActivation {
+  constructor(private readonly gate: NamecheapWidgetDisplayGate) {}
+
+  observe(event: MouseEvent): boolean {
+    if (!new AuthenticationGesture(event).trusted) return false
+    const target = event.target
+    if (!(target instanceof Element)) return false
+    const control = target.closest(
+      'a, button, input[type="button"], input[type="submit"], [role="button"]',
+    )
+    if (!(control instanceof HTMLElement)) return false
+    const label =
+      control instanceof HTMLInputElement ? control.value : control.textContent
+    if (label?.trim().toLowerCase() !== 'sign in') return false
+    this.gate.observeSignInGesture(new AuthenticationGesture(event))
+    return true
+  }
+}
 
 class AuthenticationScanRenderLifecycle {
   constructor(
@@ -153,6 +182,19 @@ class AuthenticationScanRenderLifecycle {
     if (workflowForms.length === 0) {
       removeScannedWidget()
       return AuthenticationScanOutcome.Removed
+    }
+    const namecheapDisplayRequest: Parameters<
+      typeof namecheapWidgetDisplayGate.eligibility
+    >[0] = {
+      hostname: location.hostname,
+      pathname: location.pathname,
+    }
+    if (
+      namecheapWidgetDisplayGate.eligibility(namecheapDisplayRequest) ===
+      NamecheapWidgetDisplayEligibility.AwaitingTrustedActivation
+    ) {
+      removeScannedWidget()
+      return AuthenticationScanOutcome.Suppressed
     }
 
     const classifiedRequest: ConstructorParameters<
@@ -298,6 +340,7 @@ class AuthenticationScanRenderLifecycle {
         impactRequest,
       )
     if (!impact.shouldScheduleScan) return
+    this.request.scanState.invalidatePendingScan()
     if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
       this.invalidateRenderedAuthenticationAction()
       removeScannedWidget()
@@ -319,6 +362,46 @@ class AuthenticationScanRenderLifecycle {
     this.schedule()
   }
 
+  handleAuthenticationControlActivation(target: Event['target']): void {
+    const renderedWorkflow =
+      widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+        ? widgetState.renderedWorkflowRoot.observation
+        : false
+    if (!renderedWorkflow || !(target instanceof Element)) return
+    const control = target.closest(
+      'a[href], button, input[type="submit"], input[type="button"], [role="button"]',
+    )
+    if (!(control instanceof HTMLElement)) return
+    const mountedHost =
+      widgetState.host.kind === WidgetHostKind.Attached
+        ? widgetState.host.mountedElement
+        : false
+    const boundary =
+      authenticationSurfaceObservation.authenticationWorkflowBoundary(
+        renderedWorkflow,
+      )
+    const dispositionRequest: Parameters<
+      typeof authenticationControlActivationDisposition
+    >[0] = {
+      controlTouchesRenderedWorkflow:
+        boundary instanceof Node && boundary.contains(control),
+      controlBelongsToMountedWidget: Boolean(
+        mountedHost && mountedHost.contains(control),
+      ),
+      credentialActuationInFlight: widgetState.credentialActuationInFlight,
+    }
+    if (
+      authenticationControlActivationDisposition(dispositionRequest) !==
+      AuthenticationControlActivationDisposition.Invalidate
+    ) {
+      return
+    }
+    this.invalidateRenderedAuthenticationAction()
+    this.request.scanState.invalidatePendingScan()
+    removeScannedWidget()
+    this.schedule()
+  }
+
   private invalidateRenderedAuthenticationAction(): void {
     widgetState.busy = false
     authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -330,6 +413,10 @@ const authenticationScanRenderLifecycleRequest: AuthenticationScanRenderLifecycl
   { scanState }
 const authenticationScanRenderLifecycle = new AuthenticationScanRenderLifecycle(
   authenticationScanRenderLifecycleRequest,
+)
+const namecheapWidgetDisplayGate = new NamecheapWidgetDisplayGate()
+const namecheapLoginDrawerActivation = new NamecheapLoginDrawerActivation(
+  namecheapWidgetDisplayGate,
 )
 
 function handleViewportChange(): void {
@@ -367,6 +454,17 @@ void companionWasmReady.then(async () => {
   document.addEventListener(
     'submit',
     loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    true,
+  )
+  document.addEventListener(
+    'click',
+    (event) => {
+      authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
+        event.target,
+      )
+      if (!namecheapLoginDrawerActivation.observe(event)) return
+      authenticationScanRenderLifecycle.schedule()
+    },
     true,
   )
   void authenticationScanRenderLifecycle.scanAndRender()

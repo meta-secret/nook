@@ -8,6 +8,16 @@ from that commit. Child worktrees start from the current parent frontier.
 
 ## Required actions
 
+- Inventory active and idle compatible threads before spawning. Reuse an
+  existing Team Gizmo or leaf through the harness follow-up operation when its
+  team, model/reasoning, worktree/branch, and bounded scope match; create a new
+  child only when no compatible thread can be reactivated or the scope would
+  conflict.
+- Before any implementation, test, or validation command, Prime must have an
+  active-harness result for the owning Team Gizmo and the Team Gizmo must have
+  an active-harness result for at least one bounded Team Agent. Record each
+  started child identity and scope. If either child is missing, stop and report
+  the dispatch blocker instead of continuing directly.
 - Route every high-level packet through the owning Team Gizmo.
 - Give each leaf one team identity, bounded scope, issued worktree, and named
   acceptance evidence.

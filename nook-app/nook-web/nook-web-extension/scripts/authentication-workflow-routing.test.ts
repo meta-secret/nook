@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotIngress } from '../src/lib/auth-workflow-messages'
 import {
   authenticationWorkflowMessageResponse,
@@ -6,6 +7,8 @@ import {
 } from '../src/background/service-worker/authentication-workflow-routing'
 import { MatchingPasskeyAvailabilityKind } from '../src/background/service-worker/passkey-availability'
 import { AuthenticationWorkflowSnapshotKind } from '../src/background/vault-runtime'
+
+await companionWasmReady
 
 const messageAdmission = AuthenticationWorkflowSnapshotIngress.admit({
   type: 'nook:authentication-workflow-snapshot',

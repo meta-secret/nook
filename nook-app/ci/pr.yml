@@ -120,4 +120,4 @@ tasks:
     env:
       E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
     cmds:
-      - task: _extension:test:e2e:file
+      - E2E_SPEC=e2e/mock-auth-pilot-coverage.spec.ts task --silent _extension:test:e2e:file

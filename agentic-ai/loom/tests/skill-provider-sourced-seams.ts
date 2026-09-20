@@ -250,7 +250,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
-    '6b977f77b3e2724e71ee6bc4011946ff60ff46398f0940307b9cf7fd20a7c153',
+    'e8d392f86a032d510038d55a8eb1f7d1a0dbd472f5a5362c1829a11c11df501b',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
@@ -281,7 +281,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
   },
   {
-    digest: '6b977f77b3e2724e71ee6bc4011946ff60ff46398f0940307b9cf7fd20a7c153',
+    digest: 'e8d392f86a032d510038d55a8eb1f7d1a0dbd472f5a5362c1829a11c11df501b',
     marker: '$SCRIPT_DIR/setup-brave-vault.sh',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh',

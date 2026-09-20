@@ -32,6 +32,7 @@ use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 pub use handoff_stages::{
     NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
+    NookExtensionIdentityHandoffProviderOutcome, NookExtensionIdentityHandoffProviderOutcomeState,
     NookPendingExtensionIdentityHandoff,
 };
 use nook_core::{

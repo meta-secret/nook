@@ -9,6 +9,9 @@ upward to Prime for team-scoped delivery mechanics.
 Ownership decides who changes code, Cortex, tests, and configuration. Gizmo
 coordinates delivery but does not redefine a team's technical contract.
 
+Gizmo Prime and Team Gizmos use `gpt-5.6-terra` with `low` reasoning, while
+leaf Team Agents use `gpt-5.6-luna` with `xhigh` reasoning.
+
 ## Universal rules
 
 - Follow [feature pull-request delivery](dev-delivery.md) for the complete
@@ -49,12 +52,17 @@ coordinates delivery but does not redefine a team's technical contract.
 ### Canonical team topology
 
 Gizmo Prime creates or reuses exactly one Team Gizmo per team. Every Team Gizmo
-uses `gpt-5.6-sol` with `low` reasoning and requests Fast mode with
+uses `gpt-5.6-terra` with `low` reasoning and requests Fast mode with
 `service_tier: fast`, which resolves as `priority`. Each Team Gizmo owns one
 team worktree.
-Team Gizmos require complex professional coordination, conflict and integration
-judgment, and fail-closed delivery decisions, so `gpt-5.6-sol` is canonical over
-`gpt-5.6-terra`'s intelligence/cost balance.
+Prime inventories active or idle compatible Team Gizmos and reuses one before
+creating a new child. Team Gizmos apply the same reuse-first rule to leaf
+workers. Reuse requires matching team identity, model/reasoning, canonical
+worktree and branch, and bounded scope; a historical completed entry is not
+reusable unless the harness explicitly reactivates its thread.
+Team Gizmos use Terra for coordination, conflict and integration judgment, and
+fail-closed delivery decisions. The active harness still owns admission,
+backpressure, and the boundary between Team Gizmos and leaf agents.
 Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast
 mode with `service_tier: fast`, which resolves as `priority`. Each leaf receives
 a separate issued child worktree. A Team Gizmo may dispatch disjoint specialists

@@ -103,7 +103,12 @@ impl AuthenticationControlIdentity<'_> {
                     && (!segments.iter().take(index).all(|prefix| {
                         matches!(
                             prefix.as_str(),
-                            "account" | "auth" | "authentication" | "common" | "users"
+                            "account"
+                                | "auth"
+                                | "authentication"
+                                | "common"
+                                | "myaccount"
+                                | "users"
                         ) || is_version(prefix)
                     }) || !has_local_tail)
             });
@@ -251,6 +256,9 @@ mod tests {
         for (route, expected) in [
             ("/auth/login/identifier", false),
             ("/auth/v2/login/password", false),
+            ("/myaccount/login/", false),
+            ("/unknown/login/", true),
+            ("/myaccount/login/custom", true),
             ("/auth/login/custom", true),
             ("/auth/login?connection=local", true),
             ("/auth/login#provider=unknown", true),

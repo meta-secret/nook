@@ -132,6 +132,9 @@ class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   private scheduleStartedAt = 0
   sequence = 0
+  invalidatePendingScan(): void {
+    this.sequence += 1
+  }
   schedule: (mutations?: AuthenticationScanMutationBatch) => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule

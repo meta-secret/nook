@@ -1,10 +1,17 @@
 import { describe, expect, test } from 'vitest'
 import { Effect } from 'effect'
+import { NookExtensionIdentityHandoffProviderOutcomeState } from '$app-wasm'
 import {
   IdentityHandoffResponseDecodeFailureKind,
   identityHandoffResponseDecoder,
   companionResponseDecoder,
 } from '$lib/extension/connect'
+import type { ExtensionRuntimeResponseObject } from '../../../../nook-web-shared/src/vault-app/lib/extension/extension-response-decoders'
+
+interface IdentityHandoffProviderRejectionCase {
+  readonly response: ExtensionRuntimeResponseObject
+  readonly state: NookExtensionIdentityHandoffProviderOutcomeState
+}
 
 describe('extension identity handoff response decoding', () => {
   test('decodes a successful identity handoff response', () => {
@@ -43,6 +50,49 @@ describe('extension identity handoff response decoding', () => {
       expect(decoded.left.kind).toBe(
         IdentityHandoffResponseDecodeFailureKind.InvalidResponse,
       )
+    }
+  })
+
+  test('decodes provider rejection reasons through the Rust-owned outcome', () => {
+    const rejectionCases: readonly IdentityHandoffProviderRejectionCase[] = [
+      {
+        response: {
+          ok: false,
+          reason: 'extension-identity-unavailable',
+        },
+        state:
+          NookExtensionIdentityHandoffProviderOutcomeState.RetryAfterUnlock,
+      },
+      {
+        response: {
+          ok: false,
+          reason: 'extension-identity-handoff-not-issued',
+        },
+        state: NookExtensionIdentityHandoffProviderOutcomeState.RepairPairing,
+      },
+      {
+        response: {
+          ok: false,
+          reason: 'extension-identity-handoff-failed',
+        },
+        state: NookExtensionIdentityHandoffProviderOutcomeState.Unavailable,
+      },
+    ]
+
+    for (const rejectionCase of rejectionCases) {
+      const decoded = Effect.runSync(
+        Effect.either(
+          identityHandoffResponseDecoder.decode(rejectionCase.response),
+        ),
+      )
+
+      expect(decoded._tag).toBe('Right')
+      if (decoded._tag === 'Right') {
+        expect(decoded.right).toEqual({
+          ok: false,
+          state: rejectionCase.state,
+        })
+      }
     }
   })
 })

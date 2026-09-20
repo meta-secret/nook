@@ -101,6 +101,25 @@ async function readExtensionStorage(context) {
 /** @param {Page} page */
 async function advanceCreateVaultWizardToFinalStep(page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
+  const existingVaultUnlock = page.getByTestId('login-local-unlock-step')
+  await chooser.or(existingVaultUnlock).first().waitFor({
+    state: 'visible',
+    timeout: TIMEOUT_MS,
+  })
+
+  if (await existingVaultUnlock.isVisible()) {
+    await page.getByTestId('login-vault-workflow-create').click()
+    await page.getByTestId('login-vault-create-workflow').waitFor({
+      state: 'visible',
+      timeout: TIMEOUT_MS,
+    })
+    await page.getByTestId('login-vault-name-input').waitFor({
+      state: 'visible',
+      timeout: TIMEOUT_MS,
+    })
+    return
+  }
+
   await chooser.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
 
   const finalStep = page.getByTestId('create-vault-wizard-create')
@@ -119,22 +138,34 @@ async function advanceCreateVaultWizardToFinalStep(page) {
 /** @param {Page} popupPage */
 async function ensurePinProtectedPopup(popupPage) {
   const companionHome = popupPage.getByTestId('extension-toolbar-menu')
-  if (await companionHome.isVisible().catch(() => false)) {
-    return
-  }
-
   const pinUnlock = popupPage.getByTestId('device-protection-pin-unlock-btn')
-  if (await pinUnlock.isVisible().catch(() => false)) {
+  const initialSetup = popupPage.getByTestId(
+    'device-protection-create-new-choice',
+  )
+  await companionHome.or(pinUnlock).or(initialSetup).first().waitFor({
+    state: 'visible',
+    timeout: TIMEOUT_MS,
+  })
+
+  const visibleSurfaceCount = [
+    await companionHome.isVisible(),
+    await pinUnlock.isVisible(),
+    await initialSetup.isVisible(),
+  ].filter((isVisible) => isVisible).length
+  if (visibleSurfaceCount !== 1) {
+    throw new Error(
+      `Expected one extension device-protection surface, found ${visibleSurfaceCount}.`,
+    )
+  }
+  if (await companionHome.isVisible()) return
+  if (await pinUnlock.isVisible()) {
     await popupPage.getByTestId('device-protection-pin-unlock-input').fill(pin)
     await pinUnlock.click()
     await companionHome.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
     return
   }
 
-  await popupPage
-    .getByTestId('extension-device-setup')
-    .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
-  await popupPage.getByTestId('device-protection-create-new-choice').click()
+  await initialSetup.click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
   await popupPage
     .getByTestId('device-protection-pin-input')
@@ -171,7 +202,30 @@ async function createAndApproveVault(context, popupPage) {
   if (!(await consent.isVisible().catch(() => false))) {
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    const initialVaultCreate = simplePage.getByTestId(
+      'login-create-device-vault-btn',
+    )
+    const additionalVaultCreate = simplePage.getByTestId(
+      'login-create-additional-vault-btn',
+    )
+    await initialVaultCreate.or(additionalVaultCreate).first().waitFor({
+      state: 'visible',
+      timeout: TIMEOUT_MS,
+    })
+    const additionalVaultCreateVisible = await additionalVaultCreate.isVisible()
+    const initialVaultCreateVisible = await initialVaultCreate.isVisible()
+    const visibleCreateActionCount =
+      Number(additionalVaultCreateVisible) + Number(initialVaultCreateVisible)
+    if (additionalVaultCreateVisible === initialVaultCreateVisible) {
+      throw new Error(
+        `Expected one visible Simple Vault create action, found ${visibleCreateActionCount}.`,
+      )
+    }
+    if (additionalVaultCreateVisible) {
+      await additionalVaultCreate.click()
+    } else if (initialVaultCreateVisible) {
+      await initialVaultCreate.click()
+    }
     await consent.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
   }
 
@@ -190,7 +244,9 @@ async function main() {
   }
 
   // Force the extension popup onto the PIN fallback (no OS passkey ceremony).
+  // Simple Vault still needs WebAuthn to boot and unlock its own vault.
   await context.addInitScript(() => {
+    if (globalThis.location?.protocol !== 'chrome-extension:') return
     Object.defineProperty(window, 'PublicKeyCredential', {
       configurable: true,
       get: () => false,

@@ -62,6 +62,7 @@ import {
   admit_companion_handoff_response,
   admit_companion_identity_status,
   NookExtensionIdentityHandoffContext,
+  NookExtensionIdentityHandoffProviderOutcomeState,
   type CompanionIdentityDiscoveryObservation,
   type CompanionIdentityDiscoveryRequest,
   type CompanionWebsiteHandoffBegin,
@@ -524,6 +525,13 @@ class ExtensionConnectionBrowser {
           ),
         );
         if (decodedResponse._tag === "Right") {
+          if (!decodedResponse.right.ok) {
+            return err(
+              this.identityHandoffFailureForProviderOutcome(
+                decodedResponse.right.state,
+              ),
+            );
+          }
           const identityEnvelope: ExtensionIdentityEnvelope = {
             envelope: decodedResponse.right.envelope,
             nextNonce: decodedResponse.right.nextNonce,
@@ -543,6 +551,22 @@ class ExtensionConnectionBrowser {
           ),
         ),
     );
+  }
+
+  private identityHandoffFailureForProviderOutcome(
+    state: NookExtensionIdentityHandoffProviderOutcomeState,
+  ): VaultStorageFailure {
+    switch (state) {
+      case NookExtensionIdentityHandoffProviderOutcomeState.RetryAfterUnlock:
+      case NookExtensionIdentityHandoffProviderOutcomeState.Unavailable:
+        return new VaultStorageFailure(
+          VaultStorageFailureKind.IdentityHandoffUnavailable,
+        );
+      case NookExtensionIdentityHandoffProviderOutcomeState.RepairPairing:
+        return new VaultStorageFailure(
+          VaultStorageFailureKind.IdentityHandoffRejected,
+        );
+    }
   }
 
   private async completePairedIdentityAdoption({

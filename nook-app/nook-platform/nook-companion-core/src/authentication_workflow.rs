@@ -302,11 +302,6 @@ impl AuthenticationWorkflowSnapshot {
     #[must_use]
     pub fn requires_login_match_availability(self) -> bool {
         self.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
-            && matches!(
-                self.action,
-                AuthenticationWorkflowAction::UsePasskey
-                    | AuthenticationWorkflowAction::CreatePasskey
-            )
     }
 
     #[must_use]
@@ -357,6 +352,44 @@ mod tests {
         assert_eq!(roundtrip, workflow);
         Ok(())
     }
+
+    #[test]
+    fn saved_login_match_availability_includes_continue_workflows() {
+        let continue_with_saved_login = AuthenticationWorkflowSnapshot {
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1.into(),
+            total_steps: 3.into(),
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+            observation_index: 0.into(),
+        };
+
+        assert!(continue_with_saved_login.requires_login_match_availability());
+        assert!(
+            AuthenticationWorkflowSnapshot {
+                action: AuthenticationWorkflowAction::UsePasskey,
+                ..continue_with_saved_login
+            }
+            .requires_login_match_availability()
+        );
+        assert!(
+            AuthenticationWorkflowSnapshot {
+                action: AuthenticationWorkflowAction::CreatePasskey,
+                ..continue_with_saved_login
+            }
+            .requires_login_match_availability()
+        );
+        assert!(
+            !AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..continue_with_saved_login
+            }
+            .requires_login_match_availability()
+        );
+    }
+
     #[test]
     fn ignores_pages_without_authentication_fields() {
         assert_eq!(
