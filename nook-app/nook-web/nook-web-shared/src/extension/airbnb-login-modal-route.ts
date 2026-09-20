@@ -121,12 +121,21 @@ class AirbnbLoginModalRouteDetector {
   }
 
   private dialogIsRendered(dialog: HTMLElement): boolean {
-    return (
-      !dialog.hidden &&
-      !dialog.hasAttribute("inert") &&
-      dialog.getAttribute("aria-hidden") !== "true" &&
-      dialog.getAttribute("aria-disabled") !== "true"
-    );
+    let element: HTMLElement = dialog;
+    for (;;) {
+      if (
+        element.hidden ||
+        element.hasAttribute("inert") ||
+        element.inert ||
+        element.getAttribute("aria-hidden") === "true" ||
+        element.getAttribute("aria-disabled") === "true"
+      ) {
+        return false;
+      }
+      const parent = element.parentElement;
+      if (!(parent instanceof HTMLElement)) return true;
+      element = parent;
+    }
   }
 
   private hasAirbnbIdentityField(form: HTMLFormElement): boolean {
