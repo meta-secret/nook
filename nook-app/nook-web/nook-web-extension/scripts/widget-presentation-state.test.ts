@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import type { AuthenticationWorkflowRoutingResponse } from '../src/background/service-worker/authentication-workflow-routing'
-import {
-  type WebsiteLoginMatchAvailability,
-} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { type WebsiteLoginMatchAvailability } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PilotVaultConnectionKind,
   WidgetVaultPresentationKind,
@@ -145,7 +143,9 @@ describe('authentication widget vault presentation', () => {
       ).state()
 
       expect(presentation).toEqual(routingCase.expected)
-      expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Unavailable)
+      expect(presentation.kind).not.toBe(
+        WidgetVaultPresentationKind.Unavailable,
+      )
       expect(presentation.kind).not.toBe(WidgetVaultPresentationKind.Connected)
     }
   })

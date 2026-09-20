@@ -1,6 +1,4 @@
-import {
-  type WebsiteLoginMatchAvailability,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { type WebsiteLoginMatchAvailability } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum PilotVaultConnectionKind {
   NotConnected = 'not-connected',

@@ -71,16 +71,18 @@ export async function ensurePinProtectedPopup(
   }
   const entrySurface = classifyPinDeviceEntrySurface(surfaceObservation)
   if (entrySurface === PinDeviceEntrySurfaceKind.Waiting) {
-    throw new Error('Extension popup did not expose a device-protection surface.')
+    throw new Error(
+      'Extension popup did not expose a device-protection surface.',
+    )
   }
   if (entrySurface === PinDeviceEntrySurfaceKind.Ambiguous) {
-    throw new Error('Extension popup exposed multiple device-protection surfaces.')
+    throw new Error(
+      'Extension popup exposed multiple device-protection surfaces.',
+    )
   }
   if (entrySurface === PinDeviceEntrySurfaceKind.CompanionHome) return
   if (entrySurface === PinDeviceEntrySurfaceKind.PinUnlock) {
-    await popupPage
-      .getByTestId('device-protection-pin-unlock-input')
-      .fill(pin)
+    await popupPage.getByTestId('device-protection-pin-unlock-input').fill(pin)
     await pinUnlock.click()
     await expect(companionHome).toBeVisible({ timeout: 45_000 })
     return

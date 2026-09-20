@@ -56,23 +56,23 @@
       Sign in
     </button>
     {#if loginDrawerOpen}
-    <div class="gb-dropdown__holder gb-is-opened signin-popover">
-      <input
-        id="header-username"
-        name="LoginUserName"
-        title="Your username"
-        autocomplete="on"
-        value="header-user"
-      />
-      <input
-        id="header-password"
-        name="LoginPassword"
-        title="Your password"
-        type="password"
-        autocomplete="on"
-        value="header-password"
-      />
-    </div>
+      <div class="gb-dropdown__holder gb-is-opened signin-popover">
+        <input
+          id="header-username"
+          name="LoginUserName"
+          title="Your username"
+          autocomplete="on"
+          value="header-user"
+        />
+        <input
+          id="header-password"
+          name="LoginPassword"
+          title="Your password"
+          type="password"
+          autocomplete="on"
+          value="header-password"
+        />
+      </div>
     {/if}
     <input
       id="account-search"

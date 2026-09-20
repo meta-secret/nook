@@ -159,9 +159,7 @@ async function ensurePinProtectedPopup(popupPage) {
   }
   if (await companionHome.isVisible()) return
   if (await pinUnlock.isVisible()) {
-    await popupPage
-      .getByTestId('device-protection-pin-unlock-input')
-      .fill(pin)
+    await popupPage.getByTestId('device-protection-pin-unlock-input').fill(pin)
     await pinUnlock.click()
     await companionHome.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
     return

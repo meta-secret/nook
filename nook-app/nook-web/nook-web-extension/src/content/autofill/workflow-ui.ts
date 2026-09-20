@@ -178,9 +178,13 @@ class WorkflowUi {
   vaultConnectionLabel(presentation: WidgetVaultPresentation): string {
     switch (presentation.kind) {
       case WidgetVaultPresentationKind.NotConnected:
-        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected)
+        return this.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected,
+        )
       case WidgetVaultPresentationKind.Locked:
-        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue)
+        return this.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue,
+        )
       case WidgetVaultPresentationKind.NoMatchingCredential:
         return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch)
       case WidgetVaultPresentationKind.Unavailable:
