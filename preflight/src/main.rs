@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::env;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::io;
-use std::path::PathBuf;
 use std::process;
 
 fn main() {
@@ -28,12 +27,10 @@ impl PreflightCommand {
         Self { command, options }.execute()
     }
     fn execute(self) -> io::Result<()> {
-        let Self { command, options } = self;
-        match command.as_str() {
-            _ => Err(PreflightCommand::usage(&format!(
-                "unknown command {command}"
-            ))),
-        }
+        let Self { command, .. } = self;
+        Err(PreflightCommand::usage(&format!(
+            "unknown command {command}"
+        )))
     }
 }
 
@@ -62,32 +59,6 @@ impl PreflightCommand {
             }
         }
         Ok(options)
-    }
-}
-
-impl PreflightCommand {
-    fn required<'a>(options: &'a HashMap<String, OsString>, name: &str) -> io::Result<&'a OsStr> {
-        options
-            .get(name)
-            .map(OsString::as_os_str)
-            .ok_or_else(|| PreflightCommand::usage(&format!("missing {name}")))
-    }
-}
-
-impl PreflightCommand {
-    fn required_utf8<'a>(
-        options: &'a HashMap<String, OsString>,
-        name: &str,
-    ) -> io::Result<&'a str> {
-        PreflightCommand::required(options, name)?
-            .to_str()
-            .ok_or_else(|| PreflightCommand::usage(&format!("{name} must be UTF-8")))
-    }
-}
-
-impl PreflightCommand {
-    fn required_path(options: &HashMap<String, OsString>, name: &str) -> io::Result<PathBuf> {
-        PreflightCommand::required(options, name).map(PathBuf::from)
     }
 }
 
