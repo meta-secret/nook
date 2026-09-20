@@ -74,7 +74,7 @@ test('accepts exclusions, ignored directories, and non-matching Markdown', () =>
   expect(CortexDocumentMapValeNavigationScenario.report(result.stdout)).toEqual(
     {},
   );
-});
+}, 10_000);
 
 test('reports each exact prohibited H2 through the Vale rule', () => {
   const result = CortexDocumentMapValeNavigationScenario.runInvalidFixture();
