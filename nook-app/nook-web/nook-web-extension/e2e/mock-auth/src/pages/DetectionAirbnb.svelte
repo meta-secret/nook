@@ -69,7 +69,7 @@
         autocomplete="tel-national"
         bind:value={identity}
       />
-      <button type="submit">Continue</button>
+      <button type="submit" class="airbnb-continue-button">Continue</button>
     </form>
     <button
       type="button"

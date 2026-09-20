@@ -196,6 +196,45 @@ afterEach(() => {
 })
 
 describe('Airbnb DOM-backed authentication simulation', () => {
+  test('canonicalizes the live-shaped classed Continue control on the homepage modal', () => {
+    history.replaceState({}, '', '/')
+    document.body.innerHTML = `
+      <div role="dialog">
+        <form data-testid="airbnb-homepage-auth-form">
+          <label for="phone-or-email">Phone number or email</label>
+          <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
+          <button type="submit" class="airbnb-continue-button">Continue</button>
+        </form>
+      </div>`
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected Airbnb homepage observation')
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const advance = facts.detailedAdvanceControl
+    if (!advance || advance.kind !== 'observed') {
+      throw new Error('expected Airbnb homepage advance-control facts')
+    }
+    expect(advance.observations).toHaveLength(1)
+    expect(advance.observations[0]).toMatchObject({
+      destinationIdentity: 'https://www.airbnb.com/login',
+      label: AirbnbFixtureControl.Continue,
+      machineIdentity: '',
+      submissionDestinationSource: 'omitted',
+      submissionMethod: 'get',
+    })
+    expect(
+      companion_authentication_workflow_match_kind(
+        classify_companion_authentication_workflow_facts({
+          observations: [facts],
+        }),
+      ),
+    ).toBe(CompanionAuthenticationWorkflowMatchKind.Matched)
+  })
+
   test('fills only the associated-label identity and activates Continue once', () => {
     expect(location.href).toBe('https://www.airbnb.com/login')
     const fixture = AirbnbAuthenticationFixture.stable().install()

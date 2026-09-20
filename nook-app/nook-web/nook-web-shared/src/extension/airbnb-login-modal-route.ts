@@ -14,6 +14,11 @@ type AirbnbLoginModalRouteRequest = {
   form: HTMLFormElement;
 };
 
+export type AirbnbLoginModalContinueControlRequest = {
+  form: HTMLFormElement;
+  control: HTMLElement;
+};
+
 type AirbnbLoginModalHomepageActionRequest = {
   form: HTMLFormElement;
   pageUrl: string;
@@ -167,4 +172,20 @@ export function observeAirbnbLoginModalRoute(
   request: AirbnbLoginModalRouteRequest,
 ): AirbnbLoginModalRouteObservation {
   return new AirbnbLoginModalRouteDetector(request).observe();
+}
+
+export function isAirbnbLoginModalContinueControl({
+  form,
+  control,
+}: AirbnbLoginModalContinueControlRequest): boolean {
+  if (
+    observeAirbnbLoginModalRoute({ form }).kind !==
+    AirbnbLoginModalRouteKind.Present
+  ) {
+    return false;
+  }
+  const controls = Array.from(
+    form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'),
+  );
+  return controls.length === 1 && controls[0] === control;
 }

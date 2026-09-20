@@ -20,6 +20,7 @@
       ],
       "submit": {
         "type": "submit",
+        "class": "airbnb-continue-button",
         "label": "Continue"
       }
     }

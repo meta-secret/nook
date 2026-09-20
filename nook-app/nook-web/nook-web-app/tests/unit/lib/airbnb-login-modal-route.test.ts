@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import {
   AirbnbLoginModalRouteKind,
+  isAirbnbLoginModalContinueControl,
   observeAirbnbLoginModalRoute,
 } from '../../../../nook-web-shared/src/extension/airbnb-login-modal-route'
 
@@ -42,7 +43,8 @@ type AirbnbUnsafeActionCase = {
 
 const AIRBNB_IDENTITY_FIELD =
   '<label for="phone-or-email">Phone number or email</label><input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">'
-const AIRBNB_CONTINUE_CONTROL = '<button type="submit">Continue</button>'
+const AIRBNB_CONTINUE_CONTROL =
+  '<button type="submit" class="airbnb-continue-button">Continue</button>'
 
 const AIRBNB_DEFAULT_FIXTURE: AirbnbFormFixture = {
   action: { kind: AirbnbFormActionKind.Omitted },
@@ -109,6 +111,30 @@ describe('Airbnb homepage login modal route detector', () => {
       kind: AirbnbLoginModalRouteKind.Present,
       destinationIdentity: 'https://www.airbnb.com/login',
     })
+  })
+
+  test('canonicalizes only the strict modal Continue control', () => {
+    const form = installAirbnbForm(AIRBNB_DEFAULT_FIXTURE)
+    const control = form.querySelector('button[type="submit"]')
+    if (!(control instanceof HTMLButtonElement)) {
+      throw new Error('expected Airbnb Continue control')
+    }
+    expect(isAirbnbLoginModalContinueControl({ form, control })).toBe(true)
+
+    const genericForm = installAirbnbForm({
+      ...AIRBNB_DEFAULT_FIXTURE,
+      presentation: AirbnbFormPresentationKind.Document,
+    })
+    const genericControl = genericForm.querySelector('button[type="submit"]')
+    if (!(genericControl instanceof HTMLButtonElement)) {
+      throw new Error('expected generic Continue control')
+    }
+    expect(
+      isAirbnbLoginModalContinueControl({
+        form: genericForm,
+        control: genericControl,
+      }),
+    ).toBe(false)
   })
 
   const omittedActionRejections: readonly AirbnbFixtureCase[] = [
