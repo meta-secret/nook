@@ -192,9 +192,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     ];
     let mut previous_phase = None;
     for marker in phase_markers {
-        let guarded_marker = format!(
-            "if: steps.browser-scope.outputs.validation == 'true'\n        {marker}"
-        );
+        let guarded_marker =
+            format!("if: steps.browser-scope.outputs.validation == 'true'\n        {marker}");
         let phase = fixture
             .pr
             .find(marker)
@@ -216,9 +215,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .map(|(task, _)| task)
         .ok_or_else(|| anyhow::anyhow!("post-test PR task block is missing"))?;
     assert!(
-        post_tests.contains(
-            "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
-        ),
+        post_tests
+            .contains("task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",),
         "The post-test barrier must execute heavy verification and stage coverage/browser artifacts concurrently"
     );
     let heavy = fixture
