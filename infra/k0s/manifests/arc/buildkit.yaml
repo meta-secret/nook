@@ -105,35 +105,37 @@ metadata:
   namespace: arc-runners
 data:
   buildkitd.toml: |
+    # Build histories retain cache leases independently from layer age. Bound
+    # them so obsolete solves cannot protect old graphs indefinitely.
+    [history]
+      maxAge = 86400
+      maxEntries = 20
+
     [worker.oci]
       gc = true
-      reservedSpace = "96GB"
-      maxUsedSpace = "120GB"
-      minFreeSpace = "8GB"
+      reservedSpace = "64GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
 
-      # Dependency compilation is stored in ordinary immutable layers. Retain
-      # a large working set so storage-pressure GC does not collapse a warm
-      # worker back to an 8 GB cache between consecutive PR runs.
+      # Cheap contexts age out quickly. Ordinary immutable layers used within
+      # the last day are never eligible, so GC cannot evict the newest build
+      # merely because it is large and unshared.
       [[worker.oci.gcpolicy]]
         filters = ["type==source.local", "type==source.git.checkout"]
-        keepDuration = "48h"
+        keepDuration = "2h"
         maxUsedSpace = "1GB"
       [[worker.oci.gcpolicy]]
         filters = ["type==regular"]
-        keepDuration = "168h"
-        reservedSpace = "96GB"
-        maxUsedSpace = "120GB"
-        minFreeSpace = "8GB"
-      [[worker.oci.gcpolicy]]
-        keepDuration = "1440h"
-        reservedSpace = "96GB"
-        maxUsedSpace = "120GB"
-        minFreeSpace = "8GB"
+        keepDuration = "24h"
+        reservedSpace = "64GB"
+        maxUsedSpace = "112GB"
+        minFreeSpace = "16GB"
       [[worker.oci.gcpolicy]]
         all = true
-        reservedSpace = "96GB"
-        maxUsedSpace = "120GB"
-        minFreeSpace = "8GB"
+        keepDuration = "24h"
+        reservedSpace = "64GB"
+        maxUsedSpace = "112GB"
+        minFreeSpace = "16GB"
 
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]
