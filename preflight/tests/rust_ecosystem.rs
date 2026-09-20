@@ -186,14 +186,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fixture = RustEcosystemFixture::load()?;
 
     let phase_markers = [
-        "run: task --silent ci:pr:verification",
-        "run: task --silent ci:pr:tests",
-        "run: task --silent ci:pr:post-tests",
+        "run: task --silent ci:pr:verification\n",
+        "run: task --silent ci:pr:tests\n",
+        "run: task --silent ci:pr:post-tests\n",
     ];
     let mut previous_phase = None;
     for marker in phase_markers {
-        let guarded_marker =
-            format!("if: steps.browser-scope.outputs.validation == 'true'\n        {marker}");
+        let guarded_marker = format!(
+            "if: steps.browser-scope.outputs.validation == 'true'\n        {}",
+            marker.trim_end()
+        );
         let phase = fixture
             .pr
             .find(marker)

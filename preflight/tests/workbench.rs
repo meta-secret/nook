@@ -108,13 +108,23 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
 #[test]
 fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
-    let pr_workflow = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
-    let publisher_suite =
-        RepositoryFixture::repository_root().read(".github/scripts/workbench-publish.test.cjs");
+    let root = RepositoryFixture::repository_root();
+    let pr_workflow = root.read(".github/workflows/pr.yml");
+    let pr_tasks = root.read("nook-app/ci/pr.yml");
+    let publisher_suite = root.read(".github/scripts/workbench-publish.test.cjs");
+    let delivery_helpers = pr_tasks
+        .split_once("  ci:pr:delivery-helpers:\n")
+        .and_then(|(_, rest)| rest.split_once("\n  ci:pr:heavy:"))
+        .map(|(task, _)| task)
+        .unwrap_or_else(|| panic!("PR delivery-helper task block is missing"));
 
     assert!(
-        pr_workflow.contains("node --test .github/scripts/workbench-publish.test.cjs"),
-        "PR CI must invoke the issue publisher contract suite"
+        pr_workflow.contains("run: task --silent ci:pr:tests\n"),
+        "PR CI must invoke the consolidated PR test phase"
+    );
+    assert!(
+        delivery_helpers.contains("node --test .github/scripts/workbench-publish.test.cjs"),
+        "the consolidated PR test phase must invoke the issue publisher contract suite"
     );
     assert!(
         publisher_suite.contains("rejects non-issue Workbench destination")

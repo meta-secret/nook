@@ -45,6 +45,7 @@ class ArcManifestContract {
       ciWorkflow,
       mainWorkflow,
       prWorkflow,
+      prTasks,
       authSensitiveJob,
       repositoryPolicyWorkflow,
       webResearchWorkflow,
@@ -594,7 +595,7 @@ class ArcManifestContract {
       "'nook-k0s-container' || 'ubuntu-latest'",
       "task --silent ci:pr:verification",
       "task --silent ci:pr:tests",
-      "task --silent ci:pr:heavy",
+      "task --silent ci:pr:post-tests",
       "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
       "steps.browser-scope.outputs.validation == 'true'",
       "task --silent ci:pr:browser:full",
@@ -607,6 +608,10 @@ class ArcManifestContract {
       "nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts",
     ]);
     if (admittedContract30.isErr()) return err(admittedContract30.error);
+    const admittedContract30b = prTasks.require(
+      "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+    );
+    if (admittedContract30b.isErr()) return err(admittedContract30b.error);
     const admittedContract31 = authSensitiveJob.requireAll([
       "!inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'",
       "github.event.pull_request.head.repo.full_name == github.repository",
