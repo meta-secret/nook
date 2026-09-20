@@ -1,4 +1,8 @@
 import { AuthenticationInputSurface } from "./authentication-input-surface";
+import {
+  AirbnbLoginModalRouteKind,
+  observeAirbnbLoginModalRoute,
+} from "./airbnb-login-modal-route";
 import { companionWasmReady } from "./companion-ready";
 import {
   NookLoginContextObservation,
@@ -414,7 +418,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
           looks_like_login_advance_control_label(label),
         ),
       ];
-    const doc = field.ownerDocument;
     const observation = new NookLoginContextObservation(
       form
         ? [
@@ -423,10 +426,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
             ((v) => (v ? v : ""))(form.getAttribute("action")),
             form.name,
           ].join(" ")
-        : "",
+      : "",
       ancestorIdentities,
       authenticationAdvanceControlLabel,
-      `${((v) => (v ? v : ""))(doc.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(doc.defaultView?.location?.hostname)}`,
+      `${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.hostname)}`,
     );
     try {
       return has_login_context(observation);
@@ -444,9 +447,24 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       field.disabled,
       field.readOnly,
       this.autocompleteTokens(field),
-      this.rawFieldIdentityText(field),
+      this.authenticationFieldIdentityText(field),
       loginContext,
     );
+  }
+
+  private authenticationFieldIdentityText(field: HTMLInputElement): string {
+    const form = field.form;
+    if (
+      !form ||
+      observeAirbnbLoginModalRoute({ form }).kind !==
+        AirbnbLoginModalRouteKind.Present
+    ) {
+      return this.rawFieldIdentityText(field);
+    }
+    return [
+      ((v) => (v ? v : ""))(field.getAttribute("autocomplete")),
+      this.associatedLabelText(field),
+    ].join(" ");
   }
 
   usernameEvidence(
