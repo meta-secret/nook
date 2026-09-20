@@ -154,8 +154,16 @@ class DockerizedRustBuildKitContract {
     expect(preflightBuild).toContain(
       "find src tests -type f -name '*.rs' -exec touch {} +",
     );
+    expect(preflightBuild).toContain("cargo fmt --check");
     expect(preflightBuild).toContain("cargo clippy --quiet --offline");
-    expect(preflightBuild).toContain("cargo build --quiet --offline");
+    expect(preflightBuild).not.toContain("cargo build");
+    const preflightCoverage = preflight.slice(
+      preflight.indexOf("FROM build AS test"),
+      preflight.indexOf("FROM registry.dev.nokey.sh/oven/bun:"),
+    );
+    expect(preflightCoverage).toContain(
+      "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines",
+    );
     expect(
       preflight.slice(
         preflight.indexOf("FROM policy-source AS pr-verification"),
