@@ -386,9 +386,11 @@ class ArcManifestContract {
       "type: Unconfined",
       "[worker.oci]",
       "gc = true",
-      'reservedSpace = "8GB"',
+      'reservedSpace = "96GB"',
       'maxUsedSpace = "120GB"',
       'minFreeSpace = "8GB"',
+      'filters = ["type==regular"]',
+      'keepDuration = "168h"',
       'mirrors = ["registry.dev.nokey.sh"]',
     ]);
     if (admittedContract11.isErr()) return err(admittedContract11.error);

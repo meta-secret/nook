@@ -215,6 +215,7 @@ class DockerizedRustBuildKitContract {
     expect(nightly.slice(productDependencies, productSource)).toContain(
       "--target wasm32-unknown-unknown --all-targets",
     );
+    expect(nightly).not.toContain("--mount=type=cache");
     expect(nightly.slice(productSource)).toContain(
       "-type f -name '*.rs' -exec touch {} +",
     );
@@ -564,9 +565,16 @@ class DockerizedRustBuildKitContract {
     const chefDependencies = this.read(
       "infra/sim/bake-cache/inputs/chef-dependencies.txt",
     );
+    const dylintDependencies = this.read(
+      "infra/sim/bake-cache/inputs/dylint-dependencies.txt",
+    );
     const proof = this.read("infra/tasks/pr-cache.yml");
     expect(chefDependencies).toContain(
       "Cargo.toml and Cargo.lock fixture",
+    );
+    expect(dylintDependencies).toContain("cargo-dylint=6.0.1");
+    expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
+      simulator.indexOf("COPY inputs/chef-dependencies.txt"),
     );
     expect(simulator.indexOf("COPY inputs/chef-dependencies.txt")).toBeLessThan(
       simulator.indexOf("COPY inputs/compile-web-source.txt"),
@@ -576,6 +584,14 @@ class DockerizedRustBuildKitContract {
       'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
     );
     expect(simulator).toContain("bake-sim-cargo-chef-wasm-release");
+    expect(simulator).toContain("bake-sim-cargo-dylint-product-dependencies");
+    expect(proof).toContain('grep -qx "$dylint_dependency_vertex CACHED"');
+    expect(proof).toContain(
+      "Warm verification unexpectedly rebuilt Dylint product dependencies",
+    );
+    expect(proof).toContain(
+      "Source-only change unexpectedly rebuilt Dylint product dependencies",
+    );
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
     expect(proof).toContain(
       "Warm verification unexpectedly recooked WASM dependencies",
@@ -622,6 +638,6 @@ test(
   contract.compilerGraphsDoNotConsumeTelemetryReplayArgument.bind(contract),
 );
 test(
-  "local PR cache proof covers Cargo Chef dependency reuse",
+  "local PR cache proof covers Dylint and Cargo Chef dependency reuse",
   contract.prCacheProofCoversChefDependencyReuse.bind(contract),
 );

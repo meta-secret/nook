@@ -107,9 +107,33 @@ data:
   buildkitd.toml: |
     [worker.oci]
       gc = true
-      reservedSpace = "8GB"
+      reservedSpace = "96GB"
       maxUsedSpace = "120GB"
       minFreeSpace = "8GB"
+
+      # Dependency compilation is stored in ordinary immutable layers. Retain
+      # a large working set so storage-pressure GC does not collapse a warm
+      # worker back to an 8 GB cache between consecutive PR runs.
+      [[worker.oci.gcpolicy]]
+        filters = ["type==source.local", "type==source.git.checkout"]
+        keepDuration = "48h"
+        maxUsedSpace = "1GB"
+      [[worker.oci.gcpolicy]]
+        filters = ["type==regular"]
+        keepDuration = "168h"
+        reservedSpace = "96GB"
+        maxUsedSpace = "120GB"
+        minFreeSpace = "8GB"
+      [[worker.oci.gcpolicy]]
+        keepDuration = "1440h"
+        reservedSpace = "96GB"
+        maxUsedSpace = "120GB"
+        minFreeSpace = "8GB"
+      [[worker.oci.gcpolicy]]
+        all = true
+        reservedSpace = "96GB"
+        maxUsedSpace = "120GB"
+        minFreeSpace = "8GB"
 
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]

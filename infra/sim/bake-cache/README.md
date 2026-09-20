@@ -7,13 +7,15 @@ BuildKit solves, using `pr-pipeline.Dockerfile` and its Bake targets:
 2. Tests succeed before heavy work is requested.
 3. Repeating those solves on the same builder reuses Docker layers without any
    registry cache import/export or intermediate image publication.
-4. The manifest-only Cargo Chef WASM release-cook vertex remains cached both
-   on a warm rebuild and after mutable source content changes. The simulator
-   uses a small text input instead of downloading real dependencies, while
-   preserving BuildKit's production dependency-before-source ordering.
-5. The fuzz dependency-install vertex remains cached when mutable source
+4. The Dylint product-dependency and manifest-only Cargo Chef WASM release-cook
+   vertices remain cached both on a warm rebuild and after mutable source
+   content changes. The Dylint stand-in uses the same immutable
+   dependency-before-source layer architecture as production.
+5. The simulator uses small text inputs instead of downloading real
+   dependencies, while preserving production's dependency-before-source ordering.
+6. The fuzz dependency-install vertex remains cached when mutable source
    changes before the heavy phase is rebuilt.
-6. An injected verification or test failure prevents the next phase invocation.
+7. An injected verification or test failure prevents the next phase invocation.
 
 The proof starts a disposable Docker-container builder, retains local result
 files, per-phase logs and BuildKit metadata, and removes only its own builder.

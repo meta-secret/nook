@@ -391,9 +391,11 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     for contract in [
         "[worker.oci]",
         "gc = true",
-        "reservedSpace = \"8GB\"",
+        "reservedSpace = \"96GB\"",
         "maxUsedSpace = \"120GB\"",
         "minFreeSpace = \"8GB\"",
+        "filters = [\"type==regular\"]",
+        "keepDuration = \"168h\"",
     ] {
         assert!(
             buildkit.contains(contract),
