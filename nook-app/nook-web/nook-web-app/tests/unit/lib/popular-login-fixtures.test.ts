@@ -132,7 +132,7 @@ describe('popular login shell templates', () => {
         passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       if (
         fixtureCatalog.pilotExpectation(templateId) ===
-        SiteFixturePilotExpectation.FailClosedAlternateAuthentication &&
+          SiteFixturePilotExpectation.FailClosedAlternateAuthentication &&
         templateId === 'email-password-aria-hidden'
       ) {
         expect(observations).toHaveLength(0)
