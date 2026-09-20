@@ -109,6 +109,12 @@ class DockerizedRustBuildKitContract {
     );
     expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
+    expect(bake).toContain(
+      'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]',
+    );
+    expect(bake).not.toContain(
+      'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint-wasm"]',
+    );
     expect(preflight).toContain(
       "FROM policy-source AS pr-verification\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\",
     );

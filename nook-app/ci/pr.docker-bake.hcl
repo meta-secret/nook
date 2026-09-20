@@ -40,12 +40,12 @@ target "pr-browser-artifacts" {
 }
 
 group "pr-verification" {
-  targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint-wasm"]
+  targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]
 }
 
 // This group is invoked only after the entire verification solve succeeds.
 group "pr-tests" {
-  targets = ["coverage-export", "builder-wasm", "pr-web-tests", "rust-dylint-self-test", "rust-ecosystem-deterministic"]
+  targets = ["coverage-export", "builder-wasm", "pr-web-tests", "rust-ecosystem-deterministic"]
 }
 
 group "pr-heavy" {

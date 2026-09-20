@@ -105,12 +105,6 @@ metadata:
   namespace: arc-runners
 data:
   buildkitd.toml: |
-    # Build histories retain cache leases independently from layer age. Bound
-    # them so obsolete solves cannot protect old graphs indefinitely.
-    [history]
-      maxAge = 86400
-      maxEntries = 20
-
     [worker.oci]
       gc = true
       reservedSpace = "64GB"

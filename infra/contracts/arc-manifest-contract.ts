@@ -386,8 +386,6 @@ class ArcManifestContract {
       "type: Unconfined",
       "[worker.oci]",
       "gc = true",
-      "maxAge = 86400",
-      "maxEntries = 20",
       'reservedSpace = "64GB"',
       'maxUsedSpace = "112GB"',
       'minFreeSpace = "16GB"',
@@ -400,6 +398,8 @@ class ArcManifestContract {
     const admittedContract12 = buildkit.forbidAll([
       "--oci-worker-gc",
       "--oci-worker-gc-keepstorage",
+      "[history]",
+      "maxEntries",
     ]);
     if (admittedContract12.isErr()) return err(admittedContract12.error);
     const admittedContract13 = buildkit.count({
