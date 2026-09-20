@@ -113,6 +113,7 @@ struct RustEcosystemFixture {
     checks: String,
     main: String,
     pr: String,
+    pr_tasks: String,
     quality: String,
     workspace: String,
     dylint_manifest: String,
@@ -154,6 +155,7 @@ impl RustEcosystemFixture {
             checks,
             main: root.read(".github/workflows/main.yml")?,
             pr: root.read(".github/workflows/pr.yml")?,
+            pr_tasks: root.read("nook-app/ci/pr.yml")?,
             quality: root.read(".cortex/teams/sre/workflows/quality.md")?,
             workspace: root.read("nook-app/nook-platform/Cargo.toml")?,
             dylint_manifest: root
@@ -183,9 +185,51 @@ impl RustEcosystemFixture {
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let fixture = RustEcosystemFixture::load()?;
 
+    let phase_markers = [
+        "run: task --silent ci:pr:verification",
+        "run: task --silent ci:pr:tests",
+        "run: task --silent ci:pr:post-tests",
+    ];
+    let mut previous_phase = None;
+    for marker in phase_markers {
+        let guarded_marker = format!(
+            "if: steps.browser-scope.outputs.validation == 'true'\n        {marker}"
+        );
+        let phase = fixture
+            .pr
+            .find(marker)
+            .unwrap_or_else(|| panic!("PR workflow is missing phase barrier: {marker}"));
+        assert!(
+            fixture.pr.contains(&guarded_marker),
+            "Product PR phase must retain its validation guard: {marker}"
+        );
+        assert!(
+            previous_phase.is_none_or(|previous| previous < phase),
+            "PR workflow phase barriers must remain ordered: {marker}"
+        );
+        previous_phase = Some(phase);
+    }
+    let post_tests = fixture
+        .pr_tasks
+        .split_once("  ci:pr:post-tests:\n")
+        .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
+        .map(|(task, _)| task)
+        .ok_or_else(|| anyhow::anyhow!("post-test PR task block is missing"))?;
     assert!(
-        fixture.pr.contains("run: task --silent ci:pr:heavy"),
-        "Labeled product PRs must execute the heavy Rust ecosystem phase"
+        post_tests.contains(
+            "task --parallel ci:pr:heavy ci:pr:coverage:export ci:pr:browser:prepare",
+        ),
+        "The post-test barrier must execute heavy verification and stage coverage/browser artifacts concurrently"
+    );
+    let heavy = fixture
+        .pr_tasks
+        .split_once("  ci:pr:heavy:\n")
+        .and_then(|(_, rest)| rest.split_once("\n  ci:pr:coverage:export:"))
+        .map(|(task, _)| task)
+        .ok_or_else(|| anyhow::anyhow!("heavy PR task block is missing"))?;
+    assert!(
+        heavy.contains("PR_BAKE_TARGET: pr-heavy"),
+        "The post-test fan-out must retain the heavy Bake target"
     );
     assert!(
         fixture
