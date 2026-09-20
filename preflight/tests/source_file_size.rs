@@ -18,6 +18,18 @@ impl RepositoryFixture {
             ),
         }
     }
+}
+
+struct SourceArchitectureScenario {
+    root: RepositoryFixture,
+}
+
+impl SourceArchitectureScenario {
+    fn repository() -> Self {
+        Self {
+            root: RepositoryFixture::repository_root(),
+        }
+    }
 
     fn task_body<'a>(
         &self,
@@ -39,7 +51,120 @@ impl RepositoryFixture {
         body.get(..end)
             .ok_or_else(|| anyhow::anyhow!("task {task} ends outside a UTF-8 boundary"))
     }
+
+    fn assert_source_architecture_gate(&self) -> anyhow::Result<()> {
+        let root = &self.root;
+        let central_ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
+        let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
+        let pr_workflow = fs::read_to_string(root.join(".github/workflows/pr.yml"))?;
+        let preflight_dockerfile = fs::read_to_string(root.join("preflight/Dockerfile"))?;
+        let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
+        let pr_taskfile = fs::read_to_string(root.join("nook-app/ci/pr.yml"))?;
+
+        assert!(
+            !root
+                .join(".github/workflows/source-architecture.yml")
+                .exists()
+                && !root.join(".github/workflows/loom.yml").exists(),
+            "repository policy must remain the single automatic policy workflow"
+        );
+        let pull_request_trigger = central_ci
+            .split_once("  pull_request:\n")
+            .and_then(|(_, remainder)| remainder.split_once("  push:\n"))
+            .map(|(trigger, _)| trigger)
+            .ok_or_else(|| anyhow::anyhow!("central CI must define PR before push triggers"))?;
+        assert!(
+            pull_request_trigger.contains("opened")
+                && pull_request_trigger.contains("synchronize")
+                && pull_request_trigger.contains("reopened")
+                && !pull_request_trigger.contains("paths:")
+                && !pull_request_trigger.contains("paths-ignore:")
+                && central_ci.contains(
+                    "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action)",
+                ),
+            "central CI must route every authored PR tree to repository policy"
+        );
+        let pr_route = central_ci
+            .split_once("\n  pr:\n")
+            .and_then(|(_, remainder)| remainder.split_once("\n  main:\n"))
+            .map(|(route, _)| route)
+            .ok_or_else(|| anyhow::anyhow!("central CI must define consolidated PR routing"))?;
+        assert!(
+            pr_route.contains("uses: ./.github/workflows/pr.yml")
+                && !pr_route.contains("paths:")
+                && !pr_route.contains("paths-ignore:")
+                && pr_workflow.contains("VALIDATION_REQUESTED: ${{ inputs.validation_requested }}")
+                && pr_workflow.contains("*) validation=true ;;")
+                && pr_workflow.contains("if: steps.browser-scope.outputs.validation == 'true'")
+                && pr_workflow.contains("run: task --silent ci:pr:verification\n")
+                && pr_workflow.contains("run: task --silent ci:pr:verification:tooling\n")
+                && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+                && pr_workflow
+                    .contains("run: task --silent ci:pr:tests:policy-with-delivery-helpers\n")
+                && pr_taskfile.contains("ci:pr:verification:tooling:")
+                && pr_taskfile.contains("task: preflight:policy:run")
+                && pr_taskfile.contains("ci:pr:tests:policy:"),
+            "every consolidated PR route must execute repository policy in both product and policy-only paths"
+        );
+        let policy_only = self.task_body(
+            &pr_taskfile,
+            "ci:pr:tests:policy-with-delivery-helpers",
+            "ci:pr:delivery-helpers",
+        )?;
+        assert!(
+            policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
+                && self
+                    .task_body(
+                        &pr_taskfile,
+                        "ci:pr:tests:policy",
+                        "ci:pr:tests:policy-with-delivery-helpers",
+                    )?
+                    .contains(
+                        "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+                    ),
+            "policy-only PR tests must delegate to the policy dependency and delivery helpers"
+        );
+        assert!(workflow.contains("workflow_call:"));
+        assert!(
+            workflow.contains("fetch-depth: 0")
+                && !workflow.contains("BASELINE_SHA")
+                && !workflow.contains("git diff")
+                && !workflow.contains("policy-paths"),
+            "repository policy must fetch identifier history while validating the full tree without inline base comparison or path classification"
+        );
+        assert!(
+            workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")
+                && workflow.contains("run: task ci:repository-policy:untrusted")
+                && workflow_taskfile.contains("task: preflight:repository-policy-untrusted"),
+            "repository policy must route untrusted PR source architecture through Taskfile"
+        );
+        self.assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
+        assert!(
+            preflight_dockerfile.contains("--test source_file_size"),
+            "preflight:source-architecture must run the source_file_size test"
+        );
+        Ok(())
+    }
+
+    fn assert_dockerized_preflight_tools(&self, workflow: &str, name: &str) -> anyhow::Result<()> {
+        assert!(workflow.contains("uses: ./.github/actions/nook-docker-setup"));
+        let buildkit = workflow
+            .find("uses: docker/setup-buildx-action")
+            .ok_or_else(|| anyhow::anyhow!("{name} must configure secret-free BuildKit"))?;
+        let task = workflow
+            .find("run: task ci:repository-policy:untrusted")
+            .ok_or_else(|| anyhow::anyhow!("{name} must run the untrusted policy Task"))?;
+        assert!(buildkit < task);
+        for forbidden in ["dtolnay/rust-toolchain", "Swatinem/rust-cache"] {
+            assert!(
+                !workflow.contains(forbidden),
+                "{name} must use Docker-owned Rust tooling"
+            );
+        }
+        Ok(())
+    }
 }
+
 impl Deref for RepositoryFixture {
     type Target = PathBuf;
     fn deref(&self) -> &PathBuf {
@@ -116,113 +241,5 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 
 #[test]
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    let central_ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
-    let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
-    let pr_workflow = fs::read_to_string(root.join(".github/workflows/pr.yml"))?;
-    let preflight_dockerfile = fs::read_to_string(root.join("preflight/Dockerfile"))?;
-    let workflow_taskfile = fs::read_to_string(root.join(".task/ci-workflows.yml"))?;
-    let pr_taskfile = fs::read_to_string(root.join("nook-app/ci/pr.yml"))?;
-
-    assert!(
-        !root
-            .join(".github/workflows/source-architecture.yml")
-            .exists()
-            && !root.join(".github/workflows/loom.yml").exists(),
-        "repository policy must remain the single automatic policy workflow"
-    );
-    let pull_request_trigger = central_ci
-        .split_once("  pull_request:\n")
-        .and_then(|(_, remainder)| remainder.split_once("  push:\n"))
-        .map(|(trigger, _)| trigger)
-        .ok_or_else(|| anyhow::anyhow!("central CI must define PR before push triggers"))?;
-    assert!(
-        pull_request_trigger.contains("opened")
-            && pull_request_trigger.contains("synchronize")
-            && pull_request_trigger.contains("reopened")
-            && !pull_request_trigger.contains("paths:")
-            && !pull_request_trigger.contains("paths-ignore:")
-            && central_ci.contains(
-                "contains(fromJSON('[\"opened\",\"synchronize\",\"reopened\"]'), github.event.action)",
-            ),
-        "central CI must route every authored PR tree to repository policy"
-    );
-    let pr_route = central_ci
-        .split_once("\n  pr:\n")
-        .and_then(|(_, remainder)| remainder.split_once("\n  main:\n"))
-        .map(|(route, _)| route)
-        .ok_or_else(|| anyhow::anyhow!("central CI must define consolidated PR routing"))?;
-    assert!(
-        pr_route.contains("uses: ./.github/workflows/pr.yml")
-            && !pr_route.contains("paths:")
-            && !pr_route.contains("paths-ignore:")
-            && pr_workflow.contains("VALIDATION_REQUESTED: ${{ inputs.validation_requested }}")
-            && pr_workflow.contains("*) validation=true ;;")
-            && pr_workflow.contains("if: steps.browser-scope.outputs.validation == 'true'")
-            && pr_workflow.contains("run: task --silent ci:pr:verification\n")
-            && pr_workflow.contains("run: task --silent ci:pr:verification:tooling\n")
-            && pr_workflow.contains("run: task --silent ci:pr:tests\n")
-            && pr_workflow
-                .contains("run: task --silent ci:pr:tests:policy-with-delivery-helpers\n")
-            && pr_taskfile.contains("ci:pr:verification:tooling:")
-            && pr_taskfile.contains("task: preflight:policy:run")
-            && pr_taskfile.contains("ci:pr:tests:policy:"),
-        "every consolidated PR route must execute repository policy in both product and policy-only paths"
-    );
-    let policy_only = root.task_body(
-        &pr_taskfile,
-        "ci:pr:tests:policy-with-delivery-helpers",
-        "ci:pr:delivery-helpers",
-    )?;
-    assert!(
-        policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
-            && root
-                .task_body(
-                    &pr_taskfile,
-                    "ci:pr:tests:policy",
-                    "ci:pr:tests:policy-with-delivery-helpers",
-                )?
-                .contains(
-                    "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy"
-                ),
-        "policy-only PR tests must delegate to the policy dependency and delivery helpers"
-    );
-    assert!(workflow.contains("workflow_call:"));
-    assert!(
-        workflow.contains("fetch-depth: 0")
-            && !workflow.contains("BASELINE_SHA")
-            && !workflow.contains("git diff")
-            && !workflow.contains("policy-paths"),
-        "repository policy must fetch identifier history while validating the full tree without inline base comparison or path classification"
-    );
-    assert!(
-        workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")
-            && workflow.contains("run: task ci:repository-policy:untrusted")
-            && workflow_taskfile.contains("task: preflight:repository-policy-untrusted"),
-        "repository policy must route untrusted PR source architecture through Taskfile"
-    );
-    assert_dockerized_preflight_tools(&workflow, "repository-policy")?;
-    assert!(
-        preflight_dockerfile.contains("--test source_file_size"),
-        "preflight:source-architecture must run the source_file_size test"
-    );
-    Ok(())
-}
-
-fn assert_dockerized_preflight_tools(workflow: &str, name: &str) -> anyhow::Result<()> {
-    assert!(workflow.contains("uses: ./.github/actions/nook-docker-setup"));
-    let buildkit = workflow
-        .find("uses: docker/setup-buildx-action")
-        .ok_or_else(|| anyhow::anyhow!("{name} must configure secret-free BuildKit"))?;
-    let task = workflow
-        .find("run: task ci:repository-policy:untrusted")
-        .ok_or_else(|| anyhow::anyhow!("{name} must run the untrusted policy Task"))?;
-    assert!(buildkit < task);
-    for forbidden in ["dtolnay/rust-toolchain", "Swatinem/rust-cache"] {
-        assert!(
-            !workflow.contains(forbidden),
-            "{name} must use Docker-owned Rust tooling"
-        );
-    }
-    Ok(())
+    SourceArchitectureScenario::repository().assert_source_architecture_gate()
 }
