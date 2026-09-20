@@ -340,6 +340,7 @@ class AuthenticationScanRenderLifecycle {
         impactRequest,
       )
     if (!impact.shouldScheduleScan) return
+    this.request.scanState.invalidatePendingScan()
     if (passwordFieldDiscovery.pageHasManualCheckpoint(document)) {
       this.invalidateRenderedAuthenticationAction()
       removeScannedWidget()

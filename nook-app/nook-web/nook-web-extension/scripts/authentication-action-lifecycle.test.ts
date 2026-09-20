@@ -35,12 +35,12 @@ describe('authentication control activation lifecycle', () => {
     }
   })
 
-  test('invalidates a pending scan generation with the stale control', () => {
-    const staleGeneration = scanState.sequence
+  test('prevents a pending scan from publishing after a page mutation', () => {
+    const pendingGeneration = ++scanState.sequence
 
     scanState.invalidatePendingScan()
 
-    expect(scanState.sequence).not.toBe(staleGeneration)
-    scanState.sequence = staleGeneration
+    expect(scanState.sequence).not.toBe(pendingGeneration)
+    scanState.sequence = pendingGeneration - 1
   })
 })
