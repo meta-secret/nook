@@ -75,7 +75,11 @@ test('detect and fill the Airbnb homepage login modal', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveText(
     'Airbnb authentication complete',
   )
-  await expect(page.locator('[aria-label="Continue with Google"]')).toHaveCount(1)
-  await expect(page.locator('[aria-label="Continue with Apple"]')).toHaveCount(1)
+  await expect(page.locator('[aria-label="Continue with Google"]')).toHaveCount(
+    1,
+  )
+  await expect(page.locator('[aria-label="Continue with Apple"]')).toHaveCount(
+    1,
+  )
   await demoBeat(page)
 })
