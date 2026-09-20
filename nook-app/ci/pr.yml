@@ -90,7 +90,7 @@ tasks:
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
           --set 'coverage-export.output=type=local,dest={{.PR_ARTIFACT_DIR}}/coverage' \
           --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \
-          --set "rust-dylint-self-test.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
+          --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
           --set 'rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED=true' \
           --set 'builder-wasm.output=type=cacheonly' \
           '{{.PR_BAKE_TARGET}}'

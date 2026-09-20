@@ -52,6 +52,12 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(verification < tests && tests < heavy);
         assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
         assert!(bake.contains("output = [\"type=cacheonly\"]"));
+        assert!(bake.contains(
+            "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint\"]"
+        ));
+        assert!(!bake.contains(
+            "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint-wasm\"]"
+        ));
         assert!(tasks.contains("coverage-export.output=type=local"));
         assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
         assert!(tasks.contains(

@@ -391,8 +391,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     for contract in [
         "[worker.oci]",
         "gc = true",
-        "maxAge = 86400",
-        "maxEntries = 20",
         "reservedSpace = \"64GB\"",
         "maxUsedSpace = \"112GB\"",
         "minFreeSpace = \"16GB\"",
@@ -405,6 +403,8 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC BuildKit GC configuration is missing: {contract}"
         );
     }
+    assert!(!buildkit.contains("[history]"));
+    assert!(!buildkit.contains("maxEntries"));
     assert!(!buildkit.contains("--oci-worker-gc-keepstorage"));
     assert!(container_hook.contains("nook.nokey.sh/arc-build: \"true\""));
     assert!(container_hook.contains("nook.nokey.sh/arc-container-job: \"true\""));

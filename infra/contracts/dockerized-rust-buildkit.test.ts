@@ -56,6 +56,10 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
+    expect(tasks).toContain(
+      'rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor',
+    );
+    expect(tasks).not.toContain("rust-dylint-self-test.args");
     expect(tasks).not.toContain(
       'require("./nook-app/nook-platform/nook-core/coverage-floor.json")',
     );
@@ -109,6 +113,12 @@ class DockerizedRustBuildKitContract {
     );
     expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
+    expect(bake).toContain(
+      'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]',
+    );
+    expect(bake).not.toContain(
+      'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint-wasm"]',
+    );
     expect(preflight).toContain(
       "FROM policy-source AS pr-verification\nRUN --mount=type=secret,id=sccache_s3_access_key,required=false \\",
     );
