@@ -1,4 +1,5 @@
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import type { AuthenticationRecoveryCopyEvidence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
@@ -163,7 +164,7 @@ describe('backup code candidate extraction', () => {
             message: { payload: { texts: string[] } },
             callback: (response: {
               ok: true
-              result: { copy: string; hint: 'absent' | 'present' }
+              result: AuthenticationRecoveryCopyEvidence
             }) => void,
           ) => {
             const copy = message.payload.texts.join('\n')
