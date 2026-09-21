@@ -254,6 +254,7 @@ class ExtensionOriginCompanionWasmModuleLoader {
     frame.src = hostUrl;
     frame.hidden = true;
     frame.setAttribute("aria-hidden", "true");
+    const channel = new MessageChannel();
     try {
       return await new Promise<WebAssembly.Module>(
         // eslint-disable-next-line max-params -- Promise executor owns its host callback shape.
@@ -272,6 +273,8 @@ class ExtensionOriginCompanionWasmModuleLoader {
           const cleanup = (): void => {
             window.clearTimeout(timeout);
             window.removeEventListener("message", handleMessage);
+            channel.port1.removeEventListener("message", handlePortMessage);
+            channel.port1.close();
             frame.removeEventListener("load", handleFrameLoad);
           };
           const handleMessage = (
@@ -280,17 +283,20 @@ class ExtensionOriginCompanionWasmModuleLoader {
             const hostWindow = frame.contentWindow;
             if (!hostWindow) return;
             const response = event.data;
-            const isRecord =
+            const responseRecord =
               response !== null &&
               typeof response === "object" &&
-              !Array.isArray(response);
-            const responseKind = isRecord ? response.kind : undefined;
+              !Array.isArray(response)
+                ? response
+                : undefined;
+            const responseKind = responseRecord?.kind;
             const compiledResponse =
               responseKind === CompanionWasmHostResponseKind.Compiled;
             const failedResponse =
               responseKind === CompanionWasmHostResponseKind.Failed;
             const resourceAccepted =
-              compiledResponse && response.resourceUrl === companionWasmUrl;
+              compiledResponse &&
+              responseRecord?.resourceUrl === companionWasmUrl;
             this.diagnostics.record({
               phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
               outcome:
@@ -342,6 +348,41 @@ class ExtensionOriginCompanionWasmModuleLoader {
               new Error("extension-origin companion WASM compilation failed"),
             );
           };
+          const handlePortMessage = (
+            event: MessageEvent<CompanionWasmHostTransportValue>,
+          ): void => {
+            const response = event.data;
+            const isRecord =
+              response !== null &&
+              typeof response === "object" &&
+              !Array.isArray(response);
+            const responseKind = isRecord ? response.kind : undefined;
+            const failedResponse =
+              responseKind === CompanionWasmHostResponseKind.Failed;
+            const admission = this.messageAdmission.admitPortResponse({
+              data: response,
+              expectedResourceUrl: companionWasmUrl,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ModuleAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : admission.kind === CompanionWasmHostAdmissionKind.Accepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            if (admission.kind === CompanionWasmHostAdmissionKind.Rejected) {
+              return;
+            }
+            cleanup();
+            if (admission.kind === CompanionWasmHostAdmissionKind.Accepted) {
+              resolve(admission.module);
+              return;
+            }
+            reject(
+              new Error("extension-origin companion WASM compilation failed"),
+            );
+          };
           const handleFrameLoad = (): void => {
             this.diagnostics.record({
               phase: CompanionWasmHostDiagnosticPhase.IframeLoad,
@@ -353,9 +394,11 @@ class ExtensionOriginCompanionWasmModuleLoader {
               reject(new Error("extension-origin companion WASM host closed"));
               return;
             }
-            hostWindow.postMessage(request, extensionOrigin);
+            hostWindow.postMessage(request, extensionOrigin, [channel.port2]);
           };
           window.addEventListener("message", handleMessage);
+          channel.port1.addEventListener("message", handlePortMessage);
+          channel.port1.start();
           frame.addEventListener("load", handleFrameLoad);
           this.diagnostics.record({
             phase: CompanionWasmHostDiagnosticPhase.IframeLoad,

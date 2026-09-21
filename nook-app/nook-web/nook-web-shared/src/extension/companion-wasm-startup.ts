@@ -48,6 +48,69 @@ export type CompanionWasmHostResponse =
     }
   | { readonly kind: CompanionWasmHostResponseKind.Failed };
 
+enum CompanionWasmHostResponseTransportKind {
+  ParentWindow = "parent-window",
+  Port = "port",
+}
+
+type CompanionWasmHostResponseTransportSender =
+  | {
+      readonly kind: CompanionWasmHostResponseTransportKind.ParentWindow;
+      readonly parentWindow: CompanionWasmHostParentWindow;
+      readonly targetOrigin: string;
+    }
+  | {
+      readonly kind: CompanionWasmHostResponseTransportKind.Port;
+      readonly port: MessagePort;
+    };
+
+export type CompanionWasmHostResponseTransportRequest = {
+  readonly event: MessageEvent<CompanionWasmHostTransportValue>;
+  readonly parentWindow: CompanionWasmHostParentWindow;
+  readonly targetOrigin: string;
+};
+
+export type CompanionWasmHostParentWindow = {
+  postMessage(message: CompanionWasmHostResponse, targetOrigin: string): void;
+};
+
+/** Keeps host responses on a transferable channel across isolated worlds. */
+export class CompanionWasmHostResponseTransport {
+  private constructor(
+    private readonly sender: CompanionWasmHostResponseTransportSender,
+  ) {}
+
+  static fromRequest({
+    event,
+    parentWindow,
+    targetOrigin,
+  }: CompanionWasmHostResponseTransportRequest): CompanionWasmHostResponseTransport {
+    const port = event.ports[0];
+    if (port) {
+      return new CompanionWasmHostResponseTransport({
+        kind: CompanionWasmHostResponseTransportKind.Port,
+        port,
+      });
+    }
+    return new CompanionWasmHostResponseTransport({
+      kind: CompanionWasmHostResponseTransportKind.ParentWindow,
+      parentWindow,
+      targetOrigin,
+    });
+  }
+
+  send(message: CompanionWasmHostResponse): void {
+    switch (this.sender.kind) {
+      case CompanionWasmHostResponseTransportKind.Port:
+        this.sender.port.postMessage(message);
+        return;
+      case CompanionWasmHostResponseTransportKind.ParentWindow:
+        this.sender.parentWindow.postMessage(message, this.sender.targetOrigin);
+        return;
+    }
+  }
+}
+
 export enum CompanionWasmHostDiagnosticPhase {
   IframeLoad = "iframe-load",
   RequestReceipt = "request-receipt",
@@ -119,6 +182,11 @@ export type CompanionWasmHostResponseAdmissionRequest = {
   readonly expectedResourceUrl: string;
 };
 
+export type CompanionWasmHostPortResponseAdmissionRequest = {
+  readonly data: CompanionWasmHostTransportValue;
+  readonly expectedResourceUrl: string;
+};
+
 export type CompanionWasmHostResponseAdmission =
   | { readonly kind: CompanionWasmHostAdmissionKind.Rejected }
   | { readonly kind: CompanionWasmHostAdmissionKind.Failed }
@@ -152,7 +220,24 @@ export class CompanionWasmHostMessageAdmission {
     if (event.source !== expectedSource || event.origin !== expectedOrigin) {
       return { kind: CompanionWasmHostAdmissionKind.Rejected };
     }
-    const response = this.responseShape(event.data);
+    return this.admitResponseData({
+      data: event.data,
+      expectedResourceUrl,
+    });
+  }
+
+  admitPortResponse({
+    data,
+    expectedResourceUrl,
+  }: CompanionWasmHostPortResponseAdmissionRequest): CompanionWasmHostResponseAdmission {
+    return this.admitResponseData({ data, expectedResourceUrl });
+  }
+
+  private admitResponseData({
+    data,
+    expectedResourceUrl,
+  }: CompanionWasmHostPortResponseAdmissionRequest): CompanionWasmHostResponseAdmission {
+    const response = this.responseShape(data);
     if (response.kind === CompanionWasmHostAdmissionKind.Rejected) {
       return response;
     }
@@ -210,9 +295,9 @@ export class CompanionWasmHostMessageAdmission {
   }
 
   private isWebAssemblyModule(
-    value: WebAssembly.Module | string,
+    value: WebAssembly.Module | string | undefined,
   ): value is WebAssembly.Module {
-    if (typeof value === "string") {
+    if (value === undefined || typeof value === "string") {
       return false;
     }
     try {

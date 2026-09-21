@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm'
 import {
   CompanionWasmHostAdmissionKind,
   CompanionWasmHostMessageAdmission,
+  CompanionWasmHostResponseTransport,
   CompanionWasmHostRequestKind,
   CompanionWasmHostResponseKind,
   CompanionWasmStartup,
@@ -10,6 +11,7 @@ import {
   CompanionWasmStartupOutcome,
   CompanionWasmStartupStage,
   type CompanionWasmHostResponse,
+  type CompanionWasmHostTransportValue,
   type CompanionWasmStartupDiagnostic,
   type CompanionWasmStartupRequest,
 } from '../../nook-web-shared/src/extension/companion-wasm-startup'
@@ -31,6 +33,86 @@ class RecordingCompanionWasmStartupDiagnostics {
 }
 
 describe('companion WASM startup', () => {
+  test('delivers an external-page response through a transferred port', async () => {
+    const channel = new MessageChannel()
+    const parentWindow = { postMessage: () => undefined }
+    const requestEvent = new MessageEvent('message', {
+      data: {
+        kind: CompanionWasmHostRequestKind.CompileCompanionModule,
+      },
+      ports: [channel.port2],
+    })
+    const response = {
+      kind: CompanionWasmHostResponseKind.Compiled,
+      resourceUrl:
+        'chrome-extension://nook/content/nook_companion_wasm_bg.wasm',
+      module: new CompanionWasmStartupTestFixture().validModule(),
+    } satisfies CompanionWasmHostResponse
+
+    const received = new Promise<boolean>((resolve) => {
+      channel.port1.addEventListener(
+        'message',
+        (event: MessageEvent<CompanionWasmHostTransportValue>) => {
+          const data = event.data
+          resolve(
+            data !== null &&
+              typeof data === 'object' &&
+              !Array.isArray(data) &&
+              data.kind === response.kind &&
+              data.resourceUrl === response.resourceUrl,
+          )
+        },
+      )
+      channel.port1.start()
+    })
+    CompanionWasmHostResponseTransport.fromRequest({
+      event: requestEvent,
+      parentWindow,
+      targetOrigin: 'https://accounts.google.com',
+    }).send(response)
+
+    await received.then((value) => expect(value).toBe(true))
+    channel.port1.close()
+  })
+
+  test('delivers a failed external-page response through a transferred port', async () => {
+    const channel = new MessageChannel()
+    const parentWindow = { postMessage: () => undefined }
+    const requestEvent = new MessageEvent('message', {
+      data: {
+        kind: CompanionWasmHostRequestKind.CompileCompanionModule,
+      },
+      ports: [channel.port2],
+    })
+    const response = {
+      kind: CompanionWasmHostResponseKind.Failed,
+    } satisfies CompanionWasmHostResponse
+
+    const received = new Promise<boolean>((resolve) => {
+      channel.port1.addEventListener(
+        'message',
+        (event: MessageEvent<CompanionWasmHostTransportValue>) => {
+          const data = event.data
+          resolve(
+            data !== null &&
+              typeof data === 'object' &&
+              !Array.isArray(data) &&
+              data.kind === response.kind,
+          )
+        },
+      )
+      channel.port1.start()
+    })
+    CompanionWasmHostResponseTransport.fromRequest({
+      event: requestEvent,
+      parentWindow,
+      targetOrigin: 'https://accounts.google.com',
+    }).send(response)
+
+    await received.then((value) => expect(value).toBe(true))
+    channel.port1.close()
+  })
+
   test('retries an embedded compile failure with the extension-origin module', async () => {
     const diagnostics = new RecordingCompanionWasmStartupDiagnostics()
     const attempts: string[] = []

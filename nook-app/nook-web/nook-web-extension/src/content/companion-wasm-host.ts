@@ -5,6 +5,7 @@ import {
   CompanionWasmHostDiagnosticSink,
   CompanionWasmHostAdmissionKind,
   CompanionWasmHostMessageAdmission,
+  CompanionWasmHostResponseTransport,
   CompanionWasmHostResponseKind,
   type CompanionWasmHostRequestAdmissionRequest,
   type CompanionWasmHostResponse,
@@ -59,6 +60,11 @@ class ExtensionOriginCompanionWasmHost {
     if (admission.kind !== CompanionWasmHostAdmissionKind.Accepted) {
       return
     }
+    const responseTransport = CompanionWasmHostResponseTransport.fromRequest({
+      event,
+      parentWindow: this.hostWindow.parent,
+      targetOrigin: event.origin,
+    })
     this.diagnostics.record({
       phase: CompanionWasmHostDiagnosticPhase.HostCompile,
       outcome: CompanionWasmHostDiagnosticOutcome.Started,
@@ -78,7 +84,7 @@ class ExtensionOriginCompanionWasmHost {
         resourceUrl: this.companionWasmUrl,
         module,
       }
-      this.sendResponse(message, event.origin)
+      this.sendResponse(message, responseTransport)
     } catch {
       this.diagnostics.record({
         phase: CompanionWasmHostDiagnosticPhase.HostCompile,
@@ -87,16 +93,16 @@ class ExtensionOriginCompanionWasmHost {
       const message: CompanionWasmHostResponse = {
         kind: CompanionWasmHostResponseKind.Failed,
       }
-      this.sendResponse(message, event.origin)
+      this.sendResponse(message, responseTransport)
     }
   }
 
   private sendResponse(
     message: CompanionWasmHostResponse,
-    targetOrigin: string,
+    responseTransport: CompanionWasmHostResponseTransport,
   ): void {
     try {
-      this.hostWindow.parent.postMessage(message, targetOrigin)
+      responseTransport.send(message)
       this.diagnostics.record({
         phase: CompanionWasmHostDiagnosticPhase.ResponseSend,
         outcome: CompanionWasmHostDiagnosticOutcome.Succeeded,
