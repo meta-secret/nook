@@ -242,6 +242,31 @@ describe('classified login activation', () => {
     expect(advanced).toBe(true)
   })
 
+  test('discovers a Google identifier workflow around a nested identifierNext activation', () => {
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view">
+        <section class="identifier-shell">
+          <label for="identifierId">Email or phone</label>
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+        <section class="identifier-actions">
+          <div id="identifierNext">
+            <div role="button"><span>Next</span></div>
+          </div>
+        </section>
+      </main>
+    `
+
+    const [workflow] = forms.summarizeAuthenticationWorkflowForms()
+
+    expect(workflow?.root).toBe(document.querySelector('#signin-view'))
+    expect(workflow?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      passwordFieldCount: 0,
+    })
+  })
+
   test('does not activate an external GET submitter after filling passwords', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

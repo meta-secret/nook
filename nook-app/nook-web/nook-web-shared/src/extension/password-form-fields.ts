@@ -717,14 +717,22 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   private containerHasGenericTypeButtonControls(container: Element): boolean {
-    return Array.from(
-      container.querySelectorAll(formlessTypeButtonSelector),
-    ).some(
+    return this.formlessAuthenticationControls(container).some(
       (control) =>
         !looks_like_login_advance_control_label(
           this.localActivationControlLabel(control),
         ),
     );
+  }
+
+  private formlessAuthenticationControls(container: Element): Element[] {
+    const controls = Array.from(
+      container.querySelectorAll(formlessTypeButtonSelector),
+    );
+    return controls.filter((control) => {
+      const identifierNextWrapper = control.closest("#identifierNext");
+      return !identifierNextWrapper || identifierNextWrapper === control;
+    });
   }
 
   private containerHasUnambiguousAuthenticationActivation(
@@ -734,9 +742,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   private labeledTypeButtonActivationControls(container: Element): Element[] {
-    return Array.from(
-      container.querySelectorAll(formlessTypeButtonSelector),
-    ).filter((control) =>
+    return this.formlessAuthenticationControls(container).filter((control) =>
       looks_like_login_advance_control_label(
         this.localActivationControlLabel(control),
       ),
