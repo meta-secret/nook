@@ -932,6 +932,7 @@ await mkdir(distDir, { recursive: true })
 await Promise.all([
   buildEntrypoint('src/background/service-worker.ts', 'background'),
   buildEntrypoint('src/content/autofill.ts', 'content'),
+  buildEntrypoint('src/content/companion-wasm-host.ts', 'content'),
   buildEntrypoint('src/content/authentication-route-page.ts', 'content'),
   buildEntrypoint('src/content/webauthn-content.ts', 'content'),
   buildEntrypoint('src/content/webauthn-page.ts', 'content'),
@@ -978,6 +979,10 @@ await Promise.all([
       'src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
     ),
     'content/nook_companion_wasm_bg.wasm',
+  ),
+  copyStaticFile(
+    join(projectRoot, 'src/content/companion-wasm-host.html'),
+    'content/companion-wasm-host.html',
   ),
 ])
 

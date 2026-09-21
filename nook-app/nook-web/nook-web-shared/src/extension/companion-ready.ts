@@ -18,6 +18,19 @@ import {
   type ExtensionPairingVaultTypeRuntime,
   extensionPairingVaultType,
 } from "./extension-pairing-vault-type";
+import {
+  COMPANION_WASM_HOST_RESOURCE_PATH,
+  COMPANION_WASM_RESOURCE_PATH,
+  CompanionWasmHostAdmissionKind,
+  CompanionWasmHostMessageAdmission,
+  CompanionWasmHostRequestKind,
+  CompanionWasmStartup,
+  type CompanionWasmHostRequest,
+  type CompanionWasmHostResponseAdmissionRequest,
+  type CompanionWasmHostTransportValue,
+  type CompanionWasmStartupDiagnostic,
+  type CompanionWasmStartupDiagnostics,
+} from "./companion-wasm-startup";
 
 type BunFileApi = {
   file: (path: string) => {
@@ -47,6 +60,7 @@ declare const process: {
   cwd?: () => string;
   env?: Record<string, string>;
 };
+declare const __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__: boolean;
 
 const SEALED_COMPANION_WASM_PATH =
   "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
@@ -195,7 +209,109 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
   return { kind: CompanionWasmModuleKind.Absent };
 }
 
-async function startCompanionWasm(): Promise<void> {
+class CompanionWasmStartupDiagnosticSink implements CompanionWasmStartupDiagnostics {
+  record(diagnostic: CompanionWasmStartupDiagnostic): void {
+    if (!this.diagnosticsEnabled()) return;
+    console.info("[Nook] companion WASM startup", diagnostic);
+  }
+
+  private diagnosticsEnabled(): boolean {
+    try {
+      return (
+        typeof __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__ === "boolean" &&
+        __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__
+      );
+    } catch {
+      return false;
+    }
+  }
+}
+
+class ExtensionOriginCompanionWasmModuleLoader {
+  private readonly messageAdmission = new CompanionWasmHostMessageAdmission();
+
+  async load(): Promise<WebAssembly.Module> {
+    const hostUrl = chromeRuntimeUrl(COMPANION_WASM_HOST_RESOURCE_PATH);
+    if (!hostUrl) {
+      throw new Error("extension-origin companion WASM host unavailable");
+    }
+    if (typeof document !== "object" || typeof window !== "object") {
+      throw new Error(
+        "extension-origin companion WASM host requires a document",
+      );
+    }
+    const extensionOrigin = new URL(hostUrl).origin;
+    const companionWasmUrl = chromeRuntimeUrl(COMPANION_WASM_RESOURCE_PATH);
+    if (!companionWasmUrl) {
+      throw new Error("packaged companion WASM resource unavailable");
+    }
+    const frame = document.createElement("iframe");
+    frame.src = hostUrl;
+    frame.hidden = true;
+    frame.setAttribute("aria-hidden", "true");
+    try {
+      return await new Promise<WebAssembly.Module>(
+        // eslint-disable-next-line max-params -- Promise executor owns its host callback shape.
+        (resolve, reject) => {
+          const request: CompanionWasmHostRequest = {
+            kind: CompanionWasmHostRequestKind.CompileCompanionModule,
+          };
+          const timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("extension-origin companion WASM host timed out"));
+          }, 5000);
+          const cleanup = (): void => {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", handleMessage);
+            frame.removeEventListener("load", handleFrameLoad);
+          };
+          const handleMessage = (
+            event: MessageEvent<CompanionWasmHostTransportValue>,
+          ): void => {
+            const hostWindow = frame.contentWindow;
+            if (!hostWindow) return;
+            const admissionRequest: CompanionWasmHostResponseAdmissionRequest =
+              {
+                event,
+                expectedSource: hostWindow,
+                expectedOrigin: extensionOrigin,
+                expectedResourceUrl: companionWasmUrl,
+              };
+            const admission =
+              this.messageAdmission.admitResponse(admissionRequest);
+            if (admission.kind === CompanionWasmHostAdmissionKind.Rejected) {
+              return;
+            }
+            cleanup();
+            if (admission.kind === CompanionWasmHostAdmissionKind.Accepted) {
+              resolve(admission.module);
+              return;
+            }
+            reject(
+              new Error("extension-origin companion WASM compilation failed"),
+            );
+          };
+          const handleFrameLoad = (): void => {
+            const hostWindow = frame.contentWindow;
+            if (!hostWindow) {
+              cleanup();
+              reject(new Error("extension-origin companion WASM host closed"));
+              return;
+            }
+            hostWindow.postMessage(request, "*");
+          };
+          window.addEventListener("message", handleMessage);
+          frame.addEventListener("load", handleFrameLoad);
+          document.documentElement.append(frame);
+        },
+      );
+    } finally {
+      frame.remove();
+    }
+  }
+}
+
+async function startEmbeddedCompanionWasm(): Promise<void> {
   const resolved = await companionWasmModuleOrPath();
   if (resolved.kind === CompanionWasmModuleKind.Present) {
     const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
@@ -208,6 +324,23 @@ async function startCompanionWasm(): Promise<void> {
   // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).
   // Web-app vitest installs a fetch mock in setup-wasm for this path.
   await initCompanionWasm();
+}
+
+async function startCompanionWasm(): Promise<void> {
+  const startup = new CompanionWasmStartup();
+  const request: Parameters<typeof startup.initialize>[0] = {
+    initializeEmbeddedCompanionWasm: startEmbeddedCompanionWasm,
+    loadExtensionOriginCompanionWasmModule: () =>
+      new ExtensionOriginCompanionWasmModuleLoader().load(),
+    initializeExtensionOriginCompanionWasm: async (module) => {
+      const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
+        module_or_path: module,
+      };
+      await initCompanionWasm(nookTypedArgs0_0);
+    },
+    diagnostics: new CompanionWasmStartupDiagnosticSink(),
+  };
+  await startup.initialize(request);
 }
 
 /**
