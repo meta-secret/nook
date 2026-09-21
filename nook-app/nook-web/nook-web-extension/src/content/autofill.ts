@@ -7,9 +7,7 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import {
-  AuthenticationWorkflowSnapshotResponseKind,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
@@ -192,6 +190,7 @@ class AuthenticationScanRenderLifecycle {
       return AuthenticationScanOutcome.Watching
     }
     await passwordFieldDiscovery.prepareCompanionClassification(document)
+    await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHints =
@@ -229,7 +228,8 @@ class AuthenticationScanRenderLifecycle {
           },
         })
       if (
-        enrollmentMatchDelivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+        enrollmentMatchDelivery.kind ===
+          RuntimeMessageDeliveryKind.Unavailable ||
         typeof enrollmentMatchDelivery.response !== 'object' ||
         !('kind' in enrollmentMatchDelivery.response)
       ) {

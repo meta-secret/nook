@@ -13,6 +13,7 @@ import {
   NookPageInputFieldObservation,
   authentication_page_observation_facts_match_binding,
   authentication_enrollment_workflow_match,
+  authentication_recovery_copy_evidence,
   authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
   bind_authentication_page_observation_facts,
@@ -25,6 +26,7 @@ import {
   looks_like_passkey_control_label,
   looks_like_username_field,
   parse_page_input_type,
+  is_nook_vault_app_url,
   project_password_workflow_activity,
   strongest_authentication_username_evidence,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -87,7 +89,8 @@ function classifyPageInputs(
         return {
           index: request.index,
           loginContext,
-          authenticationUsernameEvidence: authentication_username_evidence(field),
+          authenticationUsernameEvidence:
+            authentication_username_evidence(field),
           looksLikeUsernameField: looks_like_username_field(field),
           looksLikeOneTimeCodeField: looks_like_one_time_code_field(field),
         }
@@ -149,7 +152,9 @@ export async function handleCompanionWasmMessage(
           }),
         )
       case CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts:
-        return ok(bind_authentication_page_observation_facts(message.payload.facts))
+        return ok(
+          bind_authentication_page_observation_facts(message.payload.facts),
+        )
       case CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding:
         return ok(
           authentication_page_observation_facts_match_binding(
@@ -182,7 +187,9 @@ export async function handleCompanionWasmMessage(
       case CompanionWasmSessionMessageType.ClassifyPageInputField:
         return ok(classifyPageInputField(message.payload.observation))
       case CompanionWasmSessionMessageType.ClassifyPageInputs:
-        return ok(classifyPageInputs(message.payload.fields, message.payload.labels))
+        return ok(
+          classifyPageInputs(message.payload.fields, message.payload.labels),
+        )
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
@@ -194,6 +201,19 @@ export async function handleCompanionWasmMessage(
       case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
         return ok(
           looks_like_one_time_code_auto_submit_signal(message.payload.signal),
+        )
+      case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
+        return ok(
+          authentication_recovery_copy_evidence({
+            texts: [...message.payload.texts],
+          }),
+        )
+      case CompanionWasmSessionMessageType.IsNookVaultAppUrl:
+        return ok(
+          is_nook_vault_app_url(
+            message.payload.candidateUrl,
+            message.payload.baseUrl,
+          ),
         )
     }
   } catch {

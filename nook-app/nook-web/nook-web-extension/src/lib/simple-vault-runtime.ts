@@ -1,9 +1,13 @@
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   belongs_to_simple_vault,
-  is_nook_vault_app_url,
   simple_vault_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
+import { companionWasmReadiness } from '../content/autofill/companion-wasm-readiness'
 
 /** Browser requests await canonical policy without delaying listener registration. */
 class SimpleVaultRuntime {
@@ -12,11 +16,11 @@ class SimpleVaultRuntime {
   }
 
   async runtimeSimpleVaultUrl(path = ''): Promise<string> {
-    await companionWasmReady
+    await companionWasmReadiness.wait()
     return simple_vault_url(this.baseUrl(), path)
   }
   async isRuntimeSimpleVaultUrl(candidateUrl: string): Promise<boolean> {
-    await companionWasmReady
+    await companionWasmReadiness.wait()
     try {
       return belongs_to_simple_vault(this.baseUrl(), candidateUrl)
     } catch {
@@ -24,12 +28,15 @@ class SimpleVaultRuntime {
     }
   }
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
-    await companionWasmReady
-    try {
-      return is_nook_vault_app_url(candidateUrl, this.baseUrl())
-    } catch {
-      return false
-    }
+    const delivery = await sendCompanionWasmRuntimeMessage(globalThis, {
+      type: CompanionWasmSessionMessageType.IsNookVaultAppUrl,
+      payload: { candidateUrl, baseUrl: this.baseUrl() },
+      origin: globalThis.location.origin,
+    })
+    return (
+      delivery.kind === CompanionWasmRuntimeDeliveryKind.Delivered &&
+      delivery.response === true
+    )
   }
 }
 export const simpleVaultRuntime = new SimpleVaultRuntime()

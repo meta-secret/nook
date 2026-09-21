@@ -72,6 +72,16 @@ describe('Google content companion WASM decoupling', () => {
       'utf8',
     )
     expect(adapterSource).not.toContain('companion-ready')
+    const backupCodeSource = readFileSync(
+      new URL('../src/lib/backup-code-candidates.ts', import.meta.url),
+      'utf8',
+    )
+    const simpleVaultSource = readFileSync(
+      new URL('../src/lib/simple-vault-runtime.ts', import.meta.url),
+      'utf8',
+    )
+    expect(backupCodeSource).not.toContain('companion-ready')
+    expect(simpleVaultSource).not.toContain('companion-ready')
     const imported =
       await import('../src/content/autofill/runtime-message-adapter')
     const message: CompanionWasmRuntimeMessage = {
