@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { runInNewContext } from 'node:vm'
 import {
   CompanionWasmHostAdmissionKind,
   CompanionWasmHostMessageAdmission,
@@ -285,6 +286,43 @@ describe('companion WASM startup', () => {
         expectedResourceUrl,
       }),
     ).toEqual({ kind: CompanionWasmHostAdmissionKind.Failed })
+  })
+
+  test('admits a compiled module cloned from the extension host realm', () => {
+    const admission = new CompanionWasmHostMessageAdmission()
+    const channel = new MessageChannel()
+    const expectedOrigin = 'chrome-extension://nook'
+    const expectedResourceUrl =
+      'chrome-extension://nook/content/nook_companion_wasm_bg.wasm'
+    const hostRealmModule = runInNewContext(
+      'new WebAssembly.Module(bytes)',
+      {
+        bytes: new Uint8Array([
+          0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+        ]),
+      },
+    ) as WebAssembly.Module
+
+    expect(hostRealmModule instanceof WebAssembly.Module).toBe(false)
+    expect(
+      admission.admitResponse({
+        event: new MessageEvent('message', {
+          data: {
+            kind: CompanionWasmHostResponseKind.Compiled,
+            resourceUrl: expectedResourceUrl,
+            module: hostRealmModule,
+          },
+          origin: expectedOrigin,
+          source: channel.port1,
+        }),
+        expectedSource: channel.port1,
+        expectedOrigin,
+        expectedResourceUrl,
+      }),
+    ).toEqual({
+      kind: CompanionWasmHostAdmissionKind.Accepted,
+      module: hostRealmModule,
+    })
   })
 
   test('admits only a request from the owning parent window', () => {

@@ -48,6 +48,55 @@ export type CompanionWasmHostResponse =
     }
   | { readonly kind: CompanionWasmHostResponseKind.Failed };
 
+export enum CompanionWasmHostDiagnosticPhase {
+  IframeLoad = "iframe-load",
+  RequestReceipt = "request-receipt",
+  HostCompile = "host-compile",
+  ResponseSend = "response-send",
+  SourceAdmission = "source-admission",
+  OriginAdmission = "origin-admission",
+  ResourceAdmission = "resource-admission",
+  ModuleAdmission = "module-admission",
+  Timeout = "timeout",
+}
+
+export enum CompanionWasmHostDiagnosticOutcome {
+  Started = "started",
+  Succeeded = "succeeded",
+  Rejected = "rejected",
+  Skipped = "skipped",
+  Failed = "failed",
+  TimedOut = "timed-out",
+}
+
+export type CompanionWasmHostDiagnostic = {
+  readonly phase: CompanionWasmHostDiagnosticPhase;
+  readonly outcome: CompanionWasmHostDiagnosticOutcome;
+};
+
+declare const __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__: boolean;
+
+/** Emits only secret-free phase names for local extension diagnostics. */
+export class CompanionWasmHostDiagnosticSink {
+  record(diagnostic: CompanionWasmHostDiagnostic): void {
+    if (!this.diagnosticsEnabled()) {
+      return;
+    }
+    console.info("[Nook] companion WASM host", diagnostic);
+  }
+
+  private diagnosticsEnabled(): boolean {
+    try {
+      return (
+        typeof __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__ === "boolean" &&
+        __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__
+      );
+    } catch {
+      return false;
+    }
+  }
+}
+
 export enum CompanionWasmHostAdmissionKind {
   Rejected = "rejected",
   Accepted = "accepted",
@@ -150,10 +199,7 @@ export class CompanionWasmHostMessageAdmission {
     }
     const resourceUrl = value.resourceUrl;
     const module = value.module;
-    if (
-      typeof resourceUrl !== "string" ||
-      !(module instanceof WebAssembly.Module)
-    ) {
+    if (typeof resourceUrl !== "string" || !this.isWebAssemblyModule(module)) {
       return { kind: CompanionWasmHostAdmissionKind.Rejected };
     }
     return {
@@ -161,6 +207,20 @@ export class CompanionWasmHostMessageAdmission {
       resourceUrl,
       module,
     };
+  }
+
+  private isWebAssemblyModule(
+    value: WebAssembly.Module | string,
+  ): value is WebAssembly.Module {
+    if (typeof value === "string") {
+      return false;
+    }
+    try {
+      WebAssembly.Module.exports(value);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

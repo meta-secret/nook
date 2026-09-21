@@ -1,5 +1,8 @@
 import {
   COMPANION_WASM_RESOURCE_PATH,
+  CompanionWasmHostDiagnosticOutcome,
+  CompanionWasmHostDiagnosticPhase,
+  CompanionWasmHostDiagnosticSink,
   CompanionWasmHostAdmissionKind,
   CompanionWasmHostMessageAdmission,
   CompanionWasmHostResponseKind,
@@ -10,6 +13,7 @@ import {
 
 class ExtensionOriginCompanionWasmHost {
   private readonly messageAdmission = new CompanionWasmHostMessageAdmission()
+  private readonly diagnostics = new CompanionWasmHostDiagnosticSink()
   private readonly companionWasmUrl = chrome.runtime.getURL(
     COMPANION_WASM_RESOURCE_PATH,
   )
@@ -32,31 +36,76 @@ class ExtensionOriginCompanionWasmHost {
   private async handleMessage(
     event: MessageEvent<CompanionWasmHostTransportValue>,
   ): Promise<void> {
+    const sourceAdmission =
+      event.source === this.hostWindow.parent
+        ? CompanionWasmHostDiagnosticOutcome.Succeeded
+        : CompanionWasmHostDiagnosticOutcome.Rejected
+    this.diagnostics.record({
+      phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
+      outcome: sourceAdmission,
+    })
     const admissionRequest: CompanionWasmHostRequestAdmissionRequest = {
       event,
       expectedSource: this.hostWindow.parent,
     }
     const admission = this.messageAdmission.admitRequest(admissionRequest)
+    this.diagnostics.record({
+      phase: CompanionWasmHostDiagnosticPhase.RequestReceipt,
+      outcome:
+        admission.kind === CompanionWasmHostAdmissionKind.Accepted
+          ? CompanionWasmHostDiagnosticOutcome.Succeeded
+          : CompanionWasmHostDiagnosticOutcome.Rejected,
+    })
     if (admission.kind !== CompanionWasmHostAdmissionKind.Accepted) {
       return
     }
+    this.diagnostics.record({
+      phase: CompanionWasmHostDiagnosticPhase.HostCompile,
+      outcome: CompanionWasmHostDiagnosticOutcome.Started,
+    })
     try {
       const response = await fetch(this.companionWasmUrl)
       if (!response.ok) {
         throw new Error('companion WASM resource unavailable')
       }
       const module = await WebAssembly.compile(await response.arrayBuffer())
+      this.diagnostics.record({
+        phase: CompanionWasmHostDiagnosticPhase.HostCompile,
+        outcome: CompanionWasmHostDiagnosticOutcome.Succeeded,
+      })
       const message: CompanionWasmHostResponse = {
         kind: CompanionWasmHostResponseKind.Compiled,
         resourceUrl: this.companionWasmUrl,
         module,
       }
-      this.hostWindow.parent.postMessage(message, '*')
+      this.sendResponse(message, event.origin)
     } catch {
+      this.diagnostics.record({
+        phase: CompanionWasmHostDiagnosticPhase.HostCompile,
+        outcome: CompanionWasmHostDiagnosticOutcome.Failed,
+      })
       const message: CompanionWasmHostResponse = {
         kind: CompanionWasmHostResponseKind.Failed,
       }
-      this.hostWindow.parent.postMessage(message, '*')
+      this.sendResponse(message, event.origin)
+    }
+  }
+
+  private sendResponse(
+    message: CompanionWasmHostResponse,
+    targetOrigin: string,
+  ): void {
+    try {
+      this.hostWindow.parent.postMessage(message, targetOrigin)
+      this.diagnostics.record({
+        phase: CompanionWasmHostDiagnosticPhase.ResponseSend,
+        outcome: CompanionWasmHostDiagnosticOutcome.Succeeded,
+      })
+    } catch {
+      this.diagnostics.record({
+        phase: CompanionWasmHostDiagnosticPhase.ResponseSend,
+        outcome: CompanionWasmHostDiagnosticOutcome.Failed,
+      })
     }
   }
 }

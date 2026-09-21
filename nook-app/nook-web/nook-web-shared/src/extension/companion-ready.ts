@@ -21,9 +21,13 @@ import {
 import {
   COMPANION_WASM_HOST_RESOURCE_PATH,
   COMPANION_WASM_RESOURCE_PATH,
+  CompanionWasmHostDiagnosticOutcome,
+  CompanionWasmHostDiagnosticPhase,
+  CompanionWasmHostDiagnosticSink,
   CompanionWasmHostAdmissionKind,
   CompanionWasmHostMessageAdmission,
   CompanionWasmHostRequestKind,
+  CompanionWasmHostResponseKind,
   CompanionWasmStartup,
   type CompanionWasmHostRequest,
   type CompanionWasmHostResponseAdmissionRequest,
@@ -229,6 +233,7 @@ class CompanionWasmStartupDiagnosticSink implements CompanionWasmStartupDiagnost
 
 class ExtensionOriginCompanionWasmModuleLoader {
   private readonly messageAdmission = new CompanionWasmHostMessageAdmission();
+  private readonly diagnostics = new CompanionWasmHostDiagnosticSink();
 
   async load(): Promise<WebAssembly.Module> {
     const hostUrl = chromeRuntimeUrl(COMPANION_WASM_HOST_RESOURCE_PATH);
@@ -257,6 +262,10 @@ class ExtensionOriginCompanionWasmModuleLoader {
             kind: CompanionWasmHostRequestKind.CompileCompanionModule,
           };
           const timeout = window.setTimeout(() => {
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.Timeout,
+              outcome: CompanionWasmHostDiagnosticOutcome.TimedOut,
+            });
             cleanup();
             reject(new Error("extension-origin companion WASM host timed out"));
           }, 5000);
@@ -270,6 +279,40 @@ class ExtensionOriginCompanionWasmModuleLoader {
           ): void => {
             const hostWindow = frame.contentWindow;
             if (!hostWindow) return;
+            const response = event.data;
+            const isRecord =
+              response !== null &&
+              typeof response === "object" &&
+              !Array.isArray(response);
+            const responseKind = isRecord ? response.kind : undefined;
+            const compiledResponse =
+              responseKind === CompanionWasmHostResponseKind.Compiled;
+            const failedResponse =
+              responseKind === CompanionWasmHostResponseKind.Failed;
+            const resourceAccepted =
+              compiledResponse && response.resourceUrl === companionWasmUrl;
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
+              outcome:
+                event.source === hostWindow
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.OriginAdmission,
+              outcome:
+                event.origin === extensionOrigin
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ResourceAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : resourceAccepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
             const admissionRequest: CompanionWasmHostResponseAdmissionRequest =
               {
                 event,
@@ -279,6 +322,14 @@ class ExtensionOriginCompanionWasmModuleLoader {
               };
             const admission =
               this.messageAdmission.admitResponse(admissionRequest);
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ModuleAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : admission.kind === CompanionWasmHostAdmissionKind.Accepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
             if (admission.kind === CompanionWasmHostAdmissionKind.Rejected) {
               return;
             }
@@ -292,16 +343,24 @@ class ExtensionOriginCompanionWasmModuleLoader {
             );
           };
           const handleFrameLoad = (): void => {
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.IframeLoad,
+              outcome: CompanionWasmHostDiagnosticOutcome.Succeeded,
+            });
             const hostWindow = frame.contentWindow;
             if (!hostWindow) {
               cleanup();
               reject(new Error("extension-origin companion WASM host closed"));
               return;
             }
-            hostWindow.postMessage(request, "*");
+            hostWindow.postMessage(request, extensionOrigin);
           };
           window.addEventListener("message", handleMessage);
           frame.addEventListener("load", handleFrameLoad);
+          this.diagnostics.record({
+            phase: CompanionWasmHostDiagnosticPhase.IframeLoad,
+            outcome: CompanionWasmHostDiagnosticOutcome.Started,
+          });
           document.documentElement.append(frame);
         },
       );
