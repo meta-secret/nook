@@ -24,12 +24,18 @@ owner graphs, and shared knowledge.
 - The six engineering/operational owner graphs index documents owned by their
   teams: Delivery Pipeline, AI, development core, security, SRE, and web
   development.
-- Feature Gizmo is a manually operated controller, not an engineering team graph
-  or a Loom child team.
+- The single Team Gizmo coordinates all six Nook contexts under Prime.
+- Team-specific Gizmo paths are context adapters for this coordinator.
 - The shared graph indexes genuinely cross-team documents.
 - Every document has exactly one owning graph.
 - The root graph does not index child documents directly.
 - One child graph does not index another context's documents.
+
+**Prohibited:** launch separate AI and web coordinators because their contexts
+have separate graphs.
+
+**Preferred:** the existing Team Gizmo supplies the AI and web contexts to
+their respective bounded worker assignments.
 
 ## Knowledge-graph shape
 
@@ -47,13 +53,20 @@ document is selected.
 
 ## Selective context loading
 
-1. Read the root router.
-2. Select one primary owning context.
-3. Read that context's `AGENTS.md` and graph.
-4. Select one relevant category.
-5. Open only the documents needed for the assigned functionality.
-6. Read only the relevant headings.
-7. Stop when the task contract has enough authoritative context.
+Use the root router at task entry to select one primary owning context.
+Delegated workers start with the owning context and prerequisites supplied by
+Team Gizmo in their assignment.
+
+1. Read the selected context's `AGENTS.md` and graph.
+2. Select one relevant category.
+3. Open only the documents needed for the assigned functionality.
+4. Read task-relevant reference headings. Load selected skills and practices in full.
+5. Stop when the task contract has enough authoritative context.
+
+**Prohibited:** an assigned Cortex writer restarts root routing to choose a team.
+
+**Preferred:** the writer consumes the supplied AI context and selected
+authoring documents directly.
 
 Agents must not preload all graphs, all team documents, or the shared corpus.
 A foreign-team implementation requirement returns to Gizmo. A team subagent
@@ -80,7 +93,7 @@ they own centralized navigation.
 
 ## Application procedure
 
-1. Determine whether the document belongs to Feature Gizmo, Gizmo, Delivery
+1. Determine whether the document belongs to Gizmo Prime, Delivery
    Pipeline, AI, development core, security, SRE, web development, or shared
    knowledge.
 2. Place it under the owning context.

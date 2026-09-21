@@ -7,12 +7,16 @@ canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
 The AI team owns dynamic-skill meaning, card authoring, and registry
-maintenance. Gizmo owns feature delivery state when a card is applied. Route
-feature, remote validation, review, Workbench, and promotion mechanics through
-Team Gizmo (Delivery Pipeline context) -> active harness -> PR Lifecycle Agent. Team
-Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
-create or update PRs or decide policy. The Feature Gizmo remains the policy owner
-and sole invoker of `feature PR lifecycle`.
+maintenance. Gizmo Prime authorizes feature delivery when a card is applied.
+The single Team Gizmo assigns GitHub mechanics to PR Lifecycle with Delivery
+Pipeline context through the active harness. PR Lifecycle performs authorized
+PR creation, updates, validation, and delivery operations. Prime retains
+feature policy and readiness decisions.
+
+**Prohibited:** have a skill author create a PR outside the assigned delivery route.
+
+**Preferred:** Prime authorizes the PR operation. Team Gizmo assigns it to
+PR Lifecycle. PR Lifecycle executes it with the supplied Delivery Pipeline context.
 
 ## Problem Pattern
 
@@ -43,7 +47,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Keep harness-specific profile directories outside the tracked repository.
    Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
-6. Apply the skill to code through the owning Feature Gizmo's feature path when
+6. Apply the skill to code through Gizmo Prime's authorized feature scope when
    the user asks for capture plus refactor.
 
 ## Scope
@@ -97,6 +101,6 @@ For documentation-only captures, run `task loom:cortex-audit`.
 For code refactors using a dynamic skill, apply only the permitted scoped
 formatters or inexpensive diagnostics. Commit every resulting mutation in the
 allowed paths and return the exact scoped commit to Gizmo. Do not run a local
-pre-push or broad validation gate. Gizmo routes the hosted build-only packet
-through Team Gizmo (Delivery Pipeline context) -> active harness -> PR Lifecycle Agent.
-The Feature Gizmo owns later CI validation.
+pre-push or broad validation gate. Prime authorizes hosted validation.
+Team Gizmo assigns the packet to PR Lifecycle with Delivery Pipeline context
+through the active harness. Prime owns readiness based on the returned CI evidence.

@@ -133,7 +133,8 @@ catalogs the linked authorities without copying their policies.
 - **[user-facing-security-abstractions.md](../../security/dynamic-skills/user-facing-security-abstractions.md)**
   - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
-  - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
+  - Purpose: Map the main web app's Knip 5 class-member analysis and Research
+    Knip 6 caller review to Nook's hosted unused-code checks.
 - **[cortex-document-map](cortex-document-map/SKILL.md)**
   - Purpose: Centralize Cortex navigation across root/controller graphs, six engineering/operational owner graphs including Delivery Pipeline, shared knowledge, and nested Delivery Pipeline internals
 - **[testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md)**
