@@ -136,8 +136,6 @@ RUN set -eu \
     && rm -rf /meta-secret/nook/.meta-cortex \
     && mv "$meta_cortex_source/cortex" /meta-secret/nook/.meta-cortex \
     && mv "$meta_cortex_source/LICENSE" /meta-secret/nook/.meta-cortex/LICENSE \
-    && sed -i '/^\[team\.agent\]$/,/^$/s/^model = .*/model = "gpt-5.6-luna"/' \
-      /meta-secret/nook/.meta-cortex/meta-cortex.toml \
     && rm -rf "$meta_cortex_source"
 COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json

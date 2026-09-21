@@ -342,16 +342,19 @@ fn loom_workflow_audits_every_cortex_change() {
 }
 
 #[test]
-fn preflight_installs_meta_cortex_with_the_configured_team_agent_model() {
+fn preflight_installs_pinned_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     assert!(
-        dockerfile.contains(
-            "sed -i '/^\\[team\\.agent\\]$/,/^$/s/^model = .*/model = \"gpt-5.6-luna\"/'"
-        ),
-        "Meta-Cortex installation must preserve the configured team.agent model"
+        dockerfile.contains("meta_cortex_commit=d31a48a331cf01363816435d8bde9a2b9881e71b"),
+        "Meta-Cortex installation must use the pinned upstream commit"
     );
     assert!(
-        !dockerfile.contains("model = \"gpt-6-astra\""),
-        "Meta-Cortex installation must not override team.agent with a legacy model"
+        dockerfile.contains("meta-cortex-$meta_cortex_commit/cortex")
+            && dockerfile.contains("meta-cortex-$meta_cortex_commit/LICENSE"),
+        "Meta-Cortex installation must copy the pinned library and license"
+    );
+    assert!(
+        !dockerfile.contains("sed -i"),
+        "Meta-Cortex installation must not rewrite upstream configuration"
     );
 }
