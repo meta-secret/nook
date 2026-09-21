@@ -396,7 +396,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     if (!handler) {
       return Promise.resolve(
         err(
-          new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
         ),
       )
     }
@@ -500,8 +502,15 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
       if (isCompanionWasmSessionMessageType(message.type)) {
-        if (!serviceWorkerSender || !this.context.handleCompanionWasmMessage) {
-          sendResponse({ ok: false, error: 'Forbidden companion WASM request.' })
+        // Content-script requests are admitted and forwarded by the service
+        // worker. The offscreen document receives the same runtime broadcast,
+        // so it must leave that response channel untouched for the worker.
+        if (!serviceWorkerSender) return false
+        if (!this.context.handleCompanionWasmMessage) {
+          sendResponse({
+            ok: false,
+            error: 'Forbidden companion WASM request.',
+          })
           return false
         }
         void this.enqueueCompanionWasmMessage(
