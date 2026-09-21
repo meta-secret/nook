@@ -78,7 +78,9 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
 - A failed browser scenario follows the canonical
-  [unit-first browser failure loop](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#unit-first-browser-failure-loop).
+  [regression-before-fix procedure](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#mandatory-regression-coverage-for-bug-fixes)
+  and uses the applicable
+  [existing browser harness](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#existing-browser-harnesses).
 - Before integration, the Web worker authors focused behavior tests and commits
   a coherent scoped handoff. Local feedback permits only bounded inexpensive
   diagnostics or formatting. Browser and behavior tests execute in the dev

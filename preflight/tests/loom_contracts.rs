@@ -340,3 +340,21 @@ fn loom_workflow_audits_every_cortex_change() {
         "trusted and untrusted workflow branches must delegate policy behavior to Taskfile"
     );
 }
+
+#[test]
+fn preflight_installs_pinned_meta_cortex_without_configuration_override() {
+    let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
+    assert!(
+        dockerfile.contains("meta_cortex_commit=d31a48a331cf01363816435d8bde9a2b9881e71b"),
+        "Meta-Cortex installation must use the pinned upstream commit"
+    );
+    assert!(
+        dockerfile.contains("meta-cortex-$meta_cortex_commit/cortex")
+            && dockerfile.contains("meta-cortex-$meta_cortex_commit/LICENSE"),
+        "Meta-Cortex installation must copy the pinned library and license"
+    );
+    assert!(
+        !dockerfile.contains("sed -i"),
+        "Meta-Cortex installation must not rewrite upstream configuration"
+    );
+}

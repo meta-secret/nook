@@ -402,12 +402,14 @@ export class CortexDocumentMapVerifier {
     if (pathPart.length === 0) return false;
     const fragment =
       hash === -1 ? false : decodeURIComponent(url.slice(hash + 1)) || false;
-    const target = this.normalize(
+    const repositoryPath = path.posix.normalize(
       path.posix.join(
         path.posix.dirname(this.normalize(args.indexPath)),
         pathPart.replace(/\\/gu, '/'),
       ),
     );
+    if (repositoryPath.startsWith('.meta-cortex/')) return false;
+    const target = this.normalize(repositoryPath);
     return { target, fragment };
   }
 

@@ -15,77 +15,6 @@ class CortexContextRouterScenario {
   }
 }
 
-const FRESH_BASE_AUTHORITIES = [
-  '.cortex/AGENTS.md',
-  '.cortex/knowledge-graph.md',
-  '.cortex/gizmo-prime/AGENTS.md',
-  '.cortex/gizmo-prime/knowledge-graph.md',
-  '.cortex/gizmo-prime/architecture/dev-delivery.md',
-  '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
-  '.cortex/gizmo-prime/dynamic-skills/branch-naming.md',
-  '.cortex/gizmo-prime/workflows/mission-delivery.md',
-  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
-  '.cortex/gizmo-prime/workflows/pull-requests.md',
-  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
-  '.cortex/gizmo-prime/workflows/team-oriented-development.md',
-  '.cortex/teams/ai/AGENTS.md',
-  '.cortex/teams/ai/gizmo/AGENTS.md',
-  '.cortex/teams/ai/cortex-specialist/AGENTS.md',
-  '.cortex/teams/ai/loom-specialist/AGENTS.md',
-  '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
-] as const;
-
-const FRESH_BASE_BOOTSTRAP_AUTHORITIES = [
-  '.cortex/AGENTS.md',
-  '.cortex/gizmo-prime/AGENTS.md',
-  '.cortex/gizmo-prime/architecture/dev-delivery.md',
-  '.cortex/gizmo-prime/architecture/multiagent-delivery-diagrams.md',
-  '.cortex/gizmo-prime/workflows/mission-delivery.md',
-] as const;
-
-const AI_TYPESCRIPT_POLICY_ROUTES = [
-  {
-    path: '.cortex/teams/ai/AGENTS.md',
-    links: [
-      '[Function ownership](../../shared/dynamic-skills/function-ownership.md)',
-      '[TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)',
-    ],
-  },
-  {
-    path: '.cortex/teams/ai/gizmo/AGENTS.md',
-    links: [
-      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
-      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
-    ],
-  },
-  {
-    path: '.cortex/teams/ai/cortex-specialist/AGENTS.md',
-    links: [
-      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
-      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
-    ],
-  },
-  {
-    path: '.cortex/teams/ai/loom-specialist/AGENTS.md',
-    links: [
-      '[AI authored implementation routes](../AGENTS.md#authored-implementation-routing)',
-      '[function ownership](../../../shared/dynamic-skills/function-ownership.md)',
-      '[TypeScript explicit state](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
-    ],
-  },
-] as const;
-
-const CIRCUIT_BREAKER_LINK = 'CIRCUIT-BREAKER.md';
-
-const AI_CIRCUIT_BREAKER_ROUTES = [
-  '.cortex/teams/ai/AGENTS.md',
-  '.cortex/teams/ai/gizmo/AGENTS.md',
-  '.cortex/teams/ai/cortex-specialist/AGENTS.md',
-  '.cortex/teams/ai/loom-specialist/AGENTS.md',
-] as const;
-
 const TRUSTED_HANDOFF_DUPLICATION_SURFACES = [
   '.cortex/AGENTS.md',
   '.cortex/teams/ai/AGENTS.md',
@@ -138,8 +67,10 @@ Model text.
   const renderArgs = { index };
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Nook Cortex Knowledge Graph');
-  expect(markdown).toContain('## Owning contexts');
-  expect(markdown).toContain('[Gizmo Prime](gizmo-prime/knowledge-graph.md)');
+  expect(markdown).toContain('## Product and operational contexts');
+  expect(markdown).toContain(
+    '[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)',
+  );
   expect(markdown).not.toContain(
     '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
   );
@@ -151,40 +82,10 @@ Model text.
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
-  const normalized = CortexContextRouterScenario.normalizeMarkdown(markdown);
-  expect(normalized).toContain(
-    'Every feature branch starts from freshly fetched `origin/main`.',
-  );
-  expect(normalized).toContain(
-    'Gizmo Prime owns the full cycle through all required PR checks',
-  );
+  expect(markdown).toContain('meta-cortex-integration.md');
+  expect(markdown).toContain('../.meta-cortex/skill-composition.md');
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
-});
-
-test('requires every fresh-base authority to use fresh origin/main', () => {
-  for (const relativePath of FRESH_BASE_AUTHORITIES) {
-    const markdown = CortexContextRouterScenario.normalizeMarkdown(
-      readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
-    );
-    expect(markdown).toContain('feature branch');
-    expect(markdown).not.toContain(
-      'unless the user explicitly selects another base',
-    );
-    expect(markdown).toContain('origin/main');
-    expect(markdown).not.toContain('canonical local `dev`');
-    expect(markdown).not.toContain('refs/heads/dev');
-    expect(markdown).not.toContain('origin/dev');
-  }
-
-  for (const relativePath of FRESH_BASE_BOOTSTRAP_AUTHORITIES) {
-    const markdown = CortexContextRouterScenario.normalizeMarkdown(
-      readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8'),
-    );
-    expect(markdown).toContain('git fetch --prune origin');
-    expect(markdown).toContain('origin/main');
-    expect(markdown).toContain('originMainSha');
-  }
 });
 
 test('renders the complete canonical Cortex context router', () => {
@@ -198,13 +99,16 @@ test('renders the complete canonical Cortex context router', () => {
     canonicalRouter.replace(/\s+/gu, ' '),
   );
 
-  const requiredSections = ['## Required entry', '## Owning contexts'];
+  const requiredSections = [
+    '## Required entry',
+    '## Product and operational contexts',
+  ];
   for (const section of requiredSections) {
     expect(markdown).toContain(section);
   }
 
   const teamOwnershipContracts = [
-    '[Gizmo Prime](gizmo-prime/knowledge-graph.md)',
+    '[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
     '[AI](teams/ai/knowledge-graph.md)',
     '[Development Core](teams/dev-core/knowledge-graph.md)',
@@ -216,70 +120,8 @@ test('renders the complete canonical Cortex context router', () => {
     expect(markdown).toContain(contract);
   }
 
-  expect(markdown).toContain(
-    'Every feature branch starts from freshly fetched `origin/main`',
-  );
-  expect(CortexContextRouterScenario.normalizeMarkdown(markdown)).toContain(
-    'Gizmo Prime owns the full cycle through all required PR checks, squash merge to `main`, actual merged-state verification, and remote feature-branch deletion.',
-  );
-  expect(markdown).toContain('Reviews and approvals are optional.');
+  expect(markdown).toContain('meta-cortex-integration.md');
   expect(markdown).not.toContain('canonical local `dev`');
-});
-
-test('routes every AI TypeScript leaf through the minimal policy authorities', () => {
-  for (const route of AI_TYPESCRIPT_POLICY_ROUTES) {
-    const document = CortexContextRouterScenario.normalizeMarkdown(
-      readFileSync(path.join(REPOSITORY_ROOT, route.path), 'utf8'),
-    );
-    for (const link of route.links) {
-      expect(document).toContain(link);
-    }
-  }
-
-  const aiIndex = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/dynamic-skills/index.md'),
-    'utf8',
-  );
-  expect(aiIndex).toContain(
-    '[AI team contract](../AGENTS.md#authored-implementation-routing)',
-  );
-  expect(aiIndex).toContain(
-    '[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)',
-  );
-});
-
-test('keeps the circuit breaker first and mandatory across root and AI entries', () => {
-  const repositoryEntry = readFileSync(
-    path.join(REPOSITORY_ROOT, 'AGENTS.md'),
-    'utf8',
-  );
-  expect(repositoryEntry).toContain(
-    '[`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md)',
-  );
-  expect(repositoryEntry.indexOf('.cortex/CIRCUIT-BREAKER.md')).toBeLessThan(
-    repositoryEntry.indexOf('.cortex/AGENTS.md'),
-  );
-
-  for (const relativePath of AI_CIRCUIT_BREAKER_ROUTES) {
-    const document = readFileSync(
-      path.join(REPOSITORY_ROOT, relativePath),
-      'utf8',
-    );
-    expect(document).toContain(CIRCUIT_BREAKER_LINK);
-    expect(document.indexOf(CIRCUIT_BREAKER_LINK)).toBeLessThan(
-      document.indexOf('## Mission'),
-    );
-  }
-
-  const rootContract = CortexContextRouterScenario.normalizeMarkdown(
-    readFileSync(path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'), 'utf8'),
-  );
-  expect(rootContract).toContain(
-    'Every team and leaf entry inherits this first-read rule through its Prime-issued packet.',
-  );
-  expect(rootContract).toContain(
-    'That packet records that the circuit breaker was read before direct team context loading.',
-  );
 });
 
 test('keeps trusted-agent prohibitions single-sourced in the circuit breaker', () => {
@@ -356,51 +198,6 @@ test('keeps direct remote Task and BuildKit execution authoritative', () => {
   expect(circuitBreaker).toContain(
     'Preserve the complete sccache health policy, including its zero-hit gate.',
   );
-});
-
-test('keeps root and AI universal policy routes canonical', () => {
-  const rootContract = CortexContextRouterScenario.normalizeMarkdown(
-    readFileSync(path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'), 'utf8'),
-  );
-  for (const required of [
-    '[function ownership](shared/dynamic-skills/function-ownership.md)',
-    '[TypeScript explicit state](teams/web-dev/dynamic-skills/typescript-explicit-state.md)',
-    '[domain API integrity](shared/dynamic-skills/domain-api-integrity.md)',
-    '[Source file size](shared/dynamic-skills/source-file-size.md)',
-    '[TypeScript and Rust automation only](shared/dynamic-skills/typescript-rust-automation-only.md)',
-    '[Testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md)',
-    '[Prefer popular libraries](shared/dynamic-skills/prefer-popular-libraries.md)',
-    '[UI design authority](teams/web-dev/dynamic-skills/ui-design-skills.md)',
-  ]) {
-    expect(rootContract).toContain(required);
-  }
-
-  const aiContract = CortexContextRouterScenario.normalizeMarkdown(
-    readFileSync(
-      path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
-      'utf8',
-    ),
-  );
-  for (const required of [
-    '[Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)',
-    '[TypeScript domain structure](../web-dev/dynamic-skills/typescript-domain-structure.md)',
-    '[concrete values](../web-dev/dynamic-skills/typescript-no-unknown.md)',
-    '[single parameters](../web-dev/dynamic-skills/typescript-single-parameter.md)',
-    '[named call arguments](../web-dev/dynamic-skills/typescript-named-args.md)',
-    '[Source file size](../../shared/dynamic-skills/source-file-size.md)',
-    '[TypeScript and Rust automation only](../../shared/dynamic-skills/typescript-rust-automation-only.md)',
-    '[Testing and regression coverage](../../shared/dynamic-skills/testing-pyramid-and-regression.md)',
-    '[Prefer popular libraries](../../shared/dynamic-skills/prefer-popular-libraries.md)',
-    '[Rust coding](../dev-core/dynamic-skills/rust-coding.md)',
-    '[Rust macro minimization](../dev-core/dynamic-skills/rust-macro-minimization.md)',
-    '[Rust-TypeScript separation](../dev-core/dynamic-skills/rust-typescript-code-separation.md)',
-    '[WASM name coherence](../dev-core/dynamic-skills/rust-wasm-name-coherence.md)',
-    '[TypeScript enums over booleans](../web-dev/dynamic-skills/typescript-enums-over-booleans.md)',
-    '[Svelte state modeling](../web-dev/dynamic-skills/svelte-state-modeling.md)',
-    '[serial operation queues](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)',
-  ]) {
-    expect(aiContract).toContain(required);
-  }
 });
 
 test('keeps AI acceptance claims aligned with executable enforcement', () => {
@@ -489,11 +286,9 @@ test('routes AI and Delivery Pipeline authorities through their owner graphs', (
     '[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)',
   );
   expect(pipelineGizmo).toContain(
-    '[Delivery Pipeline team contract](../AGENTS.md)',
+    '[Nook Team Gizmo wrapper](../../../gizmo-prime/team-gizmo/AGENTS.md)',
   );
-  expect(pipelineGraph).toContain(
-    '[Delivery Pipeline team contract](../AGENTS.md)',
-  );
+  expect(pipelineGraph).toContain('[Team contract](../AGENTS.md)');
 });
 
 test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {
@@ -545,4 +340,35 @@ This is the actual overview text.
   expect(stripped).not.toContain('## Relationships');
   expect(stripped).not.toContain('## Document map');
   expect(stripped).not.toContain('- [Other](other.md)');
+});
+
+test('composes upstream roles with Nook delivery instead of duplicating policies', () => {
+  const root = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'),
+    'utf8',
+  );
+  const prime = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/AGENTS.md'),
+    'utf8',
+  );
+  const team = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/team-gizmo/AGENTS.md'),
+    'utf8',
+  );
+  const delivery = readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      '.cortex/gizmo-prime/architecture/dev-delivery.md',
+    ),
+    'utf8',
+  );
+  expect(root.indexOf('CIRCUIT-BREAKER.md')).toBeLessThan(
+    root.indexOf('../.meta-cortex/AGENTS.md'),
+  );
+  expect(root).toContain('../.meta-cortex/skill-composition.md');
+  expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
+  expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
+  expect(team).toContain('There is one Team Gizmo per feature.');
+  expect(delivery).toContain('git fetch --prune origin');
+  expect(delivery).toContain('originMainSha');
 });

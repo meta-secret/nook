@@ -6,13 +6,21 @@ Capture a user's concrete code feedback as durable project knowledge in the
 canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
-The AI team owns dynamic-skill meaning, card authoring, and registry
-maintenance. Gizmo owns feature delivery state when a card is applied. Route
-feature, remote validation, review, Workbench, and promotion mechanics through
-Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Team
-Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
-create or update PRs or decide policy. The Feature Gizmo remains the policy owner
-and sole invoker of `feature PR lifecycle`.
+- **AI team**
+  - Owns dynamic-skill meaning, card authoring, and registry maintenance.
+- **Gizmo Prime**
+  - Authorizes feature delivery when a card is applied.
+  - Retains feature policy and readiness decisions.
+- **Team Gizmo**
+  - The single coordinator assigns GitHub mechanics to PR Lifecycle with
+    Delivery Pipeline context through the active harness.
+- **PR Lifecycle**
+  - Performs authorized PR creation, updates, validation, and delivery operations.
+
+**Prohibited:** have a skill author create a PR outside the assigned delivery route.
+
+**Preferred:** Prime authorizes the PR operation. Team Gizmo assigns it to
+PR Lifecycle. PR Lifecycle executes it with the supplied Delivery Pipeline context.
 
 ## Problem Pattern
 
@@ -27,7 +35,9 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 1. Inspect the referenced code.
 2. Select the responsible team through
    [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
-3. Convert the explanation into a concise card in the owner's
+3. Consult upstream skill composition first. Improve generic practice upstream
+   instead of creating another local language or agent rule. Capture Nook-only
+   requirements as a concise supplement in the owner's
    `dynamic-skills/` directory.
    - Use Gizmo for delivery-control knowledge.
    - Use the responsible engineering team for implementation knowledge.
@@ -41,7 +51,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Keep harness-specific profile directories outside the tracked repository.
    Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
-6. Apply the skill to code through the owning Feature Gizmo's feature path when
+6. Apply the skill to code through Gizmo Prime's authorized feature scope when
    the user asks for capture plus refactor.
 
 ## Scope
@@ -90,11 +100,19 @@ Does not apply to:
 
 ## Validation
 
-For documentation-only captures, run `task loom:cortex-audit`.
+- For documentation-only captures, run `task loom:cortex-audit` only in the
+  authorized hosted PR validation stage.
+- Follow explicit user instructions that change the execution stage or require
+  stopping without checks.
+
+**Prohibited:** run the audit locally merely because the capture changes only prose.
+
+**Preferred:** complete a user-requested local-only capture without checks.
+Report the hosted audit as unrun.
 
 For code refactors using a dynamic skill, apply only the permitted scoped
 formatters or inexpensive diagnostics. Commit every resulting mutation in the
 allowed paths and return the exact scoped commit to Gizmo. Do not run a local
-pre-push or broad validation gate. Gizmo routes the hosted build-only packet
-through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
-The Feature Gizmo owns later CI validation.
+pre-push or broad validation gate. Prime authorizes hosted validation.
+Team Gizmo assigns the packet to PR Lifecycle with Delivery Pipeline context
+through the active harness. Prime owns readiness based on the returned CI evidence.

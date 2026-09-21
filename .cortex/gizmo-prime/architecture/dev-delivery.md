@@ -17,9 +17,9 @@ model](multiagent-delivery-diagrams.md) before using this contract.
 
 - Gizmo Prime remains the mission/root coordinator.
 - The Feature Gizmo owns implementation, repair, readiness, and final delivery.
-- Team Gizmos dispatch bounded Team Agents and integrate their commits into the
+- The single Team Gizmo dispatches bounded Team Agents and integrate their commits into the
   canonical feature branch.
-- Delivery Pipeline Team Gizmo routes GitHub mechanics to PR Lifecycle Agent.
+- Team Gizmo (Delivery Pipeline context) routes GitHub mechanics to PR Lifecycle Agent.
 - PR Lifecycle Agent pushes the canonical feature branch, creates or updates
   its pull request, observes checks, performs the authorized squash merge, and
   deletes the remote feature branch.

@@ -11,6 +11,7 @@ import {
 import {
   CortexDocumentMapContractKind,
   type AuditCortexDocumentMapRequest,
+  type CortexDocumentMapResult,
 } from '../src/domain.ts';
 
 import { CortexStructureFindingCode } from '../src/cortex-document-structure.ts';
@@ -57,6 +58,69 @@ test('audits supplied documents without repository I/O', () => {
     findings: [],
   });
 });
+
+test('treats vendored Meta-Cortex links as external graph dependencies', () => {
+  const dependencyLinks: readonly string[] = [
+    '../.meta-cortex/AGENTS.md',
+    '../.meta-cortex/skills/../AGENTS.md',
+    '../.meta-cortex/skill-composition.md#common-prerequisites',
+  ];
+  const expected: CortexDocumentMapResult = {
+    kind: CortexDocumentMapContractKind.Result,
+    findings: [],
+  };
+  for (const dependencyLink of dependencyLinks) {
+    const graph: MakeRequest = {
+      content: `# Cortex Context Router\n\n- [Meta-Cortex](${dependencyLink})\n`,
+    };
+    const request = CortexDocumentMapApplicationScenario.request(graph);
+    expect(CortexDocumentMapApplication.from(request).execute()).toEqual(
+      ok(expected),
+    );
+  }
+});
+
+test('keeps documents outside the vendored library in graph validation', () => {
+  const localLinks: readonly MissingGraphDocument[] = [
+    {
+      url: '.meta-cortex/AGENTS.md',
+      target: '.cortex/.meta-cortex/AGENTS.md',
+    },
+    {
+      url: '../.meta-cortex-copy/AGENTS.md',
+      target: '.cortex/.meta-cortex-copy/AGENTS.md',
+    },
+    {
+      url: '../.meta-cortex/../missing.md',
+      target: '.cortex/missing.md',
+    },
+  ];
+  for (const localLink of localLinks) {
+    const graph: MakeRequest = {
+      content: `# Cortex Context Router\n\n- [Local](${localLink.url})\n`,
+    };
+    const request = CortexDocumentMapApplicationScenario.request(graph);
+    const expected: CortexDocumentMapResult = {
+      kind: CortexDocumentMapContractKind.Result,
+      findings: [
+        {
+          code: CortexStructureFindingCode.InvalidIndexEntry,
+          file: '.cortex/knowledge-graph.md',
+          line: 3,
+          message: `Index link points to non-existent document: ${localLink.target}`,
+        },
+      ],
+    };
+    expect(CortexDocumentMapApplication.from(request).execute()).toEqual(
+      ok(expected),
+    );
+  }
+});
+
+type MissingGraphDocument = {
+  readonly url: string;
+  readonly target: string;
+};
 
 test('rejects HTML before topology and preserves the syntax diagnostic', () => {
   const resultOutcome = CortexDocumentMapApplication.from(

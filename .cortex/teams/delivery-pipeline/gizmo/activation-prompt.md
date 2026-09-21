@@ -1,4 +1,4 @@
-# Delivery Pipeline Team Gizmo Activation
+# Team Gizmo (Delivery Pipeline context) Activation
 
 Read the root circuit breaker and complete multiagent delivery diagrams first.
 Accept only a Gizmo Prime packet.

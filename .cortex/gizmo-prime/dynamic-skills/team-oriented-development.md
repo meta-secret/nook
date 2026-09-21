@@ -1,7 +1,7 @@
 # Team-Oriented Development
 
-Each functional team owns its implementation and tests. Team Gizmos dispatch
-bounded Team Agents and integrate their commits into the canonical feature
+Each functional team owns its implementation and tests. The single Team Gizmo dispatches
+bounded Team Agents and integrates their commits into the canonical feature
 branch.
 
 The owning Feature Gizmo owns readiness and complete delivery. Delivery

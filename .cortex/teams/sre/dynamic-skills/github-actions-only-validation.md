@@ -22,7 +22,7 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
   - Require code review and security acceptance before feature pull-request delivery.
 - **Slow dev PR checks**
   - The manually run Feature Gizmo selects the published dev snapshot.
-  - The Feature Gizmo authorizes Delivery Pipeline Team Gizmo to route the
+  - The Feature Gizmo authorizes Team Gizmo (Delivery Pipeline context) to route the
     publication and validation packet through the active harness to internal
     PR Lifecycle Agent for bounded execution.
   - The Feature Gizmo retains manager-stage policy authority, and
@@ -51,7 +51,7 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 ## Evidence
 
 Capture source SHA, run, attempt, and result. Feature build success proves
-compilation only. Return evidence through Delivery Pipeline Team Gizmo to the
+compilation only. Return evidence through Team Gizmo (Delivery Pipeline context) to the
 owning controller. The Feature Gizmo decides the manager-stage verdict and
 promotion; promotion requires slow-stage tests, review, and security
 acceptance for the exact published SHA.

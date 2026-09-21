@@ -74,6 +74,19 @@ test('accepts clean documents and valid centralized knowledge-graph.md', () => {
   ).toEqual([]);
 });
 
+test('treats vendored skills as dependencies rather than Nook graph ownership', () => {
+  const request: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content:
+      '# Nook graph\n\n- [Common coding](../.meta-cortex/skills/dev/coding-skill/SKILL.md)\n',
+  };
+  const document =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(request);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([document]),
+  ).toEqual([]);
+});
+
 test('accepts document-level team and shared graphs', () => {
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit(

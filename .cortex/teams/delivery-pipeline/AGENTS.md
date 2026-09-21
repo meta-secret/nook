@@ -1,5 +1,10 @@
 # Delivery Pipeline Team Contract
 
+This is a Nook functional context. The single Team Gizmo supplies it alongside
+Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+over legacy generic wording here; Nook product and delivery requirements remain.
+
+
 ## Mission
 
 Delivery Pipeline owns bounded GitHub and pull-request mechanics. It does not
@@ -13,7 +18,7 @@ before acting.
 - Receive a feature-delivery packet from Gizmo Prime.
 - Preserve the canonical feature branch, fresh `originMainSha`, controller,
   scope, and required-check set.
-- Dispatch PR Lifecycle Agent through Delivery Pipeline Team Gizmo.
+- Dispatch PR Lifecycle Agent through Team Gizmo (Delivery Pipeline context).
 - Push only the canonical feature branch.
 - Create or update one feature pull request into `main`.
 - Observe every required PR check for the current feature head.

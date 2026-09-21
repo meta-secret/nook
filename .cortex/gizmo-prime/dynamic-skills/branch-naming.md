@@ -39,8 +39,8 @@ Gizmo role segment is `gizmo`. A leaf uses its canonical leaf role.
   - **Security (`security`):** `gizmo`, `cryptography-specialist`, or
     `security-review-specialist`.
   - **SRE (`sre`):** `gizmo`, `provisioning`, or `cloud-native`.
-  - **Web Development (`web-dev`):** `gizmo`, `typescript-specialist`, or
-    `svelte-specialist`.
+  - **Web Development (`web-dev`):** `gizmo`, `typescript-specialist`,
+    `svelte-specialist`, or `web-designer`.
   - **Delivery Pipeline (`delivery-pipeline`):** `gizmo`, `pr-lifecycle`, or
     `pr-lifecycle`.
 - **Role:** The `role` segment is `gizmo` or the canonical leaf role listed in
@@ -156,6 +156,7 @@ codex/child/security/cryptography-specialist/agent-branching/define-crypto-branc
 ```text
 codex/child/web-dev/gizmo/agent-branching/coordinate-web-child-delivery
 codex/child/web-dev/typescript-specialist/agent-branching/define-web-branch-contract
+codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface
 ```
 
 ### Delivery Pipeline

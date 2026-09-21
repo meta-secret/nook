@@ -55,7 +55,7 @@ AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
 authors Workbench feature summaries and focused issues. It records feature
 completion and sets issue lifecycle state. For feature build or check
 mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
-Gizmo Prime authorizes Delivery Pipeline Team Gizmo. The Team Gizmo dispatches
+Gizmo Prime authorizes Team Gizmo (Delivery Pipeline context). The Team Gizmo dispatches
 PR Lifecycle Agent through the active harness and returns the evidence. The
 Feature Gizmo authorizes manager-stage publication, slow checks, and promotion
 through the same route.
@@ -155,6 +155,6 @@ When applying a skill to code:
    implementation. Commit every resulting mutation in the allowed paths and
    return the exact handoff to the owning Feature Gizmo. Do not run a local
    pre-push or broad validation gate. For applicable feature build or check
-   mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
+   mechanics, Gizmo Prime authorizes the Team Gizmo (Delivery Pipeline context) packet;
    Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
    required PR-check task. The Feature Gizmo owns later CI validation.

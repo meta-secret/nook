@@ -21,6 +21,17 @@ import {
 import type { CortexContractFinding } from '../src/lib/cortex-contracts.ts';
 
 export class CortexContractsScenario {
+  static readonly POLICY =
+    '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
+
+  static readonly VALID_REFERENCES = [
+    '[direct](../web-dev/dynamic-skills/ui-design-skills.md)',
+    '[title](../web-dev/dynamic-skills/ui-design-skills.md "Policy")',
+    '[heading](../web-dev/dynamic-skills/ui-design-skills.md#validation)',
+    '[query](../web-dev/dynamic-skills/ui-design-skills.md?plain=1#validation)',
+    '[reference][rule]\n\n[rule]: ../web-dev/dynamic-skills/ui-design-skills.md',
+  ] as const;
+
   private constructor(private readonly request: readonly string[]) {}
 
   static registry(imports: readonly string[]): CortexContractRegistry {
@@ -39,7 +50,7 @@ export class CortexContractsScenario {
       ],
       policies: [
         {
-          document: POLICY,
+          document: CortexContractsScenario.POLICY,
           kind: CortexPolicyContractKind.General,
           areas: [CortexPolicyArea.GithubTypescript],
           capabilities: [],
@@ -52,10 +63,12 @@ export class CortexContractsScenario {
   static compile(content: string): readonly CortexContractFinding[] {
     const documents: readonly CortexContractDocument[] = [
       { relativePath: AUTHORITY, content },
-      { relativePath: POLICY, content: '# Policy\n' },
+      { relativePath: CortexContractsScenario.POLICY, content: '# Policy\n' },
     ];
     return CortexConsistencyContract.from({
-      registry: CortexContractsScenario.registry([POLICY]),
+      registry: CortexContractsScenario.registry([
+        CortexContractsScenario.POLICY,
+      ]),
       documents:
         CortexContractDocuments.adaptCortexContractDocuments(documents),
     }).execute();
@@ -63,9 +76,6 @@ export class CortexContractsScenario {
 }
 
 const AUTHORITY = CortexContextAuthorityDocument.Sre;
-
-const POLICY =
-  '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '..', '..', '..');
 
@@ -100,15 +110,7 @@ test('requires the importing authority to reference the policy document', () => 
   ).toBe(true);
 });
 
-const validReferences = [
-  '[direct](../web-dev/dynamic-skills/typescript-enums-over-booleans.md)',
-  '[title](../web-dev/dynamic-skills/typescript-enums-over-booleans.md "Policy")',
-  '[heading](../web-dev/dynamic-skills/typescript-enums-over-booleans.md#validation)',
-  '[query](../web-dev/dynamic-skills/typescript-enums-over-booleans.md?plain=1#validation)',
-  '[reference][rule]\n\n[rule]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md',
-] as const;
-
-for (const reference of validReferences) {
+for (const reference of CortexContractsScenario.VALID_REFERENCES) {
   const [defaulted1 = ''] = [reference.split(']')[0]];
   test(`accepts Markdown policy reference: ${defaulted1}`, () => {
     expect(CortexContractsScenario.compile(`# SRE\n\n${reference}\n`)).toEqual(
@@ -119,7 +121,7 @@ for (const reference of validReferences) {
 
 test('uses the first duplicate Markdown reference definition', () => {
   const content =
-    '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md\n';
+    '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/ui-design-skills.md\n';
   expect(
     CortexContractsScenario.compile(content).some(
       (finding) =>

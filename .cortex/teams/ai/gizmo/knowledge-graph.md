@@ -1,28 +1,5 @@
-# AI Team Gizmo Knowledge Graph
+# Nook ai Coordination Context
 
-Load only the authority needed to orchestrate the current AI packet.
-
-## Parent and team contracts
-
-- [AI Team Gizmo contract](AGENTS.md)
-- [AI team contract](../AGENTS.md)
-- [AI team knowledge graph](../knowledge-graph.md)
-- Gizmo Prime is the parent mission authority.
-
-## Specialist contexts
-
-- [Loom specialist contract](../loom-specialist/AGENTS.md)
-- [Cortex specialist contract](../cortex-specialist/AGENTS.md)
-
-## Delivery authority
-
-Prime supplies the applicable delivery authority in the packet.
-
-Every AI packet names the canonical feature branch and carries `originMainSha`
-for the exact freshly fetched main feature base. Prime creates the feature
-branch and worktree from that commit and preserves it.
-Resolve the latest committed branch head before each stage. If the branch
-advances, follow the latest head and rerun affected evidence. Team Gizmo and
-the specialists use the current parent frontier for child worktrees. SHAs in
-packets or results are observational run evidence only. Missing or unprovable
-bootstrap/branch evidence fails closed.
+- [Context adapter](AGENTS.md)
+- [Team contract](../AGENTS.md)
+- [Team knowledge](../knowledge-graph.md)
