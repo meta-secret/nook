@@ -95,14 +95,18 @@ export async function authenticationWorkflowMessageResponse({
     matchingPasskeyAvailabilityForOriginSafe,
     websiteLoginMatchAvailability,
   } = dependencies
-  const pilotPresentationCapability =
-    dependencies.authenticationWorkflowPilotPresentationCapability ??
-    authenticationWorkflowPilotPresentationCapability
-  const bindFacts =
-    dependencies.bindAuthenticationPageObservationFacts ??
-    bind_authentication_page_observation_facts
-  const savedLoginAvailable =
-    dependencies.savedLoginActionAvailable ?? saved_login_action_available
+  const pilotPresentationCapability = ((value) =>
+    value ? value : authenticationWorkflowPilotPresentationCapability)(
+    dependencies.authenticationWorkflowPilotPresentationCapability,
+  )
+  const bindFacts = ((value) =>
+    value ? value : bind_authentication_page_observation_facts)(
+    dependencies.bindAuthenticationPageObservationFacts,
+  )
+  const savedLoginAvailable = ((value) =>
+    value ? value : saved_login_action_available)(
+    dependencies.savedLoginActionAvailable,
+  )
   try {
     await companionWasmReady
     const passkeyEvidenceIsSafe = message.payload.observations.map(

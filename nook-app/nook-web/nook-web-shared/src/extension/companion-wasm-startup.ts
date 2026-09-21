@@ -38,7 +38,7 @@ type CompanionWasmHostTransportRecord = {
 };
 
 export type CompanionWasmHostTransportValue =
-  CompanionWasmHostTransportRecord | string | number | boolean | null;
+  CompanionWasmHostTransportRecord | string | number | boolean;
 
 export type CompanionWasmHostResponse =
   | {
@@ -256,7 +256,7 @@ export class CompanionWasmHostMessageAdmission {
   private requestKind(
     value: CompanionWasmHostTransportValue,
   ): CompanionWasmHostRequestKind | false {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
       return false;
     }
     return value.kind === CompanionWasmHostRequestKind.CompileCompanionModule
@@ -272,7 +272,7 @@ export class CompanionWasmHostMessageAdmission {
         readonly resourceUrl: string;
         readonly module: WebAssembly.Module;
       } {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
       return { kind: CompanionWasmHostAdmissionKind.Rejected };
     }
     const responseKind = value.kind;
@@ -284,20 +284,24 @@ export class CompanionWasmHostMessageAdmission {
     }
     const resourceUrl = value.resourceUrl;
     const module = value.module;
-    if (typeof resourceUrl !== "string" || !this.isWebAssemblyModule(module)) {
+    const moduleCandidate = module ? module : false;
+    if (
+      typeof resourceUrl !== "string" ||
+      !this.isWebAssemblyModule(moduleCandidate)
+    ) {
       return { kind: CompanionWasmHostAdmissionKind.Rejected };
     }
     return {
       kind: CompanionWasmHostAdmissionKind.Accepted,
       resourceUrl,
-      module,
+      module: moduleCandidate,
     };
   }
 
   private isWebAssemblyModule(
-    value: WebAssembly.Module | string | undefined,
+    value: WebAssembly.Module | string | false,
   ): value is WebAssembly.Module {
-    if (value === undefined || typeof value === "string") {
+    if (!value || typeof value === "string") {
       return false;
     }
     try {

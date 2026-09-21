@@ -35,7 +35,7 @@ class RecordingCompanionWasmStartupDiagnostics {
 describe('companion WASM startup', () => {
   test('delivers an external-page response through a transferred port', async () => {
     const channel = new MessageChannel()
-    const parentWindow = { postMessage: () => undefined }
+    const parentWindow = { postMessage: () => {} }
     const requestEvent = new MessageEvent('message', {
       data: {
         kind: CompanionWasmHostRequestKind.CompileCompanionModule,
@@ -55,7 +55,7 @@ describe('companion WASM startup', () => {
         (event: MessageEvent<CompanionWasmHostTransportValue>) => {
           const data = event.data
           resolve(
-            data !== null &&
+            Boolean(data) &&
               typeof data === 'object' &&
               !Array.isArray(data) &&
               data.kind === response.kind &&
@@ -77,7 +77,7 @@ describe('companion WASM startup', () => {
 
   test('delivers a failed external-page response through a transferred port', async () => {
     const channel = new MessageChannel()
-    const parentWindow = { postMessage: () => undefined }
+    const parentWindow = { postMessage: () => {} }
     const requestEvent = new MessageEvent('message', {
       data: {
         kind: CompanionWasmHostRequestKind.CompileCompanionModule,
@@ -94,7 +94,7 @@ describe('companion WASM startup', () => {
         (event: MessageEvent<CompanionWasmHostTransportValue>) => {
           const data = event.data
           resolve(
-            data !== null &&
+            Boolean(data) &&
               typeof data === 'object' &&
               !Array.isArray(data) &&
               data.kind === response.kind,

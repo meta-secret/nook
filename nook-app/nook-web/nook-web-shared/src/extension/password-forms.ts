@@ -1055,7 +1055,9 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
             ),
           );
     if (!observation) return false;
-    const approvedControls = request.approvedAdvanceControls ?? [];
+    const approvedControls = ((value) => (value ? value : []))(
+      request.approvedAdvanceControls,
+    );
     const controls = this.scopedAdvanceControls(observation);
     const semanticSubmitControlCount =
       authenticationSubmissionControls.countedSemanticSubmitControls(

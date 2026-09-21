@@ -1,5 +1,7 @@
 import { err, ok, type Result } from 'neverthrow'
 import {
+  CompanionWasmContentResponseKind,
+  CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
   type CompanionWasmPageInputFieldObservation,
   type CompanionWasmPageInputFieldRequest,
@@ -128,15 +130,15 @@ function classifyPageInputs(
 
 function labelMatches(label: CompanionWasmLabelRequest): boolean {
   switch (label.kind) {
-    case 'login-advance':
+    case CompanionWasmLabelKind.LoginAdvance:
       return looks_like_login_advance_control_label(label.value)
-    case 'manual-checkpoint':
+    case CompanionWasmLabelKind.ManualCheckpoint:
       return looks_like_manual_checkpoint_label(label.value)
-    case 'passkey-control':
+    case CompanionWasmLabelKind.PasskeyControl:
       return looks_like_passkey_control_label(label.value)
-    case 'email-verification-body':
+    case CompanionWasmLabelKind.EmailVerificationBody:
       return looks_like_email_verification_body(label.value)
-    case 'one-time-code-auto-submit-signal':
+    case CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal:
       return looks_like_one_time_code_auto_submit_signal(label.value)
   }
 }
@@ -257,13 +259,13 @@ export async function handleCompanionWasmMessage(
         )
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
         switch (message.payload.kind) {
-          case 'login-options':
+          case CompanionWasmContentResponseKind.LoginOptions:
             return ok(decode_website_login_options(message.payload.response))
-          case 'login-picker-open':
+          case CompanionWasmContentResponseKind.LoginPickerOpen:
             return ok(
               decode_login_picker_open_response(message.payload.response),
             )
-          case 'login-save-pending':
+          case CompanionWasmContentResponseKind.LoginSavePending:
             return ok(
               decode_website_login_save_pending_response(
                 message.payload.response,

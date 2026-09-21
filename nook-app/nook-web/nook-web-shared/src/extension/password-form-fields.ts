@@ -8,6 +8,7 @@ import {
   type AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
+  CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
   type CompanionWasmLabelRequest,
   type CompanionWasmPageInputFieldRequest,
@@ -337,8 +338,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     for (const control of root.querySelectorAll<HTMLElement>(
       loginAdvanceControlSelector,
     )) {
-      add("login-advance", this.localActivationControlLabel(control));
-      add("passkey-control", this.localActivationControlLabel(control));
+      add(CompanionWasmLabelKind.LoginAdvance, this.localActivationControlLabel(control));
+      add(CompanionWasmLabelKind.PasskeyControl, this.localActivationControlLabel(control));
     }
     for (const checkbox of root.querySelectorAll<HTMLInputElement>(
       'input[type="checkbox"]',
@@ -346,7 +347,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       const label = checkbox.labels?.[0];
       const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
       add(
-        "manual-checkpoint",
+        CompanionWasmLabelKind.ManualCheckpoint,
         label
           ? ((v) => (v ? v : ""))(label.textContent).toLowerCase()
           : ariaLabel
@@ -358,10 +359,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       for (const attribute of ["oninput", "onchange"]) {
         const handler = field.getAttribute(attribute);
         if (typeof handler === "string")
-          add("one-time-code-auto-submit-signal", `${attribute}=${handler}`);
+          add(CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal, `${attribute}=${handler}`);
       }
     }
-    add("email-verification-body", ((v) => (v ? v : ""))(root.textContent));
+    add(CompanionWasmLabelKind.EmailVerificationBody, ((v) => (v ? v : ""))(root.textContent));
     return labels;
   }
 
@@ -824,7 +825,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       return (
         typeof handler === "string" &&
         this.cachedLabel(
-          "one-time-code-auto-submit-signal",
+          CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
           `${attribute}=${handler}`,
         )
       );
@@ -852,7 +853,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   looksLikeOneTimeCodeAutoSubmitSignal(signal: string): boolean {
-    return this.cachedLabel("one-time-code-auto-submit-signal", signal);
+    return this.cachedLabel(CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal, signal);
   }
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
@@ -890,7 +891,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       );
       const labeled = this.localActivationControlLabel(control);
       return explicitlyMarked ||
-        (labeled && this.cachedLabel("passkey-control", labeled))
+        (labeled && this.cachedLabel(CompanionWasmLabelKind.PasskeyControl, labeled))
         ? [{ control, explicitlyMarked }]
         : [];
     });
@@ -952,7 +953,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     return this.formlessAuthenticationControls(container).some(
       (control) =>
         !this.cachedLabel(
-          "login-advance",
+          CompanionWasmLabelKind.LoginAdvance,
           this.localActivationControlLabel(control),
         ),
     );
@@ -977,7 +978,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   private labeledTypeButtonActivationControls(container: Element): Element[] {
     return this.formlessAuthenticationControls(container).filter((control) =>
       this.cachedLabel(
-        "login-advance",
+        CompanionWasmLabelKind.LoginAdvance,
         this.localActivationControlLabel(control),
       ),
     );
@@ -1290,7 +1291,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     )
       return true;
     return this.cachedLabel(
-      "email-verification-body",
+      CompanionWasmLabelKind.EmailVerificationBody,
       ((v) => (v ? v : ""))(root.textContent),
     );
   }
@@ -1303,7 +1304,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       : ariaLabel
         ? ariaLabel.value
         : checkbox.name;
-    return this.cachedLabel("manual-checkpoint", labeled.toLowerCase());
+    return this.cachedLabel(CompanionWasmLabelKind.ManualCheckpoint, labeled.toLowerCase());
   }
 
   private ownedFormHasManualCheckpoint(owner: HTMLFormElement): boolean {

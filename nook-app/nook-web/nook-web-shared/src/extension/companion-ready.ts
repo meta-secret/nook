@@ -284,19 +284,19 @@ class ExtensionOriginCompanionWasmModuleLoader {
             if (!hostWindow) return;
             const response = event.data;
             const responseRecord =
-              response !== null &&
+              Boolean(response) &&
               typeof response === "object" &&
               !Array.isArray(response)
                 ? response
-                : undefined;
-            const responseKind = responseRecord?.kind;
+                : false;
+            const responseKind = responseRecord ? responseRecord.kind : false;
             const compiledResponse =
               responseKind === CompanionWasmHostResponseKind.Compiled;
             const failedResponse =
               responseKind === CompanionWasmHostResponseKind.Failed;
             const resourceAccepted =
               compiledResponse &&
-              responseRecord?.resourceUrl === companionWasmUrl;
+              responseRecord && responseRecord.resourceUrl === companionWasmUrl;
             this.diagnostics.record({
               phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
               outcome:
@@ -353,10 +353,10 @@ class ExtensionOriginCompanionWasmModuleLoader {
           ): void => {
             const response = event.data;
             const isRecord =
-              response !== null &&
+              Boolean(response) &&
               typeof response === "object" &&
               !Array.isArray(response);
-            const responseKind = isRecord ? response.kind : undefined;
+            const responseKind = isRecord ? response.kind : false;
             const failedResponse =
               responseKind === CompanionWasmHostResponseKind.Failed;
             const admission = this.messageAdmission.admitPortResponse({

@@ -39,6 +39,20 @@ export enum CompanionWasmSessionMessageType {
   EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
 }
 
+export enum CompanionWasmLabelKind {
+  LoginAdvance = "login-advance",
+  ManualCheckpoint = "manual-checkpoint",
+  PasskeyControl = "passkey-control",
+  EmailVerificationBody = "email-verification-body",
+  OneTimeCodeAutoSubmitSignal = "one-time-code-auto-submit-signal",
+}
+
+export enum CompanionWasmContentResponseKind {
+  LoginOptions = "login-options",
+  LoginPickerOpen = "login-picker-open",
+  LoginSavePending = "login-save-pending",
+}
+
 export type CompanionWasmLoginContextObservation = {
   readonly formIdentity: string;
   readonly ancestorIdentities: readonly string[];
@@ -62,12 +76,7 @@ export type CompanionWasmPageInputFieldRequest = {
 };
 
 export type CompanionWasmLabelRequest = {
-  readonly kind:
-    | "login-advance"
-    | "manual-checkpoint"
-    | "passkey-control"
-    | "email-verification-body"
-    | "one-time-code-auto-submit-signal";
+  readonly kind: CompanionWasmLabelKind;
   readonly value: string;
 };
 
@@ -170,8 +179,7 @@ export type CompanionWasmSessionMessage =
   | {
       readonly type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse;
       readonly payload: {
-        readonly kind:
-          "login-options" | "login-picker-open" | "login-save-pending";
+        readonly kind: CompanionWasmContentResponseKind;
         readonly response: unknown;
       };
     };

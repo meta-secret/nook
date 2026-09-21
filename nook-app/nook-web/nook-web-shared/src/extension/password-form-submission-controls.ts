@@ -692,18 +692,26 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const identityContainer: Element | undefined = form
+    const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
           query.formScope.kind === PasswordFormScopeKind.Unowned &&
           query.root instanceof Element
         ? query.root
-        : undefined;
+        : false;
     const formIdentity = [
-      ((v) => (v ? v : ""))(identityContainer?.id),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("name")),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("class")),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("aria-label")),
+      identityContainer ? identityContainer.id : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("name"))
+        : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("class"))
+        : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(
+            identityContainer.getAttribute("aria-label"),
+          )
+        : "",
     ].join(" ");
     const destinationIdentity = this.authenticationControlDestination(control);
     const machineIdentity = this.controlMachineIdentity(control);

@@ -1,5 +1,6 @@
 import { companionWasmReadiness } from './companion-wasm-readiness'
 import {
+  CompanionWasmContentResponseKind,
   CompanionWasmSessionMessageType,
   type CompanionWasmRuntimeMessage,
   type CompanionWasmSessionMessage,
@@ -9,6 +10,7 @@ import {
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
 
 import { type AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
+import type { AuthenticationPilotPresentationCapability } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import type {
   AuthenticatorPickerCancelMessage,
@@ -107,7 +109,7 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
   loginMatches: AuthenticationWorkflowRoutingResponse['loginMatches']
   selectedFacts: AuthenticationWorkflowSelectedFacts
-  pilotCapability: 'hidden' | 'propose-action'
+  pilotCapability: AuthenticationPilotPresentationCapability
   factsBindingToken: string | false
   savedLoginActionAvailable: boolean
 }
@@ -216,7 +218,9 @@ class AuthenticationRuntimeTransport {
   ): Promise<RuntimeMessageDelivery<CompanionWasmSessionResponse>> {
     const runtimeMessage: CompanionWasmRuntimeMessage = {
       ...message,
-      origin: this.browser.location?.origin ?? '',
+      origin: ((value) => (value ? value : ''))(
+        this.browser.location?.origin,
+      ),
     }
     const delivery = await this.sendRuntimeMessage(runtimeMessage)
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -250,7 +254,10 @@ class AuthenticationRuntimeTransport {
     }
     const decoded = await this.sendCompanionWasmRuntimeMessage({
       type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
-      payload: { kind: 'login-options', response: delivery.response },
+      payload: {
+        kind: CompanionWasmContentResponseKind.LoginOptions,
+        response: delivery.response,
+      },
     })
     return decoded.kind === RuntimeMessageDeliveryKind.Delivered
       ? {
@@ -287,7 +294,10 @@ class AuthenticationRuntimeTransport {
     }
     const decoded = await this.sendCompanionWasmRuntimeMessage({
       type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
-      payload: { kind: 'login-save-pending', response: delivery.response },
+      payload: {
+        kind: CompanionWasmContentResponseKind.LoginSavePending,
+        response: delivery.response,
+      },
     })
     return decoded.kind === RuntimeMessageDeliveryKind.Delivered
       ? {
@@ -324,7 +334,10 @@ class AuthenticationRuntimeTransport {
     }
     const decoded = await this.sendCompanionWasmRuntimeMessage({
       type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
-      payload: { kind: 'login-picker-open', response: delivery.response },
+      payload: {
+        kind: CompanionWasmContentResponseKind.LoginPickerOpen,
+        response: delivery.response,
+      },
     })
     return decoded.kind === RuntimeMessageDeliveryKind.Delivered
       ? {
