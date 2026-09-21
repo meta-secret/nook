@@ -5,7 +5,8 @@ Generic source-size and decomposition policy comes from Meta-Cortex common codin
 ## Required actions
 
 Use Nook's repository-wide preflight scanner for the 1,000-line source limit
-and the inline Rust unit-test requirement. Run it in the authorized PR-check stage.
+and inline Rust unit tests. Preserve integration tests. Run it in the authorized
+PR-check stage.
 Review the chosen architectural decomposition separately from the scanner result.
 
 **Prohibited:** report a passing line count as proof of cohesive architecture.
