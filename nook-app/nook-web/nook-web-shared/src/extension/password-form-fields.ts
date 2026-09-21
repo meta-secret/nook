@@ -470,6 +470,25 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     });
   }
 
+  private formlessAuthenticationAdvanceControls(
+    field: HTMLInputElement,
+  ): HTMLElement[] {
+    let container = field.parentElement;
+    while (container) {
+      const controls = Array.from(
+        container.querySelectorAll<HTMLElement>(loginAdvanceControlSelector),
+      );
+      const hasLoginAdvanceControl = controls.some((control) =>
+        looks_like_login_advance_control_label(
+          this.localActivationControlLabel(control),
+        ),
+      );
+      if (hasLoginAdvanceControl) return controls;
+      container = container.parentElement;
+    }
+    return [];
+  }
+
   private hasLoginContext(field: HTMLInputElement): boolean {
     const form = field.form;
     const ancestorIdentities: string[] = [];
@@ -497,13 +516,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
               control instanceof HTMLInputElement) &&
             control.form === form,
         )
-      : field.parentElement
-        ? Array.from(
-            field.parentElement.querySelectorAll<HTMLElement>(
-              loginAdvanceControlSelector,
-            ),
-          )
-        : [];
+      : this.formlessAuthenticationAdvanceControls(field);
+    if (!form && advanceControls.length === 0) return false;
     const advanceControlLabels = advanceControls.map((control) =>
       [
         ((v) => (v ? v : ""))(control.textContent),

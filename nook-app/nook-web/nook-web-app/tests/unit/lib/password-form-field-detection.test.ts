@@ -206,6 +206,42 @@ describe('authentication field detection', () => {
     )
   })
 
+  test('admits the nested Google identifier field beside its wrapper activation', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/v3/signin/identifier?flowName=GlifWebSignIn',
+    )
+    document.body.innerHTML = `
+      <main class="Svhjgc">
+        <section class="Em2Ord">
+          <div class="AFTWye">
+            <div class="rFrNMe">
+              <div class="aCsJod">
+                <div class="aXBtI">
+                  <div class="Xb9hP">
+                    <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="identifierNext"><div role="button"><span>Next</span></div></div>
+          <button type="button">Create account</button>
+        </section>
+      </main>
+    `
+
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      passwordFieldCount: 0,
+    })
+    expect(observations[0]?.root).toBe(document.querySelector('section'))
+  })
+
   test('uses an authentication control after a generic help button', () => {
     document.body.innerHTML = `
       <form method="post" action="/next">
