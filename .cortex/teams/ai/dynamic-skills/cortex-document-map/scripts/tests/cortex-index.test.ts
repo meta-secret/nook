@@ -68,7 +68,9 @@ Model text.
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Nook Cortex Knowledge Graph');
   expect(markdown).toContain('## Product and operational contexts');
-  expect(markdown).toContain('[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)');
+  expect(markdown).toContain(
+    '[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)',
+  );
   expect(markdown).not.toContain(
     '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
   );
@@ -286,9 +288,7 @@ test('routes AI and Delivery Pipeline authorities through their owner graphs', (
   expect(pipelineGizmo).toContain(
     '[Nook Team Gizmo wrapper](../../../gizmo-prime/team-gizmo/AGENTS.md)',
   );
-  expect(pipelineGraph).toContain(
-    '[Team contract](../AGENTS.md)',
-  );
+  expect(pipelineGraph).toContain('[Team contract](../AGENTS.md)');
 });
 
 test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {
@@ -343,11 +343,28 @@ This is the actual overview text.
 });
 
 test('composes upstream roles with Nook delivery instead of duplicating policies', () => {
-  const root = readFileSync(path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'), 'utf8');
-  const prime = readFileSync(path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/AGENTS.md'), 'utf8');
-  const team = readFileSync(path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/team-gizmo/AGENTS.md'), 'utf8');
-  const delivery = readFileSync(path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/architecture/dev-delivery.md'), 'utf8');
-  expect(root.indexOf('CIRCUIT-BREAKER.md')).toBeLessThan(root.indexOf('../.meta-cortex/AGENTS.md'));
+  const root = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'),
+    'utf8',
+  );
+  const prime = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/AGENTS.md'),
+    'utf8',
+  );
+  const team = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/team-gizmo/AGENTS.md'),
+    'utf8',
+  );
+  const delivery = readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      '.cortex/gizmo-prime/architecture/dev-delivery.md',
+    ),
+    'utf8',
+  );
+  expect(root.indexOf('CIRCUIT-BREAKER.md')).toBeLessThan(
+    root.indexOf('../.meta-cortex/AGENTS.md'),
+  );
   expect(root).toContain('../.meta-cortex/skill-composition.md');
   expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
   expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
