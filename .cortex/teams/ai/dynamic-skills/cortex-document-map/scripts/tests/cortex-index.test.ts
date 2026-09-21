@@ -372,9 +372,7 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
     'Nook project root and shared Meta-Cortex library root',
   );
   expect(root).toContain('selected base and feature branches');
-  expect(root).toContain(
-    'each worker branch and worktree in dependency order',
-  );
+  expect(root).toContain('each worker branch and worktree in dependency order');
   expect(root).toContain('applicable Nook checks');
   expect(root).not.toContain('owns shared-branch sequencing');
   expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
