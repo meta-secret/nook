@@ -5,6 +5,56 @@ use anyhow::Context;
 mod workflow_runtime_contract;
 use workflow_runtime_contract::WorkflowRuntimeContract;
 
+struct PrDeliveryScenario<'a> {
+    root: &'a Path,
+}
+
+impl PrDeliveryScenario<'_> {
+    fn assert_workflow_contract(&self) -> anyhow::Result<()> {
+        let pr = self.root.read(".github/workflows/pr.yml");
+        let mut previous = 0;
+        for phase in [
+            "run: task --silent ci:pr:verification\n",
+            "run: task --silent ci:pr:tests\n",
+            "run: task --silent ci:pr:post-tests\n",
+            "run: task --silent ci:pr:browser:full\n",
+            "uses: ./.github/actions/nook-pr-preview",
+        ] {
+            let position = pr
+                .find(phase)
+                .with_context(|| format!("missing PR phase: {phase}"))?;
+            assert!(
+                position > previous,
+                "verification, tests, post-test fan-out, browser work and preview must be ordered"
+            );
+            previous = position;
+        }
+        assert_eq!(pr.matches("    runs-on:").count(), 1);
+        assert!(!pr.contains("    needs:"));
+        assert!(!pr.contains("continue-on-error:"));
+        assert!(!pr.contains("type=registry"));
+        assert!(pr.contains("task --silent ci:pr:browser:auth"));
+        assert!(pr.contains("steps.browser-scope.outputs.auth == 'true'"));
+        assert!(pr.contains("task --silent web:research:verify"));
+        assert!(!pr.contains("nook-pr-coverage"));
+        assert!(pr.contains("require-sccache: \"true\""));
+        assert!(!pr.contains("Preserve cache telemetry"));
+        assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
+        assert_preflight_build_contract(self.root);
+        Ok(())
+    }
+
+    fn assert_artifact_backed_pr_fanout(&self) {
+        let pr = self.root.read(".github/workflows/pr.yml");
+        let pr_tasks = self.root.read("nook-app/ci/pr.yml");
+        let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
+        assert!(
+            pr.contains("run: task --silent ci:pr:post-tests")
+                && post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare")
+        );
+    }
+}
+
 #[test]
 fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
@@ -13,7 +63,10 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     }
     .assert_contract();
     assert_docker_setup_contract(&root);
-    assert_pr_workflow_contract(&root)?;
+    PrDeliveryScenario {
+        root: root.as_ref(),
+    }
+    .assert_workflow_contract()?;
     assert_artifact_backed_e2e_contract(&root)?;
     assert_release_and_main_delivery_contract(&root)?;
     Ok(())
@@ -148,49 +201,7 @@ fn assert_docker_setup_contract(root: &Path) {
     }
 }
 
-fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
-    let pr = root.read(".github/workflows/pr.yml");
-    let mut previous = 0;
-    for phase in [
-        "run: task --silent ci:pr:verification\n",
-        "run: task --silent ci:pr:tests\n",
-        "run: task --silent ci:pr:heavy\n",
-        "run: task --silent ci:pr:browser:full\n",
-        "uses: ./.github/actions/nook-pr-preview",
-    ] {
-        let position = pr
-            .find(phase)
-            .with_context(|| format!("missing PR phase: {phase}"))?;
-        assert!(
-            position > previous,
-            "verification, tests, heavy work and preview must be ordered"
-        );
-        previous = position;
-    }
-    assert_eq!(pr.matches("    runs-on:").count(), 1);
-    assert!(!pr.contains("    needs:"));
-    assert!(!pr.contains("continue-on-error:"));
-    assert!(!pr.contains("type=registry"));
-    assert!(pr.contains("task --silent ci:pr:browser:auth"));
-    assert!(pr.contains("steps.browser-scope.outputs.auth == 'true'"));
-    assert!(pr.contains("task --silent web:research:verify"));
-    assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
-    assert!(pr.contains("require-sccache: \"true\""));
-    assert!(!pr.contains("Preserve cache telemetry"));
-    assert!(!pr.contains("NOOK_PR_CACHE_TELEMETRY_DIR:"));
-    let coverage = root.read(".github/actions/nook-pr-coverage/action.yml");
-    assert!(coverage.contains("coverage/current/tools/nook-preflight"));
-    assert!(coverage.contains("base-coverage-artifact.cjs"));
-    assert_preflight_reporter_contract(root);
-    Ok(())
-}
-
-fn assert_preflight_reporter_contract(root: &Path) {
-    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
-    assert!(
-        ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
-        "native PR CI must export the preflight reporter with its coverage artifact"
-    );
+fn assert_preflight_build_contract(root: &Path) {
     let preflight_dockerfile = (root).read("preflight/Dockerfile");
     for required in [
         "FROM rust-base AS chef",
@@ -200,13 +211,10 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "cargo chef prepare --recipe-path recipe.json",
         "cargo chef cook --recipe-path recipe.json",
         "cargo clippy --quiet --locked --all-targets -- -D warnings",
-        "cargo build --quiet --locked --bin nook-preflight",
         "cargo test --quiet --locked --test core_ownership --no-run",
         "--mount=type=secret,id=sccache_s3_access_key,required=false",
         "nook-sccache-report preflight-chef",
         "nook-sccache-report preflight-build",
-        "FROM scratch AS cli-export",
-        "target/debug/nook-preflight /nook-preflight",
     ] {
         assert!(
             preflight_dockerfile.contains(required),
@@ -231,7 +239,6 @@ fn assert_preflight_reporter_contract(root: &Path) {
     let preflight_bake = (root).read("preflight/docker-bake.hcl");
     for required in [
         "target \"preflight-test\"",
-        "target \"preflight-cli-export\"",
         "rust-base = \"target:rust-base\"",
         "inherits   = [\"_sccache\"]",
         "dockerfile = \"preflight/Dockerfile\"",
@@ -243,19 +250,12 @@ fn assert_preflight_reporter_contract(root: &Path) {
     }
     let preflight_tasks = (root).read("preflight/Taskfile.yml");
     for required in [
-        "preflight:export:",
-        "preflight-cli-export",
         "preflight-test",
         "PREFLIGHT_BAKE_FILES",
         "preflight/docker-bake.hcl",
         "nook-app/nook-platform/docker/rust/docker-bake.hcl",
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
-        "PREFLIGHT_OUTPUT_PARENT:",
-        "dirname \"{{.PREFLIGHT_OUTPUT_DIR}}\"",
-        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_PARENT}}\"",
-        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_DIR}}\"",
-        "mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'",
     ] {
         assert!(
             preflight_tasks.contains(required),
@@ -269,6 +269,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
 }
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
+    PrDeliveryScenario { root }.assert_artifact_backed_pr_fanout();
     let pr = (root).read(".github/workflows/pr.yml");
     let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
@@ -308,8 +309,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    assert!(pr.contains("task --silent ci:pr:browser:prepare"));
-    assert!(pr.contains("uses: ./.github/actions/nook-pr-coverage"));
+    assert!(!pr.contains("nook-pr-coverage"));
     assert!(!pr.contains("actions/download-artifact"));
     let deploy = root.read(".github/actions/nook-pr-preview/action.yml");
     assert!(deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"));

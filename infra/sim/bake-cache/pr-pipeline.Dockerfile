@@ -34,28 +34,31 @@ RUN test "$FAIL_TESTS" = 0 \
     && printf 'tests and coverage\n' >/proof/tests \
     && echo pr-proof-test-compilation
 
+# Coverage remains a Docker/BuildKit verification output. It is part of the
+# test solve and is never transported to the runner for a redundant report.
+FROM tests AS coverage-export
+RUN printf 'coverage artifacts\n' >/proof/coverage \
+    && echo pr-proof-coverage
+
 FROM chef-deps AS rust-fuzz-deps
 COPY inputs/fuzz-dependencies.txt /fuzz/dependencies.txt
 RUN cat /fuzz/dependencies.txt >/fuzz/installed \
     && sleep 1 \
     && echo bake-sim-fuzz-dependencies
 
-FROM tests AS heavy
+# Heavy work consumes the already floor-validated test and coverage solve.
+FROM coverage-export AS heavy
 COPY --from=rust-fuzz-deps /fuzz/installed /fuzz/installed
 RUN test -s /proof/tests \
     && test -s /fuzz/installed \
     && printf 'browser and expensive checks\n' >/proof/heavy \
     && echo pr-proof-heavy
 
-# These two outputs model the independent post-test tasks that run alongside
-# the heavy target on the same persistent BuildKit builder.
-FROM tests AS coverage-export
-RUN printf 'coverage artifacts\n' >/proof/coverage \
-    && echo pr-proof-coverage
-
 FROM tests AS browser-artifacts
 RUN printf 'browser artifacts\n' >/proof/browser \
     && echo pr-proof-browser
 
 FROM scratch AS result
-COPY --from=heavy /proof /proof
+COPY --from=heavy /proof/verification /proof/verification
+COPY --from=heavy /proof/tests /proof/tests
+COPY --from=heavy /proof/heavy /proof/heavy

@@ -33,8 +33,11 @@ describe('mock-auth Pilot expectation catalog', () => {
       }
     }
 
-    expect(continueWithNookTemplateCount).toBe(29)
-    expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
+    expect(continueWithNookTemplateCount).toBe(28)
+    expect(failClosedTemplateIds).toEqual([
+      'email-password-aria-hidden',
+      'enterprise-sso-email',
+    ])
   })
 
   test('keeps the Airbnb identity label structural and associated', () => {
@@ -43,6 +46,7 @@ describe('mock-auth Pilot expectation catalog', () => {
       throw new Error('Airbnb shell template is missing')
     }
     expect(airbnbTemplate.quirks).toContain('visible-associated-label')
+    expect(airbnbTemplate.quirks).toContain('login-modal-on-homepage')
     const step = airbnbTemplate.steps[0]
     if (!step) throw new Error('Airbnb shell step is missing')
     const field = step.fields[0]

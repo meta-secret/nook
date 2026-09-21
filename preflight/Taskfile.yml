@@ -71,30 +71,6 @@ tasks:
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-buildkit.test.ts"
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-cache-registry.test.ts"
 
-  preflight:export:
-    desc: Export the static Rust preflight reporter for downstream CI jobs.
-    dir: "{{.REPO_ROOT}}"
-    deps:
-      - sccache:ensure
-    requires:
-      vars: [PREFLIGHT_OUTPUT_DIR]
-    vars:
-      # Nested local outputs need fs.write on the parent so Bake can create the
-      # tools directory under an already-populated CI artifact root.
-      PREFLIGHT_OUTPUT_PARENT:
-        sh: 'dirname "{{.PREFLIGHT_OUTPUT_DIR}}"'
-    cmds:
-      - mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'
-      - >-
-        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
-        "preflight:export"
-        {{.DOCKER}} buildx bake
-        {{.PREFLIGHT_BAKE_FILES}}
-        --allow="fs.write={{.PREFLIGHT_OUTPUT_PARENT}}"
-        --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
-        --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
-        preflight-cli-export
-
   preflight:dependency-policy:
     desc: Run cargo-deny and cargo-audit for the preflight workspace.
     cmds:

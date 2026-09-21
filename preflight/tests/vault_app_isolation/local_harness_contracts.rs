@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn local_native_verification_exports_preflight_into_the_repository_artifact_root()
+fn local_native_verification_uses_repository_artifact_root_without_preflight_export()
 -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/ci/Taskfile.yml");
@@ -10,8 +10,8 @@ fn local_native_verification_exports_preflight_into_the_repository_artifact_root
     assert!(
         rust_host.contains(
             "CI_ARTIFACT_DIR: '{{default (printf \"%s/ci-artifacts/rust\" .REPO_ROOT) .CI_ARTIFACT_DIR}}'"
-        ) && rust_host.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
-        "local native verification must default the shared coverage and preflight export root to a writable repository-local directory"
+        ) && !rust_host.contains("PREFLIGHT_OUTPUT_DIR:"),
+        "local native verification must default its surviving artifact root to a writable repository-local directory without a removed preflight export"
     );
     Ok(())
 }

@@ -408,7 +408,32 @@ function enterpriseSsoEmail() {
 }
 
 function emailPasswordAriaHidden() {
-  return emailPassword(['aria-hidden-ancestor'])
+  return shell(
+    ['aria-hidden-ancestor'],
+    [
+      {
+        fields: [
+          field({
+            name: 'email',
+            type: 'email',
+            autocomplete: 'username',
+            placeholder: 'Email',
+            'aria-label': 'Email',
+            'aria-hidden': 'true',
+          }),
+          field({
+            name: 'password',
+            type: 'password',
+            autocomplete: 'current-password',
+            placeholder: 'Password',
+            'aria-label': 'Password',
+            'aria-hidden': 'true',
+          }),
+        ],
+        submit: { type: 'submit', label: 'Sign in' },
+      },
+    ],
+  )
 }
 
 export const NEW_TEMPLATES = {

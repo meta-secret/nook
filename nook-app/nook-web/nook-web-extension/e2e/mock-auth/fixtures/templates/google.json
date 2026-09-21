@@ -1,6 +1,6 @@
 {
   "id": "google",
-  "quirks": [],
+  "quirks": ["selected-account-display"],
   "steps": [
     {
       "fields": [
@@ -20,14 +20,6 @@
     },
     {
       "fields": [
-        {
-          "type": "email",
-          "name": "identifier",
-          "id": "identifierId",
-          "autocomplete": "username",
-          "placeholder": "Email or phone",
-          "aria-label": "Email or phone"
-        },
         {
           "type": "password",
           "name": "Passwd",

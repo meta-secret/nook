@@ -71,7 +71,7 @@ class DockerizedRustContract {
     for (const command of [
       "task --silent ci:pr:verification",
       "task --silent ci:pr:tests",
-      "task --silent ci:pr:heavy",
+      "task --silent ci:pr:post-tests",
       "task --silent ci:pr:browser:full",
     ]) {
       const index = steps.findIndex((step) => step.run === command);
@@ -90,7 +90,16 @@ class DockerizedRustContract {
     expect(previewStep.if).toContain(
       "github.event.pull_request.head.repo.full_name == github.repository",
     );
-    expect(this.read("nook-app/ci/pr.yml")).toContain(
+    const prTasks = this.read("nook-app/ci/pr.yml");
+    expect(prTasks).toContain(
+      "task --parallel ci:pr:heavy ci:pr:browser:prepare",
+    );
+    expect(prTasks).toContain("coverage-export.output=type=cacheonly");
+    expect(prTasks).not.toContain("coverage-export.output=type=local");
+    expect(this.read(".github/workflows/pr.yml")).not.toContain(
+      "nook-pr-coverage",
+    );
+    expect(prTasks).toContain(
       "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
     );
   }

@@ -1,3 +1,5 @@
+// @vitest-environment-options { "url": "https://www.airbnb.com/" }
+
 import { afterEach, describe, expect, test } from 'vitest'
 
 import {
@@ -62,6 +64,65 @@ function fieldValue(selector: string): string | false {
 }
 
 describe('DOM-backed companion authentication simulation', () => {
+  test('selects the current Airbnb homepage login modal beside the page search form', () => {
+    window.history.replaceState({}, '', '/')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main>
+          <form action="/homes" aria-label="Search">
+            <input type="search" aria-label="Where">
+          </form>
+          <div role="dialog" aria-label="Log in or sign up">
+            <button type="button" aria-label="Close"></button>
+            <h1>Log in or sign up</h1>
+            <form data-testid="airbnb-auth-form">
+              <label for="phone-or-email">Phone number or email</label>
+              <input id="phone-or-email" type="text" inputmode="email" autocomplete="tel-national">
+              <button type="submit">Continue</button>
+            </form>
+            <button type="button" aria-label="Continue with Google"></button>
+            <button type="button" aria-label="Continue with Apple"></button>
+          </div>
+        </main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      observationCount: 1,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'Continue',
+    })
+    expect(result.selectedRoot).toBe(document)
+    const selectedForm = document.querySelector<HTMLFormElement>(
+      '[data-testid="airbnb-auth-form"]',
+    )
+    if (!selectedForm) throw new Error('expected Airbnb modal form')
+    expect(selectedForm.hasAttribute('action')).toBe(false)
+    expect(selectedForm.action).toBe('https://www.airbnb.com/')
+    const [observation] = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .filter(
+        ({ formScope }) =>
+          formScope.kind === PasswordFormScopeKind.Owned &&
+          formScope.owner === selectedForm,
+      )
+    if (!observation) throw new Error('expected selected Airbnb modal form')
+    expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Owned)
+    expect(fieldValue('#phone-or-email')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('[type="search"]')).toBe('')
+  })
+
   test('requires the live Google sign-in route for a form-less identifier step', () => {
     const fixture: DomAuthenticationFixture = {
       html: `<main>
@@ -167,7 +228,7 @@ describe('DOM-backed companion authentication simulation', () => {
     const ownedRequest: DomAuthenticationSimulationRequest = {
       fixture: {
         html: `<main><form id="login_form" method="post" action="/auth/login">
-          <input id="identifierId" name="identifier" type="email" autocomplete="username" placeholder="Email or phone" aria-label="Email or phone">
+          <p data-testid="google-selected-account">dom-user@example.test</p>
           <input id="password-input" name="Passwd" type="password" autocomplete="current-password" aria-label="Enter your password">
           <div id="passwordNext"><button type="submit">Next</button></div>
         </form></main>`,
@@ -187,8 +248,8 @@ describe('DOM-backed companion authentication simulation', () => {
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'Next',
     })
-    expect(fieldValue('#identifierId')).toBe(FAKE_CREDENTIALS.username)
-    expect(fieldValue('#password-input')).toBe(FAKE_CREDENTIALS.password)
+    expect(fieldValue('#identifierId')).toBe(false)
+    expect(fieldValue('[name="Passwd"]')).toBe(FAKE_CREDENTIALS.password)
   })
 
   test('runs the ChatGPT GET and OpenAI POST identifier forms', () => {
@@ -252,7 +313,7 @@ describe('DOM-backed companion authentication simulation', () => {
       ownership: 'owned-form',
       semantics: 'semantic-submit',
       semanticSubmitControlCount: 1,
-      destinationIdentity: 'http://localhost:3000/auth/login',
+      destinationIdentity: 'https://www.airbnb.com/auth/login',
       submissionDestinationSource: 'authored',
       submissionMethod: 'get',
       label: 'Continue',
@@ -336,7 +397,7 @@ describe('DOM-backed companion authentication simulation', () => {
       ownership: 'owned-form',
       semantics: 'semantic-submit',
       semanticSubmitControlCount: 1,
-      destinationIdentity: 'http://localhost:3000/log-in-or-create-account',
+      destinationIdentity: 'https://www.airbnb.com/log-in-or-create-account',
       submissionDestinationSource: 'authored',
       submissionMethod: 'post',
       label: 'Continue',

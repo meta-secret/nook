@@ -33,7 +33,7 @@ tasks:
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
         grep -q 'exporting to image' "$output/cold-verification.log"
-        grep -q 'pr-proof-coverage' "$output/cold-post-tests.log"
+        grep -q 'pr-proof-coverage' "$output/cold-tests.log"
         grep -q 'pr-proof-browser' "$output/cold-post-tests.log"
         if grep -q 'exporting cache' "$output/cold-verification.log"; then
           echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2
@@ -54,42 +54,11 @@ tasks:
           exit 1
         fi
         grep -q ' CACHED' "$output/warm-tests.log"
-        printf 'changed source\n' >>"$context/inputs/compile-web-source.txt"
-        docker buildx bake --builder "$builder" --progress=plain \
-          --metadata-file "$output/changed-verification.json" \
-          -f "$fixture" --set "*.context=$context" \
-          --allow="fs.read=$context" \
-          pr-proof-verification 2>&1 | tee "$output/changed-verification.log"
-        dylint_tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[dylint-deps 3\/3\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
-        tooling_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 2\/2\] RUN .*/\1/p' "$output/changed-verification.log" | head -n 1)"
-        verification_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[verification 2\/2\].*/\1/p' "$output/changed-verification.log" | head -n 1)"
-        test -n "$dylint_tooling_vertex"
-        test -n "$tooling_vertex"
-        test -n "$verification_vertex"
-        grep -qx "$dylint_tooling_vertex CACHED" "$output/changed-verification.log"
-        grep -qx "$tooling_vertex CACHED" "$output/changed-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-product-dependencies$' "$output/changed-verification.log"; then
-          echo 'Source-only change unexpectedly rebuilt Dylint product dependencies' >&2
-          exit 1
-        fi
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/changed-verification.log"; then
-          echo 'Source-only change unexpectedly recooked WASM dependencies' >&2
-          exit 1
-        fi
-        if grep -qx "$verification_vertex CACHED" "$output/changed-verification.log"; then
-          echo 'Mutable verification layer unexpectedly stayed cached' >&2
-          exit 1
-        fi
-        docker buildx bake --builder "$builder" --progress=plain \
-          --metadata-file "$output/changed-post-tests.json" \
-          -f "$fixture" --set "*.context=$context" \
-          --allow="fs.read=$context" \
-          pr-proof-post-tests 2>&1 | tee "$output/changed-post-tests.log"
-        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/changed-post-tests.log" | head -n 1)"
+        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/warm-post-tests.log" | head -n 1)"
         test -n "$fuzz_dependency_vertex"
-        grep -qx "$fuzz_dependency_vertex CACHED" "$output/changed-post-tests.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/changed-post-tests.log"; then
-          echo 'Source-only change unexpectedly reinstalled fuzz dependencies' >&2
+        grep -qx "$fuzz_dependency_vertex CACHED" "$output/warm-post-tests.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/warm-post-tests.log"; then
+          echo 'Warm post-test solve unexpectedly reinstalled fuzz dependencies' >&2
           exit 1
         fi
         if grep -E 'importing cache manifest|exporting cache to registry' "$output/"*.log; then

@@ -208,12 +208,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(page.getByTestId('google-selected-account')).toHaveText(
         'alice@nook.test',
       )
-      await expect(page.locator('#login_form #identifierId')).toHaveAttribute(
-        'autocomplete',
-        'username',
+      await expect(page.locator('#login_form #identifierId')).toHaveCount(0)
+      await expect(page.locator('#login_form [name="Passwd"]')).toHaveAttribute(
+        'type',
+        'password',
       )
-      await expect(page.locator('#login_form #identifierId')).toHaveValue(
-        'alice@nook.test',
+      await expect(page.locator('#login_form [name="Passwd"]')).toHaveAttribute(
+        'autocomplete',
+        'current-password',
       )
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
@@ -781,10 +783,11 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toHaveAttribute('data-state', 'vault-locked')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(
-        widget.getByText(
-          'Unlock Nook in the companion window, then click Continue with Nook again.',
-        ),
-      ).toBeVisible({ timeout: 15_000 })
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText(
+        'Unlock Nook in the companion window, then click Continue with Nook again.',
+        { timeout: 15_000 },
+      )
       await expect(
         widget.getByRole('button', { name: 'Open vault' }),
       ).toBeVisible()

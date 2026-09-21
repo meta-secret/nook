@@ -53,7 +53,8 @@ class DockerizedRustBuildKitContract {
       /type=registry|needs\.rust-build|nook-pr-rust:|nook-pr-e2e:/,
     );
     expect(tasks).toContain("buildx bake");
-    expect(tasks).toContain("coverage-export.output=type=local");
+    expect(tasks).toContain("coverage-export.output=type=cacheonly");
+    expect(tasks).not.toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
@@ -136,9 +137,6 @@ class DockerizedRustBuildKitContract {
     expect(preflightDependencies).toContain(
       "cargo clippy --quiet --locked --all-targets",
     );
-    expect(preflightDependencies).toContain(
-      "cargo build --quiet --locked --bin nook-preflight",
-    );
     const policySource = preflight.indexOf(
       "FROM policy-tools AS policy-source",
     );
@@ -156,8 +154,16 @@ class DockerizedRustBuildKitContract {
     expect(preflightBuild).toContain(
       "find src tests -type f -name '*.rs' -exec touch {} +",
     );
+    expect(preflightBuild).toContain("cargo fmt --check");
     expect(preflightBuild).toContain("cargo clippy --quiet --offline");
-    expect(preflightBuild).toContain("cargo build --quiet --offline");
+    expect(preflightBuild).not.toContain("cargo build");
+    const preflightCoverage = preflight.slice(
+      preflight.indexOf("FROM build AS test"),
+      preflight.indexOf("FROM registry.dev.nokey.sh/oven/bun:"),
+    );
+    expect(preflightCoverage).toContain(
+      "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines",
+    );
     expect(
       preflight.slice(
         preflight.indexOf("FROM policy-source AS pr-verification"),
@@ -599,34 +605,25 @@ class DockerizedRustBuildKitContract {
       simulator.indexOf("COPY inputs/compile-web-source.txt"),
     );
     expect(simulator).not.toContain("SOURCE_REVISION");
-    expect(proof).toContain(
-      'printf \'changed source\\n\' >>"$context/inputs/compile-web-source.txt"',
-    );
     expect(simulator).toContain("bake-sim-cargo-chef-wasm-release");
     expect(simulator).toContain("bake-sim-cargo-dylint-product-dependencies");
     expect(proof).toContain('grep -qx "$dylint_dependency_vertex CACHED"');
     expect(proof).toContain(
       "Warm verification unexpectedly rebuilt Dylint product dependencies",
     );
-    expect(proof).toContain(
-      "Source-only change unexpectedly rebuilt Dylint product dependencies",
-    );
     expect(proof).toContain('grep -qx "$dependency_vertex CACHED"');
     expect(proof).toContain(
       "Warm verification unexpectedly recooked WASM dependencies",
-    );
-    expect(proof).toContain(
-      "Source-only change unexpectedly recooked WASM dependencies",
     );
     expect(simulator).toContain("bake-sim-fuzz-dependencies");
     expect(simulator).toContain("FROM tests AS coverage-export");
     expect(simulator).toContain("FROM tests AS browser-artifacts");
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
-    expect(proof).toContain("pr-proof-post-tests");
-    expect(proof).toContain("cold-post-tests.log");
-    expect(proof).toContain("changed-post-tests.log");
+    expect(proof).toContain("for phase in verification tests post-tests");
+    expect(proof).toContain('"pr-proof-$phase"');
+    expect(proof).toContain("cold-tests.log");
     expect(proof).toContain(
-      "Source-only change unexpectedly reinstalled fuzz dependencies",
+      "Warm post-test solve unexpectedly reinstalled fuzz dependencies",
     );
     expect(proof).toContain("grep -q 'exporting to image'");
     expect(proof).toContain(

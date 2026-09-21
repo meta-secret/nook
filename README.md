@@ -627,17 +627,23 @@ job Pod. The hook supplies a Docker CLI only: no daemon, runtime socket, DinD,
 host path, or privileged job container. The runner uses a pinned infrastructure
 Debian browser image, not an image published for each Nook PR.
 
-The one-job phases are `ci:pr:verification`, `ci:pr:tests`, then
-`ci:pr:heavy` and optional browser suites. Verification includes formatting,
-Loom/tooling checks, Clippy, TypeScript checks/lint and product builds before
-expensive test compilation. Independent work runs concurrently within each
-phase. Coverage reporting and preview publication stay in the same job.
+The one-job phases are `ci:pr:verification`, `ci:pr:tests`, then the joined
+`ci:pr:post-tests` barrier. The test phase keeps Docker-side coverage
+generation and per-package floor enforcement in BuildKit; the post-test
+barrier runs heavy checks and browser-artifact preparation concurrently before
+optional browser suites.
+Verification includes formatting, Loom/tooling checks, Clippy, TypeScript
+checks/lint and product builds before expensive test compilation. Independent
+work runs concurrently within each phase. Preview publication stays in the
+same job; PR coverage artifacts and comments are no longer transported or
+reported.
 The phase definitions live in `nook-app/ci/pr.yml` and
 `nook-app/ci/pr.docker-bake.hcl`; coverage/preview use composite actions,
 not reusable workflows that allocate additional runners.
 
 PRs do not import/export registry layer caches or publish intermediate Nook
-images. Local outputs contain coverage and browser/deployment files only.
+images. Local outputs contain browser/deployment files only; coverage remains
+inside the Docker/BuildKit solve and is enforced there.
 Later PRs can land on another node: warm cross-run locality is not guaranteed.
 Main, release and explicit remote workflows retain their existing portable Zot
 cache/image contracts. The node-local Service prevents cross-node BuildKit
@@ -699,10 +705,10 @@ source-sensitive compiler outputs whenever credentials are available.
 Same-repository Main, PR, Rust ecosystem, and Remote jobs mount those
 credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
 cache Cargo downloads or Docker layers.
-PR CI uploads coverage reports and diagnostics for inspection, but no sibling
-job downloads its outputs. Only a trusted Main baseline may be downloaded for
-coverage comparison. The old exact-input artifact-promotion workflow is
-removed: Docker/BuildKit owns reuse of unchanged verification layers.
+PR CI enforces package coverage floors inside the Docker/BuildKit solve and
+does not upload or comment on a redundant coverage report. The old exact-input
+artifact-promotion and Main-baseline comparison workflows are removed:
+Docker/BuildKit owns reuse of unchanged verification layers.
 No new performance budget is claimed until cold/warm measurements are run.
 
 After changing Rust dependencies, commit the updated lockfile:

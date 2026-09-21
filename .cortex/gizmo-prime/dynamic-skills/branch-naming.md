@@ -19,10 +19,13 @@ Use one of these two forms.
 
 - **Prime feature branch:** Use `codex/<feature>`.
 - **Team Gizmo or leaf branch:** Use
-  `codex/<feature>/<team>/<role>/<work>`.
+  `codex/child/<team>/<role>/<feature>/<work>`.
 
-The Team Gizmo role segment is `gizmo`. A leaf uses its canonical leaf role.
-The child form must contain both the team and role segments.
+The literal `child` namespace is required for private Team Gizmo and leaf
+branches. It is shorter than the minimum feature length, so a child ref cannot
+be the path prefix of a canonical `codex/<feature>` branch. The team and role
+segments therefore precede the variable feature and work segments. The Team
+Gizmo role segment is `gizmo`. A leaf uses its canonical leaf role.
 
 ## Segment constraints
 
@@ -55,6 +58,8 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Do not append opaque attempt suffixes such as `v2`.
 - Do not use a generic work label such as `cleanup` as the bounded outcome.
 - Do not encode UUIDs or timestamps in a branch name.
+- Do not omit the literal `child` namespace from a Team Gizmo or leaf branch.
+- Do not place the feature segment before the team and role segments.
 - Do not duplicate an agent-type segment, such as
   `cortex-specialist/cortex-specialist`.
 - Do not create a child branch that omits either its team or role segment.
@@ -121,43 +126,43 @@ All examples use the valid 15-character feature segment `agent-branching`.
 ### AI
 
 ```text
-codex/agent-branching/ai/gizmo/coordinate-ai-child-delivery
-codex/agent-branching/ai/cortex-specialist/define-branch-naming-contract
+codex/child/ai/gizmo/agent-branching/coordinate-ai-child-delivery
+codex/child/ai/cortex-specialist/agent-branching/define-branch-naming-contract
 ```
 
 ### SRE
 
 ```text
-codex/agent-branching/sre/gizmo/coordinate-sre-child-delivery
-codex/agent-branching/sre/provisioning/define-runner-branch-contract
+codex/child/sre/gizmo/agent-branching/coordinate-sre-child-delivery
+codex/child/sre/provisioning/agent-branching/define-runner-branch-contract
 ```
 
 ### Development Core
 
 ```text
-codex/agent-branching/dev-core/gizmo/coordinate-core-child-delivery
-codex/agent-branching/dev-core/rust-core-developer/define-core-branch-contract
+codex/child/dev-core/gizmo/agent-branching/coordinate-core-child-delivery
+codex/child/dev-core/rust-core-developer/agent-branching/define-core-branch-contract
 ```
 
 ### Security
 
 ```text
-codex/agent-branching/security/gizmo/coordinate-security-child-delivery
-codex/agent-branching/security/cryptography-specialist/define-crypto-branch-contract
+codex/child/security/gizmo/agent-branching/coordinate-security-child-delivery
+codex/child/security/cryptography-specialist/agent-branching/define-crypto-branch-contract
 ```
 
 ### Web Development
 
 ```text
-codex/agent-branching/web-dev/gizmo/coordinate-web-child-delivery
-codex/agent-branching/web-dev/typescript-specialist/define-web-branch-contract
+codex/child/web-dev/gizmo/agent-branching/coordinate-web-child-delivery
+codex/child/web-dev/typescript-specialist/agent-branching/define-web-branch-contract
 ```
 
 ### Delivery Pipeline
 
 ```text
-codex/agent-branching/delivery-pipeline/gizmo/coordinate-pipeline-child-delivery
-codex/agent-branching/delivery-pipeline/pr-lifecycle/define-remote-branch-contract
+codex/child/delivery-pipeline/gizmo/agent-branching/coordinate-pipeline-child-delivery
+codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-contract
 ```
 
 ## Validation

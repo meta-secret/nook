@@ -380,8 +380,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # nook-event-log, and nook-companion-core above,
 # then runs nook-core with --no-clean
 # so the final report combines all portable crates while preserving cacheable dependency coverage.
-# The same run also bakes the coverage artifacts that PR CI copies out later;
-# export must not rerun the Rust tests.
+# The same run also bakes structured coverage evidence for BuildKit cache-only
+# consumers; no PR-side transport or report step reruns the Rust tests.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/coverage/nook-core \
@@ -401,8 +401,8 @@ COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
 
-# Export only the small, already-computed coverage payload. This target deliberately branches
-# before the WASM/web production stages so a PR fallback never materializes the multi-GB app image.
+# Retain only the small, already-computed coverage payload as a BuildKit target.
+# PR verification uses it cache-only and never materializes a report artifact.
 FROM scratch AS coverage-export
 
 COPY --from=builder-debug /opt/nook/coverage/nook-core/ /

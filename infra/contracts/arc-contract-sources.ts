@@ -24,6 +24,7 @@ export interface ArcContractSources {
   ciWorkflow: TextContract;
   mainWorkflow: TextContract;
   prWorkflow: TextContract;
+  prTasks: TextContract;
   authSensitiveJob: TextContract;
   repositoryPolicySource: string;
   repositoryPolicyWorkflow: TextContract;
@@ -224,6 +225,14 @@ export class ArcContractSourceInventory {
       label: "PR workflow",
       source: prWorkflowSource,
     });
+    const readPrTasks = await new OperationalContractSource(
+      resolve(this.root, "nook-app/ci/pr.yml"),
+    ).read();
+    if (readPrTasks.isErr()) return err(readPrTasks.error);
+    const prTasks = new TextContract({
+      label: "PR task phases",
+      source: readPrTasks.value,
+    });
     const authSensitiveJobStart = prWorkflowSource.indexOf(
       "      - name: Authentication-sensitive extension regression",
     );
@@ -324,6 +333,7 @@ export class ArcContractSourceInventory {
       ciWorkflow,
       mainWorkflow,
       prWorkflow,
+      prTasks,
       authSensitiveJob,
       repositoryPolicySource,
       repositoryPolicyWorkflow,

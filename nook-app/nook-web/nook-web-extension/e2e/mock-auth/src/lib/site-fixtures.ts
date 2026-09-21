@@ -14,6 +14,7 @@ export type SiteFixtureField = {
   label?: string
   placeholder?: string
   'aria-label'?: string
+  'aria-hidden'?: string
   'data-qa'?: string
   'data-testid'?: string
 }
@@ -27,6 +28,7 @@ export type SiteFixtureSubmit = {
   type: SiteFixtureSubmitType
   name?: string
   id?: string
+  class?: string
   label: string
   'data-qa'?: string
 }
@@ -254,6 +256,12 @@ class SiteFixtureCatalogAdmission {
     if ('aria-label' in value) {
       field['aria-label'] = this.decodeString(value['aria-label'], 'aria-label')
     }
+    if ('aria-hidden' in value) {
+      field['aria-hidden'] = this.decodeString(
+        value['aria-hidden'],
+        'aria-hidden',
+      )
+    }
     if ('data-qa' in value) {
       field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -297,6 +305,7 @@ class SiteFixtureCatalogAdmission {
     }
     if ('name' in value) submit.name = this.decodeString(value.name, 'name')
     if ('id' in value) submit.id = this.decodeString(value.id, 'id')
+    if ('class' in value) submit.class = this.decodeString(value.class, 'class')
     if ('data-qa' in value) {
       submit['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -451,6 +460,9 @@ export function renderFixtureHtml(
         field['aria-label']
           ? `aria-label="${escapeAttr(field['aria-label'])}"`
           : '',
+        field['aria-hidden']
+          ? `aria-hidden="${escapeAttr(field['aria-hidden'])}"`
+          : '',
         field['data-qa'] ? `data-qa="${escapeAttr(field['data-qa'])}"` : '',
         field['data-testid']
           ? `data-testid="${escapeAttr(field['data-testid'])}"`
@@ -472,6 +484,7 @@ export function renderFixtureHtml(
     `type="${submitType}"`,
     step.submit.name ? `name="${escapeAttr(step.submit.name)}"` : '',
     step.submit.id ? `id="${escapeAttr(step.submit.id)}"` : '',
+    step.submit.class ? `class="${escapeAttr(step.submit.class)}"` : '',
     step.submit['data-qa']
       ? `data-qa="${escapeAttr(step.submit['data-qa'])}"`
       : '',

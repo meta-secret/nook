@@ -882,8 +882,8 @@ impl MainRustEntrypointContract {
             String::from_utf8_lossy(&host.stderr)
         );
         assert!(
-            String::from_utf8_lossy(&host.stderr).contains("docker:ci:rust:export"),
-            "dynamic Main Rust host task must reach native verification"
+            String::from_utf8_lossy(&host.stderr).contains("docker:ci:rust:verify"),
+            "dynamic Main Rust host task must reach native verification without report export"
         );
     }
 }

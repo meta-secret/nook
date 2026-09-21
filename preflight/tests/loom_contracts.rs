@@ -34,22 +34,72 @@ impl RepositoryFixture {
         fs::read_to_string(self.join(path))
             .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
     }
+
+    fn task_body<'a>(&self, taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
+        let start_marker = format!("  {task}:\n");
+        let end_marker = format!("  {next_task}:\n");
+        let start = taskfile
+            .find(&start_marker)
+            .unwrap_or_else(|| panic!("missing task {task}"));
+        let body = taskfile
+            .get(start..)
+            .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
+        let end = body
+            .find(&end_marker)
+            .unwrap_or_else(|| panic!("missing following task {next_task}"));
+        body.get(..end)
+            .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
+    }
 }
 
-fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
-    let start_marker = format!("  {task}:\n");
-    let end_marker = format!("  {next_task}:\n");
-    let start = taskfile
-        .find(&start_marker)
-        .unwrap_or_else(|| panic!("missing task {task}"));
-    let body = taskfile
-        .get(start..)
-        .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
-    let end = body
-        .find(&end_marker)
-        .unwrap_or_else(|| panic!("missing following task {next_task}"));
-    body.get(..end)
-        .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
+struct LoomPrPolicyScenario {
+    root: RepositoryFixture,
+}
+
+impl LoomPrPolicyScenario {
+    fn repository() -> Self {
+        Self {
+            root: RepositoryFixture::repository_root(),
+        }
+    }
+
+    fn task_body<'a>(&self, taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
+        let start_marker = format!("  {task}:\n");
+        let end_marker = format!("  {next_task}:\n");
+        let start = taskfile
+            .find(&start_marker)
+            .unwrap_or_else(|| panic!("missing task {task}"));
+        let body = taskfile
+            .get(start..)
+            .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
+        let end = body
+            .find(&end_marker)
+            .unwrap_or_else(|| panic!("missing following task {next_task}"));
+        body.get(..end)
+            .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
+    }
+
+    fn assert_policy_only_pr_route(&self) {
+        let pr_tasks = self.root.read("nook-app/ci/pr.yml");
+        let policy_only = self.task_body(
+            &pr_tasks,
+            "ci:pr:tests:policy-with-delivery-helpers",
+            "ci:pr:delivery-helpers",
+        );
+        assert!(
+            policy_only.contains("task --parallel ci:pr:tests:policy ci:pr:delivery-helpers")
+                && self
+                    .task_body(
+                        &pr_tasks,
+                        "ci:pr:tests:policy",
+                        "ci:pr:tests:policy-with-delivery-helpers",
+                    )
+                    .contains(
+                        "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+                    ),
+            "policy-only PR workflow must delegate to the named policy task"
+        );
+    }
 }
 
 #[test]
@@ -125,7 +175,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let skills_install = task_body(&taskfile, "skills:install", "skills:format");
+    let skills_install = root.task_body(&taskfile, "skills:install", "skills:format");
     assert!(
         skills_install.contains("package-gate-cli.ts\" install")
             && skills_install.contains("{{.REPO_ROOT}}"),
@@ -148,25 +198,25 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         skills_bunfig.contains("linker = \"hoisted\""),
         "executable-skill workspace must retain one hoisted dependency tree"
     );
-    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
+    let skills_verify = root.task_body(&taskfile, "skills:verify", "loom:install");
     assert!(
         skills_verify.contains("deps: [skills:install]")
             && skills_verify.contains("package-gate-cli.ts\" verify"),
         "skills:verify must run every complete workspace package gate"
     );
 
-    let loom_install = task_body(&taskfile, "loom:install", "loom:format");
+    let loom_install = root.task_body(&taskfile, "loom:install", "loom:format");
     assert!(
         loom_install.contains("bun install --frozen-lockfile")
             && !loom_install.contains("skills:install"),
         "loom:install must install only Loom dependencies"
     );
-    let loom_verify = task_body(&taskfile, "loom:verify", "loom:run");
+    let loom_verify = root.task_body(&taskfile, "loom:verify", "loom:run");
     assert!(
         loom_verify.contains("task: skills:verify") && loom_verify.contains("task: loom:test"),
         "loom:verify must include executable applications and Loom"
     );
-    let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
+    let pre_push = root.task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
         pre_push.contains("deps: [loom:install, tooling:install]")
             && pre_push.contains("task loom:default FAMILY=prePush")
@@ -175,7 +225,11 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
 
     let preflight = root.read("preflight/Taskfile.yml");
-    let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
+    let format_contract = root.task_body(
+        &preflight,
+        "preflight:format-contract",
+        "preflight:dependency-policy",
+    );
     assert!(
         format_contract
             .contains("bun test \"{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts\"")
@@ -229,7 +283,6 @@ fn loom_workflow_audits_every_cortex_change() {
     let entrypoint = root.read(".github/workflows/ci.yml");
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let pr_workflow = root.read(".github/workflows/pr.yml");
-    let pr_tasks = root.read("nook-app/ci/pr.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
         entrypoint.contains("pull_request:")
@@ -241,14 +294,14 @@ fn loom_workflow_audits_every_cortex_change() {
                 "  policy:\n    name: Repository policy\n    if: github.event_name == 'push'\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
             )
             && entrypoint.contains("    uses: ./.github/workflows/pr.yml")
-            && pr_workflow.contains("run: task --silent ci:pr:tests")
-            && pr_workflow.contains("run: task --silent ci:pr:tests:policy")
-            && pr_tasks.contains(
-                "task --taskfile \"{{.REPO_ROOT}}/Taskfile.yml\" preflight:repository-policy",
+            && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+            && pr_workflow.contains(
+                "run: task --silent ci:pr:tests:policy-with-delivery-helpers\n",
             )
             && workflow.contains("workflow_call:"),
         "repository policy must validate every PR and Main tree"
     );
+    LoomPrPolicyScenario::repository().assert_policy_only_pr_route();
     assert!(
         workflow.contains("fetch-depth: 0")
             && !workflow.contains("BASELINE_SHA")

@@ -86,8 +86,8 @@ target "builder-debug" {
   cache-to   = rust_native_source_cache_to
 }
 
-// Small local-output target for the rare case where a commit-keyed main coverage artifact is
-// unavailable. It reuses builder-debug's cached Rust layers without exporting the full app image.
+// Small coverage target that reuses builder-debug's cached Rust layers without exporting the
+// full app image. PR verification selects a cache-only output; Main keeps the same graph.
 target "coverage-export" {
   inherits   = ["_sccache"]
   context    = "."

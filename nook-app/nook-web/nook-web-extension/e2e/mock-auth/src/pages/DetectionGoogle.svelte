@@ -88,16 +88,6 @@
       action="/auth/login"
       onsubmit={submitPassword}
     >
-      <label for="identifierId">Email or phone</label>
-      <input
-        id="identifierId"
-        name="identifier"
-        type="email"
-        autocomplete="username"
-        placeholder="Email or phone"
-        aria-label="Email or phone"
-        bind:value={identifier}
-      />
       <label for="password-input">Enter your password</label>
       <input
         id="password-input"
