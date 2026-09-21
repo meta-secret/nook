@@ -2,21 +2,20 @@
 
 ## Required entry
 
-Read [the circuit breaker](CIRCUIT-BREAKER.md), then
-[the root routing contract](AGENTS.md).
+Read the circuit breaker, root routing contract, and integration contract in
+that order. They supply Nook context before upstream role and skill selection.
 
-Every repository implementation and delivery mission starts under Gizmo
-Prime. Select its owner graph below, then read the complete delivery diagrams
-before acting.
+- [Circuit breaker](CIRCUIT-BREAKER.md)
+- [Root routing contract](AGENTS.md)
+- [Meta-Cortex integration and provenance](meta-cortex-integration.md)
+- [Upstream composition](../.meta-cortex/skill-composition.md)
 
-Every feature branch starts from freshly fetched `origin/main`. Gizmo Prime
-owns the full cycle through all required PR checks, squash merge to `main`,
-actual merged-state verification, and remote feature-branch deletion. Reviews
-and approvals are optional.
+## Coordination
 
-## Owning contexts
+- [Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)
 
-- [Gizmo Prime](gizmo-prime/knowledge-graph.md)
+## Product and operational contexts
+
 - [AI](teams/ai/knowledge-graph.md)
 - [Development Core](teams/dev-core/knowledge-graph.md)
 - [Security](teams/security/knowledge-graph.md)
@@ -24,5 +23,3 @@ and approvals are optional.
 - [Web Development](teams/web-dev/knowledge-graph.md)
 - [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)
 - [Shared knowledge](shared/knowledge-graph.md)
-
-Delivery Pipeline routes bounded GitHub mechanics to PR Lifecycle Agent.

@@ -4,7 +4,7 @@
 
 1. Bootstrap the canonical feature branch from freshly fetched `origin/main`.
 2. Identify the functional owner of each affected module.
-3. Dispatch bounded module work through the owning Team Gizmos.
+3. Dispatch bounded module work through the single Team Gizmo.
 4. Preserve dependency order across provider and consumer changes.
 5. Integrate verified child commits into the canonical feature branch.
 6. Create or update the feature pull request into `main`.

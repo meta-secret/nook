@@ -17,8 +17,8 @@ Load only the category that owns the assigned browser-facing functionality.
 
 ## Frontend skills
 
-- [Svelte state modeling](dynamic-skills/svelte-state-modeling.md)
-- [TypeScript serial operation queues](dynamic-skills/typescript-serial-operation-queues.md)
+- [Svelte state modeling](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/svelte-state-modeling.md)
+- [TypeScript serial operation queues](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-serial-operation-queues.md)
 - [UI design](dynamic-skills/ui-design-skills.md)
 - [Web unused-code enforcement](dynamic-skills/web-unused-code.md)
 
@@ -28,13 +28,13 @@ Use these skills for TypeScript implementation in web-owned code, an explicitly
 delegated cross-team expertise unit, or direct functional-owner implementation
 when the selected authority links them as read-only engineering policy.
 
-- [TypeScript domain structure](dynamic-skills/typescript-domain-structure.md)
-- [TypeScript explicit state](dynamic-skills/typescript-explicit-state.md)
-- [TypeScript Effect Workflows](dynamic-skills/typescript-effect.md)
-- [TypeScript enums instead of booleans](dynamic-skills/typescript-enums-over-booleans.md)
-- [TypeScript named call arguments](dynamic-skills/typescript-named-args.md)
-- [TypeScript concrete values](dynamic-skills/typescript-no-unknown.md)
-- [TypeScript single parameter](dynamic-skills/typescript-single-parameter.md)
+- [TypeScript domain structure](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
+- [TypeScript explicit state](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)
+- [TypeScript Effect Workflows](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
+- [TypeScript enums instead of booleans](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-enums-over-booleans.md)
+- [TypeScript named call arguments](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md)
+- [TypeScript concrete values](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md)
+- [TypeScript single parameter](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md)
 
 ## Frontend references
 

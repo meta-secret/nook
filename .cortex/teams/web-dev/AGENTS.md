@@ -1,5 +1,10 @@
 # Web Development Team Agent Contract
 
+This is a Nook functional context. The single Team Gizmo supplies it alongside
+Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+over legacy generic wording here; Nook product and delivery requirements remain.
+
+
 ## Mission
 
 Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
@@ -13,7 +18,7 @@ Web development owns Nook's TypeScript and Svelte engineering expertise. It
 also owns browser presentation and frontend interaction behavior.
 
 For authored TypeScript, JavaScript, or Svelte scripts, load the Web-owned
-[TypeScript Effect Workflows](dynamic-skills/typescript-effect.md) policy.
+[TypeScript Effect Workflows](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md) policy.
 Apply Effect when the changed workflow meets its scope, and preserve Rust/WASM
 ownership of portable domain and security behavior.
 

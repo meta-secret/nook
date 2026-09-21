@@ -1,5 +1,10 @@
 # AI Team Agent Contract
 
+This is a Nook functional context. The single Team Gizmo supplies it alongside
+Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+over legacy generic wording here; Nook product and delivery requirements remain.
+
+
 ## Highest-priority circuit breaker
 
 Read and follow the root [Agent Derailment Circuit
@@ -68,64 +73,15 @@ will implement named files.
 
 ## Authored implementation routing
 
-An AI Team Agent that authors TypeScript, JavaScript, or Svelte, including an
-executable skill or its tests, loads and applies these read-only authorities
-before editing:
+Use [upstream skill composition](../../../.meta-cortex/skill-composition.md)
+for every authored language, including executable skills and tests.
+The assignment supplies common coding, language practices, and any secret or
+Rust/WASM boundary requirements before implementation.
+Nook's validation section below identifies the separate enforcement surfaces.
 
-- [Function ownership](../../shared/dynamic-skills/function-ownership.md)
-  assigns every authored function to a meaningful owner. An unowned function
-  is a P1 finding.
-- [TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)
-  requires named state and normalizes authored absence. It forbids authored
-  `null`, `undefined`, and value-or-`void` contracts.
-- [TypeScript Effect Workflows](../web-dev/dynamic-skills/typescript-effect.md)
-  governs effectful workflows, typed expected failures, untrusted boundary
-  decoding, effectful dependencies, resources, concurrency, observability, and
-  runtime boundaries. Pure calculations, inert declarations, and Svelte
-  rendering remain outside Effect.
-- [Domain API integrity](../../shared/dynamic-skills/domain-api-integrity.md)
-  routes named types, one-parameter requests, typed failures, and schema or
-  migration decisions.
-- [TypeScript domain structure](../web-dev/dynamic-skills/typescript-domain-structure.md),
-  [concrete values](../web-dev/dynamic-skills/typescript-no-unknown.md),
-  [single parameters](../web-dev/dynamic-skills/typescript-single-parameter.md),
-  and [named call arguments](../web-dev/dynamic-skills/typescript-named-args.md)
-  refine that TypeScript contract.
-- [Source file size](../../shared/dynamic-skills/source-file-size.md) and
-  [TypeScript and Rust automation only](../../shared/dynamic-skills/typescript-rust-automation-only.md)
-  govern authored source structure and automation language.
-- [Testing and regression coverage](../../shared/dynamic-skills/testing-pyramid-and-regression.md)
-  governs behavior-focused tests and regression evidence.
-- [Prefer popular libraries](../../shared/dynamic-skills/prefer-popular-libraries.md)
-  applies when adding dependencies or replacing commodity code.
-
-Load [secret lifecycle](../security/dynamic-skills/secret-lifecycle.md) for a
-secret-bearing value. Load [UI design](../web-dev/dynamic-skills/ui-design-skills.md)
-for user-visible copy or interaction; the explicit-state authority governs any
-conflicting Svelte-state guidance. Load [Rust coding](../dev-core/dynamic-skills/rust-coding.md),
-[Rust macro minimization](../dev-core/dynamic-skills/rust-macro-minimization.md),
-[Rust-TypeScript separation](../dev-core/dynamic-skills/rust-typescript-code-separation.md),
-and [WASM name coherence](../dev-core/dynamic-skills/rust-wasm-name-coherence.md)
-when an explicit packet names Rust or a Rust/WASM boundary. Load [TypeScript
-enums over booleans](../web-dev/dynamic-skills/typescript-enums-over-booleans.md)
-for domain, state, policy, mode, configuration, or owned-contract booleans;
-load [Svelte state modeling](../web-dev/dynamic-skills/svelte-state-modeling.md)
-for authored Svelte; and load [serial operation queues](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)
-when authoring a serial async queue.
-
-For authored Svelte TypeScript, the packet and focused review apply
-the authorities above together for failure outcomes, workflow transitions,
-event handlers, and eligibility decisions. Require one semantically owned
-exhaustive workflow state with closed typed failure kinds and outcomes. The
-semantic owner must model workflow phase exhaustively and classify eligibility
-as an exhaustive outcome. Reject free-form application error state or text,
-parallel error slots, and coupled eligibility or phase booleans as P1 findings.
-Localized presentation copy derived from a typed outcome at the presentation
-edge is allowed.
-
-These links are the AI packet's minimal policy set. The AI team does not copy
-or edit foreign-team policy. A missing required authority or an unprovable
-policy load fails the packet closed.
+Documentation goes to the upstream tech writer with the subject owner's
+requirements. Loom implementation uses the TypeScript developer with AI context.
+Neither language expertise nor documentation authorship transfers product policy.
 
 ## Owned responsibilities
 
@@ -183,7 +139,7 @@ packet must name the authoritative checks below:
   value-or-`void`, generic optional-state, and closed-discriminant violations.
 - `task preflight:source-architecture` checks source-language and source-size
   policy.
-- A focused review against [function ownership](../../shared/dynamic-skills/function-ownership.md)
+- A focused review against [function ownership](../../../.meta-cortex/skills/dev/coding-skill/practices/function-ownership.md)
   checks TypeScript ownership because no static TypeScript checker proves
   semantic ownership. An unowned function or a missing required result is a
   P1 failure and the acceptance must fail closed.

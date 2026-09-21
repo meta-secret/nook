@@ -9,7 +9,7 @@ for future refactors.
 The AI team owns dynamic-skill meaning, card authoring, and registry
 maintenance. Gizmo owns feature delivery state when a card is applied. Route
 feature, remote validation, review, Workbench, and promotion mechanics through
-Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Team
+Team Gizmo (Delivery Pipeline context) -> active harness -> PR Lifecycle Agent. Team
 Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
 create or update PRs or decide policy. The Feature Gizmo remains the policy owner
 and sole invoker of `feature PR lifecycle`.
@@ -27,7 +27,9 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 1. Inspect the referenced code.
 2. Select the responsible team through
    [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
-3. Convert the explanation into a concise card in the owner's
+3. Consult upstream skill composition first. Improve generic practice upstream
+   instead of creating another local language or agent rule. Capture Nook-only
+   requirements as a concise supplement in the owner's
    `dynamic-skills/` directory.
    - Use Gizmo for delivery-control knowledge.
    - Use the responsible engineering team for implementation knowledge.
@@ -96,5 +98,5 @@ For code refactors using a dynamic skill, apply only the permitted scoped
 formatters or inexpensive diagnostics. Commit every resulting mutation in the
 allowed paths and return the exact scoped commit to Gizmo. Do not run a local
 pre-push or broad validation gate. Gizmo routes the hosted build-only packet
-through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
+through Team Gizmo (Delivery Pipeline context) -> active harness -> PR Lifecycle Agent.
 The Feature Gizmo owns later CI validation.

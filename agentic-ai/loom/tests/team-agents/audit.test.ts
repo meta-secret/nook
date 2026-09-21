@@ -428,12 +428,13 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects removal of any autonomous mission or delivery invariant', async () => {
+  test('rejects removal of the Meta-Cortex composition bindings', async () => {
     const invariants = [
-      'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
-      'Continue implementation, validation, repair, and authorized delivery until\n  complete delivery or an explicitly requested intermediate stop is reached.',
-      'An implementation request defaults to complete delivery.',
-      'Silence about\nmerge is not an intermediate selection.',
+      '../.meta-cortex/AGENTS.md',
+      '../.meta-cortex/skill-composition.md',
+      '../.meta-cortex/meta-cortex.toml',
+      'gizmo-prime/team-gizmo/AGENTS.md',
+      'meta-cortex-integration.md',
     ] as const;
     for (const invariant of invariants) {
       const fixtureRoot =
@@ -453,16 +454,16 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects drift of the Gizmo prohibition heading or implementation boundary', async () => {
+  test('rejects drift of the wrapper ownership boundary', async () => {
     const drifts = [
       {
-        current: 'Gizmo does not:',
-        replacement: 'Gizmo may:',
+        current: '## Prohibited actions',
+        replacement: '## Optional guidance',
       },
       {
-        current: '- implement or repair team-owned work;',
+        current: 'Do not copy upstream coordination rules or select models here.',
         replacement:
-          '- implement or repair team-owned work when requested;\n\n## Relocated marker\n\n- implement or repair team-owned work;',
+          'Local wrappers may select models.\n\n## Relocated marker\n\nDo not copy upstream coordination rules or select models here.',
       },
     ] as const;
     for (const drift of drifts) {

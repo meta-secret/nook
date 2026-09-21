@@ -98,7 +98,7 @@ jobs:
           research=false
           while IFS= read -r -d '' path; do
             case "$path" in
-              .cortex/* | .cursor/* | .vale.ini | .vale/* | .github/workflows/repository-policy.yml | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*) ;;
+              .cortex/* | .meta-cortex/* | .cursor/* | .vale.ini | .vale/* | .github/workflows/repository-policy.yml | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*) ;;
               *) product=true ;;
             esac
             case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac

@@ -12,7 +12,7 @@
 
 ## Required actions
 
-1. Verify the packet came through Gizmo Prime and Delivery Pipeline Team Gizmo.
+1. Verify the packet came through Gizmo Prime and Team Gizmo (Delivery Pipeline context).
 2. Fetch and prune origin.
 3. Resolve the canonical feature branch's latest committed head.
 4. Reject a target other than `main`.

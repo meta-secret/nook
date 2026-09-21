@@ -36,6 +36,38 @@ const DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS = [
 ] as const;
 
 describe('team task context', () => {
+  test('selects vendored language skills for a Nook team context', () => {
+    const skill =
+      '.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/SKILL.md';
+    const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
+      team: TeamKey.Sre,
+      readClaims: ['.meta-cortex/**'],
+      writeClaims: [],
+      selectedSkillPaths: [skill],
+    };
+    const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
+
+    expect(context.team).toBe(TeamKey.Sre);
+    expect(context.contextPaths).toEqual([...SRE_CONTEXT_PATHS, skill]);
+  });
+
+  test('keeps vendored skill selection within the assigned read scope', () => {
+    const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
+      team: TeamKey.Sre,
+      readClaims: ['.cortex/**'],
+      writeClaims: [],
+      selectedSkillPaths: [
+        '.meta-cortex/skills/dev/coding-skill/SKILL.md',
+      ],
+    };
+
+    expect(() =>
+      TeamTaskContextResolver.resolveTeamTaskContext(request),
+    ).toThrow('task-authorized Cortex Markdown files');
+  });
+
   test('keeps team identity separate from dynamically selected skills', () => {
     const request: TeamTaskContextRequest = {
       repositoryRoot: REPO_ROOT,

@@ -436,24 +436,23 @@ const GIZMO_AUTHORITY_PATH = '.cortex/gizmo-prime/AGENTS.md';
 const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',
   '## Team worker contract',
-  'exactly one team identity',
-  'canonical typed\nCortex authoring composition',
-  'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
-  'Continue implementation, validation, repair, and authorized delivery until\n  complete delivery or an explicitly requested intermediate stop is reached.',
-  'An implementation request defaults to complete delivery.',
-  'Silence about\nmerge is not an intermediate selection.',
+  '../.meta-cortex/AGENTS.md',
+  '../.meta-cortex/skill-composition.md',
+  '../.meta-cortex/meta-cortex.toml',
+  'gizmo-prime/team-gizmo/AGENTS.md',
+  'meta-cortex-integration.md',
 ] as const;
 
 const GIZMO_AUTHORITY_MARKERS = [
-  'single root delivery owner',
-  'exactly one team identity',
-  'The branch name is the workflow authority.',
+  '../../.meta-cortex/agents/gizmo-prime/AGENTS.md',
+  'team-gizmo/AGENTS.md',
+  'architecture/dev-delivery.md',
 ] as const;
 
-const GIZMO_PROHIBITION_HEADING = 'Gizmo does not:';
+const GIZMO_PROHIBITION_HEADING = '## Prohibited actions';
 
 const GIZMO_IMPLEMENTATION_PROHIBITION =
-  '- implement or repair team-owned work;';
+  'Do not copy upstream coordination rules or select models here.';
 
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';

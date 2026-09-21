@@ -596,11 +596,14 @@ export class CortexDocumentStructure {
     const normalizedIndexPath = this.normalizeCortexRelativePath(
       args.indexRelativePath,
     );
-    const targetRelativePath = this.normalizeCortexRelativePath(
-      path.posix.normalize(
-        path.posix.join(path.posix.dirname(normalizedIndexPath), cleanPath),
-      ),
+    const repositoryPath = path.posix.normalize(
+      path.posix.join(path.posix.dirname(normalizedIndexPath), cleanPath),
     );
+    // Vendored library links are dependencies, not Nook-owned graph entries.
+    // The repository link audit still checks their file destinations.
+    if (repositoryPath.startsWith('.meta-cortex/')) return false;
+    const targetRelativePath =
+      this.normalizeCortexRelativePath(repositoryPath);
 
     return {
       targetRelativePath,

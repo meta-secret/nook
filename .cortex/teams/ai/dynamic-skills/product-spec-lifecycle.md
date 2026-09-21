@@ -143,5 +143,5 @@ After:
   formatter mutation in allowed source or Cortex paths. Return the exact commit
   and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
   Gizmo immediately dispatches the relevant required PR-check task through
-  Delivery Pipeline Team Gizmo and PR Lifecycle Agent. The Feature Gizmo owns
+  Team Gizmo (Delivery Pipeline context) and PR Lifecycle Agent. The Feature Gizmo owns
   complete exact-head CI validation when the snapshot is ready.
