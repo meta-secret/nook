@@ -86,15 +86,17 @@ The locally installed, Git-ignored library comes from `cortex/` in
 [meta-cortex](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex), commit
 `d31a48a331cf01363816435d8bde9a2b9881e71b`.
 Its Apache-2.0 license is included in `.meta-cortex/LICENSE`.
-The only Nook configuration override is the team-agent model, set to
-`gpt-6-astra`; upstream role-specific reasoning settings are preserved.
+The Nook team-agent configuration override sets `model = "gpt-5.6-luna"` and
+`reasoning_effort = "xhigh"`. Wrappers must not duplicate model or reasoning
+settings.
 The library is not included in Nook clones or pull requests. Install it before
 using the agent entry point or running audits that resolve its local links.
 CI environments running those audits need the same dependency installed.
 
 For a fresh checkout, obtain the upstream commit above and copy its `cortex/`
 directory to Nook's `.meta-cortex/`. Copy the upstream license into that directory
-and apply the documented model override. Keep that installation untracked.
+and apply the documented team-agent model and reasoning override. Keep that
+installation untracked.
 
 For an update:
 
