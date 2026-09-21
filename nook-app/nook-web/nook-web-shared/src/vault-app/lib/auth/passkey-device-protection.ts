@@ -53,7 +53,7 @@ export function passkeyCeremonyOutcome(error: unknown): PasskeyCeremonyOutcome {
   return PasskeyCeremonyOutcome.CeremonyFailed;
 }
 
-/** Sanitized fields safe to persist for AI-debug / app-log correlation. */
+/** Sanitized fields safe to persist for diagnostic log correlation. */
 export function sanitizedPasskeyCeremonyData(error: unknown): {
   outcome: PasskeyCeremonyOutcome;
   errorName?: string;
