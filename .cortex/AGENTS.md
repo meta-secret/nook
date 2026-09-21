@@ -46,7 +46,7 @@ The following are Nook-specific additions rather than competing language rules:
 - [Rust lint rollout and existing values](teams/dev-core/design-docs/typed-newtypes.md).
 - [Rust ownership lint rollout](teams/dev-core/design-docs/rust-action-ownership.md).
 - [Nook test surfaces and coverage](shared/dynamic-skills/testing-pyramid-and-regression.md).
-- [Nook source-size enforcement](shared/dynamic-skills/source-file-size.md).
+- [Nook source-size enforcement](shared/dynamic-skills/source-file-size.md): preserve the 1,000-line source limit, keep unit tests colocated while retaining integration tests, and use domain or architectural decomposition for oversized files.
 - [Dependency audit integration](shared/dynamic-skills/prefer-popular-libraries.md).
 - [Automation languages](shared/dynamic-skills/typescript-rust-automation-only.md) is a P1 hard rule: do not author, retain, or invoke Python; use Bun and TypeScript for scripts, Rust for compiled behavior, and Taskfiles for orchestration.
 - [Nook UI and localization](teams/web-dev/dynamic-skills/ui-design-skills.md).
