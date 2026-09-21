@@ -16,7 +16,6 @@ import {
   TaskResourceClaim,
 } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
-import { isAbsolute } from 'node:path';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
 import { ModuleScope } from './module-scope-validation.ts';
@@ -45,10 +44,7 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleTaskOwnership,
 } from './domain.ts';
-import {
-  CanonicalFeatureBranchContract,
-  CanonicalWorkerBranchContract,
-} from '../lib/base-evidence.ts';
+import { ModuleDeliveryBranchAssignmentValidation } from './branch-assignment-validation.ts';
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
@@ -100,7 +96,7 @@ export class ModuleDeliveryPlanDecoder {
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();
     const state: ValidationState = { plan, issues, nodesById };
     this.validateLimits(state);
-    this.validateBranchAssignments(state);
+    ModuleDeliveryBranchAssignmentValidation.validate(state);
     this.validateParentOwnedResources(state);
     this.indexNodes(state);
     this.validateNodes(state);
@@ -147,66 +143,6 @@ export class ModuleDeliveryPlanDecoder {
         };
         this.issue(request);
       }
-    }
-  }
-
-  private validateBranchAssignments(state: ValidationState): void {
-    if (state.plan.baseBranch !== 'origin/main')
-      this.issue({
-        state,
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.baseBranch',
-        message: 'baseBranch must select freshly fetched origin/main.',
-      });
-    try {
-      CanonicalFeatureBranchContract.parse(state.plan.featureBranch);
-    } catch {
-      this.issue({
-        state,
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.featureBranch',
-        message: 'featureBranch must be a canonical codex branch.',
-      });
-    }
-    const workerBranches = new Set<string>();
-    const worktreePaths = new Set<string>();
-    const featureSegment = state.plan.featureBranch.split('/')[1];
-    for (const [index, node] of state.plan.nodes.entries()) {
-      if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
-      const workspacePath = `$.nodes[${index}].workspace`;
-      try {
-        CanonicalWorkerBranchContract.parse(node.workspace.workerBranch);
-      } catch {
-        this.issue({
-          state,
-          code: ModuleDeliveryIssueCode.InvalidField,
-          path: `${workspacePath}.workerBranch`,
-          message: 'workerBranch must be a canonical codex worker branch.',
-        });
-      }
-      if (
-        node.workspace.workerBranch.split('/')[4] !== featureSegment ||
-        workerBranches.has(node.workspace.workerBranch)
-      )
-        this.issue({
-          state,
-          code: ModuleDeliveryIssueCode.InvalidField,
-          path: `${workspacePath}.workerBranch`,
-          message:
-            'workerBranch must be unique and name the canonical feature segment.',
-        });
-      if (
-        !isAbsolute(node.workspace.worktreePath) ||
-        worktreePaths.has(node.workspace.worktreePath)
-      )
-        this.issue({
-          state,
-          code: ModuleDeliveryIssueCode.InvalidField,
-          path: `${workspacePath}.worktreePath`,
-          message: 'worktreePath must be a unique absolute path.',
-        });
-      workerBranches.add(node.workspace.workerBranch);
-      worktreePaths.add(node.workspace.worktreePath);
     }
   }
 

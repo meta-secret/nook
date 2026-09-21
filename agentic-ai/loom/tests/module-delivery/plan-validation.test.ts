@@ -618,26 +618,6 @@ describe('reviewed module delivery plan', () => {
     );
   });
 
-  test('binds every canonical worker branch to the feature segment', () => {
-    const mismatchedWorker: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      workspace: {
-        ...CORE_NODE.workspace,
-        workerBranch:
-          'codex/child/dev-core/rust-core-developer/other-feature/core-provider-implementation-work',
-      },
-    };
-    const result = ModuleDeliveryPlanValidationScenario.validate(
-      ModuleDeliveryPlanValidationScenario.plan({
-        nodes: [mismatchedWorker],
-        edgeContracts: [],
-      }),
-    );
-    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
-  });
-
   test('rejects numeric capacity from the plan boundary', () => {
     const fixture: PlanFixture = {
       nodes: DEFAULT_NODES,
