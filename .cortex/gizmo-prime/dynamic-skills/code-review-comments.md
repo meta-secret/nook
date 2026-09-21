@@ -120,9 +120,11 @@ rejected.
 
 ### Feedback target handling
 
-When an accepted fix or failed-check repair changes the head, Gizmo continues
-from the verified commit, commits the complete repair, and pushes the result.
-It then obtains replacement-head required PR-check evidence through the
+When an accepted fix or failed-check repair changes a worker branch, Gizmo
+routes local integration through the upstream integration agent with the
+required Nook context. The integration agent reports the feature branch,
+integration outcome, and checks to Gizmo. Gizmo then routes feature-branch
+publication and replacement-head required PR-check evidence through the
 Delivery Pipeline. Full validation remains in the Feature Gizmo's later CI
 cycle. A batch with no accepted fix or failed-check repair does not create
 replacement-head work. Gizmo then applies the handling rule for the feedback

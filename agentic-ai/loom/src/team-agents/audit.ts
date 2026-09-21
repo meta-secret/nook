@@ -645,7 +645,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust core SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust core evidence, and blockers to Development Core Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.RustAuth2Developer,
@@ -662,7 +662,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust auth2 SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust auth2 evidence, and blockers to Development Core Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.CryptographySpecialist,
@@ -747,7 +747,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed TypeScript SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused TypeScript evidence, and blockers to Web Development Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.SvelteSpecialist,
@@ -764,7 +764,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed Svelte SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused Svelte evidence, and blockers to Web Development Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.PrLifecycle,
