@@ -12,6 +12,10 @@ import {
   NookLoginContextObservation,
   NookPageInputFieldObservation,
   authentication_page_observation_facts_match_binding,
+  authentication_page_observation_facts_priority,
+  authentication_advance_control_is_safe,
+  authentication_control_transportable,
+  authentication_passkey_control_candidate_is_safe,
   authentication_enrollment_workflow_match,
   authentication_recovery_copy_evidence,
   decode_authentication_workflow_runtime_response,
@@ -194,6 +198,21 @@ export async function handleCompanionWasmMessage(
         return ok(
           classifyPageInputs(message.payload.fields, message.payload.labels),
         )
+      case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
+        return ok({
+          transportability: message.payload.transportability.map((request) =>
+            authentication_control_transportable(request),
+          ),
+          advanceControls: message.payload.advanceControls.map((request) =>
+            authentication_advance_control_is_safe(request),
+          ),
+          passkeyCandidates: message.payload.passkeyCandidates.map((request) =>
+            authentication_passkey_control_candidate_is_safe(request),
+          ),
+          pageFactsPriorities: message.payload.pageFacts.map((request) =>
+            authentication_page_observation_facts_priority(request),
+          ),
+        })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:

@@ -11,6 +11,10 @@ import type {
   WebsiteLoginOptions,
   WebsiteLoginSavePendingResponse,
   PasswordWorkflowActivityPresentation,
+  AuthenticationAdvanceControlObservation,
+  AuthenticationControlTransportability,
+  AuthenticationDetailedPasskeyControlCandidateObservation,
+  AuthenticationPageObservationFacts,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -31,6 +35,7 @@ export enum CompanionWasmSessionMessageType {
   IsNookVaultAppUrl = "nook:extension-session-is-nook-vault-app-url",
   DecodeAuthenticationWorkflowRuntimeResponse = "nook:extension-session-decode-authentication-workflow-runtime-response",
   DecodeContentRuntimeResponse = "nook:extension-session-decode-content-runtime-response",
+  EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
 }
 
 export type CompanionWasmLoginContextObservation = {
@@ -149,6 +154,15 @@ export type CompanionWasmSessionMessage =
       };
     }
   | {
+      readonly type: CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies;
+      readonly payload: {
+        readonly transportability: readonly AuthenticationControlTransportability[];
+        readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
+        readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
+        readonly pageFacts: readonly AuthenticationPageObservationFacts[];
+      };
+    }
+  | {
       readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
       readonly payload: { readonly response: unknown };
     }
@@ -172,6 +186,12 @@ export type CompanionWasmSessionResponse =
   | WebsiteLoginOptions
   | WebsiteLoginSavePendingResponse
   | boolean
+  | {
+      readonly transportability: readonly boolean[];
+      readonly advanceControls: readonly boolean[];
+      readonly passkeyCandidates: readonly boolean[];
+      readonly pageFactsPriorities: readonly number[];
+    }
   | {
       readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;
       readonly looksLikeUsernameField: boolean;

@@ -107,6 +107,9 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
   loginMatches: AuthenticationWorkflowRoutingResponse['loginMatches']
   selectedFacts: AuthenticationWorkflowSelectedFacts
+  pilotCapability: 'hidden' | 'propose-action'
+  factsBindingToken: string | false
+  savedLoginActionAvailable: boolean
 }
 
 export type ExtensionRuntimeRequest =
@@ -363,12 +366,40 @@ class AuthenticationRuntimeTransport {
       payload: { response: delivery.response },
     })
     if (decoded.kind === RuntimeMessageDeliveryKind.Delivered) {
+      const rawResponse = delivery.response
+      const pilotCapability =
+        rawResponse &&
+        typeof rawResponse === 'object' &&
+        'pilotCapability' in rawResponse &&
+        rawResponse.pilotCapability === 'propose-action'
+          ? 'propose-action'
+          : 'hidden'
+      const factsBindingToken =
+        rawResponse &&
+        typeof rawResponse === 'object' &&
+        'factsBindingToken' in rawResponse &&
+        typeof rawResponse.factsBindingToken === 'string'
+          ? rawResponse.factsBindingToken
+          : false
+      const savedLoginActionAvailable = Boolean(
+        rawResponse &&
+        typeof rawResponse === 'object' &&
+        'savedLoginActionAvailable' in rawResponse &&
+        rawResponse.savedLoginActionAvailable === true,
+      )
       const runtimeResponse =
         decoded.response as unknown as AuthenticationWorkflowRoutingResponse
       const { workflow: verdict, loginMatches, selectedFacts } = runtimeResponse
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: { verdict, loginMatches, selectedFacts },
+        response: {
+          verdict,
+          loginMatches,
+          selectedFacts,
+          pilotCapability,
+          factsBindingToken,
+          savedLoginActionAvailable,
+        },
       }
     }
     return this.unavailable()

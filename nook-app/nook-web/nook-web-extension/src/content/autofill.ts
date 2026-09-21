@@ -191,6 +191,7 @@ class AuthenticationScanRenderLifecycle {
     }
     await passwordFieldDiscovery.prepareCompanionClassification(document)
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
+    await passwordFormInteraction.prepareCompanionWorkflowPolicies()
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHints =
@@ -370,15 +371,7 @@ class AuthenticationScanRenderLifecycle {
     }
     const { snapshot } = verdict
     const selected = classifiedWorkflows[snapshot.observationIndex]
-    const pilotCapability =
-      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
-        type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability,
-        payload: { snapshot },
-      })
-    if (
-      pilotCapability.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      pilotCapability.response === 'hidden'
-    ) {
+    if (response.pilotCapability === 'hidden') {
       const diagnostic: AuthenticationDiagnosticObservation = {
         gate: AuthenticationDiagnosticGate.RustAdmission,
         outcome: AuthenticationDiagnosticGateOutcome.Hidden,
@@ -409,6 +402,8 @@ class AuthenticationScanRenderLifecycle {
       facts: response.selectedFacts.facts,
       loginMatches,
       vaultConnection,
+      factsBindingToken: response.factsBindingToken,
+      savedLoginActionAvailable: response.savedLoginActionAvailable,
     }
     await authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
     const diagnostic: AuthenticationDiagnosticObservation = {

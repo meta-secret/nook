@@ -11,7 +11,6 @@ import {
 
 import {
   AuthenticationWorkflowAction,
-  saved_login_action_available,
   type AuthenticationPageObservationFacts,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -63,6 +62,8 @@ type RenderWidgetArgs = {
   facts: AuthenticationPageObservationFacts
   loginMatches: WebsiteLoginMatchAvailability
   vaultConnection: PilotVaultConnection
+  factsBindingToken: string | false
+  savedLoginActionAvailable: boolean
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
@@ -163,6 +164,8 @@ class AuthenticationWidgetRenderer {
     facts,
     loginMatches,
     vaultConnection,
+    factsBindingToken,
+    savedLoginActionAvailable,
   }: RenderWidgetArgs): Promise<void> {
     if (this.ui.widgetState.dismissed) {
       workflowUi.removeWidget()
@@ -181,8 +184,10 @@ class AuthenticationWidgetRenderer {
       loginMatches,
       vaultPresentation,
       facts,
+      factsBindingToken,
     }
-    const workflowKey = await authenticationWidgetWorkflowKey(workflowKeyRequest)
+    const workflowKey =
+      await authenticationWidgetWorkflowKey(workflowKeyRequest)
     if (!workflowKey) {
       workflowUi.removeWidget()
       return
@@ -406,10 +411,7 @@ class AuthenticationWidgetRenderer {
     })
 
     body.append(takeOverButton)
-    const savedLoginActionRequest: Parameters<
-      typeof saved_login_action_available
-    >[0] = { action: snapshot.action, loginMatches }
-    if (saved_login_action_available(savedLoginActionRequest)) {
+    if (savedLoginActionAvailable) {
       const savedLoginButton = document.createElement('button')
       savedLoginButton.type = 'button'
       savedLoginButton.className = 'text-button'

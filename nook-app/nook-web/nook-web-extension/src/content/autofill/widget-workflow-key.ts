@@ -1,16 +1,10 @@
 import {
-  type AuthenticationObservationBindingToken,
+  bind_authentication_page_observation_facts,
   type AuthenticationPageObservationFacts,
   type AuthenticationPageObservationFactsBatch,
   type AuthenticationWorkflowSnapshot,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
-import {
-  RuntimeMessageDeliveryKind,
-  authenticationRuntimeTransport,
-} from './runtime-message-adapter'
-
 import type { WidgetVaultPresentation } from './widget-presentation-state'
 
 type AuthenticationWidgetWorkflowKeyRequest = {
@@ -18,6 +12,7 @@ type AuthenticationWidgetWorkflowKeyRequest = {
   loginMatches: WebsiteLoginMatchAvailability
   vaultPresentation: WidgetVaultPresentation
   facts: AuthenticationPageObservationFacts
+  factsBindingToken?: string | false
 }
 
 /** Binds a rendered widget and its approval to the same Rust-selected facts. */
@@ -26,22 +21,16 @@ export async function authenticationWidgetWorkflowKey({
   loginMatches,
   vaultPresentation,
   facts,
+  factsBindingToken,
 }: AuthenticationWidgetWorkflowKeyRequest): Promise<string | false> {
-  const factsBatch: AuthenticationPageObservationFactsBatch = {
-    observations: [facts],
+  let bindingToken = factsBindingToken
+  if (!bindingToken && !(typeof chrome === 'object' && chrome.runtime?.id)) {
+    const batch: AuthenticationPageObservationFactsBatch = {
+      observations: [facts],
+    }
+    bindingToken = bind_authentication_page_observation_facts(batch)
   }
-  const binding =
-    await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
-      type: CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts,
-      payload: { facts: factsBatch },
-    })
-  if (
-    binding.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    typeof binding.response !== 'string'
-  ) {
-    return false
-  }
-  const factsBindingToken: AuthenticationObservationBindingToken = binding.response
+  if (!bindingToken) return false
   return [
     snapshot.kind,
     snapshot.stage,
@@ -53,6 +42,6 @@ export async function authenticationWidgetWorkflowKey({
     'count' in loginMatches ? loginMatches.count : 0,
     vaultPresentation.kind,
     'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
-    factsBindingToken,
+    bindingToken,
   ].join(':')
 }

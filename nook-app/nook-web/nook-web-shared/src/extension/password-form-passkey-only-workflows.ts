@@ -1,5 +1,9 @@
 import { authentication_advance_control_is_safe } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
+
+function companionExtensionRuntimePresent(): boolean {
+  return typeof chrome === "object" && Boolean(chrome.runtime?.id);
+}
 import {
   PasswordFormScopeKind,
   type PasskeyControlCandidate,
@@ -365,7 +369,10 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
             facts.label,
             ((v) => (v ? v : ""))(facts.machineIdentity),
           ],
-        ) && authentication_advance_control_is_safe(facts)
+        ) &&
+        (companionExtensionRuntimePresent()
+          ? true
+          : authentication_advance_control_is_safe(facts))
       );
     });
   }

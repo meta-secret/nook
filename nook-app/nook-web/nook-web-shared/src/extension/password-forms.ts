@@ -17,7 +17,13 @@ import type {
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
+  AuthenticationControlTransportability,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import { CompanionWasmSessionMessageType } from "./companion-wasm-runtime-messages";
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from "./companion-wasm-runtime-transport";
 import {
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
@@ -92,7 +98,6 @@ export {
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
-
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
 
@@ -158,17 +163,148 @@ export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
 type OwnedAdvanceControlRequest =
   OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
 
+function companionExtensionRuntimePresent(): boolean {
+  return typeof chrome === "object" && Boolean(chrome.runtime?.id);
+}
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PasswordFormInteraction extends PasswordFormSummaryObservation {
+  private collectingPolicies:
+    | {
+        transportability: AuthenticationControlTransportability[];
+        advanceControls: AuthenticationAdvanceControlObservation[];
+        passkeyCandidates: AuthenticationDetailedPasskeyControlCandidateObservation[];
+        pageFacts: AuthenticationPageObservationFacts[];
+      }
+    | false = false;
+  private readonly transportabilityPolicies = new Map<string, boolean>();
+  private readonly advanceControlPolicies = new Map<string, boolean>();
+  private readonly passkeyCandidatePolicies = new Map<string, boolean>();
+  private readonly pageFactsPriorities = new Map<string, number>();
+
+  private policyKey(request: object): string {
+    return JSON.stringify(request);
+  }
+
+  private collectOrReadBooleanPolicy<Request extends object>(
+    request: Request,
+    collection: Request[] | false,
+    cache: Map<string, boolean>,
+    directPolicy: (request: Request) => boolean,
+  ): boolean {
+    const key = this.policyKey(request);
+    if (collection) {
+      if (!collection.some((candidate) => this.policyKey(candidate) === key)) {
+        collection.push(request);
+      }
+      return true;
+    }
+    const cached = cache.get(key);
+    if (typeof cached === "boolean") return cached;
+    return companionExtensionRuntimePresent() ? false : directPolicy(request);
+  }
+
+  private advanceControlIsSafe(
+    request: AuthenticationAdvanceControlObservation,
+  ): boolean {
+    return this.collectOrReadBooleanPolicy(
+      request,
+      this.collectingPolicies ? this.collectingPolicies.advanceControls : false,
+      this.advanceControlPolicies,
+      authentication_advance_control_is_safe,
+    );
+  }
+
+  private passkeyCandidateIsSafe(
+    request: AuthenticationDetailedPasskeyControlCandidateObservation,
+  ): boolean {
+    return this.collectOrReadBooleanPolicy(
+      request,
+      this.collectingPolicies
+        ? this.collectingPolicies.passkeyCandidates
+        : false,
+      this.passkeyCandidatePolicies,
+      authentication_passkey_control_candidate_is_safe,
+    );
+  }
+
+  async prepareCompanionWorkflowPolicies(): Promise<void> {
+    const collection = {
+      transportability: [] as AuthenticationControlTransportability[],
+      advanceControls: [] as AuthenticationAdvanceControlObservation[],
+      passkeyCandidates:
+        [] as AuthenticationDetailedPasskeyControlCandidateObservation[],
+      pageFacts: [] as AuthenticationPageObservationFacts[],
+    };
+    this.collectingPolicies = collection;
+    try {
+      this.summarizeAuthenticationWorkflowForms();
+    } finally {
+      this.collectingPolicies = false;
+    }
+    const delivery = await sendCompanionWasmRuntimeMessage(this.browser, {
+      type: CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies,
+      payload: collection,
+      origin: this.browser.location.origin,
+    });
+    this.transportabilityPolicies.clear();
+    this.advanceControlPolicies.clear();
+    this.passkeyCandidatePolicies.clear();
+    this.pageFactsPriorities.clear();
+    if (
+      delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
+      !delivery.response ||
+      typeof delivery.response !== "object" ||
+      !("transportability" in delivery.response) ||
+      !("advanceControls" in delivery.response) ||
+      !("passkeyCandidates" in delivery.response) ||
+      !("pageFactsPriorities" in delivery.response)
+    ) {
+      return;
+    }
+    const response = delivery.response;
+    collection.transportability.forEach((request, index) =>
+      this.transportabilityPolicies.set(
+        this.policyKey(request),
+        response.transportability[index] === true,
+      ),
+    );
+    collection.advanceControls.forEach((request, index) =>
+      this.advanceControlPolicies.set(
+        this.policyKey(request),
+        response.advanceControls[index] === true,
+      ),
+    );
+    collection.passkeyCandidates.forEach((request, index) =>
+      this.passkeyCandidatePolicies.set(
+        this.policyKey(request),
+        response.passkeyCandidates[index] === true,
+      ),
+    );
+    collection.pageFacts.forEach((request, index) => {
+      const priority = response.pageFactsPriorities[index];
+      if (typeof priority === "number") {
+        this.pageFactsPriorities.set(this.policyKey(request), priority);
+      }
+    });
+  }
+
   private passwordFormPriority(observation: PasswordFormObservation): number {
     const factsRequest: AuthenticationObservationFactsRequest = {
       observation,
       authenticatorSetupHint: false,
       backupCodesCopy: "",
     };
-    return authentication_page_observation_facts_priority(
-      this.authenticationPageObservationFacts(factsRequest),
-    );
+    const facts = this.authenticationPageObservationFacts(factsRequest);
+    if (this.collectingPolicies) {
+      this.collectingPolicies.pageFacts.push(facts);
+      return 0;
+    }
+    const cached = this.pageFactsPriorities.get(this.policyKey(facts));
+    if (typeof cached === "number") return cached;
+    return companionExtensionRuntimePresent()
+      ? 0
+      : authentication_page_observation_facts_priority(facts);
   }
 
   private scopedControlRoot({
@@ -274,13 +410,20 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     request: PageControlObservationRequest,
   ): AuthenticationAdvanceControlObservation[] {
     const observation = this.pageControlObservation(request);
-    const transportabilityRequest: Parameters<
-      typeof authentication_control_transportable
-    >[0] = {
+    const transportabilityRequest: AuthenticationControlTransportability = {
       submissionMethod: observation.submissionMethod,
       usernameFieldCount: request.observation.summary.usernameFieldCount,
     };
-    if (!authentication_control_transportable(transportabilityRequest))
+    if (
+      !this.collectOrReadBooleanPolicy(
+        transportabilityRequest,
+        this.collectingPolicies
+          ? this.collectingPolicies.transportability
+          : false,
+        this.transportabilityPolicies,
+        authentication_control_transportable,
+      )
+    )
       return [];
     return authenticationSubmissionControls.authenticationFactStringsAreTransportable(
       [
@@ -328,13 +471,19 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     const [transported] =
       this.transportableControlObservation(observationRequest);
     if (!transported) return false;
-    const safetyRequest: Parameters<
-      typeof authentication_passkey_control_candidate_is_safe
-    >[0] = {
-      kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-      observation: transported,
-    };
-    return authentication_passkey_control_candidate_is_safe(safetyRequest);
+    const safetyRequest: AuthenticationDetailedPasskeyControlCandidateObservation =
+      {
+        kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+        observation: transported,
+      };
+    return this.collectOrReadBooleanPolicy(
+      safetyRequest,
+      this.collectingPolicies
+        ? this.collectingPolicies.passkeyCandidates
+        : false,
+      this.passkeyCandidatePolicies,
+      authentication_passkey_control_candidate_is_safe,
+    );
   }
 
   findWorkflowPasskeyControl(
@@ -458,7 +607,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       candidates: advanceObservations,
       isPreferred: (candidate) =>
         candidate.actionability === "actionable" &&
-        authentication_advance_control_is_safe(candidate),
+        this.advanceControlIsSafe(candidate),
     };
     const boundedAdvanceObservations =
       authenticationSubmissionControls.boundAuthenticationControlObservations(
@@ -510,7 +659,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       candidates: passkeyCandidates,
       isPreferred: (candidate) =>
         candidate.observation.actionability === "actionable" &&
-        authentication_passkey_control_candidate_is_safe(candidate),
+        this.passkeyCandidateIsSafe(candidate),
       isNextPreferred: (candidate) =>
         candidate.observation.actionability === "actionable",
     };
@@ -545,7 +694,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       !boundedAdvanceObservations.some(
         (candidate) =>
           candidate.actionability === "actionable" &&
-          authentication_advance_control_is_safe(candidate),
+          this.advanceControlIsSafe(candidate),
       ) &&
       !advanceControls.some(
         (control) =>
@@ -802,7 +951,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
             const [transported] =
               this.transportableControlObservation(observationRequest);
             if (!transported) return false;
-            return authentication_advance_control_is_safe(transported);
+            return this.advanceControlIsSafe(transported);
           }),
       )
     );

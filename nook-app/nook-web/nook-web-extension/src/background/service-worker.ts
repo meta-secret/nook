@@ -105,6 +105,7 @@ import {
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
+  authenticationWorkflowPilotPresentationCapability,
   authenticationWorkflowRequiresLoginMatchAvailability,
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
@@ -559,6 +560,7 @@ class BackgroundRuntimeMessageRouter {
                 backgroundVaultRuntime,
               ),
             authenticationWorkflowRequiresLoginMatchAvailability,
+            authenticationWorkflowPilotPresentationCapability,
             authenticationWorkflowSavedLoginCapability,
             matchingPasskeyAvailabilityForOriginSafe:
               websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe.bind(
