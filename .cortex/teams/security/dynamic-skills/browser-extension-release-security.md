@@ -54,18 +54,18 @@ Does not apply to:
 
 1. Security defines the invariants and focused acceptance evidence. A Web
    worker owns browser-control implementation, while an SRE worker owns release
-   workflow and deployment implementation. Each functional worker formats and
-   commits its allowed implementation files; Security does not commit foreign
-   implementation.
+   workflow and deployment implementation. Each functional worker formats its
+   allowed implementation files and finishes its assigned worker branch;
+   Security does not modify foreign implementation.
 2. Security names the focused extension invariants for the handoff. Workers do
    not run the host-cached `task extension:check:fast` gate.
 3. Verify channel origin and extension identity together.
 4. Verify injection exclusions for every vault boundary.
 5. Verify archive and redirect safety before activation.
 6. Keep profiles isolated by channel and PR.
-7. Security reviews the exact functional-owner handoff, formats and commits
-   only its allowed security-owned Cortex changes, and returns a pending
-   acceptance verdict to Gizmo.
+7. Security reviews the functional-owner branch and evidence, formats only its
+   allowed security-owned Cortex changes, finishes its assigned worker branch,
+   and returns a pending acceptance verdict to Gizmo.
 8. Gizmo pushes the reviewed feature and obtains required PR-check evidence.
 9. The Feature Gizmo's slow PR stage executes security-required focused extension
    checks and applicable deployment verification.

@@ -81,9 +81,9 @@ and `preflight` sources. Unused-code ownership is split as follows:
   [regression-before-fix procedure](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#mandatory-regression-coverage-for-bug-fixes)
   and uses the applicable
   [existing browser harness](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#existing-browser-harnesses).
-- Before integration, the Web worker authors focused behavior tests and commits
-  a coherent scoped handoff. Local feedback permits only bounded inexpensive
-  diagnostics or formatting. Browser and behavior tests execute in the dev
+- Before integration, the Web worker authors focused behavior tests, finishes
+  the assigned worker branch, and reports focused evidence. Local feedback
+  permits only bounded inexpensive diagnostics or formatting. Browser and behavior tests execute in the dev
   manager's slow PR stage against the published SHA.
 - Gizmo pushes feature commits and requests required PR-check evidence.
 - Tests and required browser E2E execute in the manager's slow dev PR stage.

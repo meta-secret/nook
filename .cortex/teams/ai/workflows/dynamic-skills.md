@@ -152,9 +152,10 @@ When applying a skill to code:
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
 6. Apply only the permitted scoped formatting or inexpensive diagnostics during
-   implementation. Commit every resulting mutation in the allowed paths and
-   return the exact handoff to the owning Feature Gizmo. Do not run a local
-   pre-push or broad validation gate. For applicable feature build or check
+   implementation. Finish the assigned worker branch with every resulting
+   mutation in the allowed paths. Return the branch and focused evidence to the
+   owning Feature Gizmo. Do not run a local pre-push or broad validation gate.
+   For applicable feature build or check
    mechanics, Gizmo Prime authorizes the Team Gizmo (Delivery Pipeline context) packet;
    Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
    required PR-check task. The Feature Gizmo owns later CI validation.

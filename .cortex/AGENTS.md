@@ -72,11 +72,11 @@ an explicit handoff. Use the compact
 Nook assignment requirements. The active host owns agent communication.
 
 Select the upstream integration agent directly for local Git work. Supply it
-with the Nook project root, shared Meta-Cortex library root, selected base and
-feature branches, each worker branch and worktree, dependency order, and the
-applicable Nook checks. Nook context adds branch naming, product constraints,
-and remote-delivery boundaries; it does not wrap or restate the upstream Git
-procedure.
+with the Nook project root and shared Meta-Cortex library root. Supply the
+selected base and feature branches, each worker branch and worktree, dependency
+order, and the applicable Nook checks. Nook context adds branch naming, product
+constraints, and remote-delivery boundaries. It does not wrap or restate the
+upstream Git procedure.
 
 ## Mandatory delivery architecture
 

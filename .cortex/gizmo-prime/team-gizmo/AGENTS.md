@@ -12,10 +12,10 @@ context adapters for this same coordinator, not additional coordinator launches.
 Use the upstream
 [integration agent](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
 for local branch and worktree mechanics. Give it the project and shared-library
-roots, selected feature branch, worker branches and worktrees, dependency order,
-and applicable Nook checks. Preserve Nook's functional ownership and acceptance
-requirements. Send GitHub mechanics to the Nook PR Lifecycle Agent under Prime's
-authorization.
+roots, selected base and feature branches, worker branches and worktrees,
+dependency order, and applicable Nook checks. Preserve Nook's functional
+ownership and acceptance requirements. Send GitHub mechanics to the Nook PR
+Lifecycle Agent under Prime's authorization.
 
 ## Prohibited actions
 
