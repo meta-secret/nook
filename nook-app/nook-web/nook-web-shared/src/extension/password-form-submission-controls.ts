@@ -7,6 +7,10 @@ import {
 } from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
 import {
+  authenticationAdvanceControlSelector,
+  semanticSubmitControlSelector,
+} from "./authentication-control-selectors";
+import {
   authentication_advance_control_is_safe,
   can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
@@ -137,12 +141,6 @@ export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 
 type SemanticSubmitControlList = HTMLElement[];
-
-export const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"], [role="button"], #identifierNext';
-
-export const semanticSubmitControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
 
 export class AuthenticationSubmissionDestination {
   static source(control: HTMLElement): PageControlSubmissionDestinationSource {

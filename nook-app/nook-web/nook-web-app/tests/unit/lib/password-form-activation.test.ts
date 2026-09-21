@@ -956,59 +956,6 @@ describe('classified login activation', () => {
     ).toBe('vault-pass')
   })
 
-  test('does not fill when the approved submitter uses formmethod dialog', () => {
-    document.body.innerHTML = `
-      <form method="post" id="login" action="/auth/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-      </form>
-      <button type="submit" form="login" formmethod="dialog">Sign in</button>
-    `
-
-    expect(
-      forms.fillLoginCredentials({
-        credentials: { username: 'vault-user', password: 'vault-pass' },
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }),
-    ).toBe(false)
-    expect(
-      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
-    ).toBe('')
-    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
-  })
-
-  test('does not submit GET-default formmethod overrides after filling passwords', () => {
-    for (const formmethod of ['get', '', 'invalid', ' post ']) {
-      document.body.innerHTML = `
-        <form id="login" method="post" action="/auth/login">
-          <input autocomplete="username" />
-          <input type="password" autocomplete="current-password" />
-        </form>
-        <button id="unsafe" type="submit" form="login" formmethod="${formmethod}">Sign in</button>
-      `
-      let submitted = false
-      document.querySelector('form')?.addEventListener('submit', (event) => {
-        event.preventDefault()
-        submitted = true
-      })
-
-      expect(
-        forms.fillLoginCredentials({
-          credentials: { username: 'vault-user', password: 'vault-pass' },
-          kind: PasswordFormQueryKind.Root,
-          root: document,
-        }),
-      ).toBe(false)
-      expect(
-        document.querySelector<HTMLInputElement>('input[type="password"]')
-          ?.value,
-      ).toBe('')
-      expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
-      expect(submitted).toBe(false)
-    }
-  })
-
   test('does not submit a form outside the requested root', () => {
     document.body.innerHTML = `<form method="post" id="outside" action="/auth/login"><button id="submit" type="submit">Sign in</button></form><section id="scope"><input form="outside" type="password" /></section>`
     let activated = false

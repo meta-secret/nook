@@ -42,12 +42,14 @@ import type {
   PasswordFormScope,
 } from "./password-form-fields";
 import {
-  AuthenticationSubmissionDestination,
   authenticationAdvanceControlSelector,
+  semanticSubmitControlSelector,
+} from "./authentication-control-selectors";
+import {
+  AuthenticationSubmissionDestination,
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   PageControlSubmissionMethod,
   PasswordFormQueryKind,
-  semanticSubmitControlSelector,
   type LoginAdvanceControl,
   type PasswordFormScopeQuery,
   authenticationSubmissionControls,

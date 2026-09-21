@@ -1,14 +1,16 @@
 /* eslint-disable max-params -- DOM policy collection uses browser-owned callback shapes at this boundary. */
 import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
+  authenticationAdvanceControlSelector,
+  semanticSubmitControlSelector,
+} from "./authentication-control-selectors";
+import {
   PasswordFormScopeKind,
   passwordFieldDiscovery,
 } from "./password-form-fields";
 import {
   FormSubmissionResult,
-  authenticationAdvanceControlSelector,
   PasswordFormQueryKind,
-  semanticSubmitControlSelector,
   type LoginAdvanceControl,
   type FormSubmissionApproval,
   type PasswordFormScopeQuery,
