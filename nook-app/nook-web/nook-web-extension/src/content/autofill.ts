@@ -622,6 +622,7 @@ void (async () => {
   if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
     return
   }
+  void authenticationScanRenderLifecycle.scanAndRender()
   document.addEventListener(
     'submit',
     loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
@@ -638,7 +639,6 @@ void (async () => {
     },
     true,
   )
-  void authenticationScanRenderLifecycle.scanAndRender()
 
   const observer = new MutationObserver(
     authenticationScanRenderLifecycle.handleMutations.bind(
