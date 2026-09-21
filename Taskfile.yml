@@ -47,9 +47,6 @@ includes:
   agentic-ai:
     taskfile: .task/agentic-ai.yml
     flatten: true
-  ai-debug:
-    taskfile: .task/ai-debug.yml
-    flatten: true
   remote-execution:
     taskfile: .task/remote-execution.yml
     flatten: true
