@@ -120,7 +120,9 @@ Before:
 After:
 
 - Agent fixes the code and adds regression tests.
-- Agent updates the validation rules section in `.cortex/teams/dev-core/product-specs/credit-card-items.md` in the same commit.
+- Agent updates the validation rules section in
+  `.cortex/teams/dev-core/product-specs/credit-card-items.md` in the same feature
+  delivery.
 
 ## Application Checklist
 

@@ -9,7 +9,7 @@ Keep local implementation feedback bounded under the
 
 - Format owned Rust changes with scoped rustfmt when permitted by the task.
 - Use only bounded inexpensive TS diagnostics or formatting for local feedback.
-- Preserve unrelated changes and commit only the assigned scope.
+- Preserve unrelated changes and finish only the assigned worker-branch scope.
 - Author meaningful tests and required UI flow evidence.
 - Push the feature and route the required PR-check request through Delivery
   Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.

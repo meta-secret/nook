@@ -371,8 +371,9 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(root).toContain(
     'Nook project root and shared Meta-Cortex library root',
   );
+  expect(root).toContain('selected base and feature branches');
   expect(root).toContain(
-    'selected base and feature branches, each worker branch and worktree',
+    'each worker branch and worktree in dependency order',
   );
   expect(root).toContain('applicable Nook checks');
   expect(root).not.toContain('owns shared-branch sequencing');
