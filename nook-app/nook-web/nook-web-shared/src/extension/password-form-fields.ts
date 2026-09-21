@@ -41,6 +41,11 @@ import {
   DisabledAuthenticationFieldCandidateDiagnosticSink,
   type AuthenticationFieldCandidateDiagnosticSink,
 } from "./password-form-field-candidate-diagnostics";
+import {
+  AuthenticationSelectorEntryDiagnosticBuilder,
+  DisabledAuthenticationSelectorEntryDiagnosticSink,
+  type AuthenticationSelectorEntryDiagnosticSink,
+} from "./password-form-selector-entry-diagnostics";
 
 void companionWasmReady;
 
@@ -210,6 +215,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     new AuthenticationFieldCandidateDiagnosticBuilder();
   private fieldCandidateDiagnosticSink: AuthenticationFieldCandidateDiagnosticSink =
     new DisabledAuthenticationFieldCandidateDiagnosticSink();
+  private readonly selectorEntryDiagnosticBuilder =
+    new AuthenticationSelectorEntryDiagnosticBuilder();
+  private selectorEntryDiagnosticSink: AuthenticationSelectorEntryDiagnosticSink =
+    new DisabledAuthenticationSelectorEntryDiagnosticSink();
 
   setWorkflowScopeDiagnosticSink(
     sink: AuthenticationWorkflowScopeDiagnosticSink,
@@ -223,6 +232,12 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     this.fieldCandidateDiagnosticSink = sink;
   }
 
+  setSelectorEntryDiagnosticSink(
+    sink: AuthenticationSelectorEntryDiagnosticSink,
+  ): void {
+    this.selectorEntryDiagnosticSink = sink;
+  }
+
   private recordFieldCandidateDiagnostic(
     request: Parameters<
       AuthenticationFieldCandidateDiagnosticBuilder["build"]
@@ -230,6 +245,16 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   ): void {
     this.fieldCandidateDiagnosticSink.recordFieldCandidateDiagnostic(
       this.fieldCandidateDiagnosticBuilder.build(request),
+    );
+  }
+
+  private recordSelectorEntryDiagnostic(
+    request: Parameters<
+      AuthenticationSelectorEntryDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.selectorEntryDiagnosticSink.recordSelectorEntryDiagnostic(
+      this.selectorEntryDiagnosticBuilder.build(request),
     );
   }
 
@@ -619,6 +644,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }: PasswordFieldQuery): HTMLInputElement[] {
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
+    const selectorEntryInputCount = root.querySelectorAll("input").length;
+    const selectorEntryIdentifierIdPresent = Boolean(
+      root.querySelector("#identifierId"),
+    );
     const semanticQuery: ScopedInputFieldQuery = {
       root,
       selector: usernameFieldSelectors.join(","),
@@ -662,6 +691,16 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       seen.add(candidate.field);
       fields.push(candidate.field);
     }
+    const selectorEntryDiagnosticRequest: Parameters<
+      AuthenticationSelectorEntryDiagnosticBuilder["build"]
+    >[0] = {
+      origin: this.browser.location.origin,
+      root,
+      inputCount: selectorEntryInputCount,
+      identifierIdPresent: selectorEntryIdentifierIdPresent,
+      usernameFieldCount: fields.length,
+    };
+    this.recordSelectorEntryDiagnostic(selectorEntryDiagnosticRequest);
     return fields;
   }
 

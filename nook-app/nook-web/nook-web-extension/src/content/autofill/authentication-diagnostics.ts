@@ -3,6 +3,7 @@ import {
   type AuthenticationWorkflowScopeDiagnostic,
 } from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
 import type { AuthenticationFieldCandidateDiagnostic } from '../../../../nook-web-shared/src/extension/password-form-field-candidate-diagnostics'
+import type { AuthenticationSelectorEntryDiagnostic } from '../../../../nook-web-shared/src/extension/password-form-selector-entry-diagnostics'
 
 export enum AuthenticationDiagnosticAvailability {
   Disabled = 'disabled',
@@ -21,6 +22,7 @@ export enum AuthenticationDiagnosticGate {
   RustAdmission = 'rust-admission',
   WidgetRendering = 'widget-rendering',
   FieldCandidateEligibility = 'field-candidate-eligibility',
+  SelectorEntry = 'selector-entry',
 }
 
 export enum AuthenticationDiagnosticGateOutcome {
@@ -63,10 +65,17 @@ type AuthenticationDiagnosticFieldCandidateEntry = {
   readonly candidate: AuthenticationFieldCandidateDiagnostic
 }
 
+type AuthenticationDiagnosticSelectorEntry = {
+  readonly channel: AuthenticationDiagnosticChannelName
+  readonly gate: AuthenticationDiagnosticGate.SelectorEntry
+  readonly selectorEntry: AuthenticationSelectorEntryDiagnostic
+}
+
 export type AuthenticationDiagnosticEntry =
   | AuthenticationDiagnosticStageEntry
   | AuthenticationDiagnosticScopeEntry
   | AuthenticationDiagnosticFieldCandidateEntry
+  | AuthenticationDiagnosticSelectorEntry
 
 export interface AuthenticationDiagnosticSink {
   record(entry: AuthenticationDiagnosticEntry): void
@@ -132,6 +141,22 @@ export class AuthenticationDiagnosticChannel {
       channel: AuthenticationDiagnosticChannelName.AuthenticationDetection,
       gate: AuthenticationDiagnosticGate.FieldCandidateEligibility,
       candidate,
+    }
+    this.request.sink.record(entry)
+  }
+
+  recordSelectorEntryDiagnostic(
+    selectorEntry: AuthenticationSelectorEntryDiagnostic,
+  ): void {
+    if (
+      this.request.availability !== AuthenticationDiagnosticAvailability.Enabled
+    ) {
+      return
+    }
+    const entry: AuthenticationDiagnosticSelectorEntry = {
+      channel: AuthenticationDiagnosticChannelName.AuthenticationDetection,
+      gate: AuthenticationDiagnosticGate.SelectorEntry,
+      selectorEntry,
     }
     this.request.sink.record(entry)
   }

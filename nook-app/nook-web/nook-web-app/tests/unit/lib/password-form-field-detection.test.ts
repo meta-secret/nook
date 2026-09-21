@@ -14,6 +14,11 @@ import {
   type AuthenticationFieldCandidateDiagnostic,
 } from '../../../../nook-web-shared/src/extension/password-form-field-candidate-diagnostics'
 import {
+  DisabledAuthenticationSelectorEntryDiagnosticSink,
+  type AuthenticationSelectorEntryDiagnostic,
+  type AuthenticationSelectorEntryDiagnosticSink,
+} from '../../../../nook-web-shared/src/extension/password-form-selector-entry-diagnostics'
+import {
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -49,9 +54,51 @@ afterEach(() => {
   passwordFieldDiscovery.setFieldCandidateDiagnosticSink(
     new DisabledAuthenticationFieldCandidateDiagnosticSink(),
   )
+  passwordFieldDiscovery.setSelectorEntryDiagnosticSink(
+    new DisabledAuthenticationSelectorEntryDiagnosticSink(),
+  )
 })
 
 describe('authentication field detection', () => {
+  test('records selector-entry facts before filtering Google identifier fields', () => {
+    const diagnostics: AuthenticationSelectorEntryDiagnostic[] = []
+    const selectorEntryDiagnosticSink: AuthenticationSelectorEntryDiagnosticSink =
+      {
+        recordSelectorEntryDiagnostic: (diagnostic) =>
+          diagnostics.push(diagnostic),
+      }
+    passwordFieldDiscovery.setSelectorEntryDiagnosticSink(
+      selectorEntryDiagnosticSink,
+    )
+    window.history.replaceState(
+      {},
+      '',
+      '/v3/signin/identifier?flowName=GlifWebSignIn',
+    )
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section id="identifier-shell" class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+      </main>
+    `
+
+    expect(passwordFieldDiscovery.findUsernameFields({})).toEqual([])
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]).toMatchObject({
+      origin: window.location.origin,
+      inputCount: 1,
+      identifierIdPresent: true,
+      rootKind: 'document',
+      frameKind: 'top-frame',
+      usernameFieldCount: 0,
+    })
+    expect(JSON.stringify(diagnostics[0])).not.toContain('/v3/signin')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('flowName')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('user@example.test')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('Email or phone')
+  })
+
   test('records sanitized selector and eligibility details before workflow scope construction', () => {
     const diagnostics: AuthenticationFieldCandidateDiagnostic[] = []
     passwordFieldDiscovery.setFieldCandidateDiagnosticSink({
