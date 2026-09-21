@@ -7,14 +7,16 @@
         {
           "id": "ap_email_login",
           "name": "email",
-          "type": "email",
+          "type": "text",
           "autocomplete": "webauthn",
-          "aria-label": "Enter mobile number or email"
+          "aria-label": "Enter mobile number or email",
+          "inputmode": "email"
         }
       ],
       "submit": {
         "type": "submit",
-        "label": "Continue"
+        "label": "Continue",
+        "aria-labelledby": "continue-announce"
       }
     }
   ]

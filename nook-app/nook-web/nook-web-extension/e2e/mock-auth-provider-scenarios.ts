@@ -88,11 +88,15 @@ export class MockAuthProviderScenarios {
         const form = page.locator('#ap_login_form')
         await expect(form).toHaveAttribute('name', 'signIn')
         await expect(form).toHaveAttribute('method', 'post')
-        await expect(form).toHaveAttribute('action', '/ax/claim')
+        await expect(form).toHaveAttribute(
+          'action',
+          '/ax/claim?openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_ya_signin&policy_handle=Retail-Checkout&openid.mode=checkid_setup&openid.assoc_handle=usflex&arb=mock-arb',
+        )
         const email = form.locator('#ap_email_login')
         await expect(email).toHaveAttribute('name', 'email')
-        await expect(email).toHaveAttribute('type', 'email')
+        await expect(email).toHaveAttribute('type', 'text')
         await expect(email).toHaveAttribute('autocomplete', 'webauthn')
+        await expect(email).toHaveAttribute('inputmode', 'email')
         await expect(email).toHaveAttribute(
           'aria-label',
           'Enter mobile number or email',
@@ -112,24 +116,22 @@ export class MockAuthProviderScenarios {
         ).toEqual({
           display: 'none',
           height: 0,
-          visibility: 'hidden',
+          visibility: 'visible',
           width: 0,
         })
-        await expect(form.locator('input[type="hidden"]')).toHaveCount(2)
+        await expect(form.locator('input[type="hidden"]')).toHaveCount(19)
         const backdetect = page.locator('form[name="ue_backdetect"]')
-        await expect(backdetect).toHaveCount(2)
-        expect(
-          await backdetect.evaluateAll((forms) =>
-            forms.every(
-              (form) =>
-                form.getAttribute('action') === 'get' &&
-                form instanceof HTMLFormElement &&
-                form.elements.length === 0,
-            ),
-          ),
-        ).toBe(true)
+        await expect(backdetect).toHaveCount(1)
+        await expect(backdetect.locator('input[name="ue_back"]')).toHaveValue(
+          '2',
+        )
         const continueButton = form.getByRole('button', { name: 'Continue' })
         await expect(continueButton).toHaveAttribute('type', 'submit')
+        await expect(continueButton).toHaveAttribute(
+          'aria-labelledby',
+          'continue-announce',
+        )
+        await expect(continueButton).toHaveValue('')
         await expect(
           page.getByText('Create a free business account'),
         ).toBeVisible()
