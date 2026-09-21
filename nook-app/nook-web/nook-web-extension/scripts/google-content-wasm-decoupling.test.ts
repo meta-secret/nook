@@ -82,6 +82,13 @@ describe('Google content companion WASM decoupling', () => {
     )
     expect(backupCodeSource).not.toContain('companion-ready')
     expect(simpleVaultSource).not.toContain('companion-ready')
+    const { simpleVaultRuntime } =
+      await import('../src/lib/simple-vault-runtime')
+    expect(
+      await simpleVaultRuntime.isRuntimeNookVaultAppUrl(
+        'https://accounts.google.com/ServiceLogin',
+      ),
+    ).toBe(false)
     const imported =
       await import('../src/content/autofill/runtime-message-adapter')
     const message: CompanionWasmRuntimeMessage = {

@@ -28,6 +28,13 @@ class SimpleVaultRuntime {
     }
   }
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
+    try {
+      if (new URL(candidateUrl).origin !== new URL(this.baseUrl()).origin) {
+        return false
+      }
+    } catch {
+      return false
+    }
     const delivery = await sendCompanionWasmRuntimeMessage(globalThis, {
       type: CompanionWasmSessionMessageType.IsNookVaultAppUrl,
       payload: { candidateUrl, baseUrl: this.baseUrl() },
