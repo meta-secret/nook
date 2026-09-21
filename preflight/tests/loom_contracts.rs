@@ -340,3 +340,18 @@ fn loom_workflow_audits_every_cortex_change() {
         "trusted and untrusted workflow branches must delegate policy behavior to Taskfile"
     );
 }
+
+#[test]
+fn preflight_installs_meta_cortex_with_the_configured_team_agent_model() {
+    let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
+    assert!(
+        dockerfile.contains(
+            "sed -i '/^\\[team\\.agent\\]$/,/^$/s/^model = .*/model = \"gpt-5.6-luna\"/'"
+        ),
+        "Meta-Cortex installation must preserve the configured team.agent model"
+    );
+    assert!(
+        !dockerfile.contains("model = \"gpt-6-astra\""),
+        "Meta-Cortex installation must not override team.agent with a legacy model"
+    );
+}
