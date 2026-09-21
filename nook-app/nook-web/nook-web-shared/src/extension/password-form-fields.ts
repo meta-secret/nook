@@ -272,10 +272,11 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const advanceControlLabels = advanceControls.map((control) =>
       this.localActivationControlLabel(control),
     );
-    const preferredAdvanceControlLabel =
+    const [preferredAdvanceControlLabel = advanceControlLabels.join(" ")] = [
       advanceControlLabels.find((label) =>
         this.cachedLabel(CompanionWasmLabelKind.LoginAdvance, label),
-      ) ?? advanceControlLabels.join(" ");
+      ),
+    ];
     return {
       formIdentity: form
         ? [
