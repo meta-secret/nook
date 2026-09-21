@@ -23,7 +23,7 @@ role. It receives typed `Completed` and `Failed` structural observations from
 the active harness and does not inspect the repository. A failed observation
 remains failed. The aggregate is diagnostic output for the delivery owner.
 
-Team Gizmo and Team Agents follow the root
+Team Gizmos and Team Agents follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md). This registry
 adds only its typed structural-observation fields.
 
