@@ -4,7 +4,7 @@ import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 5;
 export type ModuleDeliveryPlanInputVersion =
-  1 | 2 | 3 | 4 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 /** A plan can describe every directed edge between distinct task nodes. */
 export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
@@ -527,32 +527,11 @@ export enum ModuleDeliveryCompatibilityStatus {
   Rejected = 'rejected',
 }
 
-export type DecodedCompatibleModuleDeliveryPlan =
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 1;
-      readonly plan: LegacyModuleDeliveryPlan;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 2;
-      readonly plan: ModuleDeliveryPlanV2;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 3;
-      readonly plan: ModuleDeliveryPlanV3;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 4;
-      readonly plan: ModuleDeliveryPlanV4;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-      readonly plan: ModuleDeliveryPlanV5;
-    };
+export type DecodedCompatibleModuleDeliveryPlan = {
+  readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+  readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly plan: ModuleDeliveryPlanV5;
+};
 
 export type RejectedCompatibleModuleDeliveryPlan = {
   readonly status: ModuleDeliveryCompatibilityStatus.Rejected;

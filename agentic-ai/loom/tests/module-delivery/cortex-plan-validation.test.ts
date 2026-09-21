@@ -155,6 +155,11 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       expert: ModuleDeliveryTaskProfile.Ordinary,
       moduleRoot: 'nook-app/nook-platform/nook-core',
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      workspace: {
+        ...node.workspace,
+        workerBranch:
+          'codex/child/dev-core/rust-core-developer/module-delivery-test/dev-core-write-cortex-authoring-work',
+      },
     };
   }
 }

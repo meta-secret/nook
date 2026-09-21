@@ -6,6 +6,7 @@ import {
 } from '../lib/base-evidence.ts';
 import { ModuleDeliveryIssueCode, ModuleDeliveryTaskKind } from './domain.ts';
 import type { ModuleDeliveryIssue } from './domain.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
 import type {
   IssueRequest,
   ValidationState,
@@ -38,6 +39,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
     for (const [index, node] of state.plan.nodes.entries()) {
       if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
       const workspacePath = `$.nodes[${index}].workspace`;
+      const branchSegments = node.workspace.workerBranch.split('/');
       try {
         CanonicalWorkerBranchContract.parse(node.workspace.workerBranch);
       } catch {
@@ -48,14 +50,15 @@ export class ModuleDeliveryBranchAssignmentValidation {
         });
       }
       if (
-        node.workspace.workerBranch.split('/')[4] !== featureSegment ||
+        branchSegments[2] !== this.workerTeamSegment(node.team) ||
+        branchSegments[4] !== featureSegment ||
         workerBranches.has(node.workspace.workerBranch)
       )
         this.addIssue({
           state,
           path: `${workspacePath}.workerBranch`,
           message:
-            'workerBranch must be unique and name the canonical feature segment.',
+            'workerBranch must match the assigned team, name the canonical feature segment, and be unique.',
         });
       if (
         !isAbsolute(node.workspace.worktreePath) ||
@@ -68,6 +71,23 @@ export class ModuleDeliveryBranchAssignmentValidation {
         });
       workerBranches.add(node.workspace.workerBranch);
       worktreePaths.add(node.workspace.worktreePath);
+    }
+  }
+
+  private static workerTeamSegment(team: TeamKey): string {
+    switch (team) {
+      case TeamKey.Ai:
+        return 'ai';
+      case TeamKey.DevelopmentCore:
+        return 'dev-core';
+      case TeamKey.Security:
+        return 'security';
+      case TeamKey.Sre:
+        return 'sre';
+      case TeamKey.WebDevelopment:
+        return 'web-dev';
+      case TeamKey.DeliveryPipeline:
+        return 'delivery-pipeline';
     }
   }
 

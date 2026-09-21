@@ -1,6 +1,5 @@
 import {
   ModuleDeliveryPlanValidationScenario,
-  SOURCE_COMMIT,
   PARENT_OWNED_RESOURCES,
   CORE_ROOT,
 } from './plan-validation.fixture.ts';
@@ -37,7 +36,6 @@ import type {
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -229,6 +227,16 @@ describe('reviewed module delivery plan', () => {
       team: TeamKey.Sre,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
+      workspace: {
+        ...ModuleDeliveryPlanValidationScenario.writeNode({
+          ...CORE_FIXTURE,
+          expert: ModuleDeliveryTaskProfile.Ordinary,
+          moduleRoot: 'infra',
+          write: ['infra/**'],
+        }).workspace,
+        workerBranch:
+          'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
+      },
     };
     expect(ModuleDeliveryPlanValidationScenario.acceptsNode(sreWrite)).toBe(
       true,
@@ -288,77 +296,23 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('decodes the historical v2 root without promoting it', () => {
-    const historical = ModuleDeliveryPlanValidationScenario.historicalV2Plan({
+  test('rejects every pre-branch plan version at the compatibility boundary', () => {
+    const canonical = ModuleDeliveryPlanValidationScenario.plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
     });
-    const compatibility =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        JSON.stringify(historical),
-      );
-    expect(compatibility.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
-    );
-    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
-      expect(compatibility.inputVersion).toBe(2);
-      expect(compatibility.plan).toEqual(historical);
-      expect(Object.hasOwn(compatibility.plan, 'originMainSha')).toBe(false);
-      expect(Object.hasOwn(compatibility.plan, 'pinnedLocalDevSha')).toBe(
-        false,
-      );
+    for (const version of [1, 2, 3, 4]) {
+      const historical = {
+        ...canonical,
+        version,
+        parentJoin: { ...canonical.parentJoin, kind: 'direct-commits' },
+      };
+      const result =
+        ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+          JSON.stringify(historical),
+        );
+      expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
     }
-    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
-      JSON.stringify(historical),
-    );
-    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
-  });
-
-  test('decodes historical v3 and v4 roots without promoting their SHA contracts', () => {
-    const historical = ModuleDeliveryPlanValidationScenario.historicalV3Plan({
-      nodes: [CORE_NODE],
-      edgeContracts: [],
-    });
-    const before = structuredClone(historical);
-    const compatibility =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        JSON.stringify(historical),
-      );
-    expect(compatibility.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
-    );
-    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
-      expect(compatibility.inputVersion).toBe(3);
-      expect(compatibility.plan).toEqual(historical);
-      expect(Object.hasOwn(compatibility.plan, 'featureHeadSha')).toBe(false);
-    }
-    const historicalV4: ModuleDeliveryPlanV4 = {
-      ...historical,
-      version: 4,
-      featureHeadSha: '4'.repeat(40),
-    };
-    const compatibilityV4 =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        JSON.stringify(historicalV4),
-      );
-    expect(compatibilityV4.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
-    );
-    expect(historical).toEqual(before);
-    if (compatibilityV4.status === ModuleDeliveryCompatibilityStatus.Decoded) {
-      expect(compatibilityV4.inputVersion).toBe(4);
-      expect(compatibilityV4.plan).toEqual(historicalV4);
-    }
-    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
-      JSON.stringify(historical),
-    );
-    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
   });
 
   test('freezes owner acceptance and typed synthesis producer identities', () => {

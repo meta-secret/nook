@@ -8,13 +8,7 @@ import {
 } from './codec-fields.ts';
 import { ModuleDeliveryPlanDigest } from './codec-digest.ts';
 import { ModuleDeliveryPlanNodeCodec } from './codec-node.ts';
-import {
-  LegacyModulePlanRootField,
-  ModulePlanRootField,
-  ModulePlanV3RootField,
-  ModulePlanV4RootField,
-  ModulePlanV5RootField,
-} from './codec-schema.ts';
+import { ModulePlanV5RootField } from './codec-schema.ts';
 import type { RejectedModulePlanRequest } from './codec-schema.ts';
 import {
   MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
@@ -33,10 +27,6 @@ import {
 } from './evidence-limits.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
-  LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV2,
-  ModuleDeliveryPlanV3,
-  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanV5,
   ModuleDeliveryIssue,
   RejectedCompatibleModuleDeliveryPlan,
@@ -215,32 +205,17 @@ export class ModuleDeliveryPlanSchema {
     const fieldRequest = { record: node, path: '$' };
     const fields = new ModulePlanFields(fieldRequest);
     const version = fields.positiveInteger('version');
-    if (
-      version !== 1 &&
-      version !== 2 &&
-      version !== 3 &&
-      version !== 4 &&
-      version !== MODULE_DELIVERY_PLAN_VERSION
-    )
+    if (version !== MODULE_DELIVERY_PLAN_VERSION)
       ModuleDeliveryPlanSchema.fail(
-        '$.version: plan version must be 1, 2, 3, 4, or 5.',
+        '$.version: only canonical plan version 5 is accepted.',
       );
-    const legacy = version === 1;
-    if (legacy) fields.requireExactKeys(LegacyModulePlanRootField);
-    else if (version === 2) fields.requireExactKeys(ModulePlanRootField);
-    else if (version === 3) fields.requireExactKeys(ModulePlanV3RootField);
-    else if (version === 4) fields.requireExactKeys(ModulePlanV4RootField);
-    else fields.requireExactKeys(ModulePlanV5RootField);
+    fields.requireExactKeys(ModulePlanV5RootField);
     const parentJoinRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
     };
     const nodeValues = fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES);
-    const generation = legacy ? 1 : fields.positiveInteger('generation');
-    const sourceCommit =
-      version === MODULE_DELIVERY_PLAN_VERSION
-        ? ''
-        : fields.string('sourceCommit');
+    const generation = fields.positiveInteger('generation');
     const maxAgentDepth = fields.positiveInteger('maxAgentDepth');
     const maxAttempts = fields.positiveInteger('maxAttempts');
     const parentOwnedResources = fields.nonEmptyStringList(
@@ -248,32 +223,6 @@ export class ModuleDeliveryPlanSchema {
     );
     const parentJoin =
       ModuleDeliveryPlanNodeCodec.decodeParentJoin(parentJoinRequest);
-    if (version === 1) {
-      const maxConcurrency = fields.positiveInteger('maxConcurrency');
-      const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
-        values: nodeValues,
-        legacy: true,
-      });
-      const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
-        fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
-      );
-      const plan: LegacyModuleDeliveryPlan = {
-        version: 1,
-        sourceCommit,
-        maxConcurrency,
-        maxAgentDepth,
-        maxAttempts,
-        parentOwnedResources,
-        parentJoin,
-        nodes,
-        edgeContracts,
-      };
-      return {
-        status: ModuleDeliveryCompatibilityStatus.Decoded,
-        inputVersion: version,
-        plan,
-      };
-    }
     const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
       values: nodeValues,
       legacy: false,
@@ -281,70 +230,6 @@ export class ModuleDeliveryPlanSchema {
     const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
       fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
     );
-    const common = {
-      generation,
-      sourceCommit,
-      maxAgentDepth,
-      maxAttempts,
-      parentOwnedResources,
-      parentJoin,
-      nodes,
-      edgeContracts,
-    };
-    if (version === 2) {
-      const maxConcurrency = fields.positiveInteger('maxConcurrency');
-      const plan: ModuleDeliveryPlanV2 = {
-        version: 2,
-        ...common,
-        maxConcurrency,
-      };
-      return {
-        status: ModuleDeliveryCompatibilityStatus.Decoded,
-        inputVersion: version,
-        plan,
-      };
-    }
-    if (version === 3) {
-      const plan: ModuleDeliveryPlanV3 = {
-        version: 3,
-        generation,
-        sourceCommit,
-        originMainSha: fields.string('originMainSha'),
-        pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
-        maxAgentDepth,
-        maxAttempts,
-        parentOwnedResources,
-        parentJoin,
-        nodes,
-        edgeContracts,
-      };
-      return {
-        status: ModuleDeliveryCompatibilityStatus.Decoded,
-        inputVersion: version,
-        plan,
-      };
-    }
-    if (version === 4) {
-      const plan: ModuleDeliveryPlanV4 = {
-        version: 4,
-        generation,
-        sourceCommit,
-        originMainSha: fields.string('originMainSha'),
-        pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
-        featureHeadSha: fields.string('featureHeadSha'),
-        maxAgentDepth,
-        maxAttempts,
-        parentOwnedResources,
-        parentJoin,
-        nodes,
-        edgeContracts,
-      };
-      return {
-        status: ModuleDeliveryCompatibilityStatus.Decoded,
-        inputVersion: version,
-        plan,
-      };
-    }
     const currentPlan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       baseBranch: fields.string('baseBranch'),

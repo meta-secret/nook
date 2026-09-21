@@ -456,10 +456,11 @@ Feature Gizmo authorizes Delivery Pipeline to publish it and request the hosted
 **`build:compile`** task through **`task remote TASK_NAME=build:compile`**.
 Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
 and complete PR validation belong to the feature pull-request lifecycle. The
-Feature Gizmo applies the validation labels required for the selected branch;
-PR Lifecycle Agent observes the resulting hosted checks. Ordinary validation
-does not contact Codex. Local Task mirrors below remain available for humans.
-Main-fix PRs use `ci:full-e2e` to request the Main-equivalent browser suites.
+Feature Gizmo authorizes PR Lifecycle Agent to apply the validation labels
+required for the selected branch and observe the resulting hosted checks.
+Ordinary validation does not contact Codex. Local Task mirrors below remain
+available for humans. Main-fix PRs use `ci:full-e2e` to request the
+Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal

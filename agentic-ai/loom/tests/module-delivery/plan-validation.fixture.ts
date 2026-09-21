@@ -17,8 +17,6 @@ import type {
   ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
-  ModuleDeliveryPlanV3,
   ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
@@ -143,39 +141,6 @@ export class ModuleDeliveryPlanValidationScenario {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  static historicalV2Plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
-    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    return {
-      version: 2,
-      generation: plan.generation,
-      sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
-      maxAgentDepth: plan.maxAgentDepth,
-      maxAttempts: plan.maxAttempts,
-      parentOwnedResources: plan.parentOwnedResources,
-      parentJoin: plan.parentJoin,
-      nodes: plan.nodes,
-      edgeContracts: plan.edgeContracts,
-    };
-  }
-
-  static historicalV3Plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
-    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    return {
-      version: 3,
-      generation: plan.generation,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      maxAgentDepth: plan.maxAgentDepth,
-      maxAttempts: plan.maxAttempts,
-      parentOwnedResources: plan.parentOwnedResources,
-      parentJoin: plan.parentJoin,
-      nodes: plan.nodes,
-      edgeContracts: plan.edgeContracts,
-    };
-  }
-
   private execute(): ModuleDeliveryPlanV5 {
     const fixture = this.request;
     return {
@@ -273,11 +238,7 @@ export class ModuleDeliveryPlanValidationScenario {
   }
 }
 
-export const SOURCE_COMMIT = '3'.repeat(40);
-
-export const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-export const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
+const SOURCE_COMMIT = '3'.repeat(40);
 
 export const PARENT_OWNED_RESOURCES: readonly string[] = [
   ...REQUIRED_PARENT_OWNED_RESOURCES,

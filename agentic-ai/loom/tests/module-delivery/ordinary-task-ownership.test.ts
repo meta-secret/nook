@@ -70,11 +70,27 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       },
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
-        workerBranch:
-          'codex/child/sre/cloud-native/module-delivery-test/ordinary-writer-implementation',
+        workerBranch: `codex/child/${this.workerNamespace(request.team)}/module-delivery-test/ordinary-writer-implementation`,
         worktreePath: '/tmp/nook-module-delivery/ordinary-writer',
       },
     };
+  }
+
+  private workerNamespace(team: TeamKey): string {
+    switch (team) {
+      case TeamKey.Ai:
+        return 'ai/loom-specialist';
+      case TeamKey.DevelopmentCore:
+        return 'dev-core/rust-core-developer';
+      case TeamKey.Security:
+        return 'security/security-review-specialist';
+      case TeamKey.Sre:
+        return 'sre/cloud-native';
+      case TeamKey.WebDevelopment:
+        return 'web-dev/typescript-specialist';
+      case TeamKey.DeliveryPipeline:
+        return 'delivery-pipeline/pr-lifecycle';
+    }
   }
 
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {

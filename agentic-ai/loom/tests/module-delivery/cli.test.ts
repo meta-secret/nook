@@ -198,7 +198,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     expect(legacy.exitCode).not.toBe(0);
     expect(
       ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('Canonical CLI admission requires plan version 5.');
+    ).toContain('only canonical plan version 5 is accepted');
 
     const rejectedCommand = [
       'task',

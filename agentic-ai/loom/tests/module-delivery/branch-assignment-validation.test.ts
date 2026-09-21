@@ -10,7 +10,7 @@ import {
   ModuleDeliveryPlanValidationScenario,
 } from './plan-validation.fixture.ts';
 
-test('binds every canonical worker branch to the feature segment', () => {
+test('binds every canonical worker branch to its assigned team and feature', () => {
   const node = ModuleDeliveryPlanValidationScenario.writeNode({
     taskId: 'core-provider',
     expert: 'core_expert',
@@ -24,7 +24,7 @@ test('binds every canonical worker branch to the feature segment', () => {
     workspace: {
       ...node.workspace,
       workerBranch:
-        'codex/child/dev-core/rust-core-developer/other-feature/core-provider-implementation-work',
+        'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
     },
   };
   const result = ModuleDeliveryPlanValidationScenario.validate(
