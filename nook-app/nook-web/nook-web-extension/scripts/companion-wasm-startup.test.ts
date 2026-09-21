@@ -74,6 +74,117 @@ describe('companion WASM startup', () => {
     ])
   })
 
+  test('preserves unrelated embedded initialization failures', async () => {
+    const diagnostics = new RecordingCompanionWasmStartupDiagnostics()
+    const attempts: string[] = []
+    const failure = new TypeError('embedded wasm bridge failure')
+    const request: CompanionWasmStartupRequest = {
+      initializeEmbeddedCompanionWasm: () => {
+        attempts.push('embedded')
+        throw failure
+      },
+      loadExtensionOriginCompanionWasmModule: async () => {
+        attempts.push('extension-origin-load')
+        return new CompanionWasmStartupTestFixture().validModule()
+      },
+      initializeExtensionOriginCompanionWasm: async () => {
+        attempts.push('extension-origin')
+      },
+      diagnostics,
+    }
+
+    await expect(new CompanionWasmStartup().initialize(request)).rejects.toBe(
+      failure,
+    )
+    expect(attempts).toEqual(['embedded'])
+    expect(diagnostics.entries).toEqual([])
+  })
+
+  test('retries a synchronously rejected embedded instantiate under CSP', async () => {
+    const diagnostics = new RecordingCompanionWasmStartupDiagnostics()
+    const attempts: string[] = []
+    const extensionOriginModule =
+      new CompanionWasmStartupTestFixture().validModule()
+    const request: CompanionWasmStartupRequest = {
+      initializeEmbeddedCompanionWasm: () => {
+        attempts.push('embedded')
+        throw new TypeError(
+          'WebAssembly.instantiate(): Wasm code generation disallowed by embedder',
+        )
+      },
+      loadExtensionOriginCompanionWasmModule: async () => {
+        attempts.push('extension-origin-load')
+        return extensionOriginModule
+      },
+      initializeExtensionOriginCompanionWasm: async () => {
+        attempts.push('extension-origin')
+      },
+      diagnostics,
+    }
+
+    await new CompanionWasmStartup().initialize(request)
+
+    expect(attempts).toEqual([
+      'embedded',
+      'extension-origin-load',
+      'extension-origin',
+    ])
+    expect(diagnostics.entries).toEqual([
+      {
+        stage: CompanionWasmStartupStage.Embedded,
+        outcome: CompanionWasmStartupOutcome.Failed,
+        failure: CompanionWasmStartupFailureKind.Compile,
+      },
+      {
+        stage: CompanionWasmStartupStage.ExtensionOrigin,
+        outcome: CompanionWasmStartupOutcome.Succeeded,
+      },
+    ])
+  })
+
+  test('retries an asynchronously rejected embedded instantiate under CSP', async () => {
+    const diagnostics = new RecordingCompanionWasmStartupDiagnostics()
+    const attempts: string[] = []
+    const extensionOriginModule =
+      new CompanionWasmStartupTestFixture().validModule()
+    const request: CompanionWasmStartupRequest = {
+      initializeEmbeddedCompanionWasm: async () => {
+        attempts.push('embedded')
+        await Promise.resolve()
+        throw new TypeError(
+          'WebAssembly.instantiate(): Wasm code generation disallowed by embedder',
+        )
+      },
+      loadExtensionOriginCompanionWasmModule: async () => {
+        attempts.push('extension-origin-load')
+        return extensionOriginModule
+      },
+      initializeExtensionOriginCompanionWasm: async () => {
+        attempts.push('extension-origin')
+      },
+      diagnostics,
+    }
+
+    await new CompanionWasmStartup().initialize(request)
+
+    expect(attempts).toEqual([
+      'embedded',
+      'extension-origin-load',
+      'extension-origin',
+    ])
+    expect(diagnostics.entries).toEqual([
+      {
+        stage: CompanionWasmStartupStage.Embedded,
+        outcome: CompanionWasmStartupOutcome.Failed,
+        failure: CompanionWasmStartupFailureKind.Compile,
+      },
+      {
+        stage: CompanionWasmStartupStage.ExtensionOrigin,
+        outcome: CompanionWasmStartupOutcome.Succeeded,
+      },
+    ])
+  })
+
   test('rejects a response from a different source', () => {
     const admission = new CompanionWasmHostMessageAdmission()
     const channel = new MessageChannel()

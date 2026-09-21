@@ -193,8 +193,20 @@ export type CompanionWasmStartupRequest = {
   readonly diagnostics: CompanionWasmStartupDiagnostics;
 };
 
-/** Owns the two-stage browser startup and its compile-error recovery. */
+/** Owns the two-stage browser startup and embedded CSP recovery. */
 export class CompanionWasmStartup {
+  private embeddedInitializationCanRetry(error: Error): boolean {
+    if (error instanceof WebAssembly.CompileError) {
+      return true
+    }
+    return (
+      error instanceof TypeError &&
+      error.message
+        .toLowerCase()
+        .includes('wasm code generation disallowed by embedder')
+    )
+  }
+
   async initialize({
     initializeEmbeddedCompanionWasm,
     loadExtensionOriginCompanionWasmModule,
@@ -205,7 +217,10 @@ export class CompanionWasmStartup {
       await initializeEmbeddedCompanionWasm();
       return;
     } catch (error) {
-      if (!(error instanceof WebAssembly.CompileError)) {
+      if (
+        !(error instanceof Error) ||
+        !this.embeddedInitializationCanRetry(error)
+      ) {
         throw error;
       }
       const diagnostic: CompanionWasmStartupDiagnostic = {
