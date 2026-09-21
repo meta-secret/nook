@@ -14,6 +14,12 @@ import {
 } from '../src/domain.ts';
 
 export class CortexConsistencyAuditScenario {
+  static readonly POLICY =
+    '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
+
+  static readonly RUST_POLICY =
+    '.cortex/teams/dev-core/design-docs/typed-newtypes.md';
+
   private constructor(private readonly request: readonly string[]) {}
 
   static hasFinding(...[findings, expected]: FindingExpectation): boolean {
@@ -37,12 +43,12 @@ export class CortexConsistencyAuditScenario {
           {
             authorityDocument: AUTHORITY,
             ownsAreas: [CortexPolicyArea.GithubTypescript],
-            imports: [POLICY],
+            imports: [CortexConsistencyAuditScenario.POLICY],
           },
         ],
         policies: [
           {
-            document: POLICY,
+            document: CortexConsistencyAuditScenario.POLICY,
             kind: CortexPolicyContractKind.General,
             areas: [CortexPolicyArea.GithubTypescript],
             capabilities: [],
@@ -52,7 +58,11 @@ export class CortexConsistencyAuditScenario {
       },
       documents: [
         { relativePath: AUTHORITY, references, commands: [] },
-        { relativePath: POLICY, references: [], commands: [] },
+        {
+          relativePath: CortexConsistencyAuditScenario.POLICY,
+          references: [],
+          commands: [],
+        },
       ],
     };
   }
@@ -66,7 +76,7 @@ export class CortexConsistencyAuditScenario {
         contexts: [],
         policies: [
           {
-            document: RUST_POLICY,
+            document: CortexConsistencyAuditScenario.RUST_POLICY,
             kind: CortexPolicyContractKind.PersistedRepresentation,
             schemaAuthority: args.schemaAuthority,
             evidence: args.evidence,
@@ -84,7 +94,7 @@ export class CortexConsistencyAuditScenario {
       },
       documents: [
         {
-          relativePath: RUST_POLICY,
+          relativePath: CortexConsistencyAuditScenario.RUST_POLICY,
           references,
           commands: [],
         },
@@ -96,11 +106,6 @@ export class CortexConsistencyAuditScenario {
 
 const AUTHORITY = CortexContextAuthorityDocument.Sre;
 
-const POLICY =
-  '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
-
-const RUST_POLICY = '.cortex/teams/dev-core/dynamic-skills/rust-coding.md';
-
 const SCHEMA_POLICY =
   '.cortex/teams/dev-core/design-docs/vault-schema-versioning.md';
 
@@ -108,7 +113,7 @@ test('accepts a referenced imported policy', () => {
   expect(
     CortexConsistencyContract.from(
       CortexConsistencyAuditScenario.request([
-        '../web-dev/dynamic-skills/typescript-enums-over-booleans.md',
+        '../web-dev/dynamic-skills/ui-design-skills.md',
       ]),
     ).execute(),
   ).toEqual([]);
@@ -303,7 +308,7 @@ test('rejects context ownership disguised by traversal', () => {
 test('rejects a non-authority document under a recognized owner', () => {
   const nonAuthority = '.cortex/teams/sre/dynamic-skills/typescript-policy.md';
   const compileRequest = CortexConsistencyAuditScenario.request([
-    '../web-dev/dynamic-skills/typescript-enums-over-booleans.md',
+    '../web-dev/dynamic-skills/ui-design-skills.md',
   ]);
   const invalidRequest: AuditCortexContractsArgs = {
     ...compileRequest,
@@ -313,13 +318,21 @@ test('rejects a non-authority document under a recognized owner', () => {
         {
           authorityDocument: nonAuthority,
           ownsAreas: [CortexPolicyArea.GithubTypescript],
-          imports: [POLICY],
+          imports: [CortexConsistencyAuditScenario.POLICY],
         },
       ],
     },
     documents: [
-      { relativePath: nonAuthority, references: [POLICY], commands: [] },
-      { relativePath: POLICY, references: [], commands: [] },
+      {
+        relativePath: nonAuthority,
+        references: [CortexConsistencyAuditScenario.POLICY],
+        commands: [],
+      },
+      {
+        relativePath: CortexConsistencyAuditScenario.POLICY,
+        references: [],
+        commands: [],
+      },
     ],
   };
   const findings = CortexConsistencyContract.from(invalidRequest).execute();
