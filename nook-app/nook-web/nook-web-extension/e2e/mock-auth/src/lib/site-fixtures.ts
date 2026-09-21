@@ -234,11 +234,13 @@ class SiteFixtureCatalogAdmission {
       throw new TypeError('fixture fields have an invalid shape')
     }
     const fields: SiteFixtureField[] = []
-    for (const field of value) fields.push(this.decodeField(field))
+    for (const [fieldIndex, field] of value.entries()) {
+      fields.push(this.decodeField(field, fieldIndex))
+    }
     return fields
   }
 
-  private decodeField(value: unknown): SiteFixtureField {
+  private decodeField(value: unknown, fieldIndex: number): SiteFixtureField {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new TypeError('fixture field has an invalid shape')
     }
@@ -246,6 +248,14 @@ class SiteFixtureCatalogAdmission {
     if ('name' in value) field.name = this.decodeString(value.name, 'name')
     if ('type' in value) field.type = this.decodeString(value.type, 'type')
     if ('id' in value) field.id = this.decodeString(value.id, 'id')
+    if ('generated-id' in value) {
+      if (value['generated-id'] !== true || 'id' in value) {
+        throw new TypeError(
+          'fixture field generated-id must be true and cannot accompany id',
+        )
+      }
+      field.id = `«fixture-r${fieldIndex + 1}»`
+    }
     if ('autocomplete' in value) {
       field.autocomplete = this.decodeString(value.autocomplete, 'autocomplete')
     }
@@ -471,8 +481,9 @@ export function renderFixtureHtml(
         .filter(Boolean)
         .join(' ')
       const input = `<input ${attrs} />`
+      const labelFor = field.id ? ` for="${escapeAttr(field.id)}"` : ''
       return field.label
-        ? `<label>${escapeHtml(field.label)}${input}</label>`
+        ? `<label${labelFor}>${escapeHtml(field.label)}${input}</label>`
         : input
     })
     .join('\n')

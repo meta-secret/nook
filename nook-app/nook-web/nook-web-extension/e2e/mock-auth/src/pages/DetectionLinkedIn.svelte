@@ -10,6 +10,8 @@
   const EVIDENCE_KEY = 'linkedin-submission-evidence'
   let username = $state('')
   let password = $state('')
+  let hiddenUsernameField: HTMLInputElement
+  let hiddenPasswordField: HTMLInputElement
   let keepSignedInChecked = $state(true)
   let signInActivationCount = $state(0)
   let hiddenSignInActivationCount = $state(0)
@@ -27,8 +29,8 @@
       LinkedInAuthMockScenario.transition({
         username,
         password,
-        hiddenUsername: username,
-        hiddenPassword: password,
+        hiddenUsername: hiddenUsernameField.value,
+        hiddenPassword: hiddenPasswordField.value,
         signInActivationCount,
         hiddenSignInActivationCount,
         alternativeActivationCount,
@@ -41,8 +43,8 @@
           username === LINKEDIN_MOCK_USERNAME &&
           password === LINKEDIN_MOCK_PASSWORD,
         hiddenCredentialsMirrored:
-          username === LINKEDIN_MOCK_USERNAME &&
-          password === LINKEDIN_MOCK_PASSWORD,
+          hiddenUsernameField.value === LINKEDIN_MOCK_USERNAME &&
+          hiddenPasswordField.value === LINKEDIN_MOCK_PASSWORD,
         signInActivated: signInActivationCount === 1,
         hiddenSignInUntouched: hiddenSignInActivationCount === 0,
         alternativesUntouched: alternativeActivationCount === 0,
@@ -80,6 +82,7 @@
           <div class="dfaf4f38 d1901be7">
             <input
               id="«r1»"
+              bind:this={hiddenUsernameField}
               type="email"
               autocomplete="username"
               bind:value={username}
@@ -93,6 +96,7 @@
           <div class="dfaf4f38 d1901be7">
             <input
               id="«r2»"
+              bind:this={hiddenPasswordField}
               type="password"
               autocomplete="current-password"
               bind:value={password}
