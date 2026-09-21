@@ -46,7 +46,7 @@ import {
   ModulePlanReadOnlyNodeField,
   ModulePlanResourceField,
   ModulePlanRootLineageField,
-  ModulePlanSourceBaselineField,
+  ModulePlanFeatureBaselineField,
   ModulePlanSynthesisNodeField,
   ModulePlanWorkspaceField,
   ModulePlanWriteNodeField,
@@ -81,13 +81,13 @@ export class ModuleDeliveryPlanNodeCodec {
   ): ModuleDeliveryParentJoin {
     const fields = new ModulePlanFields(request);
     fields.requireExactKeys(ModulePlanParentJoinField);
-    if (fields.string('kind') !== ModuleDeliveryJoinKind.DirectCommits) {
+    if (fields.string('kind') !== ModuleDeliveryJoinKind.WorkerBranches) {
       ModuleDeliveryPlanNodeCodec.fail(
         `${request.path}.kind: unsupported parent join.`,
       );
     }
     return {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
+      kind: ModuleDeliveryJoinKind.WorkerBranches,
       owner: fields.identifier('owner'),
       validationCommands: fields.nonEmptyStringList('validationCommands'),
     };
@@ -285,15 +285,16 @@ export class ModuleDeliveryPlanNodeCodec {
     workspaceFields.requireExactKeys(ModulePlanWorkspaceField);
     if (
       workspaceFields.string('kind') !==
-      ModuleDeliveryWorkspaceKind.SharedCheckout
+      ModuleDeliveryWorkspaceKind.WorkerWorktree
     ) {
       ModuleDeliveryPlanNodeCodec.fail(
         `${path}.workspace.kind: unsupported workspace kind.`,
       );
     }
     const workspace = {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
+      kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+      workerBranch: workspaceFields.string('workerBranch'),
+      worktreePath: workspaceFields.string('worktreePath'),
     } as const;
     if (!Object.hasOwn(request.value, 'cortexAuthoring')) {
       return {
@@ -359,11 +360,10 @@ export class ModuleDeliveryPlanNodeCodec {
   ): ModuleDeliveryBaseline {
     const fields = new ModulePlanFields(request);
     const kind = fields.string('kind');
-    if (kind === ModuleDeliveryBaselineKind.SourceCommit) {
-      fields.requireExactKeys(ModulePlanSourceBaselineField);
+    if (kind === ModuleDeliveryBaselineKind.FeatureBranch) {
+      fields.requireExactKeys(ModulePlanFeatureBaselineField);
       return {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: fields.string('sourceCommit'),
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       };
     }
     if (kind === ModuleDeliveryBaselineKind.IntegratedDependencies) {

@@ -16,7 +16,7 @@ before acting.
 ## Required actions
 
 - Receive a feature-delivery packet from Gizmo Prime.
-- Preserve the canonical feature branch, fresh `originMainSha`, controller,
+- Preserve the canonical feature branch, freshly fetched `origin/main` base, controller,
   scope, and required-check set.
 - Dispatch PR Lifecycle Agent through Team Gizmo (Delivery Pipeline context).
 - Push only the canonical feature branch.

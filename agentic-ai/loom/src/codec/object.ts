@@ -5,12 +5,6 @@ import {
   UntrustedYamlBoundary,
 } from '../lib/guards.ts';
 
-import { RemoteTaskPresence, type RemoteTask } from './args/pr-land.ts';
-
-import { PrLandOperation } from './enums.ts';
-
-import { YamlNullBoundary } from './external.ts';
-
 import {
   DecodeStatus,
   FieldIssue,
@@ -198,46 +192,6 @@ export class YamlPositiveIntegerField<FieldName extends string> {
   }
 }
 
-export class YamlRemoteTaskField<FieldName extends string> {
-  private constructor(private readonly request: ExpectFieldArgs<FieldName>) {}
-  static decode<FieldName extends string>(
-    args: ExpectFieldArgs<FieldName>,
-  ): DecodeOutcome<RemoteTask> {
-    return new YamlRemoteTaskField<FieldName>(args).execute();
-  }
-  private execute(): DecodeOutcome<RemoteTask> {
-    const args = this.request;
-    const fieldPathArgs: JoinPathArgs = { base: args.path, key: args.key };
-    const fieldPath = FieldPath.join(fieldPathArgs);
-    const propertyArgs2: UntrustedYamlPropertyArgs = {
-      record: args.record,
-      key: args.key,
-    };
-    const property = UntrustedYamlBoundary.property(propertyArgs2);
-    if (
-      property.presence === UntrustedYamlPropertyPresence.Absent ||
-      YamlNullBoundary.matches(property.value)
-    ) {
-      const omittedTask: RemoteTask = { presence: RemoteTaskPresence.Omitted };
-      return SuccessfulFieldDecode.create(omittedTask);
-    }
-    if (typeof property.value !== 'string') {
-      const fieldErrorArgs4: FieldErrorArgs = {
-        path: fieldPath,
-        issue: FieldIssue.ExpectedRemoteTaskString,
-      };
-      return FailedFieldDecode.create([
-        FieldDiagnostic.create(fieldErrorArgs4),
-      ]);
-    }
-    const specifiedTask: RemoteTask = {
-      presence: RemoteTaskPresence.Specified,
-      task: property.value,
-    };
-    return SuccessfulFieldDecode.create(specifiedTask);
-  }
-}
-
 export class YamlOperationSelection<T extends string> {
   private constructor(
     private readonly request: DecodeExactlyOneOperationArgs<T>,
@@ -381,5 +335,3 @@ export type MapDecodeArgs<T, U> = {
   readonly outcome: DecodeOutcome<T>;
   readonly build: (value: T) => U;
 };
-
-export const PR_LAND_OPERATIONS = Object.values(PrLandOperation);

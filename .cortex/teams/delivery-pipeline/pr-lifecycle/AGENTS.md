@@ -11,7 +11,7 @@ Require:
 
 - the owning Feature Gizmo as controller;
 - the canonical feature branch;
-- the fresh `originMainSha` base;
+- the freshly fetched `origin/main` base branch;
 - the target branch `main`;
 - the required PR check set; and
 - the authorized operation.

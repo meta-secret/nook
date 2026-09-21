@@ -51,8 +51,7 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       moduleRoot: request.moduleRoot,
       consumerOutcome: 'The bounded team-owned change is delivered.',
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: PINNED_LOCAL_DEV_SHA,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
       agentDepthLimit: 1,
       dependencies: [],
@@ -70,8 +69,10 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
         evidence: ['tests pass'],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerBranch:
+          'codex/child/sre/cloud-native/module-delivery-test/ordinary-writer-implementation',
+        worktreePath: '/tmp/nook-module-delivery/ordinary-writer',
       },
     };
   }
@@ -79,16 +80,14 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
     const plan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task test'],
       },
@@ -101,12 +100,6 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
     );
   }
 }
-
-const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 test('keeps Delivery Pipeline out of ordinary product ownership', () => {
   for (const team of Object.values(TeamKey))

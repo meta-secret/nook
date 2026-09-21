@@ -30,16 +30,14 @@ export class ModuleDeliveryCliScenario {
   static cliPlan(): ModuleDeliveryPlanV5 {
     return {
       version: 5,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -56,8 +54,7 @@ export class ModuleDeliveryCliScenario {
           consumerOutcome:
             'The delivery owner receives reviewed core evidence.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -93,7 +90,7 @@ export class ModuleDeliveryCliScenario {
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -105,8 +102,7 @@ export class ModuleDeliveryCliScenario {
           moduleRoot: CORE_ROOT,
           consumerOutcome: 'Legacy evidence is decoded for compatibility only.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -138,10 +134,6 @@ export class ModuleDeliveryCliScenario {
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 
 const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 

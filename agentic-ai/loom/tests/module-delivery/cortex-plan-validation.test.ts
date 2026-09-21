@@ -51,8 +51,7 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       moduleRoot: TeamAuthorityCatalog.teamCortexRoot(request.team),
       consumerOutcome: `${request.taskId} Cortex guidance is current.`,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: PINNED_LOCAL_DEV_SHA,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
       agentDepthLimit: 2,
       dependencies: [],
@@ -80,8 +79,9 @@ export class ModuleDeliveryCortexPlanValidationScenario {
         evidence: [`${request.taskId} guidance is audited.`],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerBranch: `codex/child/${request.team === TeamKey.Sre ? 'sre/cloud-native' : 'ai/cortex-specialist'}/module-delivery-test/${request.taskId}-cortex-authoring-work`,
+        worktreePath: `/tmp/nook-module-delivery/${request.taskId}`,
       },
     };
   }
@@ -94,16 +94,14 @@ export class ModuleDeliveryCortexPlanValidationScenario {
     const nodes = this.request;
     return {
       version: 5,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'gizmo-prime',
         validationCommands: ['task loom:verify'],
       },
@@ -160,12 +158,6 @@ export class ModuleDeliveryCortexPlanValidationScenario {
     };
   }
 }
-
-const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const SRE_SKILL = '.cortex/teams/sre/dynamic-skills/quality.md';
 

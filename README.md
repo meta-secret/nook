@@ -450,16 +450,16 @@ and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge
 is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
-Ordinary implementation agents return verified committed handoffs to Gizmo.
-Gizmo integrates them, pushes the exact branch head, and requests the hosted
+Ordinary implementation agents return verified worker branches to Gizmo. The
+upstream integration agent integrates them into the feature branch, and the
+Feature Gizmo authorizes Delivery Pipeline to publish it and request the hosted
 **`build:compile`** task through **`task remote TASK_NAME=build:compile`**.
 Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
-and complete PR validation belong to the Dev Manager's later dev-to-main CI
-cycle. That cycle explicitly starts **`task pr:validate PR=<number>`** for the
-selected published snapshot. Ordinary PR pushes do not start the complete
-pipeline. Ordinary validation does not contact Codex. Local Task mirrors below
-remain available for humans. Main-fix PRs use `FULL_E2E=1` to request the
-Main-equivalent browser suites.
+and complete PR validation belong to the feature pull-request lifecycle. The
+Feature Gizmo applies the validation labels required for the selected branch;
+PR Lifecycle Agent observes the resulting hosted checks. Ordinary validation
+does not contact Codex. Local Task mirrors below remain available for humans.
+Main-fix PRs use `ci:full-e2e` to request the Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal

@@ -237,29 +237,21 @@ loom --default toolsList
 ```
 
 Each request is a **domain-tagged object**. Exactly one root key selects the
-request family. The `prLand` family uses a nested operation key. There is no
-generic `name` / `arguments` envelope.
+request family. There is no generic `name` / `arguments` envelope.
 
 The historical `prePush` request identifier is decoded only to provide a
 controlled retirement response for older callers. It never runs host
 formatting, audits, staging, or other commands. Feature compilation uses the
-remote build-only `build:compile` task; full validation is owned by the Dev
-Manager's later CI cycle.
-
-```yaml
-prLand:
-  status:
-    prNumber: 123
-```
+remote build-only `build:compile` task; full validation is owned by the feature
+pull-request lifecycle.
 
 Stdout is YAML only.
 
-Success for a nested family:
+Success:
 
 ```yaml
 ok: true
-family: prLand
-operation: status
+family: toolsList
 result: { ... }
 ```
 
@@ -292,7 +284,6 @@ output instead of copying request bodies into guidance.
 
 Loom authored TypeScript follows [typescript-domain-structure.md](../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md):
 
-- nested request families (`prLand.status`, `prLand.validate`)
 - field-name enums for deny-unknown-key checks
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
 - runtime failures return `neverthrow` `Result` values with concrete
@@ -326,7 +317,6 @@ task loom:cortex-audit
 task loom:cortex-session-clean
 task loom:dependency-popularity
 task loom:skill-scaffold CONFIG=path/to/request.yaml
-task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
 `task loom:run` resolves repo-root-relative `CONFIG` paths before entering the
@@ -350,7 +340,6 @@ There is no checked-in sample-file catalog.
 | `cortex-audit`          | Cortex structure, links, and policy contracts |
 | `cortex-session-clean`  | Temporary Cortex session readiness assertion  |
 | `skill-scaffold`        | Create a dynamic-skill card                   |
-| `pr-land`               | Status / validate                             |
 | `dependency-popularity` | Reject low-adoption npm packages and crates   |
 
 ## Quality bar

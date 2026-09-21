@@ -14,7 +14,7 @@ finding when GitHub supports one. It resolves a conversation only after an accep
 defect is fixed or a rejected defect claim is explicitly invalidated. A
 clarification-needed finding remains unresolved.
 
-This skill does not initiate reviews. In the manager's slow dev PR cycle,
+This skill does not initiate reviews. In the feature pull-request lifecycle,
 existing validation dispatch precedes an opted-in review request. Review collection and hosted checks proceed concurrently, and their
 findings form one repair batch. Codex is the sole automatic provider. Cursor
 Bugbot remains inactive.

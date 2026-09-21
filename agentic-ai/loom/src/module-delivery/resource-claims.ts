@@ -51,16 +51,16 @@ export class ModuleWriteClaim {
   private execute(): void {
     const claims = this.request;
     if (claims.length === 0) {
-      throw new Error(
-        'Commit handoff requires at least one allowed write claim.',
-      );
+      throw new Error('Worker assignment requires at least one write claim.');
     }
     for (const claim of claims) {
       if (
         !TaskResourceClaim.isValidTaskResourceClaim(claim) ||
         claim.startsWith('git:')
       ) {
-        throw new Error(`Commit handoff has an invalid write claim: ${claim}.`);
+        throw new Error(
+          `Worker assignment has an invalid write claim: ${claim}.`,
+        );
       }
     }
   }

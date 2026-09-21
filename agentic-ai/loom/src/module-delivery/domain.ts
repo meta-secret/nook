@@ -1,7 +1,6 @@
 import { TeamKey } from '../team-agents/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
-import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 5;
 export type ModuleDeliveryPlanInputVersion =
@@ -236,21 +235,20 @@ export enum ModuleDeliveryEvidenceInputSchema {
 }
 
 export enum ModuleDeliveryWorkspaceKind {
-  SharedCheckout = 'shared-checkout',
+  WorkerWorktree = 'worker-worktree',
 }
 
 export enum ModuleDeliveryJoinKind {
-  DirectCommits = 'direct-commits',
+  WorkerBranches = 'worker-branches',
 }
 
 export enum ModuleDeliveryBaselineKind {
-  SourceCommit = 'source-commit',
+  FeatureBranch = 'feature-branch',
   IntegratedDependencies = 'integrated-dependencies',
 }
 
-export type SourceCommitBaseline = {
-  readonly kind: ModuleDeliveryBaselineKind.SourceCommit;
-  readonly sourceCommit: string;
+export type FeatureBranchBaseline = {
+  readonly kind: ModuleDeliveryBaselineKind.FeatureBranch;
 };
 
 export type IntegratedDependenciesBaseline = {
@@ -259,7 +257,7 @@ export type IntegratedDependenciesBaseline = {
 };
 
 export type ModuleDeliveryBaseline =
-  SourceCommitBaseline | IntegratedDependenciesBaseline;
+  FeatureBranchBaseline | IntegratedDependenciesBaseline;
 
 export type ModuleDeliveryResourceClaims = {
   readonly read: readonly string[];
@@ -331,8 +329,9 @@ export type ModuleDeliveryWriteNodeV2 = ModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly cortexAuthoring?: ModuleDeliveryCortexAuthoring;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
-    readonly expectedCommitHandoff: true;
+    readonly kind: ModuleDeliveryWorkspaceKind.WorkerWorktree;
+    readonly workerBranch: string;
+    readonly worktreePath: string;
   };
 };
 
@@ -354,7 +353,7 @@ export type ModuleDeliveryEdgeContract = {
 };
 
 export type ModuleDeliveryParentJoin = {
-  readonly kind: ModuleDeliveryJoinKind.DirectCommits;
+  readonly kind: ModuleDeliveryJoinKind.WorkerBranches;
   readonly owner: string;
   readonly validationCommands: readonly string[];
 };
@@ -388,7 +387,7 @@ export type ModuleDeliveryPlanV3 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-/** Historical V4 plan shape. Its feature head is retained only for migration. */
+/** Historical V4 root shape retained only for compatibility decoding. */
 export type ModuleDeliveryPlanV4 = {
   readonly version: 4;
   readonly generation: number;
@@ -404,12 +403,12 @@ export type ModuleDeliveryPlanV4 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-/** Current plan authority: the canonical branch moves; Delivery resolves its head per stage. */
-export type ModuleDeliveryPlanV5 = PinnedDevBaseEvidence & {
+/** Current plan authority uses named branches and prepared worker worktrees. */
+export type ModuleDeliveryPlanV5 = {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly baseBranch: string;
   readonly featureBranch: string;
   readonly generation: number;
-  readonly sourceCommit: string;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
@@ -450,8 +449,9 @@ export type LegacyReadOnlyModuleDeliveryNode =
 export type LegacyWriteModuleDeliveryNode = LegacyModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
-    readonly expectedCommitHandoff: true;
+    readonly kind: ModuleDeliveryWorkspaceKind.WorkerWorktree;
+    readonly workerBranch: string;
+    readonly worktreePath: string;
   };
 };
 

@@ -4,7 +4,7 @@
 
 - **Controller:** owning Feature Gizmo.
 - **Branch:** one canonical feature branch.
-- **Base:** exact fresh `originMainSha`.
+- **Base:** freshly fetched `origin/main`.
 - **Target:** `main`.
 - **Checks:** complete required PR check set.
 - **Operation:** publish, open or update PR, observe checks, squash merge, or

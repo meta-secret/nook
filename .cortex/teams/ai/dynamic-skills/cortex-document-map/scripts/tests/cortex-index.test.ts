@@ -390,5 +390,5 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(team).toContain('applicable Nook checks');
   expect(team).toContain('There is one Team Gizmo per feature.');
   expect(delivery).toContain('git fetch --prune origin');
-  expect(delivery).toContain('originMainSha');
+  expect(delivery).toContain('freshly fetched `origin/main` base branch');
 });

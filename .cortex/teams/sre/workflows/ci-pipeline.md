@@ -136,7 +136,7 @@ flowchart LR
   pr_yml --> preview[Cloudflare isolated aliases]
   pr_yml --> pr_deployment[github-pages deployment status]
 
-  merge[Manager fast-forwards tested dev SHA to main] --> ci_yml
+  merge[Feature PR squash-merges to main] --> ci_yml
   ci_yml --> main_yml[main.yml reusable or manual]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]

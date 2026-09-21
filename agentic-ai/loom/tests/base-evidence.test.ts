@@ -7,8 +7,10 @@ import { describe, test } from 'bun:test';
 
 import {
   CanonicalFeatureBranchContract,
+  CanonicalWorkerBranchContract,
   PinnedDevBaseEvidenceContract,
   type CanonicalFeatureBranch,
+  type CanonicalWorkerBranch,
   type PinnedDevBaseAncestryRequest,
 } from '../src/lib/base-evidence.ts';
 
@@ -154,12 +156,11 @@ describe('pinned dev base Git identity', () => {
 });
 
 describe('canonical feature branch identity', () => {
-  test('accepts Prime and child forms', () => {
+  test('accepts Prime feature forms', () => {
     const validBranches: readonly string[] = [
       'codex/repair-cache',
       'codex/abcdefghij',
       'codex/agentic-pipeline-delivery',
-      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile',
     ];
 
     for (const branch of validBranches) {
@@ -175,6 +176,7 @@ describe('canonical feature branch identity', () => {
       'codex/',
       'codex/repair',
       'codex/agent--branching',
+      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile',
       'codex/agent-branching/sre/provisioning/fix--cache-branch-compile',
       'codex/automation-main-failure-abc-run-42-attempt-1',
       'codex/agentic-pipeline-deliveries',
@@ -188,6 +190,37 @@ describe('canonical feature branch identity', () => {
 
     for (const branch of invalidBranches) {
       assert.throws(() => CanonicalFeatureBranchContract.parse(branch));
+    }
+  });
+});
+
+describe('canonical worker branch identity', () => {
+  test('accepts registered worker forms with the isolated child namespace', () => {
+    const validBranches: readonly string[] = [
+      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile',
+      'codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface',
+      'codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-contract',
+    ];
+
+    for (const branch of validBranches) {
+      const parsed: CanonicalWorkerBranch =
+        CanonicalWorkerBranchContract.parse(branch);
+      assert.equal(parsed, branch);
+    }
+  });
+
+  test('rejects feature refs, old prefix forms, and unregistered roles', () => {
+    const invalidBranches: readonly string[] = [
+      'codex/agent-branching',
+      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile',
+      'codex/child/sre/gizmo/agent-branching/fix-cache-branch-compile',
+      'codex/child/web-dev/provisioning/agent-branching/fix-cache-branch-compile',
+      'codex/child/sre/provisioning/short/fix-cache-branch-compile',
+      'codex/child/sre/provisioning/agent-branching/short',
+    ];
+
+    for (const branch of invalidBranches) {
+      assert.throws(() => CanonicalWorkerBranchContract.parse(branch));
     }
   });
 });

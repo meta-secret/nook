@@ -857,8 +857,8 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
       identity: 'Delivery Pipeline',
       contextDirectory: 'delivery-pipeline',
       description:
-        'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
-      capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+        'Owns remote delivery mechanics across CI, feature pull-request lifecycle, workflow execution, validation evidence, squash merge, and release operations.',
+      capabilityBoundary: `Delivery Pipeline executes authorized GitHub, CI, pull-request, merge, and release mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
 ]);

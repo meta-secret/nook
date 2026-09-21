@@ -12,29 +12,21 @@ export type PinnedDevBaseEvidence = Readonly<{
 }>;
 
 declare const CANONICAL_FEATURE_BRANCH: unique symbol;
+declare const CANONICAL_WORKER_BRANCH: unique symbol;
 
 /** The branch is the stable workflow authority; its head is resolved by Delivery at each stage. */
 export type CanonicalFeatureBranch = string & {
   readonly [CANONICAL_FEATURE_BRANCH]: 'canonical-feature-branch';
 };
 
-export class CanonicalFeatureBranchContract {
-  private constructor(private readonly value: string) {}
+export type CanonicalWorkerBranch = string & {
+  readonly [CANONICAL_WORKER_BRANCH]: 'canonical-worker-branch';
+};
 
-  static parse(value: string): CanonicalFeatureBranch {
-    return new CanonicalFeatureBranchContract(value).execute();
-  }
+class CanonicalBranchNameSyntax {
+  private constructor() {}
 
-  private execute(): CanonicalFeatureBranch {
-    const branch = this.value;
-    if (!CanonicalFeatureBranchContract.isCanonicalFeatureBranch(branch))
-      throw new Error('Canonical feature branch is malformed.');
-    return branch;
-  }
-
-  private static isCanonicalFeatureBranch(
-    branch: string,
-  ): branch is CanonicalFeatureBranch {
+  static assertSafeGitRef(branch: string): void {
     if (
       !branch ||
       branch.length > 120 ||
@@ -61,51 +53,10 @@ export class CanonicalFeatureBranchContract {
         );
       })
     )
-      return false;
-    const components = branch.split('/');
-    if (
-      components[0] !== 'codex' ||
-      components.some((component) => component.length === 0)
-    )
-      throw new Error('Canonical feature branch must be a codex branch.');
-
-    const segments = components.slice(1);
-    const valid =
-      (segments.length === 1 &&
-        (CanonicalFeatureBranchContract.isKebabSegment(
-          segments[0] || false,
-          10,
-          20,
-        ) ||
-          CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments))) ||
-      (segments.length === 4 &&
-        CanonicalFeatureBranchContract.isKebabSegment(
-          segments[0] || false,
-          10,
-          20,
-        ) &&
-        CanonicalFeatureBranchContract.isCanonicalTeam(segments[1] || false) &&
-        CanonicalFeatureBranchContract.isCanonicalRole(
-          segments[1] || false,
-          segments[2] || false,
-        ) &&
-        CanonicalFeatureBranchContract.isKebabSegment(
-          segments[3] || false,
-          20,
-          50,
-        ) &&
-        segments[3] !== 'cleanup');
-    return valid;
+      throw new Error('Canonical branch is not a safe Git ref.');
   }
 
-  /** Preserves the Prime-authorized delivery branch created before the current length bound. */
-  private static isEstablishedPrimeBranch(
-    segments: readonly string[],
-  ): boolean {
-    return segments.length === 1 && segments[0] === 'agentic-pipeline-delivery';
-  }
-
-  private static isKebabSegment(
+  static isKebabSegment(
     ...[segment, minimum, maximum]: [
       segment: string | false,
       minimum: number,
@@ -120,7 +71,7 @@ export class CanonicalFeatureBranchContract {
     );
   }
 
-  private static isCanonicalTeam(team: string | false): boolean {
+  static isCanonicalTeam(team: string | false): boolean {
     return (
       team === 'ai' ||
       team === 'dev-core' ||
@@ -131,46 +82,115 @@ export class CanonicalFeatureBranchContract {
     );
   }
 
-  private static isCanonicalRole(
+  static isCanonicalWorkerRole(
     ...[team, role]: [team: string | false, role: string | false]
   ): boolean {
     if (typeof team !== 'string' || typeof role !== 'string') return false;
     switch (team) {
       case 'ai':
-        return (
-          role === 'gizmo' ||
-          role === 'loom-specialist' ||
-          role === 'cortex-specialist'
-        );
+        return role === 'loom-specialist' || role === 'cortex-specialist';
       case 'dev-core':
         return (
-          role === 'gizmo' ||
-          role === 'rust-core-developer' ||
-          role === 'rust-auth2-developer'
+          role === 'rust-core-developer' || role === 'rust-auth2-developer'
         );
       case 'security':
         return (
-          role === 'gizmo' ||
           role === 'cryptography-specialist' ||
           role === 'security-review-specialist'
         );
       case 'sre':
         return (
-          role === 'gizmo' || role === 'provisioning' || role === 'cloud-native'
+          role === 'provisioning' ||
+          role === 'cloud-native' ||
+          role === 'docker-cache-specialist'
         );
       case 'web-dev':
         return (
-          role === 'gizmo' ||
           role === 'typescript-specialist' ||
-          role === 'svelte-specialist'
+          role === 'svelte-specialist' ||
+          role === 'web-designer'
         );
       case 'delivery-pipeline':
-        return (
-          role === 'gizmo' || role === 'dev-manager' || role === 'pr-lifecycle'
-        );
+        return role === 'pr-lifecycle';
       default:
         return false;
     }
+  }
+}
+
+export class CanonicalFeatureBranchContract {
+  private constructor(private readonly value: string) {}
+
+  static parse(value: string): CanonicalFeatureBranch {
+    return new CanonicalFeatureBranchContract(value).execute();
+  }
+
+  private execute(): CanonicalFeatureBranch {
+    const branch = this.value;
+    if (!CanonicalFeatureBranchContract.isCanonicalFeatureBranch(branch))
+      throw new Error('Canonical feature branch is malformed.');
+    return branch;
+  }
+
+  private static isCanonicalFeatureBranch(
+    branch: string,
+  ): branch is CanonicalFeatureBranch {
+    CanonicalBranchNameSyntax.assertSafeGitRef(branch);
+    const components = branch.split('/');
+    if (
+      components[0] !== 'codex' ||
+      components.some((component) => component.length === 0)
+    )
+      throw new Error('Canonical feature branch must be a codex branch.');
+
+    const segments = components.slice(1);
+    return (
+      segments.length === 1 &&
+      (CanonicalBranchNameSyntax.isKebabSegment(segments[0] || false, 10, 20) ||
+        CanonicalFeatureBranchContract.isEstablishedPrimeBranch(segments))
+    );
+  }
+
+  /** Preserves the Prime-authorized delivery branch created before the current length bound. */
+  private static isEstablishedPrimeBranch(
+    segments: readonly string[],
+  ): boolean {
+    return segments.length === 1 && segments[0] === 'agentic-pipeline-delivery';
+  }
+}
+
+export class CanonicalWorkerBranchContract {
+  private constructor(private readonly value: string) {}
+
+  static parse(value: string): CanonicalWorkerBranch {
+    return new CanonicalWorkerBranchContract(value).execute();
+  }
+
+  private execute(): CanonicalWorkerBranch {
+    const branch = this.value;
+    if (!CanonicalWorkerBranchContract.isCanonicalWorkerBranch(branch))
+      throw new Error('Canonical worker branch is malformed.');
+    return branch;
+  }
+
+  private static isCanonicalWorkerBranch(
+    branch: string,
+  ): branch is CanonicalWorkerBranch {
+    CanonicalBranchNameSyntax.assertSafeGitRef(branch);
+    const segments = branch.split('/');
+    return (
+      segments.length === 6 &&
+      segments[0] === 'codex' &&
+      segments[1] === 'child' &&
+      CanonicalBranchNameSyntax.isCanonicalTeam(segments[2] || false) &&
+      CanonicalBranchNameSyntax.isCanonicalWorkerRole(
+        segments[2] || false,
+        segments[3] || false,
+      ) &&
+      CanonicalBranchNameSyntax.isKebabSegment(segments[4] || false, 10, 20) &&
+      CanonicalBranchNameSyntax.isKebabSegment(segments[5] || false, 20, 50) &&
+      segments[5] !== 'cleanup'
+    );
   }
 }
 

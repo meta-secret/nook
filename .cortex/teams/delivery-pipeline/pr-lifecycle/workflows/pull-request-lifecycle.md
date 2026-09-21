@@ -18,7 +18,10 @@ feature branch is deleted after merge.
    branch, integration outcome, and checks, then push the new head.
 9. Rerun every required check.
 10. When all required checks are green, re-fetch PR, main, and head state.
-11. If main or head changed, invalidate affected evidence and repeat checks.
+11. If the head changed, invalidate affected evidence and repeat checks. If
+    `main` advanced, have the upstream integration agent integrate the new
+    frontier into the feature branch, return its outcome and checks, push that
+    replacement head, and repeat every invalidated check.
 12. Squash-merge the pull request.
 13. Verify GitHub's actual merged state.
 14. Verify the squash result on `origin/main`.

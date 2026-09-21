@@ -55,9 +55,11 @@ concurrency cap.
 
 AI Team Gizmo and its leaves consume the canonical feature branch name and the
 bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
-before planning, delegation, worktree creation, or edits. It selects freshly
-fetched `origin/main` as the base supplied to the upstream integration agent,
-which creates the feature and worker worktrees. The branch name is the workflow authority. Before each
+before planning, delegation, worker-worktree creation, or edits. It selects
+freshly fetched `origin/main` as the base supplied to the upstream integration
+agent, which creates the feature branch and worktree. After planning identifies
+dependency-ready assignments, the integration agent creates their worker
+branches and worktrees. The branch name is the workflow authority. Before each
 stage, delivery resolves the latest committed branch head. A branch advance
 follows the latest head and reruns affected evidence. SHAs observed during the
 run are evidence, not cross-stage authority. The AI team fails closed on

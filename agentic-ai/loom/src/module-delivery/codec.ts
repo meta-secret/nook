@@ -1,7 +1,4 @@
-import {
-  CanonicalFeatureBranchContract,
-  PinnedDevBaseEvidenceContract,
-} from '../lib/base-evidence.ts';
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import type { UntrustedYamlNode } from '../lib/guards.ts';
 import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
@@ -206,29 +203,6 @@ export class ModuleDeliveryPlanSchema {
     throw new ModuleDeliveryPlanTransportLimit(request);
   }
 
-  /** Creates a branch-authoritative plan from a historical V4 value without mutating it. */
-  static migrateModuleDeliveryPlan(
-    ...[plan, featureBranch]: [
-      plan: ModuleDeliveryPlanV4,
-      featureBranch: string,
-    ]
-  ): ModuleDeliveryPlanV5 {
-    if (plan.version !== 4)
-      throw new Error('Only module delivery plan version 4 can be migrated.');
-    const branch = CanonicalFeatureBranchContract.parse(featureBranch);
-    PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha: plan.originMainSha,
-      pinnedLocalDevSha: plan.pinnedLocalDevSha,
-    });
-    const { featureHeadSha: _observedFeatureHeadSha, ...withoutFeatureHead } =
-      plan;
-    return {
-      ...withoutFeatureHead,
-      version: MODULE_DELIVERY_PLAN_VERSION,
-      featureBranch: branch,
-    };
-  }
-
   static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV5): string {
     return ModuleDeliveryPlanDigest.moduleDeliveryPlanDigest(plan);
   }
@@ -263,7 +237,10 @@ export class ModuleDeliveryPlanSchema {
     };
     const nodeValues = fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES);
     const generation = legacy ? 1 : fields.positiveInteger('generation');
-    const sourceCommit = fields.string('sourceCommit');
+    const sourceCommit =
+      version === MODULE_DELIVERY_PLAN_VERSION
+        ? ''
+        : fields.string('sourceCommit');
     const maxAgentDepth = fields.positiveInteger('maxAgentDepth');
     const maxAttempts = fields.positiveInteger('maxAttempts');
     const parentOwnedResources = fields.nonEmptyStringList(
@@ -370,10 +347,8 @@ export class ModuleDeliveryPlanSchema {
     }
     const currentPlan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      baseBranch: fields.string('baseBranch'),
       generation,
-      sourceCommit,
-      originMainSha: fields.string('originMainSha'),
-      pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
       featureBranch: CanonicalFeatureBranchContract.parse(
         fields.string('featureBranch'),
       ),

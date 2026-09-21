@@ -33,8 +33,7 @@ export class ModuleDeliveryPlanValidationScenario {
     const baseline: ModuleDeliveryBaseline =
       fixture.dependencies.length === 0
         ? {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -74,8 +73,9 @@ export class ModuleDeliveryPlanValidationScenario {
         evidence: [`${fixture.taskId} behavior passes`],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerBranch: `codex/child/${fixture.expert === 'web_expert' ? 'web-dev/typescript-specialist' : 'dev-core/rust-core-developer'}/module-delivery-test/${fixture.taskId}-implementation-work`,
+        worktreePath: `/tmp/nook-module-delivery/${fixture.taskId}`,
       },
     };
   }
@@ -86,8 +86,7 @@ export class ModuleDeliveryPlanValidationScenario {
     const baseline: ModuleDeliveryBaseline =
       fixture.dependencies.length === 0
         ? {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -149,7 +148,7 @@ export class ModuleDeliveryPlanValidationScenario {
     return {
       version: 2,
       generation: plan.generation,
-      sourceCommit: plan.sourceCommit,
+      sourceCommit: SOURCE_COMMIT,
       maxConcurrency: 1,
       maxAgentDepth: plan.maxAgentDepth,
       maxAttempts: plan.maxAttempts,
@@ -165,9 +164,9 @@ export class ModuleDeliveryPlanValidationScenario {
     return {
       version: 3,
       generation: plan.generation,
-      sourceCommit: plan.sourceCommit,
-      originMainSha: plan.originMainSha,
-      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      sourceCommit: SOURCE_COMMIT,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: plan.maxAgentDepth,
       maxAttempts: plan.maxAttempts,
       parentOwnedResources: plan.parentOwnedResources,
@@ -181,16 +180,14 @@ export class ModuleDeliveryPlanValidationScenario {
     const fixture = this.request;
     return {
       version: 5,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -240,7 +237,7 @@ export class ModuleDeliveryPlanValidationScenario {
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -252,8 +249,7 @@ export class ModuleDeliveryPlanValidationScenario {
           moduleRoot: CORE_ROOT,
           consumerOutcome: 'The parent receives reviewed legacy evidence.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
           agentDepthLimit: 2,
           dependencies: [],

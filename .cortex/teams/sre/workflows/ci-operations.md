@@ -199,7 +199,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.
      - The repair follows the feature path into the canonical feature branch.
-     - The Feature Gizmo controls slow checks and fast-forward promotion.
+     - The Feature Gizmo controls slow checks and squash-merge authorization.
      - Incident completion retains replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.

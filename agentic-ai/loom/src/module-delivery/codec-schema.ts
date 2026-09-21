@@ -98,6 +98,7 @@ export enum ModulePlanV4RootField {
 
 /** Current branch-authoritative plan shape. Feature heads are resolved by Delivery. */
 export enum ModulePlanV5RootField {
+  BaseBranch = 'baseBranch',
   EdgeContracts = 'edgeContracts',
   FeatureBranch = 'featureBranch',
   Generation = 'generation',
@@ -106,9 +107,6 @@ export enum ModulePlanV5RootField {
   Nodes = 'nodes',
   ParentJoin = 'parentJoin',
   ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  SourceCommit = 'sourceCommit',
   Version = 'version',
 }
 
@@ -241,13 +239,13 @@ export enum ModulePlanSynthesisNodeField {
 }
 
 export enum ModulePlanWorkspaceField {
-  ExpectedCommitHandoff = 'expectedCommitHandoff',
   Kind = 'kind',
+  WorkerBranch = 'workerBranch',
+  WorktreePath = 'worktreePath',
 }
 
-export enum ModulePlanSourceBaselineField {
+export enum ModulePlanFeatureBaselineField {
   Kind = 'kind',
-  SourceCommit = 'sourceCommit',
 }
 
 export enum ModulePlanIntegratedBaselineField {

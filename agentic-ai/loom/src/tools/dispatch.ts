@@ -32,10 +32,8 @@ import { LoomRequestCatalog } from './registry.ts';
 
 import type {
   SuccessResponseForFamilyArgs,
-  SuccessResponseForPrLandArgs,
   DecodeErrorResponseArgs,
   ExecuteErrorResponseForFamilyArgs,
-  ExecuteErrorResponseForPrLandArgs,
 } from '../codec/response.ts';
 
 import type { ExplainSyntaxFailureArgs } from '../codec/blueprint-diff.ts';
@@ -263,15 +261,6 @@ export class LoomRequestDispatch {
           successResponseForFamilyArgs3,
         );
       }
-      case RequestFamily.PrLand: {
-        const successResponseForPrLandArgs: SuccessResponseForPrLandArgs = {
-          operation: request.operation,
-          result,
-        };
-        return LoomResponseEncoder.successResponseForPrLand(
-          successResponseForPrLandArgs,
-        );
-      }
       case RequestFamily.DependencyPopularity: {
         const successResponseForFamilyArgs2: SuccessResponseForFamilyArgs = {
           family: RequestFamily.DependencyPopularity,
@@ -339,16 +328,6 @@ export class LoomRequestDispatch {
           };
         return LoomResponseEncoder.executeErrorResponseForFamily(
           executeErrorResponseForFamilyArgs3,
-        );
-      }
-      case RequestFamily.PrLand: {
-        const executeErrorResponseForPrLandArgs: ExecuteErrorResponseForPrLandArgs =
-          {
-            operation: request.operation,
-            errors,
-          };
-        return LoomResponseEncoder.executeErrorResponseForPrLand(
-          executeErrorResponseForPrLandArgs,
         );
       }
       case RequestFamily.DependencyPopularity: {

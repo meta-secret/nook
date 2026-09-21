@@ -5,15 +5,9 @@ export enum RequestFamily {
   CortexAudit = 'cortexAudit',
   CortexSessionClean = 'cortexSessionClean',
   SkillScaffold = 'skillScaffold',
-  PrLand = 'prLand',
   DependencyPopularity = 'dependencyPopularity',
   ToolsList = 'toolsList',
   ToolsCall = 'toolsCall',
-}
-
-export enum PrLandOperation {
-  Status = 'status',
-  Validate = 'validate',
 }
 
 export enum ResponsePhase {

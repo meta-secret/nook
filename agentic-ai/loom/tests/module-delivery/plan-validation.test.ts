@@ -288,7 +288,7 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('decodes the historical v2 root without upgrading it to v4', () => {
+  test('decodes the historical v2 root without promoting it', () => {
     const historical = ModuleDeliveryPlanValidationScenario.historicalV2Plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
@@ -317,7 +317,7 @@ describe('reviewed module delivery plan', () => {
     );
   });
 
-  test('decodes and migrates the historical v3 root without mutating it', () => {
+  test('decodes historical v3 and v4 roots without promoting their SHA contracts', () => {
     const historical = ModuleDeliveryPlanValidationScenario.historicalV3Plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
@@ -340,16 +340,18 @@ describe('reviewed module delivery plan', () => {
       version: 4,
       featureHeadSha: '4'.repeat(40),
     };
-    const historicalV4Before = structuredClone(historicalV4);
-    const migrated = ModuleDeliveryPlanSchema.migrateModuleDeliveryPlan(
-      historicalV4,
-      'codex/module-delivery-test',
+    const compatibilityV4 =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(historicalV4),
+      );
+    expect(compatibilityV4.status).toBe(
+      ModuleDeliveryCompatibilityStatus.Decoded,
     );
     expect(historical).toEqual(before);
-    expect(historicalV4).toEqual(historicalV4Before);
-    expect(migrated.version).toBe(5);
-    expect(migrated.featureBranch).toBe('codex/module-delivery-test');
-    expect(Object.hasOwn(migrated, 'featureHeadSha')).toBe(false);
+    if (compatibilityV4.status === ModuleDeliveryCompatibilityStatus.Decoded) {
+      expect(compatibilityV4.inputVersion).toBe(4);
+      expect(compatibilityV4.plan).toEqual(historicalV4);
+    }
     const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(historical),
     );
@@ -595,7 +597,7 @@ describe('reviewed module delivery plan', () => {
     );
   });
 
-  test('rejects non-exact commits and execution limits above policy', () => {
+  test('rejects an invalid base branch and execution limits above policy', () => {
     const fixture: PlanFixture = {
       nodes: DEFAULT_NODES,
       edgeContracts: DEFAULT_EDGES,
@@ -603,7 +605,7 @@ describe('reviewed module delivery plan', () => {
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     const invalidPlan: ModuleDeliveryPlanV5 = {
       ...validPlan,
-      sourceCommit: 'main',
+      baseBranch: 'main',
       maxAgentDepth: 4,
       maxAttempts: 6,
     };
@@ -613,6 +615,26 @@ describe('reviewed module delivery plan', () => {
     );
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.LimitExceeded,
+    );
+  });
+
+  test('binds every canonical worker branch to the feature segment', () => {
+    const mismatchedWorker: ModuleDeliveryWriteNodeV2 = {
+      ...CORE_NODE,
+      workspace: {
+        ...CORE_NODE.workspace,
+        workerBranch:
+          'codex/child/dev-core/rust-core-developer/other-feature/core-provider-implementation-work',
+      },
+    };
+    const result = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan({
+        nodes: [mismatchedWorker],
+        edgeContracts: [],
+      }),
+    );
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
     );
   });
 
@@ -897,8 +919,8 @@ describe('task execution and canonical ownership', () => {
     const wrongBaseline: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: 'fedcba9876543210fedcba9876543210fedcba98',
+        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+        providerTaskIds: ['unplanned-provider'],
       },
     };
     const cases: readonly NodeFailureFixture[] = [
@@ -934,8 +956,7 @@ describe('task execution and canonical ownership', () => {
     const sourceBasedDependent: ModuleDeliveryWriteNodeV2 = {
       ...WASM_NODE,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE_COMMIT,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
     };
     const wrongProviders: ModuleDeliveryWriteNodeV2 = {

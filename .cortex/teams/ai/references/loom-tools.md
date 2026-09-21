@@ -103,7 +103,6 @@ Loom follows [typescript-domain-structure.md](../../../../.meta-cortex/agents/te
 and the [TypeScript Effect Workflows](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
 policy for new and materially changed TypeScript workflows:
 
-- nested operation enums for `prLand`
 - field-name enums passed into deny-unknown checks (never string sets)
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
 - Current migration debt: existing Loom runtime failures use `neverthrow` Result
@@ -149,16 +148,8 @@ arguments:
   action: run
 ```
 
-Use one domain root family and descriptive fields. Same-prefix operations nest:
-
-```yaml
-# right
-prLand:
-  status:
-    prNumber: 123
-```
-
-Exactly one root family key is allowed.
+Use one domain root family and descriptive fields. Exactly one root family key
+is allowed.
 
 Unknown fields fail closed.
 
@@ -227,16 +218,6 @@ The request requires `skillOwner` with one of `gizmo`, `ai`, `shared`,
 `dev-core`, `security`, `sre`, or `web-dev`. Loom creates the canonical card in
 that owner's dynamic-skill directory. It registers the card in the AI skill
 catalog. Security remains the owner for security policy and acceptance.
-
-### prLand (status / validate)
-
-```bash
-task loom:pr-land CONFIG=path/to/validate-request.yaml
-```
-
-`prLand.status` reports the current pull-request state. `prLand.validate`
-dispatches hosted validation and directs the caller to return the resulting
-repository-owned check evidence to the Feature Gizmo.
 
 ### toolsCall
 

@@ -92,7 +92,7 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
   names when it creates the feature and worker worktrees.
 - Delivery re-fetches and resolves the latest committed branch head before
   remote dispatch, PR mutation, or merge. If the branch advances, follow the
-  latest head and rerun affected evidence instead of failing on stale SHA
+  latest head and rerun affected evidence instead of failing on stale head
   observations.
 - Temporary Team Gizmo and leaf branches are private. Only the canonical
   feature branch is published or used as a remote workflow ref.
