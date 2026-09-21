@@ -8,6 +8,8 @@ import {
   authentication_control_transportable,
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
+  authentication_workflow_activity_progress,
+  AuthenticationWorkflowActivity,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
   AuthenticationAdvanceControlObservation,
@@ -18,6 +20,7 @@ import type {
   AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
   AuthenticationControlTransportability,
+  AuthenticationDisplayProgress,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { CompanionWasmSessionMessageType } from "./companion-wasm-runtime-messages";
 import {
@@ -44,7 +47,6 @@ import {
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
-  type LoginAdvanceControlRequest,
   type FormSubmissionApproval,
   type PasswordFormScopeQuery,
   authenticationSubmissionControls,
@@ -158,6 +160,7 @@ type PasskeyCandidateSafetyRequest = {
 
 export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
   submissionApproval?: FormSubmissionApproval;
+  approvedAdvanceControls?: readonly AuthenticationAdvanceControlObservation[];
 };
 
 type OwnedAdvanceControlRequest =
@@ -181,6 +184,20 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
   private readonly advanceControlPolicies = new Map<string, boolean>();
   private readonly passkeyCandidatePolicies = new Map<string, boolean>();
   private readonly pageFactsPriorities = new Map<string, number>();
+  private readonly activityProgress = new Map<
+    AuthenticationWorkflowActivity,
+    AuthenticationDisplayProgress
+  >();
+
+  authenticationActivityProgress(
+    activity: AuthenticationWorkflowActivity,
+  ): AuthenticationDisplayProgress | false {
+    const cached = this.activityProgress.get(activity);
+    if (cached) return cached;
+    return companionExtensionRuntimePresent()
+      ? false
+      : authentication_workflow_activity_progress(activity);
+  }
 
   private policyKey(request: object): string {
     return JSON.stringify(request);
@@ -251,6 +268,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     this.advanceControlPolicies.clear();
     this.passkeyCandidatePolicies.clear();
     this.pageFactsPriorities.clear();
+    this.activityProgress.clear();
     if (
       delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
       !delivery.response ||
@@ -259,6 +277,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       !("advanceControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
       !("pageFactsPriorities" in delivery.response)
+      || !("activityProgress" in delivery.response)
     ) {
       return;
     }
@@ -286,6 +305,16 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       if (typeof priority === "number") {
         this.pageFactsPriorities.set(this.policyKey(request), priority);
       }
+    });
+    [
+      AuthenticationWorkflowActivity.ReadyLogin,
+      AuthenticationWorkflowActivity.FillingLogin,
+      AuthenticationWorkflowActivity.VerifyingLogin,
+      AuthenticationWorkflowActivity.FillingAuthenticator,
+      AuthenticationWorkflowActivity.SaveOffer,
+    ].forEach((activity, index) => {
+      const progress = response.activityProgress[index];
+      if (progress) this.activityProgress.set(activity, progress);
     });
   }
 
@@ -1007,6 +1036,67 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     };
   }
 
+  private findApprovedUnownedAdvanceControl(
+    request: LoginFormSubmissionRequest,
+    usernameField: HTMLInputElement,
+  ): LoginAdvanceControl | false {
+    const observation: PasswordFormObservation | false =
+      request.kind === PasswordFormQueryKind.Scoped
+        ? {
+            root: request.root,
+            formScope: request.formScope,
+            summary: this.summarizeRoot(request),
+          }
+        : ((v) => (v ? v : false))(
+            this.summarizeAuthenticationWorkflowForms().find(
+              (candidate) =>
+                candidate.formScope.kind === PasswordFormScopeKind.Unowned &&
+                candidate.root.contains(usernameField),
+            ),
+          );
+    if (!observation) return false;
+    const approvedControls = request.approvedAdvanceControls ?? [];
+    const controls = this.scopedAdvanceControls(observation);
+    const semanticSubmitControlCount =
+      authenticationSubmissionControls.countedSemanticSubmitControls(
+        Array.from(
+          observation.root.querySelectorAll<HTMLElement>(
+            authenticationAdvanceControlSelector,
+          ),
+        ),
+      );
+    const observedControls = controls.flatMap((control) => {
+          if (!authenticationSubmissionControls.isRenderedControl(control))
+            return [];
+          const observationRequest: PageControlObservationRequest = {
+            observation,
+            control,
+            authenticationUsername:
+              passwordFieldDiscovery.usernameEvidence(observation),
+            semanticSubmitControlCount,
+          };
+          const [transported] =
+            this.transportableControlObservation(observationRequest);
+          return transported ? [{ control, observation: transported }] : [];
+        });
+    for (const approved of approvedControls) {
+      const matched = observedControls.find(
+        ({ observation: transported }) =>
+                  approved.actionability === transported.actionability &&
+                  approved.ownership === transported.ownership &&
+                  approved.semantics === transported.semantics &&
+                  approved.sourceOrigin === transported.sourceOrigin &&
+                  approved.formIdentity === transported.formIdentity &&
+                  approved.destinationIdentity ===
+                    transported.destinationIdentity &&
+                  approved.label === transported.label &&
+          approved.machineIdentity === transported.machineIdentity,
+      );
+      if (matched) return matched.control;
+    }
+    return false;
+  }
+
   submitLoginForm(request: LoginFormSubmissionRequest): FormSubmissionResult {
     const nookTypedArgs0_26 = new PasswordFormFieldQuery(request).query;
     const passwordField =
@@ -1038,16 +1128,14 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
     )
       return FormSubmissionResult.NotObserved;
     if ((!passwordField || !form) && usernameField) {
-      const clickAdvanceControlRequest: LoginAdvanceControlRequest = {
-        ...request,
+      const approved = this.findApprovedUnownedAdvanceControl(
+        request,
         usernameField,
-      };
-      if (
-        authenticationSubmissionControls.clickAdvanceControl(
-          clickAdvanceControlRequest,
-        )
-      )
+      );
+      if (approved) {
+        approved.click();
         return FormSubmissionResult.Submitted;
+      }
     }
     if (!form) return FormSubmissionResult.NotObserved;
     const implicitSubmitRequest: ApprovedImplicitAuthenticationSubmitRequest<PasswordFormObservation> =

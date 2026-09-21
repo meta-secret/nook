@@ -11,6 +11,7 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 import {
   NookLoginContextObservation,
   NookPageInputFieldObservation,
+  AuthenticationWorkflowActivity,
   authentication_page_observation_facts_match_binding,
   authentication_page_observation_facts_priority,
   authentication_advance_control_is_safe,
@@ -24,6 +25,7 @@ import {
   decode_website_login_save_pending_response,
   authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
+  authentication_workflow_activity_progress,
   bind_authentication_page_observation_facts,
   has_login_context,
   looks_like_email_verification_body,
@@ -211,6 +213,15 @@ export async function handleCompanionWasmMessage(
           ),
           pageFactsPriorities: message.payload.pageFacts.map((request) =>
             authentication_page_observation_facts_priority(request),
+          ),
+          activityProgress: [
+            AuthenticationWorkflowActivity.ReadyLogin,
+            AuthenticationWorkflowActivity.FillingLogin,
+            AuthenticationWorkflowActivity.VerifyingLogin,
+            AuthenticationWorkflowActivity.FillingAuthenticator,
+            AuthenticationWorkflowActivity.SaveOffer,
+          ].map((activity) =>
+            authentication_workflow_activity_progress(activity),
           ),
         })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:

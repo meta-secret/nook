@@ -195,6 +195,7 @@ class AuthenticationWidgetRenderer {
     const currentApproval: AuthenticationWorkflowApproval = {
       workflowKey,
       facts,
+      ...(factsBindingToken ? { factsBindingToken } : {}),
     }
     if (
       this.ui.pickerState.loginApprovalDisposition(currentApproval) ===
@@ -280,7 +281,7 @@ class AuthenticationWidgetRenderer {
     continueButton.textContent =
       workflowUi.translatedMessage(continueMessageKey)
 
-    continueButton.addEventListener('click', (event) => {
+    const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
       if (!canContinueWithNook) {
         authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -393,7 +394,12 @@ class AuthenticationWidgetRenderer {
         }
         void loginPasskeyInteraction.continueWithNook(nookTypedArgs0_7)
       }
+    }
+    continueButton.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      activateContinueButton(event)
     })
+    continueButton.addEventListener('click', activateContinueButton)
 
     const takeOverButton = document.createElement('button')
     takeOverButton.type = 'button'

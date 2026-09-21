@@ -34,6 +34,7 @@ import {
 import {
   AuthenticationControlActivationDisposition,
   authenticationControlActivationDisposition,
+  authenticationWidgetOwnsControl,
 } from './autofill/authentication-action-lifecycle'
 import {
   RuntimeMessageDeliveryKind,
@@ -508,7 +509,12 @@ class AuthenticationScanRenderLifecycle {
     this.schedule()
   }
 
-  handleAuthenticationControlActivation(target: Event['target']): void {
+  handleAuthenticationControlActivation(event: Event): void {
+    const { target } = event
+    const mountedHost =
+      widgetState.host.kind === WidgetHostKind.Attached
+        ? widgetState.host.mountedElement
+        : false
     const renderedWorkflow =
       widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
         ? widgetState.renderedWorkflowRoot.observation
@@ -518,10 +524,6 @@ class AuthenticationScanRenderLifecycle {
       'a[href], button, input[type="submit"], input[type="button"], [role="button"]',
     )
     if (!(control instanceof HTMLElement)) return
-    const mountedHost =
-      widgetState.host.kind === WidgetHostKind.Attached
-        ? widgetState.host.mountedElement
-        : false
     const boundary =
       authenticationSurfaceObservation.authenticationWorkflowBoundary(
         renderedWorkflow,
@@ -531,9 +533,14 @@ class AuthenticationScanRenderLifecycle {
     >[0] = {
       controlTouchesRenderedWorkflow:
         boundary instanceof Node && boundary.contains(control),
-      controlBelongsToMountedWidget: Boolean(
-        mountedHost && mountedHost.contains(control),
-      ),
+      controlBelongsToMountedWidget: authenticationWidgetOwnsControl({
+        lightTreeContainsControl: Boolean(
+          mountedHost && mountedHost.contains(control),
+        ),
+        shadowTreeContainsControl: Boolean(
+          mountedHost && event.composedPath().includes(mountedHost),
+        ),
+      }),
       credentialActuationInFlight: widgetState.credentialActuationInFlight,
     }
     if (
@@ -627,7 +634,7 @@ void (async () => {
     'click',
     (event) => {
       authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
-        event.target,
+        event,
       )
       if (!namecheapLoginDrawerActivation.observe(event)) return
       authenticationScanRenderLifecycle.schedule()

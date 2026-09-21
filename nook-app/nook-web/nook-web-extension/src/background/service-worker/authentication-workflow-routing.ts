@@ -135,7 +135,7 @@ export async function authenticationWorkflowMessageResponse({
         authenticator: {
           ...observation.authenticator,
           passkeyAccountAvailability:
-            passkeyEvidenceIsSafe[observationIndex] === true &&
+            passkeyEvidenceIsSafe[observationIndex] !== true ||
             passkeyAvailability.kind ===
               MatchingPasskeyAvailabilityKind.Unavailable
               ? 'unavailable'

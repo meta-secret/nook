@@ -3,6 +3,7 @@ import type {
   AuthenticationWorkflowSnapshot,
   AuthenticationWorkflowSnapshotTransport,
   AuthenticationPageObservationFactsBatch,
+  AuthenticationObservationBindingToken,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import {
@@ -26,6 +27,7 @@ export class AuthenticationWorkflowApproval {
   private constructor() {}
   declare readonly workflowKey: string
   declare readonly facts: AuthenticationPageObservationFacts
+  declare readonly factsBindingToken?: AuthenticationObservationBindingToken
   static compare({
     approved,
     current,

@@ -188,6 +188,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'alice@nook.test',
         'extension-fill-password',
       )
+      await unlockExtensionPopupPin(paired.context, paired.extensionId)
 
       const page = await paired.context.newPage()
       await page.goto(`${mockAuth.origin}/v3/signin/identifier`)

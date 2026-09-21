@@ -14,11 +14,14 @@ import {
 import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowActivity,
-  authentication_workflow_activity_progress,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authenticationActivityProgress,
+  authentication_workflow_activity_progress,
+} from './authentication-activity-progress'
 import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   LoginPickerKind,
@@ -684,7 +687,13 @@ class LoginPasskeyInteraction {
     if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
       return
     widgetState.busy = true
+    widgetState.credentialActuationInFlight = true
     continueButton.disabled = true
+    if (!authenticationActivityProgress.prepare()) {
+      widgetState.busy = false
+      continueButton.disabled = false
+      return
+    }
     const flightProgressRequest11: Parameters<
       typeof workflowUi.setFlightProgress
     >[0] = {
@@ -857,6 +866,7 @@ class LoginPasskeyInteraction {
       await this.openLoginPicker(openLoginPickerRequest1)
     } finally {
       widgetState.busy = false
+      widgetState.credentialActuationInFlight = false
       if (
         pickerState.login.kind === LoginPickerKind.Closed &&
         continueButton.isConnected &&

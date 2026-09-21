@@ -15,6 +15,7 @@ import type {
   AuthenticationControlTransportability,
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationPageObservationFacts,
+  AuthenticationDisplayProgress,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -159,7 +160,7 @@ export type CompanionWasmSessionMessage =
         readonly transportability: readonly AuthenticationControlTransportability[];
         readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
         readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
-        readonly pageFacts: readonly AuthenticationPageObservationFacts[];
+      readonly pageFacts: readonly AuthenticationPageObservationFacts[];
       };
     }
   | {
@@ -191,6 +192,7 @@ export type CompanionWasmSessionResponse =
       readonly advanceControls: readonly boolean[];
       readonly passkeyCandidates: readonly boolean[];
       readonly pageFactsPriorities: readonly number[];
+      readonly activityProgress: readonly AuthenticationDisplayProgress[];
     }
   | {
       readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;

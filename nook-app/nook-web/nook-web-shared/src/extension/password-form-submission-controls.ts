@@ -57,6 +57,9 @@ export type LoginAdvanceControl = HTMLElement;
 
 export type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
   usernameField: HTMLInputElement;
+  advanceControlIsSafe?: (
+    observation: AuthenticationAdvanceControlObservation,
+  ) => boolean;
 };
 
 type AuthenticationRouteControlRequest = {
@@ -731,24 +734,27 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       this.unownedQueryHasLocalScope(unownedScopeRequest);
 
     const passwordFields = passwordFieldDiscovery.findPasswordFields(query);
-    if (hasLocalUnownedScope && passwordFields.length > 0) {
-      const newPasswordFieldCount = passwordFields.filter((field) => {
-        const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
-          field,
-          expected: "new-password",
-        };
-        return passwordFieldDiscovery.hasAutocompleteToken(
-          newPasswordTokenRequest,
-        );
-      }).length;
-      const controls = Array.from(
-        query.root.querySelectorAll<HTMLElement>(
-          authenticationAdvanceControlSelector,
-        ),
+    const newPasswordFieldCount = passwordFields.filter((field) => {
+      const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+        field,
+        expected: "new-password",
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(
+        newPasswordTokenRequest,
       );
-      const observation: AuthenticationAdvanceControlObservation = {
+    }).length;
+    const controls = Array.from(
+      query.root.querySelectorAll<HTMLElement>(
+        authenticationAdvanceControlSelector,
+      ),
+    );
+    const observation: AuthenticationAdvanceControlObservation = {
         actionability: "actionable",
-        ownership: "locally-scoped",
+        ownership: sharesOwnedForm
+          ? "owned-form"
+          : hasLocalUnownedScope
+            ? "locally-scoped"
+            : "unowned",
         semantics: control.matches(semanticSubmitControlSelector)
           ? "semantic-submit"
           : "activation",
@@ -767,21 +773,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         submissionMethod: this.controlSubmissionMethod(control),
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
-      };
-      return authentication_advance_control_is_safe(observation);
-    }
-
-    return can_activate_authentication_route_control(
-      sourceOrigin,
-      formIdentity,
-      destinationIdentity,
-      controlLabel,
-      machineIdentity,
-      true,
-      passwordFieldDiscovery.isAuthUsernameField(query.usernameField),
-      sharesOwnedForm || hasLocalUnownedScope,
-      false,
-    );
+    };
+    return query.advanceControlIsSafe
+      ? query.advanceControlIsSafe(observation)
+      : authentication_advance_control_is_safe(observation);
   }
 
   clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
@@ -908,15 +903,18 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
       };
-      return (
-        this.authenticationFactStringsAreTransportable([
+      const transportable = this.authenticationFactStringsAreTransportable([
           observation.sourceOrigin,
           observation.formIdentity,
           observation.destinationIdentity,
           observation.label,
           ((v) => (v ? v : ""))(observation.machineIdentity),
-        ]) && authentication_advance_control_is_safe(observation)
-      );
+        ]);
+      if (!transportable) return false;
+      // The shortlist grants no action authority. In extension content worlds,
+      // retain the candidate for the subsequent offscreen Rust policy batch.
+      if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) return true;
+      return authentication_advance_control_is_safe(observation);
     });
   }
 
