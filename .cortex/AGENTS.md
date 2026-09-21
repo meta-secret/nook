@@ -13,6 +13,10 @@ constraints. Explicit user instructions determine task scope and stopping point.
 Meta-Cortex owns generic agents and skills. Nook retains six functional contexts:
 AI, Development Core, Security, SRE, Web Development, and Delivery Pipeline.
 They describe product ownership, not six coordinator instances.
+Each feature uses one functional team identity: the single Team Gizmo coordinates
+bounded Team Agents and owns shared-branch sequencing. See [agent feature
+ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md) for the
+ownership boundary.
 
 - [Nook Gizmo Prime](gizmo-prime/AGENTS.md) wraps upstream Prime.
 - [Nook Team Gizmo](gizmo-prime/team-gizmo/AGENTS.md) wraps the single upstream coordinator.
@@ -61,11 +65,16 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 ## Team worker contract
 
 Follow the upstream coordination roles with Nook's bounded scopes, issued
-worktrees, and serialized commit integration. Team-context Gizmo paths resolve to
-the single coordinator. Each writer owns its assigned files and returns scoped
-commits, evidence, and blockers. Temporary child branches are never published.
-The active host owns agent admission and communication. Do not invent a fixed
-concurrency limit or substitute repository journals for host dispatch.
+worktrees, and serialized commit integration. Each assignment names one
+functional team identity, bounded file scope, dependency order, and acceptance
+evidence. Team-context Gizmo paths resolve to the single coordinator. Team Gizmo
+owns shared-branch sequencing and integrates complete scoped commits serially.
+Temporary child branches are never published. Another active agent's work is
+read-only without an explicit handoff. Use the compact
+[subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md) for
+worker boundaries. The active host owns agent admission and communication. Do
+not invent a fixed concurrency limit or substitute repository journals for host
+dispatch.
 
 ## Mandatory delivery architecture
 
@@ -129,6 +138,8 @@ prohibited. This is a universal P1 rule.
 ## Cortex authoring
 
 Load [upstream Context Engineering](../.meta-cortex/agents/teams/ai-team/tech-writer/skills/context-engineering/SKILL.md).
+Use [self-improvement](teams/ai/dynamic-skills/self-improvement.md) for
+evidence-backed promotion of durable Cortex guidance.
 Nook's executable documentation tooling retains these project-specific cards:
 
 - [Writer integration](teams/ai/dynamic-skills/cortex-writer.md).
