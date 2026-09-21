@@ -282,9 +282,11 @@ export class RevalidatedAuthenticationAction {
     const currentBindingToken = currentDelivery.response.factsBindingToken
     if (
       currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
-      currentVerdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+      currentVerdict.kind !==
+        AuthenticationWorkflowSnapshotResponseKind.Matched ||
       !('snapshot' in currentVerdict) ||
-      currentVerdict.snapshot.observationIndex !== currentObservation.selectedIndex ||
+      currentVerdict.snapshot.observationIndex !==
+        currentObservation.selectedIndex ||
       currentVerdict.snapshot.action !== expectedAction ||
       currentDelivery.response.selectedFacts.state !== 'selected' ||
       typeof currentBindingToken !== 'string' ||
@@ -354,5 +356,4 @@ export class RevalidatedAuthenticationAction {
         }
       })
   }
-
 }

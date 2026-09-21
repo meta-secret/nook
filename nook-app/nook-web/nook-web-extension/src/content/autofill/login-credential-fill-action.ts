@@ -196,9 +196,12 @@ export class LoginCredentialFillAction {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
         approvalIsActive,
-        act: ({ currentWorkflow, approvedFacts, revalidateCurrentWorkflow }) => {
-          const approvedAdvanceControl =
-            approvedFacts.detailedAdvanceControl
+        act: ({
+          currentWorkflow,
+          approvedFacts,
+          revalidateCurrentWorkflow,
+        }) => {
+          const approvedAdvanceControl = approvedFacts.detailedAdvanceControl
           const submissionApproval: NonNullable<
             Parameters<
               typeof passwordFormInteraction.submitLoginForm

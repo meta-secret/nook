@@ -266,12 +266,12 @@ describe('authentication workflow routing', () => {
       authenticationWorkflowSnapshot: async ({
         observations,
       }: WorkflowSnapshotRequest) => {
-        expect(
-          observations[0]?.authenticator.passkeyAccountAvailability,
-        ).toBe('unavailable')
-        expect(
-          observations[0]?.authenticator.matchingPasskeyAccountCount,
-        ).toBe(0)
+        expect(observations[0]?.authenticator.passkeyAccountAvailability).toBe(
+          'unavailable',
+        )
+        expect(observations[0]?.authenticator.matchingPasskeyAccountCount).toBe(
+          0,
+        )
         return matchedWorkflowSnapshot({ observationIndex: 0, action: 0 })
       },
     })

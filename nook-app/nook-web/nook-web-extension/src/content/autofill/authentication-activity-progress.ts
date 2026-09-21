@@ -24,9 +24,8 @@ class AuthenticationActivityProgressCache {
       AuthenticationDisplayProgress
     >()
     for (const activity of activities) {
-      const progress = passwordFormInteraction.authenticationActivityProgress(
-        activity,
-      )
+      const progress =
+        passwordFormInteraction.authenticationActivityProgress(activity)
       if (!progress) return false
       next.set(activity, progress)
     }
@@ -34,9 +33,12 @@ class AuthenticationActivityProgressCache {
     return true
   }
 
-  project(activity: AuthenticationWorkflowActivity): AuthenticationDisplayProgress {
+  project(
+    activity: AuthenticationWorkflowActivity,
+  ): AuthenticationDisplayProgress {
     const progress = this.progress.get(activity)
-    if (!progress) throw new Error('Authentication activity progress unavailable')
+    if (!progress)
+      throw new Error('Authentication activity progress unavailable')
     return progress
   }
 }

@@ -376,14 +376,9 @@ describe('companion WASM startup', () => {
     const expectedOrigin = 'chrome-extension://nook'
     const expectedResourceUrl =
       'chrome-extension://nook/content/nook_companion_wasm_bg.wasm'
-    const hostRealmModule = runInNewContext(
-      'new WebAssembly.Module(bytes)',
-      {
-        bytes: new Uint8Array([
-          0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-        ]),
-      },
-    ) as WebAssembly.Module
+    const hostRealmModule = runInNewContext('new WebAssembly.Module(bytes)', {
+      bytes: new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
+    }) as WebAssembly.Module
 
     expect(hostRealmModule instanceof WebAssembly.Module).toBe(false)
     expect(

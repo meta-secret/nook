@@ -218,9 +218,7 @@ class AuthenticationRuntimeTransport {
   ): Promise<RuntimeMessageDelivery<CompanionWasmSessionResponse>> {
     const runtimeMessage: CompanionWasmRuntimeMessage = {
       ...message,
-      origin: ((value) => (value ? value : ''))(
-        this.browser.location?.origin,
-      ),
+      origin: ((value) => (value ? value : ''))(this.browser.location?.origin),
     }
     const delivery = await this.sendRuntimeMessage(runtimeMessage)
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
