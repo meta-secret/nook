@@ -58,9 +58,7 @@ describe('team task context', () => {
       team: TeamKey.Sre,
       readClaims: ['.cortex/**'],
       writeClaims: [],
-      selectedSkillPaths: [
-        '.meta-cortex/skills/dev/coding-skill/SKILL.md',
-      ],
+      selectedSkillPaths: ['.meta-cortex/skills/dev/coding-skill/SKILL.md'],
     };
 
     expect(() =>

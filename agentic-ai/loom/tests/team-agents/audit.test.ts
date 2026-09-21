@@ -461,7 +461,8 @@ describe('canonical Cortex team authority', () => {
         replacement: '## Optional guidance',
       },
       {
-        current: 'Do not copy upstream coordination rules or select models here.',
+        current:
+          'Do not copy upstream coordination rules or select models here.',
         replacement:
           'Local wrappers may select models.\n\n## Relocated marker\n\nDo not copy upstream coordination rules or select models here.',
       },
