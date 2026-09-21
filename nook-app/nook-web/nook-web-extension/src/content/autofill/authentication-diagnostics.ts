@@ -2,6 +2,7 @@ import {
   AuthenticationWorkflowScopeDiagnosticDisposition,
   type AuthenticationWorkflowScopeDiagnostic,
 } from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
+import type { AuthenticationFieldCandidateDiagnostic } from '../../../../nook-web-shared/src/extension/password-form-field-candidate-diagnostics'
 
 export enum AuthenticationDiagnosticAvailability {
   Disabled = 'disabled',
@@ -19,6 +20,7 @@ export enum AuthenticationDiagnosticGate {
   RuntimeTransport = 'runtime-transport',
   RustAdmission = 'rust-admission',
   WidgetRendering = 'widget-rendering',
+  FieldCandidateEligibility = 'field-candidate-eligibility',
 }
 
 export enum AuthenticationDiagnosticGateOutcome {
@@ -55,8 +57,16 @@ type AuthenticationDiagnosticScopeEntry = {
   readonly scope: AuthenticationWorkflowScopeDiagnostic
 }
 
+type AuthenticationDiagnosticFieldCandidateEntry = {
+  readonly channel: AuthenticationDiagnosticChannelName
+  readonly gate: AuthenticationDiagnosticGate.FieldCandidateEligibility
+  readonly candidate: AuthenticationFieldCandidateDiagnostic
+}
+
 export type AuthenticationDiagnosticEntry =
-  AuthenticationDiagnosticStageEntry | AuthenticationDiagnosticScopeEntry
+  | AuthenticationDiagnosticStageEntry
+  | AuthenticationDiagnosticScopeEntry
+  | AuthenticationDiagnosticFieldCandidateEntry
 
 export interface AuthenticationDiagnosticSink {
   record(entry: AuthenticationDiagnosticEntry): void
@@ -106,6 +116,22 @@ export class AuthenticationDiagnosticChannel {
           : AuthenticationDiagnosticGateOutcome.Rejected,
       candidateCount: observation.candidateCount,
       scope: observation,
+    }
+    this.request.sink.record(entry)
+  }
+
+  recordFieldCandidateDiagnostic(
+    candidate: AuthenticationFieldCandidateDiagnostic,
+  ): void {
+    if (
+      this.request.availability !== AuthenticationDiagnosticAvailability.Enabled
+    ) {
+      return
+    }
+    const entry: AuthenticationDiagnosticFieldCandidateEntry = {
+      channel: AuthenticationDiagnosticChannelName.AuthenticationDetection,
+      gate: AuthenticationDiagnosticGate.FieldCandidateEligibility,
+      candidate,
     }
     this.request.sink.record(entry)
   }

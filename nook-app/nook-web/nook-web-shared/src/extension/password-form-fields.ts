@@ -33,6 +33,14 @@ import {
   type AuthenticationWorkflowScopeDiagnosticGateResult,
   type AuthenticationWorkflowScopeDiagnosticSink,
 } from "./password-form-scope-diagnostics";
+import {
+  AuthenticationFieldCandidateDiagnosticBuilder,
+  AuthenticationFieldCandidateDisposition,
+  AuthenticationFieldCandidateKind,
+  AuthenticationFieldCandidateSelectorMatch,
+  DisabledAuthenticationFieldCandidateDiagnosticSink,
+  type AuthenticationFieldCandidateDiagnosticSink,
+} from "./password-form-field-candidate-diagnostics";
 
 void companionWasmReady;
 
@@ -198,11 +206,31 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     new AuthenticationWorkflowScopeDiagnosticBuilder();
   private workflowScopeDiagnosticSink: AuthenticationWorkflowScopeDiagnosticSink =
     new DisabledAuthenticationWorkflowScopeDiagnosticSink();
+  private readonly fieldCandidateDiagnosticBuilder =
+    new AuthenticationFieldCandidateDiagnosticBuilder();
+  private fieldCandidateDiagnosticSink: AuthenticationFieldCandidateDiagnosticSink =
+    new DisabledAuthenticationFieldCandidateDiagnosticSink();
 
   setWorkflowScopeDiagnosticSink(
     sink: AuthenticationWorkflowScopeDiagnosticSink,
   ): void {
     this.workflowScopeDiagnosticSink = sink;
+  }
+
+  setFieldCandidateDiagnosticSink(
+    sink: AuthenticationFieldCandidateDiagnosticSink,
+  ): void {
+    this.fieldCandidateDiagnosticSink = sink;
+  }
+
+  private recordFieldCandidateDiagnostic(
+    request: Parameters<
+      AuthenticationFieldCandidateDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.fieldCandidateDiagnosticSink.recordFieldCandidateDiagnostic(
+      this.fieldCandidateDiagnosticBuilder.build(request),
+    );
   }
 
   private recordWorkflowScopeDiagnostic(
@@ -396,12 +424,25 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       selector: 'input[type="password"]',
     };
     if (formScope) query.formScope = formScope;
-    return this.findFields(query).filter(
-      (field) =>
+    return this.findFields(query).flatMap((field) => {
+      const accepted =
         !this.inputIsEffectivelyDisabled(field) &&
         field.type === "password" &&
-        this.isRenderedInput(field),
-    );
+        this.isRenderedInput(field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field,
+        candidateKind: AuthenticationFieldCandidateKind.Password,
+        selectorMatch: AuthenticationFieldCandidateSelectorMatch.Password,
+        disposition: accepted
+          ? AuthenticationFieldCandidateDisposition.Accepted
+          : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      return accepted ? [field] : [];
+    });
   }
 
   private hasLoginContext(field: HTMLInputElement): boolean {
@@ -591,13 +632,35 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       candidateQuery.formScope = formScope;
     }
 
-    for (const field of [
-      ...this.findFields(semanticQuery),
-      ...this.findFields(candidateQuery),
+    for (const candidate of [
+      ...this.findFields(semanticQuery).map((field) => ({
+        field,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.UsernameSemantic,
+      })),
+      ...this.findFields(candidateQuery).map((field) => ({
+        field,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.UsernameCandidate,
+      })),
     ]) {
-      if (seen.has(field) || !this.looksLikeUsernameField(field)) continue;
-      seen.add(field);
-      fields.push(field);
+      const accepted = this.looksLikeUsernameField(candidate.field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field: candidate.field,
+        candidateKind: AuthenticationFieldCandidateKind.Username,
+        selectorMatch: candidate.selectorMatch,
+        disposition:
+          !seen.has(candidate.field) && accepted
+            ? AuthenticationFieldCandidateDisposition.Accepted
+            : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      if (seen.has(candidate.field) || !accepted) continue;
+      seen.add(candidate.field);
+      fields.push(candidate.field);
     }
     return fields;
   }
@@ -615,7 +678,22 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     if (formScope) query.formScope = formScope;
 
     for (const field of this.findFields(query)) {
-      if (seen.has(field) || !this.looksLikeOneTimeCodeField(field)) continue;
+      const accepted = this.looksLikeOneTimeCodeField(field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field,
+        candidateKind: AuthenticationFieldCandidateKind.OneTimeCode,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.OneTimeCodeCandidate,
+        disposition:
+          !seen.has(field) && accepted
+            ? AuthenticationFieldCandidateDisposition.Accepted
+            : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      if (seen.has(field) || !accepted) continue;
       seen.add(field);
       fields.push(field);
     }

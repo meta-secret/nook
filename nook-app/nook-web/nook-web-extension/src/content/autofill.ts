@@ -548,6 +548,9 @@ if (__NOOK_EXTENSION_DIAGNOSTICS_ENABLED__) {
   passwordFieldDiscovery.setWorkflowScopeDiagnosticSink(
     authenticationDiagnosticChannel,
   )
+  passwordFieldDiscovery.setFieldCandidateDiagnosticSink(
+    authenticationDiagnosticChannel,
+  )
 }
 const authenticationScanRenderLifecycleRequest: AuthenticationScanRenderLifecycleRequest =
   { scanState }

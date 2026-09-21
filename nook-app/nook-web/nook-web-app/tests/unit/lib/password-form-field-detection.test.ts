@@ -5,6 +5,15 @@ import {
   type AuthenticationWorkflowScopeDiagnostic,
 } from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
 import {
+  AuthenticationFieldCandidateDisposition,
+  AuthenticationFieldCandidateKind,
+  AuthenticationFieldCandidateSelectorMatch,
+  AuthenticationFieldCandidateTypeCategory,
+  AuthenticationFieldCandidateAutocompleteCategory,
+  DisabledAuthenticationFieldCandidateDiagnosticSink,
+  type AuthenticationFieldCandidateDiagnostic,
+} from '../../../../nook-web-shared/src/extension/password-form-field-candidate-diagnostics'
+import {
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -37,9 +46,66 @@ afterEach(() => {
   passwordFieldDiscovery.setWorkflowScopeDiagnosticSink(
     new DisabledAuthenticationWorkflowScopeDiagnosticSink(),
   )
+  passwordFieldDiscovery.setFieldCandidateDiagnosticSink(
+    new DisabledAuthenticationFieldCandidateDiagnosticSink(),
+  )
 })
 
 describe('authentication field detection', () => {
+  test('records sanitized selector and eligibility details before workflow scope construction', () => {
+    const diagnostics: AuthenticationFieldCandidateDiagnostic[] = []
+    passwordFieldDiscovery.setFieldCandidateDiagnosticSink({
+      recordFieldCandidateDiagnostic: (diagnostic) =>
+        diagnostics.push(diagnostic),
+    })
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section id="identifier-shell" class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+      </main>
+    `
+
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
+    const rejected = diagnostics.find(
+      (diagnostic) =>
+        diagnostic.candidateKind ===
+          AuthenticationFieldCandidateKind.Username &&
+        diagnostic.selectorMatch ===
+          AuthenticationFieldCandidateSelectorMatch.UsernameSemantic &&
+        diagnostic.disposition ===
+          AuthenticationFieldCandidateDisposition.Rejected,
+    )
+    if (!rejected)
+      throw new Error('expected rejected Google identifier candidate')
+    expect(rejected).toMatchObject({
+      typeCategory: AuthenticationFieldCandidateTypeCategory.Text,
+      autocompleteCategories: [
+        AuthenticationFieldCandidateAutocompleteCategory.Username,
+        AuthenticationFieldCandidateAutocompleteCategory.WebAuthn,
+      ],
+      disabled: false,
+      readOnly: false,
+      renderability: 'rendered',
+      rootKind: 'document',
+      frameKind: 'top-frame',
+    })
+    expect(rejected.ancestors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'section',
+          idTokens: ['identifier-shell'],
+          classTokens: ['identifier-shell'],
+        }),
+      ]),
+    )
+    expect(JSON.stringify(rejected)).not.toContain('user@example.test')
+    expect(JSON.stringify(rejected)).not.toContain('Email or phone')
+  })
+
   test('records sanitized scope gates for a rejected form-less candidate', () => {
     const diagnostics: AuthenticationWorkflowScopeDiagnostic[] = []
     passwordFieldDiscovery.setWorkflowScopeDiagnosticSink({
