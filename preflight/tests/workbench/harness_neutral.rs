@@ -136,7 +136,12 @@ fn validated_executable_workspace_dependencies(root: &Path) -> anyhow::Result<Ve
     let mut has_executable_package = false;
     for owner in EXECUTABLE_SKILL_OWNERS {
         let owner_root = root.join(owner);
-        for entry in fs::read_dir(owner_root)? {
+        let entries = match fs::read_dir(&owner_root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        for entry in entries {
             let skill_root = entry?.path();
             let Some(slug) = skill_root.file_name().and_then(|name| name.to_str()) else {
                 continue;
@@ -421,6 +426,35 @@ fn codex_agent_profiles_are_removed() -> anyhow::Result<()> {
         "Universal Cortex authority must not retain TOML profiles under {}: {toml_files:#?}",
         profiles_root.display()
     );
+    Ok(())
+}
+
+#[test]
+fn validated_workspace_dependencies_skip_missing_owner_root() -> anyhow::Result<()> {
+    let fixture = TemporaryDirectory::create("missing-owner-root")?;
+    let cortex_root = fixture.path.join(".cortex");
+    let skill_root = cortex_root.join("teams/ai/dynamic-skills/example");
+    let scripts_root = skill_root.join("scripts");
+    fs::create_dir_all(scripts_root.join("src"))?;
+    fs::create_dir_all(scripts_root.join("tests"))?;
+    fs::write(cortex_root.join("package.json"), "{}")?;
+    fs::write(cortex_root.join("bun.lock"), "{}")?;
+    fs::write(cortex_root.join("bunfig.toml"), "linker = \"hoisted\"")?;
+    fs::write(skill_root.join("SKILL.md"), "# Example")?;
+    for name in [
+        ".gitignore",
+        ".prettierrc",
+        "eslint.config.js",
+        "executable-skill.json",
+        "package.json",
+        "tsconfig.json",
+    ] {
+        fs::write(scripts_root.join(name), "")?;
+    }
+
+    let dependencies = validated_executable_workspace_dependencies(&fixture.path)?;
+
+    assert!(dependencies.is_empty());
     Ok(())
 }
 
