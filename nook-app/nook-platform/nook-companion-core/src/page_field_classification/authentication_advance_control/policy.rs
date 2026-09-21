@@ -190,8 +190,10 @@ impl CheckedAuthenticationControl<'_> {
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_destructive_action()
             || AuthenticationControlIdentity::new(&observation.form_identity)
                 .is_alternate_authentication_route()
-            || AuthenticationRouteIdentity::new(&self.destination.route_identity)
-                .indicates_destructive_action()
+            || AuthenticationRouteIdentity::new(
+                self.destination.authentication_policy_route_identity(),
+            )
+            .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.machine_identity).has_control_veto()
             || AuthenticationControlText::new(&expanded_label).contains_any_word(&["cancel"])
@@ -200,19 +202,21 @@ impl CheckedAuthenticationControl<'_> {
                 "stay signed in",
                 "remember me",
             ])
-            || AuthenticationRouteIdentity::new(&self.destination.route_identity)
-                .has_disallowed_action_or_provider(DestinationPolicy {
-                    credential: if credential_update_destination {
-                        CredentialDestination::PasswordUpdate
-                    } else {
-                        CredentialDestination::Authentication
-                    },
-                    provider: if primary_oauth_login {
-                        OAuthAuthorization::Allowed
-                    } else {
-                        OAuthAuthorization::Disallowed
-                    },
-                })
+            || AuthenticationRouteIdentity::new(
+                self.destination.authentication_policy_route_identity(),
+            )
+            .has_disallowed_action_or_provider(DestinationPolicy {
+                credential: if credential_update_destination {
+                    CredentialDestination::PasswordUpdate
+                } else {
+                    CredentialDestination::Authentication
+                },
+                provider: if primary_oauth_login {
+                    OAuthAuthorization::Allowed
+                } else {
+                    OAuthAuthorization::Disallowed
+                },
+            })
     }
 
     fn has_semantic_submit_ceremony(&self) -> bool {
@@ -682,6 +686,50 @@ mod tests {
                 .is_err()
         );
         Ok(())
+    }
+
+    #[test]
+    fn amazon_claim_identifier_post_ignores_only_verified_openid_metadata() {
+        let destination = "https://www.amazon.com/ax/claim?openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_ya_signin&policy_handle=Retail-Checkout&openid.mode=checkid_setup&openid.assoc_handle=usflex&arb=mock-arb";
+        let amazon = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Generic,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
+            source_origin: "https://www.amazon.com".to_owned(),
+            form_identity: "ap_login_form signIn".to_owned(),
+            destination_identity: destination.to_owned(),
+            label: "submit Continue".to_owned(),
+            machine_identity: "a-button-input".to_owned(),
+            submission_method: PageControlSubmissionMethod::Post,
+            submission_destination_source: PageControlSubmissionDestinationSource::Authored,
+        };
+        assert!(amazon.authentication_advance_control_is_safe());
+
+        for hostile_destination in [
+            destination.replace("www.amazon.com%2F", "attacker.example%2F"),
+            destination.replace("checkid_setup", "delete-account"),
+            format!("{destination}&action=checkout"),
+        ] {
+            let mut hostile = amazon.clone();
+            hostile.destination_identity = hostile_destination;
+            assert!(!hostile.authentication_advance_control_is_safe());
+        }
+
+        let mut cross_origin = amazon.clone();
+        cross_origin.destination_identity = destination.replace(
+            "https://www.amazon.com/ax/claim",
+            "https://attacker.example/ax/claim",
+        );
+        assert!(!cross_origin.authentication_advance_control_is_safe());
+
+        let mut contextless = amazon;
+        contextless.form_identity.clear();
+        assert!(!contextless.authentication_advance_control_is_safe());
     }
 
     #[test]

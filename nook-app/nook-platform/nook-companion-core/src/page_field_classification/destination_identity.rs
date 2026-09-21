@@ -18,6 +18,7 @@ pub struct CanonicalControlDestination {
     pub has_microsoft_provider_authority: bool,
     /// Whether the exact HTTPS destination host and path are Microsoft's consumer login root.
     pub is_microsoft_consumer_login_root: bool,
+    authentication_policy_route_identity: String,
 }
 
 /// Named values required by `CanonicalControlDestination::canonicalize_control_destination`.
@@ -37,6 +38,57 @@ impl CanonicalControlDestination {
             && url.username().is_empty()
             && url.password().is_none()
             && url.host_str().is_some()
+    }
+
+    fn amazon_claim_authentication_route(url: &Url) -> Option<String> {
+        if url.scheme() != "https"
+            || url.host_str() != Some("www.amazon.com")
+            || url.port_or_known_default() != Some(443)
+            || url.path() != "/ax/claim"
+            || url.fragment().is_some()
+        {
+            return None;
+        }
+        let pairs = url.query_pairs().collect::<Vec<_>>();
+        if pairs.len() != 6 {
+            return None;
+        }
+        let exactly_one = |key: &str, expected: &str| {
+            pairs
+                .iter()
+                .filter(|(candidate, _)| candidate == key)
+                .map(|(_, value)| value.as_ref())
+                .eq([expected])
+        };
+        if !exactly_one("openid.ns", "http://specs.openid.net/auth/2.0")
+            || !exactly_one("openid.mode", "checkid_setup")
+            || !exactly_one("openid.assoc_handle", "usflex")
+            || !exactly_one("policy_handle", "Retail-Checkout")
+        {
+            return None;
+        }
+        let return_to = pairs
+            .iter()
+            .find(|(key, _)| key == "openid.return_to")
+            .and_then(|(_, value)| Url::parse(value).ok())?;
+        if return_to.scheme() != "https"
+            || return_to.host_str() != Some("www.amazon.com")
+            || return_to.port_or_known_default() != Some(443)
+        {
+            return None;
+        }
+        let arb = pairs
+            .iter()
+            .find(|(key, _)| key == "arb")
+            .map(|(_, value)| value.as_ref())?;
+        if arb.is_empty() || arb.len() > 128 {
+            return None;
+        }
+        Some(url.path().to_owned())
+    }
+
+    pub(crate) fn authentication_policy_route_identity(&self) -> &str {
+        &self.authentication_policy_route_identity
     }
 }
 
@@ -187,6 +239,9 @@ impl CanonicalControlDestination {
             return Err(InvalidControlDestination);
         }
 
+        let authentication_policy_route_identity =
+            CanonicalControlDestination::amazon_claim_authentication_route(&destination)
+                .unwrap_or_else(|| route_identity.clone());
         Ok(CanonicalControlDestination {
             path_identity,
             route_identity,
@@ -205,6 +260,7 @@ impl CanonicalControlDestination {
                         })
                 }),
             is_microsoft_consumer_login_root,
+            authentication_policy_route_identity,
         })
     }
 }
@@ -406,5 +462,46 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn amazon_claim_metadata_uses_the_exact_authentication_route_for_policy() {
+        let destination = "https://www.amazon.com/ax/claim?openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_ya_signin&policy_handle=Retail-Checkout&openid.mode=checkid_setup&openid.assoc_handle=usflex&arb=mock-arb";
+        let canonical = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: "https://www.amazon.com",
+                destination_identity: destination,
+            },
+        );
+        assert!(canonical.is_ok());
+        let Ok(canonical) = canonical else {
+            return;
+        };
+        assert!(canonical.route_identity.contains("Retail-Checkout"));
+        assert_eq!(
+            canonical.authentication_policy_route_identity(),
+            "/ax/claim"
+        );
+
+        for hostile in [
+            destination.replace("checkid_setup", "delete-account"),
+            destination.replace("www.amazon.com%2F", "attacker.example%2F"),
+            format!("{destination}&action=checkout"),
+        ] {
+            let canonical = CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://www.amazon.com",
+                    destination_identity: &hostile,
+                },
+            );
+            assert!(canonical.is_ok());
+            let Ok(canonical) = canonical else {
+                return;
+            };
+            assert_ne!(
+                canonical.authentication_policy_route_identity(),
+                "/ax/claim"
+            );
+        }
     }
 }
