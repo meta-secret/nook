@@ -25,7 +25,7 @@ machines use only the lightweight feedback allowed by the dev contract.
 ## Feature compilation
 
 The owning Feature Gizmo publishes its canonical feature branch. Gizmo Prime
-authorizes the branch delivery packet, and Delivery Pipeline Team Gizmo
+authorizes the branch delivery packet, and Team Gizmo (Delivery Pipeline context)
 dispatches PR Lifecycle Agent through the active harness to run the required
 required PR-check capability. Each stage re-fetches and resolves the latest
 committed branch head; the returned exact SHA is observational evidence only.
@@ -54,7 +54,7 @@ committed branch head; the returned exact SHA is observational evidence only.
 ## Slow dev PR validation
 
 The manually started Feature Gizmo authorizes publication of the selected
-snapshot and the full existing PR checks. Delivery Pipeline Team Gizmo routes
+snapshot and the full existing PR checks. Team Gizmo (Delivery Pipeline context) routes
 that manager-authorized packet through the active harness to PR Lifecycle Agent
 for snapshot publication and bounded check execution. The Feature Gizmo
 retains policy authority, and manager-only `feature PR lifecycle` remains the sole
@@ -85,7 +85,7 @@ PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
 before each stage and returns the exact SHA as observational evidence only. A
 stale caller-provided feature SHA does not reject branch-authorized execution.
 For manager-stage publication, slow checks, and promotion, the Feature Gizmo
-authorizes the packet. Delivery Pipeline Team Gizmo dispatches PR Lifecycle
+authorizes the packet. Team Gizmo (Delivery Pipeline context) dispatches PR Lifecycle
 Agent through the active harness. Neither Team Gizmo nor PR Lifecycle Agent may
 create or update pull requests or decide policy, readiness, promotion, or
 Workbench state.

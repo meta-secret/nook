@@ -112,8 +112,11 @@ export class TeamTaskContextResolver {
         (path) =>
           !TaskResourceClaim.isValidTaskResourceClaim(path) ||
           path.includes('*') ||
-          !path.startsWith('.cortex/') ||
-          !path.includes('/dynamic-skills/') ||
+          !(
+            (path.startsWith('.cortex/') &&
+              path.includes('/dynamic-skills/')) ||
+            (path.startsWith('.meta-cortex/') && path.includes('/skills/'))
+          ) ||
           !path.endsWith('.md') ||
           !TeamTaskContextResolver.isRegularFile(
             join(request.repositoryRoot, path),

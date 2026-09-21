@@ -34,7 +34,7 @@ invalidates evidence bound to an older head.
 - Verify GitHub reports the pull request as merged.
 - Verify the squash result is present on `origin/main`.
 - Delete the remote feature branch after merge.
-- Report exact evidence and blockers through Delivery Pipeline Team Gizmo.
+- Report exact evidence and blockers through Team Gizmo (Delivery Pipeline context).
 
 ## Prohibited actions
 

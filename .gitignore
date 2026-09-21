@@ -67,3 +67,6 @@ lcov.info
 **/llvm-cov-target/
 
 nook-app/nook-platform/fuzz/target
+
+# Locally installed upstream agent framework.
+/.meta-cortex/

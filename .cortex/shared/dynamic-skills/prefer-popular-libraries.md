@@ -1,30 +1,11 @@
-# Prefer Popular Libraries
+# Nook Dependency Audit Integration
 
-## Purpose
+Library selection and language-specific adoption thresholds come from Meta-Cortex.
+Nook's Loom dependency audit provides the repository evidence.
 
-Before writing boilerplate, prefer a well-known library that already solves the
-problem. Reject obscure packages that almost nobody uses.
+## Required actions
 
-## Problem Pattern
-
-Agents reinvent diffs, parsers, HTTP helpers, or small utilities by hand.
-
-Or they add a niche dependency with a handful of GitHub stars and almost no
-downloads. That creates maintenance and supply-chain risk.
-
-## Preferred Pattern
-
-1. Before implementing non-domain boilerplate, search for a mature library.
-2. Prefer packages/crates with clear majority adoption:
-   - high weekly npm downloads or crates.io downloads
-   - substantial GitHub stars when a GitHub repo is available
-   - active maintenance
-3. Avoid libraries with very small stars or near-zero downloads unless the user
-   explicitly requires that package.
-4. Domain rules, cryptography, vault policy, and product invariants stay in
-   Nook-owned code (`nook-core` / Loom codecs). Libraries help with commodity
-   mechanics, not product policy.
-5. Validate candidate dependencies with Loom:
+Include repository manifests when adding or reviewing dependencies:
 
 ```yaml
 dependencyPopularity:
@@ -35,35 +16,10 @@ dependencyPopularity:
   minCratesIoRecentDownloads: 1000
 ```
 
-```bash
-task loom:dependency-popularity
-```
+The owning hosted validation stage runs `task loom:dependency-popularity`.
+Resolve failed findings before delivery. Product validation remains in Nook-owned
+Rust domain code; this audit measures dependency adoption only.
 
-## Scope
+**Prohibited:** treat a popular package as the authority for vault policy.
 
-Applies to:
-
-- Choosing new npm packages and crates.io crates
-- Deciding whether to hand-roll commodity helpers
-
-Does not apply to:
-
-- Nook domain models, crypto, auth, vault storage, or WASM contracts
-- Generated bindings and toolchain-pinned packages
-
-## Examples
-
-- Before: hand-written YAML value-kind switches and recursive object diffs
-- After: `diff` (`jsdiff`) unified patches for blueprint-vs-received YAML
-
-## Decision checklist
-
-- [ ] Ask whether a popular library already solves the commodity problem.
-- [ ] Check stars/downloads before adding a dependency.
-- [ ] Run Loom `dependencyPopularity` when adding or reviewing dependencies.
-- [ ] Keep domain validation and product policy in Nook-owned code.
-
-## Validation
-
-- `task loom:dependency-popularity`
-- Review findings for any `verdict: fail` entries before merge
+**Preferred:** use it for commodity mechanics behind the existing typed boundary.

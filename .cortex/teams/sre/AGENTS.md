@@ -1,5 +1,10 @@
 # SRE Team Agent Contract
 
+This is a Nook functional context. The single Team Gizmo supplies it alongside
+Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+over legacy generic wording here; Nook product and delivery requirements remain.
+
+
 ## Mission
 
 Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
@@ -31,8 +36,8 @@ read-only. Do not load the consumer team's complete graph.
 For authored JavaScript or TypeScript under `.github/` or SRE-owned scripts,
 load these web-owned skills directly as read-only engineering policy:
 
-- [TypeScript domain structure](../web-dev/dynamic-skills/typescript-domain-structure.md)
-- [TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)
+- [TypeScript domain structure](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
+- [TypeScript explicit state](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)
 
 Do not open the web-development graph. Applying these linked skills does not
 create a web-development expertise provider.

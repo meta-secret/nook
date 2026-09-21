@@ -3,6 +3,8 @@
 ## Prime authority
 
 - [Gizmo Prime contract](AGENTS.md)
+- [Single Team Gizmo](team-gizmo/AGENTS.md)
+- [Project agent catalog](team-gizmo/role-catalog.md)
 
 ## Delivery contract
 

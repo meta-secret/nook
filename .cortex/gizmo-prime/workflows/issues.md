@@ -18,7 +18,7 @@ out of scope, a follow-up, unimplemented, future work, or blocked. Also apply
 it when implementation, review, or tests discover work that the current PR
 will not finish.
 
-1. Ask Delivery Pipeline Team Gizmo to route an issue-search packet through the
+1. Ask Team Gizmo (Delivery Pipeline context) to route an issue-search packet through the
    active harness to the PR Lifecycle Agent.
 2. The PR Lifecycle Agent clones or updates the Workbench outside the Nook
    working tree.
@@ -123,7 +123,7 @@ Features may proceed concurrently when their scopes and dependencies allow.
 
 1. The owning Gizmo authors the issue content and lifecycle state.
 2. Route the single-issue publication packet through the active harness.
-   - Delivery Pipeline Team Gizmo sends it to the PR Lifecycle Agent.
+   - Team Gizmo (Delivery Pipeline context) sends it to the PR Lifecycle Agent.
    - The PR Lifecycle Agent executes the checked-in helper without changing
      the authored content.
 3. When updating an existing issue, protect the edit against concurrent

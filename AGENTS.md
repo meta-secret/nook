@@ -3,8 +3,10 @@
 Read [`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md) before every
 other Cortex document. Then read [`.cortex/AGENTS.md`](.cortex/AGENTS.md) and
 [`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
-changes in this repository. They are the system of record and central
-knowledge graph for architecture, product context, rules, and workflows.
+changes in this repository. Nook context composes with
+[Meta-Cortex](.meta-cortex/AGENTS.md) through the
+[integration contract](.cortex/meta-cortex-integration.md). Meta-Cortex owns
+generic agents and skills; Nook owns product context and delivery constraints.
 
 ## Review guidelines
 

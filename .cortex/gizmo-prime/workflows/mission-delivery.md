@@ -30,7 +30,7 @@ through bounded Team Agents, passes every required PR check, squash-merges into
 2. Run `git fetch --prune origin`.
 3. Resolve exact `origin/main` as `originMainSha`.
 4. Create the canonical feature branch and worktree from that commit.
-5. Dispatch bounded team packets through Team Gizmos.
+5. Dispatch bounded team packets through the single Team Gizmo.
 6. Integrate reviewed child commits into the feature branch.
 7. Route GitHub mechanics through Delivery Pipeline and PR Lifecycle.
 8. Push the feature branch and create or update one PR into `main`.
