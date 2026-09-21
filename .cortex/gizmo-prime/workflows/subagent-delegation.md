@@ -2,16 +2,20 @@
 
 ## Required actions
 
-Use the upstream agent workflow supplied by Nook's integration contract.
-Prime sends the mission to the single Team Gizmo, the coordinator for one
-functional team. It selects upstream roles with Nook context from the supplied
-catalogs. There is no per-team coordinator launch.
-
-Preserve Nook's team identity, bounded file scope, issued worktree, dependency
-order, and acceptance evidence in each assignment. Keep child branches private.
-Team Gizmo owns shared-branch sequencing. Integrate complete scoped commits
-serially into the shared canonical feature branch.
-PR Lifecycle receives GitHub operations through Team Gizmo under Prime's authority.
+- Use the upstream agent workflow supplied by Nook's integration contract.
+- Prime sends the mission to the single Team Gizmo, the coordinator for one
+  functional team.
+  - Team Gizmo selects upstream roles with Nook context from the supplied
+    catalogs.
+  - There is no per-team coordinator launch.
+- Preserve Nook's team identity, bounded file scope, issued worktree,
+  dependency order, and acceptance evidence in each assignment.
+- Keep child branches private.
+- Team Gizmo owns shared-branch sequencing.
+- Integrate complete scoped commits serially into the shared canonical feature
+  branch.
+- PR Lifecycle receives GitHub operations through Team Gizmo under Prime's
+  authority.
 
 **Prohibited:** launch a second coordinator because one task needs security review.
 
