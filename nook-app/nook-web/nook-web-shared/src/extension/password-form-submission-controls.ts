@@ -708,9 +708,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         ? ((v) => (v ? v : ""))(identityContainer.getAttribute("class"))
         : "",
       identityContainer
-        ? ((v) => (v ? v : ""))(
-            identityContainer.getAttribute("aria-label"),
-          )
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("aria-label"))
         : "",
     ].join(" ");
     const destinationIdentity = this.authenticationControlDestination(control);
@@ -757,30 +755,29 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       ),
     );
     const observation: AuthenticationAdvanceControlObservation = {
-        actionability: "actionable",
-        ownership: sharesOwnedForm
-          ? "owned-form"
-          : hasLocalUnownedScope
-            ? "locally-scoped"
-            : "unowned",
-        semantics: control.matches(semanticSubmitControlSelector)
-          ? "semantic-submit"
-          : "activation",
-        authenticationUsername: passwordFieldDiscovery.usernameEvidence(query),
-        passwordFieldCount: passwordFields.length,
-        newPasswordFieldCount,
-        oneTimeCodeFieldCount:
-          passwordFieldDiscovery.findOneTimeCodeFields(query).length,
-        semanticSubmitControlCount:
-          this.countedSemanticSubmitControls(controls),
-        sourceOrigin,
-        formIdentity: formIdentity.trim(),
-        destinationIdentity,
-        label: controlLabel,
-        machineIdentity,
-        submissionMethod: this.controlSubmissionMethod(control),
-        submissionDestinationSource:
-          AuthenticationSubmissionDestination.source(control),
+      actionability: "actionable",
+      ownership: sharesOwnedForm
+        ? "owned-form"
+        : hasLocalUnownedScope
+          ? "locally-scoped"
+          : "unowned",
+      semantics: control.matches(semanticSubmitControlSelector)
+        ? "semantic-submit"
+        : "activation",
+      authenticationUsername: passwordFieldDiscovery.usernameEvidence(query),
+      passwordFieldCount: passwordFields.length,
+      newPasswordFieldCount,
+      oneTimeCodeFieldCount:
+        passwordFieldDiscovery.findOneTimeCodeFields(query).length,
+      semanticSubmitControlCount: this.countedSemanticSubmitControls(controls),
+      sourceOrigin,
+      formIdentity: formIdentity.trim(),
+      destinationIdentity,
+      label: controlLabel,
+      machineIdentity,
+      submissionMethod: this.controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
     };
     return query.advanceControlIsSafe
       ? query.advanceControlIsSafe(observation)
@@ -912,16 +909,17 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
           AuthenticationSubmissionDestination.source(control),
       };
       const transportable = this.authenticationFactStringsAreTransportable([
-          observation.sourceOrigin,
-          observation.formIdentity,
-          observation.destinationIdentity,
-          observation.label,
-          ((v) => (v ? v : ""))(observation.machineIdentity),
-        ]);
+        observation.sourceOrigin,
+        observation.formIdentity,
+        observation.destinationIdentity,
+        observation.label,
+        ((v) => (v ? v : ""))(observation.machineIdentity),
+      ]);
       if (!transportable) return false;
       // The shortlist grants no action authority. In extension content worlds,
       // retain the candidate for the subsequent offscreen Rust policy batch.
-      if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) return true;
+      if (typeof chrome === "object" && Boolean(chrome.runtime?.id))
+        return true;
       return authentication_advance_control_is_safe(observation);
     });
   }

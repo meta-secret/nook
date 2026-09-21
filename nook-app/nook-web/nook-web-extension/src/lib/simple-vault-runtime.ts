@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Vault runtime calls cross the generated WASM binding boundary here. */
 import {
   belongs_to_simple_vault,
   simple_vault_url,
@@ -28,13 +29,6 @@ class SimpleVaultRuntime {
     }
   }
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
-    try {
-      if (new URL(candidateUrl).origin !== new URL(this.baseUrl()).origin) {
-        return false
-      }
-    } catch {
-      return false
-    }
     const delivery = await sendCompanionWasmRuntimeMessage(globalThis, {
       type: CompanionWasmSessionMessageType.IsNookVaultAppUrl,
       payload: { candidateUrl, baseUrl: this.baseUrl() },

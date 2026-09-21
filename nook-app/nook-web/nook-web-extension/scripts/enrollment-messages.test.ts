@@ -145,7 +145,7 @@ describe('backup code candidate extraction', () => {
     ).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
   })
 
-  test('does not treat 2fa inside emails as a backup-code page hint', () => {
+  test('does not treat 2fa inside emails as a backup-code page hint', async () => {
     // happy-dom/document unavailable in bun unit tests — exercise the regex
     // through the same exported helper with a stubbed body when present.
     const documentWasPresent = 'document' in globalThis
@@ -155,13 +155,43 @@ describe('backup code candidate extraction', () => {
       configurable: true,
       value: { body },
     })
+    Object.assign(globalThis, {
+      location: new URL('https://example.test/backup-codes'),
+      chrome: {
+        runtime: {
+          sendMessage: (
+            message: { payload: { texts: string[] } },
+            callback: (response: {
+              ok: true
+              result: { copy: string; hint: 'absent' | 'present' }
+            }) => void,
+          ) => {
+            const copy = message.payload.texts.join('\n')
+            callback({
+              ok: true,
+              result: {
+                copy,
+                hint:
+                  copy.includes('Save your backup codes') &&
+                  copy.includes('A1B2-C3D4-E5F6')
+                    ? 'present'
+                    : 'absent',
+              },
+            })
+          },
+        },
+      },
+    })
     try {
+      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
       expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
         false,
       )
       body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
+      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
       expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
       body.innerText = 'Enable 2FA codes for your account'
+      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
       expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
         false,
       )

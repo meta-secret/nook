@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Chrome test doubles provide the minimal tab contract exercised by this suite. */
 import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
 import {

@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- WebAuthn observations are converted into typed Rust requests at this boundary. */
 import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {

@@ -1,12 +1,11 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- DOM traversal callbacks and generated Rust adapters retain their host-defined shapes. */
 import { AuthenticationInputSurface } from "./authentication-input-surface";
 import {
   AirbnbLoginModalRouteKind,
   observeAirbnbLoginModalRoute,
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
-import {
-  type AuthenticationUsernameEvidence,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
+import { type AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   CompanionWasmLabelKind,
   CompanionWasmSessionMessageType,
@@ -216,7 +215,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     boolean
   >();
   private readonly companionLabels = new Map<string, boolean>();
-  private companionStrongestUsernameEvidence: AuthenticationUsernameEvidence | false = false;
+  private companionStrongestUsernameEvidence:
+    AuthenticationUsernameEvidence | false = false;
 
   async prepareCompanionClassification(root: ParentNode): Promise<void> {
     const fields = Array.from(root.querySelectorAll<HTMLInputElement>("input"));
@@ -245,8 +245,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     if (
       !response ||
       typeof response !== "object" ||
-      !('fields' in response) ||
-      !('labels' in response)
+      !("fields" in response) ||
+      !("labels" in response)
     ) {
       return;
     }
@@ -260,7 +260,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
         looksLikeOneTimeCodeField: field.looksLikeOneTimeCodeField,
       });
     }
-    if ('strongestAuthenticationUsernameEvidence' in response) {
+    if ("strongestAuthenticationUsernameEvidence" in response) {
       this.companionStrongestUsernameEvidence =
         response.strongestAuthenticationUsernameEvidence;
     }
@@ -328,18 +328,28 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     return [];
   }
 
-  private companionLabelRequests(root: ParentNode): CompanionWasmLabelRequest[] {
+  private companionLabelRequests(
+    root: ParentNode,
+  ): CompanionWasmLabelRequest[] {
     const labels: CompanionWasmLabelRequest[] = [];
     const add = (kind: CompanionWasmLabelRequest["kind"], value: string) => {
-      if (!labels.some((label) => label.kind === kind && label.value === value)) {
+      if (
+        !labels.some((label) => label.kind === kind && label.value === value)
+      ) {
         labels.push({ kind, value });
       }
     };
     for (const control of root.querySelectorAll<HTMLElement>(
       loginAdvanceControlSelector,
     )) {
-      add(CompanionWasmLabelKind.LoginAdvance, this.localActivationControlLabel(control));
-      add(CompanionWasmLabelKind.PasskeyControl, this.localActivationControlLabel(control));
+      add(
+        CompanionWasmLabelKind.LoginAdvance,
+        this.localActivationControlLabel(control),
+      );
+      add(
+        CompanionWasmLabelKind.PasskeyControl,
+        this.localActivationControlLabel(control),
+      );
     }
     for (const checkbox of root.querySelectorAll<HTMLInputElement>(
       'input[type="checkbox"]',
@@ -359,10 +369,16 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       for (const attribute of ["oninput", "onchange"]) {
         const handler = field.getAttribute(attribute);
         if (typeof handler === "string")
-          add(CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal, `${attribute}=${handler}`);
+          add(
+            CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+            `${attribute}=${handler}`,
+          );
       }
     }
-    add(CompanionWasmLabelKind.EmailVerificationBody, ((v) => (v ? v : ""))(root.textContent));
+    add(
+      CompanionWasmLabelKind.EmailVerificationBody,
+      ((v) => (v ? v : ""))(root.textContent),
+    );
     return labels;
   }
 
@@ -853,7 +869,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }
 
   looksLikeOneTimeCodeAutoSubmitSignal(signal: string): boolean {
-    return this.cachedLabel(CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal, signal);
+    return this.cachedLabel(
+      CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+      signal,
+    );
   }
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
@@ -891,7 +910,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       );
       const labeled = this.localActivationControlLabel(control);
       return explicitlyMarked ||
-        (labeled && this.cachedLabel(CompanionWasmLabelKind.PasskeyControl, labeled))
+        (labeled &&
+          this.cachedLabel(CompanionWasmLabelKind.PasskeyControl, labeled))
         ? [{ control, explicitlyMarked }]
         : [];
     });
@@ -1304,7 +1324,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       : ariaLabel
         ? ariaLabel.value
         : checkbox.name;
-    return this.cachedLabel(CompanionWasmLabelKind.ManualCheckpoint, labeled.toLowerCase());
+    return this.cachedLabel(
+      CompanionWasmLabelKind.ManualCheckpoint,
+      labeled.toLowerCase(),
+    );
   }
 
   private ownedFormHasManualCheckpoint(owner: HTMLFormElement): boolean {

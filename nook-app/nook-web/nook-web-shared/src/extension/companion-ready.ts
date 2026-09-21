@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Companion readiness messages are generated transport records assembled at this boundary. */
 import initCompanionWasm, {
   admit_extension_pairing_vault_type,
   decode_extension_event_log_record,
@@ -296,7 +297,8 @@ class ExtensionOriginCompanionWasmModuleLoader {
               responseKind === CompanionWasmHostResponseKind.Failed;
             const resourceAccepted =
               compiledResponse &&
-              responseRecord && responseRecord.resourceUrl === companionWasmUrl;
+              responseRecord &&
+              responseRecord.resourceUrl === companionWasmUrl;
             this.diagnostics.record({
               phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
               outcome:

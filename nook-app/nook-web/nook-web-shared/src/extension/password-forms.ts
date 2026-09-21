@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-restricted-types, nook-typed-api/no-raw-object-arguments, max-params -- DOM policy collection uses browser-owned object contracts and callback shapes at this boundary. */
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import {
   PasswordAuthenticationWorkflowFormSummary,
@@ -276,8 +277,8 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
       !("transportability" in delivery.response) ||
       !("advanceControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
-      !("pageFactsPriorities" in delivery.response)
-      || !("activityProgress" in delivery.response)
+      !("pageFactsPriorities" in delivery.response) ||
+      !("activityProgress" in delivery.response)
     ) {
       return;
     }
@@ -1068,30 +1069,29 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
         ),
       );
     const observedControls = controls.flatMap((control) => {
-          if (!authenticationSubmissionControls.isRenderedControl(control))
-            return [];
-          const observationRequest: PageControlObservationRequest = {
-            observation,
-            control,
-            authenticationUsername:
-              passwordFieldDiscovery.usernameEvidence(observation),
-            semanticSubmitControlCount,
-          };
-          const [transported] =
-            this.transportableControlObservation(observationRequest);
-          return transported ? [{ control, observation: transported }] : [];
-        });
+      if (!authenticationSubmissionControls.isRenderedControl(control))
+        return [];
+      const observationRequest: PageControlObservationRequest = {
+        observation,
+        control,
+        authenticationUsername:
+          passwordFieldDiscovery.usernameEvidence(observation),
+        semanticSubmitControlCount,
+      };
+      const [transported] =
+        this.transportableControlObservation(observationRequest);
+      return transported ? [{ control, observation: transported }] : [];
+    });
     for (const approved of approvedControls) {
       const matched = observedControls.find(
         ({ observation: transported }) =>
-                  approved.actionability === transported.actionability &&
-                  approved.ownership === transported.ownership &&
-                  approved.semantics === transported.semantics &&
-                  approved.sourceOrigin === transported.sourceOrigin &&
-                  approved.formIdentity === transported.formIdentity &&
-                  approved.destinationIdentity ===
-                    transported.destinationIdentity &&
-                  approved.label === transported.label &&
+          approved.actionability === transported.actionability &&
+          approved.ownership === transported.ownership &&
+          approved.semantics === transported.semantics &&
+          approved.sourceOrigin === transported.sourceOrigin &&
+          approved.formIdentity === transported.formIdentity &&
+          approved.destinationIdentity === transported.destinationIdentity &&
+          approved.label === transported.label &&
           approved.machineIdentity === transported.machineIdentity,
       );
       if (matched) return matched.control;

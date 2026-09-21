@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Revalidation observations are assembled into typed Rust routing requests here. */
 import {
   PasswordFormScopeKind,
   type PasswordFormObservation,

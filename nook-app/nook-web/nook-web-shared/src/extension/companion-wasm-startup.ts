@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, no-restricted-syntax -- The startup decoder narrows imported WASM module and transport values at their boundary. */
 export enum CompanionWasmStartupStage {
   Embedded = "embedded",
   ExtensionOrigin = "extension-origin",
@@ -346,14 +347,14 @@ export type CompanionWasmStartupRequest = {
 export class CompanionWasmStartup {
   private embeddedInitializationCanRetry(error: Error): boolean {
     if (error instanceof WebAssembly.CompileError) {
-      return true
+      return true;
     }
     return (
       error instanceof TypeError &&
       error.message
         .toLowerCase()
-        .includes('wasm code generation disallowed by embedder')
-    )
+        .includes("wasm code generation disallowed by embedder")
+    );
   }
 
   async initialize({

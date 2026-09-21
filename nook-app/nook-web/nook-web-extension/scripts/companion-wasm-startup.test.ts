@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/await-thenable, @typescript-eslint/no-unsafe-type-assertion -- Test doubles intentionally model synchronous and dynamically imported browser boundaries. */
 import { describe, expect, test } from 'bun:test'
 import { runInNewContext } from 'node:vm'
 import {

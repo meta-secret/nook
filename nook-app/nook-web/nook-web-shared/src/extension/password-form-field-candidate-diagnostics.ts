@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Diagnostic observations are assembled into generated Rust request records here. */
 export enum AuthenticationFieldCandidateDisposition {
   Accepted = "accepted",
   Rejected = "rejected",

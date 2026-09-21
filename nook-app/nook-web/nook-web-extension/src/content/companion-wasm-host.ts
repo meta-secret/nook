@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- Window messaging owns the callback shape and transports Rust-generated records. */
 import {
   COMPANION_WASM_RESOURCE_PATH,
   CompanionWasmHostDiagnosticOutcome,

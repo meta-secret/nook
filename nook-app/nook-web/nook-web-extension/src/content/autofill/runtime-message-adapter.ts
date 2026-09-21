@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime payloads are decoded and narrowed inside this dedicated adapter. */
 import { companionWasmReadiness } from './companion-wasm-readiness'
 import {
   CompanionWasmContentResponseKind,

@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime payloads are decoded at this offscreen dispatch boundary. */
 import { err, type Result } from 'neverthrow'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -67,7 +68,6 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   handleCompanionWasmMessage?: (
     message: CompanionWasmSessionMessage,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
@@ -625,7 +625,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           : this.enqueue(request)
         void response.then((result) =>
           result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )

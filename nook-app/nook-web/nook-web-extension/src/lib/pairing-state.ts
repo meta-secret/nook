@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax -- This dedicated storage decoder uses a predicate to narrow untrusted persisted state. */
 import { Schema } from 'effect'
 import type { ExtensionReadySetup as ExtensionReadySetupState } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 

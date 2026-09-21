@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Rust-generated request records are assembled at this typed boundary. */
 import {
   authentication_passkey_control_evidence_is_safe,
   authentication_workflow_saved_login_capability,

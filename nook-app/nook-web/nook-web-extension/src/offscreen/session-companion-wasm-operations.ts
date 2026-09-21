@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
 import { err, ok, type Result } from 'neverthrow'
 import {
   CompanionWasmContentResponseKind,

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import type {
   AuthenticationObservationBindingToken,
   AuthenticationPageObservationFactsBatch,
@@ -169,7 +170,7 @@ export type CompanionWasmSessionMessage =
         readonly transportability: readonly AuthenticationControlTransportability[];
         readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
         readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
-      readonly pageFacts: readonly AuthenticationPageObservationFacts[];
+        readonly pageFacts: readonly AuthenticationPageObservationFacts[];
       };
     }
   | {

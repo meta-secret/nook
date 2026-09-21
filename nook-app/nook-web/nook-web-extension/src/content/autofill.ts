@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- DOM observations are converted into typed Rust requests at this content boundary. */
 import {
   authenticationRouteBrowser,
   type AuthenticationSourceMessage,

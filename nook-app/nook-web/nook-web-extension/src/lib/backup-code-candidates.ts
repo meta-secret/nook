@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Candidate observations are assembled into a Rust-generated request at this adapter boundary. */
 import {
   extract_backup_code_candidates,
   type AuthenticationRecoveryCopyEvidence,
