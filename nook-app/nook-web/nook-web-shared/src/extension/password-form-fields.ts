@@ -635,26 +635,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     });
   }
 
-  private formlessAuthenticationAdvanceControls(
-    field: HTMLInputElement,
-  ): HTMLElement[] {
-    let container = field.parentElement;
-    while (container) {
-      const controls = Array.from(
-        container.querySelectorAll<HTMLElement>(loginAdvanceControlSelector),
-      );
-      const hasLoginAdvanceControl = controls.some((control) =>
-        this.cachedLabel(
-          "login-advance",
-          this.localActivationControlLabel(control),
-        ),
-      );
-      if (hasLoginAdvanceControl) return controls;
-      container = container.parentElement;
-    }
-    return [];
-  }
-
   private hasLoginContext(field: HTMLInputElement): boolean {
     return this.companionLoginContexts.get(field) === true;
   }
@@ -1047,6 +1027,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     container,
     field,
   }: TypeButtonPromotionScopeRequest): boolean {
+    if (!(field instanceof HTMLInputElement)) return false;
     const promotionRequest: TypeButtonPromotionScopeRequest = {
       container,
       field,

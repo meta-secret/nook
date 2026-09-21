@@ -1,4 +1,3 @@
-import type { BrowserRuntimeMessageValue } from './browser-runtime-message'
 import type {
   CompanionWasmRuntimeMessage,
   CompanionWasmSessionResponse,
@@ -17,9 +16,9 @@ export type CompanionWasmRuntimeDelivery =
   | { readonly kind: CompanionWasmRuntimeDeliveryKind.Unavailable }
 
 type CompanionWasmRuntimeResponse = {
-  readonly ok: boolean
-  readonly result?: BrowserRuntimeMessageValue
-}
+  readonly ok: true
+  readonly result: CompanionWasmSessionResponse
+} | { readonly ok: false }
 
 export function sendCompanionWasmRuntimeMessage(
   browser: typeof globalThis,
@@ -41,7 +40,7 @@ export function sendCompanionWasmRuntimeMessage(
           }
           resolve({
             kind: CompanionWasmRuntimeDeliveryKind.Delivered,
-            response: response.result as CompanionWasmSessionResponse,
+            response: response.result,
           })
         },
       )
