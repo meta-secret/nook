@@ -534,10 +534,12 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
 
     const response = await dispatcher.enqueueCompanionWasmMessage(message)
 
-    expect(response).toEqual({
-      kind: 'password-change',
-      generationProgress: { currentStep: 2, totalSteps: 3 },
-    })
+    expect(response).toEqual(
+      ok({
+        kind: 'password-change',
+        generationProgress: { currentStep: 2, totalSteps: 3 },
+      }),
+    )
     expect(handled).toEqual([
       CompanionWasmSessionMessageType.PasswordWorkflowActivity,
     ])
