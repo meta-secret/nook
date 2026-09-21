@@ -1,5 +1,4 @@
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
-import { companionWasmReady } from "./companion-ready";
 import {
   PasswordAuthenticationWorkflowFormSummary,
   type PasswordAuthenticationWorkflowFormSummaryDependencies,
@@ -9,7 +8,6 @@ import {
   authentication_control_transportable,
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
-  looks_like_one_time_code_auto_submit_signal,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
   AuthenticationAdvanceControlObservation,
@@ -94,7 +92,6 @@ export {
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
-void companionWasmReady;
 
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
@@ -430,7 +427,7 @@ class PasswordFormInteraction extends PasswordFormSummaryObservation {
           }),
         ),
       isPreferred: (signal) =>
-        looks_like_one_time_code_auto_submit_signal(signal),
+        passwordFieldDiscovery.looksLikeOneTimeCodeAutoSubmitSignal(signal),
     };
     const oneTimeCodeHandlerSignals =
       authenticationSubmissionControls.boundAuthenticationControlObservations(

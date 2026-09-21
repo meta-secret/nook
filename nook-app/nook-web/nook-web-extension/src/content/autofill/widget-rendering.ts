@@ -157,13 +157,13 @@ class AuthenticationWidgetRenderer {
     authenticatorEnrollmentInteraction.renderEnrollmentActions(nookTypedArgs1_0)
   }
 
-  renderWidget({
+  async renderWidget({
     snapshot,
     workflow,
     facts,
     loginMatches,
     vaultConnection,
-  }: RenderWidgetArgs): void {
+  }: RenderWidgetArgs): Promise<void> {
     if (this.ui.widgetState.dismissed) {
       workflowUi.removeWidget()
       return
@@ -182,7 +182,11 @@ class AuthenticationWidgetRenderer {
       vaultPresentation,
       facts,
     }
-    const workflowKey = authenticationWidgetWorkflowKey(workflowKeyRequest)
+    const workflowKey = await authenticationWidgetWorkflowKey(workflowKeyRequest)
+    if (!workflowKey) {
+      workflowUi.removeWidget()
+      return
+    }
     const currentApproval: AuthenticationWorkflowApproval = {
       workflowKey,
       facts,

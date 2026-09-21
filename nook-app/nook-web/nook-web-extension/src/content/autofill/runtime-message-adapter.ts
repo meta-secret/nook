@@ -1,4 +1,9 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import type {
+  CompanionWasmRuntimeMessage,
+  CompanionWasmSessionMessage,
+  CompanionWasmSessionResponse,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
 
@@ -99,6 +104,7 @@ type RuntimeMessageResponse =
   | WebsiteLoginSaveActionResponse
   | WebsiteLoginSaveOfferResponse
   | WebsiteLoginSavePendingResponse
+  | CompanionWasmSessionResponse
 
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
@@ -127,6 +133,7 @@ export type ExtensionRuntimeRequest =
   | WebsiteLoginSaveDismissMessage
   | WebsiteLoginSaveOfferMessage
   | WebsiteLoginSavePendingMessage
+  | CompanionWasmSessionMessage
 
 export type {
   AuthenticationWorkflowSnapshotResponse,
@@ -201,6 +208,32 @@ class AuthenticationRuntimeTransport {
       }
     } catch {
       return this.unavailable()
+    }
+  }
+
+  async sendCompanionWasmRuntimeMessage(
+    message: CompanionWasmSessionMessage,
+  ): Promise<RuntimeMessageDelivery<CompanionWasmSessionResponse>> {
+    const runtimeMessage: CompanionWasmRuntimeMessage = {
+      ...message,
+      origin: this.browser.location.origin,
+    }
+    const delivery = await this.sendRuntimeMessage(runtimeMessage)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    if (
+      !delivery.response ||
+      typeof delivery.response !== 'object' ||
+      !('ok' in delivery.response) ||
+      delivery.response.ok !== true ||
+      !('result' in delivery.response)
+    ) {
+      return this.unavailable()
+    }
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: delivery.response.result as CompanionWasmSessionResponse,
     }
   }
 

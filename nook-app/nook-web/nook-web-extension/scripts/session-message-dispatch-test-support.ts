@@ -19,6 +19,10 @@ import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
 } from '../src/lib/browser-runtime-message'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 beforeAll(async () => {
   await companionWasmReady
@@ -122,6 +126,7 @@ export {
   BrowserRuntimeMessageAdmissionKind,
   ExtensionSessionMessageDispatcher,
   ExtensionSessionMessageType,
+  CompanionWasmSessionMessageType,
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   decodeProviders,
@@ -132,6 +137,7 @@ export {
 }
 
 export type {
+  CompanionWasmSessionMessage,
   ExtensionSessionQueue,
   NookVaultManager,
   ParsedExtensionSessionTransportRequest,

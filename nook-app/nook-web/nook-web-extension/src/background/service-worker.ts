@@ -128,6 +128,11 @@ import {
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
 import { Effect, Either } from 'effect'
+import {
+  isCompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmSessionMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
@@ -469,6 +474,38 @@ class BackgroundRuntimeMessageRouter {
       return (
         schemaOutcome.responseChannel === RuntimeMessageResponseChannel.Open
       )
+    }
+
+    if (
+      'type' in message &&
+      typeof message.type === 'string' &&
+      isCompanionWasmSessionMessageType(message.type)
+    ) {
+      if (
+        !('origin' in message) ||
+        typeof message.origin !== 'string' ||
+        !extensionPairingIdentity.isAuthorizedWebsiteSender({
+          sender,
+          origin: message.origin,
+        })
+      ) {
+        sendResponse({ ok: false, reason: 'companion-wasm-forbidden-origin' })
+        return false
+      }
+      const sessionMessage = message as CompanionWasmRuntimeMessage
+      void extensionPairingIdentity
+        .sendSessionMessage(sessionMessage as CompanionWasmSessionMessage)
+        .then((delivery) => {
+          if (delivery.isErr()) {
+            sendResponse({ ok: false, reason: 'companion-wasm-unavailable' })
+            return
+          }
+          sendResponse({ ok: true, result: delivery.value })
+        })
+        .catch(() => {
+          sendResponse({ ok: false, reason: 'companion-wasm-failed' })
+        })
+      return true
     }
 
     if (

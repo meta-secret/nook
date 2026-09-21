@@ -11,14 +11,13 @@ import {
 import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
 import { pageQrCapture } from '../../lib/page-qr-capture'
 import {
-  authentication_page_observation_facts_match_binding,
   AuthenticationWorkflowSnapshotResponseKind,
-  bind_authentication_page_observation_facts,
   type AuthenticationWorkflowAction,
   type AuthenticationObservationBindingToken,
   type AuthenticationPageObservationFacts,
   type AuthenticationPageObservationFactsBatch,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowSnapshotMessageType } from '../../lib/auth-workflow-messages'
 import {
   RuntimeMessageDeliveryKind,
@@ -217,11 +216,9 @@ export class RevalidatedAuthenticationAction {
     const approvedFactsBatch: AuthenticationPageObservationFactsBatch = {
       observations: [approvedObservation.facts],
     }
-    let approvedDomObservationBindingToken: AuthenticationObservationBindingToken
-    try {
-      approvedDomObservationBindingToken =
-        bind_authentication_page_observation_facts(approvedFactsBatch)
-    } catch {
+    const approvedDomObservationBindingToken =
+      await this.bindObservationFacts(approvedFactsBatch)
+    if (!approvedDomObservationBindingToken) {
       return rejected()
     }
     const message: Parameters<
@@ -253,20 +250,18 @@ export class RevalidatedAuthenticationAction {
     const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
       observations: [delivery.response.selectedFacts.facts],
     }
-    let selectedObservationBindingToken: AuthenticationObservationBindingToken
-    try {
-      selectedObservationBindingToken =
-        bind_authentication_page_observation_facts(selectedFactsBatch)
-    } catch {
+    const selectedObservationBindingToken =
+      await this.bindObservationFacts(selectedFactsBatch)
+    if (!selectedObservationBindingToken) {
       return rejected()
     }
     if (
       observationBinding.kind ===
         AuthenticationObservationBindingKind.Required &&
-      !authentication_page_observation_facts_match_binding(
+      !(await this.matchObservationFactsBinding(
         observationBinding.token,
         selectedFactsBatch,
-      )
+      ))
     ) {
       return rejected()
     }
@@ -278,10 +273,10 @@ export class RevalidatedAuthenticationAction {
     }
     if (
       currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
-      !authentication_page_observation_facts_match_binding(
+      !(await this.matchObservationFactsBinding(
         approvedDomObservationBindingToken,
         currentFactsBatch,
-      ) ||
+      )) ||
       approvedObservation.controlIdentities.compare(
         currentObservation.controlIdentities,
       ) === AuthenticationControlIdentityComparison.Changed ||
@@ -293,16 +288,9 @@ export class RevalidatedAuthenticationAction {
       if (!approvalIsActive()) return false
       const postActionObservation = observeCurrentFacts()
       if (!postActionObservation) return false
-      const postActionFactsBatch: AuthenticationPageObservationFactsBatch = {
-        observations: [postActionObservation.facts],
-      }
       if (
         postActionObservation.selectedIndex !==
           approvedObservation.selectedIndex ||
-        !authentication_page_observation_facts_match_binding(
-          approvedDomObservationBindingToken,
-          postActionFactsBatch,
-        ) ||
         approvedObservation.controlIdentities.compare(
           postActionObservation.controlIdentities,
         ) === AuthenticationControlIdentityComparison.Changed
@@ -331,13 +319,59 @@ export class RevalidatedAuthenticationAction {
   }
   static requiredAuthenticationObservationBinding(
     facts: AuthenticationPageObservationFacts,
-  ): AuthenticationObservationBinding {
+  ): Promise<AuthenticationObservationBinding> {
     const batch: AuthenticationPageObservationFactsBatch = {
       observations: [facts],
     }
-    return {
-      kind: AuthenticationObservationBindingKind.Required,
-      token: bind_authentication_page_observation_facts(batch),
+    return authenticationRuntimeTransport
+      .sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts,
+        payload: { facts: batch },
+      })
+      .then((delivery) => {
+        if (
+          delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+          typeof delivery.response !== 'string'
+        ) {
+          return { kind: AuthenticationObservationBindingKind.Unbound }
+        }
+        return {
+          kind: AuthenticationObservationBindingKind.Required,
+          token: delivery.response,
+        }
+      })
+  }
+
+  private async bindObservationFacts(
+    facts: AuthenticationPageObservationFactsBatch,
+  ): Promise<AuthenticationObservationBindingToken | false> {
+    const delivery =
+      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts,
+        payload: { facts },
+      })
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      typeof delivery.response !== 'string'
+    ) {
+      return false
     }
+    return delivery.response
+  }
+
+  private async matchObservationFactsBinding(
+    binding: AuthenticationObservationBindingToken,
+    facts: AuthenticationPageObservationFactsBatch,
+  ): Promise<boolean> {
+    const delivery =
+      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding,
+        payload: { binding, facts },
+      })
+    return (
+      delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+      typeof delivery.response === 'boolean' &&
+      delivery.response
+    )
   }
 }

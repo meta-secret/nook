@@ -134,7 +134,7 @@ class AuthenticatorInteraction {
       this.ui.widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
     let releasedObservationBinding: AuthenticationObservationBinding =
-      RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+      await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
         approval.facts,
       )
     const releaseRequest: ConstructorParameters<

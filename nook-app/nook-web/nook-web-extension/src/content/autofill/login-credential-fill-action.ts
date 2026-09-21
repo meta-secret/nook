@@ -67,7 +67,7 @@ export class LoginCredentialFillAction {
       return false
     }
     let releasedObservationBinding: AuthenticationObservationBinding =
-      RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+      await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
         approval.facts,
       )
     const revalidationRequest1: ConstructorParameters<

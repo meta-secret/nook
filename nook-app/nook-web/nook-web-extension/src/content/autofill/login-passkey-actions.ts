@@ -15,11 +15,11 @@ import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowActivity,
   authentication_workflow_activity_progress,
-  project_password_workflow_activity,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   LoginPickerKind,
   WidgetControlDisposition,
@@ -320,15 +320,28 @@ class LoginPasskeyInteraction {
     if (widgetState.busy) return
     widgetState.busy = true
     continueButton.disabled = true
-    const passwordWorkflowActivityRequest1: Parameters<
-      typeof project_password_workflow_activity
-    >[0] = {
+    const passwordWorkflowActivityRequest1 = {
       currentPasswordFieldCount: workflow.summary.currentPasswordFieldCount,
       newPasswordFieldCount: workflow.summary.newPasswordFieldCount,
     }
-    const activity = project_password_workflow_activity(
-      passwordWorkflowActivityRequest1,
-    )
+    const activityDelivery =
+      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.PasswordWorkflowActivity,
+        payload: passwordWorkflowActivityRequest1,
+      })
+    if (activityDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      continueButton.disabled = false
+      return
+    }
+    const activity = activityDelivery.response
+    if (
+      typeof activity !== 'object' ||
+      !('generationProgress' in activity) ||
+      !('kind' in activity)
+    ) {
+      continueButton.disabled = false
+      return
+    }
     const flightProgressRequest10: Parameters<
       typeof workflowUi.setFlightProgress
     >[0] = {
@@ -354,7 +367,7 @@ class LoginPasskeyInteraction {
       WidgetControlDisposition.Active
     try {
       let releasedObservationBinding: AuthenticationObservationBinding =
-        RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+        await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
       const revalidationRequest2: ConstructorParameters<
@@ -576,7 +589,7 @@ class LoginPasskeyInteraction {
       WidgetControlDisposition.Active
     try {
       const observationBinding =
-        RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+        await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
       const revalidationRequest4: ConstructorParameters<

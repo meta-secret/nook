@@ -7,12 +7,10 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  authentication_enrollment_workflow_match,
-  authentication_workflow_pilot_presentation_capability,
   AuthenticationWorkflowSnapshotResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   passwordFieldDiscovery,
@@ -193,6 +191,7 @@ class AuthenticationScanRenderLifecycle {
       this.recordDiagnostic(diagnostic)
       return AuthenticationScanOutcome.Watching
     }
+    await passwordFieldDiscovery.prepareCompanionClassification(document)
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHints =
@@ -219,23 +218,44 @@ class AuthenticationScanRenderLifecycle {
       (enrollmentHints.qr || enrollmentHints.backupCodes) &&
       workflowForms.length === 0
     ) {
-      const enrollmentMatch = authentication_enrollment_workflow_match(
-        enrollmentHints.qr,
-        recoveryCopy,
-        passwordFieldDiscovery.pageHasManualCheckpoint(document),
-      )
+      const enrollmentMatchDelivery =
+        await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+          type: CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch,
+          payload: {
+            authenticatorSetupHint: enrollmentHints.qr,
+            backupCodesCopy: recoveryCopy,
+            manualCheckpointPresent:
+              passwordFieldDiscovery.pageHasManualCheckpoint(document),
+          },
+        })
       if (
-        enrollmentMatch.kind !== 'matched' ||
-        authentication_workflow_pilot_presentation_capability(
-          enrollmentMatch.snapshot,
-        ) !== 'propose-action'
+        enrollmentMatchDelivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+        typeof enrollmentMatchDelivery.response !== 'object' ||
+        !('kind' in enrollmentMatchDelivery.response)
       ) {
+        removeScannedWidget()
+        return AuthenticationScanOutcome.Removed
+      }
+      const enrollmentMatch = enrollmentMatchDelivery.response
+      if (enrollmentMatch.kind !== 'matched') {
         const diagnostic: AuthenticationDiagnosticObservation = {
           gate: AuthenticationDiagnosticGate.RustAdmission,
           outcome: AuthenticationDiagnosticGateOutcome.Rejected,
           candidateCount: 0,
         }
         this.recordDiagnostic(diagnostic)
+        removeScannedWidget()
+        return AuthenticationScanOutcome.Removed
+      }
+      const enrollmentCapability =
+        await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+          type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability,
+          payload: { snapshot: enrollmentMatch.snapshot },
+        })
+      if (
+        enrollmentCapability.kind === RuntimeMessageDeliveryKind.Unavailable ||
+        enrollmentCapability.response !== 'propose-action'
+      ) {
         removeScannedWidget()
         return AuthenticationScanOutcome.Removed
       }
@@ -350,9 +370,14 @@ class AuthenticationScanRenderLifecycle {
     }
     const { snapshot } = verdict
     const selected = classifiedWorkflows[snapshot.observationIndex]
+    const pilotCapability =
+      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability,
+        payload: { snapshot },
+      })
     if (
-      authentication_workflow_pilot_presentation_capability(snapshot) ===
-      'hidden'
+      pilotCapability.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      pilotCapability.response === 'hidden'
     ) {
       const diagnostic: AuthenticationDiagnosticObservation = {
         gate: AuthenticationDiagnosticGate.RustAdmission,
@@ -385,7 +410,7 @@ class AuthenticationScanRenderLifecycle {
       loginMatches,
       vaultConnection,
     }
-    authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
+    await authenticationWidgetRenderer.renderWidget(nookTypedArgs0_1)
     const diagnostic: AuthenticationDiagnosticObservation = {
       gate: AuthenticationDiagnosticGate.WidgetRendering,
       outcome: AuthenticationDiagnosticGateOutcome.Rendered,
@@ -593,7 +618,7 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
-void companionWasmReady.then(async () => {
+void (async () => {
   if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
     return
   }
@@ -649,4 +674,4 @@ void companionWasmReady.then(async () => {
     }
     window.addEventListener(eventName, handleViewportChange, options)
   }
-})
+})()
