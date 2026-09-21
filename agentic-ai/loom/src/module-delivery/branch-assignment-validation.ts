@@ -1,4 +1,4 @@
-import { isAbsolute } from 'node:path';
+import { isAbsolute, normalize } from 'node:path';
 
 import {
   CanonicalFeatureBranchContract,
@@ -40,6 +40,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
       if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
       const workspacePath = `$.nodes[${index}].workspace`;
       const branchSegments = node.workspace.workerBranch.split('/');
+      const normalizedWorktreePath = normalize(node.workspace.worktreePath);
       try {
         CanonicalWorkerBranchContract.parse(node.workspace.workerBranch);
       } catch {
@@ -62,7 +63,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
         });
       if (
         !isAbsolute(node.workspace.worktreePath) ||
-        worktreePaths.has(node.workspace.worktreePath)
+        worktreePaths.has(normalizedWorktreePath)
       )
         this.addIssue({
           state,
@@ -70,7 +71,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
           message: 'worktreePath must be a unique absolute path.',
         });
       workerBranches.add(node.workspace.workerBranch);
-      worktreePaths.add(node.workspace.worktreePath);
+      worktreePaths.add(normalizedWorktreePath);
     }
   }
 

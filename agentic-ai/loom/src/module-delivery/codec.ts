@@ -230,13 +230,21 @@ export class ModuleDeliveryPlanSchema {
     const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
       fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
     );
+    let featureBranch: string;
+    try {
+      featureBranch = CanonicalFeatureBranchContract.parse(
+        fields.string('featureBranch'),
+      );
+    } catch {
+      ModuleDeliveryPlanSchema.fail(
+        '$.featureBranch: feature branch is not canonical.',
+      );
+    }
     const currentPlan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       baseBranch: fields.string('baseBranch'),
       generation,
-      featureBranch: CanonicalFeatureBranchContract.parse(
-        fields.string('featureBranch'),
-      ),
+      featureBranch,
       maxAgentDepth,
       maxAttempts,
       parentOwnedResources,
