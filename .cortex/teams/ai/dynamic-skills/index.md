@@ -1,7 +1,7 @@
 # Project Skill Registry
 
-Generic practices are selected through [Meta-Cortex composition](../../../../.meta-cortex/skill-composition.md).
-The retained local cards own Nook tooling, product, or delivery details.
+Generic practices are selected through the responsible Meta-Cortex role and
+its skills. The retained local cards own Nook tooling, product, or delivery details.
 
 
 This directory is the canonical project skill registry for Nook agents. The
@@ -31,13 +31,13 @@ catalogs the linked authorities without copying their policies.
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
-- **[function-ownership.md](../../../../.meta-cortex/skills/dev/coding-skill/practices/function-ownership.md)**
+- **[function-ownership.md](../../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/function-ownership.md)**
   - Purpose: **P1 / primary action-structure rule**
     - Require every authored function in every implementation language to
       belong to a meaningful owner.
     - Reject free functions, module-only ownership, and catch-all utility
       containers.
-- **[domain-api-integrity.md](../../../../.meta-cortex/skills/dev/coding-skill/practices/domain-api-integrity.md)**
+- **[domain-api-integrity.md](../../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/domain-api-integrity.md)**
   - Purpose: **P1 / universal domain API rule**
     - Require named domain types, concrete values, one-parameter request APIs,
       validated capabilities, typed failures, and exhaustive states.

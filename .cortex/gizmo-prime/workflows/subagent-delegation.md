@@ -2,20 +2,13 @@
 
 ## Required actions
 
-- Use the upstream agent workflow supplied by Nook's integration contract.
-- Prime sends the mission to the single Team Gizmo, the coordinator for one
-  functional team.
-  - Team Gizmo selects upstream roles with Nook context from the supplied
-    catalogs.
-  - There is no per-team coordinator launch.
-- Preserve Nook's team identity, bounded file scope, issued worktree,
-  dependency order, and acceptance evidence in each assignment.
-- Keep child branches private.
-- Team Gizmo owns shared-branch sequencing.
-- Integrate complete scoped commits serially into the shared canonical feature
-  branch.
-- PR Lifecycle receives GitHub operations through Team Gizmo under Prime's
-  authority.
+- Use [upstream Team Gizmo](../../../.meta-cortex/agents/teams/gizmo/AGENTS.md)
+  for assignment and coordination.
+- Use the upstream [integration agent](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
+  for local branches, worktrees, integration, validation, and cleanup.
+- Preserve Nook's functional team identity, bounded file scope, dependency
+  order, product constraints, and acceptance evidence in each assignment.
+- Send authorized GitHub operations through Team Gizmo to PR Lifecycle.
 
 **Prohibited:** launch a second coordinator because one task needs security review.
 
@@ -23,5 +16,6 @@
 
 ## Prohibited actions
 
-Do not use repository journals as a dispatch mechanism. The active host provides
-agent launch and handoff. Explicit user limits on delegation remain binding.
+Do not duplicate the upstream local feature procedure in Nook wrappers. Do not
+use repository journals as a dispatch mechanism. The active host provides agent
+communication. Explicit user limits on delegation remain binding.

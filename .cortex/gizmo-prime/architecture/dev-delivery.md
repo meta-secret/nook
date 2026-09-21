@@ -17,8 +17,9 @@ model](multiagent-delivery-diagrams.md) before using this contract.
 
 - Gizmo Prime remains the mission/root coordinator.
 - The Feature Gizmo owns implementation, repair, readiness, and final delivery.
-- The single Team Gizmo dispatches bounded Team Agents and integrate their commits into the
-  canonical feature branch.
+- The single Team Gizmo coordinates bounded workers.
+- The upstream integration agent owns local workspace setup, branch integration,
+  combined validation, and cleanup.
 - Team Gizmo (Delivery Pipeline context) routes GitHub mechanics to PR Lifecycle Agent.
 - PR Lifecycle Agent pushes the canonical feature branch, creates or updates
   its pull request, observes checks, performs the authorized squash merge, and
@@ -31,11 +32,10 @@ model](multiagent-delivery-diagrams.md) before using this contract.
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 `git fetch --prune origin`. A fetch failure fails the run closed.
 
-Prime resolves the fetched `origin/main` commit and records it as
-`originMainSha`. Every new canonical feature branch and feature worktree starts
-from that exact commit. Child worktrees start from their current parent
-frontier. No local `dev`, remote `dev`, previously pinned base, or other branch
-may substitute for the fresh `origin/main` base.
+Prime selects the freshly fetched `origin/main` as the base branch supplied to
+the upstream local feature workflow. Every new canonical feature branch starts
+from that base. No local `dev`, remote `dev`, previously pinned base, or other
+branch may substitute for it.
 
 The canonical feature branch name is workflow authority. Observed base and head
 SHAs are delivery evidence. Before review, PR mutation, check observation, or
@@ -47,10 +47,9 @@ follows the latest head and reruns the affected checks.
 
 ### Feature implementation
 
-- Use one canonical feature branch and worktree per feature.
-- Keep Team Gizmo and leaf branches private.
-- Preserve bounded child commits while integrating them into the feature
-  branch.
+- Apply the upstream [local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md).
+- Use one canonical feature branch for the feature.
+- Keep worker branches local.
 - Author meaningful Rust behavior tests and targeted web flow tests with the
   implementation.
 - Permit only the scoped local feedback authorized by the owning language
@@ -84,7 +83,7 @@ approval, or review count does not block the owning Feature Gizmo.
 6. Verify that GitHub reports the pull request as merged.
 7. Verify that `origin/main` contains the squash result.
 8. Delete the remote feature branch after the merge.
-9. Remove private child worktrees and local child branches after integration.
+9. Confirm local worker cleanup through the upstream integration agent.
 
 The merge method must keep `main` linear. Squash merge is the canonical method.
 Repository settings must allow squash merging, disable merge commits, and

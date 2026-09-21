@@ -3,9 +3,9 @@
 ## Delivery and ownership
 
 Use [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md) and the
-[dev contract](../../../gizmo-prime/architecture/dev-delivery.md). Each feature Gizmo
-owns a branch and isolated Team Agent children. The AI worker returns scoped
-commits to its feature Gizmo. The worker does not publish or promote branches.
+[dev contract](../../../gizmo-prime/architecture/dev-delivery.md). Use the
+upstream integration agent for local workspaces, branch integration, and cleanup.
+AI workers do not publish or promote branches.
 
 ## Implementation procedure
 
@@ -17,14 +17,14 @@ commits to its feature Gizmo. The worker does not publish or promote branches.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Commit the complete scoped iteration.
-10. Return authored tests and interface evidence to Gizmo.
-11. Have Gizmo push the feature and request required PR-check execution through
+9. Finish the scoped worker branch through the upstream local feature workflow.
+10. Return authored tests and interface evidence to Team Gizmo.
+11. Have the integration agent merge the finished worker branch and validate
+    the combined feature.
+12. Have Gizmo push the feature and request required PR-check execution through
     the PR Lifecycle Agent.
-12. Route corrections through the responsible team and repeat compilation.
-13. After acceptance, Gizmo authorizes the PR Lifecycle Agent's serialized local
-    integration.
-14. Hand publication, full slow checks, and promotion to the Feature Gizmo.
+13. Route corrections through the responsible team and repeat validation.
+14. Hand publication and full slow checks to the Feature Gizmo.
 
 ## Package boundaries
 

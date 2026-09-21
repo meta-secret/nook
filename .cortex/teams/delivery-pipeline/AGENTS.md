@@ -1,7 +1,7 @@
 # Delivery Pipeline Team Contract
 
 This is a Nook functional context. The single Team Gizmo supplies it alongside
-Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+Meta-Cortex roles and their selected skills. Generic upstream rules take precedence
 over legacy generic wording here; Nook product and delivery requirements remain.
 
 

@@ -14,6 +14,7 @@ flowchart LR
     Team --> TS["TypeScript developer + Nook context"]
     Team --> Writer["Tech writer + Nook context"]
     Team --> Security["Security agent + Nook context"]
+    Team --> Integration["Upstream integration agent"]
     Team --> Operations["Nook SRE and PR Lifecycle"]
 ```
 
@@ -26,12 +27,13 @@ combined evidence to Prime. Project-only roles remain until upstream covers them
 
 Follow the [feature-delivery contract](dev-delivery.md) for exact Nook stages.
 For authorized full delivery, Prime starts a feature from freshly fetched main.
-Children work in issued scopes. Team Gizmo integrates their commits serially.
-PR Lifecycle publishes only the canonical feature branch under Prime's authority.
+Workers operate in assigned scopes. The upstream integration agent merges their
+branches into the feature branch and validates the combined result. PR Lifecycle
+publishes only the canonical feature branch under Prime's authority.
 
 ```mermaid
 flowchart LR
-    Base["Fresh origin/main"] --> Work["Bounded implementation and integration"]
+    Base["Fresh origin/main"] --> Work["Upstream local feature integration"]
     Work --> PR["Feature PR to main"]
     PR --> Checks["Required checks for current head"]
     Checks --> Decision{"All green?"}

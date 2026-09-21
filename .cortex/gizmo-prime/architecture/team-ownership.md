@@ -88,8 +88,8 @@ context supplies Nook's operation contracts, not an additional coordinator.
 
 Root manifests, lockfiles, generated bindings, registries, and shared command
 outputs have one assigned writer. Sequence overlapping scopes and dependencies.
-Attribute pre-existing edits before assigning a scope. Each child writes only in
-its issued worktree. Serialize commit integration into the feature branch.
+Attribute pre-existing edits before assigning a scope. Supply shared-file
+dependencies to Team Gizmo and the upstream integration agent for ordered work.
 
 **Prohibited:** give two simultaneous writers the same generated binding output.
 

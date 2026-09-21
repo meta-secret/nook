@@ -83,7 +83,7 @@ Model text.
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
   expect(markdown).toContain('meta-cortex-integration.md');
-  expect(markdown).toContain('../.meta-cortex/skill-composition.md');
+  expect(markdown).toContain('../.meta-cortex/agents/teams/gizmo/AGENTS.md');
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });
@@ -365,7 +365,9 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(root.indexOf('CIRCUIT-BREAKER.md')).toBeLessThan(
     root.indexOf('../.meta-cortex/AGENTS.md'),
   );
-  expect(root).toContain('../.meta-cortex/skill-composition.md');
+  expect(root).toContain(
+    '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+  );
   expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
   expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
   expect(team).toContain('There is one Team Gizmo per feature.');

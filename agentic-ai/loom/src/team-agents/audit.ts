@@ -437,7 +437,7 @@ const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',
   '## Team worker contract',
   '../.meta-cortex/AGENTS.md',
-  '../.meta-cortex/skill-composition.md',
+  '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
   '../.meta-cortex/meta-cortex.toml',
   'gizmo-prime/team-gizmo/AGENTS.md',
   'meta-cortex-integration.md',

@@ -30,13 +30,10 @@ Analyze in this order:
 
 Keep knowledge routing separate from write authorization. Invoke the registered
 semantic role through the active harness as read-only against an immutable
-snapshot of the exact accepted baseline. A separately authorized
-implementation worker applies accepted findings in an isolated child worktree
-based on the parent feature worktree's exact baseline. The worker returns the
-exact commit for its iteration and focused evidence. The delivery parent
-reports its ordinary status and evidence, then verifies and integrates that
-commit into the parent worktree before deciding whether to continue. Follow the
-root [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
+snapshot of the exact accepted baseline. Team Gizmo assigns accepted implementation findings to a
+worker. The upstream integration agent supplies the workspace and integrates
+the finished task branch. Follow the root
+[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).
 
 ## Scope
 
@@ -68,13 +65,9 @@ Do not use this skill to:
 3. Select the smallest allowed authority and skill context for the task.
 4. Verify the role contract and selection against the exact source commit.
 5. Return findings directly through the harness.
-6. Let a separately authorized implementation worker apply accepted findings in
-   an isolated child worktree based on the parent's exact baseline.
-7. Require the worker to return its exact iteration commit, status, and focused
-   evidence.
-8. Let the delivery parent verify and integrate that commit into the parent
-   worktree.
-9. Let the delivery parent verify acceptance and decide continuation.
+6. Let Team Gizmo assign accepted findings to an implementation worker.
+7. Let the upstream integration agent integrate the finished worker branch.
+8. Let Team Gizmo review combined validation and decide continuation.
 
 ## Validation
 

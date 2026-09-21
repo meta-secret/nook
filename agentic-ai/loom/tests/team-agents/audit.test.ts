@@ -428,10 +428,10 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects removal of the Meta-Cortex composition bindings', async () => {
+  test('rejects removal of the Meta-Cortex role bindings', async () => {
     const invariants = [
       '../.meta-cortex/AGENTS.md',
-      '../.meta-cortex/skill-composition.md',
+      '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
       '../.meta-cortex/meta-cortex.toml',
       'gizmo-prime/team-gizmo/AGENTS.md',
       'meta-cortex-integration.md',

@@ -121,20 +121,15 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
     assert!(
         agent_map.contains("gizmo-prime/dynamic-skills/agent-feature-ownership.md")
-            && normalized_agent_map.contains("Another active agent's work is read-only"),
+            && normalized_agent_map.contains("Another active task remains read-only"),
         "root routing must preserve the universal ownership boundary and link its authority"
     );
 
     for required in [
-        "Treat every other active task as read-only",
-        "explicit parent feature/integration worktree",
-        "one child worktree per Team Agent task from the parent frontier",
-        "bounded task/attempt identity",
-        "committed handoff before parent integration",
-        "parent-owned integration/PR policy",
-        "Preserve dependency order",
-        "Grant one commit turn at a time",
-        "Team Agent lifecycle service, scheduler, or Git-state machinery",
+        "local feature workflow",
+        "workspace setup, worker completion, branch integration, and cleanup",
+        "functional ownership and product acceptance requirements",
+        "GitHub PR policy separate",
         "persistent Delivery Pipeline or PR Lifecycle Agent service, scheduler, or notification journal",
     ] {
         assert!(
@@ -157,9 +152,10 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         "pull-request workflow must reject foreign task mutation"
     );
     assert!(
-        ownership_skill.contains("replying to or resolving its review threads")
-            && ownership_skill.contains("closing, reopening, or merging its pull request")
-            && ownership_skill.contains("Recheck ownership before every remote mutation")
+        ownership_skill.contains("reply to or resolve another task's review threads")
+            && ownership_skill.contains("Do not close,")
+            && ownership_skill.contains("reopen, or merge its pull request")
+            && ownership_skill.contains("Recheck task ownership before each push")
             && ownership_skill.contains("prompt-backed run requires the `continuing_owner`"),
         "agent feature ownership skill must cover PR and review mutations"
     );

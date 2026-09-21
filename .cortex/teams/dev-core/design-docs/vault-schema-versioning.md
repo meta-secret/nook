@@ -11,7 +11,7 @@ The immutable event log is the vault source of truth. Projection YAML is a
 derived, browser-local cache and is never imported as an event source.
 
 This vault-specific contract follows the repository-wide
-[domain API integrity rule](../../../../.meta-cortex/skills/dev/coding-skill/practices/domain-api-integrity.md).
+[domain API integrity rule](../../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/domain-api-integrity.md).
 
 ## Version axes
 
