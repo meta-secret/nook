@@ -208,7 +208,6 @@ export async function launchPairedPinExtension(
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })
-
   return {
     context,
     extensionId,
@@ -234,6 +233,9 @@ export async function saveVaultLogin(
   await expect(
     vaultPage.getByTestId('vault-group-login').getByTestId('secret-row').last(),
   ).toBeVisible({ timeout: 15_000 })
+  const context = vaultPage.context()
+  const extensionId = new URL((await getServiceWorker(context)).url()).host
+  await unlockExtensionPopupPin(context, extensionId)
 }
 
 export async function saveVaultAuthenticator(
@@ -254,6 +256,9 @@ export async function saveVaultAuthenticator(
       .getByTestId('secret-row')
       .last(),
   ).toBeVisible({ timeout: 15_000 })
+  const context = vaultPage.context()
+  const extensionId = new URL((await getServiceWorker(context)).url()).host
+  await unlockExtensionPopupPin(context, extensionId)
 }
 
 /** Force-lock the extension device session (same path as idle expiry). */

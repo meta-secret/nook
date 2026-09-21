@@ -296,6 +296,39 @@ describe('classified login activation', () => {
     })
   })
 
+  test('activates the approved nested Google identifierNext control', () => {
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view">
+        <label for="identifierId">Email or phone</label>
+        <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" />
+        <input name="hiddenPassword" type="password" hidden />
+        <div id="identifierNext">
+          <button type="button">Next</button>
+        </div>
+        <button type="button">Forgot email?</button>
+        <button type="button">Create account</button>
+      </main>
+    `
+    let advanced = false
+    document
+      .querySelector('#identifierNext button')
+      ?.addEventListener('click', () => {
+        advanced = true
+      })
+    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
+    if (!workflow) throw new Error('expected Google identifier workflow')
+
+    expect(
+      didSubmit({
+        kind: PasswordFormQueryKind.Scoped,
+        root: workflow.root,
+        formScope: workflow.formScope,
+      }),
+    ).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
   test('does not activate an external GET submitter after filling passwords', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

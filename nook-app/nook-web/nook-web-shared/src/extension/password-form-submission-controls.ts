@@ -626,8 +626,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       hasAuthenticationPassword,
     };
     const legacyActuationIsSafe =
+      !(typeof chrome === "object" && Boolean(chrome.runtime?.id)) &&
       this.canRequestImplicitAuthenticationSubmit(capabilityRequest);
-    if (!legacyActuationIsSafe && !alternativeActuationIsSafe()) {
+    const alternativeIsSafe = alternativeActuationIsSafe();
+    if (!legacyActuationIsSafe && !alternativeIsSafe) {
       return FormSubmissionResult.NotObserved;
     }
     const requestedApproval = approval;

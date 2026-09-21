@@ -352,15 +352,22 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     try {
       await saveVaultLogin(
         paired.vaultPage,
-        mockAuth.origin,
+        'https://x.com',
         'alice@nook.test',
         'extension-fill-password',
       )
 
       const page = await paired.context.newPage()
-      await page.goto(`${mockAuth.origin}/i/flow/login`)
+      await page.route('https://x.com/**', async (route) => {
+        const requestedUrl = new URL(route.request().url())
+        const localResponse = await page.request.get(
+          `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+        )
+        await route.fulfill({ response: localResponse })
+      })
+      await page.goto('https://x.com/i/flow/login')
       await expect(page).toHaveURL(
-        `${mockAuth.origin}/i/jf/onboarding/web?mode=login`,
+        'https://x.com/i/jf/onboarding/web?mode=login',
       )
       await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
         'x-identifier',

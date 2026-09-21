@@ -17,6 +17,8 @@ import type {
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationPageObservationFacts,
   AuthenticationDisplayProgress,
+  ApprovedAuthenticationWorkflowDecision,
+  AuthenticationImplicitSubmitActuationObservation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -38,6 +40,7 @@ export enum CompanionWasmSessionMessageType {
   DecodeAuthenticationWorkflowRuntimeResponse = "nook:extension-session-decode-authentication-workflow-runtime-response",
   DecodeContentRuntimeResponse = "nook:extension-session-decode-content-runtime-response",
   EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
+  RevalidateApprovedAuthenticationWorkflow = "nook:extension-session-revalidate-approved-authentication-workflow",
 }
 
 export enum CompanionWasmLabelKind {
@@ -171,6 +174,14 @@ export type CompanionWasmSessionMessage =
         readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
         readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
         readonly pageFacts: readonly AuthenticationPageObservationFacts[];
+        readonly implicitSubmissions: readonly AuthenticationImplicitSubmitActuationObservation[];
+      };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow;
+      readonly payload: {
+        readonly approved: AuthenticationPageObservationFacts;
+        readonly live: AuthenticationPageObservationFactsBatch;
       };
     }
   | {
@@ -197,11 +208,15 @@ export type CompanionWasmSessionResponse =
   | WebsiteLoginSavePendingResponse
   | boolean
   | {
+      readonly revalidationDecision: ApprovedAuthenticationWorkflowDecision;
+    }
+  | {
       readonly transportability: readonly boolean[];
       readonly advanceControls: readonly boolean[];
       readonly passkeyCandidates: readonly boolean[];
       readonly pageFactsPriorities: readonly number[];
       readonly activityProgress: readonly AuthenticationDisplayProgress[];
+      readonly implicitSubmissions: readonly boolean[];
     }
   | {
       readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;

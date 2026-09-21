@@ -11,7 +11,6 @@ import {
 import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowActivity,
-  authentication_workflow_activity_progress,
   AuthenticatorCodeResponseKind,
   AuthenticatorPickerOpenResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -50,6 +49,10 @@ import {
   RevalidatedAuthenticationActResultKind,
   type AuthenticationObservationBinding,
 } from './workflow-revalidation'
+import {
+  authenticationActivityProgress,
+  authentication_workflow_activity_progress,
+} from './authentication-activity-progress'
 
 type FillAuthenticatorCodeArgs = {
   account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'> & {
@@ -275,6 +278,7 @@ class AuthenticatorInteraction {
     ) {
       return
     }
+    if (!authenticationActivityProgress.prepare()) return
     this.ui.widgetState.busy = true
     continueButton.disabled = true
     const nookTypedArgs0_8: Parameters<typeof workflowUi.setFlightProgress>[0] =
@@ -429,8 +433,9 @@ class AuthenticatorInteraction {
         return
       }
       if (
-        authenticationWorkflowUi.approvedWorkflowDisposition(workflow) !==
-        LiveAuthenticationWorkflowDisposition.Current
+        (await authenticationWorkflowUi.approvedWorkflowDisposition(
+          workflow,
+        )) !== LiveAuthenticationWorkflowDisposition.Current
       ) {
         this.cancelAuthenticatorPickerRequest(requestId)
         return

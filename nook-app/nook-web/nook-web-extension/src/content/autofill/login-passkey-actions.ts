@@ -224,7 +224,7 @@ class LoginPasskeyInteraction {
       return
     }
     if (
-      authenticationWorkflowUi.approvedWorkflowDisposition(workflow) !==
+      (await authenticationWorkflowUi.approvedWorkflowDisposition(workflow)) !==
       LiveAuthenticationWorkflowDisposition.Current
     ) {
       this.cancelLoginPickerRequest(requestId)

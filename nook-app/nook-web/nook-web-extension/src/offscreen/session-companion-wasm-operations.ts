@@ -29,6 +29,7 @@ import {
   authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
   authentication_workflow_activity_progress,
+  authentication_implicit_submit_actuation_is_safe,
   bind_authentication_page_observation_facts,
   has_login_context,
   looks_like_email_verification_body,
@@ -41,7 +42,9 @@ import {
   parse_page_input_type,
   is_nook_vault_app_url,
   project_password_workflow_activity,
+  revalidate_approved_authentication_workflow,
   strongest_authentication_username_evidence,
+  can_activate_authentication_route_control,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   SessionOperationFailure,
@@ -217,6 +220,32 @@ export async function handleCompanionWasmMessage(
           pageFactsPriorities: message.payload.pageFacts.map((request) =>
             authentication_page_observation_facts_priority(request),
           ),
+          implicitSubmissions: message.payload.implicitSubmissions.map(
+            (request) => {
+              const strictPolicy =
+                authentication_implicit_submit_actuation_is_safe(request)
+              const context = request.ceremony.authenticationContext
+              if (!context) return strictPolicy
+              const fields = request.fields
+              return (
+                strictPolicy ||
+                can_activate_authentication_route_control(
+                  context.sourceOrigin,
+                  context.formIdentity,
+                  context.destinationIdentity,
+                  request.controlLabel,
+                  request.controlMachineIdentity,
+                  false,
+                  fields.usernameFieldCount > 0,
+                  true,
+                  fields.currentPasswordFieldCount +
+                    fields.genericPasswordFieldCount +
+                    fields.newPasswordFieldCount >
+                    0,
+                )
+              )
+            },
+          ),
           activityProgress: [
             AuthenticationWorkflowActivity.ReadyLogin,
             AuthenticationWorkflowActivity.FillingLogin,
@@ -226,6 +255,13 @@ export async function handleCompanionWasmMessage(
           ].map((activity) =>
             authentication_workflow_activity_progress(activity),
           ),
+        })
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
+        return ok({
+          revalidationDecision: revalidate_approved_authentication_workflow({
+            approved: message.payload.approved,
+            live: message.payload.live,
+          }),
         })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))

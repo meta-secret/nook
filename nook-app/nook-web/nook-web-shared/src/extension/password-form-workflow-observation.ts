@@ -10,6 +10,7 @@ import {
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
   authentication_workflow_activity_progress,
+  authentication_implicit_submit_actuation_is_safe,
   AuthenticationWorkflowActivity,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -22,6 +23,7 @@ import type {
   AuthenticationUsernameEvidence,
   AuthenticationControlTransportability,
   AuthenticationDisplayProgress,
+  AuthenticationImplicitSubmitActuationObservation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { CompanionWasmSessionMessageType } from "./companion-wasm-runtime-messages";
 import {
@@ -127,6 +129,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
   private readonly advanceControlPolicies = new Map<string, boolean>();
   private readonly passkeyCandidatePolicies = new Map<string, boolean>();
   private readonly pageFactsPriorities = new Map<string, number>();
+  private readonly implicitSubmissionPolicies = new Map<string, boolean>();
   private readonly activityProgress = new Map<
     AuthenticationWorkflowActivity,
     AuthenticationDisplayProgress
@@ -188,6 +191,22 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     );
   }
 
+  authenticationImplicitSubmitActuationIsSafe(
+    facts: AuthenticationPageObservationFacts,
+  ): boolean {
+    const request: AuthenticationImplicitSubmitActuationObservation = {
+      fields: facts.fields,
+      ceremony: facts.ceremony,
+      controlLabel: "",
+      controlMachineIdentity: "",
+    };
+    const cached = this.implicitSubmissionPolicies.get(this.policyKey(request));
+    if (typeof cached === "boolean") return cached;
+    return companionExtensionRuntimePresent()
+      ? false
+      : authentication_implicit_submit_actuation_is_safe(request);
+  }
+
   async prepareCompanionWorkflowPolicies(): Promise<void> {
     const collection = {
       transportability: [] as AuthenticationControlTransportability[],
@@ -195,6 +214,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       passkeyCandidates:
         [] as AuthenticationDetailedPasskeyControlCandidateObservation[],
       pageFacts: [] as AuthenticationPageObservationFacts[],
+      implicitSubmissions:
+        [] as AuthenticationImplicitSubmitActuationObservation[],
     };
     this.collectingPolicies = collection;
     try {
@@ -211,6 +232,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     this.advanceControlPolicies.clear();
     this.passkeyCandidatePolicies.clear();
     this.pageFactsPriorities.clear();
+    this.implicitSubmissionPolicies.clear();
     this.activityProgress.clear();
     if (
       delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
@@ -220,7 +242,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       !("advanceControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
       !("pageFactsPriorities" in delivery.response) ||
-      !("activityProgress" in delivery.response)
+      !("activityProgress" in delivery.response) ||
+      !("implicitSubmissions" in delivery.response)
     ) {
       return;
     }
@@ -259,6 +282,50 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       const progress = response.activityProgress[index];
       if (progress) this.activityProgress.set(activity, progress);
     });
+    const implicitSubmissions = this.summarizeAuthenticationWorkflowForms().map(
+      (observation): AuthenticationImplicitSubmitActuationObservation => {
+        const facts = this.authenticationPageObservationFacts({
+          observation,
+          authenticatorSetupHint: false,
+        });
+        return {
+          fields: facts.fields,
+          ceremony: facts.ceremony,
+          controlLabel: "",
+          controlMachineIdentity: "",
+        };
+      },
+    );
+    const implicitDelivery = await sendCompanionWasmRuntimeMessage(
+      this.browser,
+      {
+        type: CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies,
+        payload: {
+          transportability: [],
+          advanceControls: [],
+          passkeyCandidates: [],
+          pageFacts: [],
+          implicitSubmissions,
+        },
+        origin: this.browser.location.origin,
+      },
+    );
+    if (
+      implicitDelivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
+      !implicitDelivery.response ||
+      typeof implicitDelivery.response !== "object" ||
+      !("implicitSubmissions" in implicitDelivery.response)
+    ) {
+      return;
+    }
+    const implicitResponses: readonly boolean[] =
+      implicitDelivery.response.implicitSubmissions;
+    implicitSubmissions.forEach((request, index) =>
+      this.implicitSubmissionPolicies.set(
+        this.policyKey(request),
+        implicitResponses[index] === true,
+      ),
+    );
   }
 
   private passwordFormPriority(observation: PasswordFormObservation): number {

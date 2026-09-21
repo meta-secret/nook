@@ -319,19 +319,34 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
         this.transportableControlObservation(observationRequest);
       return transported ? [{ control, observation: transported }] : [];
     });
+    const observationsMatch = (
+      approved: (typeof approvedControls)[number],
+      transported: (typeof observedControls)[number]["observation"],
+    ) =>
+      approved.actionability === transported.actionability &&
+      approved.ownership === transported.ownership &&
+      approved.semantics === transported.semantics &&
+      approved.sourceOrigin === transported.sourceOrigin &&
+      approved.formIdentity === transported.formIdentity &&
+      approved.destinationIdentity === transported.destinationIdentity &&
+      approved.label === transported.label &&
+      approved.machineIdentity === transported.machineIdentity;
     for (const approved of approvedControls) {
-      const matched = observedControls.find(
-        ({ observation: transported }) =>
-          approved.actionability === transported.actionability &&
-          approved.ownership === transported.ownership &&
-          approved.semantics === transported.semantics &&
-          approved.sourceOrigin === transported.sourceOrigin &&
-          approved.formIdentity === transported.formIdentity &&
-          approved.destinationIdentity === transported.destinationIdentity &&
-          approved.label === transported.label &&
-          approved.machineIdentity === transported.machineIdentity,
+      if (!this.advanceControlIsSafe(approved)) continue;
+      const matched = observedControls.find(({ observation: transported }) =>
+        observationsMatch(approved, transported),
       );
-      if (matched) return matched.control;
+      if (!matched || !this.advanceControlIsSafe(matched.observation)) continue;
+      const approvedDescendants = observedControls.filter(
+        ({ control, observation: transported }) =>
+          control !== matched.control &&
+          matched.control.contains(control) &&
+          this.advanceControlIsSafe(transported) &&
+          approvedControls.some((candidate) =>
+            observationsMatch(candidate, transported),
+          ),
+      );
+      return approvedDescendants.at(-1)?.control ?? matched.control;
     }
     return false;
   }
@@ -392,6 +407,8 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
         hasAuthenticationUsername,
         hasAuthenticationPassword: Boolean(passwordField),
         requestedApproval: ((v) => (v ? v : false))(request.submissionApproval),
+        implicitActuationIsSafe:
+          this.authenticationImplicitSubmitActuationIsSafe.bind(this),
       };
     return new ApprovedImplicitAuthenticationSubmission(
       implicitSubmitRequest,

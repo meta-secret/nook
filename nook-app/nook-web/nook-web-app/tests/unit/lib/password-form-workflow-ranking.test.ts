@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import type { CompanionWasmRuntimeMessage } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
@@ -54,9 +55,59 @@ function approvedWorkflowDisposition(
 
 afterEach(() => {
   document.body.replaceChildren()
+  vi.unstubAllGlobals()
 })
 
 describe('authentication workflow ranking', () => {
+  test('fails closed through the extension session when the approved workflow disappears', async () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const approved = classifiedObservedAuthenticationWorkflow()
+    document.body.replaceChildren()
+    type RevalidationResponse = {
+      readonly ok: true
+      readonly result: {
+        readonly revalidationDecision: {
+          readonly kind: 'rejected'
+        }
+      }
+    }
+    const response: RevalidationResponse = {
+      ok: true,
+      result: {
+        revalidationDecision: { kind: 'rejected' },
+      },
+    }
+    const sendMessage = vi.fn(
+      (
+        message: CompanionWasmRuntimeMessage,
+        callback: (response: RevalidationResponse) => void,
+      ) => {
+        expect(message.type).toBe(
+          'nook:extension-session-revalidate-approved-authentication-workflow',
+        )
+        callback(response)
+      },
+    )
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension', sendMessage, lastError: false },
+    })
+
+    await expect(
+      new LiveApprovedAuthenticationWorkflow({
+        approved,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).extensionDisposition(globalThis),
+    ).resolves.toBe(LiveAuthenticationWorkflowDisposition.Changed)
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
   test('gives a sibling passkey-only form its own observation', () => {
     document.body.innerHTML = `
       <div class="login-panel">

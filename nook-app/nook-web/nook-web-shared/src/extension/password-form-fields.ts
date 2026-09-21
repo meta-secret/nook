@@ -745,7 +745,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
 
     const observationRequest: PageInputClassificationRequest = {
       field,
-      loginContext: false,
+      loginContext: this.hasLoginContext(field),
     };
     const observation = this.pageInputObservation(observationRequest);
     return Boolean(observation && observation.looksLikeOneTimeCodeField);
