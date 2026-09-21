@@ -19,9 +19,6 @@ Reference documents provide durable technology cheat sheets, runtime configurati
 - **[loom-tools.md](../../teams/ai/references/loom-tools.md)**
   - Description: Loom CLI tool runner, YAML requests, and deterministic audits
   - Topics: Loom tools, typed requests, domain YAML
-- **[ai-debugging.md](../../teams/web-dev/references/ai-debugging.md)**
-  - Description: Comprehensive AI-agent debugging cheat sheet, browser profiles, and failure triage
-  - Topics: Post-mortem debugging, test triage, log replay
 - **[bun-svelte.md](../../teams/web-dev/references/bun-svelte.md)**
   - Description: Svelte 5 runes, Vite dev server, Bun tooling, and unused code enforcement
   - Topics: Svelte 5, Vite transforms, Knip, jscpd
