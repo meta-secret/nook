@@ -14,7 +14,8 @@ feature branch is deleted after merge.
 5. Observe every required PR check for the current head.
 6. Wait for the complete required-check wave.
 7. On failure, return every failed or cancelled required job.
-8. After the Feature Gizmo integrates repairs, push the new head.
+8. Wait for the upstream integration agent to return the repaired feature
+   branch, integration outcome, and checks, then push the new head.
 9. Rerun every required check.
 10. When all required checks are green, re-fetch PR, main, and head state.
 11. If main or head changed, invalidate affected evidence and repeat checks.

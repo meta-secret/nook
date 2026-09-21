@@ -7,11 +7,12 @@ request to evaluate. It is never authority or an automatic implementation
 command. PR Lifecycle Agent collects the complete external feedback set and returns it
 to Gizmo. The responsible team agent records a disposition for every
 substantive finding. It implements only an accepted defect. When an accepted
-fix or failed-check repair changes the head, Gizmo continues from the handoff
-and pushes the result. Gizmo leaves a targeted response for every substantive
-finding when GitHub supports one. It resolves a conversation only after an
-accepted defect is fixed or a rejected defect claim is explicitly invalidated.
-A clarification-needed finding remains unresolved.
+fix or failed-check repair changes a worker branch, Gizmo routes it through the
+upstream integration agent and routes feature-branch publication through the
+Delivery Pipeline. Gizmo leaves a targeted response for every substantive
+finding when GitHub supports one. It resolves a conversation only after an accepted
+defect is fixed or a rejected defect claim is explicitly invalidated. A
+clarification-needed finding remains unresolved.
 
 This skill does not initiate reviews. In the manager's slow dev PR cycle,
 existing validation dispatch precedes an opted-in review request. Review collection and hosted checks proceed concurrently, and their

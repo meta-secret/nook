@@ -355,6 +355,10 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
     path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/team-gizmo/AGENTS.md'),
     'utf8',
   );
+  const ai = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+    'utf8',
+  );
   const delivery = readFileSync(
     path.join(
       REPOSITORY_ROOT,
@@ -374,7 +378,7 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(root).toContain('selected base and feature branches');
   expect(root).toContain('each worker branch and worktree in dependency order');
   expect(root).toContain('applicable Nook checks');
-  expect(root).not.toContain('owns shared-branch sequencing');
+  expect(ai).not.toContain('owns shared-branch sequencing');
   expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
   expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
   expect(team).toContain(
