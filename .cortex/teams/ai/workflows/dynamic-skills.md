@@ -155,7 +155,9 @@ When applying a skill to code:
    implementation. Finish the assigned worker branch with every resulting
    mutation in the allowed paths. Return the branch and focused evidence to the
    owning Feature Gizmo. Do not run a local pre-push or broad validation gate.
-   For applicable feature build or check
-   mechanics, Gizmo Prime authorizes the Team Gizmo (Delivery Pipeline context) packet;
-   Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
-   required PR-check task. The Feature Gizmo owns later CI validation.
+   Feature Gizmo routes local integration through the upstream integration agent
+   and waits for its feature branch, integration outcome, and checks. For
+   applicable feature build or check mechanics, Gizmo Prime authorizes the Team
+   Gizmo (Delivery Pipeline context) packet; Team Gizmo then dispatches PR
+   Lifecycle Agent through the active harness for the required PR-check task.
+   The Feature Gizmo owns later CI validation.
