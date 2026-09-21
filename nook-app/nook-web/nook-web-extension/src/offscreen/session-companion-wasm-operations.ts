@@ -15,6 +15,9 @@ import {
   authentication_enrollment_workflow_match,
   authentication_recovery_copy_evidence,
   decode_authentication_workflow_runtime_response,
+  decode_login_picker_open_response,
+  decode_website_login_options,
+  decode_website_login_save_pending_response,
   authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
   bind_authentication_page_observation_facts,
@@ -222,6 +225,21 @@ export async function handleCompanionWasmMessage(
             message.payload.response,
           ),
         )
+      case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
+        switch (message.payload.kind) {
+          case 'login-options':
+            return ok(decode_website_login_options(message.payload.response))
+          case 'login-picker-open':
+            return ok(
+              decode_login_picker_open_response(message.payload.response),
+            )
+          case 'login-save-pending':
+            return ok(
+              decode_website_login_save_pending_response(
+                message.payload.response,
+              ),
+            )
+        }
     }
   } catch {
     return invalidRequest()

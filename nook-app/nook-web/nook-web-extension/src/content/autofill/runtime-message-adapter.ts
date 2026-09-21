@@ -45,7 +45,6 @@ import type {
 import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
 
 import {
-  decode_login_picker_open_response,
   decode_authenticator_picker_open_response,
   decode_authentication_outcome_response,
   decode_authenticator_backup_attach_response,
@@ -57,8 +56,6 @@ import {
   decode_generated_password_response,
   decode_website_login_save_action_response,
   decode_website_login_save_offer_response,
-  decode_website_login_save_pending_response,
-  decode_website_login_options,
   type AuthenticationWorkflowRoutingResponse,
   type AuthenticationWorkflowSelectedFacts,
   type AuthenticationWorkflowSnapshotResponse,
@@ -248,15 +245,16 @@ class AuthenticationRuntimeTransport {
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return this.unavailable()
     }
-    try {
-      await companionWasmReadiness.wait()
-      return {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_options(delivery.response),
-      }
-    } catch {
-      return this.unavailable()
-    }
+    const decoded = await this.sendCompanionWasmRuntimeMessage({
+      type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
+      payload: { kind: 'login-options', response: delivery.response },
+    })
+    return decoded.kind === RuntimeMessageDeliveryKind.Delivered
+      ? {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response: decoded.response as WebsiteLoginOptions,
+        }
+      : this.unavailable()
   }
 
   async sendLoginSaveOfferRuntimeMessage(
@@ -284,15 +282,16 @@ class AuthenticationRuntimeTransport {
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return this.unavailable()
     }
-    try {
-      await companionWasmReadiness.wait()
-      return {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_save_pending_response(delivery.response),
-      }
-    } catch {
-      return this.unavailable()
-    }
+    const decoded = await this.sendCompanionWasmRuntimeMessage({
+      type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
+      payload: { kind: 'login-save-pending', response: delivery.response },
+    })
+    return decoded.kind === RuntimeMessageDeliveryKind.Delivered
+      ? {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response: decoded.response as WebsiteLoginSavePendingResponse,
+        }
+      : this.unavailable()
   }
 
   async sendLoginSaveActionRuntimeMessage(
@@ -320,15 +319,16 @@ class AuthenticationRuntimeTransport {
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return this.unavailable()
     }
-    try {
-      await companionWasmReadiness.wait()
-      return {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_login_picker_open_response(delivery.response),
-      }
-    } catch {
-      return this.unavailable()
-    }
+    const decoded = await this.sendCompanionWasmRuntimeMessage({
+      type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
+      payload: { kind: 'login-picker-open', response: delivery.response },
+    })
+    return decoded.kind === RuntimeMessageDeliveryKind.Delivered
+      ? {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response: decoded.response as LoginPickerOpenResponse,
+        }
+      : this.unavailable()
   }
 
   async sendAuthenticatorPickerOpenRuntimeMessage(

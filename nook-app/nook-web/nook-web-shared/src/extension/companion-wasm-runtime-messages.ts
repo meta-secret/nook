@@ -7,6 +7,9 @@ import type {
   AuthenticationWorkflowSnapshot,
   AuthenticationRecoveryCopyEvidence,
   AuthenticationWorkflowRoutingResponse,
+  LoginPickerOpenResponse,
+  WebsiteLoginOptions,
+  WebsiteLoginSavePendingResponse,
   PasswordWorkflowActivityPresentation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
@@ -27,6 +30,7 @@ export enum CompanionWasmSessionMessageType {
   AuthenticationRecoveryCopyEvidence = "nook:extension-session-authentication-recovery-copy-evidence",
   IsNookVaultAppUrl = "nook:extension-session-is-nook-vault-app-url",
   DecodeAuthenticationWorkflowRuntimeResponse = "nook:extension-session-decode-authentication-workflow-runtime-response",
+  DecodeContentRuntimeResponse = "nook:extension-session-decode-content-runtime-response",
 }
 
 export type CompanionWasmLoginContextObservation = {
@@ -147,6 +151,14 @@ export type CompanionWasmSessionMessage =
   | {
       readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
       readonly payload: { readonly response: unknown };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse;
+      readonly payload: {
+        readonly kind:
+          "login-options" | "login-picker-open" | "login-save-pending";
+        readonly response: unknown;
+      };
     };
 
 export type CompanionWasmSessionResponse =
@@ -156,6 +168,9 @@ export type CompanionWasmSessionResponse =
   | AuthenticationWorkflowMatch
   | AuthenticationRecoveryCopyEvidence
   | AuthenticationWorkflowRoutingResponse
+  | LoginPickerOpenResponse
+  | WebsiteLoginOptions
+  | WebsiteLoginSavePendingResponse
   | boolean
   | {
       readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;

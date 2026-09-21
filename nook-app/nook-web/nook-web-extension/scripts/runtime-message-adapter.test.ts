@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationOutcomeVerdict,
   AuthenticationOutcomeResponseKind,
@@ -15,6 +16,9 @@ import {
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
   decode_authentication_workflow_runtime_response,
+  decode_login_picker_open_response,
+  decode_website_login_options,
+  decode_website_login_save_pending_response,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
@@ -39,6 +43,8 @@ import {
 import { WebsiteLoginPickerOpenMessageType } from '../src/lib/login-picker-messages'
 import { WebsiteLoginSaveOfferMessageType } from '../src/lib/login-save-messages'
 import { AuthenticationOutcomeClassifyMessageType } from '../src/lib/outcome-evidence-messages'
+
+await companionWasmReady
 
 type TestAcknowledgement = { accepted: true }
 
@@ -88,6 +94,41 @@ function installRuntimeMock(mock: RuntimeMock): void {
               message.payload.response,
             ),
           })
+        } catch {
+          callback({ ok: false })
+        }
+        return
+      }
+      if (
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        message.type ===
+          CompanionWasmSessionMessageType.DecodeContentRuntimeResponse &&
+        'payload' in message &&
+        message.payload &&
+        typeof message.payload === 'object' &&
+        'kind' in message.payload &&
+        'response' in message.payload
+      ) {
+        try {
+          const result = (() => {
+            switch (message.payload.kind) {
+              case 'login-options':
+                return decode_website_login_options(message.payload.response)
+              case 'login-picker-open':
+                return decode_login_picker_open_response(
+                  message.payload.response,
+                )
+              case 'login-save-pending':
+                return decode_website_login_save_pending_response(
+                  message.payload.response,
+                )
+              default:
+                throw new TypeError('unsupported decoder')
+            }
+          })()
+          callback({ ok: true, result })
         } catch {
           callback({ ok: false })
         }
