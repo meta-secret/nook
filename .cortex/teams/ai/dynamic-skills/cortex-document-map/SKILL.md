@@ -68,9 +68,9 @@ Team Gizmo in their assignment.
 **Preferred:** the writer consumes the supplied AI context and selected
 authoring documents directly.
 
-Agents must not preload all graphs, all team documents, or the shared corpus.
-A foreign-team implementation requirement returns to Gizmo. A team subagent
-does not load the Gizmo graph.
+- Agents must not preload all graphs, all team documents, or the shared corpus.
+- A foreign-team implementation requirement returns to Gizmo.
+- A team subagent does not load the Gizmo graph.
 
 A selected team authority may link the smallest task-relevant set of
 foreign-team skills as read-only engineering policy. The worker opens those

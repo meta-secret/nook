@@ -6,12 +6,16 @@ Capture a user's concrete code feedback as durable project knowledge in the
 canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
-The AI team owns dynamic-skill meaning, card authoring, and registry
-maintenance. Gizmo Prime authorizes feature delivery when a card is applied.
-The single Team Gizmo assigns GitHub mechanics to PR Lifecycle with Delivery
-Pipeline context through the active harness. PR Lifecycle performs authorized
-PR creation, updates, validation, and delivery operations. Prime retains
-feature policy and readiness decisions.
+- **AI team**
+  - Owns dynamic-skill meaning, card authoring, and registry maintenance.
+- **Gizmo Prime**
+  - Authorizes feature delivery when a card is applied.
+  - Retains feature policy and readiness decisions.
+- **Team Gizmo**
+  - The single coordinator assigns GitHub mechanics to PR Lifecycle with
+    Delivery Pipeline context through the active harness.
+- **PR Lifecycle**
+  - Performs authorized PR creation, updates, validation, and delivery operations.
 
 **Prohibited:** have a skill author create a PR outside the assigned delivery route.
 
@@ -96,9 +100,10 @@ Does not apply to:
 
 ## Validation
 
-For documentation-only captures, run `task loom:cortex-audit` only in the
-authorized hosted PR validation stage. Follow explicit user instructions that
-change the execution stage or require stopping without checks.
+- For documentation-only captures, run `task loom:cortex-audit` only in the
+  authorized hosted PR validation stage.
+- Follow explicit user instructions that change the execution stage or require
+  stopping without checks.
 
 **Prohibited:** run the audit locally merely because the capture changes only prose.
 

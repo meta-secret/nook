@@ -6,9 +6,10 @@ Use Meta-Cortex Prime and the single Team Gizmo through Nook's wrappers.
 The upstream roles own coordination behavior. This document owns Nook's
 functional boundaries and shared-file integration constraints.
 
-Every assignment has one functional owner and a bounded write scope.
-Choose the upstream role for its expertise, then supply the relevant Nook context.
-Security review does not transfer implementation ownership.
+- Every assignment has one functional owner and a bounded write scope.
+- Choose the upstream role for its expertise.
+- Supply the relevant Nook context.
+- Security review does not transfer implementation ownership.
 
 **Prohibited:** create another coordinator when work crosses from Rust to web.
 

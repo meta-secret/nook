@@ -56,10 +56,11 @@ and publication were not performed.
 
 ### Pipeline boundary
 
-Nook's feature-delivery contract remains the delivery authority. Upstream
-validation guidance selects the required evidence; Nook determines its execution
-stage. A skill's example command does not authorize local validation or deployment.
-The PR Lifecycle Agent remains a project-specific role under Team Gizmo.
+- Nook's feature-delivery contract remains the delivery authority.
+- Upstream validation guidance selects the required evidence.
+- Nook determines its execution stage.
+- A skill's example command does not authorize local validation or deployment.
+- The PR Lifecycle Agent remains a project-specific role under Team Gizmo.
 
 Loom's team keys remain project-context identifiers during coexistence.
 Its legacy agent-workflow runtime is not the Meta-Cortex launcher. New missions
