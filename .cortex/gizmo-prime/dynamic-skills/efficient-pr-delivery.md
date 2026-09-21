@@ -3,7 +3,8 @@
 ## Procedure
 
 1. Start the feature from freshly fetched `origin/main`.
-2. Integrate bounded Team Agent commits into the canonical feature branch.
+2. Have the upstream integration agent integrate finished worker branches into
+   the canonical feature branch.
 3. Push once per coherent implementation or repair wave.
 4. Create or update one pull request into `main`.
 5. Run every required PR check.

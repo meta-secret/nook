@@ -71,6 +71,13 @@ an explicit handoff. Use the compact
 [subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md) for
 Nook assignment requirements. The active host owns agent communication.
 
+Select the upstream integration agent directly for local Git work. Supply it
+with the Nook project root, shared Meta-Cortex library root, selected base and
+feature branches, each worker branch and worktree, dependency order, and the
+applicable Nook checks. Nook context adds branch naming, product constraints,
+and remote-delivery boundaries; it does not wrap or restate the upstream Git
+procedure.
+
 ## Mandatory delivery architecture
 
 Read the [delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md)

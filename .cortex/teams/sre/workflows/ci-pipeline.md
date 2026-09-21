@@ -657,8 +657,9 @@ coverage solve and package floors in the verified Rust graph.
 **Gizmo remote commands:**
 
 - Ordinary Team Agents format every changed file in their allowed scope and
-  return coherent exact committed handoffs. They do not push, dispatch remote
-  work, or operate external PR/check state.
+  finish their assigned worker branches. They report the branch and focused
+  evidence to Team Gizmo. They do not push, dispatch remote work, or operate
+  external PR/check state.
 - Feature Gizmos request repeatable required PR-check evidence.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the Feature Gizmo's feature pull-request cycle uses the full slow PR workflow.

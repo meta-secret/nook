@@ -112,7 +112,7 @@ Report the hosted audit as unrun.
 
 For code refactors using a dynamic skill, apply only the permitted scoped
 formatters or inexpensive diagnostics. Commit every resulting mutation in the
-allowed paths and return the exact scoped commit to Gizmo. Do not run a local
+allowed paths and return the worker branch and focused evidence to Gizmo. Do not run a local
 pre-push or broad validation gate. Prime authorizes hosted validation.
 Team Gizmo assigns the packet to PR Lifecycle with Delivery Pipeline context
 through the active harness. Prime owns readiness based on the returned CI evidence.

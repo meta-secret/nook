@@ -139,9 +139,9 @@ After:
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
 - Run `task loom:cortex-audit` to verify links, index entries, and structure.
 - For implementation tasks, apply only permitted scoped formatting or
-  inexpensive diagnostics and commit the coherent handoff. Include every
-  formatter mutation in allowed source or Cortex paths. Return the exact commit
-  and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
+  inexpensive diagnostics and finish the coherent worker branch. Include every
+  formatter mutation in allowed source or Cortex paths. Return the branch and
+  evidence to Gizmo. Do not run a local pre-push or broad validation gate.
   Gizmo immediately dispatches the relevant required PR-check task through
   Team Gizmo (Delivery Pipeline context) and PR Lifecycle Agent. The Feature Gizmo owns
   complete exact-head CI validation when the snapshot is ready.

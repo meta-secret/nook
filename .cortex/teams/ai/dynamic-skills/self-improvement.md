@@ -171,7 +171,7 @@ Before returning an AI-owned Cortex handoff to Gizmo:
 - no speculative or duplicate guidance was promoted;
 - optional temporary notes are removed;
 - `git ls-files .cortex/.session` is empty; and
-- the clean handoff and exact commit are reported.
+- the worker branch, focused evidence, and unresolved blockers are reported.
 
 Promotion enters the same pull request as the work that justified it. A changed
 head requires fresh exact-head hosted validation.

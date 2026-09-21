@@ -82,7 +82,7 @@ Deployment verification must prove:
 - the checksum; and
 - the packaged manifest.
 
-The security worker returns focused evidence for its exact committed handoff.
+The security worker returns its worker branch and focused evidence.
 Gizmo obtains hosted extension proof and deployment evidence and returns both
 to Security. Security accepts or rejects that exact-head evidence before
 readiness.

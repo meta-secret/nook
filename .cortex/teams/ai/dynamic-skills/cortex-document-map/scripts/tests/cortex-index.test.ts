@@ -368,8 +368,19 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(root).toContain(
     '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
   );
+  expect(root).toContain('Nook project root, shared Meta-Cortex library root');
+  expect(root).toContain('feature branches, each worker branch and worktree');
+  expect(root).toContain('applicable Nook checks');
+  expect(root).not.toContain('owns shared-branch sequencing');
   expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
   expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
+  expect(team).toContain(
+    '../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+  );
+  expect(team).toContain('project and shared-library');
+  expect(team).toContain('roots, selected feature branch');
+  expect(team).toContain('worker branches and worktrees');
+  expect(team).toContain('applicable Nook checks');
   expect(team).toContain('There is one Team Gizmo per feature.');
   expect(delivery).toContain('git fetch --prune origin');
   expect(delivery).toContain('originMainSha');

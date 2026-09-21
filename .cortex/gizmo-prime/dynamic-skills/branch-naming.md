@@ -87,10 +87,9 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
 - Prime authorizes the canonical feature branch name. The branch name is the
   workflow authority for publication and remote work.
-- After the mandatory fetch, Prime resolves exact `origin/main`. Every new
-  feature mission, feature branch, and worktree uses that fresh commit as its
-  base. An older main observation or another branch is invalid. The base is
-  preserved after feature creation.
+- After the mandatory fetch, Prime selects `origin/main` as the feature base.
+  The upstream integration agent receives that base and the authorized branch
+  names when it creates the feature and worker worktrees.
 - Delivery re-fetches and resolves the latest committed branch head before
   remote dispatch, PR mutation, or merge. If the branch advances, follow the
   latest head and rerun affected evidence instead of failing on stale SHA

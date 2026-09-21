@@ -433,6 +433,9 @@ describe('canonical Cortex team authority', () => {
       '../.meta-cortex/AGENTS.md',
       '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
       '../.meta-cortex/meta-cortex.toml',
+      'Nook project root, shared Meta-Cortex library root',
+      'feature branches, each worker branch and worktree',
+      'applicable Nook checks',
       'gizmo-prime/team-gizmo/AGENTS.md',
       'meta-cortex-integration.md',
     ] as const;
