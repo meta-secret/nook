@@ -160,12 +160,18 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
         () => (alternativeActivations += 1),
       )
     }
+    const detailedAdvanceControl =
+      'detailedAdvanceControl' in facts ? facts.detailedAdvanceControl : false
     const submitRequest: Parameters<
       typeof passwordFormInteraction.submitLoginForm
     >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
+      approvedAdvanceControls:
+        detailedAdvanceControl && detailedAdvanceControl.kind === 'observed'
+          ? detailedAdvanceControl.observations
+          : [],
     }
     expect(passwordFormInteraction.submitLoginForm(submitRequest)).toBe(
       FormSubmissionResult.Submitted,

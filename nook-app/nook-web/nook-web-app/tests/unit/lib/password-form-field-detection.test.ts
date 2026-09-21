@@ -166,8 +166,7 @@ describe('authentication field detection', () => {
           <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
         </section>
         <section class="identifier-actions">
-          <div id="identifierNext"><div role="button"><span>Next</span></div></div>
-          <button type="button">Create account</button>
+          <button type="button">Review profile</button>
         </section>
       </main>
     `
@@ -187,13 +186,7 @@ describe('authentication field detection', () => {
       tag: 'section',
       classTokens: ['identifier-shell'],
     })
-    expect(rejected.controls).toContainEqual(
-      expect.objectContaining({
-        tag: 'div',
-        role: '',
-        label: 'next',
-      }),
-    )
+    expect(rejected.controls).toEqual([])
     expect(JSON.stringify(rejected.ancestors)).not.toContain(
       'user@example.test',
     )

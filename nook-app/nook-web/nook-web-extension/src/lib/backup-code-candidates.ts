@@ -1,5 +1,6 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- Candidate observations are assembled into a Rust-generated request at this adapter boundary. */
 import {
+  authentication_recovery_copy_evidence,
   extract_backup_code_candidates,
   type AuthenticationRecoveryCopyEvidence,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -77,8 +78,17 @@ class RecoveryCopyObservation {
     }
   }
 
+  private currentEvidence(): RecoveryCopyEvidence {
+    if (typeof chrome === 'object' && Boolean(chrome.runtime?.id)) {
+      return this.evidence
+    }
+    return authentication_recovery_copy_evidence({
+      texts: this.recoveryTexts(),
+    })
+  }
+
   authenticationRecoveryEvidence(): RecoveryCopyEvidence {
-    return this.evidence
+    return this.currentEvidence()
   }
 
   authenticationRecoveryCopy(): string {
@@ -86,13 +96,12 @@ class RecoveryCopyObservation {
   }
 
   recoveryCopyHasBackupCodeHint(recoveryCopy: string): boolean {
-    return (
-      recoveryCopy === this.evidence.copy && this.evidence.hint === 'present'
-    )
+    const evidence = this.currentEvidence()
+    return recoveryCopy === evidence.copy && evidence.hint === 'present'
   }
 
   pageHasDocumentBackupCodeHint(): boolean {
-    return this.authenticationRecoveryEvidence().hint === 'present'
+    return this.currentEvidence().hint === 'present'
   }
 
   extractDocumentBackupCodeCandidates(sourceText?: string): string[] {

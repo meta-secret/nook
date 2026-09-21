@@ -367,9 +367,19 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const cached = this.companionLabels.get(`${kind}:${value}`);
     if (typeof cached === "boolean") return cached;
     const labelRequest: CompanionWasmLabelRequest = { kind, value };
-    return typeof chrome === "object" && Boolean(chrome.runtime?.id)
+    return !this.directClassificationAvailable()
       ? false
       : this.directClassification.label(labelRequest);
+  }
+
+  private directClassificationAvailable(): boolean {
+    if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) return false;
+    return (
+      this.fieldCandidateDiagnosticSink instanceof
+        DisabledAuthenticationFieldCandidateDiagnosticSink &&
+      this.selectorEntryDiagnosticSink instanceof
+        DisabledAuthenticationSelectorEntryDiagnosticSink
+    );
   }
 
   private readonly workflowScopeDiagnosticBuilder =
@@ -638,7 +648,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
   private hasLoginContext(field: HTMLInputElement): boolean {
     const cached = this.companionLoginContexts.get(field);
     if (typeof cached === "boolean") return cached;
-    return typeof chrome === "object" && Boolean(chrome.runtime?.id)
+    return !this.directClassificationAvailable()
       ? false
       : this.directClassification.loginContext(
           this.loginContextObservation(field),
@@ -659,7 +669,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       return false;
     const classification = this.companionFieldClassifications.get(field);
     if (classification) return classification;
-    if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) return false;
+    if (!this.directClassificationAvailable()) return false;
     const observation: CompanionWasmPageInputFieldRequest["observation"] = {
       inputType: field.type,
       disabled: field.disabled,
@@ -697,7 +707,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     if (observation.formScope) query.formScope = observation.formScope;
     const evidence = this.companionStrongestUsernameEvidence;
     if (evidence) return evidence;
-    if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) {
+    if (!this.directClassificationAvailable()) {
       throw new Error();
     }
     return this.directClassification.strongestUsernameEvidence(

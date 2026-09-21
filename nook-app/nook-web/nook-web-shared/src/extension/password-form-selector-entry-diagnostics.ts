@@ -45,7 +45,7 @@ export class AuthenticationSelectorEntryDiagnosticBuilder {
       inputCount: request.inputCount,
       identifierIdPresent: request.identifierIdPresent,
       rootKind:
-        request.root instanceof Document
+        request.root.nodeType === 9
           ? AuthenticationFieldCandidateRootKind.Document
           : AuthenticationFieldCandidateRootKind.Element,
       frameKind: this.frameKind(request.root),
@@ -54,8 +54,12 @@ export class AuthenticationSelectorEntryDiagnosticBuilder {
   }
 
   private frameKind(root: ParentNode): AuthenticationFieldCandidateFrameKind {
-    const ownerDocument = root instanceof Document ? root : root.ownerDocument;
-    const frameWindow = ownerDocument?.defaultView;
+    const ownerDocument = root.ownerDocument;
+    const frameWindow = ownerDocument
+      ? ownerDocument.defaultView
+      : root === document
+        ? window
+        : false;
     if (!frameWindow) {
       return AuthenticationFieldCandidateFrameKind.Unavailable;
     }
