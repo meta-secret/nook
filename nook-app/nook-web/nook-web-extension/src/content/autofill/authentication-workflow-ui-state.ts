@@ -35,9 +35,9 @@ class AuthenticationWorkflowUi {
     continueButton.disabled = !enableContinue || this.ui.widgetState.busy
   }
 
-  approvedWorkflowDisposition(
+  async approvedWorkflowDisposition(
     workflow: PasswordFormObservation,
-  ): LiveAuthenticationWorkflowDisposition {
+  ): Promise<LiveAuthenticationWorkflowDisposition> {
     const rendered = this.ui.widgetState.workflowAdmission()
     if (rendered.kind !== WidgetWorkflowAdmissionKind.Assigned)
       return LiveAuthenticationWorkflowDisposition.Changed
@@ -64,7 +64,9 @@ class AuthenticationWorkflowUi {
       authenticatorSetupHint: hints.qr,
       backupCodesHint: hints.backupCodes,
     }
-    return new LiveApprovedAuthenticationWorkflow(liveRequest).disposition
+    return new LiveApprovedAuthenticationWorkflow(
+      liveRequest,
+    ).extensionDisposition(globalThis)
   }
 }
 

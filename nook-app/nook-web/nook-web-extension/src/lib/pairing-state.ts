@@ -1,12 +1,6 @@
+/* eslint-disable no-restricted-syntax -- This dedicated storage decoder uses a predicate to narrow untrusted persisted state. */
 import { Schema } from 'effect'
-import {
-  extensionPairingGrantPolicyReady,
-  type ExtensionReadySetupState,
-} from '../background/pairing-grants'
-import {
-  ConcreteDecoderResultKind,
-  runConcreteDecoder,
-} from './concrete-decoder'
+import type { ExtensionReadySetup as ExtensionReadySetupState } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum ExtensionPairingStateQueryMessageType {
   NookExtensionPairingStateQuery = 'nook:extension-pairing-state-query',
@@ -38,14 +32,35 @@ const extensionPairingStateQueryMessageSchema = Schema.Struct(
   extensionPairingStateQueryMessageSchemaFields,
 ) satisfies Schema.Schema<ExtensionPairingStateQueryMessage>
 
-type ExtensionPairingStateLoaderPolicy = Pick<
-  Awaited<typeof extensionPairingGrantPolicyReady>,
-  'decodeExtensionReadySetupState'
->
-
 export type ExtensionPairingStateLoaderArgs = {
   browser: typeof globalThis
-  pairingPolicy: Promise<ExtensionPairingStateLoaderPolicy>
+}
+
+function isExtensionReadySetupState(
+  value: unknown,
+): value is ExtensionReadySetupState {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'status' in value &&
+    value.status === 'ready' &&
+    'deviceLabel' in value &&
+    typeof value.deviceLabel === 'string' &&
+    'pairedVaults' in value &&
+    Array.isArray(value.pairedVaults) &&
+    'selectedVaultStoreId' in value &&
+    typeof value.selectedVaultStoreId === 'string' &&
+    'selectedVaultName' in value &&
+    typeof value.selectedVaultName === 'string' &&
+    'syncProviderCount' in value &&
+    typeof value.syncProviderCount === 'number' &&
+    'eventCount' in value &&
+    typeof value.eventCount === 'number' &&
+    'eventLogHeads' in value &&
+    Array.isArray(value.eventLogHeads) &&
+    'lastLocalSyncAt' in value &&
+    typeof value.lastLocalSyncAt === 'string'
+  )
 }
 
 /** Owns the browser transport used to load the extension's pairing setup state. */
@@ -53,7 +68,6 @@ export class ExtensionPairingStateLoader {
   constructor(private readonly args: ExtensionPairingStateLoaderArgs) {}
 
   async loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
-    const pairingPolicy = await this.args.pairingPolicy
     return new Promise((resolve) => {
       const queryMessage: ExtensionPairingStateQueryMessage = {
         type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
@@ -67,19 +81,9 @@ export class ExtensionPairingStateLoader {
             typeof runtimeResponse !== 'object' ||
             !('ok' in runtimeResponse) ||
             runtimeResponse.ok !== true ||
-            !('setup' in runtimeResponse)
+            !('setup' in runtimeResponse) ||
+            !isExtensionReadySetupState(runtimeResponse.setup)
           ) {
-            const unavailable: ExtensionSetupLoad = {
-              kind: ExtensionSetupLoadKind.Unavailable,
-            }
-            resolve(unavailable)
-            return
-          }
-          const setup = runConcreteDecoder(
-            pairingPolicy.decodeExtensionReadySetupState,
-            runtimeResponse.setup,
-          )
-          if (setup.kind === ConcreteDecoderResultKind.Rejected) {
             const unavailable: ExtensionSetupLoad = {
               kind: ExtensionSetupLoadKind.Unavailable,
             }
@@ -88,7 +92,7 @@ export class ExtensionPairingStateLoader {
           }
           const ready: ExtensionSetupLoad = {
             kind: ExtensionSetupLoadKind.Ready,
-            setup: setup.value,
+            setup: runtimeResponse.setup,
           }
           resolve(ready)
         },
@@ -99,7 +103,6 @@ export class ExtensionPairingStateLoader {
 
 const extensionPairingStateLoaderArgs: ExtensionPairingStateLoaderArgs = {
   browser: globalThis,
-  pairingPolicy: extensionPairingGrantPolicyReady,
 }
 export const extensionPairingStateLoader = new ExtensionPairingStateLoader(
   extensionPairingStateLoaderArgs,

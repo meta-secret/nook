@@ -56,9 +56,20 @@ vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   passwordFormInteraction: {
     fillLoginCredentials: actionMocks.fillLoginCredentials,
     findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
+    prepareCompanionWorkflowPolicies: vi.fn(() => Promise.resolve()),
     submitLoginForm: actionMocks.submitLoginForm,
   },
 }))
+
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/authentication-activity-progress',
+  () => ({
+    authentication_workflow_activity_progress: () => ({
+      currentStep: 1,
+      totalSteps: 3,
+    }),
+  }),
+)
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-revalidation',
@@ -111,6 +122,15 @@ vi.mock(
       Unavailable: 'unavailable',
     },
     authenticationRuntimeTransport: {
+      sendCompanionWasmRuntimeMessage: vi.fn(() =>
+        Promise.resolve({
+          kind: 'delivered',
+          response: {
+            kind: 2,
+            generationProgress: { currentStep: 2, totalSteps: 3 },
+          },
+        }),
+      ),
       sendAuthenticationWorkflowSnapshotRuntimeMessage: vi.fn(),
       sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
       sendAuthenticatorBackupAttachRuntimeMessage: vi.fn(),
@@ -277,6 +297,7 @@ beforeEach(() => {
     const actResult = request.act({
       currentWorkflow: workflow,
       observationBindingToken: 'approved-observation',
+      approvedFacts: approvalFacts,
       revalidateCurrentWorkflow: () => workflow,
     })
     return {
@@ -306,6 +327,7 @@ describe('revalidated authentication actions', () => {
       const actResult = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return {
@@ -514,6 +536,7 @@ describe('revalidated authentication actions', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return { kind: revalidationOutcomeKind(result.kind) }
@@ -522,6 +545,7 @@ describe('revalidated authentication actions', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return { kind: revalidationOutcomeKind(result.kind) }
@@ -564,6 +588,7 @@ describe('revalidated authentication actions', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return { kind: revalidationOutcomeKind(result.kind) }
@@ -572,6 +597,7 @@ describe('revalidated authentication actions', () => {
       request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       throw new Error('fill revalidation failed')
@@ -614,6 +640,7 @@ describe('revalidated authentication actions', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts: approvalFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return { kind: revalidationOutcomeKind(result.kind) }

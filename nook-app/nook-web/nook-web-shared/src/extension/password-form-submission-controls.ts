@@ -7,6 +7,10 @@ import {
 } from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
 import {
+  authenticationAdvanceControlSelector,
+  semanticSubmitControlSelector,
+} from "./authentication-control-selectors";
+import {
   authentication_advance_control_is_safe,
   can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
@@ -53,10 +57,13 @@ export type PasswordFormScopeQuery =
       formScope: PasswordFormScope;
     };
 
-export type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
+export type LoginAdvanceControl = HTMLElement;
 
 export type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
   usernameField: HTMLInputElement;
+  advanceControlIsSafe?: (
+    observation: AuthenticationAdvanceControlObservation,
+  ) => boolean;
 };
 
 type AuthenticationRouteControlRequest = {
@@ -134,12 +141,6 @@ export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 
 type SemanticSubmitControlList = HTMLElement[];
-
-export const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"]';
-
-export const semanticSubmitControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
 
 export class AuthenticationSubmissionDestination {
   static source(control: HTMLElement): PageControlSubmissionDestinationSource {
@@ -623,8 +624,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       hasAuthenticationPassword,
     };
     const legacyActuationIsSafe =
+      !(typeof chrome === "object" && Boolean(chrome.runtime?.id)) &&
       this.canRequestImplicitAuthenticationSubmit(capabilityRequest);
-    if (!legacyActuationIsSafe && !alternativeActuationIsSafe()) {
+    const alternativeIsSafe = alternativeActuationIsSafe();
+    if (!legacyActuationIsSafe && !alternativeIsSafe) {
       return FormSubmissionResult.NotObserved;
     }
     const requestedApproval = approval;
@@ -651,6 +654,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }: AuthenticationRouteDestinationRequest): string {
     if (
       control &&
+      (control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement) &&
       this.controlHasNativeSubmitSemantics(control) &&
       control.hasAttribute("formaction")
     ) {
@@ -662,13 +667,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   private authenticationControlDestination(
     control: LoginAdvanceControl,
   ): string {
-    if (!control.form) {
+    const controlForm = this.associatedAuthenticationForm(control);
+    if (controlForm.kind !== PasswordFormScopeKind.Owned) {
       return this.boundedAuthenticationDestination(
         ((v) => (v ? v : ""))(control.ownerDocument.defaultView?.location.href),
       );
     }
     const request: AuthenticationRouteDestinationRequest = {
-      form: control.form,
+      form: controlForm.owner,
       control,
     };
     return this.authenticationRouteDestination(request);
@@ -678,22 +684,32 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     request: AuthenticationRouteControlRequest,
   ): boolean {
     const { control, controlLabel, query } = request;
-    const form = control.form;
+    const controlForm = this.associatedAuthenticationForm(control);
+    const form =
+      controlForm.kind === PasswordFormScopeKind.Owned
+        ? controlForm.owner
+        : false;
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const identityContainer =
-      !form &&
-      query.kind === PasswordFormQueryKind.Scoped &&
-      query.formScope.kind === PasswordFormScopeKind.Unowned &&
-      query.root instanceof Element
+    const identityContainer: Element | false = form
+      ? form
+      : query.kind === PasswordFormQueryKind.Scoped &&
+          query.formScope.kind === PasswordFormScopeKind.Unowned &&
+          query.root instanceof Element
         ? query.root
-        : form;
+        : false;
     const formIdentity = [
-      ((v) => (v ? v : ""))(identityContainer?.id),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("name")),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("class")),
-      ((v) => (v ? v : ""))(identityContainer?.getAttribute("aria-label")),
+      identityContainer ? identityContainer.id : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("name"))
+        : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("class"))
+        : "",
+      identityContainer
+        ? ((v) => (v ? v : ""))(identityContainer.getAttribute("aria-label"))
+        : "",
     ].join(" ");
     const destinationIdentity = this.authenticationControlDestination(control);
     const machineIdentity = this.controlMachineIdentity(control);
@@ -724,57 +740,48 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       this.unownedQueryHasLocalScope(unownedScopeRequest);
 
     const passwordFields = passwordFieldDiscovery.findPasswordFields(query);
-    if (hasLocalUnownedScope && passwordFields.length > 0) {
-      const newPasswordFieldCount = passwordFields.filter((field) => {
-        const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
-          field,
-          expected: "new-password",
-        };
-        return passwordFieldDiscovery.hasAutocompleteToken(
-          newPasswordTokenRequest,
-        );
-      }).length;
-      const controls = Array.from(
-        query.root.querySelectorAll<HTMLElement>(
-          authenticationAdvanceControlSelector,
-        ),
-      );
-      const observation: AuthenticationAdvanceControlObservation = {
-        actionability: "actionable",
-        ownership: "locally-scoped",
-        semantics: control.matches(semanticSubmitControlSelector)
-          ? "semantic-submit"
-          : "activation",
-        authenticationUsername: passwordFieldDiscovery.usernameEvidence(query),
-        passwordFieldCount: passwordFields.length,
-        newPasswordFieldCount,
-        oneTimeCodeFieldCount:
-          passwordFieldDiscovery.findOneTimeCodeFields(query).length,
-        semanticSubmitControlCount:
-          this.countedSemanticSubmitControls(controls),
-        sourceOrigin,
-        formIdentity: formIdentity.trim(),
-        destinationIdentity,
-        label: controlLabel,
-        machineIdentity,
-        submissionMethod: this.controlSubmissionMethod(control),
-        submissionDestinationSource:
-          AuthenticationSubmissionDestination.source(control),
+    const newPasswordFieldCount = passwordFields.filter((field) => {
+      const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+        field,
+        expected: "new-password",
       };
-      return authentication_advance_control_is_safe(observation);
-    }
-
-    return can_activate_authentication_route_control(
-      sourceOrigin,
-      formIdentity,
-      destinationIdentity,
-      controlLabel,
-      machineIdentity,
-      true,
-      passwordFieldDiscovery.isAuthUsernameField(query.usernameField),
-      sharesOwnedForm || hasLocalUnownedScope,
-      false,
+      return passwordFieldDiscovery.hasAutocompleteToken(
+        newPasswordTokenRequest,
+      );
+    }).length;
+    const controls = Array.from(
+      query.root.querySelectorAll<HTMLElement>(
+        authenticationAdvanceControlSelector,
+      ),
     );
+    const observation: AuthenticationAdvanceControlObservation = {
+      actionability: "actionable",
+      ownership: sharesOwnedForm
+        ? "owned-form"
+        : hasLocalUnownedScope
+          ? "locally-scoped"
+          : "unowned",
+      semantics: control.matches(semanticSubmitControlSelector)
+        ? "semantic-submit"
+        : "activation",
+      authenticationUsername: passwordFieldDiscovery.usernameEvidence(query),
+      passwordFieldCount: passwordFields.length,
+      newPasswordFieldCount,
+      oneTimeCodeFieldCount:
+        passwordFieldDiscovery.findOneTimeCodeFields(query).length,
+      semanticSubmitControlCount: this.countedSemanticSubmitControls(controls),
+      sourceOrigin,
+      formIdentity: formIdentity.trim(),
+      destinationIdentity,
+      label: controlLabel,
+      machineIdentity,
+      submissionMethod: this.controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
+    };
+    return query.advanceControlIsSafe
+      ? query.advanceControlIsSafe(observation)
+      : authentication_advance_control_is_safe(observation);
   }
 
   clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
@@ -793,11 +800,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       ),
     );
     for (const control of controls) {
-      if (
-        ownedScope.kind === PasswordFormScopeKind.Owned &&
-        control.form !== ownedScope.owner
-      ) {
-        continue;
+      const controlScope = this.associatedAuthenticationForm(control);
+      if (ownedScope.kind === PasswordFormScopeKind.Owned) {
+        if (
+          controlScope.kind !== PasswordFormScopeKind.Owned ||
+          controlScope.owner !== ownedScope.owner
+        ) {
+          continue;
+        }
       }
       if (this.controlIsInert(control)) {
         continue;
@@ -898,15 +908,19 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
       };
-      return (
-        this.authenticationFactStringsAreTransportable([
-          observation.sourceOrigin,
-          observation.formIdentity,
-          observation.destinationIdentity,
-          observation.label,
-          ((v) => (v ? v : ""))(observation.machineIdentity),
-        ]) && authentication_advance_control_is_safe(observation)
-      );
+      const transportable = this.authenticationFactStringsAreTransportable([
+        observation.sourceOrigin,
+        observation.formIdentity,
+        observation.destinationIdentity,
+        observation.label,
+        ((v) => (v ? v : ""))(observation.machineIdentity),
+      ]);
+      if (!transportable) return false;
+      // The shortlist grants no action authority. In extension content worlds,
+      // retain the candidate for the subsequent offscreen Rust policy batch.
+      if (typeof chrome === "object" && Boolean(chrome.runtime?.id))
+        return true;
+      return authentication_advance_control_is_safe(observation);
     });
   }
 

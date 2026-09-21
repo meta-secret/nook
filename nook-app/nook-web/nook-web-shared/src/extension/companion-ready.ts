@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Companion readiness messages are generated transport records assembled at this boundary. */
 import initCompanionWasm, {
   admit_extension_pairing_vault_type,
   decode_extension_event_log_record,
@@ -18,6 +19,23 @@ import {
   type ExtensionPairingVaultTypeRuntime,
   extensionPairingVaultType,
 } from "./extension-pairing-vault-type";
+import {
+  COMPANION_WASM_HOST_RESOURCE_PATH,
+  COMPANION_WASM_RESOURCE_PATH,
+  CompanionWasmHostDiagnosticOutcome,
+  CompanionWasmHostDiagnosticPhase,
+  CompanionWasmHostDiagnosticSink,
+  CompanionWasmHostAdmissionKind,
+  CompanionWasmHostMessageAdmission,
+  CompanionWasmHostRequestKind,
+  CompanionWasmHostResponseKind,
+  CompanionWasmStartup,
+  type CompanionWasmHostRequest,
+  type CompanionWasmHostResponseAdmissionRequest,
+  type CompanionWasmHostTransportValue,
+  type CompanionWasmStartupDiagnostic,
+  type CompanionWasmStartupDiagnostics,
+} from "./companion-wasm-startup";
 
 type BunFileApi = {
   file: (path: string) => {
@@ -47,6 +65,7 @@ declare const process: {
   cwd?: () => string;
   env?: Record<string, string>;
 };
+declare const __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__: boolean;
 
 const SEALED_COMPANION_WASM_PATH =
   "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
@@ -195,7 +214,208 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
   return { kind: CompanionWasmModuleKind.Absent };
 }
 
-async function startCompanionWasm(): Promise<void> {
+class CompanionWasmStartupDiagnosticSink implements CompanionWasmStartupDiagnostics {
+  record(diagnostic: CompanionWasmStartupDiagnostic): void {
+    if (!this.diagnosticsEnabled()) return;
+    console.info("[Nook] companion WASM startup", diagnostic);
+  }
+
+  private diagnosticsEnabled(): boolean {
+    try {
+      return (
+        typeof __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__ === "boolean" &&
+        __NOOK_EXTENSION_DIAGNOSTICS_ENABLED__
+      );
+    } catch {
+      return false;
+    }
+  }
+}
+
+class ExtensionOriginCompanionWasmModuleLoader {
+  private readonly messageAdmission = new CompanionWasmHostMessageAdmission();
+  private readonly diagnostics = new CompanionWasmHostDiagnosticSink();
+
+  async load(): Promise<WebAssembly.Module> {
+    const hostUrl = chromeRuntimeUrl(COMPANION_WASM_HOST_RESOURCE_PATH);
+    if (!hostUrl) {
+      throw new Error("extension-origin companion WASM host unavailable");
+    }
+    if (typeof document !== "object" || typeof window !== "object") {
+      throw new Error(
+        "extension-origin companion WASM host requires a document",
+      );
+    }
+    const extensionOrigin = new URL(hostUrl).origin;
+    const companionWasmUrl = chromeRuntimeUrl(COMPANION_WASM_RESOURCE_PATH);
+    if (!companionWasmUrl) {
+      throw new Error("packaged companion WASM resource unavailable");
+    }
+    const frame = document.createElement("iframe");
+    frame.src = hostUrl;
+    frame.hidden = true;
+    frame.setAttribute("aria-hidden", "true");
+    const channel = new MessageChannel();
+    try {
+      return await new Promise<WebAssembly.Module>(
+        // eslint-disable-next-line max-params -- Promise executor owns its host callback shape.
+        (resolve, reject) => {
+          const request: CompanionWasmHostRequest = {
+            kind: CompanionWasmHostRequestKind.CompileCompanionModule,
+          };
+          const timeout = window.setTimeout(() => {
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.Timeout,
+              outcome: CompanionWasmHostDiagnosticOutcome.TimedOut,
+            });
+            cleanup();
+            reject(new Error("extension-origin companion WASM host timed out"));
+          }, 5000);
+          const cleanup = (): void => {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", handleMessage);
+            channel.port1.removeEventListener("message", handlePortMessage);
+            channel.port1.close();
+            frame.removeEventListener("load", handleFrameLoad);
+          };
+          const handleMessage = (
+            event: MessageEvent<CompanionWasmHostTransportValue>,
+          ): void => {
+            const hostWindow = frame.contentWindow;
+            if (!hostWindow) return;
+            const response = event.data;
+            const responseRecord =
+              Boolean(response) &&
+              typeof response === "object" &&
+              !Array.isArray(response)
+                ? response
+                : false;
+            const responseKind = responseRecord ? responseRecord.kind : false;
+            const compiledResponse =
+              responseKind === CompanionWasmHostResponseKind.Compiled;
+            const failedResponse =
+              responseKind === CompanionWasmHostResponseKind.Failed;
+            const resourceAccepted =
+              compiledResponse &&
+              responseRecord &&
+              responseRecord.resourceUrl === companionWasmUrl;
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.SourceAdmission,
+              outcome:
+                event.source === hostWindow
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.OriginAdmission,
+              outcome:
+                event.origin === extensionOrigin
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ResourceAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : resourceAccepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            const admissionRequest: CompanionWasmHostResponseAdmissionRequest =
+              {
+                event,
+                expectedSource: hostWindow,
+                expectedOrigin: extensionOrigin,
+                expectedResourceUrl: companionWasmUrl,
+              };
+            const admission =
+              this.messageAdmission.admitResponse(admissionRequest);
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ModuleAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : admission.kind === CompanionWasmHostAdmissionKind.Accepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            if (admission.kind === CompanionWasmHostAdmissionKind.Rejected) {
+              return;
+            }
+            cleanup();
+            if (admission.kind === CompanionWasmHostAdmissionKind.Accepted) {
+              resolve(admission.module);
+              return;
+            }
+            reject(
+              new Error("extension-origin companion WASM compilation failed"),
+            );
+          };
+          const handlePortMessage = (
+            event: MessageEvent<CompanionWasmHostTransportValue>,
+          ): void => {
+            const response = event.data;
+            const isRecord =
+              Boolean(response) &&
+              typeof response === "object" &&
+              !Array.isArray(response);
+            const responseKind = isRecord ? response.kind : false;
+            const failedResponse =
+              responseKind === CompanionWasmHostResponseKind.Failed;
+            const admission = this.messageAdmission.admitPortResponse({
+              data: response,
+              expectedResourceUrl: companionWasmUrl,
+            });
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.ModuleAdmission,
+              outcome: failedResponse
+                ? CompanionWasmHostDiagnosticOutcome.Skipped
+                : admission.kind === CompanionWasmHostAdmissionKind.Accepted
+                  ? CompanionWasmHostDiagnosticOutcome.Succeeded
+                  : CompanionWasmHostDiagnosticOutcome.Rejected,
+            });
+            if (admission.kind === CompanionWasmHostAdmissionKind.Rejected) {
+              return;
+            }
+            cleanup();
+            if (admission.kind === CompanionWasmHostAdmissionKind.Accepted) {
+              resolve(admission.module);
+              return;
+            }
+            reject(
+              new Error("extension-origin companion WASM compilation failed"),
+            );
+          };
+          const handleFrameLoad = (): void => {
+            this.diagnostics.record({
+              phase: CompanionWasmHostDiagnosticPhase.IframeLoad,
+              outcome: CompanionWasmHostDiagnosticOutcome.Succeeded,
+            });
+            const hostWindow = frame.contentWindow;
+            if (!hostWindow) {
+              cleanup();
+              reject(new Error("extension-origin companion WASM host closed"));
+              return;
+            }
+            hostWindow.postMessage(request, extensionOrigin, [channel.port2]);
+          };
+          window.addEventListener("message", handleMessage);
+          channel.port1.addEventListener("message", handlePortMessage);
+          channel.port1.start();
+          frame.addEventListener("load", handleFrameLoad);
+          this.diagnostics.record({
+            phase: CompanionWasmHostDiagnosticPhase.IframeLoad,
+            outcome: CompanionWasmHostDiagnosticOutcome.Started,
+          });
+          document.documentElement.append(frame);
+        },
+      );
+    } finally {
+      frame.remove();
+    }
+  }
+}
+
+async function startEmbeddedCompanionWasm(): Promise<void> {
   const resolved = await companionWasmModuleOrPath();
   if (resolved.kind === CompanionWasmModuleKind.Present) {
     const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
@@ -208,6 +428,23 @@ async function startCompanionWasm(): Promise<void> {
   // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).
   // Web-app vitest installs a fetch mock in setup-wasm for this path.
   await initCompanionWasm();
+}
+
+async function startCompanionWasm(): Promise<void> {
+  const startup = new CompanionWasmStartup();
+  const request: Parameters<typeof startup.initialize>[0] = {
+    initializeEmbeddedCompanionWasm: startEmbeddedCompanionWasm,
+    loadExtensionOriginCompanionWasmModule: () =>
+      new ExtensionOriginCompanionWasmModuleLoader().load(),
+    initializeExtensionOriginCompanionWasm: async (module) => {
+      const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
+        module_or_path: module,
+      };
+      await initCompanionWasm(nookTypedArgs0_0);
+    },
+    diagnostics: new CompanionWasmStartupDiagnosticSink(),
+  };
+  await startup.initialize(request);
 }
 
 /**

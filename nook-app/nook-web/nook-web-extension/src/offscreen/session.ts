@@ -36,6 +36,7 @@ import {
   type HandleSessionMessageArgs,
   type SessionOperationContext,
 } from './session-operations'
+import { handleCompanionWasmMessage } from './session-companion-wasm-operations'
 import {
   CompanionVaultDiscovery,
   CompanionDiscoveryEndpointKind,
@@ -43,6 +44,7 @@ import {
 } from './session-vault-operations'
 import { decode_companion_identity_discovery_observation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
+import type { CompanionWasmSessionResponse } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 
@@ -387,12 +389,14 @@ export type ExtensionSessionResponse =
       | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
     >
   | WebsitePasskeyAccountsSessionResponse
+  | CompanionWasmSessionResponse
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {
     handleMessage,
     handleCompanionIdentityDiscovery,
     handleCompanionIdentityHandoff,
+    handleCompanionWasmMessage,
     decodeProviders: async (providers) => {
       return admit_extension_storage_providers(providers)
     },

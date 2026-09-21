@@ -81,3 +81,48 @@ fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Resu
     );
     Ok(())
 }
+
+#[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
+fn local_https_generator_keeps_docker_arguments_in_one_shell_command() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    let web_tasks = root.read("nook-app/nook-web/Taskfile.yml");
+    let https_generate = section(&web_tasks, "  web:https:generate:\n", "  _web:install:\n");
+
+    for marker in [
+        "{{.DOCKER}} build",
+        "--file \"{{.REPO_ROOT}}/nook-app/nook-web/docker/mkcert.Dockerfile\"",
+        "--tag \"{{.DOCKER_MKCERT_IMAGE}}\"",
+        "{{.DOCKER}} run --rm",
+        "-e CAROOT=/certs",
+        "-v \"$https_dir:/certs\"",
+        "\"{{.DOCKER_MKCERT_IMAGE}}\"",
+        "-cert-file /certs/localhost.pem",
+        "-key-file /certs/localhost-key.pem",
+    ] {
+        let line = https_generate
+            .lines()
+            .find(|line| line.contains(marker))
+            .unwrap_or_else(|| panic!("HTTPS generator is missing Docker argument {marker}"));
+        assert!(
+            line.trim_end().ends_with('\\'),
+            "Docker argument {marker} must escape the YAML shell-block newline"
+        );
+    }
+    assert!(
+        https_generate
+            .lines()
+            .any(|line| line.trim() == "\"{{.REPO_ROOT}}\";"),
+        "Docker build must retain the repository context argument"
+    );
+    assert!(
+        https_generate
+            .lines()
+            .any(|line| line.trim() == "localhost 127.0.0.1 ::1;"),
+        "mkcert container must retain its certificate host arguments"
+    );
+    Ok(())
+}

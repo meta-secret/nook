@@ -21,6 +21,7 @@ import type {
   ExtensionSessionRuntimeMessageValue,
 } from '../background/service-worker/session-runtime-messages'
 import { ExtensionPairingStorageProviderPayloadDecoder } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { CompanionWasmSessionMessage } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 export const EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS = 5_000
 
@@ -95,6 +96,7 @@ export type ExtensionSessionTransportRequest =
   | ExtensionSessionImportTransportRequest
   | CompanionIdentityDiscoverySessionTransportRequest
   | CompanionIdentityHandoffSessionTransportRequest
+  | CompanionWasmSessionMessage
 
 export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
   'nook:extension-session-authorize-companion-identity-handoff'

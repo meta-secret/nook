@@ -5,6 +5,8 @@ import { createContext, runInContext } from 'node:vm'
 
 import { expect, test } from 'bun:test'
 import {
+  ExtensionDiagnosticBuildAvailability,
+  ExtensionDiagnosticBuildPolicy,
   ExtensionEntrypointBuildFormat,
   extensionEntrypointBuildPolicy,
 } from './build-contract'
@@ -25,6 +27,22 @@ test('uses classic IIFE output for content scripts and module output elsewhere',
       entrypoint: 'src/background/service-worker.ts',
     }),
   ).toBe(ExtensionEntrypointBuildFormat.Module)
+})
+
+test('enables authentication diagnostics only for non-production channels', () => {
+  const policy = new ExtensionDiagnosticBuildPolicy()
+  expect(policy.availability({ channel: 'production' })).toBe(
+    ExtensionDiagnosticBuildAvailability.Disabled,
+  )
+  expect(policy.availability({ channel: 'development' })).toBe(
+    ExtensionDiagnosticBuildAvailability.Enabled,
+  )
+  expect(policy.availability({ channel: 'local' })).toBe(
+    ExtensionDiagnosticBuildAvailability.Enabled,
+  )
+  expect(policy.availability({ channel: 'pr-408' })).toBe(
+    ExtensionDiagnosticBuildAvailability.Enabled,
+  )
 })
 
 test('emits an executable self-contained classic autofill bundle', async () => {

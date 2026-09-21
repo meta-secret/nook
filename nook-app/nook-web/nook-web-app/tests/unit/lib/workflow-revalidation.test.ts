@@ -4,6 +4,7 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticationWorkflowStage,
+  bind_authentication_page_observation_facts,
   type AuthenticationApprovalRequirement,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -84,6 +85,9 @@ function matchedDeliveryWithSelectedFacts(
     response: {
       ...delivery.response,
       selectedFacts: { state: 'selected' as const, facts: selectedFacts },
+      factsBindingToken: bind_authentication_page_observation_facts({
+        observations: [selectedFacts],
+      }),
     },
   }
 }
@@ -95,20 +99,24 @@ function enrichedMatchedDelivery(
   const selectedFacts = message.payload.observations[0]
   if (!selectedFacts) throw new Error('expected selected workflow facts')
   const delivery = matchedDelivery(action)
+  const enrichedFacts = {
+    ...selectedFacts,
+    authenticator: {
+      ...selectedFacts.authenticator,
+      passkeyAccountAvailability: 'ready' as const,
+    },
+  }
   return {
     ...delivery,
     response: {
       ...delivery.response,
       selectedFacts: {
         state: 'selected' as const,
-        facts: {
-          ...selectedFacts,
-          authenticator: {
-            ...selectedFacts.authenticator,
-            passkeyAccountAvailability: 'ready' as const,
-          },
-        },
+        facts: enrichedFacts,
       },
+      factsBindingToken: bind_authentication_page_observation_facts({
+        observations: [enrichedFacts],
+      }),
     },
   }
 }

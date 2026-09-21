@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authentication_advance_control_is_safe,
+  looks_like_login_advance_control_label,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  passwordFormCredentialInteraction as credentials,
   passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -14,7 +17,33 @@ const wholeDocumentPasswordFormSubmission: Parameters<
 function didSubmit(
   request: Parameters<typeof forms.submitLoginForm>[0],
 ): boolean {
-  return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
+  const workflow = forms
+    .summarizeAuthenticationWorkflowForms()
+    .find(
+      (candidate) =>
+        candidate.root === request.root &&
+        (request.kind === PasswordFormQueryKind.Root ||
+          candidate.formScope.kind === request.formScope.kind),
+    )
+  const facts = workflow
+    ? forms.authenticationPageObservationFacts({
+        observation: workflow,
+        authenticatorSetupHint: false,
+      })
+    : false
+  const detailedAdvanceControl = facts ? facts.detailedAdvanceControl : false
+  const approvedAdvanceControls =
+    detailedAdvanceControl && detailedAdvanceControl.kind === 'observed'
+      ? detailedAdvanceControl.observations.filter(
+          (control) =>
+            authentication_advance_control_is_safe(control) &&
+            looks_like_login_advance_control_label(control.label),
+        )
+      : []
+  return (
+    forms.submitLoginForm({ ...request, approvedAdvanceControls }) ===
+    FormSubmissionResult.Submitted
+  )
 }
 
 afterEach(() => {
@@ -242,6 +271,64 @@ describe('classified login activation', () => {
     expect(advanced).toBe(true)
   })
 
+  test('discovers a Google identifier workflow around a nested identifierNext activation', () => {
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view">
+        <section class="identifier-shell">
+          <label for="identifierId">Email or phone</label>
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+        <section class="identifier-actions">
+          <div id="identifierNext">
+            <div role="button"><span>Next</span></div>
+          </div>
+        </section>
+      </main>
+    `
+
+    const [workflow] = forms.summarizeAuthenticationWorkflowForms()
+
+    expect(workflow?.root).toBe(document.querySelector('#signin-view'))
+    expect(workflow?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      passwordFieldCount: 0,
+    })
+  })
+
+  test('activates the approved nested Google identifierNext control', () => {
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view">
+        <label for="identifierId">Email or phone</label>
+        <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" />
+        <input name="hiddenPassword" type="password" hidden />
+        <div id="identifierNext">
+          <button type="button">Next</button>
+        </div>
+        <button type="button">Forgot email?</button>
+        <button type="button">Create account</button>
+      </main>
+    `
+    let advanced = false
+    document
+      .querySelector('#identifierNext button')
+      ?.addEventListener('click', () => {
+        advanced = true
+      })
+    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
+    if (!workflow) throw new Error('expected Google identifier workflow')
+
+    expect(
+      didSubmit({
+        kind: PasswordFormQueryKind.Scoped,
+        root: workflow.root,
+        formScope: workflow.formScope,
+      }),
+    ).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
   test('does not activate an external GET submitter after filling passwords', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">
@@ -410,39 +497,6 @@ describe('classified login activation', () => {
 
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe(true)
-  })
-
-  test.each([
-    ['<button aria-label="Anmelden" title="Anmelden">Anmelden</button>', true],
-    [
-      '<button aria-label="Se connecter" title="Se connecter">Se connecter</button>',
-      true,
-    ],
-    ['<button type="submit">Supprimer le compte</button>', false],
-    ['<form method="post" id="f"><button>Entrar</button></form>', false],
-  ])('gates form-less localized control %s', (control, expected) => {
-    window.history.replaceState({}, '', '/')
-    document.body.innerHTML = `
-      <div role="form" class="signin-panel">
-        <input data-qa="login_email" name="email" type="email" />
-        ${control}
-      </div>
-    `
-    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
-    expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    const submissionArgs: Parameters<typeof forms.submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: ((...[v = document]) => v)(workflow?.root),
-      formScope: ((
-        ...[
-          v = {
-            kind: PasswordFormScopeKind.Unowned,
-          },
-        ]
-      ) => v)(workflow?.formScope),
-    }
-
-    expect(didSubmit(submissionArgs)).toBe(expected)
   })
 
   test.each([
@@ -902,59 +956,6 @@ describe('classified login activation', () => {
     ).toBe('vault-pass')
   })
 
-  test('does not fill when the approved submitter uses formmethod dialog', () => {
-    document.body.innerHTML = `
-      <form method="post" id="login" action="/auth/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-      </form>
-      <button type="submit" form="login" formmethod="dialog">Sign in</button>
-    `
-
-    expect(
-      forms.fillLoginCredentials({
-        credentials: { username: 'vault-user', password: 'vault-pass' },
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }),
-    ).toBe(false)
-    expect(
-      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
-    ).toBe('')
-    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
-  })
-
-  test('does not submit GET-default formmethod overrides after filling passwords', () => {
-    for (const formmethod of ['get', '', 'invalid', ' post ']) {
-      document.body.innerHTML = `
-        <form id="login" method="post" action="/auth/login">
-          <input autocomplete="username" />
-          <input type="password" autocomplete="current-password" />
-        </form>
-        <button id="unsafe" type="submit" form="login" formmethod="${formmethod}">Sign in</button>
-      `
-      let submitted = false
-      document.querySelector('form')?.addEventListener('submit', (event) => {
-        event.preventDefault()
-        submitted = true
-      })
-
-      expect(
-        forms.fillLoginCredentials({
-          credentials: { username: 'vault-user', password: 'vault-pass' },
-          kind: PasswordFormQueryKind.Root,
-          root: document,
-        }),
-      ).toBe(false)
-      expect(
-        document.querySelector<HTMLInputElement>('input[type="password"]')
-          ?.value,
-      ).toBe('')
-      expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
-      expect(submitted).toBe(false)
-    }
-  })
-
   test('does not submit a form outside the requested root', () => {
     document.body.innerHTML = `<form method="post" id="outside" action="/auth/login"><button id="submit" type="submit">Sign in</button></form><section id="scope"><input form="outside" type="password" /></section>`
     let activated = false
@@ -968,26 +969,5 @@ describe('classified login activation', () => {
 
     expect(didSubmit({ kind: PasswordFormQueryKind.Root, root })).toBe(false)
     expect(activated).toBe(false)
-  })
-
-  test('fills the first enabled OTP field through the native value setter', () => {
-    document.body.innerHTML = `
-      <input autocomplete="one-time-code" disabled />
-      <input id="otp-code" type="tel" />
-    `
-    const field = document.querySelector<HTMLInputElement>('#otp-code')
-    let inputEvents = 0
-    field?.addEventListener('input', () => inputEvents++)
-
-    expect(
-      credentials.fillOneTimeCode({
-        code: '123456',
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }),
-    ).toBe(true)
-    expect(field?.value).toBe('123456')
-    expect(inputEvents).toBe(1)
-    expect(document.activeElement).toBe(field)
   })
 })

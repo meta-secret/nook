@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Chrome test doubles provide the minimal tab contract exercised by this suite. */
 import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -152,5 +153,45 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
       ok: false,
       error: 'Invalid extension session request.',
     })
+  })
+
+  test('leaves content companion WASM requests for the service worker', async () => {
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      handleCompanionIdentityHandoff: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      handleCompanionWasmMessage: async () => ok({ ok: true }),
+      decodeProviders,
+      handleMessage: async () => ok({ ok: true }),
+    })
+    let responded = false
+    const handled = dispatcher.listener()(
+      {
+        type: 'nook:extension-session-classify-page-inputs',
+        origin: 'https://accounts.google.com',
+        payload: { fields: [], labels: [] },
+      },
+      {
+        id: 'nook-extension',
+        tab: { id: 7 } as chrome.tabs.Tab,
+        url: 'https://accounts.google.com/v3/signin/identifier',
+      },
+      () => {
+        responded = true
+      },
+    )
+
+    expect(Boolean(handled)).toBe(false)
+    await Promise.resolve()
+    expect(responded).toBe(false)
   })
 })

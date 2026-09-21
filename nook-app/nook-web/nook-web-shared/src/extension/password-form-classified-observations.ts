@@ -1,7 +1,16 @@
 import {
   revalidate_approved_authentication_workflow,
+  type ApprovedAuthenticationWorkflowDecision,
   type AuthenticationPageObservationFacts,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+} from "./companion-wasm-runtime-messages";
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from "./companion-wasm-runtime-transport";
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   authenticationSubmissionControls,
@@ -32,6 +41,11 @@ type LiveApprovedAuthenticationWorkflowRequest = {
 type AuthenticationWorkflowScopePair = {
   left: PasswordFormObservation;
   right: PasswordFormObservation;
+};
+
+type LiveAuthenticationWorkflowDecisionProjectionRequest = {
+  readonly liveCandidates: ClassifiedAuthenticationWorkflowObservation[];
+  readonly decision: ApprovedAuthenticationWorkflowDecision;
 };
 
 export class AuthenticationWorkflowClassification {
@@ -110,27 +124,23 @@ export class LiveApprovedAuthenticationWorkflow {
   constructor(
     private readonly request: LiveApprovedAuthenticationWorkflowRequest,
   ) {}
-  get disposition(): LiveAuthenticationWorkflowDisposition {
-    const { approved, authenticatorSetupHint, backupCodesHint } = this.request;
+  private liveCandidates(): ClassifiedAuthenticationWorkflowObservation[] {
+    const { authenticatorSetupHint, backupCodesHint } = this.request;
     const classificationRequest: ClassifiedAuthenticationWorkflowRequest = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint,
       backupCodesHint,
     };
-    const liveCandidates = new AuthenticationWorkflowClassification(
-      classificationRequest,
-    ).observations;
-    const revalidationRequest: Parameters<
-      typeof revalidate_approved_authentication_workflow
-    >[0] = {
-      approved: approved.facts,
-      live: {
-        observations: liveCandidates.map((candidate) => candidate.facts),
-      },
-    };
-    const decision =
-      revalidate_approved_authentication_workflow(revalidationRequest);
+    return new AuthenticationWorkflowClassification(classificationRequest)
+      .observations;
+  }
+
+  private dispositionFromDecision({
+    liveCandidates,
+    decision,
+  }: LiveAuthenticationWorkflowDecisionProjectionRequest): LiveAuthenticationWorkflowDisposition {
+    const { approved } = this.request;
     if (decision.kind === "rejected")
       return LiveAuthenticationWorkflowDisposition.Changed;
     const selected = liveCandidates[decision.observationIndex];
@@ -143,5 +153,59 @@ export class LiveApprovedAuthenticationWorkflow {
       .disposition === AuthenticationWorkflowScopeDisposition.Same
       ? LiveAuthenticationWorkflowDisposition.Current
       : LiveAuthenticationWorkflowDisposition.Changed;
+  }
+
+  get disposition(): LiveAuthenticationWorkflowDisposition {
+    const { approved } = this.request;
+    const liveCandidates = this.liveCandidates();
+    const revalidationRequest: Parameters<
+      typeof revalidate_approved_authentication_workflow
+    >[0] = {
+      approved: approved.facts,
+      live: {
+        observations: liveCandidates.map((candidate) => candidate.facts),
+      },
+    };
+    const decision =
+      revalidate_approved_authentication_workflow(revalidationRequest);
+    const projectionRequest: LiveAuthenticationWorkflowDecisionProjectionRequest =
+      { liveCandidates, decision };
+    return this.dispositionFromDecision(projectionRequest);
+  }
+
+  async extensionDisposition(
+    browser: typeof globalThis,
+  ): Promise<LiveAuthenticationWorkflowDisposition> {
+    if (!browser.chrome.runtime?.id) return this.disposition;
+    const { approved } = this.request;
+    const liveCandidates = this.liveCandidates();
+    const runtimeMessage: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow,
+      payload: {
+        approved: approved.facts,
+        live: {
+          observations: liveCandidates.map((candidate) => candidate.facts),
+        },
+      },
+      origin: browser.location.origin,
+    };
+    const delivery = await sendCompanionWasmRuntimeMessage(
+      browser,
+      runtimeMessage,
+    );
+    if (
+      delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
+      !delivery.response ||
+      typeof delivery.response !== "object" ||
+      !("revalidationDecision" in delivery.response)
+    ) {
+      return LiveAuthenticationWorkflowDisposition.Changed;
+    }
+    const projectionRequest: LiveAuthenticationWorkflowDecisionProjectionRequest =
+      {
+        liveCandidates,
+        decision: delivery.response.revalidationDecision,
+      };
+    return this.dispositionFromDecision(projectionRequest);
   }
 }

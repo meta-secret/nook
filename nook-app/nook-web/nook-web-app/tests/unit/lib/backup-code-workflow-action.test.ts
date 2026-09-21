@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowAction,
+  type AuthenticationPageObservationFacts,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
 import type { EnrollmentFlowHost } from '../../../../nook-web-extension/src/content/enrollment-flow'
@@ -52,6 +55,30 @@ vi.mock(
   }),
 )
 import { RevalidatedEnrollmentAction } from '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action'
+const approvedFacts: AuthenticationPageObservationFacts = {
+  fields: {
+    usernameFieldCount: 0,
+    currentPasswordFieldCount: 0,
+    newPasswordFieldCount: 0,
+    genericPasswordFieldCount: 0,
+    oneTimeCodeFieldCount: 0,
+    actionablePasswordFieldCount: 0,
+    readonlyPasswordFieldCount: 0,
+  },
+  ceremony: {
+    oneTimeCodeProgression: 'advance-control-required',
+    manualCheckpoint: 'absent',
+    advanceControl: 'absent',
+  },
+  authenticator: {
+    authenticatorSetup: 'absent',
+    backupCodesCopy: 'A1B2-C3D4-E5F6',
+    passkeyControl: 'absent',
+    passkeyAccountAvailability: 'unavailable',
+    matchingPasskeyAccountCount: 0,
+  },
+  credentialSubmission: { kind: 'absent' },
+}
 beforeEach(() => vi.clearAllMocks())
 describe('backup-code workflow action', () => {
   function connectedHost() {
@@ -119,6 +146,7 @@ describe('backup-code workflow action', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
+        approvedFacts,
         revalidateCurrentWorkflow: () => workflow,
       })
       return {

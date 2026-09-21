@@ -46,6 +46,15 @@ const renderState = vi.hoisted(() => ({
   },
 }))
 
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/widget-workflow-key',
+  () => ({
+    authenticationWidgetWorkflowKey: vi.fn(() =>
+      Promise.resolve('login:credentials'),
+    ),
+  }),
+)
+
 type MountTestWidgetShellArgs = {
   shell: { host: HTMLElement }
 }
@@ -249,19 +258,25 @@ type RenderPasskeyWidgetArgs = {
   >[0]['loginMatches']
 }
 
-function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
+async function renderPasskeyWidget({
+  loginMatches,
+}: RenderPasskeyWidgetArgs): Promise<void> {
   const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] =
     {
       snapshot,
       workflow,
       facts,
+      factsBindingToken: 'approved-observation',
       loginMatches,
+      savedLoginActionAvailable:
+        loginMatches.kind === 'locked' ||
+        (loginMatches.kind === 'ready' && loginMatches.count > 0),
       vaultConnection: {
         kind: PilotVaultConnectionKind.Connected,
         vaultName: 'Personal',
       },
     }
-  authenticationWidgetRenderer.renderWidget(args)
+  await authenticationWidgetRenderer.renderWidget(args)
 }
 
 function savedLoginButton(): HTMLButtonElement | false {
@@ -281,8 +296,8 @@ beforeEach(() => {
 })
 
 describe('passkey workflow saved-login fallback', () => {
-  test('renders and invokes saved login for ready matches', () => {
-    renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 2 } })
+  test('renders and invokes saved login for ready matches', async () => {
+    await renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 2 } })
 
     const savedLogin = savedLoginButton()
     if (savedLogin) savedLogin.click()
@@ -291,8 +306,8 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.continueWithNook).toHaveBeenCalledOnce()
   })
 
-  test('renders saved login for a locked vault', () => {
-    renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
+  test('renders saved login for a locked vault', async () => {
+    await renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
     const savedLogin = savedLoginButton()
     if (savedLogin) savedLogin.click()
 
@@ -300,7 +315,7 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.continueWithNook).toHaveBeenCalledOnce()
   })
 
-  test('omits saved login for empty and unavailable matches', () => {
+  test('omits saved login for empty and unavailable matches', async () => {
     const unavailableMatches: Array<
       Parameters<
         typeof authenticationWidgetRenderer.renderWidget
@@ -308,17 +323,17 @@ describe('passkey workflow saved-login fallback', () => {
     > = [{ kind: 'ready', count: 0 }, { kind: 'unavailable' }]
     for (const loginMatches of unavailableMatches) {
       document.body.replaceChildren()
-      renderPasskeyWidget({ loginMatches })
+      await renderPasskeyWidget({ loginMatches })
       expect(savedLoginButton()).toBe(false)
     }
   })
 
-  test('cancels a pending login picker before primary passkey activation', () => {
+  test('cancels a pending login picker before primary passkey activation', async () => {
     renderState.pickerState.login = {
       kind: 'open',
       request: { approval: {} },
     }
-    renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 2 } })
+    await renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 2 } })
     const primary = document.querySelector<HTMLButtonElement>(
       'button[data-primary="true"]',
     )
@@ -332,7 +347,7 @@ describe('passkey workflow saved-login fallback', () => {
 })
 
 describe('authenticator enrollment workflow', () => {
-  test('renders and dispatches the Rust-selected enrollment action', () => {
+  test('renders and dispatches the Rust-selected enrollment action', async () => {
     const enrollmentSnapshot: AuthenticationWorkflowSnapshotView = {
       ...snapshot,
       action: AuthenticationWorkflowAction.EnrollAuthenticator,
@@ -343,14 +358,16 @@ describe('authenticator enrollment workflow', () => {
       snapshot: enrollmentSnapshot,
       workflow,
       facts,
+      factsBindingToken: 'approved-observation',
       loginMatches: { kind: 'unavailable' },
+      savedLoginActionAvailable: false,
       vaultConnection: {
         kind: PilotVaultConnectionKind.Connected,
         vaultName: 'Personal',
       },
     }
 
-    authenticationWidgetRenderer.renderWidget(args)
+    await authenticationWidgetRenderer.renderWidget(args)
     const primary = document.querySelector<HTMLButtonElement>(
       'button[data-primary="true"]',
     )

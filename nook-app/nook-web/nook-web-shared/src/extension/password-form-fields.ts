@@ -1,39 +1,59 @@
-import { AuthenticationInputSurface } from "./authentication-input-surface";
+/* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- DOM traversal callbacks and generated Rust adapters retain their host-defined shapes. */
+import {
+  PasswordFormScopeKind,
+  PasswordFormUnownedScopeDiscovery,
+  type AutocompleteTokenMatchRequest,
+  type PasswordFormScope,
+  type UnownedAuthContainerRequest,
+} from "./password-form-unowned-scope";
+
+export {
+  PasswordFormScopeKind,
+  type AutocompleteTokenMatchRequest,
+  type ControlObservationAssociationRequest,
+  type LocalOwnedFormAdjacencyRequest,
+  type PasswordFormScope,
+  type UnownedAuthContainerRequest,
+} from "./password-form-unowned-scope";
 import {
   AirbnbLoginModalRouteKind,
   observeAirbnbLoginModalRoute,
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
-import { companionWasmReady } from "./companion-ready";
+import { type AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  NookLoginContextObservation,
-  NookPageInputFieldObservation,
-  authentication_username_evidence,
-  has_login_context,
-  looks_like_email_verification_body,
-  looks_like_login_advance_control_label,
-  looks_like_manual_checkpoint_label,
-  looks_like_one_time_code_field,
-  looks_like_passkey_control_label,
-  looks_like_one_time_code_auto_submit_signal,
-  looks_like_username_field,
-  parse_page_input_type,
-  strongest_authentication_username_evidence,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
-import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
-import { AuthenticationContainerIdentity } from "./password-form-container-identity";
+  CompanionWasmLabelKind,
+  CompanionWasmSessionMessageType,
+  type CompanionWasmLabelRequest,
+  type CompanionWasmPageInputFieldRequest,
+} from "./companion-wasm-runtime-messages";
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from "./companion-wasm-runtime-transport";
+import {
+  PasswordFormFieldDirectClassification,
+  type DirectFieldClassification,
+} from "./password-form-field-direct-classification";
 import { authenticationFieldIndexCatalog } from "./password-form-owned-field-index";
-
-void companionWasmReady;
-
-export enum PasswordFormScopeKind {
-  Owned = "owned",
-  Unowned = "unowned",
-}
-
-export type PasswordFormScope =
-  | { kind: PasswordFormScopeKind.Owned; owner: HTMLFormElement }
-  | { kind: PasswordFormScopeKind.Unowned };
+import {
+  AuthenticationWorkflowScopeDiagnosticBuilder,
+  DisabledAuthenticationWorkflowScopeDiagnosticSink,
+  type AuthenticationWorkflowScopeDiagnosticSink,
+} from "./password-form-scope-diagnostics";
+import {
+  AuthenticationFieldCandidateDiagnosticBuilder,
+  AuthenticationFieldCandidateDisposition,
+  AuthenticationFieldCandidateKind,
+  AuthenticationFieldCandidateSelectorMatch,
+  DisabledAuthenticationFieldCandidateDiagnosticSink,
+  type AuthenticationFieldCandidateDiagnosticSink,
+} from "./password-form-field-candidate-diagnostics";
+import {
+  AuthenticationSelectorEntryDiagnosticBuilder,
+  DisabledAuthenticationSelectorEntryDiagnosticSink,
+  type AuthenticationSelectorEntryDiagnosticSink,
+} from "./password-form-selector-entry-diagnostics";
 
 export type PasswordFieldQuery = {
   root?: ParentNode;
@@ -56,14 +76,11 @@ type PageInputClassificationRequest = {
   loginContext: boolean;
 };
 
+type CompanionWasmFieldClassification = DirectFieldClassification;
+
 type AssociatedFormFieldSelectorRequest = {
   selector: string;
   formId: string;
-};
-
-type TypeButtonPromotionScopeRequest = {
-  container: Element;
-  field: HTMLElement;
 };
 
 export type LocalOwnedLoginObservationRootRequest = {
@@ -78,16 +95,6 @@ export type LocalOwnedLoginObservationRootsRequest = {
   passwordFields: readonly HTMLInputElement[];
   usernameFields: readonly HTMLInputElement[];
   oneTimeCodeFields: readonly HTMLInputElement[];
-};
-
-export type UnownedAuthContainerRequest = {
-  field: HTMLElement;
-  root: ParentNode;
-};
-
-export type AutocompleteTokenMatchRequest = {
-  field: HTMLInputElement;
-  expected: string;
 };
 
 export const usernameFieldSelectors = [
@@ -144,8 +151,9 @@ const oneTimeCodeCandidateSelector = [
   'input[type="password"]',
 ].join(",");
 
+// Google renders the identifier-step Next activation as a roleless wrapper.
 const loginAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]';
+  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"], [role="button"], #identifierNext';
 
 type OneTimeCodeFieldList = HTMLInputElement[];
 
@@ -166,22 +174,275 @@ export type PasskeyControlCandidate = {
 const passkeyControlSelector =
   '[data-nook-passkey-control], button, a[href], [role="button"], input[type="button"], input[type="submit"]';
 
-const formlessTypeButtonSelector =
-  'button[type="button"], input[type="button"], [role="button"]';
-
-export type LocalOwnedFormAdjacencyRequest = {
-  control: HTMLElement;
-  owner: HTMLFormElement;
-};
-
-export type ControlObservationAssociationRequest = {
-  control: HTMLElement;
-  formScope: PasswordFormScope;
-  root: ParentNode;
-};
-
 /** Owns this browser host’s resources and interaction lifecycle. */
-class PasswordFieldDiscovery extends AuthenticationInputSurface {
+class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
+  private readonly directClassification =
+    new PasswordFormFieldDirectClassification();
+  private readonly companionFieldClassifications = new WeakMap<
+    HTMLInputElement,
+    CompanionWasmFieldClassification
+  >();
+  private readonly companionLoginContexts = new WeakMap<
+    HTMLInputElement,
+    boolean
+  >();
+  private readonly companionLabels = new Map<string, boolean>();
+  private companionStrongestUsernameEvidence:
+    AuthenticationUsernameEvidence | false = false;
+
+  async prepareCompanionClassification(root: ParentNode): Promise<void> {
+    const fields = Array.from(root.querySelectorAll<HTMLInputElement>("input"));
+    const fieldRequests: CompanionWasmPageInputFieldRequest[] = fields.map(
+      (field, index) => ({
+        index,
+        observation: {
+          inputType: field.type,
+          disabled: field.disabled,
+          readOnly: field.readOnly,
+          autocompleteTokens: this.autocompleteTokens(field),
+          identityText: this.authenticationFieldIdentityText(field),
+          loginContext: false,
+        },
+        loginContextObservation: this.loginContextObservation(field),
+      }),
+    );
+    const labels = this.companionLabelRequests(root);
+    const delivery = await sendCompanionWasmRuntimeMessage(this.browser, {
+      type: CompanionWasmSessionMessageType.ClassifyPageInputs,
+      payload: { fields: fieldRequests, labels },
+      origin: this.browser.location.origin,
+    });
+    if (delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered) return;
+    const response = delivery.response;
+    if (
+      !response ||
+      typeof response !== "object" ||
+      !("fields" in response) ||
+      !("labels" in response)
+    ) {
+      return;
+    }
+    for (const field of response.fields) {
+      const element = fields[field.index];
+      if (!element) continue;
+      this.companionLoginContexts.set(element, field.loginContext);
+      this.companionFieldClassifications.set(element, {
+        authenticationUsernameEvidence: field.authenticationUsernameEvidence,
+        looksLikeUsernameField: field.looksLikeUsernameField,
+        looksLikeOneTimeCodeField: field.looksLikeOneTimeCodeField,
+      });
+    }
+    if ("strongestAuthenticationUsernameEvidence" in response) {
+      this.companionStrongestUsernameEvidence =
+        response.strongestAuthenticationUsernameEvidence;
+    }
+    for (const label of response.labels) {
+      this.companionLabels.set(`${label.kind}:${label.value}`, label.matches);
+    }
+  }
+
+  private loginContextObservation(field: HTMLInputElement) {
+    const form = field.form;
+    const ancestorIdentities: string[] = [];
+    let container = field.parentElement;
+    let depth = 0;
+    while (container && depth < 6) {
+      ancestorIdentities.push(
+        [
+          container.id,
+          container.className,
+          ((v) => (v ? v : ""))(container.getAttribute("role")),
+        ].join(" "),
+      );
+      container = container.parentElement;
+      depth += 1;
+    }
+    const advanceControls = form
+      ? Array.from(
+          form.ownerDocument.querySelectorAll<HTMLElement>(
+            loginAdvanceControlSelector,
+          ),
+        ).filter(
+          (control) =>
+            (control instanceof HTMLButtonElement ||
+              control instanceof HTMLInputElement) &&
+            control.form === form,
+        )
+      : this.formlessAuthenticationAdvanceControlCandidates(field);
+    const advanceControlLabels = advanceControls.map((control) =>
+      this.localActivationControlLabel(control),
+    );
+    const [preferredAdvanceControlLabel = advanceControlLabels.join(" ")] = [
+      advanceControlLabels.find((label) =>
+        this.cachedLabel(CompanionWasmLabelKind.LoginAdvance, label),
+      ),
+    ];
+    return {
+      formIdentity: form
+        ? [
+            form.id,
+            form.className,
+            ((v) => (v ? v : ""))(form.getAttribute("action")),
+            form.name,
+          ].join(" ")
+        : "",
+      ancestorIdentities,
+      advanceControlLabel: preferredAdvanceControlLabel,
+      pathContext: `${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.hostname)}`,
+    };
+  }
+
+  private formlessAuthenticationAdvanceControlCandidates(
+    field: HTMLInputElement,
+  ): HTMLElement[] {
+    let container = field.parentElement;
+    while (container) {
+      const controls = Array.from(
+        container.querySelectorAll<HTMLElement>(loginAdvanceControlSelector),
+      );
+      if (controls.length > 0) return controls;
+      container = container.parentElement;
+    }
+    return [];
+  }
+
+  private companionLabelRequests(
+    root: ParentNode,
+  ): CompanionWasmLabelRequest[] {
+    const labels: CompanionWasmLabelRequest[] = [];
+    const add = (kind: CompanionWasmLabelRequest["kind"], value: string) => {
+      if (
+        !labels.some((label) => label.kind === kind && label.value === value)
+      ) {
+        labels.push({ kind, value });
+      }
+    };
+    for (const control of root.querySelectorAll<HTMLElement>(
+      loginAdvanceControlSelector,
+    )) {
+      add(
+        CompanionWasmLabelKind.LoginAdvance,
+        this.localActivationControlLabel(control),
+      );
+      add(
+        CompanionWasmLabelKind.PasskeyControl,
+        this.localActivationControlLabel(control),
+      );
+    }
+    for (const checkbox of root.querySelectorAll<HTMLInputElement>(
+      'input[type="checkbox"]',
+    )) {
+      const label = checkbox.labels?.[0];
+      const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
+      add(
+        CompanionWasmLabelKind.ManualCheckpoint,
+        label
+          ? ((v) => (v ? v : ""))(label.textContent).toLowerCase()
+          : ariaLabel
+            ? ariaLabel.value.toLowerCase()
+            : checkbox.name.toLowerCase(),
+      );
+    }
+    for (const field of root.querySelectorAll<HTMLInputElement>("input")) {
+      for (const attribute of ["oninput", "onchange"]) {
+        const handler = field.getAttribute(attribute);
+        if (typeof handler === "string")
+          add(
+            CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+            `${attribute}=${handler}`,
+          );
+      }
+    }
+    add(
+      CompanionWasmLabelKind.EmailVerificationBody,
+      ((v) => (v ? v : ""))(root.textContent),
+    );
+    return labels;
+  }
+
+  protected cachedLabel(
+    kind: CompanionWasmLabelRequest["kind"],
+    value: string,
+  ): boolean {
+    const cached = this.companionLabels.get(`${kind}:${value}`);
+    if (typeof cached === "boolean") return cached;
+    const labelRequest: CompanionWasmLabelRequest = { kind, value };
+    return !this.directClassificationAvailable()
+      ? false
+      : this.directClassification.label(labelRequest);
+  }
+
+  private directClassificationAvailable(): boolean {
+    if (typeof chrome === "object" && Boolean(chrome.runtime?.id)) return false;
+    return (
+      this.fieldCandidateDiagnosticSink instanceof
+        DisabledAuthenticationFieldCandidateDiagnosticSink &&
+      this.selectorEntryDiagnosticSink instanceof
+        DisabledAuthenticationSelectorEntryDiagnosticSink
+    );
+  }
+
+  private readonly workflowScopeDiagnosticBuilder =
+    new AuthenticationWorkflowScopeDiagnosticBuilder();
+  private workflowScopeDiagnosticSink: AuthenticationWorkflowScopeDiagnosticSink =
+    new DisabledAuthenticationWorkflowScopeDiagnosticSink();
+  private readonly fieldCandidateDiagnosticBuilder =
+    new AuthenticationFieldCandidateDiagnosticBuilder();
+  private fieldCandidateDiagnosticSink: AuthenticationFieldCandidateDiagnosticSink =
+    new DisabledAuthenticationFieldCandidateDiagnosticSink();
+  private readonly selectorEntryDiagnosticBuilder =
+    new AuthenticationSelectorEntryDiagnosticBuilder();
+  private selectorEntryDiagnosticSink: AuthenticationSelectorEntryDiagnosticSink =
+    new DisabledAuthenticationSelectorEntryDiagnosticSink();
+
+  setWorkflowScopeDiagnosticSink(
+    sink: AuthenticationWorkflowScopeDiagnosticSink,
+  ): void {
+    this.workflowScopeDiagnosticSink = sink;
+  }
+
+  setFieldCandidateDiagnosticSink(
+    sink: AuthenticationFieldCandidateDiagnosticSink,
+  ): void {
+    this.fieldCandidateDiagnosticSink = sink;
+  }
+
+  setSelectorEntryDiagnosticSink(
+    sink: AuthenticationSelectorEntryDiagnosticSink,
+  ): void {
+    this.selectorEntryDiagnosticSink = sink;
+  }
+
+  private recordFieldCandidateDiagnostic(
+    request: Parameters<
+      AuthenticationFieldCandidateDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.fieldCandidateDiagnosticSink.recordFieldCandidateDiagnostic(
+      this.fieldCandidateDiagnosticBuilder.build(request),
+    );
+  }
+
+  private recordSelectorEntryDiagnostic(
+    request: Parameters<
+      AuthenticationSelectorEntryDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.selectorEntryDiagnosticSink.recordSelectorEntryDiagnostic(
+      this.selectorEntryDiagnosticBuilder.build(request),
+    );
+  }
+
+  protected recordWorkflowScopeDiagnostic(
+    request: Parameters<
+      AuthenticationWorkflowScopeDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.workflowScopeDiagnosticSink.recordWorkflowScopeDiagnostic(
+      this.workflowScopeDiagnosticBuilder.build(request),
+    );
+  }
+
   private associatedFormFieldSelector({
     selector,
     formId,
@@ -288,7 +549,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     );
   }
 
-  private findFields({
+  protected findFields({
     root,
     selector,
     formScope,
@@ -363,94 +624,61 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       selector: 'input[type="password"]',
     };
     if (formScope) query.formScope = formScope;
-    return this.findFields(query).filter(
-      (field) =>
+    return this.findFields(query).flatMap((field) => {
+      const accepted =
         !this.inputIsEffectivelyDisabled(field) &&
         field.type === "password" &&
-        this.isRenderedInput(field),
-    );
+        this.isRenderedInput(field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field,
+        candidateKind: AuthenticationFieldCandidateKind.Password,
+        selectorMatch: AuthenticationFieldCandidateSelectorMatch.Password,
+        disposition: accepted
+          ? AuthenticationFieldCandidateDisposition.Accepted
+          : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      return accepted ? [field] : [];
+    });
   }
 
   private hasLoginContext(field: HTMLInputElement): boolean {
-    const form = field.form;
-    const ancestorIdentities: string[] = [];
-    let container = field.parentElement;
-    let depth = 0;
-    while (container && depth < 6) {
-      ancestorIdentities.push(
-        [
-          container.id,
-          container.className,
-          ((v) => (v ? v : ""))(container.getAttribute("role")),
-        ].join(" "),
-      );
-      container = container.parentElement;
-      depth += 1;
-    }
-    const advanceControls = form
-      ? Array.from(
-          form.ownerDocument.querySelectorAll<HTMLElement>(
-            loginAdvanceControlSelector,
-          ),
-        ).filter(
-          (control) =>
-            (control instanceof HTMLButtonElement ||
-              control instanceof HTMLInputElement) &&
-            control.form === form,
-        )
-      : field.parentElement
-        ? Array.from(
-            field.parentElement.querySelectorAll<HTMLElement>(
-              loginAdvanceControlSelector,
-            ),
-          )
-        : [];
-    const advanceControlLabels = advanceControls.map((control) =>
-      [
-        ((v) => (v ? v : ""))(control.textContent),
-        ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
-        ((v) => (v ? v : ""))(control.getAttribute("title")),
-        control instanceof HTMLInputElement ? control.value : "",
-      ].join(" "),
-    );
-    const [authenticationAdvanceControlLabel = advanceControlLabels.join(" ")] =
-      [
-        advanceControlLabels.find((label) =>
-          looks_like_login_advance_control_label(label),
-        ),
-      ];
-    const observation = new NookLoginContextObservation(
-      form
-        ? [
-            form.id,
-            form.className,
-            ((v) => (v ? v : ""))(form.getAttribute("action")),
-            form.name,
-          ].join(" ")
-        : "",
-      ancestorIdentities,
-      authenticationAdvanceControlLabel,
-      `${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(field.ownerDocument.defaultView?.location?.hostname)}`,
-    );
-    try {
-      return has_login_context(observation);
-    } finally {
-      observation.free();
-    }
+    const cached = this.companionLoginContexts.get(field);
+    if (typeof cached === "boolean") return cached;
+    return !this.directClassificationAvailable()
+      ? false
+      : this.directClassification.loginContext(
+          this.loginContextObservation(field),
+        );
   }
 
+  protected hasLoginPathContext(field: HTMLInputElement): boolean {
+    return this.hasLoginContext(field);
+  }
   private pageInputObservation({
     field,
     loginContext,
-  }: PageInputClassificationRequest): NookPageInputFieldObservation {
-    return new NookPageInputFieldObservation(
-      parse_page_input_type(field.type),
-      field.disabled,
-      field.readOnly,
-      this.autocompleteTokens(field),
-      this.authenticationFieldIdentityText(field),
+  }: PageInputClassificationRequest): CompanionWasmFieldClassification | false {
+    if (
+      this.companionLoginContexts.has(field) &&
+      this.companionLoginContexts.get(field) !== loginContext
+    )
+      return false;
+    const classification = this.companionFieldClassifications.get(field);
+    if (classification) return classification;
+    if (!this.directClassificationAvailable()) return false;
+    const observation: CompanionWasmPageInputFieldRequest["observation"] = {
+      inputType: field.type,
+      disabled: field.disabled,
+      readOnly: field.readOnly,
+      autocompleteTokens: this.autocompleteTokens(field),
+      identityText: this.authenticationFieldIdentityText(field),
       loginContext,
-    );
+    };
+    return this.directClassification.field(observation);
   }
 
   private authenticationFieldIdentityText(field: HTMLInputElement): string {
@@ -477,10 +705,16 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     const query: PasswordFieldQuery = {};
     if (observation.root) query.root = observation.root;
     if (observation.formScope) query.formScope = observation.formScope;
-    const evidence = this.findUsernameFields(query).map(
-      this.authenticationUsernameEvidence.bind(this),
+    const evidence = this.companionStrongestUsernameEvidence;
+    if (evidence) return evidence;
+    if (!this.directClassificationAvailable()) {
+      throw new Error();
+    }
+    return this.directClassification.strongestUsernameEvidence(
+      this.findUsernameFields(query).map(
+        this.authenticationUsernameEvidence.bind(this),
+      ),
     );
-    return strongest_authentication_username_evidence(evidence);
   }
 
   authenticationUsernameEvidence(
@@ -491,11 +725,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       loginContext: this.hasLoginContext(field),
     };
     const observation = this.pageInputObservation(observationRequest);
-    try {
-      return authentication_username_evidence(observation);
-    } finally {
-      observation.free();
-    }
+    if (!observation) throw new Error();
+    return observation.authenticationUsernameEvidence;
   }
 
   private looksLikeUsernameField(field: HTMLInputElement): boolean {
@@ -506,11 +737,7 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       loginContext: this.hasLoginContext(field),
     };
     const observation = this.pageInputObservation(observationRequest);
-    try {
-      return looks_like_username_field(observation);
-    } finally {
-      observation.free();
-    }
+    return Boolean(observation && observation.looksLikeUsernameField);
   }
 
   private looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
@@ -518,14 +745,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
 
     const observationRequest: PageInputClassificationRequest = {
       field,
-      loginContext: false,
+      loginContext: this.hasLoginContext(field),
     };
     const observation = this.pageInputObservation(observationRequest);
-    try {
-      return looks_like_one_time_code_field(observation);
-    } finally {
-      observation.free();
-    }
+    return Boolean(observation && observation.looksLikeOneTimeCodeField);
   }
 
   findUsernameFields({
@@ -534,6 +757,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   }: PasswordFieldQuery): HTMLInputElement[] {
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
+    const selectorEntryInputCount = root.querySelectorAll("input").length;
+    const selectorEntryIdentifierIdPresent = Boolean(
+      root.querySelector("#identifierId"),
+    );
     const semanticQuery: ScopedInputFieldQuery = {
       root,
       selector: usernameFieldSelectors.join(","),
@@ -547,14 +774,46 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       candidateQuery.formScope = formScope;
     }
 
-    for (const field of [
-      ...this.findFields(semanticQuery),
-      ...this.findFields(candidateQuery),
+    for (const candidate of [
+      ...this.findFields(semanticQuery).map((field) => ({
+        field,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.UsernameSemantic,
+      })),
+      ...this.findFields(candidateQuery).map((field) => ({
+        field,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.UsernameCandidate,
+      })),
     ]) {
-      if (seen.has(field) || !this.looksLikeUsernameField(field)) continue;
-      seen.add(field);
-      fields.push(field);
+      const accepted = this.looksLikeUsernameField(candidate.field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field: candidate.field,
+        candidateKind: AuthenticationFieldCandidateKind.Username,
+        selectorMatch: candidate.selectorMatch,
+        disposition:
+          !seen.has(candidate.field) && accepted
+            ? AuthenticationFieldCandidateDisposition.Accepted
+            : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      if (seen.has(candidate.field) || !accepted) continue;
+      seen.add(candidate.field);
+      fields.push(candidate.field);
     }
+    const selectorEntryDiagnosticRequest: Parameters<
+      AuthenticationSelectorEntryDiagnosticBuilder["build"]
+    >[0] = {
+      origin: this.browser.location.origin,
+      root,
+      inputCount: selectorEntryInputCount,
+      identifierIdPresent: selectorEntryIdentifierIdPresent,
+      usernameFieldCount: fields.length,
+    };
+    this.recordSelectorEntryDiagnostic(selectorEntryDiagnosticRequest);
     return fields;
   }
 
@@ -571,7 +830,22 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     if (formScope) query.formScope = formScope;
 
     for (const field of this.findFields(query)) {
-      if (seen.has(field) || !this.looksLikeOneTimeCodeField(field)) continue;
+      const accepted = this.looksLikeOneTimeCodeField(field);
+      const diagnosticRequest: Parameters<
+        AuthenticationFieldCandidateDiagnosticBuilder["build"]
+      >[0] = {
+        field,
+        candidateKind: AuthenticationFieldCandidateKind.OneTimeCode,
+        selectorMatch:
+          AuthenticationFieldCandidateSelectorMatch.OneTimeCodeCandidate,
+        disposition:
+          !seen.has(field) && accepted
+            ? AuthenticationFieldCandidateDisposition.Accepted
+            : AuthenticationFieldCandidateDisposition.Rejected,
+        root,
+      };
+      this.recordFieldCandidateDiagnostic(diagnosticRequest);
+      if (seen.has(field) || !accepted) continue;
       seen.add(field);
       fields.push(field);
     }
@@ -585,7 +859,10 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       const handler = field.getAttribute(attribute);
       return (
         typeof handler === "string" &&
-        looks_like_one_time_code_auto_submit_signal(`${attribute}=${handler}`)
+        this.cachedLabel(
+          CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+          `${attribute}=${handler}`,
+        )
       );
     });
   }
@@ -608,6 +885,13 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       .split(/\s+/u)
       .filter(Boolean)
       .includes(expected);
+  }
+
+  looksLikeOneTimeCodeAutoSubmitSignal(signal: string): boolean {
+    return this.cachedLabel(
+      CompanionWasmLabelKind.OneTimeCodeAutoSubmitSignal,
+      signal,
+    );
   }
 
   isAuthUsernameField(field: HTMLInputElement): boolean {
@@ -645,7 +929,8 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
       );
       const labeled = this.localActivationControlLabel(control);
       return explicitlyMarked ||
-        (labeled && looks_like_passkey_control_label(labeled))
+        (labeled &&
+          this.cachedLabel(CompanionWasmLabelKind.PasskeyControl, labeled))
         ? [{ control, explicitlyMarked }]
         : [];
     });
@@ -672,314 +957,6 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
   pageHasPasskeyControl(root: ParentNode = this.browser.document): boolean {
     return (
       this.findPasskeyControl(root).kind === PasskeyControlLookupKind.Found
-    );
-  }
-
-  private localActivationControlLabel(control: Element): string {
-    const labelledBy = ((v) => (v ? v : ""))(
-      control.getAttribute("aria-labelledby"),
-    )
-      .split(/\s+/u)
-      .filter(Boolean)
-      .flatMap((id) => {
-        const label = control.ownerDocument.getElementById(id);
-        return label ? [((v) => (v ? v : ""))(label.textContent)] : [];
-      })
-      .join(" ");
-    const value =
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLButtonElement
-        ? control.value
-        : "";
-    return [
-      ((v) => (v ? v : ""))(control.textContent),
-      ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
-      ((v) => (v ? v : ""))(control.getAttribute("title")),
-      ((v) => (v ? v : ""))(control.getAttribute("alt")),
-      value,
-      labelledBy,
-    ]
-      .join(" ")
-      .trim();
-  }
-
-  private containerHasGenericTypeButtonControls(container: Element): boolean {
-    return Array.from(
-      container.querySelectorAll(formlessTypeButtonSelector),
-    ).some(
-      (control) =>
-        !looks_like_login_advance_control_label(
-          this.localActivationControlLabel(control),
-        ),
-    );
-  }
-
-  private containerHasUnambiguousAuthenticationActivation(
-    container: Element,
-  ): boolean {
-    return this.labeledTypeButtonActivationControls(container).length === 1;
-  }
-
-  private labeledTypeButtonActivationControls(container: Element): Element[] {
-    return Array.from(
-      container.querySelectorAll(formlessTypeButtonSelector),
-    ).filter((control) =>
-      looks_like_login_advance_control_label(
-        this.localActivationControlLabel(control),
-      ),
-    );
-  }
-
-  private containerIsDocumentShell(container: Element): boolean {
-    return container === container.ownerDocument.documentElement;
-  }
-
-  private unownedCredentialFields(root: ParentNode): HTMLInputElement[] {
-    return Array.from(
-      root.querySelectorAll<HTMLInputElement>(
-        'input[type="password"], input[autocomplete~="username" i], input[autocomplete~="email" i], input[autocomplete~="one-time-code" i]',
-      ),
-    ).filter((field) => !field.form && this.isRenderedInput(field));
-  }
-
-  private containerHasUnownedCredentialCluster(container: Element): boolean {
-    const fields = this.unownedCredentialFields(container);
-    const passwords = fields.filter(
-      (field) => field.type === "password",
-    ).length;
-    const otps = fields.filter((field) => {
-      const tokenRequest: AutocompleteTokenMatchRequest = {
-        field,
-        expected: "one-time-code",
-      };
-      return this.hasAutocompleteToken(tokenRequest);
-    }).length;
-    const usernames = fields.length - passwords - otps;
-    return otps > 0 || (usernames > 0 && passwords > 0);
-  }
-
-  private containerHasSemanticSubmitControl(container: Element): boolean {
-    return Boolean(
-      container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type])',
-      ),
-    );
-  }
-
-  private containerLooksLikeExplicitAuthSurface(container: Element): boolean {
-    return new AuthenticationContainerIdentity(container).present;
-  }
-
-  private containerIsFormlessAuthenticationScope({
-    container,
-    field,
-  }: TypeButtonPromotionScopeRequest): boolean {
-    if (this.containerIsDocumentShell(container)) return false;
-    if (this.containerHasSemanticSubmitControl(container)) return true;
-    const promotionRequest: TypeButtonPromotionScopeRequest = {
-      container,
-      field,
-    };
-    if (
-      this.containerHasUnambiguousAuthenticationActivation(container) &&
-      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest)
-    ) {
-      return true;
-    }
-    if (
-      this.containerLooksLikeExplicitAuthSurface(container) &&
-      !this.containerHasGenericTypeButtonControls(container)
-    ) {
-      return true;
-    }
-    return (
-      this.containerHasUnownedCredentialCluster(container) &&
-      !this.containerHasGenericTypeButtonControls(container) &&
-      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest)
-    );
-  }
-
-  private unownedCredentialFieldCount(root: ParentNode): number {
-    return this.unownedCredentialFields(root).length;
-  }
-
-  private typeButtonPromotionSwallowsForeignScope({
-    container,
-    field,
-  }: TypeButtonPromotionScopeRequest): boolean {
-    const [activation] = this.labeledTypeButtonActivationControls(container);
-    if (!activation) return false;
-    let scope = activation.parentElement;
-    while (scope && container.contains(scope)) {
-      if (
-        this.unownedCredentialFieldCount(scope) > 0 &&
-        !scope.contains(field)
-      ) {
-        return true;
-      }
-      if (scope === container) break;
-      scope = scope.parentElement;
-    }
-    return false;
-  }
-
-  nearestUnownedAuthContainer({
-    field,
-    root,
-  }: UnownedAuthContainerRequest): ParentNode {
-    let container = field.parentElement;
-    while (container && container !== root) {
-      const scopeRequest: TypeButtonPromotionScopeRequest = {
-        container,
-        field,
-      };
-      if (this.containerIsFormlessAuthenticationScope(scopeRequest)) {
-        return container;
-      }
-      container = container.parentElement;
-    }
-    const parent = field.parentElement;
-    if (parent instanceof HTMLElement && parent !== root) {
-      const parentScopeRequest: TypeButtonPromotionScopeRequest = {
-        container: parent,
-        field,
-      };
-      if (this.containerIsFormlessAuthenticationScope(parentScopeRequest)) {
-        return parent;
-      }
-    }
-    return field;
-  }
-
-  isLocallyAdjacentToOwnedForm({
-    control,
-    owner,
-  }: LocalOwnedFormAdjacencyRequest): boolean {
-    const containingForm = control.closest("form");
-    if (containingForm && containingForm !== owner) {
-      return false;
-    }
-    const panel = owner.parentElement;
-    if (
-      !panel ||
-      panel === owner.ownerDocument.body ||
-      panel === owner.ownerDocument.documentElement
-    ) {
-      return false;
-    }
-    if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
-      control.form
-    ) {
-      return false;
-    }
-    const formsInPanel = Array.from(panel.querySelectorAll("form"));
-    return formsInPanel.length === 1 && formsInPanel[0] === owner
-      ? panel.contains(control)
-      : false;
-  }
-
-  controlAssociatesWithObservation({
-    control,
-    formScope,
-  }: ControlObservationAssociationRequest): boolean {
-    if (formScope.kind === PasswordFormScopeKind.Owned) {
-      const adjacencyRequest: LocalOwnedFormAdjacencyRequest = {
-        control,
-        owner: formScope.owner,
-      };
-      if (
-        control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement
-      ) {
-        return (
-          control.form === formScope.owner ||
-          this.isLocallyAdjacentToOwnedForm(adjacencyRequest)
-        );
-      }
-      return (
-        formScope.owner.contains(control) ||
-        this.isLocallyAdjacentToOwnedForm(adjacencyRequest)
-      );
-    }
-    if (
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-    ) {
-      return !control.form;
-    }
-    return !control.closest("form");
-  }
-
-  localUnownedPasskeyContainer({
-    field,
-    root,
-  }: UnownedAuthContainerRequest): ParentNode {
-    const documentRoot = field.ownerDocument;
-    const nearestRequest: UnownedAuthContainerRequest = { field, root };
-    const nearest = this.nearestUnownedAuthContainer(nearestRequest);
-    if (
-      nearest !== field &&
-      nearest !== root &&
-      nearest !== documentRoot.body &&
-      nearest !== documentRoot.documentElement
-    ) {
-      return nearest;
-    }
-    const parent = field.parentElement;
-    if (
-      parent &&
-      parent !== documentRoot.body &&
-      parent !== documentRoot.documentElement
-    ) {
-      return parent;
-    }
-    return root;
-  }
-
-  pageHasManualCheckpoint(root: ParentNode): boolean {
-    const doc = ((v) => (v ? v : this.browser.document))(root.ownerDocument);
-    if (
-      doc.querySelector(
-        'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]',
-      )
-    ) {
-      return true;
-    }
-    if (
-      Array.from(
-        root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-      ).some(this.checkboxHasManualCheckpoint.bind(this))
-    )
-      return true;
-    return looks_like_email_verification_body(
-      ((v) => (v ? v : ""))(root.textContent),
-    );
-  }
-
-  private checkboxHasManualCheckpoint(checkbox: HTMLInputElement): boolean {
-    const label = checkbox.labels?.[0];
-    const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
-    const labeled = label
-      ? ((v) => (v ? v : ""))(label.textContent)
-      : ariaLabel
-        ? ariaLabel.value
-        : checkbox.name;
-    return looks_like_manual_checkpoint_label(labeled.toLowerCase());
-  }
-
-  private ownedFormHasManualCheckpoint(owner: HTMLFormElement): boolean {
-    const fieldQuery: ScopedInputFieldQuery = {
-      root: owner.ownerDocument,
-      selector: 'input[type="checkbox"]',
-      formScope: { kind: PasswordFormScopeKind.Owned, owner },
-    };
-    return (
-      this.pageHasManualCheckpoint(owner) ||
-      this.findFields(fieldQuery).some(
-        this.checkboxHasManualCheckpoint.bind(this),
-      )
     );
   }
 }

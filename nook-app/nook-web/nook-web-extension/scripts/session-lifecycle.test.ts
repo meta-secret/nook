@@ -35,7 +35,22 @@ function installAuthenticationSurfaceHost({
   sendMessage,
 }: AuthenticationSurfaceHost): void {
   Object.assign(globalThis, {
+    location: new URL('chrome-extension://nook/service-worker.js'),
     chrome: {
+      runtime: {
+        sendMessage: (
+          message: { payload: { candidateUrl: string } },
+          callback: (response: { ok: true; result: boolean }) => void,
+        ) => {
+          const hostname = new URL(message.payload.candidateUrl).hostname
+          callback({
+            ok: true,
+            result:
+              hostname === 'simple.example.test' ||
+              hostname === 'sentinel.example.test',
+          })
+        },
+      },
       tabs: {
         query: (
           _query: chrome.tabs.QueryInfo,

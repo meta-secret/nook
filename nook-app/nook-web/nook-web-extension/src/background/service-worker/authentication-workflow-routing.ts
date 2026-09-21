@@ -1,10 +1,16 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Rust-generated request records are assembled at this typed boundary. */
 import {
   authentication_passkey_control_evidence_is_safe,
   authentication_workflow_saved_login_capability,
   authentication_workflow_requires_login_match_availability,
+  authentication_workflow_pilot_presentation_capability,
+  bind_authentication_page_observation_facts,
+  saved_login_action_available,
   type AuthenticationPageObservationFacts,
   type AuthenticationSavedLoginCapability,
   type AuthenticationDetailedPasskeyControlObservation,
+  type AuthenticationPilotPresentationCapability,
+  type AuthenticationObservationBindingToken,
   type AuthenticationWorkflowSelectedFactsWire,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -28,6 +34,9 @@ export type AuthenticationWorkflowRoutingDependencies = {
   authenticationWorkflowSnapshot: typeof VaultRuntime.backgroundVaultRuntime.authenticationWorkflowSnapshot
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
   authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
+  authenticationWorkflowPilotPresentationCapability?: typeof authenticationWorkflowPilotPresentationCapability
+  bindAuthenticationPageObservationFacts?: typeof bind_authentication_page_observation_facts
+  savedLoginActionAvailable?: typeof saved_login_action_available
   matchingPasskeyAvailabilityForOriginSafe: typeof websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe
   websiteLoginMatchAvailability: typeof AccountPickers.accountPickerSessions.websiteLoginMatchAvailability
 }
@@ -50,12 +59,21 @@ export function authenticationWorkflowRequiresLoginMatchAvailability(
   return authentication_workflow_requires_login_match_availability(snapshot)
 }
 
+export function authenticationWorkflowPilotPresentationCapability(
+  snapshot: AuthenticationWorkflowSnapshotView,
+): AuthenticationPilotPresentationCapability {
+  return authentication_workflow_pilot_presentation_capability(snapshot)
+}
+
 export type AuthenticationWorkflowRoutingResponse = {
   workflow:
     | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
     | { ok: false; reason: 'workflow-snapshot-failed' }
   loginMatches: WebsiteLoginMatchAvailability
   selectedFacts: AuthenticationWorkflowSelectedFactsWire
+  pilotCapability?: AuthenticationPilotPresentationCapability
+  factsBindingToken?: AuthenticationObservationBindingToken
+  savedLoginActionAvailable?: boolean
 }
 
 export type AuthenticationWorkflowRoutingRequest = {
@@ -78,6 +96,18 @@ export async function authenticationWorkflowMessageResponse({
     matchingPasskeyAvailabilityForOriginSafe,
     websiteLoginMatchAvailability,
   } = dependencies
+  const pilotPresentationCapability = ((value) =>
+    value ? value : authenticationWorkflowPilotPresentationCapability)(
+    dependencies.authenticationWorkflowPilotPresentationCapability,
+  )
+  const bindFacts = ((value) =>
+    value ? value : bind_authentication_page_observation_facts)(
+    dependencies.bindAuthenticationPageObservationFacts,
+  )
+  const savedLoginAvailable = ((value) =>
+    value ? value : saved_login_action_available)(
+    dependencies.savedLoginActionAvailable,
+  )
   try {
     await companionWasmReady
     const passkeyEvidenceIsSafe = message.payload.observations.map(
@@ -110,7 +140,7 @@ export async function authenticationWorkflowMessageResponse({
         authenticator: {
           ...observation.authenticator,
           passkeyAccountAvailability:
-            passkeyEvidenceIsSafe[observationIndex] === true &&
+            passkeyEvidenceIsSafe[observationIndex] !== true ||
             passkeyAvailability.kind ===
               MatchingPasskeyAvailabilityKind.Unavailable
               ? 'unavailable'
@@ -163,6 +193,12 @@ export async function authenticationWorkflowMessageResponse({
         workflow: { ok: true, snapshot: result.snapshot },
         loginMatches,
         selectedFacts: { state: 'selected', facts: selectedFacts },
+        pilotCapability: pilotPresentationCapability(result.snapshot),
+        factsBindingToken: bindFacts({ observations: [selectedFacts] }),
+        savedLoginActionAvailable: savedLoginAvailable({
+          action: result.snapshot.action,
+          loginMatches,
+        }),
       }
     }
     return {
