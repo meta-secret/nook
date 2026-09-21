@@ -446,8 +446,4 @@ const AUDITED_NODE_EVAL_COMMAND_DIGESTS = new Map<string, string>([
     '.task/agentic-ai.yml',
     'aa81b457c8f43b93e64cd4f7b1ccbd3371338bc965ff7bea10c58dead505a5ff',
   ],
-  [
-    '.task/ai-debug.yml',
-    '52258309733346901e9962cecc19927e86e142140563575277abe3e362553e2d',
-  ],
 ]);

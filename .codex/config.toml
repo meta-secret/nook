@@ -1,10 +1,3 @@
-# Project-scoped browser tooling for the local AI-debug pilot. Codex loads this
-# file only when the repository is trusted. Keep this profile isolated: Nook is
-# a password manager, so the pilot must never inherit a developer's daily
-# browser profile or persist its session after the MCP process exits.
-# Allowed origins are listed in .github/scripts/ai-debug/allowed-origins.json
-# and checked by `task ai-debug:check`.
-
 # This deployment allocation is consumed by the active harness for one Codex
 # session. Threads here mean agent task sessions, not OS threads. It is not a
 # Cortex architecture or product concurrency limit.
@@ -13,38 +6,3 @@ max_concurrent_threads_per_session = 20
 
 [features.multi_agent_v2]
 max_concurrent_threads_per_session = 20
-
-[mcp_servers.playwright]
-command = "bash"
-args = [
-  ".github/scripts/ai-debug/run-playwright-mcp.sh",
-  "--caps=devtools",
-  "--isolated",
-  "--block-service-workers",
-  "--ignore-https-errors",
-  "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;https://127.0.0.1:5173;https://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;wss://127.0.0.1:5173;wss://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;https://127.0.0.1:5175;https://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175;wss://127.0.0.1:5175;wss://localhost:5175",
-  "--init-page=.github/scripts/ai-debug/local-only.ts",
-  "--test-id-attribute=data-testid",
-  "--console-level=warning",
-]
-enabled = true
-required = false
-startup_timeout_sec = 60
-tool_timeout_sec = 900
-default_tools_approval_mode = "writes"
-enabled_tools = [
-  "browser_annotate",
-  "browser_click",
-  "browser_close",
-  "browser_console_messages",
-  "browser_evaluate",
-  "browser_find",
-  "browser_navigate",
-  "browser_press_key",
-  "browser_resize",
-  "browser_snapshot",
-  "browser_tabs",
-  "browser_take_screenshot",
-  "browser_type",
-  "browser_wait_for",
-]

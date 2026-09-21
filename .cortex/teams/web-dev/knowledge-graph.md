@@ -38,7 +38,6 @@ when the selected authority links them as read-only engineering policy.
 
 ## Frontend references
 
-- [Playwright MCP annotation and debugging](references/ai-debugging.md)
 - [Svelte, Vite, and Bun](references/bun-svelte.md)
 
 ## Team topology

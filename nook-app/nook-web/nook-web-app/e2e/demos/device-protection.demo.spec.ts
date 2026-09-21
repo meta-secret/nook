@@ -39,7 +39,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await demoBeat(page)
 
   await page.getByTestId('get-started-path-simple').click()
-  await page.getByTestId('login-vault-name-input').fill('AI-debug PIN vault')
+  await page.getByTestId('login-vault-name-input').fill('PIN demo vault')
   await page.getByTestId('login-create-device-vault-btn').click()
   await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

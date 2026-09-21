@@ -150,7 +150,7 @@ test.describe('local folder backup provider', () => {
     await expect(recoverySummary).toHaveCount(0)
   })
 
-  test('explains the AI-debug browser directory-picker boundary', async ({
+  test('explains the automated browser directory-picker boundary', async ({
     page,
   }) => {
     await installPasskeyMock(page)
@@ -166,7 +166,7 @@ test.describe('local folder backup provider', () => {
     await page.getByTestId('provider-option-local-folder').click()
     await page.getByTestId('settings-choose-local-folder-btn').click()
     await expect(page.getByTestId('settings-local-folder-error')).toContainText(
-      'automated AI-debug browser',
+      'automated browser',
     )
     await expect(page.getByTestId('settings-local-folder-error')).toContainText(
       'regular browser',

@@ -1670,7 +1670,7 @@
     "local_folder_connection_title": "Choose backup folder",
     "local_folder_connection_subtitle": "Grant write access to a dedicated folder",
     "local_folder_unsupported_browser": "Local backup needs a browser that can grant write access to a folder.",
-    "local_folder_automated_browser_error": "Local folders cannot be opened from the automated AI-debug browser. Open Nook in your regular browser to connect a local backup folder.",
+    "local_folder_automated_browser_error": "Local folders cannot be opened from the automated browser. Open Nook in your regular browser to connect a local backup folder.",
     "choose_local_folder": "Choose folder",
     "local_folder_choosing": "Choosing…",
     "local_folder_sync_title": "Save backup provider",
