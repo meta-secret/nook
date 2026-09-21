@@ -1,4 +1,4 @@
-import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReadiness } from './companion-wasm-readiness'
 import type {
   CompanionWasmRuntimeMessage,
   CompanionWasmSessionMessage,
@@ -249,7 +249,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_website_login_options(delivery.response),
@@ -267,7 +267,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_website_login_save_offer_response(delivery.response),
@@ -285,7 +285,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_website_login_save_pending_response(delivery.response),
@@ -303,7 +303,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_website_login_save_action_response(delivery.response),
@@ -321,7 +321,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_login_picker_open_response(delivery.response),
@@ -339,7 +339,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_picker_open_response(delivery.response),
@@ -359,7 +359,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       const runtimeResponse = decode_authentication_workflow_runtime_response(
         delivery.response,
       )
@@ -381,7 +381,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_preview_response(delivery.response),
@@ -399,7 +399,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_backup_attach_response(
@@ -420,7 +420,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_code_response(delivery.response),
@@ -438,7 +438,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_options_response(delivery.response),
@@ -456,7 +456,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_enrollment_stage_response(
@@ -476,7 +476,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authenticator_enrollment_confirm_response(
@@ -496,7 +496,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_authentication_outcome_response(delivery.response),
@@ -514,7 +514,7 @@ class AuthenticationRuntimeTransport {
       return this.unavailable()
     }
     try {
-      await companionWasmReady
+      await companionWasmReadiness.wait()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: decode_generated_password_response(delivery.response),
