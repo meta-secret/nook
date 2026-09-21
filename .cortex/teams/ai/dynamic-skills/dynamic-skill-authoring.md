@@ -96,7 +96,14 @@ Does not apply to:
 
 ## Validation
 
-For documentation-only captures, run `task loom:cortex-audit`.
+For documentation-only captures, run `task loom:cortex-audit` only in the
+authorized hosted PR validation stage. Follow explicit user instructions that
+change the execution stage or require stopping without checks.
+
+**Prohibited:** run the audit locally merely because the capture changes only prose.
+
+**Preferred:** complete a user-requested local-only capture without checks.
+Report the hosted audit as unrun.
 
 For code refactors using a dynamic skill, apply only the permitted scoped
 formatters or inexpensive diagnostics. Commit every resulting mutation in the
