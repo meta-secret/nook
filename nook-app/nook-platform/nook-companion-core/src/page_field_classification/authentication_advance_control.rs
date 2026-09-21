@@ -316,7 +316,7 @@ impl CheckedAuthenticationControl<'_> {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if AuthenticationRouteIdentity::new(&self.destination.route_identity)
+        if AuthenticationRouteIdentity::new(self.destination.authentication_policy_route_identity())
             .indicates_non_authentication()
             && !credential_update_destination
         {

@@ -48,11 +48,16 @@ describe('Amazon authentication mock', () => {
             {
               id: 'ap_email_login',
               name: 'email',
-              type: 'email',
+              type: 'text',
               autocomplete: 'webauthn',
+              inputmode: 'email',
             },
           ],
-          submit: { type: 'submit', label: 'Continue' },
+          submit: {
+            type: 'submit',
+            label: 'Continue',
+            'aria-labelledby': 'continue-announce',
+          },
         },
       ],
     })
