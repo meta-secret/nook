@@ -14,9 +14,10 @@ describe('LinkedIn authentication mock', () => {
   const signIn: LinkedInAuthSubmission = {
     username: LINKEDIN_MOCK_USERNAME,
     password: LINKEDIN_MOCK_PASSWORD,
-    hiddenUsername: '',
-    hiddenPassword: '',
+    hiddenUsername: LINKEDIN_MOCK_USERNAME,
+    hiddenPassword: LINKEDIN_MOCK_PASSWORD,
     signInActivationCount: 1,
+    hiddenSignInActivationCount: 0,
     alternativeActivationCount: 0,
     keepSignedInChecked: true,
   }
@@ -30,10 +31,11 @@ describe('LinkedIn authentication mock', () => {
   test.each([
     ['a different username', { username: 'other@nook.test' }],
     ['a different password', { password: 'different-password' }],
-    ['a changed hidden username', { hiddenUsername: 'unexpected' }],
-    ['a changed hidden password', { hiddenPassword: 'unexpected' }],
+    ['an unmirrored hidden username', { hiddenUsername: '' }],
+    ['an unmirrored hidden password', { hiddenPassword: '' }],
     ['no primary activation', { signInActivationCount: 0 }],
     ['two primary activations', { signInActivationCount: 2 }],
+    ['a hidden primary activation', { hiddenSignInActivationCount: 1 }],
     ['an alternative activation', { alternativeActivationCount: 1 }],
     ['changed retention', { keepSignedInChecked: false }],
   ])('rejects %s', (_, changed) => {
@@ -44,7 +46,8 @@ describe('LinkedIn authentication mock', () => {
 
   test('keeps only the exact consumer mapping on the faithful shell', () => {
     expect(siteShells.linkedin).toEqual({
-      loginUrl: 'https://www.linkedin.com/login/',
+      loginUrl:
+        'https://www.linkedin.com/login/?trk=guest_homepage-basic_nav-header-signin',
       source: 'capture',
       template: 'linkedin',
     })
@@ -57,11 +60,11 @@ describe('LinkedIn authentication mock', () => {
     }
     expect(linkedInTemplate).toMatchObject({
       id: 'linkedin',
-      quirks: ['formless', 'responsive-duplicate'],
+      quirks: ['formless', 'responsive-duplicate', 'react-shared-state'],
       steps: [
         {
           fields: [
-            { type: 'email', autocomplete: 'username' },
+            { type: 'email', autocomplete: 'username webauthn' },
             { type: 'password', autocomplete: 'current-password' },
           ],
           submit: { type: 'button', label: 'Sign in' },
@@ -70,7 +73,7 @@ describe('LinkedIn authentication mock', () => {
     })
     expect(
       linkedInTemplate.steps[0]?.fields.every(
-        (field) => !('id' in field) && !('name' in field),
+        (field) => field['generated-id'] && !('name' in field),
       ),
     ).toBe(true)
   })

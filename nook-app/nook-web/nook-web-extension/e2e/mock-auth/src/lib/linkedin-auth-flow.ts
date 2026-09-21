@@ -12,6 +12,7 @@ export type LinkedInAuthSubmission = {
   readonly hiddenUsername: string
   readonly hiddenPassword: string
   readonly signInActivationCount: number
+  readonly hiddenSignInActivationCount: number
   readonly alternativeActivationCount: number
   readonly keepSignedInChecked: boolean
 }
@@ -22,9 +23,10 @@ export class LinkedInAuthMockScenario {
   ): LinkedInAuthTransitionKind {
     return submission.username === LINKEDIN_MOCK_USERNAME &&
       submission.password === LINKEDIN_MOCK_PASSWORD &&
-      submission.hiddenUsername === '' &&
-      submission.hiddenPassword === '' &&
+      submission.hiddenUsername === LINKEDIN_MOCK_USERNAME &&
+      submission.hiddenPassword === LINKEDIN_MOCK_PASSWORD &&
       submission.signInActivationCount === 1 &&
+      submission.hiddenSignInActivationCount === 0 &&
       submission.alternativeActivationCount === 0 &&
       submission.keepSignedInChecked
       ? LinkedInAuthTransitionKind.Completed

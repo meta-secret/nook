@@ -1,18 +1,20 @@
 {
   "id": "linkedin",
-  "quirks": ["formless", "responsive-duplicate"],
+  "quirks": ["formless", "responsive-duplicate", "react-shared-state"],
   "steps": [
     {
       "fields": [
         {
           "type": "email",
-          "autocomplete": "username",
-          "aria-label": "Email or phone"
+          "autocomplete": "username webauthn",
+          "label": "Email or phone",
+          "generated-id": true
         },
         {
           "type": "password",
           "autocomplete": "current-password",
-          "aria-label": "Password"
+          "label": "Password",
+          "generated-id": true
         }
       ],
       "submit": {
