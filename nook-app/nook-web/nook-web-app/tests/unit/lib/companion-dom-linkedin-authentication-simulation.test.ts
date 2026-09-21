@@ -1,4 +1,4 @@
-// @vitest-environment-options { "url": "https://www.linkedin.com/login/" }
+// @vitest-environment-options { "url": "https://www.linkedin.com/login/?trk=guest_homepage-basic_nav-header-signin" }
 
 import { afterEach, describe, expect, test } from 'vitest'
 
@@ -30,26 +30,55 @@ type LinkedInDomElements = {
 
 class LinkedInDomFixture {
   static install(primaryLabel = 'Sign in'): LinkedInDomElements {
-    document.body.innerHTML = `<main><section data-testid="linkedin-active-surface">
-      <label>Email or phone<input type="email" autocomplete="username"></label>
-      <label>Password<input type="password" autocomplete="current-password"></label>
-      <button type="button">Show password</button>
-      <label><input type="checkbox" checked>Keep me signed in</label>
-      <button type="button" data-testid="primary">${primaryLabel}</button>
-    </section><button type="button">Sign in with Apple</button>
+    document.body.innerHTML = `<main>
+    <section data-testid="linkedin-responsive-duplicate" style="display:none">
+      <button type="button">Sign in with Apple</button>
+      <div class="e5616576 _1957d19a _3ff5f032 _3e0ed175 d73e1ea3 _09ab8b1b _991ffcd1 d1901be7">
+        <div class="_649b9f0b d1901be7"><div class="_6f6ba678 _1957d19a _3ff5f032 d1901be7">
+          <label for="«r1»">Email or phone</label><div class="dfaf4f38 d1901be7">
+            <input id="«r1»" type="email" autocomplete="username">
+          </div>
+        </div></div>
+        <div class="dcd57938 _1957d19a d1901be7"><div class="_6f6ba678 _1957d19a _3ff5f032 d1901be7">
+          <label for="«r2»">Password</label><div class="dfaf4f38 d1901be7">
+            <input id="«r2»" type="password" autocomplete="current-password">
+            <div class="c0d882ed dabfd919 _42ca2b07 _6b579e31"><button type="button" aria-label="Show password"></button></div>
+          </div>
+        </div></div>
+        <label for="hidden-keep">Keep me signed in</label>
+        <input id="hidden-keep" type="checkbox" tabindex="-1" checked>
+        <button type="button">Sign in</button>
+      </div>
+    </section>
+    <section data-testid="linkedin-active-surface">
+      <button type="button">Sign in with Apple</button>
+      <div class="e5616576 _1957d19a _3ff5f032 _3e0ed175 d73e1ea3 _09ab8b1b _991ffcd1 d1901be7">
+        <div class="_649b9f0b d1901be7"><div class="_6f6ba678 _1957d19a _3ff5f032 d1901be7">
+          <label for="«r3»">Email or phone</label><div class="dfaf4f38 d1901be7">
+            <input id="«r3»" type="email" autocomplete="username webauthn">
+          </div>
+        </div></div>
+        <div class="dcd57938 _1957d19a d1901be7"><div class="_6f6ba678 _1957d19a _3ff5f032 d1901be7">
+          <label for="«r4»">Password</label><div class="dfaf4f38 d1901be7">
+            <input id="«r4»" type="password" autocomplete="current-password">
+            <div class="c0d882ed dabfd919 _42ca2b07 _6b579e31"><button type="button" aria-label="Show password"></button></div>
+          </div>
+        </div></div>
+        <label for="active-keep">Keep me signed in</label>
+        <input id="active-keep" type="checkbox" tabindex="-1" checked>
+        <button type="button" data-testid="primary">${primaryLabel}</button>
+      </div>
+    </section>
     <a href="/checkpoint/rp/request-password-reset">Forgot password?</a>
     <a href="/signup">Join now</a><a href="/legal/privacy-policy">Privacy Policy</a>
     <label>Language<select><option>English</option></select></label>
-    <section data-testid="linkedin-responsive-duplicate" hidden>
-      <label>Email or phone<input type="email" autocomplete="username"></label>
-      <label>Password<input type="password" autocomplete="current-password"></label>
-      <button type="button">Sign in</button>
-    </section></main>`
-    const root = document.querySelector<HTMLElement>(
+    </main>`
+    const activeSurface = document.querySelector<HTMLElement>(
       '[data-testid="linkedin-active-surface"]',
     )
+    const root = activeSurface?.querySelector<HTMLElement>(':scope > div')
     const username = root?.querySelector<HTMLInputElement>(
-      'input[autocomplete="username"]',
+      'input[autocomplete~="username"]',
     )
     const password = root?.querySelector<HTMLInputElement>(
       'input[autocomplete="current-password"]',
@@ -123,8 +152,10 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     })
     expect(facts.ceremony.authenticationContext).toMatchObject({
       sourceOrigin: 'https://www.linkedin.com',
-      formIdentity: '',
-      destinationIdentity: 'https://www.linkedin.com/login/',
+      formIdentity:
+        'e5616576 _1957d19a _3ff5f032 _3e0ed175 d73e1ea3 _09ab8b1b _991ffcd1 d1901be7',
+      destinationIdentity:
+        'https://www.linkedin.com/login/?trk=guest_homepage-basic_nav-header-signin',
     })
     const workflow = classify_companion_authentication_workflow_facts({
       observations: [facts],
@@ -186,7 +217,7 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     expect(document.querySelectorAll('form')).toHaveLength(0)
     expect(
       [fixture.username, fixture.password].every(
-        (field) => !field.hasAttribute('id') && !field.hasAttribute('name'),
+        (field) => field.hasAttribute('id') && !field.hasAttribute('name'),
       ),
     ).toBe(true)
   })

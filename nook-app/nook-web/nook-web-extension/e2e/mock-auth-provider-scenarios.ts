@@ -207,18 +207,25 @@ export class MockAuthProviderScenarios {
           )
           await route.fulfill({ response: localResponse })
         })
-        await page.goto('https://www.linkedin.com/login/')
+        await page.goto(
+          'https://www.linkedin.com/login/?trk=guest_homepage-basic_nav-header-signin',
+        )
         expect(interceptedLinkedInRequestCount).toBeGreaterThan(0)
-        await expect(page).toHaveURL('https://www.linkedin.com/login/')
+        await expect(page).toHaveURL(
+          'https://www.linkedin.com/login/?trk=guest_homepage-basic_nav-header-signin',
+        )
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
           'linkedin-combined',
         )
         await expect(page.locator('form')).toHaveCount(0)
         const active = page.getByTestId('linkedin-active-surface')
-        const username = active.getByLabel('Email or phone')
-        const password = active.getByLabel('Password')
+        const username = active.getByLabel('Email or phone', { exact: true })
+        const password = active.getByLabel('Password', { exact: true })
         await expect(username).toHaveAttribute('type', 'email')
-        await expect(username).toHaveAttribute('autocomplete', 'username')
+        await expect(username).toHaveAttribute(
+          'autocomplete',
+          'username webauthn',
+        )
         await expect(password).toHaveAttribute('type', 'password')
         await expect(password).toHaveAttribute(
           'autocomplete',
@@ -230,22 +237,25 @@ export class MockAuthProviderScenarios {
             .evaluateAll((fields) =>
               fields.every(
                 (field) =>
-                  !field.hasAttribute('id') && !field.hasAttribute('name'),
+                  field.hasAttribute('id') && !field.hasAttribute('name'),
               ),
             ),
         ).toBe(true)
         await expect(
-          active.getByRole('button', { name: 'Sign in' }),
+          active.getByRole('button', { name: 'Sign in', exact: true }),
         ).toHaveAttribute('type', 'button')
         await expect(
-          active.getByRole('button', { name: 'Show password' }),
+          active.getByRole('button', { name: 'Show password', exact: true }),
         ).toBeVisible()
         await expect(active.getByLabel('Keep me signed in')).toBeChecked()
         await expect(
           page.getByRole('link', { name: 'Forgot password?' }),
         ).toBeVisible()
         await expect(
-          page.getByRole('button', { name: 'Sign in with Apple' }),
+          page.getByRole('button', {
+            name: 'Sign in with Apple',
+            exact: true,
+          }),
         ).toBeVisible()
         await expect(page.getByRole('link', { name: 'Join now' })).toBeVisible()
         await expect(
@@ -254,7 +264,12 @@ export class MockAuthProviderScenarios {
         await expect(page.getByLabel('Language')).toBeVisible()
         const duplicate = page.getByTestId('linkedin-responsive-duplicate')
         await expect(duplicate).toBeHidden()
-        await expect(duplicate.locator('input')).toHaveCount(2)
+        await expect(duplicate.locator('input')).toHaveCount(3)
+        await expect(duplicate.locator('input[type="email"]')).toHaveAttribute(
+          'autocomplete',
+          'username',
+        )
+        await expect(duplicate.locator('input[type="checkbox"]')).toBeChecked()
         expect(
           await duplicate
             .locator('input')
@@ -263,7 +278,7 @@ export class MockAuthProviderScenarios {
                 field instanceof HTMLInputElement ? field.value : '',
               ),
             ),
-        ).toEqual(['', ''])
+        ).toEqual(['', '', 'on'])
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
@@ -282,8 +297,9 @@ export class MockAuthProviderScenarios {
           .toBe(
             JSON.stringify({
               visibleCredentialsMatched: true,
-              hiddenDuplicateUntouched: true,
+              hiddenCredentialsMirrored: true,
               signInActivated: true,
+              hiddenSignInUntouched: true,
               alternativesUntouched: true,
               keepSignedInUnchanged: true,
             }),

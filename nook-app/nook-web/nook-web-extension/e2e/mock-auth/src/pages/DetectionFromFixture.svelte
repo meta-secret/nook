@@ -177,7 +177,7 @@
 
 {#snippet fixtureInput(field: SiteFixtureField)}
   {#if field.label}
-    <label
+    <label for={field.id}
       >{field.label}<input
         type={((...[v = 'text']) => v)(field.type)}
         name={field.name}
