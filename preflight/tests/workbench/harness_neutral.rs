@@ -328,8 +328,11 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
         ("bounded file scope", &["bounded file scope"][..]),
         ("acceptance evidence", &["acceptance evidence"][..]),
         (
-            "shared-branch sequencing",
-            &["shared-branch sequencing", "shared-branch write sequencing"][..],
+            "integration ordering and execution",
+            &[
+                "integration order",
+                "integration agent integrates bounded work",
+            ][..],
         ),
     ] {
         assert!(

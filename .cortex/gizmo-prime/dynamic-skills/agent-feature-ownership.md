@@ -16,6 +16,10 @@ owns local feature and task branches, worktrees, integration, and cleanup.
 - Keep knowledge routing separate from write authority.
 - Route GitHub mutations only through Nook PR Lifecycle under Prime's explicit
   authorization.
+- Recheck task ownership before each push, review resolution, close, reopen, or
+  merge action.
+- Do not reply to or resolve another task's review threads. Do not close,
+  reopen, or merge its pull request.
 - Let the active harness carry ordinary communication and handoffs.
 
 **Prohibited:** modify another active task's branch, pull request, review thread,
@@ -33,6 +37,16 @@ documented machine-owned scope remain allowed.
 Local Git completion follows the upstream integration agent. GitHub publication,
 checks, merge, and remote cleanup remain the separate responsibility of
 [PR Lifecycle](../../teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
+
+## Automated worker ownership
+
+- An issue-backed run takes its continuing owner from the claimed Workbench
+  issue.
+- A prompt-backed run requires the `continuing_owner` workflow input.
+- The continuing owner must be a Nook GitHub collaborator with write access.
+- The workflow records that owner for its branch and Workbench scope and posts
+  a direct mention before exit.
+- The manager-owned PR path records aggregate delivery provenance.
 
 ## Prohibited actions
 
