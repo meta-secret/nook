@@ -1,7 +1,7 @@
 # AI Team Agent Contract
 
 This is a Nook functional context. The single Team Gizmo supplies it alongside
-Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+Meta-Cortex roles and their selected skills. Generic upstream rules take precedence
 over legacy generic wording here; Nook product and delivery requirements remain.
 
 
@@ -73,10 +73,9 @@ will implement named files.
 
 ## Authored implementation routing
 
-Use [upstream skill composition](../../../.meta-cortex/skill-composition.md)
-for every authored language, including executable skills and tests.
-The assignment supplies common coding, language practices, and any secret or
-Rust/WASM boundary requirements before implementation.
+Use the responsible upstream role for every authored language, including
+executable skills and tests. The assignment supplies the role's common coding
+skill, language skill, and any secret or Rust/WASM boundary requirements.
 Nook's validation section below identifies the separate enforcement surfaces.
 
 Documentation goes to the upstream tech writer with the subject owner's
@@ -139,7 +138,7 @@ packet must name the authoritative checks below:
   value-or-`void`, generic optional-state, and closed-discriminant violations.
 - `task preflight:source-architecture` checks source-language and source-size
   policy.
-- A focused review against [function ownership](../../../.meta-cortex/skills/dev/coding-skill/practices/function-ownership.md)
+- A focused review against [function ownership](../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/function-ownership.md)
   checks TypeScript ownership because no static TypeScript checker proves
   semantic ownership. An unowned function or a missing required result is a
   P1 failure and the acceptance must fail closed.

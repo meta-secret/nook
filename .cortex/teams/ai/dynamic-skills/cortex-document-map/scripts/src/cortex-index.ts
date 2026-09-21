@@ -299,7 +299,8 @@ that order. They supply Nook context before upstream role and skill selection.
 - [Circuit breaker](CIRCUIT-BREAKER.md)
 - [Root routing contract](AGENTS.md)
 - [Meta-Cortex integration and provenance](meta-cortex-integration.md)
-- [Upstream composition](../.meta-cortex/skill-composition.md)
+- [Upstream Team Gizmo](../.meta-cortex/agents/teams/gizmo/AGENTS.md)
+- [Upstream local feature integration](../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
 
 ## Coordination
 

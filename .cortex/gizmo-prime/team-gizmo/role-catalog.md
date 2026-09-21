@@ -32,6 +32,9 @@
 Upstream SRE is a placeholder. These Nook roles remain active until an upstream
 implementation covers their responsibilities.
 
+- [Local integration](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md):
+  upstream feature and worker worktree setup, branch integration, validation,
+  and local cleanup.
 - [Provisioning](../../teams/sre/provisioning/AGENTS.md): infrastructure provisioning.
 - [Cloud native](../../teams/sre/cloud-native/AGENTS.md): cluster and deployment operations.
 - [Docker cache](../../teams/sre/docker-cache-specialist/AGENTS.md): cache-health work.

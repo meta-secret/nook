@@ -62,8 +62,8 @@ test('audits supplied documents without repository I/O', () => {
 test('treats vendored Meta-Cortex links as external graph dependencies', () => {
   const dependencyLinks: readonly string[] = [
     '../.meta-cortex/AGENTS.md',
-    '../.meta-cortex/skills/../AGENTS.md',
-    '../.meta-cortex/skill-composition.md#common-prerequisites',
+    '../.meta-cortex/agents/../AGENTS.md',
+    '../.meta-cortex/agents/teams/gizmo/AGENTS.md#control-local-feature-changes',
   ];
   const expected: CortexDocumentMapResult = {
     kind: CortexDocumentMapContractKind.Result,

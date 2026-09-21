@@ -20,7 +20,6 @@ Resolve these Nook and upstream locations when loading the integration:
 - **Upstream catalogs:** `.meta-cortex/agents/teams/`.
 - **Project catalog:** `.cortex/gizmo-prime/team-gizmo/role-catalog.md`.
 - **Configuration:** `.meta-cortex/meta-cortex.toml`.
-- **Composition:** `.meta-cortex/skill-composition.md`.
 - **Project context:** the root contract and selected Nook team authorities.
 
 These wrappers select the upstream role behavior and the Nook context. Keep
@@ -30,14 +29,14 @@ catalogs.
 ### Pinned installation
 
 The ignored library is copied from `cortex/` in
-[meta-cortex](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex) at commit
-`d31a48a331cf01363816435d8bde9a2b9881e71b`. Its Apache-2.0 license is copied to
-`.meta-cortex/LICENSE`.
+[meta-cortex](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex) at release
+`v0.2.0`. Its Apache-2.0 license is copied to `.meta-cortex/LICENSE`.
 
-The library is absent from Nook clones and pull requests. Install this exact
-commit for local development and for CI stages that resolve Meta-Cortex links.
-Keep the installed directory untracked and copy the upstream configuration
-unchanged.
+The library is absent from Nook clones, task worktrees, and pull requests.
+Install this exact release in the repository root for local development and in
+CI stages that resolve Meta-Cortex links. Task worktrees resolve that shared
+library root separately. Keep the installed directory untracked and copy the
+upstream configuration unchanged.
 
 For a fresh checkout, copy the pinned `cortex/` directory and `LICENSE` into
 `.meta-cortex/`. This checkout uses a local source installation; do not run
@@ -45,8 +44,10 @@ For a fresh checkout, copy the pinned `cortex/` directory and `LICENSE` into
 
 ### Updating the pinned installation
 
-1. Select and record the new upstream commit in this document.
-2. Replace the ignored `.meta-cortex/` library and license from that commit.
-3. Review upstream path changes and update the thin wrapper and catalog mappings.
-4. Keep the upstream configuration unchanged during development and CI install.
-5. Run the Nook-authorized checks for the updated integration.
+1. Select and record the new upstream release tag in this document.
+2. Compare the installed copy with its recorded source and preserve local
+   differences separately.
+3. Replace the ignored `.meta-cortex/` library and license from that tag.
+4. Review upstream path changes and update the thin wrapper and catalog mappings.
+5. Keep the upstream configuration unchanged during development and CI install.
+6. Run the Nook-authorized checks for the updated integration.

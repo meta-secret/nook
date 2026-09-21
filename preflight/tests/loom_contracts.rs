@@ -342,16 +342,16 @@ fn loom_workflow_audits_every_cortex_change() {
 }
 
 #[test]
-fn preflight_installs_pinned_meta_cortex_without_configuration_override() {
+fn preflight_installs_released_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     assert!(
-        dockerfile.contains("meta_cortex_commit=d31a48a331cf01363816435d8bde9a2b9881e71b"),
-        "Meta-Cortex installation must use the pinned upstream commit"
+        dockerfile.contains("meta_cortex_release=v0.2.0"),
+        "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(
-        dockerfile.contains("meta-cortex-$meta_cortex_commit/cortex")
-            && dockerfile.contains("meta-cortex-$meta_cortex_commit/LICENSE"),
-        "Meta-Cortex installation must copy the pinned library and license"
+        dockerfile.contains("meta-cortex-${meta_cortex_release#v}/cortex")
+            && dockerfile.contains("meta-cortex-${meta_cortex_release#v}/LICENSE"),
+        "Meta-Cortex installation must copy the released library and license"
     );
     assert!(
         !dockerfile.contains("sed -i"),

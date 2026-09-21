@@ -1,16 +1,16 @@
 # Branch Naming Contract
 
-This contract defines branch names for every new feature, Team Gizmo, and leaf
-task. Branch identity stays tied to the feature, team, role, and bounded
-outcome.
+This contract adds Nook naming rules to the upstream
+[local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md).
+Branch identity stays tied to the feature, team, role, and bounded outcome.
 
 ## Outcome
 
 A compliant branch name identifies one owner and one bounded delivery outcome.
 
 - The Prime feature branch is the only feature remote branch.
-- A Team Gizmo or leaf branch identifies one child packet and its work.
-- Every new child branch complies with this contract.
+- A worker branch identifies one assigned task and its work.
+- Every new worker branch complies with this contract.
 - Existing branches are not retroactively renamed during an active task.
 
 ## Branch forms
@@ -18,14 +18,14 @@ A compliant branch name identifies one owner and one bounded delivery outcome.
 Use one of these two forms.
 
 - **Prime feature branch:** Use `codex/<feature>`.
-- **Team Gizmo or leaf branch:** Use
+- **Worker branch:** Use
   `codex/child/<team>/<role>/<feature>/<work>`.
 
-The literal `child` namespace is required for private Team Gizmo and leaf
-branches. It is shorter than the minimum feature length, so a child ref cannot
+The literal `child` namespace is required for private worker branches. It is
+shorter than the minimum feature length, so a worker ref cannot
 be the path prefix of a canonical `codex/<feature>` branch. The team and role
-segments therefore precede the variable feature and work segments. The Team
-Gizmo role segment is `gizmo`. A leaf uses its canonical leaf role.
+segments therefore precede the variable feature and work segments. Use the
+worker's canonical role segment.
 
 ## Segment constraints
 
@@ -33,18 +33,16 @@ Gizmo role segment is `gizmo`. A leaf uses its canonical leaf role.
   kebab-case.
 - **Team:** The `team` segment is one canonical team slug from this registry.
 - **Role registry:** Each team allows the following role segments.
-  - **AI (`ai`):** `gizmo`, `loom-specialist`, or `cortex-specialist`.
-  - **Development Core (`dev-core`):** `gizmo`, `rust-core-developer`, or
+  - **AI (`ai`):** `loom-specialist` or `cortex-specialist`.
+  - **Development Core (`dev-core`):** `rust-core-developer` or
     `rust-auth2-developer`.
-  - **Security (`security`):** `gizmo`, `cryptography-specialist`, or
+  - **Security (`security`):** `cryptography-specialist` or
     `security-review-specialist`.
-  - **SRE (`sre`):** `gizmo`, `provisioning`, or `cloud-native`.
-  - **Web Development (`web-dev`):** `gizmo`, `typescript-specialist`,
+  - **SRE (`sre`):** `provisioning`, `cloud-native`, or `docker-cache-specialist`.
+  - **Web Development (`web-dev`):** `typescript-specialist`,
     `svelte-specialist`, or `web-designer`.
-  - **Delivery Pipeline (`delivery-pipeline`):** `gizmo`, `pr-lifecycle`, or
-    `pr-lifecycle`.
-- **Role:** The `role` segment is `gizmo` or the canonical leaf role listed in
-  the registry for the selected team.
+  - **Delivery Pipeline (`delivery-pipeline`):** `pr-lifecycle`.
+- **Role:** The `role` segment is the canonical worker role listed for the team.
 - **Work:** The `work` segment is 20–50 characters. It uses lowercase
   kebab-case and describes a bounded outcome.
 - **Full name:** The complete branch name is at most 120 characters,
@@ -63,27 +61,13 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Do not duplicate an agent-type segment, such as
   `cortex-specialist/cortex-specialist`.
 - Do not create a child branch that omits either its team or role segment.
-- Do not create an empty commit, an empty merge, or a commit with
-  `--allow-empty`.
-- Do not integrate with `--no-ff`.
 - Do not force-push a feature or child branch.
 
 ## Ownership and integration
 
-- A leaf branch maps one-to-one to its issued child worktree and task.
-- A Team Gizmo branch maps one-to-one to its team packet and team worktree.
-- Team Gizmo verifies that a child delta is non-empty before integration.
-- A no-op child returns evidence and is cleaned up without a commit.
-- When the feature frontier has not moved, prefer `git merge --ff-only`.
-- Otherwise, cherry-pick only non-empty leaf commits without merge commits.
-- Team Gizmo integrates leaf commits into the feature branch in a
-  commit-preserving manner.
-- After verified integration, remove the child worktree and delete its local
-  child branch. This keeps `git log --all` free of retained duplicate-looking
-  refs.
-- Internal child branches are not PR branches.
-- Do not push an internal child branch unless an explicitly authorized remote
-  mechanism requires it.
+- A worker branch maps one-to-one to its assigned task worktree.
+- Follow upstream local feature integration for commits, merges, and cleanup.
+- Worker branches are local integration inputs, not PR branches.
 - Push and publish only the Prime feature branch as the feature remote branch.
 
 ## Dispatch and follow-up
@@ -116,8 +100,8 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - After every required PR check is green, squash-merge the canonical feature
   branch into `main` and delete the remote feature branch.
 
-Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
-worktree, and integration sequencing.
+Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for Nook
+assignment scope and the upstream integration skill for Git sequencing.
 
 ## Examples
 
@@ -126,35 +110,30 @@ All examples use the valid 15-character feature segment `agent-branching`.
 ### AI
 
 ```text
-codex/child/ai/gizmo/agent-branching/coordinate-ai-child-delivery
 codex/child/ai/cortex-specialist/agent-branching/define-branch-naming-contract
 ```
 
 ### SRE
 
 ```text
-codex/child/sre/gizmo/agent-branching/coordinate-sre-child-delivery
 codex/child/sre/provisioning/agent-branching/define-runner-branch-contract
 ```
 
 ### Development Core
 
 ```text
-codex/child/dev-core/gizmo/agent-branching/coordinate-core-child-delivery
 codex/child/dev-core/rust-core-developer/agent-branching/define-core-branch-contract
 ```
 
 ### Security
 
 ```text
-codex/child/security/gizmo/agent-branching/coordinate-security-child-delivery
 codex/child/security/cryptography-specialist/agent-branching/define-crypto-branch-contract
 ```
 
 ### Web Development
 
 ```text
-codex/child/web-dev/gizmo/agent-branching/coordinate-web-child-delivery
 codex/child/web-dev/typescript-specialist/agent-branching/define-web-branch-contract
 codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface
 ```
@@ -162,7 +141,6 @@ codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface
 ### Delivery Pipeline
 
 ```text
-codex/child/delivery-pipeline/gizmo/agent-branching/coordinate-pipeline-child-delivery
 codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-contract
 ```
 
@@ -172,5 +150,4 @@ codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-
    - Verify the canonical team and role.
    - Verify the bounded work outcome.
    - Verify the total length.
-2. Before integration, verify that the child delta is non-empty.
-   - Preserve the non-empty commit history.
+2. Before creation, verify the complete branch name against the constraints.

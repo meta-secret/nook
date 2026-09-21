@@ -1,6 +1,10 @@
 # Nook Cortex Writer Integration
 
-Generic authoring rules are supplied by Meta-Cortex Context Engineering.
+Generic authoring rules are supplied by Meta-Cortex
+[Context Engineering](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/context-engineering/SKILL.md).
+Programming and delivery examples use upstream
+[Code Practice Writing](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/code-practice-writing/SKILL.md)
+and [Delivery Writing](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/delivery-writing/SKILL.md).
 This card owns Nook's density-lint integration. Loom continues to compose it
 with the article-audit and consistency-compiler cards for Cortex write scopes.
 
@@ -10,17 +14,9 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
-Every feature branch starts from freshly fetched `origin/main`.
-
-- It compares the working branch with the merge base of the canonical feature
-  branch resolved at audit time. The packet may carry `originMainSha` and
-  `originMainSha` as bootstrap evidence; require the former to be an
-  ancestor of the latter. Prime creates every feature branch and worktree from
-  the current committed fresh-main feature base and preserves it. The branch
-  name is the workflow authority. Resolve its latest committed head before the
-  audit. If the branch advances, follow the latest head and rerun the audit.
-  Missing or unprovable bootstrap/branch evidence fails closed; observed SHAs
-  remain run evidence only.
+- It compares the working branch with the merge base selected by Nook's
+  pull-request audit stage. Branch and workspace creation remain owned by the
+  upstream integration agent; this lint does not define local Git procedure.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.
@@ -61,4 +57,3 @@ sentence boundary, line, check, message, severity, cardinality, and Unicode
 character counting.
 
 It does not rewrite meaning. The agent still owns the edit.
-

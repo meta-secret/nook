@@ -14,7 +14,7 @@ Meta-Cortex owns generic agents and skills. Nook retains six functional contexts
 AI, Development Core, Security, SRE, Web Development, and Delivery Pipeline.
 They describe product ownership, not six coordinator instances.
 Each feature uses one functional team identity: the single Team Gizmo coordinates
-bounded Team Agents and owns shared-branch sequencing. See [agent feature
+bounded Team Agents and owns their integration order. See [agent feature
 ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md) for the
 ownership boundary.
 
@@ -42,9 +42,8 @@ Workers consume assigned context directly instead of restarting root routing.
 
 ## Universal language authoring
 
-Use [upstream skill composition](../.meta-cortex/skill-composition.md).
-It owns common prerequisites, language specializations, and cross-language policy.
-Read applicable practices before editing, including for scripts and tests.
+Select the responsible upstream role from its team catalog. Load that role's
+skills and prerequisites before editing, including for scripts and tests.
 The following are Nook-specific additions rather than competing language rules:
 
 - [Rust lint rollout and existing values](teams/dev-core/design-docs/typed-newtypes.md).
@@ -64,24 +63,21 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 
 ## Team worker contract
 
-Follow the upstream coordination roles with Nook's bounded scopes, issued
-worktrees, and serialized commit integration. Each assignment names one
-functional team identity, bounded file scope, dependency order, and acceptance
-evidence. Team-context Gizmo paths resolve to the single coordinator. Team Gizmo
-owns shared-branch sequencing and integrates complete scoped commits serially.
-Temporary child branches are never published. Another active agent's work is
-read-only without an explicit handoff. Use the compact
+Follow the upstream Prime, Team Gizmo, and
+[integration agent](../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
+with Nook's functional scopes and acceptance evidence. Team-context Gizmo paths
+resolve to the single coordinator. Another active task remains read-only without
+an explicit handoff. Use the compact
 [subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md) for
-worker boundaries. The active host owns agent admission and communication. Do
-not invent a fixed concurrency limit or substitute repository journals for host
-dispatch.
+Nook assignment requirements. The active host owns agent communication.
 
 ## Mandatory delivery architecture
 
 Read the [delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 and [feature-delivery contract](gizmo-prime/architecture/dev-delivery.md)
 for an authorized delivery task. Prime owns the feature's outcome and authorization.
-Team Gizmo integrates bounded work. PR Lifecycle performs authorized GitHub mechanics.
+The upstream integration agent integrates bounded work. PR Lifecycle performs
+authorized GitHub mechanics.
 The user's explicit intermediate stopping point takes precedence over full delivery.
 
 ## GitHub execution boundary

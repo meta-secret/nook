@@ -78,7 +78,7 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
   const request: MakeDocumentArgs = {
     path: '.cortex/knowledge-graph.md',
     content:
-      '# Nook graph\n\n- [Common coding](../.meta-cortex/skills/dev/coding-skill/SKILL.md)\n',
+      '# Nook graph\n\n- [Common coding](../.meta-cortex/agents/teams/dev-team/common/coding-skill/SKILL.md)\n',
   };
   const document =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument(request);
