@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationControlActivationDisposition,
   authenticationControlActivationDisposition,
+  authenticationWidgetOwnsControl,
 } from '../src/content/autofill/authentication-action-lifecycle'
 import { scanState } from '../src/content/autofill/state'
 
@@ -33,6 +34,15 @@ describe('authentication control activation lifecycle', () => {
         AuthenticationControlActivationDisposition.Ignore,
       )
     }
+  })
+
+  test('recognizes controls rendered inside the widget shadow root', () => {
+    expect(
+      authenticationWidgetOwnsControl({
+        lightTreeContainsControl: false,
+        shadowTreeContainsControl: true,
+      }),
+    ).toBe(true)
   })
 
   test('prevents a pending scan from publishing after a page mutation', () => {

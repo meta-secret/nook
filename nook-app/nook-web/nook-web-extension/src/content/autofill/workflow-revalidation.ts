@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Revalidation observations are assembled into typed Rust routing requests here. */
 import {
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -11,14 +12,13 @@ import {
 import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
 import { pageQrCapture } from '../../lib/page-qr-capture'
 import {
-  authentication_page_observation_facts_match_binding,
   AuthenticationWorkflowSnapshotResponseKind,
-  bind_authentication_page_observation_facts,
   type AuthenticationWorkflowAction,
   type AuthenticationObservationBindingToken,
   type AuthenticationPageObservationFacts,
   type AuthenticationPageObservationFactsBatch,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowSnapshotMessageType } from '../../lib/auth-workflow-messages'
 import {
   RuntimeMessageDeliveryKind,
@@ -38,6 +38,7 @@ type RevalidatedAuthenticationActionArgs = {
 export type RevalidatedAuthenticationActRequest = {
   currentWorkflow: PasswordFormObservation
   observationBindingToken: AuthenticationObservationBindingToken
+  approvedFacts: AuthenticationPageObservationFacts
   revalidateCurrentWorkflow: () => PasswordFormObservation | false
 }
 
@@ -211,17 +212,11 @@ export class RevalidatedAuthenticationAction {
           AuthenticationControlIdentitySnapshot.capture(currentWorkflow),
       }
     }
-    if (!approvalIsActive()) return rejected()
-    const approvedObservation = observeCurrentFacts()
-    if (!approvedObservation) return rejected()
-    const approvedFactsBatch: AuthenticationPageObservationFactsBatch = {
-      observations: [approvedObservation.facts],
+    if (!approvalIsActive()) {
+      return rejected()
     }
-    let approvedDomObservationBindingToken: AuthenticationObservationBindingToken
-    try {
-      approvedDomObservationBindingToken =
-        bind_authentication_page_observation_facts(approvedFactsBatch)
-    } catch {
+    const approvedObservation = observeCurrentFacts()
+    if (!approvedObservation) {
       return rejected()
     }
     const message: Parameters<
@@ -237,7 +232,9 @@ export class RevalidatedAuthenticationAction {
       await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
         message,
       )
-    if (!approvalIsActive()) return rejected()
+    if (!approvalIsActive()) {
+      return rejected()
+    }
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable)
       return rejected()
     const { verdict } = delivery.response
@@ -250,38 +247,51 @@ export class RevalidatedAuthenticationAction {
     ) {
       return rejected()
     }
-    const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
-      observations: [delivery.response.selectedFacts.facts],
-    }
-    let selectedObservationBindingToken: AuthenticationObservationBindingToken
-    try {
-      selectedObservationBindingToken =
-        bind_authentication_page_observation_facts(selectedFactsBatch)
-    } catch {
+    const selectedObservationBindingToken =
+      typeof delivery.response.factsBindingToken === 'string'
+        ? delivery.response.factsBindingToken
+        : false
+    if (!selectedObservationBindingToken) {
       return rejected()
     }
     if (
       observationBinding.kind ===
         AuthenticationObservationBindingKind.Required &&
-      !authentication_page_observation_facts_match_binding(
-        observationBinding.token,
-        selectedFactsBatch,
-      )
+      observationBinding.token !== selectedObservationBindingToken
     ) {
       return rejected()
     }
 
     const currentObservation = observeCurrentFacts()
     if (!currentObservation) return rejected()
-    const currentFactsBatch: AuthenticationPageObservationFactsBatch = {
-      observations: [currentObservation.facts],
+    const currentMessage: Parameters<
+      typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage
+    >[0] = {
+      type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+      payload: {
+        origin: location.origin,
+        observations: currentObservation.observations,
+      },
     }
+    const currentDelivery =
+      await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
+        currentMessage,
+      )
+    if (currentDelivery.kind === RuntimeMessageDeliveryKind.Unavailable)
+      return rejected()
+    const currentVerdict = currentDelivery.response.verdict
+    const currentBindingToken = currentDelivery.response.factsBindingToken
     if (
       currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
-      !authentication_page_observation_facts_match_binding(
-        approvedDomObservationBindingToken,
-        currentFactsBatch,
-      ) ||
+      currentVerdict.kind !==
+        AuthenticationWorkflowSnapshotResponseKind.Matched ||
+      !('snapshot' in currentVerdict) ||
+      currentVerdict.snapshot.observationIndex !==
+        currentObservation.selectedIndex ||
+      currentVerdict.snapshot.action !== expectedAction ||
+      currentDelivery.response.selectedFacts.state !== 'selected' ||
+      typeof currentBindingToken !== 'string' ||
+      currentBindingToken !== selectedObservationBindingToken ||
       approvedObservation.controlIdentities.compare(
         currentObservation.controlIdentities,
       ) === AuthenticationControlIdentityComparison.Changed ||
@@ -293,16 +303,9 @@ export class RevalidatedAuthenticationAction {
       if (!approvalIsActive()) return false
       const postActionObservation = observeCurrentFacts()
       if (!postActionObservation) return false
-      const postActionFactsBatch: AuthenticationPageObservationFactsBatch = {
-        observations: [postActionObservation.facts],
-      }
       if (
         postActionObservation.selectedIndex !==
           approvedObservation.selectedIndex ||
-        !authentication_page_observation_facts_match_binding(
-          approvedDomObservationBindingToken,
-          postActionFactsBatch,
-        ) ||
         approvedObservation.controlIdentities.compare(
           postActionObservation.controlIdentities,
         ) === AuthenticationControlIdentityComparison.Changed
@@ -314,6 +317,7 @@ export class RevalidatedAuthenticationAction {
     const actRequest: RevalidatedAuthenticationActRequest = {
       currentWorkflow: currentObservation.currentWorkflow,
       observationBindingToken: selectedObservationBindingToken,
+      approvedFacts: currentDelivery.response.selectedFacts.facts,
       revalidateCurrentWorkflow,
     }
     const actResult = act(actRequest)
@@ -331,13 +335,26 @@ export class RevalidatedAuthenticationAction {
   }
   static requiredAuthenticationObservationBinding(
     facts: AuthenticationPageObservationFacts,
-  ): AuthenticationObservationBinding {
+  ): Promise<AuthenticationObservationBinding> {
     const batch: AuthenticationPageObservationFactsBatch = {
       observations: [facts],
     }
-    return {
-      kind: AuthenticationObservationBindingKind.Required,
-      token: bind_authentication_page_observation_facts(batch),
-    }
+    return authenticationRuntimeTransport
+      .sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts,
+        payload: { facts: batch },
+      })
+      .then((delivery) => {
+        if (
+          delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+          typeof delivery.response !== 'string'
+        ) {
+          return { kind: AuthenticationObservationBindingKind.Unbound }
+        }
+        return {
+          kind: AuthenticationObservationBindingKind.Required,
+          token: delivery.response,
+        }
+      })
   }
 }

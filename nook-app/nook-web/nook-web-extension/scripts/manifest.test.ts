@@ -108,10 +108,15 @@ describe('extension origin isolation', () => {
     expect(defaultManifest().permissions).toContain(ExtensionPermission.Storage)
   })
 
-  test('exposes the icon and companion WASM to in-page content scripts', () => {
+  test('exposes the icon, host, and companion WASM to in-page content scripts', () => {
     expect(defaultManifest().web_accessible_resources).toEqual([
       {
-        resources: ['icons/nook.png', 'content/nook_companion_wasm_bg.wasm'],
+        resources: [
+          'icons/nook.png',
+          'content/companion-wasm-host.html',
+          'content/companion-wasm-host.js',
+          'content/nook_companion_wasm_bg.wasm',
+        ],
         matches: ['<all_urls>'],
       },
     ])

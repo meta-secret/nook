@@ -313,16 +313,16 @@ tasks:
         if [ -s "$https_dir/rootCA.pem" ] && [ -s "$https_dir/localhost.pem" ] && [ -s "$https_dir/localhost-key.pem" ]; then
           exit 0;
         fi;
-        {{.DOCKER}} build
-          --file "{{.REPO_ROOT}}/nook-app/nook-web/docker/mkcert.Dockerfile"
-          --tag "{{.DOCKER_MKCERT_IMAGE}}"
+        {{.DOCKER}} build \
+          --file "{{.REPO_ROOT}}/nook-app/nook-web/docker/mkcert.Dockerfile" \
+          --tag "{{.DOCKER_MKCERT_IMAGE}}" \
           "{{.REPO_ROOT}}";
-        {{.DOCKER}} run --rm
-          -e CAROOT=/certs
-          -v "$https_dir:/certs"
-          "{{.DOCKER_MKCERT_IMAGE}}"
-          -cert-file /certs/localhost.pem
-          -key-file /certs/localhost-key.pem
+        {{.DOCKER}} run --rm \
+          -e CAROOT=/certs \
+          -v "$https_dir:/certs" \
+          "{{.DOCKER_MKCERT_IMAGE}}" \
+          -cert-file /certs/localhost.pem \
+          -key-file /certs/localhost-key.pem \
           localhost 127.0.0.1 ::1;
         chmod 0600 "$https_dir"/*'
 

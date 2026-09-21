@@ -9,6 +9,8 @@ import {
   ExtensionSessionMessageType,
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  CompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
   decodeProviders,
   parseExtensionSessionRequest,
   sessionMessageWireFixture,
@@ -480,5 +482,66 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
+  })
+
+  test('routes companion workflow operations through the offscreen queue', async () => {
+    const handled: CompanionWasmSessionMessageType[] = []
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      handleCompanionIdentityHandoff: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      decodeProviders,
+      handleCompanionWasmMessage: async (message) => {
+        handled.push(message.type)
+        if (
+          message.type ===
+          CompanionWasmSessionMessageType.PasswordWorkflowActivity
+        ) {
+          return ok({
+            kind: 'password-change',
+            generationProgress: { currentStep: 2, totalSteps: 3 },
+          })
+        }
+        return err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        )
+      },
+      handleMessage: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+    })
+    const message: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.PasswordWorkflowActivity,
+      payload: {
+        currentPasswordFieldCount: 1,
+        newPasswordFieldCount: 1,
+      },
+    }
+
+    const response = await dispatcher.enqueueCompanionWasmMessage(message)
+
+    expect(response).toEqual(
+      ok({
+        kind: 'password-change',
+        generationProgress: { currentStep: 2, totalSteps: 3 },
+      }),
+    )
+    expect(handled).toEqual([
+      CompanionWasmSessionMessageType.PasswordWorkflowActivity,
+    ])
   })
 })

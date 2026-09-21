@@ -74,12 +74,13 @@
       hidden
       bind:value={hiddenPassword}
     />
-    <button type="button">Create account</button>
     <div id="identifierNext">
       <button type="button" onclick={() => submit('identifier-next')}
         >Next</button
       >
     </div>
+    <button type="button">Forgot email?</button>
+    <button type="button">Create account</button>
   {:else}
     <p data-testid="google-selected-account">{flowState.identifier}</p>
     <form

@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- WebAuthn observations are converted into typed Rust requests at this boundary. */
 import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {
@@ -14,12 +15,15 @@ import {
 import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowActivity,
-  authentication_workflow_activity_progress,
-  project_password_workflow_activity,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authenticationActivityProgress,
+  authentication_workflow_activity_progress,
+} from './authentication-activity-progress'
+import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   LoginPickerKind,
   WidgetControlDisposition,
@@ -220,7 +224,7 @@ class LoginPasskeyInteraction {
       return
     }
     if (
-      authenticationWorkflowUi.approvedWorkflowDisposition(workflow) !==
+      (await authenticationWorkflowUi.approvedWorkflowDisposition(workflow)) !==
       LiveAuthenticationWorkflowDisposition.Current
     ) {
       this.cancelLoginPickerRequest(requestId)
@@ -320,15 +324,28 @@ class LoginPasskeyInteraction {
     if (widgetState.busy) return
     widgetState.busy = true
     continueButton.disabled = true
-    const passwordWorkflowActivityRequest1: Parameters<
-      typeof project_password_workflow_activity
-    >[0] = {
+    const passwordWorkflowActivityRequest1 = {
       currentPasswordFieldCount: workflow.summary.currentPasswordFieldCount,
       newPasswordFieldCount: workflow.summary.newPasswordFieldCount,
     }
-    const activity = project_password_workflow_activity(
-      passwordWorkflowActivityRequest1,
-    )
+    const activityDelivery =
+      await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
+        type: CompanionWasmSessionMessageType.PasswordWorkflowActivity,
+        payload: passwordWorkflowActivityRequest1,
+      })
+    if (activityDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      continueButton.disabled = false
+      return
+    }
+    const activity = activityDelivery.response
+    if (
+      typeof activity !== 'object' ||
+      !('generationProgress' in activity) ||
+      !('kind' in activity)
+    ) {
+      continueButton.disabled = false
+      return
+    }
     const flightProgressRequest10: Parameters<
       typeof workflowUi.setFlightProgress
     >[0] = {
@@ -354,7 +371,7 @@ class LoginPasskeyInteraction {
       WidgetControlDisposition.Active
     try {
       let releasedObservationBinding: AuthenticationObservationBinding =
-        RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+        await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
       const revalidationRequest2: ConstructorParameters<
@@ -576,7 +593,7 @@ class LoginPasskeyInteraction {
       WidgetControlDisposition.Active
     try {
       const observationBinding =
-        RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
+        await RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
           approval.facts,
         )
       const revalidationRequest4: ConstructorParameters<
@@ -671,7 +688,13 @@ class LoginPasskeyInteraction {
     if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
       return
     widgetState.busy = true
+    widgetState.credentialActuationInFlight = true
     continueButton.disabled = true
+    if (!authenticationActivityProgress.prepare()) {
+      widgetState.busy = false
+      continueButton.disabled = false
+      return
+    }
     const flightProgressRequest11: Parameters<
       typeof workflowUi.setFlightProgress
     >[0] = {
@@ -844,6 +867,7 @@ class LoginPasskeyInteraction {
       await this.openLoginPicker(openLoginPickerRequest1)
     } finally {
       widgetState.busy = false
+      widgetState.credentialActuationInFlight = false
       if (
         pickerState.login.kind === LoginPickerKind.Closed &&
         continueButton.isConnected &&

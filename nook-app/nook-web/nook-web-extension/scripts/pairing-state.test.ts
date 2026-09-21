@@ -1,8 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import {
-  extensionPairingGrantPolicyReady,
-  type ExtensionReadySetupState,
-} from '../src/background/pairing-grants'
+import { type ExtensionReadySetupState } from '../src/background/pairing-grants'
 import { Effect } from 'effect'
 import {
   ExtensionPairingStateQueryMessage,
@@ -38,10 +35,7 @@ describe('extension pairing state loader', () => {
     Object.assign(globalThis, {
       chrome: { runtime: { sendMessage, lastError: false } },
     })
-    const loader = new ExtensionPairingStateLoader({
-      browser: globalThis,
-      pairingPolicy: extensionPairingGrantPolicyReady,
-    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
 
     expect(
       await Effect.runPromise(
@@ -76,10 +70,7 @@ describe('extension pairing state loader', () => {
     Object.assign(globalThis, {
       chrome: { runtime: { sendMessage, lastError: false } },
     })
-    const loader = new ExtensionPairingStateLoader({
-      browser: globalThis,
-      pairingPolicy: extensionPairingGrantPolicyReady,
-    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
 
     expect(await loader.loadExtensionSetupState()).toEqual({
       kind: ExtensionSetupLoadKind.Unavailable,

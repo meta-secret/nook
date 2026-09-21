@@ -323,6 +323,10 @@ export function simulateDomAuthentication({
       reject: () =>
         passwordFormCredentialInteraction.clearLoginCredentials(fillRequest),
     },
+    approvedAdvanceControls:
+      detailedAdvanceControl && detailedAdvanceControl.kind === 'observed'
+        ? detailedAdvanceControl.observations
+        : [],
   }
   const submissionResult = approvedFill
     ? passwordFormInteraction.submitLoginForm(submissionRequest)

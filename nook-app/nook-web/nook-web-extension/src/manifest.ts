@@ -200,6 +200,8 @@ export function createManifest(
       {
         resources: [
           'icons/nook.png',
+          'content/companion-wasm-host.html',
+          'content/companion-wasm-host.js',
           // Content scripts fetch companion WASM via chrome.runtime.getURL;
           // MV3 requires the package path to be web-accessible for page worlds.
           'content/nook_companion_wasm_bg.wasm',

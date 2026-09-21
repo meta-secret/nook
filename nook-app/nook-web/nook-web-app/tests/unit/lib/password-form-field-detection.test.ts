@@ -1,5 +1,24 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  AuthenticationWorkflowScopeDiagnosticDisposition,
+  DisabledAuthenticationWorkflowScopeDiagnosticSink,
+  type AuthenticationWorkflowScopeDiagnostic,
+} from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
+import {
+  AuthenticationFieldCandidateDisposition,
+  AuthenticationFieldCandidateKind,
+  AuthenticationFieldCandidateSelectorMatch,
+  AuthenticationFieldCandidateTypeCategory,
+  AuthenticationFieldCandidateAutocompleteCategory,
+  DisabledAuthenticationFieldCandidateDiagnosticSink,
+  type AuthenticationFieldCandidateDiagnostic,
+} from '../../../../nook-web-shared/src/extension/password-form-field-candidate-diagnostics'
+import {
+  DisabledAuthenticationSelectorEntryDiagnosticSink,
+  type AuthenticationSelectorEntryDiagnostic,
+  type AuthenticationSelectorEntryDiagnosticSink,
+} from '../../../../nook-web-shared/src/extension/password-form-selector-entry-diagnostics'
+import {
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -29,9 +48,193 @@ function observedAuthenticationWorkflow(): PasswordFormObservation {
 
 afterEach(() => {
   document.body.replaceChildren()
+  passwordFieldDiscovery.setWorkflowScopeDiagnosticSink(
+    new DisabledAuthenticationWorkflowScopeDiagnosticSink(),
+  )
+  passwordFieldDiscovery.setFieldCandidateDiagnosticSink(
+    new DisabledAuthenticationFieldCandidateDiagnosticSink(),
+  )
+  passwordFieldDiscovery.setSelectorEntryDiagnosticSink(
+    new DisabledAuthenticationSelectorEntryDiagnosticSink(),
+  )
 })
 
 describe('authentication field detection', () => {
+  test('records selector-entry facts before filtering Google identifier fields', () => {
+    const diagnostics: AuthenticationSelectorEntryDiagnostic[] = []
+    const selectorEntryDiagnosticSink: AuthenticationSelectorEntryDiagnosticSink =
+      {
+        recordSelectorEntryDiagnostic: (diagnostic) =>
+          diagnostics.push(diagnostic),
+      }
+    passwordFieldDiscovery.setSelectorEntryDiagnosticSink(
+      selectorEntryDiagnosticSink,
+    )
+    window.history.replaceState(
+      {},
+      '',
+      '/v3/signin/identifier?flowName=GlifWebSignIn',
+    )
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section id="identifier-shell" class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+      </main>
+    `
+
+    expect(passwordFieldDiscovery.findUsernameFields({})).toEqual([])
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]).toMatchObject({
+      origin: window.location.origin,
+      inputCount: 1,
+      identifierIdPresent: true,
+      rootKind: 'document',
+      frameKind: 'top-frame',
+      usernameFieldCount: 0,
+    })
+    expect(JSON.stringify(diagnostics[0])).not.toContain('/v3/signin')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('flowName')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('user@example.test')
+    expect(JSON.stringify(diagnostics[0])).not.toContain('Email or phone')
+  })
+
+  test('records sanitized selector and eligibility details before workflow scope construction', () => {
+    const diagnostics: AuthenticationFieldCandidateDiagnostic[] = []
+    passwordFieldDiscovery.setFieldCandidateDiagnosticSink({
+      recordFieldCandidateDiagnostic: (diagnostic) =>
+        diagnostics.push(diagnostic),
+    })
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section id="identifier-shell" class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+      </main>
+    `
+
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
+    const rejected = diagnostics.find(
+      (diagnostic) =>
+        diagnostic.candidateKind ===
+          AuthenticationFieldCandidateKind.Username &&
+        diagnostic.selectorMatch ===
+          AuthenticationFieldCandidateSelectorMatch.UsernameSemantic &&
+        diagnostic.disposition ===
+          AuthenticationFieldCandidateDisposition.Rejected,
+    )
+    if (!rejected)
+      throw new Error('expected rejected Google identifier candidate')
+    expect(rejected).toMatchObject({
+      typeCategory: AuthenticationFieldCandidateTypeCategory.Text,
+      autocompleteCategories: [
+        AuthenticationFieldCandidateAutocompleteCategory.Username,
+        AuthenticationFieldCandidateAutocompleteCategory.WebAuthn,
+      ],
+      disabled: false,
+      readOnly: false,
+      renderability: 'rendered',
+      rootKind: 'document',
+      frameKind: 'top-frame',
+    })
+    expect(rejected.ancestors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'section',
+          idTokens: ['identifier-shell'],
+          classTokens: ['identifier-shell'],
+        }),
+      ]),
+    )
+    expect(JSON.stringify(rejected)).not.toContain('user@example.test')
+    expect(JSON.stringify(rejected)).not.toContain('Email or phone')
+  })
+
+  test('records sanitized scope gates for a rejected form-less candidate', () => {
+    const diagnostics: AuthenticationWorkflowScopeDiagnostic[] = []
+    passwordFieldDiscovery.setWorkflowScopeDiagnosticSink({
+      recordWorkflowScopeDiagnostic: (diagnostic) =>
+        diagnostics.push(diagnostic),
+    })
+    window.history.replaceState({}, '', '/home')
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+        <section class="identifier-actions">
+          <button type="button">Review profile</button>
+        </section>
+      </main>
+    `
+
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
+    expect(diagnostics.length).toBeGreaterThan(0)
+    const rejected = diagnostics.find(
+      (diagnostic) =>
+        diagnostic.disposition ===
+        AuthenticationWorkflowScopeDiagnosticDisposition.Rejected,
+    )
+    if (!rejected) throw new Error('expected rejected scope diagnostics')
+    expect(rejected.candidateCount).toBe(1)
+    expect(rejected.ancestors[0]).toMatchObject({
+      tag: 'section',
+      classTokens: ['identifier-shell'],
+    })
+    expect(rejected.controls).toEqual([])
+    expect(JSON.stringify(rejected.ancestors)).not.toContain(
+      'user@example.test',
+    )
+    expect(rejected.gates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ gate: 'semantic-submit-control' }),
+        expect.objectContaining({ gate: 'unambiguous-login-activation' }),
+        expect.objectContaining({ gate: 'foreign-scope-not-swallowed' }),
+      ]),
+    )
+  })
+
+  test('admits the nested Google identifier field beside its wrapper activation', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/v3/signin/identifier?flowName=GlifWebSignIn',
+    )
+    document.body.innerHTML = `
+      <main class="Svhjgc">
+        <section class="Em2Ord">
+          <div class="AFTWye">
+            <div class="rFrNMe">
+              <div class="aCsJod">
+                <div class="aXBtI">
+                  <div class="Xb9hP">
+                    <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="identifierNext"><div role="button"><span>Next</span></div></div>
+          <button type="button">Create account</button>
+        </section>
+      </main>
+    `
+
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      passwordFieldCount: 0,
+    })
+    expect(observations[0]?.root).toBe(document.querySelector('section'))
+  })
+
   test('uses an authentication control after a generic help button', () => {
     document.body.innerHTML = `
       <form method="post" action="/next">

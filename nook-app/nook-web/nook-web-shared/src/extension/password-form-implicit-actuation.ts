@@ -1,6 +1,4 @@
-import { authentication_implicit_submit_actuation_is_safe } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
-  AuthenticationImplicitSubmitActuationObservation,
   AuthenticationPageObservationFacts,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -47,6 +45,14 @@ export type ApprovedImplicitAuthenticationSubmitRequest<
   hasAuthenticationUsername: boolean;
   hasAuthenticationPassword: boolean;
   requestedApproval: FormSubmissionApproval | false;
+  implicitActuationIsSafe: (
+    facts: AuthenticationPageObservationFacts,
+  ) => boolean;
+};
+
+type AuthenticationImplicitActuationEvidenceRequest = {
+  facts: AuthenticationPageObservationFacts;
+  policy: (facts: AuthenticationPageObservationFacts) => boolean;
 };
 
 export class ApprovedImplicitAuthenticationSubmission<
@@ -59,11 +65,13 @@ export class ApprovedImplicitAuthenticationSubmission<
     const request = this.request;
     const actuationIsSafe = (): boolean => {
       const observation = this.currentOwnedAuthenticationFormObservation();
+      if (!observation) return false;
+      const evidenceRequest: AuthenticationImplicitActuationEvidenceRequest = {
+        facts: request.factsForObservation(observation),
+        policy: request.implicitActuationIsSafe,
+      };
       return Boolean(
-        observation &&
-        new AuthenticationImplicitActuationEvidence(
-          request.factsForObservation(observation),
-        ).isSafe(),
+        new AuthenticationImplicitActuationEvidence(evidenceRequest).isSafe(),
       );
     };
     const implicitRequest: Parameters<
@@ -96,15 +104,15 @@ export class ApprovedImplicitAuthenticationSubmission<
 }
 
 class AuthenticationImplicitActuationEvidence {
-  constructor(private readonly facts: AuthenticationPageObservationFacts) {}
+  private readonly facts: AuthenticationPageObservationFacts;
+  private readonly policy: (
+    facts: AuthenticationPageObservationFacts,
+  ) => boolean;
+  constructor(request: AuthenticationImplicitActuationEvidenceRequest) {
+    this.facts = request.facts;
+    this.policy = request.policy;
+  }
   isSafe(): boolean {
-    const facts = this.facts;
-    const observation: AuthenticationImplicitSubmitActuationObservation = {
-      fields: facts.fields,
-      ceremony: facts.ceremony,
-      controlLabel: "",
-      controlMachineIdentity: "",
-    };
-    return authentication_implicit_submit_actuation_is_safe(observation);
+    return this.policy(this.facts);
   }
 }

@@ -11,7 +11,6 @@ import {
 
 import {
   AuthenticationWorkflowAction,
-  saved_login_action_available,
   type AuthenticationPageObservationFacts,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -63,6 +62,8 @@ type RenderWidgetArgs = {
   facts: AuthenticationPageObservationFacts
   loginMatches: WebsiteLoginMatchAvailability
   vaultConnection: PilotVaultConnection
+  factsBindingToken: string | false
+  savedLoginActionAvailable: boolean
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
@@ -157,13 +158,15 @@ class AuthenticationWidgetRenderer {
     authenticatorEnrollmentInteraction.renderEnrollmentActions(nookTypedArgs1_0)
   }
 
-  renderWidget({
+  async renderWidget({
     snapshot,
     workflow,
     facts,
     loginMatches,
     vaultConnection,
-  }: RenderWidgetArgs): void {
+    factsBindingToken,
+    savedLoginActionAvailable,
+  }: RenderWidgetArgs): Promise<void> {
     if (this.ui.widgetState.dismissed) {
       workflowUi.removeWidget()
       return
@@ -181,11 +184,18 @@ class AuthenticationWidgetRenderer {
       loginMatches,
       vaultPresentation,
       facts,
+      factsBindingToken,
     }
-    const workflowKey = authenticationWidgetWorkflowKey(workflowKeyRequest)
+    const workflowKey =
+      await authenticationWidgetWorkflowKey(workflowKeyRequest)
+    if (!workflowKey) {
+      workflowUi.removeWidget()
+      return
+    }
     const currentApproval: AuthenticationWorkflowApproval = {
       workflowKey,
       facts,
+      ...(factsBindingToken ? { factsBindingToken } : {}),
     }
     if (
       this.ui.pickerState.loginApprovalDisposition(currentApproval) ===
@@ -271,7 +281,7 @@ class AuthenticationWidgetRenderer {
     continueButton.textContent =
       workflowUi.translatedMessage(continueMessageKey)
 
-    continueButton.addEventListener('click', (event) => {
+    const activateContinueButton = (event: Event): void => {
       if (!new AuthenticationGesture(event).trusted) return
       if (!canContinueWithNook) {
         authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
@@ -384,7 +394,12 @@ class AuthenticationWidgetRenderer {
         }
         void loginPasskeyInteraction.continueWithNook(nookTypedArgs0_7)
       }
+    }
+    continueButton.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return
+      activateContinueButton(event)
     })
+    continueButton.addEventListener('click', activateContinueButton)
 
     const takeOverButton = document.createElement('button')
     takeOverButton.type = 'button'
@@ -402,10 +417,7 @@ class AuthenticationWidgetRenderer {
     })
 
     body.append(takeOverButton)
-    const savedLoginActionRequest: Parameters<
-      typeof saved_login_action_available
-    >[0] = { action: snapshot.action, loginMatches }
-    if (saved_login_action_available(savedLoginActionRequest)) {
+    if (savedLoginActionAvailable) {
       const savedLoginButton = document.createElement('button')
       savedLoginButton.type = 'button'
       savedLoginButton.className = 'text-button'

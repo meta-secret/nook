@@ -9,8 +9,8 @@ import { WebsiteLoginRevealMessageType } from '../../lib/login-fill-messages'
 import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowActivity,
-  authentication_workflow_activity_progress,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { authentication_workflow_activity_progress } from './authentication-activity-progress'
 import { WidgetControlDisposition, widgetState } from './state'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { workflowUi } from './workflow-ui'
@@ -32,7 +32,6 @@ export class LoginCredentialFillAction {
   async fillAndSubmitAccount({
     account,
     workflow,
-    approval,
     step,
     title,
     description,
@@ -66,10 +65,9 @@ export class LoginCredentialFillAction {
       authenticationWorkflowUi.setStatus(authenticationStatusRequest1)
       return false
     }
-    let releasedObservationBinding: AuthenticationObservationBinding =
-      RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
-        approval.facts,
-      )
+    let releasedObservationBinding: AuthenticationObservationBinding = {
+      kind: AuthenticationObservationBindingKind.Unbound,
+    }
     const revalidationRequest1: ConstructorParameters<
       typeof RevalidatedAuthenticationAction
     >[0] = {
@@ -90,8 +88,9 @@ export class LoginCredentialFillAction {
     ).execute()
     if (
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
-    )
+    ) {
       return showFillFailure()
+    }
     const loginFillMessage1: Parameters<
       typeof loginFillRuntimeTransport.sendLoginFillMessage
     >[0] = {
@@ -105,8 +104,9 @@ export class LoginCredentialFillAction {
     }
     const delivery =
       await loginFillRuntimeTransport.sendLoginFillMessage(loginFillMessage1)
-    if (delivery.kind === LoginFillDeliveryKind.Unavailable)
+    if (delivery.kind === LoginFillDeliveryKind.Unavailable) {
       return showFillFailure()
+    }
     const { response } = delivery
     if (!approvalIsActive()) {
       if (response?.ok && typeof response.password === 'string')
@@ -117,8 +117,9 @@ export class LoginCredentialFillAction {
       !response?.ok ||
       !response.username ||
       typeof response.password !== 'string'
-    )
+    ) {
       return showFillFailure()
+    }
 
     const credentials = {
       username: response.username,
@@ -185,6 +186,7 @@ export class LoginCredentialFillAction {
       // microtask. Cross the browser task boundary before rebuilding the
       // untrusted DOM facts and activating the approved submit control.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+      await passwordFormInteraction.prepareCompanionWorkflowPolicies()
       const submissionRevalidationRequest: ConstructorParameters<
         typeof RevalidatedAuthenticationAction
       >[0] = {
@@ -194,7 +196,12 @@ export class LoginCredentialFillAction {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
         approvalIsActive,
-        act: ({ currentWorkflow, revalidateCurrentWorkflow }) => {
+        act: ({
+          currentWorkflow,
+          approvedFacts,
+          revalidateCurrentWorkflow,
+        }) => {
+          const approvedAdvanceControl = approvedFacts.detailedAdvanceControl
           const submissionApproval: NonNullable<
             Parameters<
               typeof passwordFormInteraction.submitLoginForm
@@ -213,6 +220,10 @@ export class LoginCredentialFillAction {
             root: currentWorkflow.root,
             formScope: currentWorkflow.formScope,
             submissionApproval,
+            approvedAdvanceControls:
+              approvedAdvanceControl?.kind === 'observed'
+                ? approvedAdvanceControl.observations
+                : [],
           }
           submission.result = passwordFormInteraction.submitLoginForm(
             loginSubmissionRequest1,

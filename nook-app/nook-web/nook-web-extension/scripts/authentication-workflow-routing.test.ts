@@ -260,6 +260,41 @@ describe('authentication workflow routing', () => {
     expect(availabilityCalls).toBe(0)
   })
 
+  test('does not invent ready passkey state without safe page evidence', async () => {
+    const dependencies = workflowDependencies({
+      authenticationPasskeyEvidenceIsSafe: () => false,
+      authenticationWorkflowSnapshot: async ({
+        observations,
+      }: WorkflowSnapshotRequest) => {
+        expect(observations[0]?.authenticator.passkeyAccountAvailability).toBe(
+          'unavailable',
+        )
+        expect(observations[0]?.authenticator.matchingPasskeyAccountCount).toBe(
+          0,
+        )
+        return matchedWorkflowSnapshot({ observationIndex: 0, action: 0 })
+      },
+    })
+
+    const response = await authenticationWorkflowMessageResponse({
+      message,
+      sender,
+      dependencies,
+    })
+
+    expect(response).toMatchObject({
+      selectedFacts: {
+        state: 'selected',
+        facts: {
+          authenticator: {
+            passkeyAccountAvailability: 'unavailable',
+            matchingPasskeyAccountCount: 0,
+          },
+        },
+      },
+    })
+  })
+
   test('contains a synchronous evidence-classifier exception', async () => {
     const dependencies = workflowDependencies({
       authenticationPasskeyEvidenceIsSafe: () => {

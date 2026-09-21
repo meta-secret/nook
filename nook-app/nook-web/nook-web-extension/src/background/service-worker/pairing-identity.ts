@@ -572,6 +572,8 @@ class ExtensionPairingIdentity {
         CompanionIdentityDiscoveryDecodeFailureKind
       > => {
         if (
+          !response ||
+          typeof response !== 'object' ||
           !('ok' in response) ||
           response.ok !== true ||
           !('status' in response)

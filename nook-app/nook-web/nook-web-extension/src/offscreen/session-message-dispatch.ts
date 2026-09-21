@@ -1,3 +1,4 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime payloads are decoded at this offscreen dispatch boundary. */
 import { err, type Result } from 'neverthrow'
 import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -35,6 +36,10 @@ import {
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import {
+  isCompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -60,7 +65,9 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<Result<SessionResponse, SessionOperationFailure>>
-  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
+  handleCompanionWasmMessage?: (
+    message: CompanionWasmSessionMessage,
+  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
@@ -382,6 +389,30 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     return this.operations.enqueue(enqueueArgs)
   }
 
+  enqueueCompanionWasmMessage(
+    message: CompanionWasmSessionMessage,
+  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
+    const handler = this.context.handleCompanionWasmMessage
+    if (!handler) {
+      return Promise.resolve(
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      )
+    }
+    const enqueueArgs: EnqueueSessionOperationRequest<SessionResponse> = {
+      operation: () => handler(message),
+      options: {
+        priority: SessionOperationPriority.Normal,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: { kind: SessionOperationCleanupKind.None },
+      },
+    }
+    return this.operations.enqueue(enqueueArgs)
+  }
+
   enqueue(
     message: ParsedExtensionSessionTransportRequest,
   ): Promise<Result<SessionResponse, SessionOperationFailure>> {
@@ -470,6 +501,27 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         !sender.tab &&
         (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
+      if (isCompanionWasmSessionMessageType(message.type)) {
+        // Content-script requests are admitted and forwarded by the service
+        // worker. The offscreen document receives the same runtime broadcast,
+        // so it must leave that response channel untouched for the worker.
+        if (!serviceWorkerSender) return false
+        if (!this.context.handleCompanionWasmMessage) {
+          sendResponse({
+            ok: false,
+            error: 'Forbidden companion WASM request.',
+          })
+          return false
+        }
+        void this.enqueueCompanionWasmMessage(
+          message as CompanionWasmSessionMessage,
+        ).then((result) =>
+          result.match(sendResponse, (failure) =>
+            sendResponse({ ok: false, error: failure.message }),
+          ),
+        )
+        return true
+      }
       if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
         if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
@@ -573,7 +625,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           : this.enqueue(request)
         void response.then((result) =>
           result.match(sendResponse, (failure) =>
-            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
             sendResponse({ ok: false, error: failure.message }),
           ),
         )
