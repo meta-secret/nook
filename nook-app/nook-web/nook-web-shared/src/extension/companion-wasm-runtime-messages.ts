@@ -6,6 +6,7 @@ import type {
   AuthenticationWorkflowMatch,
   AuthenticationWorkflowSnapshot,
   AuthenticationRecoveryCopyEvidence,
+  AuthenticationWorkflowRoutingResponse,
   PasswordWorkflowActivityPresentation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
@@ -25,6 +26,7 @@ export enum CompanionWasmSessionMessageType {
   LooksLikeOneTimeCodeAutoSubmitSignal = "nook:extension-session-looks-like-one-time-code-auto-submit-signal",
   AuthenticationRecoveryCopyEvidence = "nook:extension-session-authentication-recovery-copy-evidence",
   IsNookVaultAppUrl = "nook:extension-session-is-nook-vault-app-url",
+  DecodeAuthenticationWorkflowRuntimeResponse = "nook:extension-session-decode-authentication-workflow-runtime-response",
 }
 
 export type CompanionWasmLoginContextObservation = {
@@ -141,6 +143,10 @@ export type CompanionWasmSessionMessage =
         readonly candidateUrl: string;
         readonly baseUrl: string;
       };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
+      readonly payload: { readonly response: unknown };
     };
 
 export type CompanionWasmSessionResponse =
@@ -149,6 +155,7 @@ export type CompanionWasmSessionResponse =
   | AuthenticationObservationBindingToken
   | AuthenticationWorkflowMatch
   | AuthenticationRecoveryCopyEvidence
+  | AuthenticationWorkflowRoutingResponse
   | boolean
   | {
       readonly authenticationUsernameEvidence: AuthenticationUsernameEvidence;

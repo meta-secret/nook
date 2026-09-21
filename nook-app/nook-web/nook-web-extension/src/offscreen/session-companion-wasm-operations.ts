@@ -14,6 +14,7 @@ import {
   authentication_page_observation_facts_match_binding,
   authentication_enrollment_workflow_match,
   authentication_recovery_copy_evidence,
+  decode_authentication_workflow_runtime_response,
   authentication_username_evidence,
   authentication_workflow_pilot_presentation_capability,
   bind_authentication_page_observation_facts,
@@ -213,6 +214,12 @@ export async function handleCompanionWasmMessage(
           is_nook_vault_app_url(
             message.payload.candidateUrl,
             message.payload.baseUrl,
+          ),
+        )
+      case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
+        return ok(
+          decode_authentication_workflow_runtime_response(
+            message.payload.response,
           ),
         )
     }

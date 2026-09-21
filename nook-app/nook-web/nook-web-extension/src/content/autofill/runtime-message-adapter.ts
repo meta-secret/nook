@@ -1,8 +1,9 @@
 import { companionWasmReadiness } from './companion-wasm-readiness'
-import type {
-  CompanionWasmRuntimeMessage,
-  CompanionWasmSessionMessage,
-  CompanionWasmSessionResponse,
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmSessionMessage,
+  type CompanionWasmSessionResponse,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -47,7 +48,6 @@ import {
   decode_login_picker_open_response,
   decode_authenticator_picker_open_response,
   decode_authentication_outcome_response,
-  decode_authentication_workflow_runtime_response,
   decode_authenticator_backup_attach_response,
   decode_authenticator_code_response,
   decode_authenticator_enrollment_confirm_response,
@@ -59,7 +59,7 @@ import {
   decode_website_login_save_offer_response,
   decode_website_login_save_pending_response,
   decode_website_login_options,
-  type AuthenticationWorkflowRuntimeResponse,
+  type AuthenticationWorkflowRoutingResponse,
   type AuthenticationWorkflowSelectedFacts,
   type AuthenticationWorkflowSnapshotResponse,
   type AuthenticatorBackupAttachResponse,
@@ -89,7 +89,7 @@ export type RuntimeMessageDelivery<Response> =
 
 type RuntimeMessageResponse =
   | AuthenticationOutcomeResponse
-  | AuthenticationWorkflowRuntimeResponse
+  | AuthenticationWorkflowRoutingResponse
   | AuthenticationWorkflowSnapshotResponse
   | AuthenticatorBackupAttachResponse
   | AuthenticatorCodeResponse
@@ -108,7 +108,7 @@ type RuntimeMessageResponse =
 
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
-  loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
+  loginMatches: AuthenticationWorkflowRoutingResponse['loginMatches']
   selectedFacts: AuthenticationWorkflowSelectedFacts
 }
 
@@ -216,7 +216,7 @@ class AuthenticationRuntimeTransport {
   ): Promise<RuntimeMessageDelivery<CompanionWasmSessionResponse>> {
     const runtimeMessage: CompanionWasmRuntimeMessage = {
       ...message,
-      origin: this.browser.location.origin,
+      origin: this.browser.location?.origin ?? '',
     }
     const delivery = await this.sendRuntimeMessage(runtimeMessage)
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -358,19 +358,20 @@ class AuthenticationRuntimeTransport {
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return this.unavailable()
     }
-    try {
-      await companionWasmReadiness.wait()
-      const runtimeResponse = decode_authentication_workflow_runtime_response(
-        delivery.response,
-      )
+    const decoded = await this.sendCompanionWasmRuntimeMessage({
+      type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse,
+      payload: { response: delivery.response },
+    })
+    if (decoded.kind === RuntimeMessageDeliveryKind.Delivered) {
+      const runtimeResponse =
+        decoded.response as unknown as AuthenticationWorkflowRoutingResponse
       const { workflow: verdict, loginMatches, selectedFacts } = runtimeResponse
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: { verdict, loginMatches, selectedFacts },
       }
-    } catch {
-      return this.unavailable()
     }
+    return this.unavailable()
   }
 
   async sendAuthenticatorPreviewRuntimeMessage(

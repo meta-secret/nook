@@ -1,5 +1,4 @@
 import {
-  classify_authentication_backup_codes_observation,
   extract_backup_code_candidates,
   type AuthenticationRecoveryCopyEvidence,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -87,8 +86,7 @@ class RecoveryCopyObservation {
 
   recoveryCopyHasBackupCodeHint(recoveryCopy: string): boolean {
     return (
-      classify_authentication_backup_codes_observation(recoveryCopy, false) ===
-      'present'
+      recoveryCopy === this.evidence.copy && this.evidence.hint === 'present'
     )
   }
 

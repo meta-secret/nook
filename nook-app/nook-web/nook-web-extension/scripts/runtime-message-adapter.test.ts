@@ -14,7 +14,9 @@ import {
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
+  decode_authentication_workflow_runtime_response,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   RuntimeMessageDeliveryKind,
   authenticationRuntimeTransport,
@@ -64,9 +66,33 @@ type RuntimeMock =
 function installRuntimeMock(mock: RuntimeMock): void {
   const runtime = {
     sendMessage: (...parameters: [unknown, (response: unknown) => void]) => {
+      const message = parameters[0]
       const callback = parameters[1]
       const response =
         mock.kind === RuntimeMockKind.Response ? mock.response : {}
+      if (
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        message.type ===
+          CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse &&
+        'payload' in message &&
+        message.payload &&
+        typeof message.payload === 'object' &&
+        'response' in message.payload
+      ) {
+        try {
+          callback({
+            ok: true,
+            result: decode_authentication_workflow_runtime_response(
+              message.payload.response,
+            ),
+          })
+        } catch {
+          callback({ ok: false })
+        }
+        return
+      }
       callback(response)
     },
   }
