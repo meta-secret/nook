@@ -346,7 +346,10 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
             observationsMatch(candidate, transported),
           ),
       );
-      return approvedDescendants.at(-1)?.control ?? matched.control;
+      for (const approvedDescendant of approvedDescendants.reverse()) {
+        return approvedDescendant.control;
+      }
+      return matched.control;
     }
     return false;
   }

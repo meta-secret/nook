@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { CompanionWasmRuntimeMessage } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import type { ApprovedAuthenticationWorkflowDecision } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
@@ -72,9 +73,7 @@ describe('authentication workflow ranking', () => {
     type RevalidationResponse = {
       readonly ok: true
       readonly result: {
-        readonly revalidationDecision: {
-          readonly kind: 'rejected'
-        }
+        readonly revalidationDecision: ApprovedAuthenticationWorkflowDecision
       }
     }
     const response: RevalidationResponse = {
