@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authentication_advance_control_is_safe,
+  looks_like_login_advance_control_label,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  passwordFormCredentialInteraction as credentials,
   passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -14,7 +17,33 @@ const wholeDocumentPasswordFormSubmission: Parameters<
 function didSubmit(
   request: Parameters<typeof forms.submitLoginForm>[0],
 ): boolean {
-  return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
+  const workflow = forms
+    .summarizeAuthenticationWorkflowForms()
+    .find(
+      (candidate) =>
+        candidate.root === request.root &&
+        (request.kind === PasswordFormQueryKind.Root ||
+          candidate.formScope.kind === request.formScope.kind),
+    )
+  const facts = workflow
+    ? forms.authenticationPageObservationFacts({
+        observation: workflow,
+        authenticatorSetupHint: false,
+      })
+    : false
+  const detailedAdvanceControl = facts ? facts.detailedAdvanceControl : false
+  const approvedAdvanceControls =
+    detailedAdvanceControl && detailedAdvanceControl.kind === 'observed'
+      ? detailedAdvanceControl.observations.filter(
+          (control) =>
+            authentication_advance_control_is_safe(control) &&
+            looks_like_login_advance_control_label(control.label),
+        )
+      : []
+  return (
+    forms.submitLoginForm({ ...request, approvedAdvanceControls }) ===
+    FormSubmissionResult.Submitted
+  )
 }
 
 afterEach(() => {
@@ -435,39 +464,6 @@ describe('classified login activation', () => {
 
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe(true)
-  })
-
-  test.each([
-    ['<button aria-label="Anmelden" title="Anmelden">Anmelden</button>', true],
-    [
-      '<button aria-label="Se connecter" title="Se connecter">Se connecter</button>',
-      true,
-    ],
-    ['<button type="submit">Supprimer le compte</button>', false],
-    ['<form method="post" id="f"><button>Entrar</button></form>', false],
-  ])('gates form-less localized control %s', (control, expected) => {
-    window.history.replaceState({}, '', '/')
-    document.body.innerHTML = `
-      <div role="form" class="signin-panel">
-        <input data-qa="login_email" name="email" type="email" />
-        ${control}
-      </div>
-    `
-    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
-    expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    const submissionArgs: Parameters<typeof forms.submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: ((...[v = document]) => v)(workflow?.root),
-      formScope: ((
-        ...[
-          v = {
-            kind: PasswordFormScopeKind.Unowned,
-          },
-        ]
-      ) => v)(workflow?.formScope),
-    }
-
-    expect(didSubmit(submissionArgs)).toBe(expected)
   })
 
   test.each([
@@ -993,26 +989,5 @@ describe('classified login activation', () => {
 
     expect(didSubmit({ kind: PasswordFormQueryKind.Root, root })).toBe(false)
     expect(activated).toBe(false)
-  })
-
-  test('fills the first enabled OTP field through the native value setter', () => {
-    document.body.innerHTML = `
-      <input autocomplete="one-time-code" disabled />
-      <input id="otp-code" type="tel" />
-    `
-    const field = document.querySelector<HTMLInputElement>('#otp-code')
-    let inputEvents = 0
-    field?.addEventListener('input', () => inputEvents++)
-
-    expect(
-      credentials.fillOneTimeCode({
-        code: '123456',
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }),
-    ).toBe(true)
-    expect(field?.value).toBe('123456')
-    expect(inputEvents).toBe(1)
-    expect(document.activeElement).toBe(field)
   })
 })

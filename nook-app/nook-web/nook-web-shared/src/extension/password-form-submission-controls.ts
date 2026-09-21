@@ -139,7 +139,7 @@ export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 type SemanticSubmitControlList = HTMLElement[];
 
 export const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"], [role="button"]';
+  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"], [role="button"], #identifierNext';
 
 export const semanticSubmitControlSelector =
   'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
