@@ -214,7 +214,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     );
     assert!(!central_ci.contains("dev-promotion-readiness:"));
     assert!(central_ci.contains("uses: ./.github/workflows/pr.yml"));
-    assert!(central_ci.contains("github.event.pull_request.head.ref == 'dev'"));
+    assert!(!central_ci.contains("github.event.pull_request.head.ref == 'dev'"));
     let preflight_gate =
         "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));

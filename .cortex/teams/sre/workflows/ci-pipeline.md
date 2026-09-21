@@ -168,11 +168,11 @@ Cancellation is scoped to work that a newer run actually supersedes:
 ### Concurrency scopes
 
 - **Central CI (`ci.yml`)**
-  - Scope: `main`, `dev-pr`, `pr-<number>`, or an event-specific run group.
-  - Cancel active run: No; `cancel-in-progress: false` preserves every active
-    validation run and its evidence.
-  - Reason: Validation and cache-publication evidence remains available even
-    when a newer event targets the same logical source.
+  - Scope: `main`, `pr-<number>`, or an event-specific run group.
+  - Cancel active run: Yes for pull requests; no for main, scheduled, and
+    manually dispatched runs.
+  - Reason: A newer PR event supersedes stale head validation, while trusted
+    cache-publication runs retain serialized completion semantics.
 - **Remote task (`remote.yml`)**
   - Scope: ref, selected task, and dispatch nonce.
   - Cancel active run: No.
@@ -187,11 +187,10 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: workflow-triggered preview or branch execution.
   - Cancel active run: Workflow-owned; untrusted validation remains isolated
     from trusted ARC work.
-- **Stateful publishers (`dev-pr-manager.yml` and `release.yml`)**
+- **Stateful publisher (`release.yml`)**
   - Scope: publisher-specific group or source run identity.
   - Cancel active run: No.
-  - Reason: Do not interrupt PR promotion, release deployment, or evidence
-    handoff state.
+  - Reason: Do not interrupt release deployment or evidence handoff state.
 
 ## Production release strategy
 

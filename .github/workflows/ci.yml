@@ -16,19 +16,6 @@ concurrency:
   group: >-
     ${{ github.event_name == 'push' && 'main' ||
     (github.event_name == 'pull_request' &&
-    github.event.pull_request.head.repo.full_name == github.repository &&
-    github.event.pull_request.head.ref == 'dev' &&
-    github.event.pull_request.base.ref == 'main' &&
-    (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-    (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
-    (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) &&
-    'dev-pr') ||
-    (github.event_name == 'pull_request' &&
-    github.event.pull_request.head.repo.full_name == github.repository &&
-    github.event.pull_request.head.ref == 'dev' &&
-    github.event.pull_request.base.ref == 'main' &&
-    format('dev-pr-event-{0}', github.run_id)) ||
-    (github.event_name == 'pull_request' &&
     (github.event.action != 'labeled' && github.event.action != 'edited' ||
     github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e' ||
     github.event.changes.base.ref.from != '') && format('pr-{0}', github.event.pull_request.number)) ||
@@ -51,7 +38,6 @@ jobs:
       full-e2e-requested: ${{ steps.paths.outputs.full-e2e-requested }}
       product: ${{ steps.paths.outputs.product }}
       research: ${{ steps.paths.outputs.research }}
-      dev-pr: ${{ steps.paths.outputs.dev-pr }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -66,7 +52,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          DEV_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'dev' && github.event.pull_request.base.ref == 'main' && 'true' || 'false' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -81,19 +66,12 @@ jobs:
           fi
           validation_requested=false
           full_e2e_requested=false
-          dev_pr="$DEV_PR"
           if [ "$EVENT_NAME" = pull_request ]; then
             label_scope="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | [any(. == "ci:validate" or . == "ci:full-e2e"), any(. == "ci:full-e2e")] | @tsv')"
             IFS=$'\t' read -r validation_requested full_e2e_requested <<< "$label_scope"
-            if [ "$DEV_PR" = "true" ]; then
-              # Dev PRs always run ordinary validation, while full browser e2e
-              # remains an explicit ci:full-e2e opt-in.
-              validation_requested=true
-            fi
           fi
           echo "validation-requested=$validation_requested" >> "$GITHUB_OUTPUT"
           echo "full-e2e-requested=$full_e2e_requested" >> "$GITHUB_OUTPUT"
-          echo "dev-pr=$dev_pr" >> "$GITHUB_OUTPUT"
           product=false
           research=false
           while IFS= read -r -d '' path; do
@@ -103,9 +81,6 @@ jobs:
             esac
             case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac
           done < "$changed_paths"
-          if [ "$DEV_PR" = "true" ]; then
-            product=true
-          fi
           echo "product=$product" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
 
@@ -135,7 +110,7 @@ jobs:
     uses: ./.github/workflows/pr.yml
     secrets: inherit
     with:
-      validation_requested: ${{ github.event.pull_request.head.ref == 'dev' || contains(github.event.pull_request.labels.*.name, 'ci:validate') || contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}
+      validation_requested: ${{ contains(github.event.pull_request.labels.*.name, 'ci:validate') || contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}
       full_e2e_requested: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') }}
       source_sha: ${{ github.event.pull_request.head.sha }}
 
