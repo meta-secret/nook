@@ -1,3 +1,8 @@
+import {
+  AuthenticationWorkflowScopeDiagnosticDisposition,
+  type AuthenticationWorkflowScopeDiagnostic,
+} from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
+
 export enum AuthenticationDiagnosticAvailability {
   Disabled = 'disabled',
   Enabled = 'enabled',
@@ -35,12 +40,23 @@ export type AuthenticationDiagnosticObservation = {
   readonly candidateCount: number
 }
 
-export type AuthenticationDiagnosticEntry = {
+type AuthenticationDiagnosticStageEntry = {
   readonly channel: AuthenticationDiagnosticChannelName
   readonly gate: AuthenticationDiagnosticGate
   readonly outcome: AuthenticationDiagnosticGateOutcome
   readonly candidateCount: number
 }
+
+type AuthenticationDiagnosticScopeEntry = {
+  readonly channel: AuthenticationDiagnosticChannelName
+  readonly gate: AuthenticationDiagnosticGate.WorkflowFormDiscovery
+  readonly outcome: AuthenticationDiagnosticGateOutcome
+  readonly candidateCount: number
+  readonly scope: AuthenticationWorkflowScopeDiagnostic
+}
+
+export type AuthenticationDiagnosticEntry =
+  AuthenticationDiagnosticStageEntry | AuthenticationDiagnosticScopeEntry
 
 export interface AuthenticationDiagnosticSink {
   record(entry: AuthenticationDiagnosticEntry): void
@@ -68,6 +84,28 @@ export class AuthenticationDiagnosticChannel {
       gate: observation.gate,
       outcome: observation.outcome,
       candidateCount: observation.candidateCount,
+    }
+    this.request.sink.record(entry)
+  }
+
+  recordWorkflowScopeDiagnostic(
+    observation: AuthenticationWorkflowScopeDiagnostic,
+  ): void {
+    if (
+      this.request.availability !== AuthenticationDiagnosticAvailability.Enabled
+    ) {
+      return
+    }
+    const entry: AuthenticationDiagnosticScopeEntry = {
+      channel: AuthenticationDiagnosticChannelName.AuthenticationDetection,
+      gate: AuthenticationDiagnosticGate.WorkflowFormDiscovery,
+      outcome:
+        observation.disposition ===
+        AuthenticationWorkflowScopeDiagnosticDisposition.Accepted
+          ? AuthenticationDiagnosticGateOutcome.CandidatesFound
+          : AuthenticationDiagnosticGateOutcome.Rejected,
+      candidateCount: observation.candidateCount,
+      scope: observation,
     }
     this.request.sink.record(entry)
   }

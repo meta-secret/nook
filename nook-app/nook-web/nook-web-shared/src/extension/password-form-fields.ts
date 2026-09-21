@@ -23,6 +23,16 @@ import {
 import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 import { authenticationFieldIndexCatalog } from "./password-form-owned-field-index";
+import {
+  AuthenticationWorkflowScopeDiagnosticBuilder,
+  AuthenticationWorkflowScopeDiagnosticCandidateKind,
+  AuthenticationWorkflowScopeDiagnosticDisposition,
+  AuthenticationWorkflowScopeDiagnosticGate,
+  AuthenticationWorkflowScopeDiagnosticGateOutcome,
+  DisabledAuthenticationWorkflowScopeDiagnosticSink,
+  type AuthenticationWorkflowScopeDiagnosticGateResult,
+  type AuthenticationWorkflowScopeDiagnosticSink,
+} from "./password-form-scope-diagnostics";
 
 void companionWasmReady;
 
@@ -184,6 +194,27 @@ export type ControlObservationAssociationRequest = {
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PasswordFieldDiscovery extends AuthenticationInputSurface {
+  private readonly workflowScopeDiagnosticBuilder =
+    new AuthenticationWorkflowScopeDiagnosticBuilder();
+  private workflowScopeDiagnosticSink: AuthenticationWorkflowScopeDiagnosticSink =
+    new DisabledAuthenticationWorkflowScopeDiagnosticSink();
+
+  setWorkflowScopeDiagnosticSink(
+    sink: AuthenticationWorkflowScopeDiagnosticSink,
+  ): void {
+    this.workflowScopeDiagnosticSink = sink;
+  }
+
+  private recordWorkflowScopeDiagnostic(
+    request: Parameters<
+      AuthenticationWorkflowScopeDiagnosticBuilder["build"]
+    >[0],
+  ): void {
+    this.workflowScopeDiagnosticSink.recordWorkflowScopeDiagnostic(
+      this.workflowScopeDiagnosticBuilder.build(request),
+    );
+  }
+
   private associatedFormFieldSelector({
     selector,
     formId,
@@ -793,31 +824,111 @@ class PasswordFieldDiscovery extends AuthenticationInputSurface {
     container,
     field,
   }: TypeButtonPromotionScopeRequest): boolean {
-    if (this.containerIsDocumentShell(container)) return false;
-    if (this.containerHasSemanticSubmitControl(container)) return true;
     const promotionRequest: TypeButtonPromotionScopeRequest = {
       container,
       field,
     };
-    if (
-      this.containerHasUnambiguousAuthenticationActivation(container) &&
-      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest) &&
-      (!this.containerHasGenericTypeButtonControls(container) ||
-        this.hasLoginPathContext(field))
-    ) {
-      return true;
-    }
-    if (
-      this.containerLooksLikeExplicitAuthSurface(container) &&
-      !this.containerHasGenericTypeButtonControls(container)
-    ) {
-      return true;
-    }
-    return (
-      this.containerHasUnownedCredentialCluster(container) &&
-      !this.containerHasGenericTypeButtonControls(container) &&
-      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest)
+    const notDocumentShell = !this.containerIsDocumentShell(container);
+    const semanticSubmitControl =
+      this.containerHasSemanticSubmitControl(container);
+    const unambiguousLoginActivation =
+      this.containerHasUnambiguousAuthenticationActivation(container);
+    const loginPathContext = unambiguousLoginActivation
+      ? this.hasLoginPathContext(field)
+      : false;
+    const noGenericTypeButtonControls =
+      !this.containerHasGenericTypeButtonControls(container);
+    const explicitAuthenticationSurface =
+      this.containerLooksLikeExplicitAuthSurface(container);
+    const unownedCredentialCluster =
+      this.containerHasUnownedCredentialCluster(container);
+    const foreignScopeNotSwallowed =
+      !this.typeButtonPromotionSwallowsForeignScope(promotionRequest);
+    const scopeAdmitted =
+      notDocumentShell &&
+      (semanticSubmitControl ||
+        (unambiguousLoginActivation &&
+          foreignScopeNotSwallowed &&
+          (noGenericTypeButtonControls || loginPathContext)) ||
+        (explicitAuthenticationSurface && noGenericTypeButtonControls) ||
+        (unownedCredentialCluster &&
+          noGenericTypeButtonControls &&
+          foreignScopeNotSwallowed));
+    const gates: AuthenticationWorkflowScopeDiagnosticGateResult[] = [
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.NotDocumentShell,
+        outcome: notDocumentShell
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.SemanticSubmitControl,
+        outcome: semanticSubmitControl
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.UnambiguousLoginActivation,
+        outcome: unambiguousLoginActivation
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.LoginPathContext,
+        outcome: loginPathContext
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.NoGenericTypeButtonControls,
+        outcome: noGenericTypeButtonControls
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.ExplicitAuthenticationSurface,
+        outcome: explicitAuthenticationSurface
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.UnownedCredentialCluster,
+        outcome: unownedCredentialCluster
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+      {
+        gate: AuthenticationWorkflowScopeDiagnosticGate.ForeignScopeNotSwallowed,
+        outcome: foreignScopeNotSwallowed
+          ? AuthenticationWorkflowScopeDiagnosticGateOutcome.Passed
+          : AuthenticationWorkflowScopeDiagnosticGateOutcome.Failed,
+      },
+    ];
+    const controls = this.formlessAuthenticationControls(container).slice(
+      0,
+      16,
     );
+    const candidateKind =
+      field.type === "password"
+        ? AuthenticationWorkflowScopeDiagnosticCandidateKind.Password
+        : this.hasAutocompleteToken({ field, expected: "one-time-code" })
+          ? AuthenticationWorkflowScopeDiagnosticCandidateKind.OneTimeCode
+          : AuthenticationWorkflowScopeDiagnosticCandidateKind.Username;
+    const scopeDiagnosticRequest: Parameters<
+      AuthenticationWorkflowScopeDiagnosticBuilder["build"]
+    >[0] = {
+      field,
+      container,
+      candidateKind,
+      candidateCount: this.unownedCredentialFieldCount(container),
+      controls,
+      gates,
+      disposition: scopeAdmitted
+        ? AuthenticationWorkflowScopeDiagnosticDisposition.Accepted
+        : AuthenticationWorkflowScopeDiagnosticDisposition.Rejected,
+    };
+    this.recordWorkflowScopeDiagnostic(scopeDiagnosticRequest);
+    return scopeAdmitted;
   }
 
   private unownedCredentialFieldCount(root: ParentNode): number {

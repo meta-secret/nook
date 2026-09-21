@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  AuthenticationWorkflowScopeDiagnosticDisposition,
+  DisabledAuthenticationWorkflowScopeDiagnosticSink,
+  type AuthenticationWorkflowScopeDiagnostic,
+} from '../../../../nook-web-shared/src/extension/password-form-scope-diagnostics'
+import {
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -29,9 +34,65 @@ function observedAuthenticationWorkflow(): PasswordFormObservation {
 
 afterEach(() => {
   document.body.replaceChildren()
+  passwordFieldDiscovery.setWorkflowScopeDiagnosticSink(
+    new DisabledAuthenticationWorkflowScopeDiagnosticSink(),
+  )
 })
 
 describe('authentication field detection', () => {
+  test('records sanitized scope gates for a rejected form-less candidate', () => {
+    const diagnostics: AuthenticationWorkflowScopeDiagnostic[] = []
+    passwordFieldDiscovery.setWorkflowScopeDiagnosticSink({
+      recordWorkflowScopeDiagnostic: (diagnostic) =>
+        diagnostics.push(diagnostic),
+    })
+    window.history.replaceState({}, '', '/home')
+    document.body.innerHTML = `
+      <main id="signin-view" class="shell user@example.test">
+        <section class="identifier-shell">
+          <input id="identifierId" name="identifier" type="text" autocomplete="username webauthn" aria-label="Email or phone" />
+        </section>
+        <section class="identifier-actions">
+          <div id="identifierNext"><div role="button"><span>Next</span></div></div>
+          <button type="button">Create account</button>
+        </section>
+      </main>
+    `
+
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
+    expect(diagnostics.length).toBeGreaterThan(0)
+    const rejected = diagnostics.find(
+      (diagnostic) =>
+        diagnostic.disposition ===
+        AuthenticationWorkflowScopeDiagnosticDisposition.Rejected,
+    )
+    if (!rejected) throw new Error('expected rejected scope diagnostics')
+    expect(rejected.candidateCount).toBe(1)
+    expect(rejected.ancestors[0]).toMatchObject({
+      tag: 'section',
+      classTokens: ['identifier-shell'],
+    })
+    expect(rejected.controls).toContainEqual(
+      expect.objectContaining({
+        tag: 'div',
+        role: '',
+        label: 'next',
+      }),
+    )
+    expect(JSON.stringify(rejected.ancestors)).not.toContain(
+      'user@example.test',
+    )
+    expect(rejected.gates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ gate: 'semantic-submit-control' }),
+        expect.objectContaining({ gate: 'unambiguous-login-activation' }),
+        expect.objectContaining({ gate: 'foreign-scope-not-swallowed' }),
+      ]),
+    )
+  })
+
   test('uses an authentication control after a generic help button', () => {
     document.body.innerHTML = `
       <form method="post" action="/next">
