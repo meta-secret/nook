@@ -192,6 +192,27 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
+  test('renders LinkedIn generated field IDs with associated labels', async ({
+    page,
+  }) => {
+    const mockAuth = await startMockAuthServer()
+    try {
+      await page.goto(`${mockAuth.origin}/template/linkedin`)
+      const email = page.getByLabel('Email or phone', { exact: true })
+      const password = page.getByLabel('Password', { exact: true })
+      await expect(email).toHaveAttribute('id', '«fixture-r1»')
+      await expect(password).toHaveAttribute('id', '«fixture-r2»')
+      await expect(page.locator('label[for="«fixture-r1»"]')).toHaveText(
+        'Email or phone',
+      )
+      await expect(page.locator('label[for="«fixture-r2»"]')).toHaveText(
+        'Password',
+      )
+    } finally {
+      await mockAuth.close()
+    }
+  })
+
   test('shows Pilot Continue with Nook on every eligible shell template', async ({
     browserName,
   }, testInfo) => {
