@@ -453,6 +453,8 @@ Use this workflow for quality, CI, and deployment changes.
 11. **GitHub Actions agent execution:**
     - Feature teams author tests and return their worker branches with focused
       evidence to Team Gizmo for upstream local integration.
+    - Team Gizmo waits for the integration agent's feature branch, integration
+      outcome, and checks before requesting remote validation.
     - Feature feedback requires required PR-check capability.
     - Missing capability is a blocker, not permission for slow feature checks.
     - The manually run Feature Gizmo owns the full slow feature pull request cycle.

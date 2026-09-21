@@ -85,7 +85,10 @@ and `preflight` sources. Unused-code ownership is split as follows:
   the assigned worker branch, and reports focused evidence. Local feedback
   permits only bounded inexpensive diagnostics or formatting. Browser and behavior tests execute in the dev
   manager's slow PR stage against the published SHA.
-- Gizmo pushes feature commits and requests required PR-check evidence.
+- The upstream integration agent integrates the worker branch and reports its
+  feature branch, integration outcome, and checks to Gizmo.
+- Gizmo routes feature-branch publication and required PR-check evidence through
+  the Delivery Pipeline.
 - Tests and required browser E2E execute in the manager's slow dev PR stage.
 - Web development owns browser acceptance requirements.
 - The manager owns snapshot publication and promotion.

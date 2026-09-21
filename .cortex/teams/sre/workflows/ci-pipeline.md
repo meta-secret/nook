@@ -660,7 +660,9 @@ coverage solve and package floors in the verified Rust graph.
   finish their assigned worker branches. They report the branch and focused
   evidence to Team Gizmo. They do not push, dispatch remote work, or operate
   external PR/check state.
-- Feature Gizmos request repeatable required PR-check evidence.
+- Feature Gizmos route those branches through the upstream integration agent,
+  wait for its feature branch, integration outcome, and checks, and then request
+  repeatable required PR-check evidence.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the Feature Gizmo's feature pull-request cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.

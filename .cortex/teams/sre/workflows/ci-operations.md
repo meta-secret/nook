@@ -173,6 +173,8 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
 - Feature teams author tests and finish scoped worker branches.
+- Feature Gizmos route those branches through the upstream integration agent and
+  wait for its feature branch, integration outcome, and checks.
 - Feature Gizmos request only the required required PR-check capability.
 - The Feature Gizmo alone requests the full slow feature pull request checks.
 - Local tests, Docker work, product compilation, and broad pre-push are prohibited.
