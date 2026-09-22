@@ -3,8 +3,10 @@
 ## Required entry
 
 Read [the circuit breaker](CIRCUIT-BREAKER.md) before every other Cortex document.
-Then read [Meta-Cortex integration](meta-cortex-integration.md) and the
-[root knowledge graph](knowledge-graph.md).
+Then enforce the Meta-Cortex integration
+[required bootstrap](meta-cortex-integration.md#required-bootstrap). Do not
+plan, edit, validate, or launch agents until the bootstrap succeeds. After it
+succeeds, read the [root knowledge graph](knowledge-graph.md).
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
