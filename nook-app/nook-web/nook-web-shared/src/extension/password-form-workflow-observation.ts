@@ -438,6 +438,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       this.collectPageFactsPolicy(facts);
       return true;
     }
+    if (!this.preparedWorkflowHints) return true;
     return this.authenticationPageObservationFactsIsAdmissible(facts);
   }
 
