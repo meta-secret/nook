@@ -202,6 +202,7 @@ export type CompanionWasmSessionResponse =
   | PasswordWorkflowActivityPresentation
   | AuthenticationObservationBindingToken
   | AuthenticationWorkflowMatch
+  | AuthenticationEnrollmentWorkflowMatchResponse
   | AuthenticationRecoveryCopyEvidence
   | AuthenticationWorkflowRoutingResponse
   | LoginPickerOpenResponse
@@ -240,6 +241,15 @@ export type CompanionWasmSessionResponse =
         readonly value: string;
         readonly matches: boolean;
       }[];
+    };
+
+export type AuthenticationEnrollmentWorkflowMatchResponse =
+  | { readonly kind: "no-match" }
+  | { readonly kind: "rejected" }
+  | {
+      readonly kind: "matched";
+      readonly snapshot: AuthenticationWorkflowSnapshot;
+      readonly pilotCapability: AuthenticationPilotPresentationCapability;
     };
 
 export type CompanionWasmRuntimeMessage = CompanionWasmSessionMessage & {

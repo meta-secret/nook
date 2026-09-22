@@ -260,14 +260,9 @@ class AuthenticationScanRenderLifecycle {
         removeScannedWidget()
         return AuthenticationScanOutcome.Removed
       }
-      const enrollmentCapability =
-        await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
-          type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability,
-          payload: { snapshot: enrollmentMatch.snapshot },
-        })
       if (
-        enrollmentCapability.kind === RuntimeMessageDeliveryKind.Unavailable ||
-        enrollmentCapability.response !== 'propose-action'
+        !('pilotCapability' in enrollmentMatch) ||
+        enrollmentMatch.pilotCapability !== 'propose-action'
       ) {
         removeScannedWidget()
         return AuthenticationScanOutcome.Removed
