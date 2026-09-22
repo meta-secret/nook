@@ -56,10 +56,6 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("coverage-export.output=type=cacheonly");
     expect(tasks).not.toContain("coverage-export.output=type=local");
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
-    expect(tasks).toContain("ci:pr:wasm:handoff:");
-    expect(tasks).toContain("pr-wasm-artifacts.output=type=local");
-    expect(tasks).toContain('WEB_ARTIFACTS_CONTEXT="$wasm_artifact_dir"');
-    expect(tasks).toContain('--allow="fs.read=$wasm_artifact_dir"');
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
       'rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor',
@@ -116,8 +112,7 @@ class DockerizedRustBuildKitContract {
     expect(rustDockerTasks).toContain(
       'task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy',
     );
-    expect(bake).toContain("web-artifacts = WEB_ARTIFACTS_CONTEXT");
-    expect(bake).not.toContain('web-artifacts = "target:pr-wasm-artifacts"');
+    expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
     expect(bake).toContain(
       'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]',

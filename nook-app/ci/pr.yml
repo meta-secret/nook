@@ -53,7 +53,6 @@ tasks:
 
   ci:pr:verification:product:
     cmds:
-      - task: ci:pr:wasm:handoff
       - task: ci:pr:bake
         vars: { PR_BAKE_TARGET: pr-verification }
 
@@ -82,39 +81,6 @@ tasks:
       - cd "{{.REPO_ROOT}}" && node --test .github/scripts/workbench-publish.test.cjs
       - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs
 
-  ci:pr:wasm:handoff:
-    internal: true
-    desc: Export the verified PR WASM producer to an invocation-local host context.
-    requires:
-      vars: [PR_ARTIFACT_DIR]
-    cmds:
-      - |
-        set -euo pipefail
-        commit_id="$(git rev-parse HEAD)"
-        case "$commit_id" in
-          ''|*[!0-9a-f]*)
-            echo "ci:pr:wasm:handoff: HEAD must be a full lowercase git SHA" >&2
-            exit 1
-            ;;
-        esac
-        wasm_artifact_dir='{{.PR_ARTIFACT_DIR}}/wasm/'"$commit_id"
-        mkdir -p "$wasm_artifact_dir"
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
-          -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
-          --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
-          --set "pr-wasm-artifacts.output=type=local,dest=$wasm_artifact_dir" \
-          pr-wasm-artifacts
-        for required in \
-          "$wasm_artifact_dir/nook-wasm/nook_wasm.js" \
-          "$wasm_artifact_dir/nook-wasm/nook_wasm_bg.wasm" \
-          "$wasm_artifact_dir/nook-wasm/nook-companion-wasm/nook_companion_wasm.js" \
-          "$wasm_artifact_dir/nook-wasm/nook-companion-wasm/nook_companion_wasm_bg.wasm"; do
-          test -s "$required" || {
-            echo "ci:pr:wasm:handoff: missing generated file $required" >&2
-            exit 1
-          }
-        done
-
   ci:pr:heavy:
     desc: Run fuzz and Kani only after unit/integration tests succeed.
     cmds:
@@ -133,13 +99,10 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        commit_id="$(git rev-parse HEAD)"
-        wasm_artifact_dir='{{.PR_ARTIFACT_DIR}}/wasm/'"$commit_id"
         mkdir -p '{{.PR_ARTIFACT_DIR}}/browser'
         floor="$(jq -er '.package_lines_percent.nook_domain_api | numbers' '{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json')"
-        WEB_ARTIFACTS_CONTEXT="$wasm_artifact_dir" {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
-          --allow="fs.read=$wasm_artifact_dir" \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
           --set 'coverage-export.output=type=cacheonly' \
           --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \

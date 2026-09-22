@@ -62,8 +62,7 @@ impl<'a> PrProducerCacheContract<'a> {
             .map(|(task, _)| task)
             .context("missing heavy task block")?;
         assert!(heavy.contains("PR_BAKE_TARGET: pr-heavy"));
-        assert!(bake.contains("web-artifacts = WEB_ARTIFACTS_CONTEXT"));
-        assert!(!bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
+        assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
         assert!(bake.contains("output = [\"type=cacheonly\"]"));
         assert!(bake.contains(
             "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint\"]"
@@ -72,10 +71,6 @@ impl<'a> PrProducerCacheContract<'a> {
             "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint-wasm\"]"
         ));
         assert!(tasks.contains("coverage-export.output=type=cacheonly"));
-        assert!(tasks.contains("ci:pr:wasm:handoff:"));
-        assert!(tasks.contains("pr-wasm-artifacts.output=type=local"));
-        assert!(tasks.contains("WEB_ARTIFACTS_CONTEXT=\"$wasm_artifact_dir\""));
-        assert!(tasks.contains("--allow=\"fs.read=$wasm_artifact_dir\""));
         assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
         assert!(tasks.contains(
             "test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'",
