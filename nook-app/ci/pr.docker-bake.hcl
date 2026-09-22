@@ -14,7 +14,10 @@ target "pr-wasm-artifacts" {
 target "_pr-web" {
   inherits = ["_nook-web-base"]
   contexts = {
-    web-artifacts = "target:pr-wasm-artifacts"
+    // Exported by ci:pr:wasm:handoff before any web target is solved. Keeping
+    // this as a host context prevents stale generated packages from remaining
+    // inside the web BuildKit lineage.
+    web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
   output = ["type=cacheonly"]
 }
