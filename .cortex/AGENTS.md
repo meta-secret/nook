@@ -95,8 +95,11 @@ The user's explicit intermediate stopping point takes precedence over full deliv
 
 ## GitHub execution boundary
 
-Route live-agent GitHub operations, including read-only queries and wrapper calls,
-through PR Lifecycle under Prime's authorization and Team Gizmo's assignment.
+Route live-agent GitHub PR operations, including read-only queries and wrapper
+calls, through upstream PR agent behavior in Nook's PR Lifecycle adapter.
+Route workflow dispatch, reruns, logs, and pipeline repairs through upstream
+CI/CD with Nook's SRE context. Both require Prime's authorization and Team
+Gizmo's assignment in multi-agent mode.
 Repository-owned CI retains its existing execution contracts.
 Use the [operation handshake](teams/delivery-pipeline/pr-lifecycle/workflows/authorization-handshake.md).
 An explicit user-directed direct task follows the integration contract instead.

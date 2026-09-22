@@ -1,10 +1,10 @@
-# Provisioning Specialist Knowledge Graph
+# Provisioning and CI/CD Knowledge Graph
 
 Load only the authority needed for the assigned provisioning packet.
 
 ## Parent contracts
 
-- [Provisioning Specialist contract](AGENTS.md)
+- [Provisioning and CI/CD adapter](AGENTS.md)
 - [SRE Team Gizmo contract](../gizmo/AGENTS.md)
 - [SRE team contract](../AGENTS.md)
 - [SRE team knowledge graph](../knowledge-graph.md)
@@ -14,6 +14,7 @@ Load only the authority needed for the assigned provisioning packet.
 
 - Provisioning work is limited to the exact files and evidence named by the packet.
 - The specialist follows SRE-owned provisioning and infrastructure authorities.
+- CI/CD work uses upstream CI/CD Operations with Nook's hosted execution policy.
 - Functional product, security, web, and AI decisions return to the owning team.
 
 ## Delivery authority

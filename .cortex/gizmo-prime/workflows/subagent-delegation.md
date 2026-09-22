@@ -8,7 +8,8 @@
   for local branches, worktrees, integration, validation, and cleanup.
 - Preserve Nook's functional team identity, bounded file scope, dependency
   order, product constraints, and acceptance evidence in each assignment.
-- Send authorized GitHub operations through Team Gizmo to PR Lifecycle.
+- Send authorized PR operations through Team Gizmo to PR Lifecycle. Assign
+  workflow execution and pipeline repairs to upstream CI/CD with Nook SRE context.
 
 **Prohibited:** launch a second coordinator because one task needs security review.
 

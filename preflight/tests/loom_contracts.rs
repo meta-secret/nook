@@ -345,7 +345,7 @@ fn loom_workflow_audits_every_cortex_change() {
 fn preflight_installs_released_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     assert!(
-        dockerfile.contains("meta_cortex_release=v0.4.0"),
+        dockerfile.contains("meta_cortex_release=v0.6.0"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(

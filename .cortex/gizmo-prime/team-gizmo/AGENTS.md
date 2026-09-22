@@ -14,8 +14,9 @@ Use the upstream
 for local branch and worktree mechanics. Give it the project and shared-library
 roots, selected base and feature branches, worker branches and worktrees,
 dependency order, and applicable Nook checks. Preserve Nook's functional
-ownership and acceptance requirements. Send GitHub mechanics to the Nook PR
-Lifecycle Agent under Prime's authorization.
+ownership and acceptance requirements. Send PR mechanics to the upstream PR
+agent through Nook's PR Lifecycle adapter under Prime's authorization. Assign
+workflow execution and pipeline repairs to upstream CI/CD with Nook SRE context.
 
 ## Prohibited actions
 

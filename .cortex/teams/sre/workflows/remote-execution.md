@@ -24,10 +24,9 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-The owning Feature Gizmo publishes its canonical feature branch. Gizmo Prime
-authorizes the branch delivery packet, and Team Gizmo (Delivery Pipeline context)
-dispatches PR Lifecycle Agent through the active harness to run the required
-required PR-check capability. Each stage re-fetches and resolves the latest
+The owning Feature Gizmo authorizes publication of its canonical feature branch
+through PR Lifecycle. Team Gizmo assigns hosted execution to the upstream CI/CD
+agent with Nook SRE context. Each stage re-fetches and resolves the latest
 committed branch head; the returned exact SHA is observational evidence only.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
@@ -56,7 +55,8 @@ committed branch head; the returned exact SHA is observational evidence only.
 The Feature Gizmo authorizes publication of the canonical feature branch and
 the full existing PR checks. Team Gizmo (Delivery Pipeline context) routes that
 packet through the active harness to PR Lifecycle Agent for branch publication
-and bounded check execution. The Feature Gizmo retains policy authority, and
+and check observation. Upstream CI/CD handles required dispatches, reruns, and
+pipeline diagnostics with SRE context. The Feature Gizmo retains policy authority, and
 the feature PR lifecycle remains the sole path for pull-request
 creation/update. Follow
 [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
@@ -69,25 +69,35 @@ creation/update. Follow
 
 ## Runner and task reference
 
+### Execution boundary
+
 The testing selectors below belong to slow validation or separately authorized
 operations. Their existence never permits feature-stage test execution.
 
-Routing rules:
+### Routing rules
 
-All remote task and PR-check invocations below are routed through Delivery
-Pipeline Team Gizmo. For feature build-only work, the owning Feature Gizmo
-submits the canonical feature branch and Gizmo Prime authorizes the packet.
-PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
-before each stage and returns the exact SHA as observational evidence only. A
-stale caller-provided feature SHA does not reject branch-authorized execution.
-For feature-branch publication, required checks, and squash merge, the Feature
-Gizmo authorizes the packet. Team Gizmo (Delivery Pipeline context) dispatches
-PR Lifecycle Agent through the active harness. PR Lifecycle Agent owns the
-authorized GitHub mechanics but does not decide product policy or readiness.
+Team Gizmo routes remote task execution through upstream CI/CD with Nook SRE
+context and the authorized canonical feature branch. The execution owner
+re-fetches and resolves that branch's latest committed head before each stage
+and returns the exact SHA as observational evidence only. A stale caller-provided
+feature SHA does not reject branch-authorized execution. Forward user-requested
+selectors directly under the root circuit breaker.
+
+For feature-branch publication, PR check observation, and squash merge, Team
+Gizmo assigns PR Lifecycle under Feature Gizmo authorization. CI/CD returns run
+evidence through Team Gizmo for PR observation. Neither role decides product
+policy or readiness. Single-agent sessions perform these responsibilities locally.
+
+- **Prohibited:** dispatch a second run solely because PR observation changed
+  owners, or validate a requested selector against a local catalog.
+- **Preferred:** reuse matching run evidence and dispatch an authorized selector
+  directly when execution is needed. Report the runner's actual terminal result.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.
-- Complete PR validation with `task pr:validate PR=<number>`.
+- PR Lifecycle requests label-triggered validation with `task pr:validate PR=<number>`
+  (or `FULL_E2E=1` for a Main-fix browser gate). CI/CD owns only the resulting
+  workflow execution and observation; it does not mutate pull-request labels.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - `loom:verify` uses the general `nook-k0s` scale set.

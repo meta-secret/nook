@@ -703,7 +703,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       team: TeamKey.Sre,
       identity: 'Provisioning specialist',
       description:
-        'Maintains bounded infrastructure provisioning mechanics, manifests, and operational evidence under SRE ownership.',
+        'Executes bounded CI/CD workflows, diagnostics, and infrastructure provisioning mechanics under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       serviceTier: 'fast',
@@ -713,7 +713,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
-        'Reports bounded provisioning evidence and blockers to SRE Team Gizmo.',
+        'Reports bounded CI/CD execution, diagnostics, provisioning evidence, and blockers to SRE Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.CloudNative,
@@ -857,8 +857,8 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
       identity: 'Delivery Pipeline',
       contextDirectory: 'delivery-pipeline',
       description:
-        'Owns remote delivery mechanics across CI, feature pull-request lifecycle, workflow execution, validation evidence, squash merge, and release operations.',
-      capabilityBoundary: `Delivery Pipeline executes authorized GitHub, CI, pull-request, merge, and release mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+        'Owns authorized pull-request lifecycle mechanics, including publication, check observation, squash merge, and remote feature-branch cleanup.',
+      capabilityBoundary: `Delivery Pipeline executes authorized GitHub pull-request, merge, and branch-cleanup mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
 ]);

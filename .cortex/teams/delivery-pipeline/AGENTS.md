@@ -7,8 +7,20 @@ over legacy generic wording here; Nook product and delivery requirements remain.
 
 ## Mission
 
+### Scope and ownership
+
 Delivery Pipeline owns bounded GitHub and pull-request mechanics. It does not
 replace the owning Feature Gizmo's end-to-end delivery authority.
+
+PR Lifecycle is Nook's context adapter for the upstream PR agent. Workflow
+dispatch, reruns, log investigation, and pipeline repairs use upstream CI/CD
+with Nook SRE context through the same Team Gizmo. This contract owns Nook's
+delivery choices; generic GitHub procedures remain upstream.
+
+- **Prohibited:** treat check observation as permission to dispatch another run
+  or perform a deployment.
+- **Preferred:** reuse the CI/CD owner's run evidence and perform only the
+  authorized PR operation.
 
 Read the root circuit breaker and the complete multiagent delivery diagrams
 before acting.

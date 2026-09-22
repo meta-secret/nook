@@ -7,6 +7,8 @@ over legacy generic wording here; Nook product and delivery requirements remain.
 
 ## Mission
 
+### Delivery and validation
+
 Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
 Author meaningful tests in feature work, but execute them only in the feature
 PR required-check stage. Feature validation is required PR-check execution only. Local
@@ -14,8 +16,19 @@ feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
 or formatting. Older instructions to run Loom tests, audits, preflight, or
 broad pre-push commands are not local or feature-stage permissions.
 
+### Infrastructure ownership
+
 SRE owns Nook's build, validation, cluster, deployment, and operational
 infrastructure.
+
+Use the upstream [CI/CD agent](../../../.meta-cortex/teams/sre-team/agents/cicd-agent/AGENTS.md)
+through the [provisioning adapter](provisioning/AGENTS.md) for assigned workflow
+execution and pipeline repairs. Nook's commands, validation venue, provider
+runbooks, and deployment authorization remain the execution contract.
+
+- **Prohibited:** interpret green PR checks as authorization for a deployment.
+- **Preferred:** run the separately authorized existing deployment procedure and
+  return its actual revision and outcome to the feature owner.
 
 ## Context loading
 

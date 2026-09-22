@@ -1,0 +1,76 @@
+version: '3'
+
+# PR Lifecycle owns the label mutation that requests the label-triggered CI run.
+# CI/CD owns execution and observation of the resulting workflow only.
+tasks:
+  pr:validate:
+    desc: Request PR validation through the PR label trigger (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    requires:
+      vars: [PR]
+    env:
+      REQUESTED_PR: '{{.PR}}'
+      REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+    preconditions:
+      - sh: command -v gh >/dev/null 2>&1
+        msg: GitHub CLI is required.
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - |
+        set -euo pipefail
+
+        case "$REQUESTED_PR" in
+          ''|*[!0-9]*|0)
+            echo "PR must be a positive pull-request number." >&2
+            exit 2
+            ;;
+        esac
+        if [ "$REQUEST_FULL_E2E" != "0" ] && [ "$REQUEST_FULL_E2E" != "1" ]; then
+          echo "FULL_E2E must be 0 or 1." >&2
+          exit 2
+        fi
+        local_sha="$(git rev-parse HEAD)"
+        pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
+        pr_sha="${pr_state%%|*}"
+        base_ref="${pr_state#*|}"
+        if [ "$local_sha" != "$pr_sha" ]; then
+          echo "Local HEAD is not PR #$REQUESTED_PR's current head." >&2
+          echo "local: $local_sha" >&2
+          echo "PR:    $pr_sha" >&2
+          exit 2
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Commit and push the complete change before requesting PR validation." >&2
+          exit 2
+        fi
+
+        .github/scripts/require-current-base.sh origin "$base_ref"
+
+        validation_label="ci:validate"
+        stale_validation_label="ci:full-e2e"
+        if [ "$REQUEST_FULL_E2E" = "1" ]; then
+          validation_label="ci:full-e2e"
+          stale_validation_label="ci:validate"
+        fi
+
+        current_labels="$(gh pr view "$REQUESTED_PR" --json labels --jq '.labels[].name')"
+        if printf '%s\n' "$current_labels" | grep -Fxq "$stale_validation_label"; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$stale_validation_label"
+        fi
+        if printf '%s\n' "$current_labels" | grep -Fxq "$validation_label"; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
+        fi
+        gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
+        dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
+        dispatched_pr_sha="${dispatched_pr_state%%|*}"
+        dispatched_base_ref="${dispatched_pr_state#*|}"
+        dispatched_base_current="1"
+        if ! .github/scripts/require-current-base.sh origin "$dispatched_base_ref"; then
+          dispatched_base_current="0"
+        fi
+        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ] || [ "$dispatched_base_current" != "1" ]; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
+          echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
+          exit 2
+        fi
+        echo "Triggered PR validation for $pr_sha with label $validation_label."

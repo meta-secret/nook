@@ -21,6 +21,10 @@ model](multiagent-delivery-diagrams.md) before using this contract.
 - The upstream integration agent owns local workspace setup, branch integration,
   combined validation, and cleanup.
 - Team Gizmo (Delivery Pipeline context) routes GitHub mechanics to PR Lifecycle Agent.
+- PR Lifecycle applies the upstream PR agent with Nook delivery policy.
+- Team Gizmo assigns workflow dispatch, reruns, diagnostics, and pipeline
+  repairs to upstream CI/CD with Nook SRE context. Reuse one observer's evidence
+  per run; PR observation does not require another workflow dispatch.
 - PR Lifecycle Agent pushes the canonical feature branch, creates or updates
   its pull request, observes checks, performs the authorized squash merge, and
   deletes the remote feature branch.
