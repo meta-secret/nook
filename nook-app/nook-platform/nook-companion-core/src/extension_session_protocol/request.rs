@@ -742,11 +742,6 @@ mod tests {
                 r#""nonce":"nonce","#,
             ),
             (
-                "vault summary",
-                r#"{"type":"nook:extension-session-vault-summary","payload":{"vaultStoreId":"vault","appId":"app","appPublicKey":"public","appSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
-                r#""vaultStoreId":"vault","#,
-            ),
-            (
                 "passkey lookup",
                 r#"{"type":"nook:extension-session-list-passkeys","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","rpId":"example.com","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
                 r#""rpId":"example.com","#,
@@ -827,6 +822,21 @@ mod tests {
                 "{family} request should require its domain fields"
             );
         }
+    }
+
+    #[test]
+    fn vault_summary_requires_its_vault_grant() {
+        let valid = r#"{"type":"nook:extension-session-vault-summary","payload":{"vaultStoreId":"vault","appId":"app","appPublicKey":"public","appSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#;
+        assert_eq!(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(valid),
+            ExtensionSessionRequestValidation::Accepted
+        );
+        assert_eq!(
+            ExtensionSessionRequestValidation::validate_extension_session_request_json(
+                &valid.replace(r#""vaultStoreId":"vault","#, "")
+            ),
+            ExtensionSessionRequestValidation::Rejected
+        );
     }
 
     #[test]
