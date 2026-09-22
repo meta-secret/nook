@@ -90,15 +90,19 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
         ? control.value
         : "";
     return [
-      ((v) => (v ? v : ""))(control.textContent),
-      ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
-      ((v) => (v ? v : ""))(control.getAttribute("title")),
-      ((v) => (v ? v : ""))(control.getAttribute("alt")),
-      value,
-      labelledBy,
-    ]
-      .join(" ")
-      .trim();
+      ...new Set(
+        [
+          ((v) => (v ? v : ""))(control.textContent),
+          ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
+          ((v) => (v ? v : ""))(control.getAttribute("title")),
+          ((v) => (v ? v : ""))(control.getAttribute("alt")),
+          value,
+          labelledBy,
+        ]
+          .map((candidate) => candidate.trim())
+          .filter(Boolean),
+      ),
+    ].join(" ");
   }
 
   private containerHasGenericTypeButtonControls(container: Element): boolean {

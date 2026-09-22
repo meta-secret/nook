@@ -56,6 +56,54 @@ impl AuthenticationAdvanceControlObservation {
         actionable.authentication_advance_control_is_safe()
     }
 
+    /// Whether Tesla's disabled password submitter supplies planning evidence.
+    /// Final actuation still requires a fresh actionable observation.
+    #[must_use]
+    pub(crate) fn is_inert_tesla_password_planning_advance(&self) -> bool {
+        if !matches!(self.actionability, PageControlActionability::Inert)
+            || !self.is_tesla_scripted_password_submit_shape()
+        {
+            return false;
+        }
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: &self.source_origin,
+                destination_identity: &self.destination_identity,
+            },
+        ) else {
+            return false;
+        };
+        if !destination.is_tesla_account_authorization() {
+            return false;
+        }
+        let mut actionable = self.clone();
+        actionable.actionability = PageControlActionability::Actionable;
+        actionable.authentication_advance_control_is_safe()
+    }
+
+    pub(crate) fn is_tesla_scripted_password_submit_shape(&self) -> bool {
+        matches!(self.ownership, PageControlOwnership::OwnedForm)
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Absent
+            )
+            && matches!(self.submission_method, PageControlSubmissionMethod::Get)
+            && matches!(
+                self.submission_destination_source,
+                PageControlSubmissionDestinationSource::Omitted
+            )
+            && self.source_origin == "https://auth.tesla.com"
+            && self.form_identity.is_empty()
+            && self.password_field_count.is_single()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && !self.semantic_submit_control_count.is_multiple()
+            && AuthenticationControlText::new(&self.label).expand_identity_text() == "sign in"
+            && AuthenticationControlText::new(&self.machine_identity).expand_identity_text()
+                == "tds btn"
+    }
+
     pub(super) fn is_identifier_only_get_advance(&self) -> bool {
         if self.is_mixed_phone_or_email_identifier_advance() {
             return true;
@@ -145,6 +193,11 @@ impl AuthenticationAdvanceControlObservation {
 }
 
 impl CheckedAuthenticationControl<'_> {
+    fn has_tesla_scripted_password_submit(&self) -> bool {
+        self.destination.is_tesla_account_authorization()
+            && self.observation.is_tesla_scripted_password_submit_shape()
+    }
+
     fn has_webauthn_email_oauth_identifier_advance(&self) -> bool {
         matches!(
             self.observation.authentication_username,
@@ -169,6 +222,7 @@ impl CheckedAuthenticationControl<'_> {
                 && AuthenticationRouteIdentity::new(&self.destination.path_identity)
                     .has_safe_login_identity();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_login()
+            || self.has_tesla_scripted_password_submit()
             || locally_scoped_explicit_activation
             || (owned_semantic_submit
                 && (AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
@@ -186,19 +240,20 @@ impl CheckedAuthenticationControl<'_> {
         let primary_oauth_login_label = AuthenticationControlIdentity::new(&observation.label)
             .is_explicit_advance()
             || (webauthn_identifier_advance && expanded_label == "next");
-        let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
-            && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(
-                observation.authentication_username,
-                AuthenticationUsernameEvidence::Strong
-                    | AuthenticationUsernameEvidence::WebAuthnEmail
-                    | AuthenticationUsernameEvidence::Explicit
-            )
-            && (observation.password_field_count.is_nonzero() || webauthn_identifier_advance)
-            && primary_oauth_login_label
-            && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
-            && AuthenticationRouteIdentity::new(&self.destination.route_identity)
-                .indicates_oauth_authorization();
+        let primary_oauth_login = self.has_tesla_scripted_password_submit()
+            || (matches!(observation.ownership, PageControlOwnership::OwnedForm)
+                && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+                && matches!(
+                    observation.authentication_username,
+                    AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::WebAuthnEmail
+                        | AuthenticationUsernameEvidence::Explicit
+                )
+                && (observation.password_field_count.is_nonzero() || webauthn_identifier_advance)
+                && primary_oauth_login_label
+                && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
+                && AuthenticationRouteIdentity::new(&self.destination.route_identity)
+                    .indicates_oauth_authorization());
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_destructive_action()
             || AuthenticationControlIdentity::new(&observation.form_identity)
                 .is_alternate_authentication_route()
@@ -318,6 +373,8 @@ mod tests {
 
     struct TeslaDefaultGetScenario;
 
+    struct TeslaPasswordDefaultGetScenario;
+
     struct MixedPhoneOrEmailDefaultGetScenario;
 
     impl MixedPhoneOrEmailDefaultGetScenario {
@@ -427,6 +484,28 @@ mod tests {
                 let mut rejected = Self::observation();
                 rejected.authentication_username = evidence;
                 assert!(!rejected.authentication_advance_control_is_safe());
+            }
+        }
+    }
+
+    impl TeslaPasswordDefaultGetScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::Absent,
+                password_field_count: 1.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://auth.tesla.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US".to_owned(),
+                label: "Sign In".to_owned(),
+                machine_identity: "tds-btn".to_owned(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
             }
         }
     }
@@ -561,7 +640,39 @@ mod tests {
     #[test]
     fn tesla_owned_webauthn_email_default_get_is_narrowly_admitted() {
         assert!(TeslaDefaultGetScenario::observation().authentication_advance_control_is_safe());
+        let mut live_authorization = TeslaDefaultGetScenario::observation();
+        live_authorization.destination_identity = "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US".to_owned();
+        assert!(live_authorization.authentication_advance_control_is_safe());
         TeslaDefaultGetScenario::assert_hostile_variants_fail_closed();
+    }
+
+    #[test]
+    fn tesla_scripted_password_default_get_is_narrowly_admitted() {
+        let observation = TeslaPasswordDefaultGetScenario::observation();
+        assert!(observation.is_tesla_scripted_password_submit_shape());
+        assert!(observation.authentication_advance_control_is_safe());
+
+        let mut inert = observation.clone();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!inert.authentication_advance_control_is_safe());
+        assert!(inert.is_inert_tesla_password_planning_advance());
+
+        for mutate in [
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.destination_identity =
+                    "https://auth.tesla.com/oauth2/v1/authorize".to_owned();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.label = "Continue".to_owned();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.machine_identity = "primary".to_owned();
+            },
+        ] {
+            let mut rejected = observation.clone();
+            mutate(&mut rejected);
+            assert!(!rejected.authentication_advance_control_is_safe());
+        }
     }
 
     #[test]

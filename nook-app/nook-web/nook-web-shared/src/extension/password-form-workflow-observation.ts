@@ -558,6 +558,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     const transportabilityRequest: AuthenticationControlTransportability = {
       submissionMethod: observation.submissionMethod,
       usernameFieldCount: request.observation.summary.usernameFieldCount,
+      passwordFieldCount: request.observation.summary.passwordFieldCount,
     };
     if (
       !this.collectOrReadBooleanPolicy(
@@ -746,6 +747,10 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       isPreferred: (candidate) =>
         candidate.actionability === "actionable" &&
         this.advanceControlIsSafe(candidate),
+      // Keep the form's submitter ahead of auxiliary controls even while a
+      // framework disables it until credential input. The observation grants
+      // no actuation authority until a fresh actionable revalidation.
+      isNextPreferred: (candidate) => candidate.semantics === "semantic-submit",
     };
     const boundedAdvanceObservations =
       authenticationSubmissionControls.boundAuthenticationControlObservations(

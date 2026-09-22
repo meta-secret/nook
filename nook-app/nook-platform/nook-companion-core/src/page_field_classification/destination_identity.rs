@@ -19,6 +19,13 @@ pub struct CanonicalControlDestination {
     /// Whether the exact HTTPS destination host and path are Microsoft's consumer login root.
     pub is_microsoft_consumer_login_root: bool,
     authentication_policy_route_identity: String,
+    authentication_policy_destination: AuthenticationPolicyDestination,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthenticationPolicyDestination {
+    Default,
+    TeslaAccountAuthorization,
 }
 
 /// Named values required by `CanonicalControlDestination::canonicalize_control_destination`.
@@ -38,6 +45,37 @@ impl CanonicalControlDestination {
             && url.username().is_empty()
             && url.password().is_none()
             && url.host_str().is_some()
+    }
+
+    fn tesla_account_authorization_route(url: &Url) -> Option<String> {
+        if url.scheme() != "https"
+            || url.host_str() != Some("auth.tesla.com")
+            || url.port_or_known_default() != Some(443)
+            || url.path() != "/oauth2/v1/authorize"
+            || url.fragment().is_some()
+        {
+            return None;
+        }
+        let pairs = url.query_pairs().collect::<Vec<_>>();
+        if pairs.len() != 5 {
+            return None;
+        }
+        let exactly_one = |key: &str, expected: &str| {
+            pairs
+                .iter()
+                .filter(|(candidate, _)| candidate == key)
+                .map(|(_, value)| value.as_ref())
+                .eq([expected])
+        };
+        if !exactly_one("response_type", "code")
+            || !exactly_one("client_id", "accounts")
+            || !exactly_one("redirect_uri", "https://accounts.tesla.com/oauth2/callback")
+            || !exactly_one("scope", "offline_access user profile ou_code email")
+            || !exactly_one("locale", "en-US")
+        {
+            return None;
+        }
+        Some(url.path().to_owned())
     }
 
     fn amazon_claim_authentication_route(url: &Url) -> Option<String> {
@@ -89,6 +127,13 @@ impl CanonicalControlDestination {
 
     pub(crate) fn authentication_policy_route_identity(&self) -> &str {
         &self.authentication_policy_route_identity
+    }
+
+    pub(crate) fn is_tesla_account_authorization(&self) -> bool {
+        matches!(
+            self.authentication_policy_destination,
+            AuthenticationPolicyDestination::TeslaAccountAuthorization
+        )
     }
 }
 
@@ -239,9 +284,14 @@ impl CanonicalControlDestination {
             return Err(InvalidControlDestination);
         }
 
-        let authentication_policy_route_identity =
-            CanonicalControlDestination::amazon_claim_authentication_route(&destination)
-                .unwrap_or_else(|| route_identity.clone());
+        let tesla_account_authorization_route =
+            CanonicalControlDestination::tesla_account_authorization_route(&destination);
+        let authentication_policy_route_identity = tesla_account_authorization_route
+            .clone()
+            .or_else(|| {
+                CanonicalControlDestination::amazon_claim_authentication_route(&destination)
+            })
+            .unwrap_or_else(|| route_identity.clone());
         Ok(CanonicalControlDestination {
             path_identity,
             route_identity,
@@ -261,6 +311,11 @@ impl CanonicalControlDestination {
                 }),
             is_microsoft_consumer_login_root,
             authentication_policy_route_identity,
+            authentication_policy_destination: if tesla_account_authorization_route.is_some() {
+                AuthenticationPolicyDestination::TeslaAccountAuthorization
+            } else {
+                AuthenticationPolicyDestination::Default
+            },
         })
     }
 }
@@ -501,6 +556,51 @@ mod tests {
             assert_ne!(
                 canonical.authentication_policy_route_identity(),
                 "/ax/claim"
+            );
+        }
+    }
+
+    #[test]
+    fn tesla_account_oauth_metadata_uses_the_exact_authentication_route_for_policy() {
+        let destination = "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US";
+        let canonical = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: "https://auth.tesla.com",
+                destination_identity: destination,
+            },
+        );
+        assert!(canonical.is_ok());
+        let Ok(canonical) = canonical else {
+            return;
+        };
+        assert!(canonical.route_identity.contains("scope=offline_access"));
+        assert_eq!(
+            canonical.authentication_policy_route_identity(),
+            "/oauth2/v1/authorize"
+        );
+
+        for hostile in [
+            destination.replace("client_id=accounts", "client_id=attacker"),
+            destination.replace(
+                "accounts.tesla.com%2Foauth2%2Fcallback",
+                "attacker.example%2Fcallback",
+            ),
+            destination.replace("profile", "delete-account"),
+            format!("{destination}&provider=google"),
+        ] {
+            let canonical = CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://auth.tesla.com",
+                    destination_identity: &hostile,
+                },
+            );
+            assert!(canonical.is_ok());
+            let Ok(canonical) = canonical else {
+                return;
+            };
+            assert_ne!(
+                canonical.authentication_policy_route_identity(),
+                "/oauth2/v1/authorize"
             );
         }
     }

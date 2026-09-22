@@ -1,16 +1,19 @@
 export const TESLA_MOCK_EMAIL = 'alice@nook.test'
+export const TESLA_MOCK_PASSWORD = 'extension-fill-password'
 
 export enum TeslaAuthControl {
   Next = 'next',
+  SignIn = 'sign-in',
   TroubleSigningIn = 'trouble-signing-in',
-  CreateAccount = 'create-account',
+  Cancel = 'cancel',
   Unrecognized = 'unrecognized',
 }
 
 enum TeslaAuthControlLabel {
   Next = 'Next',
+  SignIn = 'Sign In',
   TroubleSigningIn = 'Trouble Signing In?',
-  CreateAccount = 'Create Account',
+  Cancel = 'Cancel',
 }
 
 export enum TeslaAuthPrimaryActivationState {
@@ -20,6 +23,11 @@ export enum TeslaAuthPrimaryActivationState {
 }
 
 export enum TeslaAuthEmailMatch {
+  Matched = 'matched',
+  Different = 'different',
+}
+
+export enum TeslaAuthPasswordMatch {
   Matched = 'matched',
   Different = 'different',
 }
@@ -41,15 +49,24 @@ export type TeslaAuthSubmission = {
   readonly auxiliaryActivationCount: number
 }
 
+export type TeslaAuthPasswordSubmission = {
+  readonly password: string
+  readonly submittedControl: TeslaAuthControl
+  readonly primaryActivation: TeslaAuthPrimaryActivationState
+  readonly auxiliaryActivationCount: number
+}
+
 export class TeslaAuthMockScenario {
   static submittedControl(label: string): TeslaAuthControl {
     switch (label.trim()) {
       case TeslaAuthControlLabel.Next:
         return TeslaAuthControl.Next
+      case TeslaAuthControlLabel.SignIn:
+        return TeslaAuthControl.SignIn
       case TeslaAuthControlLabel.TroubleSigningIn:
         return TeslaAuthControl.TroubleSigningIn
-      case TeslaAuthControlLabel.CreateAccount:
-        return TeslaAuthControl.CreateAccount
+      case TeslaAuthControlLabel.Cancel:
+        return TeslaAuthControl.Cancel
       default:
         return TeslaAuthControl.Unrecognized
     }
@@ -69,9 +86,27 @@ export class TeslaAuthMockScenario {
       : TeslaAuthEmailMatch.Different
   }
 
+  static passwordMatch(password: string): TeslaAuthPasswordMatch {
+    return password === TESLA_MOCK_PASSWORD
+      ? TeslaAuthPasswordMatch.Matched
+      : TeslaAuthPasswordMatch.Different
+  }
+
   static transition(submission: TeslaAuthSubmission): TeslaAuthTransitionKind {
     return submission.email === TESLA_MOCK_EMAIL &&
       submission.submittedControl === TeslaAuthControl.Next &&
+      submission.primaryActivation ===
+        TeslaAuthPrimaryActivationState.Activated &&
+      submission.auxiliaryActivationCount === 0
+      ? TeslaAuthTransitionKind.Completed
+      : TeslaAuthTransitionKind.Rejected
+  }
+
+  static passwordTransition(
+    submission: TeslaAuthPasswordSubmission,
+  ): TeslaAuthTransitionKind {
+    return submission.password === TESLA_MOCK_PASSWORD &&
+      submission.submittedControl === TeslaAuthControl.SignIn &&
       submission.primaryActivation ===
         TeslaAuthPrimaryActivationState.Activated &&
       submission.auxiliaryActivationCount === 0

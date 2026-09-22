@@ -6,10 +6,12 @@ import {
 } from "./authentication-control-selectors";
 import {
   PasswordFormScopeKind,
+  type PasswordFormScope,
   passwordFieldDiscovery,
 } from "./password-form-fields";
 import {
   FormSubmissionResult,
+  PageControlSubmissionMethod,
   PasswordFormQueryKind,
   type LoginAdvanceControl,
   type FormSubmissionApproval,
@@ -55,8 +57,8 @@ export {
 
 export type {
   PasskeyControlLookup,
-  PasswordFormScope,
 } from "./password-form-fields";
+export type { PasswordFormScope };
 
 export { passwordFormCredentialInteraction } from "./password-form-field-actions";
 
@@ -83,6 +85,9 @@ export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
 
 type OwnedAdvanceControlRequest =
   OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
+type OwnedAdvanceControlLookupRequest = OwnedAdvanceControlRequest & {
+  allowAdmissiblePlanningControl?: boolean;
+};
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PasswordFormInteraction extends PasswordFormWorkflowObservation {
@@ -122,6 +127,92 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
     const approvedPasswordForm: ApprovedPasswordForm = passwordForm
       ? { kind: ApprovedPasswordFormKind.Available, form: passwordForm }
       : { kind: ApprovedPasswordFormKind.Unavailable };
+    const scriptedGetLookupRequest: OwnedAdvanceControlLookupRequest | false =
+      passwordForm
+        ? {
+            request,
+            form: passwordForm,
+            allowAdmissiblePlanningControl: true,
+          }
+        : false;
+    const scriptedGetSubmitter = scriptedGetLookupRequest
+      ? this.findApprovedOwnedAdvanceControl(scriptedGetLookupRequest)
+      : false;
+    const scriptedGetDisclosureInitiallyApproved = Boolean(
+      passwordForm &&
+      scriptedGetSubmitter &&
+      this.ownedGetPasswordDisclosureIsAdmissible(request, passwordForm),
+    );
+    const scriptedGetFormScope: PasswordFormScope | false =
+      passwordForm
+        ? { kind: PasswordFormScopeKind.Owned, owner: passwordForm }
+        : false;
+    const scriptedGetDestinationRequest:
+      | Parameters<
+          typeof authenticationSubmissionControls.controlDestinationIdentity
+        >[0]
+      | false =
+      scriptedGetSubmitter && scriptedGetFormScope
+        ? { control: scriptedGetSubmitter, formScope: scriptedGetFormScope }
+        : false;
+    const scriptedGetDestination = scriptedGetDestinationRequest
+      ? authenticationSubmissionControls.controlDestinationIdentity(
+          scriptedGetDestinationRequest,
+        )
+      : "";
+    const scriptedGetLabel = scriptedGetSubmitter
+      ? authenticationSubmissionControls.controlLabel(scriptedGetSubmitter)
+      : "";
+    const scriptedGetMachineIdentity = scriptedGetSubmitter
+      ? authenticationSubmissionControls.controlMachineIdentity(
+          scriptedGetSubmitter,
+        )
+      : "";
+    const scriptedGetApprovalRemainsBound = (
+      form: HTMLFormElement,
+    ): boolean => {
+      if (
+        !scriptedGetDisclosureInitiallyApproved ||
+        passwordForm !== form ||
+        !scriptedGetSubmitter ||
+        !scriptedGetSubmitter.isConnected
+      ) {
+        return false;
+      }
+      const submitterScope =
+        authenticationSubmissionControls.associatedAuthenticationForm(
+          scriptedGetSubmitter,
+        );
+      if (
+        submitterScope.kind !== PasswordFormScopeKind.Owned ||
+        submitterScope.owner !== form
+      ) {
+        return false;
+      }
+      const currentFormScope: PasswordFormScope = {
+        kind: PasswordFormScopeKind.Owned,
+        owner: form,
+      };
+      const currentDestinationRequest: Parameters<
+        typeof authenticationSubmissionControls.controlDestinationIdentity
+      >[0] = {
+        control: scriptedGetSubmitter,
+        formScope: currentFormScope,
+      };
+      return (
+        authenticationSubmissionControls.controlSubmissionMethod(
+          scriptedGetSubmitter,
+        ) === PageControlSubmissionMethod.Get &&
+        authenticationSubmissionControls.controlDestinationIdentity(
+          currentDestinationRequest,
+        ) === scriptedGetDestination &&
+        authenticationSubmissionControls.controlLabel(scriptedGetSubmitter) ===
+          scriptedGetLabel &&
+        authenticationSubmissionControls.controlMachineIdentity(
+          scriptedGetSubmitter,
+        ) === scriptedGetMachineIdentity
+      );
+    };
     const disclosureRevalidationRequest: ConstructorParameters<
       typeof CredentialDisclosureRevalidation
     >[0] = {
@@ -129,14 +220,21 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
       approvedPasswordForm,
       request,
       selectedSubmitter: (form) => {
+        if (scriptedGetApprovalRemainsBound(form)) {
+          return scriptedGetSubmitter;
+        }
         const approvedAdvanceControlRequest: OwnedAdvanceControlRequest = {
           request,
           form,
         };
-        return this.findApprovedOwnedAdvanceControl(
-          approvedAdvanceControlRequest,
-        );
+        const lookupRequest: OwnedAdvanceControlLookupRequest = {
+          ...approvedAdvanceControlRequest,
+          allowAdmissiblePlanningControl: true,
+        };
+        return this.findApprovedOwnedAdvanceControl(lookupRequest);
       },
+      scriptedGetPasswordDisclosureIsApproved: (form) =>
+        scriptedGetApprovalRemainsBound(form),
     };
     const disclosureRevalidation = new CredentialDisclosureRevalidation(
       disclosureRevalidationRequest,
@@ -180,7 +278,8 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
   private findApprovedOwnedAdvanceControl({
     request,
     form,
-  }: OwnedAdvanceControlRequest): LoginAdvanceControl | false {
+    allowAdmissiblePlanningControl = false,
+  }: OwnedAdvanceControlLookupRequest): LoginAdvanceControl | false {
     const formWithinRequestRoot =
       request.root === form.ownerDocument ||
       (request.root instanceof Node && request.root.contains(form));
@@ -220,10 +319,63 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
             const [transported] =
               this.transportableControlObservation(observationRequest);
             if (!transported) return false;
-            return this.advanceControlIsSafe(transported);
+            if (this.advanceControlIsSafe(transported)) return true;
+            if (
+              !allowAdmissiblePlanningControl ||
+              !control.matches(semanticSubmitControlSelector)
+            ) {
+              return false;
+            }
+            const factsRequest: AuthenticationObservationFactsRequest = {
+              observation,
+              authenticatorSetupHint: false,
+              backupCodesHint: false,
+            };
+            const facts = this.authenticationPageObservationFacts(factsRequest);
+            return this.authenticationPageObservationFactsIsAdmissible(facts);
           }),
       )
     );
+  }
+
+  private ownedGetPasswordDisclosureIsAdmissible(
+    request: LoginCredentialsFillRequest,
+    form: HTMLFormElement,
+  ): boolean {
+    if (
+      form.ownerDocument.defaultView?.location.origin !==
+      "https://auth.tesla.com"
+    ) {
+      return false;
+    }
+    if (
+      authenticationSubmissionControls.formSubmissionMethod(form) !==
+      PageControlSubmissionMethod.Get
+    ) {
+      return false;
+    }
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    };
+    const summaryRequest: PasswordFormScopeQuery = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: request.root,
+      formScope,
+    };
+    const observation: PasswordFormObservation = {
+      root: request.root,
+      formScope,
+      summary: this.summarizeRoot(summaryRequest),
+    };
+    if (observation.summary.passwordFieldCount !== 1) return false;
+    const factsRequest: AuthenticationObservationFactsRequest = {
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    };
+    const facts = this.authenticationPageObservationFacts(factsRequest);
+    return this.authenticationPageObservationFactsIsAdmissible(facts);
   }
 
   private activateApprovedOwnedAdvanceControl({

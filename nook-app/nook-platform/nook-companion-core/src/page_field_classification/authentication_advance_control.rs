@@ -183,11 +183,13 @@ impl AuthenticationAdvanceControlObservation {
         if !self.is_bounded()
             || (self.destination_identity.len()
                 > super::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
-                && !self.is_extended_identifier_only_get_advance())
+                && !self.is_extended_identifier_only_get_advance()
+                && !self.is_tesla_scripted_password_submit_shape())
             || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
             || self.has_ambiguous_identifier_only_submit()
             || (matches!(self.submission_method, PageControlSubmissionMethod::Get)
-                && !self.is_identifier_only_get_advance())
+                && !self.is_identifier_only_get_advance()
+                && !self.is_tesla_scripted_password_submit_shape())
         {
             return Err(InvalidAuthenticationControl);
         }
@@ -198,6 +200,11 @@ impl AuthenticationAdvanceControlObservation {
             },
         )
         .map_err(|_| InvalidAuthenticationControl)?;
+        if self.is_tesla_scripted_password_submit_shape()
+            && !destination.is_tesla_account_authorization()
+        {
+            return Err(InvalidAuthenticationControl);
+        }
         if destination.has_provider_authority
             && matches!(
                 self.authentication_username,
