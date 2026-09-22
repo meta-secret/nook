@@ -6,12 +6,14 @@
   "packageManager": "bun@1.3.14",
   "bin": {
     "loom": "./src/cli.ts",
+    "loom-agent-delegation": "./src/agent-workflow/delegation-cli.ts",
     "loom-module-delivery": "./src/module-delivery/cli.ts",
     "loom-module-experts": "./src/module-experts/cli.ts",
     "loom-structural-experts": "./src/structural-experts/cli.ts"
   },
   "scripts": {
     "loom": "bun run src/cli.ts",
+    "agent-delegation": "bun run src/agent-workflow/delegation-cli.ts",
     "module-delivery": "bun run src/module-delivery/cli.ts",
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
@@ -37,6 +39,7 @@
   },
   "dependencies": {
     "@nats-io/nats-core": "^3.4.0",
+    "@openai/codex-sdk": "0.147.0",
     "diff": "9.0.0",
     "github-slugger": "2.0.0",
     "mdast-util-from-markdown": "2.0.3",

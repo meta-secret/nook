@@ -293,7 +293,6 @@ export class ModuleDeliveryPlanNodeCodec {
     }
     const workspace = {
       kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
-      workerRole: workspaceFields.string('workerRole'),
       workerBranch: workspaceFields.string('workerBranch'),
       worktreePath: workspaceFields.string('worktreePath'),
     } as const;

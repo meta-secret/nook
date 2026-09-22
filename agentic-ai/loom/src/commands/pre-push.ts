@@ -5,7 +5,7 @@ import { LoomFailureCode } from '../loom-failure.ts';
 
 /**
  * @deprecated Feature and delivery validation are owned by remote build-only
- * execution and the feature PR lifecycle checks. Kept as an inert compatibility
+ * execution and the manager's later CI cycle. Kept as an inert compatibility
  * boundary for old request payloads.
  */
 export class PrePushCommand {
@@ -20,7 +20,7 @@ export class PrePushCommand {
     return err({
       code: LoomFailureCode.CommandFailed,
       message:
-        'prePush is deprecated and does not execute; use remote build:compile and the feature PR lifecycle validation checks',
+        'prePush is deprecated and does not execute; use remote build:compile and the manager-owned CI validation cycle',
     });
   }
 }

@@ -17,7 +17,7 @@ import type {
   ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -72,10 +72,6 @@ export class ModuleDeliveryPlanValidationScenario {
       },
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
-        workerRole:
-          fixture.expert === 'web_expert'
-            ? 'typescript-specialist'
-            : 'rust-core-developer',
         workerBranch: `codex/child/${fixture.expert === 'web_expert' ? 'web-dev/typescript-specialist' : 'dev-core/rust-core-developer'}/module-delivery-test/${fixture.taskId}-implementation-work`,
         worktreePath: `/tmp/nook-module-delivery/${fixture.taskId}`,
       },
@@ -141,14 +137,14 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV6 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV6 {
+  private execute(): ModuleDeliveryPlanV5 {
     const fixture = this.request;
     return {
-      version: 6,
+      version: 5,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
@@ -165,7 +161,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV6): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 

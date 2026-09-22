@@ -100,20 +100,6 @@ test('accepts the reviewed repository contract registry', () => {
   ).toEqual([]);
 });
 
-test('keeps the retired delegation journal unreachable', () => {
-  const taskfile = readFileSync(
-    path.join(REPOSITORY_ROOT, '.task/agentic-ai.yml'),
-    'utf8',
-  );
-  const packageManifest = readFileSync(
-    path.join(REPOSITORY_ROOT, 'agentic-ai/loom/package.json'),
-    'utf8',
-  );
-  expect(taskfile).not.toContain('loom:agent-delegation');
-  expect(packageManifest).not.toContain('loom-agent-delegation');
-  expect(packageManifest).not.toContain('agent-delegation');
-});
-
 test('requires the importing authority to reference the policy document', () => {
   expect(
     CortexContractsScenario.compile('# SRE\n\nNo policy link.\n').some(

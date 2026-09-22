@@ -320,6 +320,7 @@ test('production Loom limits provider imports to the semantic adapter', async ()
   ).filter((relativePath) => relativePath.length > 0);
 
   expect([...violations].sort()).toEqual([
+    'src/agent-workflow/codex-runtime.ts',
     'src/lib/cortex-article-structure.ts',
     'src/module-delivery/codec.ts',
   ]);

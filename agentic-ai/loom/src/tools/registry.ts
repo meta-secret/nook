@@ -140,7 +140,7 @@ export class LoomRequestExecution {
         return err({
           code: LoomFailureCode.CommandFailed,
           message:
-            'prePush is deprecated and does not execute; use remote build:compile and the feature PR lifecycle validation checks',
+            'prePush is deprecated and does not execute; use remote build:compile and the manager-owned CI validation cycle',
         });
       }
       case RequestFamily.CortexAudit:
