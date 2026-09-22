@@ -123,6 +123,22 @@ type ExtensionCreatePinRequest = {
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
+export type CompanionVaultSummaryArgs = {
+  vaultStoreId: string
+  appId: string
+  appPublicKey: string
+  appSigningPublicKey: string
+}
+
+export type CompanionVaultSummary = {
+  secretCount: number
+}
+
+type ExtensionVaultSummaryRequest = {
+  type: typeof ExtensionSessionMessageType.VaultSummary
+  payload: CompanionVaultSummaryArgs & ExtensionControlPayload
+}
+
 type ExtensionUnlockPinRequest = {
   type: typeof ExtensionSessionMessageType.UnlockPin
   payload: { pin: string; queue: ExtensionSessionQueue }
@@ -137,6 +153,7 @@ type ExtensionSessionRequest =
   | ExtensionUnlockPasskeyRequest
   | ExtensionCreatePinRequest
   | ExtensionUnlockPinRequest
+  | ExtensionVaultSummaryRequest
 
 type ExtensionRuntimeRequest =
   { type: ExtensionRuntimeRequestType.EnsureRuntime } | ExtensionSessionRequest
@@ -448,6 +465,33 @@ class ExtensionWasmRuntime {
       kind: ExtensionSessionDeviceStateKind.Active,
       device: status.device,
     }
+  }
+
+  async extensionVaultSummary(
+    args: CompanionVaultSummaryArgs,
+  ): Promise<CompanionVaultSummary> {
+    const request: ExtensionVaultSummaryRequest = {
+      type: ExtensionSessionMessageType.VaultSummary,
+      payload: { ...args, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    }
+    const summaryResponseRequest: ExtensionSessionResponseRequest<CompanionVaultSummary> =
+      {
+        message: request,
+        decode: (response) => {
+          if (
+            !response ||
+            typeof response !== 'object' ||
+            !('secretCount' in response) ||
+            typeof response.secretCount !== 'number' ||
+            !Number.isSafeInteger(response.secretCount) ||
+            response.secretCount < 0
+          ) {
+            throw new Error('Extension vault summary is unavailable.')
+          }
+          return { secretCount: response.secretCount }
+        },
+      }
+    return this.sessionResponse(summaryResponseRequest)
   }
 
   async createExtensionPasskey(

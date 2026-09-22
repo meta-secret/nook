@@ -140,7 +140,7 @@ test('creates a passkey from browser-native WASM options after extension messagi
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
-    await expect(popupPage.getByTestId('stay-ready-btn')).toBeVisible()
+    await expect(popupPage.getByTestId('companion-done-btn')).toBeVisible()
     await openSimpleVaultConnection(context, popupPage)
   } finally {
     await context.close()
@@ -358,7 +358,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       connectedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
-    await expect(connectedPopupPage.getByTestId('stay-ready-btn')).toBeVisible()
+    await expect(
+      connectedPopupPage.getByTestId('companion-done-btn'),
+    ).toBeVisible()
     await expect(
       connectedPopupPage.getByTestId('open-simple-vault-btn'),
     ).toBeVisible()

@@ -34,7 +34,9 @@ export type ExtensionTranslationRequest =
     }
   | {
       kind: ExtensionTranslationRequestKind.WithReplacements
-      key: typeof I18N_KEYS.ExtensionCompanionReadyVault
+      key:
+        | typeof I18N_KEYS.ExtensionCompanionReadyVault
+        | typeof I18N_KEYS.ExtensionCompanionReadyDescription
       replacements: { vault: string }
     }
 
