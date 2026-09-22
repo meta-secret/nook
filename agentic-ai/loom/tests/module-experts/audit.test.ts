@@ -12,10 +12,8 @@ import { dirname, join, resolve } from 'node:path';
 import type { CodexOptions } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
-  ModuleExpertRuntimeRouting,
   type AuditGeneratedScopeProducerContractArgs,
   type AuditModuleExpertRuntimePolicyArgs,
-  type AuditModuleExpertRuntimeRoutingArgs,
   type AuditModuleExpertsArgs,
   ModuleExpertContract,
 } from '../../src/module-experts/audit.ts';
@@ -880,43 +878,6 @@ describe('module expert audit', () => {
         (finding) => finding.code,
       ),
     ).toEqual(['unsafe-module-expert-runtime']);
-  });
-
-  test('rejects generic and module-expert runtime routing drift', () => {
-    const safeModuleCliSource = 'invokeModuleExpert(invokeArgs);';
-    const safeTrustedRuntimeSource = 'executeIsolated(executionArgs);';
-    const moduleRoutingMutations: readonly AuditModuleExpertRuntimeRoutingArgs[] =
-      [
-        {
-          moduleExpertCliSource: 'validateModuleExpertRequest(request);',
-          trustedRuntimeSource: safeTrustedRuntimeSource,
-        },
-        {
-          moduleExpertCliSource:
-            'invokeModuleExpert(invokeArgs); new CodexSdkAgentRuntime<string, string>();',
-          trustedRuntimeSource: safeTrustedRuntimeSource,
-        },
-        {
-          moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource:
-            'executeIsolated(executionArgs); new CodexSdkAgentRuntime<string, string>();',
-        },
-        {
-          moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource: 'consumeIsolated(consumeArgs);',
-        },
-        {
-          moduleExpertCliSource: safeModuleCliSource,
-          trustedRuntimeSource: 'executeOther(executionArgs);',
-        },
-      ];
-    for (const mutation of moduleRoutingMutations) {
-      expect(
-        ModuleExpertRuntimeRouting.audit(mutation).map(
-          (finding) => finding.code,
-        ),
-      ).toEqual(['unsafe-module-expert-runtime-routing']);
-    }
   });
 
   for (const mutation of ModuleExpertsAuditFixture.GENERATED_MARKER_MUTATIONS) {

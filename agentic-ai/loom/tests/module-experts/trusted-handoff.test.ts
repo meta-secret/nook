@@ -2,13 +2,21 @@ import { expect, test } from 'bun:test';
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { ModuleExpertCommandParser } from '../../src/module-experts/cli.ts';
+import { StructuralExpertCommandLine } from '../../src/structural-experts/cli.ts';
+
 const LOOM_ROOT = join(import.meta.dir, '../..');
 
-const TRUSTED_HANDOFF_SURFACES = [
+const RETIRED_HANDOFF_SURFACES = [
   'src/module-experts/invoke.ts',
-  'src/module-experts/trusted-runtime.ts',
   'src/structural-experts/invoke.ts',
   'src/structural-experts/parent-context.ts',
+  'src/agent-workflow/agent-journal.ts',
+  'src/agent-workflow/agent-replay.ts',
+  'src/agent-workflow/attempt-codec.ts',
+  'src/agent-workflow/attempt-verification.ts',
+  'src/agent-workflow/codex-runtime.ts',
+  'src/module-experts/trusted-runtime.ts',
   'src/structural-experts/trusted-runtime.ts',
 ] as const;
 
@@ -19,55 +27,10 @@ const REMOVED_INTERNAL_SECURITY_MODULES = [
   'src/structural-experts/parent-authorization.ts',
 ] as const;
 
-test('keeps same-thread expert handoffs plain and boundary checks explicit', async () => {
-  const sources = await Promise.all(
-    TRUSTED_HANDOFF_SURFACES.map(async (relativePath) => ({
-      relativePath,
-      source: await readFile(join(LOOM_ROOT, relativePath), 'utf8'),
-    })),
-  );
-  const prohibitedInternalSecurityLayers = [
-    /node:crypto/u,
-    /\bWeakMap\b/u,
-    /\bWeakSet\b/u,
-    /AgentAttemptReplay/u,
-    /AgentAttemptTransport/u,
-    /IsolationReceipt/u,
-    /ParentAuthorization/u,
-    /verifyModuleExpertInvocationResult/u,
-    /\b(?:one[- ]shot|one[- ]use)\b/iu,
-  ] as const;
-  for (const surface of sources) {
-    for (const prohibited of prohibitedInternalSecurityLayers) {
-      expect(surface.source).not.toMatch(prohibited);
-    }
+test('keeps named-expert handoffs on the active harness', async () => {
+  for (const relativePath of RETIRED_HANDOFF_SURFACES) {
+    await expect(access(join(LOOM_ROOT, relativePath))).rejects.toThrow();
   }
-
-  const moduleRuntime = sources.find(
-    (surface) =>
-      surface.relativePath === 'src/module-experts/trusted-runtime.ts',
-  );
-  const structuralRuntime = sources.find(
-    (surface) =>
-      surface.relativePath === 'src/structural-experts/trusted-runtime.ts',
-  );
-  const structuralParentContext = sources.find(
-    (surface) =>
-      surface.relativePath === 'src/structural-experts/parent-context.ts',
-  );
-  if (!moduleRuntime || !structuralRuntime || !structuralParentContext) {
-    throw new Error('Trusted expert handoff source inventory is incomplete.');
-  }
-  expect(moduleRuntime.source).toContain(
-    'ModuleExpertCodexSdkAgentRuntime.executeIsolated',
-  );
-  expect(structuralRuntime.source).toContain(
-    'ReadOnlyExpertCodexRuntime.executeIsolated',
-  );
-  expect(structuralParentContext.source).toContain(
-    'VerifiedAttemptArtifacts.readVerifiedBarrierAttempt',
-  );
-
   const externalBoundary = await readFile(
     join(LOOM_ROOT, 'src/module-experts/runtime-contract.ts'),
     'utf8',
@@ -80,6 +43,25 @@ test('keeps same-thread expert handoffs plain and boundary checks explicit', asy
   }
 });
 
+test('rejects retired named-expert invocation entrypoints', async () => {
+  const invocation = [
+    'invoke',
+    '--request',
+    '/tmp/request.json',
+    '--working-directory',
+    '/tmp/repository',
+  ] as const;
+  expect(ModuleExpertCommandParser.parse(invocation)).toBe(false);
+  expect(StructuralExpertCommandLine.parse(invocation)).toBe(false);
+
+  const taskfile = await readFile(
+    join(LOOM_ROOT, '../../.task/agentic-ai.yml'),
+    'utf8',
+  );
+  expect(taskfile).not.toContain('loom:module-experts:invoke');
+  expect(taskfile).not.toContain('loom:structural-experts:invoke');
+});
+
 test('keeps trusted-handoff documentation and failure kinds current', async () => {
   const readme = await readFile(join(LOOM_ROOT, 'README.md'), 'utf8');
   for (const staleReference of [
@@ -89,14 +71,11 @@ test('keeps trusted-handoff documentation and failure kinds current', async () =
     'exact typed child authorization',
     'exact depth-two authorization',
     'parent authorization freezes',
+    'delegation journal',
+    'attempt journal',
+    'module-experts:invoke',
+    'structural-experts:invoke',
   ]) {
     expect(readme).not.toContain(staleReference);
   }
-
-  const runtime = await readFile(
-    join(LOOM_ROOT, 'src/agent-workflow/runtime.ts'),
-    'utf8',
-  );
-  expect(runtime).not.toContain('IsolationReceipt');
-  expect(runtime).not.toContain('isolationReceipt');
 });

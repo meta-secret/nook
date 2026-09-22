@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
-import { DecodeStatus } from '../src/codec/field-error.ts';
+import { DecodeStatus, FieldDetailKind } from '../src/codec/field-error.ts';
 import {
   EXAMPLE_CATALOG,
   LoomRequestExamples,
@@ -167,6 +167,11 @@ describe('loom dispatch protocol', () => {
       expect(outcome.body.errors[0]?.detail).toMatchObject({
         kind: 'text',
       });
+      const detail = outcome.body.errors[0]?.detail;
+      if (detail?.kind === FieldDetailKind.Text) {
+        expect(detail.text).toContain('feature PR lifecycle validation checks');
+        expect(detail.text).not.toContain('manager-owned CI validation cycle');
+      }
     }
   });
 });

@@ -468,53 +468,22 @@ worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
 typed Loom catalog mirrors the roles for isolated read-only execution.
 Run **`task loom:module-experts:validate`** to verify complete production-module
 routing, runtime isolation, generated WASM binding contracts, the
-`internal_api_expert` boundary, and research exclusions. Loom journal creation
-and replay reject agent lineage deeper than three levels.
-Invoke one selected role with
-**`task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json`**.
-Invocation requires a non-empty **`CODEX_API_KEY`**. It does not reuse or copy
-interactive ChatGPT login state.
-The request binds an exact source commit, registered expert, stable run/task
-identity, attempt, parent lineage, and bounded instruction. Runtime progress is
-printed live but never written to JSONL. Loom finalizes the lifecycle journal
-and terminal handoff and returns their content-addressed evidence references,
-but does not schedule a successor or mutate lifecycle state. Before invocation,
-Loom replay-verifies a completed depth-one `ModuleDevelopmentPlan` with an
-exact typed authorization for that child. Depth-three work also requires its
-completed immediate parent. Direct named experts are agent-attempt children at
-depth two or three; they never use workflow-root lineage, and their evidence
-cannot authorize descendants.
-Each expert reads an immutable, catalog-scoped commit snapshot through bounded
-loopback list, read, and literal-search tools. Every snapshot includes its
-canonical skill and workflow authorities. The internal API expert also receives
-the exact registered portable Rust roots needed for boundary inspection.
-The credential is redeemed once
-through helper source embedded in the running Loom module, rather than loaded
-from the analyzed commit or live worktree. It is absent from the Codex process
-environment, provider configuration, arguments, and repository snapshot.
-Model-controlled process, write, general network, web-search, and delegation
-paths remain disabled. Successful experts return a typed
-`ModuleExpertEvidence` continuation; parent actions are evidence, not scheduler
-authority.
+`internal_api_expert` boundary, and research exclusions. Gizmo selects and
+invokes module experts through the active harness; Loom does not own an expert
+journal, replay, or completion-handoff path.
 
 Structural refactoring uses a separate read-only expert registry so overlapping
 maintenance scopes do not pretend to own production modules. Run
 **`task loom:structural-experts:validate`** to verify the exact code, Cortex,
-and synthesis role contracts. Invoke one preauthorized role with
-**`task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json`**.
-`code_refactoring_expert` and `cortex_refactoring_expert` inspect only bounded
-exact-commit evidence. `system_coherence_synthesizer` receives only
-replay-verified child results and views. The parent plan freezes the read scope
-or synthesis barrier; every role remains nondelegating and read-only. See the
+and synthesis role contracts. Gizmo invokes these roles through the active
+harness. Every role remains nondelegating and read-only. See the
 [structural refactoring registry](.cortex/teams/ai/architecture/refactoring-experts.md)
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:module-experts:validate # named read-only expert and production-module routing audit
-task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
-task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
 task remote TASK_NAME=web:build # direct-Pod web build

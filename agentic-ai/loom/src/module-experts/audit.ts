@@ -40,14 +40,6 @@ import {
 
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
 
-import {
-  MODULE_EXPERT_CLI,
-  MODULE_EXPERT_TRUSTED_RUNTIME,
-  ModuleExpertRuntimeRouting,
-} from './runtime-routing-audit.ts';
-
-import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
-
 import { ModuleExpertEnvironment } from './runtime-environment-audit.ts';
 
 import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
@@ -89,7 +81,6 @@ export class ModuleExpertContract {
     ModuleExpertContract.validateProductionCoverage(coverageArgs);
     ModuleExpertContract.mergeTeamAgentAudit(context);
     ModuleExpertContract.validateRuntimePolicy(context);
-    ModuleExpertContract.validateRuntimeRouting(context);
     return {
       findings,
       profileCount: MODULE_EXPERT_CATALOG.length,
@@ -739,27 +730,6 @@ export class ModuleExpertContract {
     }
   }
 
-  private static validateRuntimeRouting(
-    context: ModuleExpertValidationContext,
-  ): void {
-    const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
-    const trustedRuntimePath = join(
-      context.repoRoot,
-      MODULE_EXPERT_TRUSTED_RUNTIME,
-    );
-    const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
-      moduleExpertCliSource: existsSync(moduleExpertCliPath)
-        ? readFileSync(moduleExpertCliPath, 'utf8')
-        : '',
-      trustedRuntimeSource: existsSync(trustedRuntimePath)
-        ? readFileSync(trustedRuntimePath, 'utf8')
-        : '',
-    };
-    for (const finding of ModuleExpertRuntimeRouting.audit(auditArgs)) {
-      context.findings[context.findings.length] = finding;
-    }
-  }
-
   private static safeIdentifier(value: string): boolean {
     return value.length <= 64 && /^[a-z][a-z0-9_]*$/u.test(value);
   }
@@ -789,10 +759,6 @@ export class ModuleExpertContract {
     );
   }
 }
-
-export { ModuleExpertRuntimeRouting };
-
-export type { AuditModuleExpertRuntimeRoutingArgs };
 
 export type ModuleExpertAuditFinding = {
   readonly code: string;
