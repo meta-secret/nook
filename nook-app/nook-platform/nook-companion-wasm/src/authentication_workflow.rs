@@ -144,6 +144,15 @@ mod routing_admission_tests {
 }
 
 #[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observation_facts_is_admissible(
+    input: nook_companion_core::AuthenticationPageObservationFacts,
+) -> bool {
+    input.authentication_page_observation_facts_is_admissible()
+}
+
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,

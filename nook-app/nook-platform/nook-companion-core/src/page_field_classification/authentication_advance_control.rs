@@ -16,6 +16,7 @@ use crate::{AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+mod envelope;
 mod policy;
 mod submission_destination_source;
 
@@ -169,26 +170,6 @@ impl AuthenticationAdvanceControlObservation {
                 || AuthenticationControlIdentity::new(&self.label).is_explicit_advance())
     }
 
-    /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
-    #[must_use]
-    pub fn is_bounded(&self) -> bool {
-        self.source_origin.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.destination_identity.len() <= super::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
-            && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.machine_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && [
-                self.password_field_count,
-                self.new_password_field_count,
-                self.one_time_code_field_count,
-            ]
-            .into_iter()
-            .all(AuthenticationFieldCount::is_within_observation_limit)
-            && self
-                .semantic_submit_control_count
-                .is_within_observation_limit()
-    }
-
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
@@ -200,6 +181,9 @@ impl AuthenticationAdvanceControlObservation {
 
     fn check(&self) -> Result<CheckedAuthenticationControl<'_>, InvalidAuthenticationControl> {
         if !self.is_bounded()
+            || (self.destination_identity.len()
+                > super::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
+                && !self.is_extended_identifier_only_get_advance())
             || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
             || self.has_ambiguous_identifier_only_submit()
             || (matches!(self.submission_method, PageControlSubmissionMethod::Get)

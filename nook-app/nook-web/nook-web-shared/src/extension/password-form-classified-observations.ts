@@ -68,6 +68,9 @@ export class AuthenticationWorkflowClassification {
       const authenticationContext = facts.ceremony.authenticationContext;
       const fields = facts.fields;
       return authenticationContext &&
+        passwordFormInteraction.authenticationPageObservationFactsIsAdmissible(
+          facts,
+        ) &&
         authenticationFactBounds.controlTextsFit([
           authenticationContext.sourceOrigin,
           authenticationContext.formIdentity,

@@ -63,6 +63,20 @@
       renderState.fixture.quirks.includes('selected-account-display') &&
       renderState.step.fields.some((field) => field.type === 'password'),
   )
+  const zeroHeightPasswordContainer = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes(
+        'zero-height-overflow-password-container',
+      ),
+  )
+  const omitFormMethod = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('form-method-omitted'),
+  )
+  const omitFormAction = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('form-action-omitted'),
+  )
 
   function fieldSelector(field: SiteFixtureField): string {
     if (field.id) return `#${CSS.escape(field.id)}`
@@ -209,6 +223,16 @@
   {/if}
 {/snippet}
 
+{#snippet fixtureField(field: SiteFixtureField)}
+  {#if zeroHeightPasswordContainer && field.id === 'hidden-password'}
+    <div style="height: 0; overflow: hidden">
+      {@render fixtureInput(field)}
+    </div>
+  {:else}
+    {@render fixtureInput(field)}
+  {/if}
+{/snippet}
+
 {#if renderState.kind === DetectionFixtureRenderKind.Missing}
   <main>
     <h1>Unknown site fixture</h1>
@@ -224,9 +248,15 @@
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}
-      <form id="login_form" method="post" action="/auth/login" {onsubmit}>
+      <form
+        id={zeroHeightPasswordContainer ? undefined : 'login_form'}
+        class={zeroHeightPasswordContainer ? 'nw-signin' : undefined}
+        method={omitFormMethod ? undefined : 'post'}
+        action={omitFormAction ? undefined : '/auth/login'}
+        {onsubmit}
+      >
         {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
-          {@render fixtureInput(field)}
+          {@render fixtureField(field)}
         {/each}
         {#if step.submit.type === SiteFixtureSubmitType.Button}
           <button
@@ -262,9 +292,15 @@
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
-    <form id="login_form" method="post" action="/auth/login" {onsubmit}>
+    <form
+      id={zeroHeightPasswordContainer ? undefined : 'login_form'}
+      class={zeroHeightPasswordContainer ? 'nw-signin' : undefined}
+      method={omitFormMethod ? undefined : 'post'}
+      action={omitFormAction ? undefined : '/auth/login'}
+      {onsubmit}
+    >
       {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
-        {@render fixtureInput(field)}
+        {@render fixtureField(field)}
       {/each}
       {#if step.submit.type === SiteFixtureSubmitType.Button}
         <button

@@ -79,11 +79,7 @@ impl AuthenticationAdvanceControlObservation {
                         }
                         AuthenticationUsernameEvidence::Explicit => {
                             self.form_identity.is_empty()
-                                || (AuthenticationRouteIdentity::new(&self.form_identity)
-                                    .indicates_authentication()
-                                    && AuthenticationControlText::new(&self.label)
-                                        .expand_identity_text()
-                                        == "continue with email")
+                                || self.has_booking_identifier_form_identity()
                         }
                         AuthenticationUsernameEvidence::Absent
                         | AuthenticationUsernameEvidence::Generic
@@ -97,6 +93,10 @@ impl AuthenticationAdvanceControlObservation {
             && self.new_password_field_count.is_zero()
             && self.one_time_code_field_count.is_zero()
             && self.semantic_submit_control_count.is_single()
+    }
+
+    pub(super) fn has_booking_identifier_form_identity(&self) -> bool {
+        AuthenticationControlText::new(&self.form_identity).expand_identity_text() == "nw signin"
     }
 
     fn is_mixed_phone_or_email_identifier_advance(&self) -> bool {
@@ -443,7 +443,7 @@ mod tests {
                 one_time_code_field_count: 0.into(),
                 semantic_submit_control_count: 1.into(),
                 source_origin: "https://account.booking.com".to_owned(),
-                form_identity: String::new(),
+                form_identity: "nw-signin".to_owned(),
                 destination_identity: "https://account.booking.com/sign-in".to_owned(),
                 label: "Continue with email".to_owned(),
                 machine_identity: String::new(),
@@ -506,12 +506,23 @@ mod tests {
     #[test]
     fn booking_owned_identifier_default_get_is_narrowly_admitted() {
         assert!(BookingDefaultGetScenario::observation().authentication_advance_control_is_safe());
+        for localized_label in [
+            "Continuar con el correo electrónico",
+            "Continuer avec l’adresse e-mail",
+            "Mit E-Mail-Adresse fortfahren",
+        ] {
+            let mut localized = BookingDefaultGetScenario::observation();
+            localized.label = localized_label.to_owned();
+            assert!(
+                localized.authentication_advance_control_is_safe(),
+                "{localized_label}"
+            );
+        }
         let mut oauth_state = BookingDefaultGetScenario::observation();
         oauth_state.destination_identity = format!(
             "https://account.booking.com/sign-in?op_token={}",
             "a".repeat(700)
         );
-        oauth_state.form_identity = "nw-signin".to_owned();
         assert!(oauth_state.authentication_advance_control_is_safe());
 
         let mut oversized = BookingDefaultGetScenario::observation();

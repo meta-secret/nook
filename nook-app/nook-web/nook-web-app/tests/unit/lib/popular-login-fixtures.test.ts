@@ -116,6 +116,16 @@ describe('popular login shell templates', () => {
     }
   })
 
+  test('renders Booking hidden-password layout and omitted form attributes', () => {
+    const html = renderFixtureHtml(fixtureCatalog.template('booking'))
+    expect(html).toContain(
+      '<div style="height: 0; overflow: hidden"><input type="password"',
+    )
+    expect(html).toContain('<form class="nw-signin">')
+    expect(html).not.toContain('method="post"')
+    expect(html).not.toContain('action="/auth/login"')
+  })
+
   test.each(templateIds.map((id) => [id, id]))(
     'detects login workflow for template %s',
     (templateId) => {

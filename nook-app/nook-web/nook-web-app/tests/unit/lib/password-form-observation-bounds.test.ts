@@ -119,6 +119,31 @@ describe('authentication observation bounds', () => {
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
+  test('isolates an oversized destination without poisoning a valid sibling', () => {
+    const oversizedQuery = `state=${'a'.repeat(4_100)}`
+    document.body.innerHTML = `
+      <form id="oversized" method="post" aria-label="Login" action="/login?${oversizedQuery}">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+      <form id="valid-login" method="post" aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const classified = new AuthenticationWorkflowClassification({
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }).observations
+    expect(classified).toHaveLength(1)
+    expect(ownedFormId(classified[0]!.observation)).toBe('valid-login')
+  })
+
   test('isolates a candidate whose raw form identity exceeds the bound', () => {
     document.body.innerHTML = `
       <form method="post"

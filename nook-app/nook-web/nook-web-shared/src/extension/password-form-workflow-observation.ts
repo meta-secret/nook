@@ -8,6 +8,7 @@ import {
   authentication_advance_control_is_safe,
   authentication_control_transportable,
   authentication_page_observation_facts_priority,
+  authentication_page_observation_facts_is_admissible,
   authentication_passkey_control_candidate_is_safe,
   authentication_workflow_activity_progress,
   authentication_implicit_submit_actuation_is_safe,
@@ -114,6 +115,11 @@ type PasskeyCandidateSafetyRequest = {
   observation: PasswordFormObservation;
 };
 
+type PrepareCompanionWorkflowPoliciesRequest = {
+  authenticatorSetupHint: boolean;
+  backupCodesHint: boolean;
+};
+
 function companionExtensionRuntimePresent(): boolean {
   return typeof chrome === "object" && Boolean(chrome.runtime?.id);
 }
@@ -126,12 +132,15 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         advanceControls: AuthenticationAdvanceControlObservation[];
         passkeyCandidates: AuthenticationDetailedPasskeyControlCandidateObservation[];
         pageFacts: AuthenticationPageObservationFacts[];
+        authenticatorSetupHint: boolean;
+        backupCodesHint: boolean;
       }
     | false = false;
   private readonly transportabilityPolicies = new Map<string, boolean>();
   private readonly advanceControlPolicies = new Map<string, boolean>();
   private readonly passkeyCandidatePolicies = new Map<string, boolean>();
   private readonly pageFactsPriorities = new Map<string, number>();
+  private readonly pageFactsAdmissibility = new Map<string, boolean>();
   private readonly implicitSubmissionPolicies = new Map<string, boolean>();
   private readonly activityProgress = new Map<
     AuthenticationWorkflowActivity,
@@ -210,7 +219,10 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       : authentication_implicit_submit_actuation_is_safe(request);
   }
 
-  async prepareCompanionWorkflowPolicies(): Promise<void> {
+  async prepareCompanionWorkflowPolicies({
+    authenticatorSetupHint,
+    backupCodesHint,
+  }: PrepareCompanionWorkflowPoliciesRequest): Promise<void> {
     const collection = {
       transportability: [] as AuthenticationControlTransportability[],
       advanceControls: [] as AuthenticationAdvanceControlObservation[],
@@ -219,6 +231,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       pageFacts: [] as AuthenticationPageObservationFacts[],
       implicitSubmissions:
         [] as AuthenticationImplicitSubmitActuationObservation[],
+      authenticatorSetupHint,
+      backupCodesHint,
     };
     this.collectingPolicies = collection;
     try {
@@ -235,6 +249,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     this.advanceControlPolicies.clear();
     this.passkeyCandidatePolicies.clear();
     this.pageFactsPriorities.clear();
+    this.pageFactsAdmissibility.clear();
     this.implicitSubmissionPolicies.clear();
     this.activityProgress.clear();
     if (
@@ -245,6 +260,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       !("advanceControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
       !("pageFactsPriorities" in delivery.response) ||
+      !("pageFactsAdmissibility" in delivery.response) ||
       !("activityProgress" in delivery.response) ||
       !("implicitSubmissions" in delivery.response)
     ) {
@@ -274,6 +290,10 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       if (typeof priority === "number") {
         this.pageFactsPriorities.set(this.policyKey(request), priority);
       }
+      this.pageFactsAdmissibility.set(
+        this.policyKey(request),
+        response.pageFactsAdmissibility[index] === true,
+      );
     });
     [
       AuthenticationWorkflowActivity.ReadyLogin,
@@ -334,8 +354,13 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
   private passwordFormPriority(observation: PasswordFormObservation): number {
     const factsRequest: AuthenticationObservationFactsRequest = {
       observation,
-      authenticatorSetupHint: false,
-      backupCodesCopy: "",
+      authenticatorSetupHint: this.collectingPolicies
+        ? this.collectingPolicies.authenticatorSetupHint
+        : false,
+      backupCodesCopy:
+        this.collectingPolicies && this.collectingPolicies.backupCodesHint
+          ? "Save backup codes"
+          : "",
     };
     const facts = this.authenticationPageObservationFacts(factsRequest);
     if (this.collectingPolicies) {
@@ -347,6 +372,16 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     return companionExtensionRuntimePresent()
       ? 0
       : authentication_page_observation_facts_priority(facts);
+  }
+
+  authenticationPageObservationFactsIsAdmissible(
+    facts: AuthenticationPageObservationFacts,
+  ): boolean {
+    const cached = this.pageFactsAdmissibility.get(this.policyKey(facts));
+    if (typeof cached === "boolean") return cached;
+    return companionExtensionRuntimePresent()
+      ? false
+      : authentication_page_observation_facts_is_admissible(facts);
   }
 
   private scopedControlRoot({

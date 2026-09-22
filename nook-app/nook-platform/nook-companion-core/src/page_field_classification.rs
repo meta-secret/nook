@@ -28,6 +28,7 @@ pub use authentication_advance_control::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
+pub(crate) use authentication_route_evidence::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES;
 pub use authentication_route_evidence::{
     AuthenticationRouteActuation, AuthenticationRouteEvidence, CredentialUpdateRouteEvidence,
     MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES,
@@ -212,7 +213,7 @@ impl OneTimeCodeRouteEvidence<'_> {
         if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return OneTimeCodeRouteDecision::Rejected;
         }
@@ -300,6 +301,8 @@ impl AuthenticationAdvanceControlObservation {
             && AuthenticationControlText::new(&label_identity)
                 .contains_any_word(&["device", "devices"]);
         if !observation.is_bounded()
+            || observation.destination_identity.len()
+                > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
             || !matches!(
                 observation.actionability,
                 PageControlActionability::Actionable
@@ -384,7 +387,7 @@ impl AuthenticationAdvanceControlObservation {
         if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return false;
         }
@@ -428,7 +431,7 @@ impl AuthenticationAdvanceControlObservation {
         if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
-            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return false;
         }

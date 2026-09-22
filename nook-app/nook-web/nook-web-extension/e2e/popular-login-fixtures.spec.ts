@@ -220,6 +220,11 @@ test.describe('popular login fixture coverage', () => {
       const hiddenPassword = page.locator('#hidden-password')
       await expect(hiddenPassword).toHaveAttribute('aria-hidden', 'true')
       await expect(hiddenPassword).toHaveAttribute('tabindex', '-1')
+      await expect(hiddenPassword.locator('..')).toHaveCSS('height', '0px')
+      await expect(hiddenPassword.locator('..')).toHaveCSS('overflow', 'hidden')
+      const form = page.locator('form.nw-signin')
+      await expect(form).not.toHaveAttribute('method')
+      await expect(form).not.toHaveAttribute('action')
     } finally {
       await mockAuth.close()
     }

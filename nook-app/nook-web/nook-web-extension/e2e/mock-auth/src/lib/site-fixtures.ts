@@ -458,6 +458,9 @@ export function renderFixtureHtml(
   const [ariaHidden = fixture.quirks.includes('aria-hidden-ancestor')] = [
     options?.wrapAriaHidden,
   ]
+  const zeroHeightPasswordContainer = fixture.quirks.includes(
+    'zero-height-overflow-password-container',
+  )
   const fields = step.fields
     .map((field) => {
       const attrs = [
@@ -487,9 +490,12 @@ export function renderFixtureHtml(
         .join(' ')
       const input = `<input ${attrs} />`
       const labelFor = field.id ? ` for="${escapeAttr(field.id)}"` : ''
-      return field.label
+      const renderedField = field.label
         ? `<label${labelFor}>${escapeHtml(field.label)}${input}</label>`
         : input
+      return zeroHeightPasswordContainer && field.id === 'hidden-password'
+        ? `<div style="height: 0; overflow: hidden">${renderedField}</div>`
+        : renderedField
     })
     .join('\n')
   const submitType =
@@ -507,8 +513,18 @@ export function renderFixtureHtml(
   ]
     .filter(Boolean)
     .join(' ')
+  const omittedMethod = fixture.quirks.includes('form-method-omitted')
+  const omittedAction = fixture.quirks.includes('form-action-omitted')
+  const bookingForm = zeroHeightPasswordContainer
+  const formAttrs = [
+    bookingForm ? 'class="nw-signin"' : 'id="login_form"',
+    omittedMethod ? '' : 'method="post"',
+    omittedAction ? '' : 'action="/auth/login"',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const inner = `
-    <form id="login_form">
+    <form ${formAttrs}>
       ${fields}
       <button ${submitAttrs}>${escapeHtml(step.submit.label)}</button>
     </form>`

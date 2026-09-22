@@ -193,7 +193,6 @@ class AuthenticationScanRenderLifecycle {
     }
     await passwordFieldDiscovery.prepareCompanionClassification(document)
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
-    await passwordFormInteraction.prepareCompanionWorkflowPolicies()
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHints =
@@ -201,6 +200,15 @@ class AuthenticationScanRenderLifecycle {
         recoveryCopy,
       )
     enrollmentHints.backupCodes = backupCodesHint === 'present'
+    const companionPoliciesRequest: Parameters<
+      typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
+    >[0] = {
+      authenticatorSetupHint: enrollmentHints.qr,
+      backupCodesHint: enrollmentHints.backupCodes,
+    }
+    await passwordFormInteraction.prepareCompanionWorkflowPolicies(
+      companionPoliciesRequest,
+    )
     const workflowForms = passwordFormInteraction
       .summarizeAuthenticationWorkflowForms()
       .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)
