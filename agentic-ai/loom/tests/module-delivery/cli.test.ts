@@ -8,8 +8,6 @@ import { join, resolve } from 'node:path';
 
 import { expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -33,8 +31,6 @@ export class ModuleDeliveryCliScenario {
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      maxAgentDepth: 2,
-      maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
       parentJoin: {
         kind: ModuleDeliveryJoinKind.WorkerBranches,
@@ -48,7 +44,6 @@ export class ModuleDeliveryCliScenario {
           team: TeamKey.DevelopmentCore,
           functionalOwner: TeamKey.Ai,
           acceptanceOwner: TeamKey.Ai,
-          parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
           expert: 'core_expert',
           moduleRoot: CORE_ROOT,
           consumerOutcome:
@@ -56,7 +51,6 @@ export class ModuleDeliveryCliScenario {
           baseline: {
             kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
-          agentDepthLimit: 2,
           dependencies: [],
           resources: {
             read: [`${CORE_ROOT}/**`],

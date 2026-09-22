@@ -1,4 +1,3 @@
-import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
@@ -35,7 +34,6 @@ import {
   LegacyModulePlanResourceField,
   LegacyModulePlanWriteNodeField,
   ModulePlanAcceptanceField,
-  ModulePlanAttemptLineageField,
   ModulePlanCortexAuthoringField,
   ModulePlanCortexWriteNodeField,
   ModulePlanEdgeField,
@@ -45,7 +43,6 @@ import {
   ModulePlanParentJoinField,
   ModulePlanReadOnlyNodeField,
   ModulePlanResourceField,
-  ModulePlanRootLineageField,
   ModulePlanFeatureBaselineField,
   ModulePlanSynthesisNodeField,
   ModulePlanWorkspaceField,
@@ -220,15 +217,6 @@ export class ModuleDeliveryPlanNodeCodec {
       path: `${path}.acceptanceOwner`,
       allowGizmoPrime,
     };
-    const parentLineageRequest: ModulePlanObjectDecodeRequest = {
-      record: request.legacy
-        ? request.value
-        : fields.recordField('parentLineage'),
-      path: `${path}.parentLineage`,
-    };
-    const parentLineage = request.legacy
-      ? { kind: AgentAttemptParentKind.WorkflowRoot as const }
-      : ModuleDeliveryPlanNodeCodec.decodeParentLineage(parentLineageRequest);
     const resourceClaimsRequest: ModulePlanResourceDecodeRequest = {
       ...resourceRequest,
       legacy: request.legacy,
@@ -247,12 +235,10 @@ export class ModuleDeliveryPlanNodeCodec {
       acceptanceOwner: ModuleDeliveryPlanNodeCodec.decodeOwner(
         acceptanceOwnerRequest,
       ),
-      parentLineage,
       expert,
       moduleRoot,
       consumerOutcome: fields.string('consumerOutcome'),
       baseline: ModuleDeliveryPlanNodeCodec.decodeBaseline(baselineRequest),
-      agentDepthLimit: fields.positiveInteger('agentDepthLimit'),
       dependencies: fields.stringList('dependencies'),
       resources: ModuleDeliveryPlanNodeCodec.decodeResourceClaims(
         resourceClaimsRequest,
@@ -433,29 +419,6 @@ export class ModuleDeliveryPlanNodeCodec {
     };
     const team = ModuleTaskOwnership.moduleDeliveryTaskTeam(teamRequest);
     return team === false ? TeamKey.Ai : team;
-  }
-
-  private static decodeParentLineage(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryNodeV2['parentLineage'] {
-    const fields = new ModulePlanFields(request);
-    const kind = fields.string('kind');
-    if (kind === AgentAttemptParentKind.WorkflowRoot) {
-      fields.requireExactKeys(ModulePlanRootLineageField);
-      return { kind: AgentAttemptParentKind.WorkflowRoot };
-    }
-    if (kind !== AgentAttemptParentKind.AgentAttempt) {
-      ModuleDeliveryPlanNodeCodec.fail(
-        `${request.path}.kind: unsupported parent lineage kind.`,
-      );
-    }
-    fields.requireExactKeys(ModulePlanAttemptLineageField);
-    return {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: fields.identifier('task'),
-      agent: fields.identifier('agent'),
-      attempt: fields.positiveInteger('attempt'),
-    };
   }
 
   private static decodeEvidenceInput(

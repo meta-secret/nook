@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -46,14 +44,12 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       team: request.team,
       functionalOwner: request.team,
       acceptanceOwner: request.team,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: CORTEX_TEAM_WRITER_EXPERT,
       moduleRoot: TeamAuthorityCatalog.teamCortexRoot(request.team),
       consumerOutcome: `${request.taskId} Cortex guidance is current.`,
       baseline: {
         kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
-      agentDepthLimit: 2,
       dependencies: [],
       resources: {
         read: request.selectedSkillPaths,
@@ -99,8 +95,6 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      maxAgentDepth: 2,
-      maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
         kind: ModuleDeliveryJoinKind.WorkerBranches,

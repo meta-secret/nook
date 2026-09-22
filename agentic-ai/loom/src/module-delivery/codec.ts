@@ -216,8 +216,6 @@ export class ModuleDeliveryPlanSchema {
     };
     const nodeValues = fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES);
     const generation = fields.positiveInteger('generation');
-    const maxAgentDepth = fields.positiveInteger('maxAgentDepth');
-    const maxAttempts = fields.positiveInteger('maxAttempts');
     const parentOwnedResources = fields.nonEmptyStringList(
       'parentOwnedResources',
     );
@@ -245,8 +243,6 @@ export class ModuleDeliveryPlanSchema {
       baseBranch: fields.string('baseBranch'),
       generation,
       featureBranch,
-      maxAgentDepth,
-      maxAttempts,
       parentOwnedResources,
       parentJoin,
       nodes,

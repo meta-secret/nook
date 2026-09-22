@@ -1,6 +1,5 @@
 import { TeamKey } from '../team-agents/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 6;
 export type ModuleDeliveryPlanInputVersion =
@@ -11,8 +10,6 @@ export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
   MAX_MODULE_DELIVERY_NODES * (MAX_MODULE_DELIVERY_NODES - 1);
 /** Evidence synthesis may name each task node at most once. */
 export const MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS = MAX_MODULE_DELIVERY_NODES;
-export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
-export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
 
 export enum ModuleDeliveryOwner {
@@ -304,12 +301,10 @@ type ModuleDeliveryNodeFields = {
   readonly team: TeamKey;
   readonly functionalOwner: ModuleDeliveryOwnerIdentity;
   readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  readonly parentLineage: AgentAttemptParent;
   readonly expert: string;
   readonly moduleRoot: string;
   readonly consumerOutcome: string;
   readonly baseline: ModuleDeliveryBaseline;
-  readonly agentDepthLimit: number;
   readonly dependencies: readonly string[];
   readonly resources: ModuleDeliveryResourceClaims;
   readonly parentOwnedExclusions: readonly string[];
@@ -410,8 +405,6 @@ export type ModuleDeliveryPlanV6 = {
   readonly baseBranch: string;
   readonly featureBranch: string;
   readonly generation: number;
-  readonly maxAgentDepth: number;
-  readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
   readonly parentJoin: ModuleDeliveryParentJoin;
   readonly nodes: readonly ModuleDeliveryNodeV2[];
@@ -508,7 +501,6 @@ export enum ModuleDeliveryIssueCode {
   LimitExceeded = 'limit-exceeded',
   EvidenceSurfaceMismatch = 'evidence-surface-mismatch',
   TeamOwnershipMismatch = 'team-ownership-mismatch',
-  ParentLineageMismatch = 'parent-lineage-mismatch',
   EvidenceInputMismatch = 'evidence-input-mismatch',
   AcceptanceOwnershipMismatch = 'acceptance-ownership-mismatch',
 }

@@ -210,7 +210,7 @@ describe('canonical worker branch identity', () => {
     }
   });
 
-  test('rejects feature refs, old prefix forms, and unregistered roles', () => {
+  test('rejects noncanonical identities and opaque work suffixes', () => {
     const invalidBranches: readonly string[] = [
       'codex/agent-branching',
       'codex/agent-branching/sre/provisioning/fix-cache-branch-compile',
@@ -218,6 +218,10 @@ describe('canonical worker branch identity', () => {
       'codex/child/web-dev/provisioning/agent-branching/fix-cache-branch-compile',
       'codex/child/sre/provisioning/short/fix-cache-branch-compile',
       'codex/child/sre/provisioning/agent-branching/short',
+      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile-v2',
+      'codex/child/sre/provisioning/agent-branching/123e4567-e89b-12d3-a456-426614174000',
+      'codex/child/sre/provisioning/agent-branching/fix-cache-on-2026-09-22',
+      'codex/child/sre/provisioning/agent-branching/fix-cache-20260922-021234',
     ];
 
     for (const branch of invalidBranches) {

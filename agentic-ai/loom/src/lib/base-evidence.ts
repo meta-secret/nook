@@ -191,7 +191,23 @@ export class CanonicalWorkerBranchContract {
         segments[4] || false,
       ) &&
       CanonicalBranchNameSyntax.isKebabSegment(segments[5] || false, 20, 50) &&
-      segments[5] !== 'cleanup'
+      !CanonicalWorkerBranchContract.isProhibitedWorkSegment(
+        segments[5] || false,
+      )
+    );
+  }
+
+  private static isProhibitedWorkSegment(segment: string | false): boolean {
+    if (segment === false || segment === 'cleanup') return true;
+    return (
+      /(?:^|-)v\d+$/u.test(segment) ||
+      /(?:^|-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-|$)/u.test(
+        segment,
+      ) ||
+      /(?:^|-)(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:-|$)/u.test(
+        segment,
+      ) ||
+      /(?:^|-)\d{8}-\d{6}(?:-|$)/u.test(segment)
     );
   }
 

@@ -1,5 +1,3 @@
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -46,12 +44,10 @@ export class ModuleDeliveryPlanValidationScenario {
           : TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: fixture.expert,
       moduleRoot: fixture.moduleRoot,
       consumerOutcome: `${fixture.taskId} publishes its accepted capability.`,
       baseline,
-      agentDepthLimit: 2,
       dependencies: fixture.dependencies,
       resources: {
         read: fixture.read,
@@ -100,12 +96,10 @@ export class ModuleDeliveryPlanValidationScenario {
       team: TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: fixture.expert,
       moduleRoot: fixture.moduleRoot,
       consumerOutcome: `${fixture.taskId} reports reviewed evidence.`,
       baseline,
-      agentDepthLimit: 2,
       dependencies: fixture.dependencies,
       resources: {
         read: [`${fixture.moduleRoot}/**`],
@@ -152,8 +146,6 @@ export class ModuleDeliveryPlanValidationScenario {
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      maxAgentDepth: 3,
-      maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
       parentJoin: {
         kind: ModuleDeliveryJoinKind.WorkerBranches,

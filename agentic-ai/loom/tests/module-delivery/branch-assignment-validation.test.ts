@@ -144,6 +144,50 @@ test('rejects equivalent normalized worker worktree paths', () => {
   );
 });
 
+test('rejects nested worker worktree paths in either order', () => {
+  const first = ModuleDeliveryPlanValidationScenario.writeNode({
+    taskId: 'core-provider',
+    expert: 'core_expert',
+    moduleRoot: CORE_ROOT,
+    dependencies: [],
+    read: [`${CORE_ROOT}/**`],
+    write: [`${CORE_ROOT}/provider/**`],
+  });
+  const second = ModuleDeliveryPlanValidationScenario.writeNode({
+    taskId: 'core-consumer',
+    expert: 'core_expert',
+    moduleRoot: CORE_ROOT,
+    dependencies: [],
+    read: [`${CORE_ROOT}/**`],
+    write: [`${CORE_ROOT}/consumer/**`],
+  });
+  const parent = '/tmp/nook-module-delivery/core-provider';
+  const child = `${parent}/nested-consumer`;
+  for (const [firstPath, secondPath] of [
+    [parent, child],
+    [child, parent],
+  ] as const) {
+    const result = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan({
+        nodes: [
+          {
+            ...first,
+            workspace: { ...first.workspace, worktreePath: firstPath },
+          },
+          {
+            ...second,
+            workspace: { ...second.workspace, worktreePath: secondPath },
+          },
+        ],
+        edgeContracts: [],
+      }),
+    );
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  }
+});
+
 test('rejects trailing-separator and symlink aliases of one worktree', () => {
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'nook-worktree-identity-'));
   try {

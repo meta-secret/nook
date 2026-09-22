@@ -331,7 +331,6 @@ describe('reviewed module delivery plan', () => {
       team: TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: 'core_expert',
       moduleRoot: CORE_ROOT,
       consumerOutcome: 'Accepted provider evidence is synthesized.',
@@ -339,7 +338,6 @@ describe('reviewed module delivery plan', () => {
         kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
         providerTaskIds: [provider.taskId],
       },
-      agentDepthLimit: 2,
       dependencies: [provider.taskId],
       resources: { read: [], write: [], evidenceSurface: [] },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
@@ -552,7 +550,7 @@ describe('reviewed module delivery plan', () => {
     );
   });
 
-  test('rejects an invalid base branch and execution limits above policy', () => {
+  test('rejects an invalid base branch', () => {
     const fixture: PlanFixture = {
       nodes: DEFAULT_NODES,
       edgeContracts: DEFAULT_EDGES,
@@ -561,16 +559,39 @@ describe('reviewed module delivery plan', () => {
     const invalidPlan: ModuleDeliveryPlanV6 = {
       ...validPlan,
       baseBranch: 'main',
-      maxAgentDepth: 4,
-      maxAttempts: 6,
     };
     const result = ModuleDeliveryPlanValidationScenario.validate(invalidPlan);
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.InvalidField,
     );
-    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
-      ModuleDeliveryIssueCode.LimitExceeded,
+  });
+
+  test('rejects retired harness lifecycle admission fields', () => {
+    const validPlan = ModuleDeliveryPlanValidationScenario.plan({
+      nodes: DEFAULT_NODES,
+      edgeContracts: DEFAULT_EDGES,
+    });
+    const retiredRoot = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify({ ...validPlan, maxAgentDepth: 3, maxAttempts: 2 }),
     );
+    const retiredNode = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify({
+        ...validPlan,
+        nodes: [
+          {
+            ...validPlan.nodes[0],
+            parentLineage: { kind: 'workflow-root' },
+            agentDepthLimit: 2,
+          },
+          ...validPlan.nodes.slice(1),
+        ],
+      }),
+    );
+    for (const result of [retiredRoot, retiredNode]) {
+      expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+        ModuleDeliveryIssueCode.InvalidField,
+      );
+    }
   });
 
   test('rejects numeric capacity from the plan boundary', () => {
@@ -887,7 +908,7 @@ describe('task execution and canonical ownership', () => {
     }
   });
 
-  test('validates dependency baseline policy and inherited agent depth', () => {
+  test('validates dependency baseline policy', () => {
     const sourceBasedDependent: ModuleDeliveryWriteNodeV2 = {
       ...WASM_NODE,
       baseline: {
@@ -901,14 +922,9 @@ describe('task execution and canonical ownership', () => {
         providerTaskIds: ['web-consumer'],
       },
     };
-    const excessiveDepth: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      agentDepthLimit: 4,
-    };
     const cases: readonly ModuleDeliveryWriteNodeV2[] = [
       sourceBasedDependent,
       wrongProviders,
-      excessiveDepth,
     ];
     for (const node of cases) {
       const nodes = node.taskId === 'wasm-adapter' ? [CORE_NODE, node] : [node];
@@ -917,12 +933,8 @@ describe('task execution and canonical ownership', () => {
       const result = ModuleDeliveryPlanValidationScenario.validate(
         ModuleDeliveryPlanValidationScenario.plan(fixture),
       );
-      const expected =
-        node === excessiveDepth
-          ? ModuleDeliveryIssueCode.LimitExceeded
-          : ModuleDeliveryIssueCode.BaselineMismatch;
       expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
-        expected,
+        ModuleDeliveryIssueCode.BaselineMismatch,
       );
     }
   });

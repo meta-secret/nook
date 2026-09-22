@@ -11,10 +11,7 @@ import type {
   ExecutionTopologyRequest,
   AddExecutionConstraintRequest,
 } from './plan-validation-context.ts';
-import {
-  AgentAttemptParentKind,
-  TaskResourceClaim,
-} from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
@@ -30,8 +27,6 @@ import type {
 import { ModuleDeliveryPlanSchema } from './codec.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
-  MAX_MODULE_DELIVERY_AGENT_DEPTH,
-  MAX_MODULE_DELIVERY_ATTEMPTS,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
@@ -121,16 +116,6 @@ export class ModuleDeliveryPlanDecoder {
         path: '$.nodes',
         actual: state.plan.nodes.length,
         maximum: MAX_MODULE_DELIVERY_NODES,
-      },
-      {
-        path: '$.maxAgentDepth',
-        actual: state.plan.maxAgentDepth,
-        maximum: MAX_MODULE_DELIVERY_AGENT_DEPTH,
-      },
-      {
-        path: '$.maxAttempts',
-        actual: state.plan.maxAttempts,
-        maximum: MAX_MODULE_DELIVERY_ATTEMPTS,
       },
     ] as const;
     for (const check of checks) {
@@ -227,7 +212,6 @@ export class ModuleDeliveryPlanDecoder {
       this.validateDependencies(nodeRequest);
       this.validateTaskKind(nodeRequest);
       this.validateBaseline(nodeRequest);
-      this.validateAgentDepth(nodeRequest);
       const cortexRequest: CortexAuthoringValidationRequest = { node, path };
       for (const finding of CortexAuthoringPolicy.validateCortexAuthoring(
         cortexRequest,
@@ -277,17 +261,6 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateOwnership(request: NodeValidationRequest): void {
-    if (
-      request.node.parentLineage.kind !== AgentAttemptParentKind.WorkflowRoot
-    ) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.ParentLineageMismatch,
-        path: `${request.path}.parentLineage`,
-        message: 'Canonical validation requires workflow-root lineage.',
-      };
-      this.issue(issueRequest);
-    }
     if (request.node.acceptanceOwner !== request.node.functionalOwner) {
       const issueRequest: IssueRequest = {
         state: request.state,
@@ -541,21 +514,6 @@ export class ModuleDeliveryPlanDecoder {
         path: `${request.path}.baseline.providerTaskIds`,
         message:
           'Integrated baseline providers must exactly match dependencies.',
-      };
-      this.issue(issueRequest);
-    }
-  }
-
-  private validateAgentDepth(request: NodeValidationRequest): void {
-    if (
-      request.node.agentDepthLimit < 1 ||
-      request.node.agentDepthLimit > request.state.plan.maxAgentDepth
-    ) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.LimitExceeded,
-        path: `${request.path}.agentDepthLimit`,
-        message: 'Task agent depth must inherit the plan bound.',
       };
       this.issue(issueRequest);
     }

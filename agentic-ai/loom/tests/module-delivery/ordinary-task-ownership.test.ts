@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -46,14 +44,12 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       team: request.team,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: ModuleDeliveryTaskProfile.Ordinary,
       moduleRoot: request.moduleRoot,
       consumerOutcome: 'The bounded team-owned change is delivered.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
-      agentDepthLimit: 1,
       dependencies: [],
       resources: { read: [], write: [request.write], evidenceSurface: [] },
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -104,8 +100,6 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      maxAgentDepth: 1,
-      maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
         kind: ModuleDeliveryJoinKind.WorkerBranches,

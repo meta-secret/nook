@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import {
   CanonicalFeatureBranchContract,
@@ -67,7 +67,12 @@ export class ModuleDeliveryBranchAssignmentValidation {
         });
       if (
         !isAbsolute(node.workspace.worktreePath) ||
-        worktreePaths.has(normalizedWorktreePath)
+        [...worktreePaths].some((existing) =>
+          this.worktreePathsOverlap({
+            first: existing,
+            second: normalizedWorktreePath,
+          }),
+        )
       )
         this.addIssue({
           state,
@@ -103,6 +108,26 @@ export class ModuleDeliveryBranchAssignmentValidation {
     } catch {
       return resolved;
     }
+  }
+
+  private static worktreePathsOverlap(request: {
+    readonly first: string;
+    readonly second: string;
+  }): boolean {
+    return (
+      request.first === request.second ||
+      this.isDescendantPath(relative(request.first, request.second)) ||
+      this.isDescendantPath(relative(request.second, request.first))
+    );
+  }
+
+  private static isDescendantPath(candidate: string): boolean {
+    return (
+      candidate !== '' &&
+      candidate !== '..' &&
+      !candidate.startsWith(`..${sep}`) &&
+      !isAbsolute(candidate)
+    );
   }
 
   private static addIssue(request: BranchIssueRequest): void {
