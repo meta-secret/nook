@@ -42,7 +42,8 @@ impl AuthenticationDetailedAdvanceControlObservation {
                         observation.classify(),
                         AuthenticationAdvanceControlDecision::AdvancesAuthentication
                     )
-                    || observation.is_inert_webauthn_email_planning_advance())
+                    || observation.is_inert_webauthn_email_planning_advance()
+                    || observation.allows_tesla_password_disclosure_planning())
         ));
         if advances {
             AuthenticationAdvanceControlEvidence::Present
@@ -341,7 +342,7 @@ mod tests {
                 semantic_submit_control_count: 1.into(),
                 source_origin: "https://auth.tesla.com".to_owned(),
                 form_identity: String::new(),
-                destination_identity: "https://auth.tesla.com/oauth2/v1/authorize".to_owned(),
+                destination_identity: "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US".to_owned(),
                 label: "Next".to_owned(),
                 machine_identity: String::new(),
                 submission_method: PageControlSubmissionMethod::Get,

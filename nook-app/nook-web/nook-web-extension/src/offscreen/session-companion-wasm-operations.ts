@@ -18,6 +18,7 @@ import {
   authentication_page_observation_facts_match_binding,
   authentication_page_observation_facts_priority,
   authentication_page_observation_facts_is_admissible,
+  authentication_advance_control_allows_password_disclosure_planning,
   authentication_advance_control_is_safe,
   authentication_control_transportable,
   authentication_passkey_control_candidate_is_safe,
@@ -215,6 +216,12 @@ export async function handleCompanionWasmMessage(
           advanceControls: message.payload.advanceControls.map((request) =>
             authentication_advance_control_is_safe(request),
           ),
+          passwordDisclosureControls:
+            message.payload.passwordDisclosureControls.map((request) =>
+              authentication_advance_control_allows_password_disclosure_planning(
+                request,
+              ),
+            ),
           passkeyCandidates: message.payload.passkeyCandidates.map((request) =>
             authentication_passkey_control_candidate_is_safe(request),
           ),

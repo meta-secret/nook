@@ -5,7 +5,9 @@
     "form-action-omitted",
     "input-type-omitted",
     "email-webauthn-autocomplete",
-    "submit-disabled-until-input"
+    "submit-disabled-until-input",
+    "oauth-query-inherited-from-page",
+    "password-step-swapped-in-place"
   ],
   "steps": [
     {
@@ -13,12 +15,34 @@
         {
           "name": "identity",
           "autocomplete": "email webauthn",
-          "aria-label": "Email"
+          "id": "identity",
+          "autocapitalize": "none",
+          "autocorrect": "off",
+          "spellcheck": "false",
+          "dir": "ltr"
         }
       ],
       "submit": {
         "type": "submit",
-        "label": "Next"
+        "label": "Next",
+        "aria-label": "Next"
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "password",
+          "type": "password",
+          "autocomplete": "current-password",
+          "id": "password",
+          "autocapitalize": "none",
+          "dir": "ltr"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Sign In",
+        "aria-label": "Sign In"
       }
     }
   ]

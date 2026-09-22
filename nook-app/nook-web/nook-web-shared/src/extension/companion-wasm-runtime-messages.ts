@@ -172,6 +172,7 @@ export type CompanionWasmSessionMessage =
       readonly payload: {
         readonly transportability: readonly AuthenticationControlTransportability[];
         readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
+        readonly passwordDisclosureControls: readonly AuthenticationAdvanceControlObservation[];
         readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
         readonly pageFacts: readonly AuthenticationPageObservationFacts[];
         readonly implicitSubmissions: readonly AuthenticationImplicitSubmitActuationObservation[];
@@ -213,6 +214,7 @@ export type CompanionWasmSessionResponse =
   | {
       readonly transportability: readonly boolean[];
       readonly advanceControls: readonly boolean[];
+      readonly passwordDisclosureControls: readonly boolean[];
       readonly passkeyCandidates: readonly boolean[];
       readonly pageFactsPriorities: readonly number[];
       readonly pageFactsAdmissibility: readonly boolean[];

@@ -1,4 +1,4 @@
-// @vitest-environment-options { "url": "https://auth.tesla.com/oauth2/v1/authorize" }
+// @vitest-environment-options { "url": "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US" }
 
 import { afterEach, describe, expect, test } from 'vitest'
 
@@ -24,10 +24,13 @@ const TESLA_FAKE_CREDENTIALS: FakeLoginCredentials = {
   password: 'extension-fill-password',
 }
 
+const TESLA_AUTHORIZATION_URL =
+  'https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US'
+
 enum TeslaFixturePrimaryControl {
   Next = 'Next',
   TroubleSigningIn = 'Trouble Signing In?',
-  CreateAccount = 'Create Account',
+  Cancel = 'Cancel',
   ContinueWithGoogle = 'Continue with Google',
   UsePasskey = 'Use passkey',
   DeleteAccount = 'Delete account',
@@ -136,12 +139,12 @@ class TeslaAuthenticationFixture {
       ownership === TeslaFixtureFormOwnership.Unowned
         ? ' form="tesla-unrelated-form"'
         : ''
-    const content = `<label>Email<input name="identity" autocomplete="${autocomplete}" aria-label="Email"></label><button type="submit" disabled${primaryFormAttribute} data-testid="tesla-primary">${primaryLabel}</button>${submitLayout === TeslaFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}`
+    const content = `<div class="tds-form-layout"><div class="_formHeader_hykg1_1"><h1>Sign In</h1></div><div class="tds-form-item"><div class="tds-form-label"><label class="tds-form-label-text" for="identity">Email</label><div class="tds-form-label-tooltip tds-text--regular" tabindex="0" role="button" aria-label="If your account is linked to an email you no longer have access to, sign in to your account and update your email under account settings"></div></div><div class="tds-form-input tds-form-input--default"><input class="tds-form-input-text" id="identity" name="identity" autocomplete="${autocomplete}" autocapitalize="none" autocorrect="off" spellcheck="false" dir="ltr" data-sentry-block="true"></div></div><div class="tds-btn_group tds-btn_group--vertical"><button class="tds-btn tds-btn--width-full" type="submit" disabled aria-label="${primaryLabel}"${primaryFormAttribute} data-testid="tesla-primary">${primaryLabel}</button><button class="tds-btn tds-btn--tertiary tds-btn--width-full" type="button" aria-label="Cancel">Cancel</button>${submitLayout === TeslaFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}</div></div>`
     const authenticationSurface =
       ownership === TeslaFixtureFormOwnership.Owned
         ? `<form${actionAttribute} data-testid="tesla-auth-form">${content}</form>`
         : `<form id="tesla-unrelated-form" data-testid="tesla-unrelated-form"></form><section data-testid="tesla-unowned-surface">${content}</section>`
-    return `<header><a href="https://www.tesla.com/" aria-label="Tesla home">Tesla</a></header><main><h1>Sign In</h1>${authenticationSurface}<a href="/forgot">Trouble Signing In?</a><p>Or</p><button type="button">Create Account</button><button type="button">Select Language</button></main><footer><a href="/privacy">Privacy</a><a href="/contact">Contact</a></footer>`
+    return `<header><a href="https://www.tesla.com/" aria-label="Tesla home">Tesla</a></header><main>${authenticationSurface}<a href="https://tesla.com/support/troubleshoot-account?redirect=no">Trouble Signing In?</a><button type="button">Select Language</button></main><footer><a href="/privacy">Privacy</a><a href="/contact">Contact</a></footer>`
   }
 
   install(): TeslaDomElements {
@@ -152,7 +155,7 @@ class TeslaAuthenticationFixture {
         ? '[data-testid="tesla-auth-form"]'
         : '[data-testid="tesla-unowned-surface"]',
     )
-    const email = root?.querySelector<HTMLInputElement>('[aria-label="Email"]')
+    const email = root?.querySelector<HTMLInputElement>('#identity')
     const primary = root?.querySelector<HTMLButtonElement>(
       '[data-testid="tesla-primary"]',
     )
@@ -204,12 +207,63 @@ class TeslaAuthenticationFixture {
 
 afterEach(() => {
   document.body.replaceChildren()
-  history.replaceState({}, '', '/oauth2/v1/authorize')
+  history.replaceState({}, '', TESLA_AUTHORIZATION_URL)
 })
 
 describe('Tesla DOM-backed authentication simulation', () => {
+  test('fills Password and activates Sign In after the identifier transition', () => {
+    document.body.innerHTML = `<main><form><div class="tds-form-layout"><div class="_formHeader_hykg1_1"><h1>Sign In</h1></div><div style="max-width: 100%; width: 100%;"><div style="display: flex; justify-content: space-between; width: 100%;"><div data-visual-mask="true">${TESLA_FAKE_CREDENTIALS.username}</div><div><button type="button" class="tds-link">Change</button></div></div></div><div class="tds-form-item"><label class="tds-form-label" for="password">Password</label><div class="tds-form-input tds-form-input--default"><input class="tds-form-input-text" id="password" dir="ltr" autocomplete="current-password" autocapitalize="none" data-sentry-block="true" type="password" name="password" style="text-align: left;"><div class="tds-form-input-trailing"><button aria-label="Show" class="tds-icon-btn" type="button"></button></div></div></div><div class="tds-btn_group tds-btn_group--vertical"><button class="tds-btn" type="submit" disabled aria-label="Sign In">Sign In</button><button class="tds-btn tds-btn--tertiary tds-btn--width-full" type="button" aria-label="Cancel">Cancel</button></div><a class="tds-link" href="/user/password/forgot?client_id=accounts">Forgot password?</a></div></form></main>`
+    const password = document.querySelector<HTMLInputElement>('#password')
+    const signIn = document.querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    )
+    if (!password || !signIn) throw new Error('expected Tesla password form')
+    password.addEventListener('input', () => {
+      signIn.disabled = password.value.length === 0
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected Tesla password observation')
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const workflow = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(workflow)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
+    expect(
+      passwordFormInteraction.fillLoginCredentials({
+        kind: PasswordFormQueryKind.Scoped,
+        root: observation.root,
+        formScope: observation.formScope,
+        credentials: TESLA_FAKE_CREDENTIALS,
+      }),
+    ).toBe(true)
+    expect(password.value).toBe(TESLA_FAKE_CREDENTIALS.password)
+    expect(signIn.disabled).toBe(false)
+    let signInActivationCount = 0
+    signIn.addEventListener('click', () => {
+      signInActivationCount += 1
+    })
+    expect(
+      passwordFormInteraction.submitLoginForm({
+        kind: PasswordFormQueryKind.Scoped,
+        root: observation.root,
+        formScope: observation.formScope,
+      }),
+    ).toBe(FormSubmissionResult.Submitted)
+    expect(signInActivationCount).toBe(1)
+  })
+
   test('fills only Email, enables Next, and activates it exactly once', () => {
-    expect(location.href).toBe('https://auth.tesla.com/oauth2/v1/authorize')
+    expect(location.href).toBe(TESLA_AUTHORIZATION_URL)
     const fixture = TeslaAuthenticationFixture.stable().install()
     const observations =
       passwordFormInteraction.summarizeAuthenticationWorkflowForms()
@@ -229,7 +283,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
     expect(form.hasAttribute('method')).toBe(false)
     expect(form.method).toBe('get')
     expect(form.hasAttribute('action')).toBe(false)
-    expect(form.action).toBe('https://auth.tesla.com/oauth2/v1/authorize')
+    expect(form.action).toBe(TESLA_AUTHORIZATION_URL)
     expect(fixture.email.hasAttribute('type')).toBe(false)
     expect(fixture.email.type).toBe('text')
     expect(fixture.primary.disabled).toBe(true)
@@ -249,9 +303,10 @@ describe('Tesla DOM-backed authentication simulation', () => {
       actionability: 'inert',
       authenticationUsername: 'web-authn-email',
       sourceOrigin: 'https://auth.tesla.com',
-      destinationIdentity: 'https://auth.tesla.com/oauth2/v1/authorize',
+      destinationIdentity: TESLA_AUTHORIZATION_URL,
       formIdentity: '',
       label: TeslaFixturePrimaryControl.Next,
+      machineIdentity: 'tds-btn tds-btn--width-full',
       ownership: 'owned-form',
       semanticSubmitControlCount: 1,
       submissionDestinationSource: 'omitted',
@@ -338,7 +393,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
 
   test.each([
     TeslaFixturePrimaryControl.TroubleSigningIn,
-    TeslaFixturePrimaryControl.CreateAccount,
+    TeslaFixturePrimaryControl.Cancel,
     TeslaFixturePrimaryControl.ContinueWithGoogle,
     TeslaFixturePrimaryControl.UsePasskey,
     TeslaFixturePrimaryControl.DeleteAccount,

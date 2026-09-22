@@ -41,6 +41,13 @@ impl AuthenticationFieldObservationFacts {
     }
 
     fn username_fields_match(self, observation: &AuthenticationAdvanceControlObservation) -> bool {
+        if observation.is_tesla_scripted_password_submit_shape() {
+            return self.username_field_count.is_zero()
+                && matches!(
+                    observation.authentication_username,
+                    AuthenticationUsernameEvidence::Absent
+                );
+        }
         if matches!(
             observation.submission_method,
             PageControlSubmissionMethod::Get

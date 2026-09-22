@@ -3,19 +3,28 @@ import { describe, expect, test } from 'bun:test'
 import teslaTemplate from '../../fixtures/templates/tesla.json'
 import {
   TESLA_MOCK_EMAIL,
+  TESLA_MOCK_PASSWORD,
   TeslaAuthControl,
   TeslaAuthEmailMatch,
   TeslaAuthMockScenario,
+  TeslaAuthPasswordMatch,
   TeslaAuthPresentationState,
   TeslaAuthPrimaryActivationState,
   TeslaAuthTransitionKind,
   type TeslaAuthSubmission,
+  type TeslaAuthPasswordSubmission,
 } from './tesla-auth-flow'
 
 describe('Tesla authentication mock', () => {
   const emailContinuation: TeslaAuthSubmission = {
     email: TESLA_MOCK_EMAIL,
     submittedControl: TeslaAuthControl.Next,
+    primaryActivation: TeslaAuthPrimaryActivationState.Activated,
+    auxiliaryActivationCount: 0,
+  }
+  const passwordSubmission: TeslaAuthPasswordSubmission = {
+    password: TESLA_MOCK_PASSWORD,
+    submittedControl: TeslaAuthControl.SignIn,
     primaryActivation: TeslaAuthPrimaryActivationState.Activated,
     auxiliaryActivationCount: 0,
   }
@@ -26,13 +35,25 @@ describe('Tesla authentication mock', () => {
     )
   })
 
+  test('completes only through the observed password submission', () => {
+    expect(TeslaAuthMockScenario.passwordTransition(passwordSubmission)).toBe(
+      TeslaAuthTransitionKind.Completed,
+    )
+    expect(
+      TeslaAuthMockScenario.passwordTransition({
+        ...passwordSubmission,
+        password: 'different-password',
+      }),
+    ).toBe(TeslaAuthTransitionKind.Rejected)
+  })
+
   test.each([
     ['a different email', { email: 'other@nook.test' }],
     [
       'trouble recovery',
       { submittedControl: TeslaAuthControl.TroubleSigningIn },
     ],
-    ['account creation', { submittedControl: TeslaAuthControl.CreateAccount }],
+    ['cancellation', { submittedControl: TeslaAuthControl.Cancel }],
     ['an unknown control', { submittedControl: TeslaAuthControl.Unrecognized }],
     [
       'no activation',
@@ -59,6 +80,12 @@ describe('Tesla authentication mock', () => {
     expect(TeslaAuthMockScenario.submittedControl(' Next ')).toBe(
       TeslaAuthControl.Next,
     )
+    expect(TeslaAuthMockScenario.submittedControl(' Sign In ')).toBe(
+      TeslaAuthControl.SignIn,
+    )
+    expect(TeslaAuthMockScenario.passwordMatch(TESLA_MOCK_PASSWORD)).toBe(
+      TeslaAuthPasswordMatch.Matched,
+    )
     expect(TeslaAuthMockScenario.submittedControl('Primary action')).toBe(
       TeslaAuthControl.Unrecognized,
     )
@@ -75,6 +102,8 @@ describe('Tesla authentication mock', () => {
         'input-type-omitted',
         'email-webauthn-autocomplete',
         'submit-disabled-until-input',
+        'oauth-query-inherited-from-page',
+        'password-step-swapped-in-place',
       ],
       steps: [
         {
@@ -82,10 +111,31 @@ describe('Tesla authentication mock', () => {
             {
               name: 'identity',
               autocomplete: 'email webauthn',
-              'aria-label': 'Email',
+              id: 'identity',
+              autocapitalize: 'none',
+              autocorrect: 'off',
+              spellcheck: 'false',
+              dir: 'ltr',
             },
           ],
-          submit: { type: 'submit', label: 'Next' },
+          submit: { type: 'submit', label: 'Next', 'aria-label': 'Next' },
+        },
+        {
+          fields: [
+            {
+              name: 'password',
+              type: 'password',
+              autocomplete: 'current-password',
+              id: 'password',
+              autocapitalize: 'none',
+              dir: 'ltr',
+            },
+          ],
+          submit: {
+            type: 'submit',
+            label: 'Sign In',
+            'aria-label': 'Sign In',
+          },
         },
       ],
     })

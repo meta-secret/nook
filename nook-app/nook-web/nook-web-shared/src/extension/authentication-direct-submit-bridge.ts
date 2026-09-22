@@ -23,6 +23,7 @@ export type AuthenticationSubmissionObservation = {
   approval: FormSubmissionApproval | false;
   expectedSubmitter: HTMLElement | false;
   directRouteApproved: () => boolean;
+  allowNativeReplay: boolean;
 };
 
 const ISOLATED_BRIDGE_STATE = "__nookAuthenticationDirectSubmitBridgeV1";
@@ -104,6 +105,7 @@ const AuthenticationSubmissionBridge = class {
     approval,
     expectedSubmitter,
     directRouteApproved,
+    allowNativeReplay,
   }: AuthenticationSubmissionObservation): FormSubmissionResult {
     let result = FormSubmissionResult.NotObserved;
     let replaying = false;
@@ -156,7 +158,12 @@ const AuthenticationSubmissionBridge = class {
     const stopDirectObservation = this.observeAuthenticationDirectSubmits(
       (submittedForm) => {
         if (submittedForm !== form) return true;
-        if (!approval || !directRouteApproved() || !approval.isApproved()) {
+        if (
+          !allowNativeReplay ||
+          !approval ||
+          !directRouteApproved() ||
+          !approval.isApproved()
+        ) {
           reject();
           return false;
         }
@@ -170,7 +177,9 @@ const AuthenticationSubmissionBridge = class {
       action();
       if (approval && Object.is(result, FormSubmissionResult.Submitted)) {
         if (!approval.isApproved()) reject();
-        else if (!directSubmitted && !pagePrevented) {
+        else if (!directSubmitted && !pagePrevented && !allowNativeReplay) {
+          reject();
+        } else if (!directSubmitted && !pagePrevented) {
           try {
             replaying = true;
             if (expectedSubmitter) form.requestSubmit(expectedSubmitter);

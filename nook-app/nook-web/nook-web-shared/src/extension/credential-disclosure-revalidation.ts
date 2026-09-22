@@ -25,6 +25,9 @@ export interface CredentialDisclosureRevalidationRequest {
   readonly approvedPasswordForm: ApprovedPasswordForm;
   readonly request: LoginCredentialsFillRequest;
   readonly selectedSubmitter: (form: HTMLFormElement) => ApprovedAdvanceControl;
+  readonly scriptedGetPasswordDisclosureIsApproved: (
+    form: HTMLFormElement,
+  ) => boolean;
 }
 
 export class CredentialDisclosureRevalidation {
@@ -53,6 +56,8 @@ export class CredentialDisclosureRevalidation {
     >[0] = {
       form: approvedForm,
       selectedSubmitter: this.request.selectedSubmitter(approvedForm),
+      scriptedGetPasswordDisclosureApproved:
+        this.request.scriptedGetPasswordDisclosureIsApproved(approvedForm),
     };
     return authenticationSubmissionControls.selectedSubmitterBlocksCredentialDisclosure(
       disclosureRequest,

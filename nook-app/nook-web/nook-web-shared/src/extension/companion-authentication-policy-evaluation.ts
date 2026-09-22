@@ -19,6 +19,7 @@ const MAX_COMPANION_AUTHENTICATION_POLICY_PAYLOAD_BYTES = 128 * 1024;
 export type CompanionAuthenticationPolicyEvaluationRequest = {
   readonly transportability: readonly AuthenticationControlTransportability[];
   readonly advanceControls: readonly AuthenticationAdvanceControlObservation[];
+  readonly passwordDisclosureControls: readonly AuthenticationAdvanceControlObservation[];
   readonly passkeyCandidates: readonly AuthenticationDetailedPasskeyControlCandidateObservation[];
   readonly pageFacts: readonly AuthenticationPageObservationFacts[];
   readonly implicitSubmissions: readonly AuthenticationImplicitSubmitActuationObservation[];
@@ -27,6 +28,7 @@ export type CompanionAuthenticationPolicyEvaluationRequest = {
 type MutablePolicyPayload = {
   transportability: AuthenticationControlTransportability[];
   advanceControls: AuthenticationAdvanceControlObservation[];
+  passwordDisclosureControls: AuthenticationAdvanceControlObservation[];
   passkeyCandidates: AuthenticationDetailedPasskeyControlCandidateObservation[];
   pageFacts: AuthenticationPageObservationFacts[];
   implicitSubmissions: AuthenticationImplicitSubmitActuationObservation[];
@@ -36,6 +38,7 @@ type PolicyPayloadBatch = {
   payload: MutablePolicyPayload;
   transportabilityIndices: number[];
   advanceControlIndices: number[];
+  passwordDisclosureControlIndices: number[];
   passkeyCandidateIndices: number[];
   pageFactsIndices: number[];
   implicitSubmissionIndices: number[];
@@ -44,6 +47,7 @@ type PolicyPayloadBatch = {
 enum PolicyPayloadEntryKind {
   Transportability = "transportability",
   AdvanceControl = "advanceControl",
+  PasswordDisclosureControl = "passwordDisclosureControl",
   PasskeyCandidate = "passkeyCandidate",
   PageFacts = "pageFacts",
   ImplicitSubmission = "implicitSubmission",
@@ -57,6 +61,11 @@ type PolicyPayloadEntry =
     }
   | {
       kind: PolicyPayloadEntryKind.AdvanceControl;
+      index: number;
+      value: AuthenticationAdvanceControlObservation;
+    }
+  | {
+      kind: PolicyPayloadEntryKind.PasswordDisclosureControl;
       index: number;
       value: AuthenticationAdvanceControlObservation;
     }
@@ -81,12 +90,14 @@ function emptyPolicyPayloadBatch(): PolicyPayloadBatch {
     payload: {
       transportability: [],
       advanceControls: [],
+      passwordDisclosureControls: [],
       passkeyCandidates: [],
       pageFacts: [],
       implicitSubmissions: [],
     },
     transportabilityIndices: [],
     advanceControlIndices: [],
+    passwordDisclosureControlIndices: [],
     passkeyCandidateIndices: [],
     pageFactsIndices: [],
     implicitSubmissionIndices: [],
@@ -98,6 +109,7 @@ function policyPayloadBatchIsEmpty(batch: PolicyPayloadBatch): boolean {
   return (
     payload.transportability.length === 0 &&
     payload.advanceControls.length === 0 &&
+    payload.passwordDisclosureControls.length === 0 &&
     payload.passkeyCandidates.length === 0 &&
     payload.pageFacts.length === 0 &&
     payload.implicitSubmissions.length === 0
@@ -120,6 +132,10 @@ function appendPolicyPayloadEntry(
     case PolicyPayloadEntryKind.AdvanceControl:
       batch.payload.advanceControls.push(entry.value);
       batch.advanceControlIndices.push(entry.index);
+      break;
+    case PolicyPayloadEntryKind.PasswordDisclosureControl:
+      batch.payload.passwordDisclosureControls.push(entry.value);
+      batch.passwordDisclosureControlIndices.push(entry.index);
       break;
     case PolicyPayloadEntryKind.PasskeyCandidate:
       batch.payload.passkeyCandidates.push(entry.value);
@@ -147,6 +163,10 @@ function appendPolicyPayloadEntry(
     case PolicyPayloadEntryKind.AdvanceControl:
       batch.payload.advanceControls.pop();
       batch.advanceControlIndices.pop();
+      break;
+    case PolicyPayloadEntryKind.PasswordDisclosureControl:
+      batch.payload.passwordDisclosureControls.pop();
+      batch.passwordDisclosureControlIndices.pop();
       break;
     case PolicyPayloadEntryKind.PasskeyCandidate:
       batch.payload.passkeyCandidates.pop();
@@ -177,6 +197,13 @@ function policyPayloadEntries(
       index,
       value,
     })),
+    ...request.passwordDisclosureControls.map(
+      (value, index): PolicyPayloadEntry => ({
+        kind: PolicyPayloadEntryKind.PasswordDisclosureControl,
+        index,
+        value,
+      }),
+    ),
     ...request.passkeyCandidates.map((value, index): PolicyPayloadEntry => ({
       kind: PolicyPayloadEntryKind.PasskeyCandidate,
       index,
@@ -219,6 +246,9 @@ export async function evaluateCompanionAuthenticationPolicies(
 ): Promise<CompanionWasmRuntimeDelivery> {
   const transportability = request.transportability.map(() => false);
   const advanceControls = request.advanceControls.map(() => false);
+  const passwordDisclosureControls = request.passwordDisclosureControls.map(
+    () => false,
+  );
   const passkeyCandidates = request.passkeyCandidates.map(() => false);
   const pageFactsPriorities = request.pageFacts.map(() => 0);
   const pageFactsAdmissibility = request.pageFacts.map(() => false);
@@ -237,6 +267,7 @@ export async function evaluateCompanionAuthenticationPolicies(
       typeof delivery.response !== "object" ||
       !("transportability" in delivery.response) ||
       !("advanceControls" in delivery.response) ||
+      !("passwordDisclosureControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
       !("pageFactsPriorities" in delivery.response) ||
       !("pageFactsAdmissibility" in delivery.response) ||
@@ -254,6 +285,10 @@ export async function evaluateCompanionAuthenticationPolicies(
     });
     batch.advanceControlIndices.forEach((target, index) => {
       advanceControls[target] = response.advanceControls[index] === true;
+    });
+    batch.passwordDisclosureControlIndices.forEach((target, index) => {
+      passwordDisclosureControls[target] =
+        response.passwordDisclosureControls[index] === true;
     });
     batch.passkeyCandidateIndices.forEach((target, index) => {
       passkeyCandidates[target] = response.passkeyCandidates[index] === true;
@@ -275,6 +310,7 @@ export async function evaluateCompanionAuthenticationPolicies(
         response: {
           transportability,
           advanceControls,
+          passwordDisclosureControls,
           passkeyCandidates,
           pageFactsPriorities,
           pageFactsAdmissibility,

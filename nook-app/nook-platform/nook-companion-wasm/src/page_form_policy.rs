@@ -184,24 +184,6 @@ impl NookLoginContextObservation {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_implicit_submit_actuation_is_safe(
-    observation: nook_companion_core::AuthenticationImplicitSubmitActuationObservation,
-) -> bool {
-    observation.is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_advance_control_is_safe(
-    observation: nook_companion_core::AuthenticationAdvanceControlObservation,
-) -> bool {
-    observation.authentication_advance_control_is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_candidate_is_safe(
     candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
@@ -261,6 +243,7 @@ impl NookLoginContextObservation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authentication_control_actuation::*;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -669,6 +652,42 @@ mod tests {
 
         tesla.actionability = nook_companion_core::PageControlActionability::Inert;
         assert!(!authentication_advance_control_is_safe(tesla));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn password_disclosure_planning_export_preserves_exact_tesla_policy() {
+        let mut tesla = login_advance_observation(
+            "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US",
+            "Sign In",
+        );
+        tesla.actionability = nook_companion_core::PageControlActionability::Inert;
+        tesla.authentication_username = nook_companion_core::AuthenticationUsernameEvidence::Absent;
+        tesla.password_field_count = 1.into();
+        tesla.source_origin = "https://auth.tesla.com".to_owned();
+        tesla.form_identity.clear();
+        tesla.machine_identity = "tds-btn".to_owned();
+        tesla.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        tesla.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
+        assert!(authentication_advance_control_allows_password_disclosure_planning(tesla.clone()));
+
+        for mutate in [
+            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+                control.destination_identity =
+                    "https://auth.tesla.com/oauth2/v1/authorize".to_owned();
+            },
+            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+                control.label = "Continue".to_owned();
+            },
+            |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
+                control.machine_identity = "primary".to_owned();
+            },
+        ] {
+            let mut rejected = tesla.clone();
+            mutate(&mut rejected);
+            assert!(!authentication_advance_control_allows_password_disclosure_planning(rejected));
+        }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
