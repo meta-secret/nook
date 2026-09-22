@@ -305,7 +305,15 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       const progress = response.activityProgress[index];
       if (progress) this.activityProgress.set(activity, progress);
     });
-    const implicitSubmissions = this.summarizeAuthenticationWorkflowForms().map(
+    const settledWorkflowForms = this.summarizeAuthenticationWorkflowForms();
+    const settledPageFacts = settledWorkflowForms.map((observation) =>
+      this.authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint,
+        backupCodesCopy: backupCodesHint ? "Save backup codes" : "",
+      }),
+    );
+    const implicitSubmissions = settledWorkflowForms.map(
       (observation): AuthenticationImplicitSubmitActuationObservation => {
         const facts = this.authenticationPageObservationFacts({
           observation,
@@ -327,7 +335,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
           transportability: [],
           advanceControls: [],
           passkeyCandidates: [],
-          pageFacts: [],
+          pageFacts: settledPageFacts,
           implicitSubmissions,
         },
         origin: this.browser.location.origin,
@@ -337,12 +345,25 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       implicitDelivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
       !implicitDelivery.response ||
       typeof implicitDelivery.response !== "object" ||
+      !("pageFactsPriorities" in implicitDelivery.response) ||
+      !("pageFactsAdmissibility" in implicitDelivery.response) ||
       !("implicitSubmissions" in implicitDelivery.response)
     ) {
       return;
     }
+    const implicitResponse = implicitDelivery.response;
+    settledPageFacts.forEach((request, index) => {
+      const priority = implicitResponse.pageFactsPriorities[index];
+      if (typeof priority === "number") {
+        this.pageFactsPriorities.set(this.policyKey(request), priority);
+      }
+      this.pageFactsAdmissibility.set(
+        this.policyKey(request),
+        implicitResponse.pageFactsAdmissibility[index] === true,
+      );
+    });
     const implicitResponses: readonly boolean[] =
-      implicitDelivery.response.implicitSubmissions;
+      implicitResponse.implicitSubmissions;
     implicitSubmissions.forEach((request, index) =>
       this.implicitSubmissionPolicies.set(
         this.policyKey(request),
