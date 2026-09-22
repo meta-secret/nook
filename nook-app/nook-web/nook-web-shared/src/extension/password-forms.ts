@@ -16,6 +16,7 @@ import {
   type LoginAdvanceControl,
   type FormSubmissionApproval,
   type PasswordFormScopeQuery,
+  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import {
@@ -141,7 +142,11 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
     const scriptedGetDisclosureInitiallyApproved = Boolean(
       passwordForm &&
       scriptedGetSubmitter &&
-      this.ownedGetPasswordDisclosureIsAdmissible(request, passwordForm),
+      this.ownedPasswordDisclosurePlanningIsApproved(
+        request,
+        passwordForm,
+        scriptedGetSubmitter,
+      ),
     );
     const scriptedGetFormScope: PasswordFormScope | false =
       passwordForm
@@ -298,62 +303,49 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
                 candidate.formScope.owner === form,
             ),
           );
-    return (
-      observation &&
-      ((v) => (v ? v : false))(
-        this.scopedAdvanceControls(observation)
-          .sort(this.semanticSubmitControlsFirst.bind(this))
-          .find((control) => {
-            if (!authenticationSubmissionControls.isRenderedControl(control))
-              return false;
-            const observationRequest: PageControlObservationRequest = {
-              observation,
-              control,
-              authenticationUsername:
-                passwordFieldDiscovery.usernameEvidence(observation),
-              semanticSubmitControlCount:
-                authenticationSubmissionControls.countedSemanticSubmitControls(
-                  this.scopedAdvanceControls(observation),
-                ),
-            };
-            const [transported] =
-              this.transportableControlObservation(observationRequest);
-            if (!transported) return false;
-            if (this.advanceControlIsSafe(transported)) return true;
-            if (
-              !allowAdmissiblePlanningControl ||
-              !control.matches(semanticSubmitControlSelector)
-            ) {
-              return false;
-            }
-            const factsRequest: AuthenticationObservationFactsRequest = {
-              observation,
-              authenticatorSetupHint: false,
-              backupCodesHint: false,
-            };
-            const facts = this.authenticationPageObservationFacts(factsRequest);
-            return this.authenticationPageObservationFactsIsAdmissible(facts);
-          }),
-      )
+    if (!observation) return false;
+    const scopedControls = this.scopedAdvanceControls(observation);
+    const semanticSubmitControlCount = Math.min(
+      scopedControls.filter((control) =>
+        control.matches(semanticSubmitControlSelector),
+      ).length,
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    );
+    return ((v) => (v ? v : false))(
+      scopedControls
+        .sort(this.semanticSubmitControlsFirst.bind(this))
+        .find((control) => {
+          if (!authenticationSubmissionControls.isRenderedControl(control))
+            return false;
+          const observationRequest: PageControlObservationRequest = {
+            observation,
+            control,
+            authenticationUsername:
+              passwordFieldDiscovery.usernameEvidence(observation),
+            semanticSubmitControlCount,
+          };
+          const [transported] =
+            this.transportableControlObservation(observationRequest);
+          if (!transported) return false;
+          if (this.advanceControlIsSafe(transported)) return true;
+          if (
+            !allowAdmissiblePlanningControl ||
+            !control.matches(semanticSubmitControlSelector)
+          ) {
+            return false;
+          }
+          return this.advanceControlAllowsPasswordDisclosurePlanning(
+            transported,
+          );
+        }),
     );
   }
 
-  private ownedGetPasswordDisclosureIsAdmissible(
+  private ownedPasswordDisclosurePlanningIsApproved(
     request: LoginCredentialsFillRequest,
     form: HTMLFormElement,
+    control: LoginAdvanceControl,
   ): boolean {
-    if (
-      form.ownerDocument.defaultView?.location.origin !==
-      "https://auth.tesla.com"
-    ) {
-      return false;
-    }
-    if (
-      authenticationSubmissionControls.formSubmissionMethod(form) !==
-      PageControlSubmissionMethod.Get
-    ) {
-      return false;
-    }
     const formScope: PasswordFormScope = {
       kind: PasswordFormScopeKind.Owned,
       owner: form,
@@ -368,14 +360,24 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
       formScope,
       summary: this.summarizeRoot(summaryRequest),
     };
-    if (observation.summary.passwordFieldCount !== 1) return false;
-    const factsRequest: AuthenticationObservationFactsRequest = {
+    const observationRequest: PageControlObservationRequest = {
       observation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
+      control,
+      authenticationUsername:
+        passwordFieldDiscovery.usernameEvidence(observation),
+      semanticSubmitControlCount: Math.min(
+        this.scopedAdvanceControls(observation).filter((candidate) =>
+          candidate.matches(semanticSubmitControlSelector),
+        ).length,
+        MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+      ),
     };
-    const facts = this.authenticationPageObservationFacts(factsRequest);
-    return this.authenticationPageObservationFactsIsAdmissible(facts);
+    const [transported] =
+      this.transportableControlObservation(observationRequest);
+    return Boolean(
+      transported &&
+      this.advanceControlAllowsPasswordDisclosurePlanning(transported),
+    );
   }
 
   private activateApprovedOwnedAdvanceControl({

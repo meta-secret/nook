@@ -9,6 +9,7 @@ import {
   type CompanionWasmRuntimeDelivery,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import type {
+  AuthenticationAdvanceControlObservation,
   AuthenticationPageObservationFacts,
   AuthenticationDisplayProgress,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -25,6 +26,7 @@ const originalLocationDescriptor = Object.getOwnPropertyDescriptor(
 type PolicyRuntimeResult = {
   transportability: boolean[]
   advanceControls: boolean[]
+  passwordDisclosureControls: boolean[]
   passkeyCandidates: boolean[]
   pageFactsPriorities: number[]
   pageFactsAdmissibility: boolean[]
@@ -131,6 +133,8 @@ describe('authentication policy transport batching', () => {
               result: {
                 transportability: payload.transportability.map(() => true),
                 advanceControls: payload.advanceControls.map(() => true),
+                passwordDisclosureControls:
+                  payload.passwordDisclosureControls.map(() => true),
                 passkeyCandidates: payload.passkeyCandidates.map(() => true),
                 pageFactsPriorities: payload.pageFacts.map(() => 7),
                 pageFactsAdmissibility: payload.pageFacts.map(() => true),
@@ -148,10 +152,29 @@ describe('authentication policy transport batching', () => {
       `https://example.test/login?state=${'a'.repeat(140_000)}`,
     )
     const valid = authenticationFacts('https://example.test/login')
+    const passwordDisclosureControl: AuthenticationAdvanceControlObservation = {
+      actionability: 'inert',
+      ownership: 'owned-form',
+      semantics: 'semantic-submit',
+      authenticationUsername: 'absent',
+      passwordFieldCount: 1,
+      newPasswordFieldCount: 0,
+      oneTimeCodeFieldCount: 0,
+      semanticSubmitControlCount: 1,
+      sourceOrigin: 'https://auth.tesla.com',
+      formIdentity: '',
+      destinationIdentity:
+        'https://auth.tesla.com/oauth2/v1/authorize?client_id=accounts',
+      label: 'Sign In',
+      machineIdentity: 'tds-btn',
+      submissionMethod: 'get',
+      submissionDestinationSource: 'omitted',
+    }
     const delivery: CompanionWasmRuntimeDelivery =
       await evaluateCompanionAuthenticationPolicies(globalThis, {
         transportability: [],
         advanceControls: [],
+        passwordDisclosureControls: [passwordDisclosureControl],
         passkeyCandidates: [],
         pageFacts: [oversized, valid],
         implicitSubmissions: [],
@@ -162,12 +185,14 @@ describe('authentication policy transport batching', () => {
       delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
       typeof delivery.response !== 'object' ||
       !('pageFactsPriorities' in delivery.response) ||
-      !('pageFactsAdmissibility' in delivery.response)
+      !('pageFactsAdmissibility' in delivery.response) ||
+      !('passwordDisclosureControls' in delivery.response)
     ) {
       throw new Error('expected a typed authentication policy response')
     }
-    expect(deliveredPageFactsCounts).toEqual([1])
+    expect(deliveredPageFactsCounts).toEqual([0, 1])
     expect(delivery.response.pageFactsPriorities).toEqual([0, 7])
     expect(delivery.response.pageFactsAdmissibility).toEqual([false, true])
+    expect(delivery.response.passwordDisclosureControls).toEqual([true])
   })
 })

@@ -5,6 +5,7 @@ import {
   type PasswordAuthenticationWorkflowFormSummaryDependencies,
 } from "./password-authentication-workflow-form-summary";
 import {
+  authentication_advance_control_allows_password_disclosure_planning,
   authentication_advance_control_is_safe,
   authentication_control_transportable,
   authentication_page_observation_facts_priority,
@@ -127,6 +128,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     | {
         transportability: AuthenticationControlTransportability[];
         advanceControls: AuthenticationAdvanceControlObservation[];
+        passwordDisclosureControls: AuthenticationAdvanceControlObservation[];
         passkeyCandidates: AuthenticationDetailedPasskeyControlCandidateObservation[];
         pageFacts: AuthenticationPageObservationFacts[];
         authenticatorSetupHint: boolean;
@@ -137,6 +139,10 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     AuthenticationPageObservationFacts[] | false = false;
   private readonly transportabilityPolicies = new Map<string, boolean>();
   private readonly advanceControlPolicies = new Map<string, boolean>();
+  private readonly passwordDisclosureControlPolicies = new Map<
+    string,
+    boolean
+  >();
   private readonly passkeyCandidatePolicies = new Map<string, boolean>();
   private readonly pageFactsPriorities = new Map<string, number>();
   private readonly pageFactsAdmissibility = new Map<string, boolean>();
@@ -191,6 +197,19 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     );
   }
 
+  protected advanceControlAllowsPasswordDisclosurePlanning(
+    request: AuthenticationAdvanceControlObservation,
+  ): boolean {
+    return this.collectOrReadBooleanPolicy(
+      request,
+      this.collectingPolicies
+        ? this.collectingPolicies.passwordDisclosureControls
+        : false,
+      this.passwordDisclosureControlPolicies,
+      authentication_advance_control_allows_password_disclosure_planning,
+    );
+  }
+
   private passkeyCandidateIsSafe(
     request: AuthenticationDetailedPasskeyControlCandidateObservation,
   ): boolean {
@@ -228,6 +247,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     const collection = {
       transportability: [] as AuthenticationControlTransportability[],
       advanceControls: [] as AuthenticationAdvanceControlObservation[],
+      passwordDisclosureControls:
+        [] as AuthenticationAdvanceControlObservation[],
       passkeyCandidates:
         [] as AuthenticationDetailedPasskeyControlCandidateObservation[],
       pageFacts: [] as AuthenticationPageObservationFacts[],
@@ -248,6 +269,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     );
     this.transportabilityPolicies.clear();
     this.advanceControlPolicies.clear();
+    this.passwordDisclosureControlPolicies.clear();
     this.passkeyCandidatePolicies.clear();
     this.pageFactsPriorities.clear();
     this.pageFactsAdmissibility.clear();
@@ -259,6 +281,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       typeof delivery.response !== "object" ||
       !("transportability" in delivery.response) ||
       !("advanceControls" in delivery.response) ||
+      !("passwordDisclosureControls" in delivery.response) ||
       !("passkeyCandidates" in delivery.response) ||
       !("pageFactsPriorities" in delivery.response) ||
       !("pageFactsAdmissibility" in delivery.response) ||
@@ -278,6 +301,12 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       this.advanceControlPolicies.set(
         this.policyKey(request),
         response.advanceControls[index] === true,
+      ),
+    );
+    collection.passwordDisclosureControls.forEach((request, index) =>
+      this.passwordDisclosureControlPolicies.set(
+        this.policyKey(request),
+        response.passwordDisclosureControls[index] === true,
       ),
     );
     collection.passkeyCandidates.forEach((request, index) =>
@@ -318,6 +347,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       {
         transportability: [],
         advanceControls: [],
+        passwordDisclosureControls: [],
         passkeyCandidates: [],
         pageFacts: settledPageFacts,
         implicitSubmissions: [],
@@ -363,6 +393,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       {
         transportability: [],
         advanceControls: [],
+        passwordDisclosureControls: [],
         passkeyCandidates: [],
         pageFacts: [],
         implicitSubmissions,
@@ -738,6 +769,9 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       };
       return this.transportableControlObservation(observationRequest);
     });
+    advanceObservations.forEach((candidate) =>
+      this.advanceControlAllowsPasswordDisclosurePlanning(candidate),
+    );
     const advanceBoundRequest: Parameters<
       typeof authenticationSubmissionControls.boundAuthenticationControlObservations<
         (typeof advanceObservations)[number]

@@ -59,7 +59,7 @@ impl AuthenticationAdvanceControlObservation {
     /// Whether Tesla's disabled password submitter supplies planning evidence.
     /// Final actuation still requires a fresh actionable observation.
     #[must_use]
-    pub(crate) fn is_inert_tesla_password_planning_advance(&self) -> bool {
+    pub fn allows_tesla_password_disclosure_planning(&self) -> bool {
         if !matches!(self.actionability, PageControlActionability::Inert)
             || !self.is_tesla_scripted_password_submit_shape()
         {
@@ -655,7 +655,7 @@ mod tests {
         let mut inert = observation.clone();
         inert.actionability = PageControlActionability::Inert;
         assert!(!inert.authentication_advance_control_is_safe());
-        assert!(inert.is_inert_tesla_password_planning_advance());
+        assert!(inert.allows_tesla_password_disclosure_planning());
 
         for mutate in [
             |control: &mut AuthenticationAdvanceControlObservation| {

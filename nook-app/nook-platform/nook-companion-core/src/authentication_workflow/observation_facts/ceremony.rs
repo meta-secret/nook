@@ -43,7 +43,7 @@ impl AuthenticationDetailedAdvanceControlObservation {
                         AuthenticationAdvanceControlDecision::AdvancesAuthentication
                     )
                     || observation.is_inert_webauthn_email_planning_advance()
-                    || observation.is_inert_tesla_password_planning_advance())
+                    || observation.allows_tesla_password_disclosure_planning())
         ));
         if advances {
             AuthenticationAdvanceControlEvidence::Present
