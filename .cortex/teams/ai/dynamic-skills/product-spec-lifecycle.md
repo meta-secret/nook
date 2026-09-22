@@ -120,7 +120,9 @@ Before:
 After:
 
 - Agent fixes the code and adds regression tests.
-- Agent updates the validation rules section in `.cortex/teams/dev-core/product-specs/credit-card-items.md` in the same commit.
+- Agent updates the validation rules section in
+  `.cortex/teams/dev-core/product-specs/credit-card-items.md` in the same feature
+  delivery.
 
 ## Application Checklist
 
@@ -139,9 +141,11 @@ After:
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
 - Run `task loom:cortex-audit` to verify links, index entries, and structure.
 - For implementation tasks, apply only permitted scoped formatting or
-  inexpensive diagnostics and commit the coherent handoff. Include every
-  formatter mutation in allowed source or Cortex paths. Return the exact commit
-  and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
-  Gizmo immediately dispatches the relevant required PR-check task through
-  Team Gizmo (Delivery Pipeline context) and PR Lifecycle Agent. The Feature Gizmo owns
-  complete exact-head CI validation when the snapshot is ready.
+  inexpensive diagnostics and finish the coherent worker branch. Include every
+  formatter mutation in allowed source or Cortex paths. Return the branch and
+  evidence to Gizmo. Do not run a local pre-push or broad validation gate.
+  Gizmo routes local integration through the upstream integration agent and
+  waits for its feature branch, integration outcome, and checks. Gizmo then
+  dispatches the relevant required PR-check task through Team Gizmo (Delivery
+  Pipeline context) and PR Lifecycle Agent. The Feature Gizmo owns complete
+  exact-head CI validation when the snapshot is ready.

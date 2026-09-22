@@ -97,18 +97,14 @@ export enum ModulePlanV4RootField {
 }
 
 /** Current branch-authoritative plan shape. Feature heads are resolved by Delivery. */
-export enum ModulePlanV5RootField {
+export enum ModulePlanV6RootField {
+  BaseBranch = 'baseBranch',
   EdgeContracts = 'edgeContracts',
   FeatureBranch = 'featureBranch',
   Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
   Nodes = 'nodes',
   ParentJoin = 'parentJoin',
   ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  SourceCommit = 'sourceCommit',
   Version = 'version',
 }
 
@@ -133,7 +129,6 @@ export enum ModulePlanParentJoinField {
 export enum ModulePlanReadOnlyNodeField {
   Acceptance = 'acceptance',
   AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
   Baseline = 'baseline',
   ConsumerOutcome = 'consumerOutcome',
   Dependencies = 'dependencies',
@@ -141,7 +136,6 @@ export enum ModulePlanReadOnlyNodeField {
   FunctionalOwner = 'functionalOwner',
   Kind = 'kind',
   ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
   ParentOwnedExclusions = 'parentOwnedExclusions',
   Resources = 'resources',
   TaskId = 'taskId',
@@ -151,7 +145,6 @@ export enum ModulePlanReadOnlyNodeField {
 export enum ModulePlanWriteNodeField {
   Acceptance = 'acceptance',
   AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
   Baseline = 'baseline',
   ConsumerOutcome = 'consumerOutcome',
   Dependencies = 'dependencies',
@@ -159,7 +152,6 @@ export enum ModulePlanWriteNodeField {
   FunctionalOwner = 'functionalOwner',
   Kind = 'kind',
   ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
   ParentOwnedExclusions = 'parentOwnedExclusions',
   Resources = 'resources',
   TaskId = 'taskId',
@@ -170,7 +162,6 @@ export enum ModulePlanWriteNodeField {
 export enum ModulePlanCortexWriteNodeField {
   Acceptance = 'acceptance',
   AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
   Baseline = 'baseline',
   ConsumerOutcome = 'consumerOutcome',
   CortexAuthoring = 'cortexAuthoring',
@@ -179,7 +170,6 @@ export enum ModulePlanCortexWriteNodeField {
   FunctionalOwner = 'functionalOwner',
   Kind = 'kind',
   ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
   ParentOwnedExclusions = 'parentOwnedExclusions',
   Resources = 'resources',
   TaskId = 'taskId',
@@ -224,7 +214,6 @@ export enum LegacyModulePlanWriteNodeField {
 export enum ModulePlanSynthesisNodeField {
   Acceptance = 'acceptance',
   AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
   Baseline = 'baseline',
   ConsumerOutcome = 'consumerOutcome',
   Dependencies = 'dependencies',
@@ -233,7 +222,6 @@ export enum ModulePlanSynthesisNodeField {
   FunctionalOwner = 'functionalOwner',
   Kind = 'kind',
   ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
   ParentOwnedExclusions = 'parentOwnedExclusions',
   Resources = 'resources',
   TaskId = 'taskId',
@@ -241,13 +229,14 @@ export enum ModulePlanSynthesisNodeField {
 }
 
 export enum ModulePlanWorkspaceField {
-  ExpectedCommitHandoff = 'expectedCommitHandoff',
   Kind = 'kind',
+  WorkerBranch = 'workerBranch',
+  WorkerRole = 'workerRole',
+  WorktreePath = 'worktreePath',
 }
 
-export enum ModulePlanSourceBaselineField {
+export enum ModulePlanFeatureBaselineField {
   Kind = 'kind',
-  SourceCommit = 'sourceCommit',
 }
 
 export enum ModulePlanIntegratedBaselineField {
@@ -293,17 +282,6 @@ export enum ModulePlanEdgeField {
   ProviderTaskId = 'providerTaskId',
   PublicTypes = 'publicTypes',
   SecurityInvariants = 'securityInvariants',
-}
-
-export enum ModulePlanRootLineageField {
-  Kind = 'kind',
-}
-
-export enum ModulePlanAttemptLineageField {
-  Agent = 'agent',
-  Attempt = 'attempt',
-  Kind = 'kind',
-  Task = 'task',
 }
 
 export enum ModulePlanEvidenceInputField {

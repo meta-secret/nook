@@ -6,8 +6,6 @@ import type { DependencyPopularityRequest } from './args/dependency-popularity.t
 
 import type { PrePushRequest } from './args/pre-push.ts';
 
-import type { PrLandPrRequest } from './args/pr-land.ts';
-
 import {
   SkillOwner,
   type SkillScaffoldRequest,
@@ -20,7 +18,7 @@ import {
   UntrustedYamlBoundary,
 } from '../lib/guards.ts';
 
-import { PrLandOperation, RequestFamily } from './enums.ts';
+import { RequestFamily } from './enums.ts';
 
 import { YamlDocument } from './yaml.ts';
 
@@ -100,8 +98,7 @@ export enum DefaultableExamplePresence {
   Absent = 'absent',
 }
 
-export type ExampleOperation =
-  PrLandOperation | ExampleOperationMarker.FamilyRoot;
+export type ExampleOperation = ExampleOperationMarker.FamilyRoot;
 
 /** @deprecated Retained only to decode old request documents. */
 export type PrePushExampleDocument = {
@@ -128,23 +125,6 @@ export type DependencyPopularityExampleDocument = {
   readonly dependencyPopularity: DependencyPopularityRequest;
 };
 
-export type PrLandStatusExampleDocument = {
-  readonly prLand: {
-    readonly status: PrLandPrRequest;
-  };
-};
-
-export type PrLandValidateExamplePayload = {
-  readonly prNumber: number;
-  readonly runFullE2e: boolean;
-};
-
-export type PrLandValidateExampleDocument = {
-  readonly prLand: {
-    readonly validate: PrLandValidateExamplePayload;
-  };
-};
-
 export type ToolsCallExampleDocument = {
   readonly toolsCall: ToolsListExampleDocument;
 };
@@ -156,8 +136,6 @@ export type ExampleDocument =
   | CortexSessionCleanExampleDocument
   | SkillScaffoldExampleDocument
   | DependencyPopularityExampleDocument
-  | PrLandStatusExampleDocument
-  | PrLandValidateExampleDocument
   | ToolsCallExampleDocument;
 
 export type ExampleCatalogEntry = {
@@ -213,26 +191,6 @@ export const DEPENDENCY_POPULARITY_EXAMPLE_DOCUMENT: DependencyPopularityExample
     },
   };
 
-const PR_LAND_PR_EXAMPLE: PrLandPrRequest = {
-  prNumber: 123,
-};
-
-export const PR_LAND_STATUS_EXAMPLE_DOCUMENT: PrLandStatusExampleDocument = {
-  prLand: {
-    status: PR_LAND_PR_EXAMPLE,
-  },
-};
-
-export const PR_LAND_VALIDATE_EXAMPLE_DOCUMENT: PrLandValidateExampleDocument =
-  {
-    prLand: {
-      validate: {
-        prNumber: 948,
-        runFullE2e: false,
-      },
-    },
-  };
-
 export const TOOLS_CALL_EXAMPLE_DOCUMENT: ToolsCallExampleDocument = {
   toolsCall: TOOLS_LIST_EXAMPLE_DOCUMENT,
 };
@@ -260,18 +218,6 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
     family: RequestFamily.SkillScaffold,
     operation: ExampleOperationMarker.FamilyRoot,
     document: SKILL_SCAFFOLD_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Status,
-    document: PR_LAND_STATUS_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Parameterized,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Validate,
-    document: PR_LAND_VALIDATE_EXAMPLE_DOCUMENT,
     dispatch: ExampleDispatchKind.Parameterized,
   },
   {

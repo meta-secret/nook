@@ -51,25 +51,21 @@ committed branch head; the returned exact SHA is observational evidence only.
   not select cache reuse; BuildKit remains authoritative. The five-minute
   timeout includes both phases and export.
 
-## Slow dev PR validation
+## Feature PR validation
 
-The manually started Feature Gizmo authorizes publication of the selected
-snapshot and the full existing PR checks. Team Gizmo (Delivery Pipeline context) routes
-that manager-authorized packet through the active harness to PR Lifecycle Agent
-for snapshot publication and bounded check execution. The Feature Gizmo
-retains policy authority, and manager-only `feature PR lifecycle` remains the sole
-path for pull-request creation/update. Team Gizmo and PR Lifecycle Agent do
-not create or update pull requests or decide policy, readiness, or promotion
-verdicts. Follow
+The Feature Gizmo authorizes publication of the canonical feature branch and
+the full existing PR checks. Team Gizmo (Delivery Pipeline context) routes that
+packet through the active harness to PR Lifecycle Agent for branch publication
+and bounded check execution. The Feature Gizmo retains policy authority, and
+the feature PR lifecycle remains the sole path for pull-request
+creation/update. Follow
 [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
-- Freeze canonical feature branch during validation and promotion.
-- Check out the captured dev SHA in every job.
+- Resolve the latest committed feature-branch head before every stage.
 - Preserve e2e opt-ins and security-required focused checks.
-- Use native concurrency with cancellation disabled and one pending slot.
-- Do not use per-push path reductions or an automatic dev-push slow pipeline.
+- Let a newer feature-head event cancel stale head validation.
 - Delegate failures back through the feature path.
-- Promote only through guarded fast-forward promotion after the complete slow verdict.
+- Squash-merge only after the unchanged head has a complete green verdict.
 
 ## Runner and task reference
 
@@ -84,11 +80,10 @@ submits the canonical feature branch and Gizmo Prime authorizes the packet.
 PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
 before each stage and returns the exact SHA as observational evidence only. A
 stale caller-provided feature SHA does not reject branch-authorized execution.
-For manager-stage publication, slow checks, and promotion, the Feature Gizmo
-authorizes the packet. Team Gizmo (Delivery Pipeline context) dispatches PR Lifecycle
-Agent through the active harness. Neither Team Gizmo nor PR Lifecycle Agent may
-create or update pull requests or decide policy, readiness, promotion, or
-Workbench state.
+For feature-branch publication, required checks, and squash merge, the Feature
+Gizmo authorizes the packet. Team Gizmo (Delivery Pipeline context) dispatches
+PR Lifecycle Agent through the active harness. PR Lifecycle Agent owns the
+authorized GitHub mechanics but does not decide product policy or readiness.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.

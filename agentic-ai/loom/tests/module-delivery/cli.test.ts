@@ -8,8 +8,6 @@ import { join, resolve } from 'node:path';
 
 import { expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -19,7 +17,7 @@ import {
 
 import type {
   LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -27,19 +25,15 @@ import { TeamKey } from '../../src/team-agents/catalog.ts';
 export class ModuleDeliveryCliScenario {
   private constructor(private readonly request: string) {}
 
-  static cliPlan(): ModuleDeliveryPlanV5 {
+  static cliPlan(): ModuleDeliveryPlanV6 {
     return {
-      version: 5,
+      version: 6,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      maxAgentDepth: 2,
-      maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -50,16 +44,13 @@ export class ModuleDeliveryCliScenario {
           team: TeamKey.DevelopmentCore,
           functionalOwner: TeamKey.Ai,
           acceptanceOwner: TeamKey.Ai,
-          parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
           expert: 'core_expert',
           moduleRoot: CORE_ROOT,
           consumerOutcome:
             'The delivery owner receives reviewed core evidence.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
-          agentDepthLimit: 2,
           dependencies: [],
           resources: {
             read: [`${CORE_ROOT}/**`],
@@ -93,7 +84,7 @@ export class ModuleDeliveryCliScenario {
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -105,8 +96,7 @@ export class ModuleDeliveryCliScenario {
           moduleRoot: CORE_ROOT,
           consumerOutcome: 'Legacy evidence is decoded for compatibility only.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -138,10 +128,6 @@ export class ModuleDeliveryCliScenario {
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 
 const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -187,7 +173,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     );
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":5');
+    expect(firstResult).toContain('"inputVersion":6');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
     const legacyCommand = [
@@ -206,7 +192,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     expect(legacy.exitCode).not.toBe(0);
     expect(
       ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('Canonical CLI admission requires plan version 5.');
+    ).toContain('only canonical plan version 6 is accepted');
 
     const rejectedCommand = [
       'task',

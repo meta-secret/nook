@@ -2,8 +2,6 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 import { dirname, isAbsolute, join, normalize, relative } from 'node:path';
 
-import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
-
 import {
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_RESEARCH_ROOT,
@@ -23,34 +21,11 @@ import { ModuleExpertSnapshotScope } from './snapshot-scope-audit.ts';
 import type { AuditModuleExpertSnapshotScopesArgs } from './snapshot-scope-audit.ts';
 
 import {
-  MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-  MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-  MODULE_EXPERT_AUTH_PROVIDER,
-  MODULE_EXPERT_CONTEXT_MCP,
-  MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-  ModuleExpertIsolation,
-} from './runtime-contract.ts';
-
-import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from './read-context-mcp.ts';
-
-import {
   CargoWorkspaceInventoryKind,
   CargoWorkspaceDiscovery,
 } from './cargo-workspace.ts';
 
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
-
-import {
-  MODULE_EXPERT_CLI,
-  MODULE_EXPERT_TRUSTED_RUNTIME,
-  ModuleExpertRuntimeRouting,
-} from './runtime-routing-audit.ts';
-
-import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
-
-import { ModuleExpertEnvironment } from './runtime-environment-audit.ts';
-
-import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
 
 import { TeamAgentContract } from '../team-agents/audit.ts';
 
@@ -88,8 +63,6 @@ export class ModuleExpertContract {
     };
     ModuleExpertContract.validateProductionCoverage(coverageArgs);
     ModuleExpertContract.mergeTeamAgentAudit(context);
-    ModuleExpertContract.validateRuntimePolicy(context);
-    ModuleExpertContract.validateRuntimeRouting(context);
     return {
       findings,
       profileCount: MODULE_EXPERT_CATALOG.length,
@@ -129,168 +102,6 @@ export class ModuleExpertContract {
     };
     ModuleExpertContract.validateGeneratedScopeProducer(validationArgs);
     return findings;
-  }
-
-  static auditModuleExpertRuntimePolicy(
-    args: AuditModuleExpertRuntimePolicyArgs,
-  ): readonly ModuleExpertAuditFinding[] {
-    if (!args.codexOptions.config)
-      return [ModuleExpertContract.unsafeRuntimeFinding()];
-    const config = args.codexOptions.config;
-    const agents = ModuleExpertContract.configRecord(config.agents);
-    const features = ModuleExpertContract.configRecord(config.features);
-    const shellEnvironmentPolicy = ModuleExpertContract.configRecord(
-      config.shell_environment_policy,
-    );
-    const tools = ModuleExpertContract.configRecord(config.tools);
-    const modelProviders = ModuleExpertContract.configRecord(
-      config.model_providers,
-    );
-    const provider = ModuleExpertContract.configRecord(
-      modelProviders && modelProviders[MODULE_EXPERT_AUTH_PROVIDER],
-    );
-    const contextServers = ModuleExpertContract.configRecord(
-      config.mcp_servers,
-    );
-    const contextServer = ModuleExpertContract.configRecord(
-      contextServers && contextServers[MODULE_EXPERT_CONTEXT_MCP],
-    );
-    const contextServerValidation: ContextServerRegistryValidation = {
-      registry: contextServers,
-      server: contextServer,
-    };
-    const authEnvironmentComparison: OrderedValuesComparison = {
-      actual: args.authEnvironmentKeys,
-      expected: EXPECTED_AUTH_ENVIRONMENT_KEYS,
-    };
-    const processEnvironmentComparison: OrderedValuesComparison = {
-      actual: args.processEnvironmentKeys,
-      expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
-    };
-    const actualShellEnvironment = ModuleExpertContract.configRecord(
-      shellEnvironmentPolicy === false ? false : shellEnvironmentPolicy.set,
-    );
-    const runtimeEnvironmentValidation: ValidateModuleExpertRuntimeEnvironmentArgs =
-      {
-        actualProcessEnvironment: args.codexOptions.env,
-        actualShellEnvironment,
-        allowedShellKeys: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
-        safeCodexEnvironment: args.safeCodexEnvironment,
-        safeShellEnvironment: args.safeShellEnvironment,
-      };
-    const valid =
-      args.threadOptions.sandboxMode === 'read-only' &&
-      args.threadOptions.approvalPolicy === 'never' &&
-      args.threadOptions.networkAccessEnabled === false &&
-      args.threadOptions.webSearchMode === 'disabled' &&
-      args.threadOptions.skipGitRepoCheck === true &&
-      config.allow_login_shell === false &&
-      config.cli_auth_credentials_store === 'file' &&
-      config.model_provider === MODULE_EXPERT_AUTH_PROVIDER &&
-      ModuleExpertContract.validAuthenticationProvider(provider) &&
-      Boolean(agents) &&
-      agents !== false &&
-      agents.enabled === false &&
-      agents.max_depth === 0 &&
-      JSON.stringify(features) === JSON.stringify(EXPECTED_DISABLED_FEATURES) &&
-      Boolean(tools) &&
-      tools !== false &&
-      tools.view_image === false &&
-      tools.web_search === false &&
-      config.web_search === 'disabled' &&
-      ModuleExpertContract.validContextServerRegistry(
-        contextServerValidation,
-      ) &&
-      Boolean(shellEnvironmentPolicy) &&
-      shellEnvironmentPolicy !== false &&
-      typeof shellEnvironmentPolicy === 'object' &&
-      !Array.isArray(shellEnvironmentPolicy) &&
-      shellEnvironmentPolicy.inherit === 'none' &&
-      shellEnvironmentPolicy.ignore_default_excludes === false &&
-      ModuleExpertEnvironment.validate(runtimeEnvironmentValidation) &&
-      ModuleExpertContract.sameOrderedValues(authEnvironmentComparison) &&
-      ModuleExpertContract.sameOrderedValues(processEnvironmentComparison);
-    if (valid) return [];
-    return [ModuleExpertContract.unsafeRuntimeFinding()];
-  }
-
-  private static unsafeRuntimeFinding(): ModuleExpertAuditFinding {
-    return {
-      code: 'unsafe-module-expert-runtime',
-      path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
-      message:
-        'Module experts require an isolated read-only, bounded-context, non-delegating Codex runtime.',
-    };
-  }
-
-  private static configRecord(
-    value?: CodexConfigEntry,
-  ): CodexConfigRecord | false {
-    if (typeof value !== 'object' || !value || Array.isArray(value))
-      return false;
-    return value;
-  }
-
-  private static validAuthenticationProvider(
-    provider: CodexConfigRecord | false,
-  ): boolean {
-    if (!provider) return false;
-    const auth = ModuleExpertContract.configRecord(provider.auth);
-    if (!auth) return false;
-    return (
-      provider.name === 'Nook module expert OpenAI provider' &&
-      provider.base_url === 'https://api.openai.com/v1' &&
-      provider.wire_api === 'responses' &&
-      auth.command === process.execPath &&
-      Array.isArray(auth.args) &&
-      auth.args.length === 5 &&
-      auth.args[0] === '-e' &&
-      auth.args[1] === MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE &&
-      auth.args[2] === '--' &&
-      typeof auth.args[3] === 'string' &&
-      typeof auth.args[4] === 'string' &&
-      auth.refresh_interval_ms === 0 &&
-      auth.timeout_ms === 5_000
-    );
-  }
-
-  private static validContextServerRegistry(
-    validation: ContextServerRegistryValidation,
-  ): boolean {
-    const { registry, server } = validation;
-    if (
-      !registry ||
-      !server ||
-      Object.keys(registry).length !== 1 ||
-      server.enabled !== true ||
-      server.required !== true ||
-      server.default_tools_approval_mode !== 'approve' ||
-      server.startup_timeout_sec !== 5 ||
-      server.tool_timeout_sec !== 10 ||
-      JSON.stringify(server.enabled_tools) !==
-        JSON.stringify(MODULE_EXPERT_READ_CONTEXT_TOOLS)
-    ) {
-      return false;
-    }
-    if (typeof server.url !== 'string') return false;
-    try {
-      const url = new URL(server.url);
-      return (
-        url.protocol === 'http:' &&
-        url.hostname === '127.0.0.1' &&
-        url.pathname.length > 1
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  private static sameOrderedValues(
-    comparison: OrderedValuesComparison,
-  ): boolean {
-    return (
-      JSON.stringify(comparison.actual) === JSON.stringify(comparison.expected)
-    );
   }
 
   private static validateProfiles(
@@ -699,67 +510,6 @@ export class ModuleExpertContract {
     return [...rustRoots, ...webRoots].sort();
   }
 
-  private static validateRuntimePolicy(
-    context: ModuleExpertValidationContext,
-  ): void {
-    const threadOptionsArgs = { workingDirectory: context.repoRoot };
-    const threadOptions =
-      ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
-        threadOptionsArgs,
-      );
-    const codexOptionsRequest = {
-      authenticationCommandArgs: [
-        '-e',
-        MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-        '--',
-        '/isolated/authentication.sock',
-        'audit-nonce',
-      ],
-      contextServerUrl: 'http://127.0.0.1:1/audit-context',
-      processEnvironment: {
-        CODEX_HOME: '/isolated/codex-home',
-        PATH: '/usr/bin',
-      },
-    };
-    const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
-      authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-      codexOptions:
-        ModuleExpertIsolation.buildModuleExpertCodexOptions(
-          codexOptionsRequest,
-        ),
-      processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-      safeCodexEnvironment: AUDIT_CODEX_ENVIRONMENT,
-      safeShellEnvironment: AUDIT_SHELL_ENVIRONMENT,
-      threadOptions,
-    };
-    for (const finding of ModuleExpertContract.auditModuleExpertRuntimePolicy(
-      auditArgs,
-    )) {
-      context.findings[context.findings.length] = finding;
-    }
-  }
-
-  private static validateRuntimeRouting(
-    context: ModuleExpertValidationContext,
-  ): void {
-    const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
-    const trustedRuntimePath = join(
-      context.repoRoot,
-      MODULE_EXPERT_TRUSTED_RUNTIME,
-    );
-    const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
-      moduleExpertCliSource: existsSync(moduleExpertCliPath)
-        ? readFileSync(moduleExpertCliPath, 'utf8')
-        : '',
-      trustedRuntimeSource: existsSync(trustedRuntimePath)
-        ? readFileSync(trustedRuntimePath, 'utf8')
-        : '',
-    };
-    for (const finding of ModuleExpertRuntimeRouting.audit(auditArgs)) {
-      context.findings[context.findings.length] = finding;
-    }
-  }
-
   private static safeIdentifier(value: string): boolean {
     return value.length <= 64 && /^[a-z][a-z0-9_]*$/u.test(value);
   }
@@ -790,10 +540,6 @@ export class ModuleExpertContract {
   }
 }
 
-export { ModuleExpertRuntimeRouting };
-
-export type { AuditModuleExpertRuntimeRoutingArgs };
-
 export type ModuleExpertAuditFinding = {
   readonly code: string;
   readonly path: string;
@@ -811,15 +557,6 @@ export type AuditModuleExpertsArgs = {
   readonly repoRoot: string;
 };
 
-export type AuditModuleExpertRuntimePolicyArgs = {
-  readonly authEnvironmentKeys: readonly string[];
-  readonly codexOptions: CodexOptions;
-  readonly processEnvironmentKeys: readonly string[];
-  readonly safeCodexEnvironment: Readonly<Record<string, string>>;
-  readonly safeShellEnvironment: Readonly<Record<string, string>>;
-  readonly threadOptions: ThreadOptions;
-};
-
 export type AuditModuleExpertCortexAuthorityArgs = {
   readonly source: string;
 };
@@ -833,42 +570,6 @@ const MODULE_EXPERT_CORTEX_AUTHORITY_PATH =
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 
 const WEB_ROOT = 'nook-app/nook-web';
-
-const EXPECTED_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
-
-const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
-  'COMSPEC',
-  'PATH',
-  'Path',
-  'PATHEXT',
-  'SYSTEMROOT',
-  'SystemRoot',
-  'WINDIR',
-] as const;
-
-const AUDIT_CODEX_ENVIRONMENT = {
-  CODEX_HOME: '/isolated/codex-home',
-  PATH: '/usr/bin',
-} as const;
-
-const AUDIT_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
-
-const EXPECTED_DISABLED_FEATURES = {
-  apps: false,
-  code_mode: { enabled: false },
-  goals: false,
-  hooks: false,
-  memories: false,
-  multi_agent: false,
-  multi_agent_v2: false,
-  network_proxy: false,
-  plugins: false,
-  shell_snapshot: false,
-  shell_tool: false,
-  skill_mcp_dependency_install: false,
-  unified_exec: false,
-  view_image: false,
-} as const;
 
 const MODULE_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
   {
@@ -909,20 +610,6 @@ type ModuleExpertValidationContext = {
 export type AuditGeneratedScopeProducerContractArgs = {
   readonly repoRoot: string;
   readonly generatedScope: ModuleExpertGeneratedScope;
-};
-
-type CodexConfigEntry = NonNullable<CodexOptions['config']>[string];
-
-type CodexConfigRecord = Readonly<Record<string, CodexConfigEntry>>;
-
-type ContextServerRegistryValidation = {
-  readonly registry: CodexConfigRecord | false;
-  readonly server: CodexConfigRecord | false;
-};
-
-type OrderedValuesComparison = {
-  readonly actual: readonly string[];
-  readonly expected: readonly string[];
 };
 
 type ValidateProfilePathsArgs = {

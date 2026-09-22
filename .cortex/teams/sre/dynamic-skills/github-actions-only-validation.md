@@ -20,23 +20,23 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
   - Keep tests, coverage, e2e, and preflight outside its transitive task graph.
   - Author meaningful tests for later execution.
   - Require code review and security acceptance before feature pull-request delivery.
-- **Slow dev PR checks**
-  - The manually run Feature Gizmo selects the published dev snapshot.
+- **Feature PR required checks**
+  - The manually run Feature Gizmo selects the published feature branch.
   - The Feature Gizmo authorizes Team Gizmo (Delivery Pipeline context) to route the
     publication and validation packet through the active harness to internal
     PR Lifecycle Agent for bounded execution.
-  - The Feature Gizmo retains manager-stage policy authority, and
+  - The Feature Gizmo retains readiness policy authority, and
     `feature PR lifecycle` remains the sole pull-request creation/update path; Team
-    Gizmo and PR Lifecycle Agent do not create or update pull requests or
-    decide policy, readiness, or promotion verdicts.
-  - Run the full existing slow PR checks on the captured dev head SHA.
+    Gizmo routes authorized mechanics and PR Lifecycle Agent creates or updates
+    the pull request without deciding policy, readiness, or promotion verdicts.
+  - Run the full required PR checks on the captured feature head SHA.
   - Preserve e2e opt-ins and security-required focused browser checks.
-  - Freeze remote dev during checking and promotion.
-  - Use native non-cancelling concurrency with one active and latest pending.
+  - Use native PR concurrency that cancels stale-head validation when a newer
+    event supersedes it; separate pull requests remain independent.
   - Run complete checks without per-push path-filter reductions.
   - Route failures through feature compilation and feature pull-request delivery.
 - **Execution infrastructure**
-  - Use the configured remote runner for compilation and slow checks.
+  - Use the configured remote runner for compilation and required checks.
   - Preserve existing container, credential, and trust boundaries.
   - See [remote execution](../workflows/remote-execution.md) for runner details.
 
@@ -45,13 +45,13 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 - Do not run local tests, Docker work, product compilation, or coverage.
 - Do not treat `rust:ci`, `web:verify`, or `loom:verify` as build-only.
 - Do not add an automatic dev-push slow pipeline.
-- Do not cancel an active slow run or create a custom scheduler.
+- Do not create a custom scheduler or cancel runs outside native supersession.
 - Do not replace missing remote evidence with local execution.
 
 ## Evidence
 
 Capture source SHA, run, attempt, and result. Feature build success proves
 compilation only. Return evidence through Team Gizmo (Delivery Pipeline context) to the
-owning controller. The Feature Gizmo decides the manager-stage verdict and
-promotion; promotion requires slow-stage tests, review, and security
-acceptance for the exact published SHA.
+owning controller. The Feature Gizmo decides merge readiness; merge requires
+the feature PR required checks and any separately scoped security acceptance
+for the published feature head. Review and approval remain optional.

@@ -52,7 +52,7 @@ The feature README records:
 - current completion status.
 
 Feature completion follows [dev delivery](../architecture/dev-delivery.md).
-The manager's dev PR aggregates selected complete features.
+Each feature branch owns its feature PR through completion.
 
 - Create the feature README before its first focused issue.
 - Keep focused issues linked from the feature index.

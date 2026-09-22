@@ -9,7 +9,7 @@ import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
 } from './blueprint-diff.ts';
-import { PrLandOperation, RequestFamily, ResponsePhase } from './enums.ts';
+import { RequestFamily, ResponsePhase } from './enums.ts';
 import {
   FieldIssue,
   type FieldError,
@@ -55,14 +55,6 @@ export class LoomResponseEncoder {
     return { ok: true, family, result };
   }
 
-  static successResponseForPrLand(
-    args: SuccessResponseForPrLandArgs,
-  ): SuccessResponse {
-    const { operation, result } = args;
-
-    return { ok: true, family: RequestFamily.PrLand, operation, result };
-  }
-
   static decodeErrorResponse(
     args: DecodeErrorResponseArgs,
   ): DecodeErrorResponse {
@@ -99,25 +91,6 @@ export class LoomResponseEncoder {
     };
   }
 
-  static executeErrorResponseForPrLand(
-    args: ExecuteErrorResponseForPrLandArgs,
-  ): ExecuteErrorResponse {
-    const { operation, errors } = args;
-
-    return {
-      ok: false,
-      isError: true,
-      phase: ResponsePhase.Execute,
-      family: RequestFamily.PrLand,
-      operation,
-      errors,
-      recover: {
-        toolsListRequest: TOOLS_LIST_INVOKE,
-        hint: LoomResponseEncoder.EXECUTE_HINT,
-      },
-    };
-  }
-
   static encodeResponse(
     response: SuccessResponse | ErrorResponse,
   ): UntrustedYamlNode {
@@ -127,9 +100,6 @@ export class LoomResponseEncoder {
         family: response.family,
         result: response.result,
       };
-      if (response.family === RequestFamily.PrLand) {
-        encoded.operation = response.operation;
-      }
       return UntrustedYamlBoundary.seal(encoded);
     }
 
@@ -162,9 +132,6 @@ export class LoomResponseEncoder {
     }
     if (response.phase === ResponsePhase.Execute) {
       encoded.family = response.family;
-      if (response.family === RequestFamily.PrLand) {
-        encoded.operation = response.operation;
-      }
     }
     return UntrustedYamlBoundary.seal(encoded);
   }
@@ -179,20 +146,15 @@ export class LoomResponseEncoder {
   }
 }
 
-export type SuccessResponse =
-  | (SuccessResponseBase & {
-      readonly family:
-        | RequestFamily.PrePush
-        | RequestFamily.CortexAudit
-        | RequestFamily.CortexSessionClean
-        | RequestFamily.SkillScaffold
-        | RequestFamily.DependencyPopularity
-        | RequestFamily.ToolsList;
-    })
-  | (SuccessResponseBase & {
-      readonly family: RequestFamily.PrLand;
-      readonly operation: PrLandOperation;
-    });
+export type SuccessResponse = SuccessResponseBase & {
+  readonly family:
+    | RequestFamily.PrePush
+    | RequestFamily.CortexAudit
+    | RequestFamily.CortexSessionClean
+    | RequestFamily.SkillScaffold
+    | RequestFamily.DependencyPopularity
+    | RequestFamily.ToolsList;
+};
 
 export type DecodeErrorResponse = {
   readonly ok: false;
@@ -203,31 +165,21 @@ export type DecodeErrorResponse = {
   readonly recover: RecoverHint;
 };
 
-export type ExecuteErrorResponse =
-  | {
-      readonly ok: false;
-      readonly isError: true;
-      readonly phase: ResponsePhase.Execute;
-      readonly family:
-        | RequestFamily.PrePush
-        | RequestFamily.CortexAudit
-        | RequestFamily.CortexSessionClean
-        | RequestFamily.SkillScaffold
-        | RequestFamily.DependencyPopularity
-        | RequestFamily.ToolsList
-        | RequestFamily.ToolsCall;
-      readonly errors: readonly FieldError[];
-      readonly recover: RecoverHint;
-    }
-  | {
-      readonly ok: false;
-      readonly isError: true;
-      readonly phase: ResponsePhase.Execute;
-      readonly family: RequestFamily.PrLand;
-      readonly operation: PrLandOperation;
-      readonly errors: readonly FieldError[];
-      readonly recover: RecoverHint;
-    };
+export type ExecuteErrorResponse = {
+  readonly ok: false;
+  readonly isError: true;
+  readonly phase: ResponsePhase.Execute;
+  readonly family:
+    | RequestFamily.PrePush
+    | RequestFamily.CortexAudit
+    | RequestFamily.CortexSessionClean
+    | RequestFamily.SkillScaffold
+    | RequestFamily.DependencyPopularity
+    | RequestFamily.ToolsList
+    | RequestFamily.ToolsCall;
+  readonly errors: readonly FieldError[];
+  readonly recover: RecoverHint;
+};
 
 export type ErrorResponse = DecodeErrorResponse | ExecuteErrorResponse;
 
@@ -239,11 +191,6 @@ export type SuccessResponseForFamilyArgs = {
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList;
-  readonly result: UntrustedYamlNode;
-};
-
-export type SuccessResponseForPrLandArgs = {
-  readonly operation: PrLandOperation;
   readonly result: UntrustedYamlNode;
 };
 
@@ -262,10 +209,5 @@ export type ExecuteErrorResponseForFamilyArgs = {
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList
     | RequestFamily.ToolsCall;
-  readonly errors: readonly FieldError[];
-};
-
-export type ExecuteErrorResponseForPrLandArgs = {
-  readonly operation: PrLandOperation;
   readonly errors: readonly FieldError[];
 };

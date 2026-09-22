@@ -129,7 +129,7 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   [
     '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
-    'f1f5ccdf4018460774b17dc012b4e7fb197bcaf578be2834fd44ca30f1786151',
+    'd41d7290b77f50ace0e99b8f28dc87b11f2c22cb8b0113965611b6faf03c6651',
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
@@ -157,20 +157,8 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'a52477a1e74c01cebd9d4f9c8de03790e1426cd15e2ddffcd34a85e5e2052fa4',
   ],
   [
-    'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '8d1efad4ca6c65086dc46c925f67af431cdce6093b3d9ac40a35b3253232abf7',
-  ],
-  [
     'agentic-ai/loom/src/lib/run.ts',
     '8bee6ac341fecf756a0323ecaa509bf82617cc9b4a51f9999ec3a5709a4c25f3',
-  ],
-  [
-    'agentic-ai/loom/src/module-experts/repository-snapshot.ts',
-    'c4414d19cc693f76f5d282109af62b24336052a34780476fd13d7671a7b9117d',
-  ],
-  [
-    'agentic-ai/loom/src/agent-workflow/delegation-aggregation.ts',
-    'd91c6bda5de0c6285849d09868467b8520b4bf55f8587d9afe9ea411791e6311',
   ],
   [
     'agentic-ai/loom/src/commands/pr-authored-budget.ts',

@@ -21,9 +21,8 @@ Load only the authority needed for the assigned Cortex packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-The packet names the canonical feature branch and may carry bootstrap evidence:
-`originMainSha` for the freshly fetched `origin/main`. Use the current parent frontier for the specialist
+The packet names the canonical feature branch and the freshly fetched
+`origin/main` base. Use the current feature-branch frontier for the specialist
 worktree. Resolve the latest committed branch head before each stage; a branch
-advance follows the latest head and reruns affected evidence. SHAs observed in
-packets or results are run evidence only, not feature authority. Reject missing
-or unprovable bootstrap/branch evidence.
+advance follows the latest head and reruns affected evidence. Reject missing or
+unprovable branch evidence.

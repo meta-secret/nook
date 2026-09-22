@@ -3,7 +3,7 @@
 Read the root circuit breaker and complete multiagent delivery diagrams first.
 Accept only a Gizmo Prime packet.
 
-Preserve the canonical feature branch and fresh `originMainSha`. Dispatch PR
+Preserve the canonical feature branch and freshly fetched `origin/main` base. Dispatch PR
 Lifecycle Agent for branch publication, feature PR creation or update, complete
 required-check observation, squash merge, actual merged-state verification,
 and remote feature-branch deletion.

@@ -57,7 +57,7 @@ completion and sets issue lifecycle state. For feature build or check
 mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
 Gizmo Prime authorizes Team Gizmo (Delivery Pipeline context). The Team Gizmo dispatches
 PR Lifecycle Agent through the active harness and returns the evidence. The
-Feature Gizmo authorizes manager-stage publication, slow checks, and promotion
+Feature Gizmo authorizes feature-branch publication, required checks, and merge
 through the same route.
 
 For Workbench publication, Feature Gizmo approves the exact feature summary or
@@ -152,9 +152,12 @@ When applying a skill to code:
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
 6. Apply only the permitted scoped formatting or inexpensive diagnostics during
-   implementation. Commit every resulting mutation in the allowed paths and
-   return the exact handoff to the owning Feature Gizmo. Do not run a local
-   pre-push or broad validation gate. For applicable feature build or check
-   mechanics, Gizmo Prime authorizes the Team Gizmo (Delivery Pipeline context) packet;
-   Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
-   required PR-check task. The Feature Gizmo owns later CI validation.
+   implementation. Finish the assigned worker branch with every resulting
+   mutation in the allowed paths. Return the branch and focused evidence to the
+   owning Feature Gizmo. Do not run a local pre-push or broad validation gate.
+   Feature Gizmo routes local integration through the upstream integration agent
+   and waits for its feature branch, integration outcome, and checks. For
+   applicable feature build or check mechanics, Gizmo Prime authorizes the Team
+   Gizmo (Delivery Pipeline context) packet; Team Gizmo then dispatches PR
+   Lifecycle Agent through the active harness for the required PR-check task.
+   The Feature Gizmo owns later CI validation.

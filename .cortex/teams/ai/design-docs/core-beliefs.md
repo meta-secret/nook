@@ -70,16 +70,16 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Keep elapsed time in required delivery records unless the user requests it.
 - See [pull request task completion](../../../gizmo-prime/workflows/pull-requests.md#promotion-and-completion-procedure).
 
-## 8. Deliver Through Dev
+## 8. Deliver Through One Feature Pull Request
 
 - Each feature Gizmo follows [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
 - Team Agents own scoped implementation and authored tests.
 - Gizmo owns feature compilation, review, and feature pull-request delivery decisions.
-- A manually run Feature Gizmo owns publication, slow PR validation, and promotion.
+- A manually run Feature Gizmo owns publication, slow PR validation, and merge readiness.
 - PR Lifecycle Agent executes bounded operations under the owning controller's packets.
-- Promotion fast-forwards main to the tested dev SHA.
-- Preserve dev and all feature history.
-- Do not rebase, squash, or create a promotion merge commit.
+- The upstream integration agent owns local feature-branch integration.
+- PR Lifecycle squash-merges the tested feature branch into `main`.
+- Preserve linear `main` history and delete the merged remote feature branch.
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
 

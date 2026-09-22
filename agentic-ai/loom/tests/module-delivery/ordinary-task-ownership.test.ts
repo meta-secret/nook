@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -17,7 +15,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -46,15 +44,12 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       team: request.team,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: ModuleDeliveryTaskProfile.Ordinary,
       moduleRoot: request.moduleRoot,
       consumerOutcome: 'The bounded team-owned change is delivered.',
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: PINNED_LOCAL_DEV_SHA,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
-      agentDepthLimit: 1,
       dependencies: [],
       resources: { read: [], write: [request.write], evidenceSurface: [] },
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -70,25 +65,44 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
         evidence: ['tests pass'],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerRole: this.workerRole(request.team),
+        workerBranch: `codex/child/${this.workerNamespace(request.team)}/module-delivery-test/ordinary-writer-implementation`,
+        worktreePath: '/tmp/nook-module-delivery/ordinary-writer',
       },
     };
   }
 
+  private workerNamespace(team: TeamKey): string {
+    switch (team) {
+      case TeamKey.Ai:
+        return 'ai/loom-specialist';
+      case TeamKey.DevelopmentCore:
+        return 'dev-core/rust-core-developer';
+      case TeamKey.Security:
+        return 'security/security-review-specialist';
+      case TeamKey.Sre:
+        return 'sre/cloud-native';
+      case TeamKey.WebDevelopment:
+        return 'web-dev/typescript-specialist';
+      case TeamKey.DeliveryPipeline:
+        return 'delivery-pipeline/pr-lifecycle';
+    }
+  }
+
+  private workerRole(team: TeamKey): string {
+    return this.workerNamespace(team).replace(/^[^/]+\//u, '');
+  }
+
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-    const plan: ModuleDeliveryPlanV5 = {
+    const plan: ModuleDeliveryPlanV6 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      maxAgentDepth: 1,
-      maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task test'],
       },
@@ -101,12 +115,6 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
     );
   }
 }
-
-const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 test('keeps Delivery Pipeline out of ordinary product ownership', () => {
   for (const team of Object.values(TeamKey))

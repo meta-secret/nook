@@ -58,8 +58,10 @@ and manual ecosystem execution in one Actions run named `CI`.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Verification completes before test compilation; failure stops later phases.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
-- Dev PRs and research changes request product validation automatically.
-- Policy-only PRs run tooling verification, preflight and Loom in the same job.
+- Product-path and research changes request product validation automatically.
+- Feature PRs with only policy paths require the authorized `ci:validate` or
+  `ci:full-e2e` label mutation to select product validation; without one they
+  run tooling verification, preflight, and Loom in the same job.
 - UI-demo execution remains disabled, with its focused-spec contract retained.
 - Pages preview uses a same-runner composite action; coverage remains inside
   the Docker/BuildKit solve.
@@ -136,7 +138,7 @@ flowchart LR
   pr_yml --> preview[Cloudflare isolated aliases]
   pr_yml --> pr_deployment[github-pages deployment status]
 
-  merge[Manager fast-forwards tested dev SHA to main] --> ci_yml
+  merge[Feature PR squash-merges to main] --> ci_yml
   ci_yml --> main_yml[main.yml reusable or manual]
   main_yml --> main_verify[Verify + build + e2e]
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
@@ -168,11 +170,11 @@ Cancellation is scoped to work that a newer run actually supersedes:
 ### Concurrency scopes
 
 - **Central CI (`ci.yml`)**
-  - Scope: `main`, `dev-pr`, `pr-<number>`, or an event-specific run group.
-  - Cancel active run: No; `cancel-in-progress: false` preserves every active
-    validation run and its evidence.
-  - Reason: Validation and cache-publication evidence remains available even
-    when a newer event targets the same logical source.
+  - Scope: `main`, `pr-<number>`, or an event-specific run group.
+  - Cancel active run: Yes for pull requests; no for main, scheduled, and
+    manually dispatched runs.
+  - Reason: A newer PR event supersedes stale head validation, while trusted
+    cache-publication runs retain serialized completion semantics.
 - **Remote task (`remote.yml`)**
   - Scope: ref, selected task, and dispatch nonce.
   - Cancel active run: No.
@@ -187,11 +189,10 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: workflow-triggered preview or branch execution.
   - Cancel active run: Workflow-owned; untrusted validation remains isolated
     from trusted ARC work.
-- **Stateful publishers (`dev-pr-manager.yml` and `release.yml`)**
+- **Stateful publisher (`release.yml`)**
   - Scope: publisher-specific group or source run identity.
   - Cancel active run: No.
-  - Reason: Do not interrupt PR promotion, release deployment, or evidence
-    handoff state.
+  - Reason: Do not interrupt release deployment or evidence handoff state.
 
 ## Production release strategy
 
@@ -466,7 +467,7 @@ git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-The manager's slow PR stage runs this contract. Local feature formatting stays
+The feature PR required-check stage runs this contract. Local feature formatting stays
 bounded — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
@@ -657,9 +658,12 @@ coverage solve and package floors in the verified Rust graph.
 **Gizmo remote commands:**
 
 - Ordinary Team Agents format every changed file in their allowed scope and
-  return coherent exact committed handoffs. They do not push, dispatch remote
-  work, or operate external PR/check state.
-- Feature Gizmos request repeatable required PR-check evidence.
+  finish their assigned worker branches. They report the branch and focused
+  evidence to Team Gizmo. They do not push, dispatch remote work, or operate
+  external PR/check state.
+- Feature Gizmos route those branches through the upstream integration agent,
+  wait for its feature branch, integration outcome, and checks, and then request
+  repeatable required PR-check evidence.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the Feature Gizmo's feature pull-request cycle uses the full slow PR workflow.
 - Preserve the existing e2e opt-ins and security-required focused checks.

@@ -30,7 +30,7 @@ catalogs.
 
 The ignored library is copied from `cortex/` in
 [meta-cortex](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex) at release
-`v0.2.0`. Its Apache-2.0 license is copied to `.meta-cortex/LICENSE`.
+`v0.3.0`. Its Apache-2.0 license is copied to `.meta-cortex/LICENSE`.
 
 The library is absent from Nook clones, task worktrees, and pull requests.
 Install this exact release in the repository root for local development and in

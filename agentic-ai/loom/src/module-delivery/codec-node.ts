@@ -1,4 +1,3 @@
-import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
@@ -35,7 +34,6 @@ import {
   LegacyModulePlanResourceField,
   LegacyModulePlanWriteNodeField,
   ModulePlanAcceptanceField,
-  ModulePlanAttemptLineageField,
   ModulePlanCortexAuthoringField,
   ModulePlanCortexWriteNodeField,
   ModulePlanEdgeField,
@@ -45,8 +43,7 @@ import {
   ModulePlanParentJoinField,
   ModulePlanReadOnlyNodeField,
   ModulePlanResourceField,
-  ModulePlanRootLineageField,
-  ModulePlanSourceBaselineField,
+  ModulePlanFeatureBaselineField,
   ModulePlanSynthesisNodeField,
   ModulePlanWorkspaceField,
   ModulePlanWriteNodeField,
@@ -81,13 +78,13 @@ export class ModuleDeliveryPlanNodeCodec {
   ): ModuleDeliveryParentJoin {
     const fields = new ModulePlanFields(request);
     fields.requireExactKeys(ModulePlanParentJoinField);
-    if (fields.string('kind') !== ModuleDeliveryJoinKind.DirectCommits) {
+    if (fields.string('kind') !== ModuleDeliveryJoinKind.WorkerBranches) {
       ModuleDeliveryPlanNodeCodec.fail(
         `${request.path}.kind: unsupported parent join.`,
       );
     }
     return {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
+      kind: ModuleDeliveryJoinKind.WorkerBranches,
       owner: fields.identifier('owner'),
       validationCommands: fields.nonEmptyStringList('validationCommands'),
     };
@@ -220,15 +217,6 @@ export class ModuleDeliveryPlanNodeCodec {
       path: `${path}.acceptanceOwner`,
       allowGizmoPrime,
     };
-    const parentLineageRequest: ModulePlanObjectDecodeRequest = {
-      record: request.legacy
-        ? request.value
-        : fields.recordField('parentLineage'),
-      path: `${path}.parentLineage`,
-    };
-    const parentLineage = request.legacy
-      ? { kind: AgentAttemptParentKind.WorkflowRoot as const }
-      : ModuleDeliveryPlanNodeCodec.decodeParentLineage(parentLineageRequest);
     const resourceClaimsRequest: ModulePlanResourceDecodeRequest = {
       ...resourceRequest,
       legacy: request.legacy,
@@ -247,12 +235,10 @@ export class ModuleDeliveryPlanNodeCodec {
       acceptanceOwner: ModuleDeliveryPlanNodeCodec.decodeOwner(
         acceptanceOwnerRequest,
       ),
-      parentLineage,
       expert,
       moduleRoot,
       consumerOutcome: fields.string('consumerOutcome'),
       baseline: ModuleDeliveryPlanNodeCodec.decodeBaseline(baselineRequest),
-      agentDepthLimit: fields.positiveInteger('agentDepthLimit'),
       dependencies: fields.stringList('dependencies'),
       resources: ModuleDeliveryPlanNodeCodec.decodeResourceClaims(
         resourceClaimsRequest,
@@ -285,15 +271,17 @@ export class ModuleDeliveryPlanNodeCodec {
     workspaceFields.requireExactKeys(ModulePlanWorkspaceField);
     if (
       workspaceFields.string('kind') !==
-      ModuleDeliveryWorkspaceKind.SharedCheckout
+      ModuleDeliveryWorkspaceKind.WorkerWorktree
     ) {
       ModuleDeliveryPlanNodeCodec.fail(
         `${path}.workspace.kind: unsupported workspace kind.`,
       );
     }
     const workspace = {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
+      kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+      workerRole: workspaceFields.string('workerRole'),
+      workerBranch: workspaceFields.string('workerBranch'),
+      worktreePath: workspaceFields.string('worktreePath'),
     } as const;
     if (!Object.hasOwn(request.value, 'cortexAuthoring')) {
       return {
@@ -359,11 +347,10 @@ export class ModuleDeliveryPlanNodeCodec {
   ): ModuleDeliveryBaseline {
     const fields = new ModulePlanFields(request);
     const kind = fields.string('kind');
-    if (kind === ModuleDeliveryBaselineKind.SourceCommit) {
-      fields.requireExactKeys(ModulePlanSourceBaselineField);
+    if (kind === ModuleDeliveryBaselineKind.FeatureBranch) {
+      fields.requireExactKeys(ModulePlanFeatureBaselineField);
       return {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: fields.string('sourceCommit'),
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       };
     }
     if (kind === ModuleDeliveryBaselineKind.IntegratedDependencies) {
@@ -432,29 +419,6 @@ export class ModuleDeliveryPlanNodeCodec {
     };
     const team = ModuleTaskOwnership.moduleDeliveryTaskTeam(teamRequest);
     return team === false ? TeamKey.Ai : team;
-  }
-
-  private static decodeParentLineage(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryNodeV2['parentLineage'] {
-    const fields = new ModulePlanFields(request);
-    const kind = fields.string('kind');
-    if (kind === AgentAttemptParentKind.WorkflowRoot) {
-      fields.requireExactKeys(ModulePlanRootLineageField);
-      return { kind: AgentAttemptParentKind.WorkflowRoot };
-    }
-    if (kind !== AgentAttemptParentKind.AgentAttempt) {
-      ModuleDeliveryPlanNodeCodec.fail(
-        `${request.path}.kind: unsupported parent lineage kind.`,
-      );
-    }
-    fields.requireExactKeys(ModulePlanAttemptLineageField);
-    return {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: fields.identifier('task'),
-      agent: fields.identifier('agent'),
-      attempt: fields.positiveInteger('attempt'),
-    };
   }
 
   private static decodeEvidenceInput(

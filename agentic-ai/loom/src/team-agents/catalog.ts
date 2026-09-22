@@ -244,12 +244,12 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
     key: TeamKey.DeliveryPipeline,
     identity: 'Delivery Pipeline',
     description:
-      'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
+      'Owns remote delivery mechanics across CI, feature pull-request lifecycle, workflow execution, validation evidence, squash merge, and release operations.',
     contextPaths: [
       '.cortex/teams/delivery-pipeline/AGENTS.md',
       '.cortex/teams/delivery-pipeline/knowledge-graph.md',
     ],
-    capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    capabilityBoundary: `Delivery Pipeline executes authorized GitHub, CI, pull-request, merge, and release mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
 ] as const;
 
@@ -417,7 +417,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust core SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust core evidence, and blockers to Development Core Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {
@@ -435,7 +435,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust auth2 SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust auth2 evidence, and blockers to Development Core Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {
@@ -525,7 +525,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed TypeScript SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused TypeScript evidence, and blockers to Web Development Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {
@@ -543,7 +543,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed Svelte SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused Svelte evidence, and blockers to Web Development Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verify the GitHub repository settings required by the non-squashing delivery
-# graph. This is intentionally read-only; repository administrators apply the
+# Verify the GitHub repository settings required by squash-only delivery.
+# This is intentionally read-only; repository administrators apply the
 # settings, and this check fails closed when they drift.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ if ! command -v "$gh_bin" >/dev/null 2>&1; then
 fi
 
 # GitHubRepositoryDeliveryPolicy owns repository-level merge and retention
-# settings required by exact-commit, non-squashing promotion.
+# settings required by squash-only feature delivery.
 verify_github_repository_delivery_policy() {
   local setting="$1"
   local expected="$2"
@@ -33,7 +33,7 @@ verify_github_repository_delivery_policy() {
 }
 
 # GitHubBranchProtectionPolicy owns branch-level mutation and history settings
-# required by exact-commit, non-squashing promotion.
+# required by protected linear main history.
 verify_github_branch_protection_policy() {
   local branch="$1"
   local setting="$2"
@@ -51,17 +51,18 @@ verify_github_branch_protection_policy() {
   echo "Branch delivery policy: ${branch}.${setting}=${actual}"
 }
 
-# GitHub's ordinary merge button remains available for unrelated workflows,
-# while this repository's manager promotes by an exact non-forced fast-forward.
-verify_github_repository_delivery_policy allow_merge_commit true
-verify_github_repository_delivery_policy allow_squash_merge false
+# Feature PRs merge to main as one squash commit and their remote branches are
+# deleted after merge.
+verify_github_repository_delivery_policy allow_merge_commit false
+verify_github_repository_delivery_policy allow_squash_merge true
 verify_github_repository_delivery_policy allow_rebase_merge false
-verify_github_repository_delivery_policy delete_branch_on_merge false
+verify_github_repository_delivery_policy delete_branch_on_merge true
 
-for branch in main dev; do
+for branch in main; do
   verify_github_branch_protection_policy "$branch" allow_force_pushes.enabled false
   verify_github_branch_protection_policy "$branch" allow_deletions.enabled false
-  verify_github_branch_protection_policy "$branch" required_linear_history.enabled false
+  verify_github_branch_protection_policy "$branch" required_linear_history.enabled true
+  verify_github_branch_protection_policy "$branch" required_pull_request_reviews missing
 done
 
-echo "GitHub delivery policy is compatible with exact-commit, non-squashing promotion."
+echo "GitHub delivery policy is compatible with squash-only feature delivery."

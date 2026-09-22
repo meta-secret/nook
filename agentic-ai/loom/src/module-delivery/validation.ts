@@ -11,10 +11,7 @@ import type {
   ExecutionTopologyRequest,
   AddExecutionConstraintRequest,
 } from './plan-validation-context.ts';
-import {
-  AgentAttemptParentKind,
-  TaskResourceClaim,
-} from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { CortexAuthoringPolicy } from './cortex-authoring-validation.ts';
@@ -30,8 +27,6 @@ import type {
 import { ModuleDeliveryPlanSchema } from './codec.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
-  MAX_MODULE_DELIVERY_AGENT_DEPTH,
-  MAX_MODULE_DELIVERY_ATTEMPTS,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
@@ -44,11 +39,11 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleTaskOwnership,
 } from './domain.ts';
-import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
+import { ModuleDeliveryBranchAssignmentValidation } from './branch-assignment-validation.ts';
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -78,7 +73,7 @@ export class ModuleDeliveryPlanDecoder {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 5.',
+        message: 'Canonical validation requires authored plan version 6.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -90,13 +85,13 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV5,
+    plan: ModuleDeliveryPlanV6,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();
     const state: ValidationState = { plan, issues, nodesById };
     this.validateLimits(state);
-    this.validateCommit(state);
+    ModuleDeliveryBranchAssignmentValidation.validate(state);
     this.validateParentOwnedResources(state);
     this.indexNodes(state);
     this.validateNodes(state);
@@ -122,16 +117,6 @@ export class ModuleDeliveryPlanDecoder {
         actual: state.plan.nodes.length,
         maximum: MAX_MODULE_DELIVERY_NODES,
       },
-      {
-        path: '$.maxAgentDepth',
-        actual: state.plan.maxAgentDepth,
-        maximum: MAX_MODULE_DELIVERY_AGENT_DEPTH,
-      },
-      {
-        path: '$.maxAttempts',
-        actual: state.plan.maxAttempts,
-        maximum: MAX_MODULE_DELIVERY_ATTEMPTS,
-      },
     ] as const;
     for (const check of checks) {
       if (check.actual <= 0 || check.actual > check.maximum) {
@@ -143,38 +128,6 @@ export class ModuleDeliveryPlanDecoder {
         };
         this.issue(request);
       }
-    }
-  }
-
-  private validateCommit(state: ValidationState): void {
-    const commits = [
-      ['sourceCommit', state.plan.sourceCommit],
-      ['originMainSha', state.plan.originMainSha],
-      ['pinnedLocalDevSha', state.plan.pinnedLocalDevSha],
-    ] as const;
-    for (const [name, value] of commits) {
-      if (!/^[0-9a-f]{40}$/u.test(value)) {
-        const request: IssueRequest = {
-          state,
-          code:
-            name === 'sourceCommit'
-              ? ModuleDeliveryIssueCode.InvalidField
-              : ModuleDeliveryIssueCode.BaseEvidenceMismatch,
-          path: `$.${name}`,
-          message: `${name} must be an exact lowercase 40-hex commit.`,
-        };
-        this.issue(request);
-      }
-    }
-    try {
-      CanonicalFeatureBranchContract.parse(state.plan.featureBranch);
-    } catch {
-      this.issue({
-        state,
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.featureBranch',
-        message: 'featureBranch must be a canonical codex branch.',
-      });
     }
   }
 
@@ -259,7 +212,6 @@ export class ModuleDeliveryPlanDecoder {
       this.validateDependencies(nodeRequest);
       this.validateTaskKind(nodeRequest);
       this.validateBaseline(nodeRequest);
-      this.validateAgentDepth(nodeRequest);
       const cortexRequest: CortexAuthoringValidationRequest = { node, path };
       for (const finding of CortexAuthoringPolicy.validateCortexAuthoring(
         cortexRequest,
@@ -309,17 +261,6 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateOwnership(request: NodeValidationRequest): void {
-    if (
-      request.node.parentLineage.kind !== AgentAttemptParentKind.WorkflowRoot
-    ) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.ParentLineageMismatch,
-        path: `${request.path}.parentLineage`,
-        message: 'Canonical validation requires workflow-root lineage.',
-      };
-      this.issue(issueRequest);
-    }
     if (request.node.acceptanceOwner !== request.node.functionalOwner) {
       const issueRequest: IssueRequest = {
         state: request.state,
@@ -538,17 +479,14 @@ export class ModuleDeliveryPlanDecoder {
   private validateBaseline(request: NodeValidationRequest): void {
     if (request.node.dependencies.length === 0) {
       if (
-        request.node.baseline.kind !==
-          ModuleDeliveryBaselineKind.SourceCommit ||
-        request.node.baseline.sourceCommit !==
-          request.state.plan.pinnedLocalDevSha
+        request.node.baseline.kind !== ModuleDeliveryBaselineKind.FeatureBranch
       ) {
         const issueRequest: IssueRequest = {
           state: request.state,
           code: ModuleDeliveryIssueCode.BaselineMismatch,
           path: `${request.path}.baseline`,
           message:
-            'Independent tasks require the pinned local-dev bootstrap base.',
+            'Independent tasks require the canonical feature-branch baseline.',
         };
         this.issue(issueRequest);
       }
@@ -576,21 +514,6 @@ export class ModuleDeliveryPlanDecoder {
         path: `${request.path}.baseline.providerTaskIds`,
         message:
           'Integrated baseline providers must exactly match dependencies.',
-      };
-      this.issue(issueRequest);
-    }
-  }
-
-  private validateAgentDepth(request: NodeValidationRequest): void {
-    if (
-      request.node.agentDepthLimit < 1 ||
-      request.node.agentDepthLimit > request.state.plan.maxAgentDepth
-    ) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.LimitExceeded,
-        path: `${request.path}.agentDepthLimit`,
-        message: 'Task agent depth must inherit the plan bound.',
       };
       this.issue(issueRequest);
     }

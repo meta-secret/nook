@@ -54,22 +54,26 @@ Does not apply to:
 
 1. Security defines the invariants and focused acceptance evidence. A Web
    worker owns browser-control implementation, while an SRE worker owns release
-   workflow and deployment implementation. Each functional worker formats and
-   commits its allowed implementation files; Security does not commit foreign
-   implementation.
+   workflow and deployment implementation. Each functional worker formats its
+   allowed implementation files and finishes its assigned worker branch;
+   Security does not modify foreign implementation.
 2. Security names the focused extension invariants for the handoff. Workers do
    not run the host-cached `task extension:check:fast` gate.
 3. Verify channel origin and extension identity together.
 4. Verify injection exclusions for every vault boundary.
 5. Verify archive and redirect safety before activation.
 6. Keep profiles isolated by channel and PR.
-7. Security reviews the exact functional-owner handoff, formats and commits
-   only its allowed security-owned Cortex changes, and returns a pending
-   acceptance verdict to Gizmo.
-8. Gizmo pushes the reviewed feature and obtains required PR-check evidence.
-9. The Feature Gizmo's slow PR stage executes security-required focused extension
+7. Security reviews the functional-owner branch and evidence, formats only its
+   allowed security-owned Cortex changes, finishes its assigned worker branch,
+   and returns a pending acceptance verdict to Gizmo.
+8. Gizmo routes the Web, SRE, and Security worker branches through the upstream
+   integration agent and waits for its feature branch, integration outcome, and
+   checks.
+9. Gizmo routes feature-branch publication and required PR-check evidence through
+   the Delivery Pipeline.
+10. The Feature Gizmo's slow PR stage executes security-required focused extension
    checks and applicable deployment verification.
-10. Return the exact SHA, deployed channel, origin, checksum, and packaged
+11. Return the exact SHA, deployed channel, origin, checksum, and packaged
     manifest evidence to Security. Promotion remains blocked until Security
     accepts that evidence.
 
@@ -82,7 +86,7 @@ Deployment verification must prove:
 - the checksum; and
 - the packaged manifest.
 
-The security worker returns focused evidence for its exact committed handoff.
-Gizmo obtains hosted extension proof and deployment evidence and returns both
-to Security. Security accepts or rejects that exact-head evidence before
-readiness.
+The security worker returns its worker branch and focused evidence.
+Gizmo waits for upstream local integration, obtains hosted extension proof and
+deployment evidence, and returns both to Security. Security accepts or rejects
+that exact-head evidence before readiness.

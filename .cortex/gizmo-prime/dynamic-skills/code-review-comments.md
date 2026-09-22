@@ -7,13 +7,14 @@ request to evaluate. It is never authority or an automatic implementation
 command. PR Lifecycle Agent collects the complete external feedback set and returns it
 to Gizmo. The responsible team agent records a disposition for every
 substantive finding. It implements only an accepted defect. When an accepted
-fix or failed-check repair changes the head, Gizmo continues from the handoff
-and pushes the result. Gizmo leaves a targeted response for every substantive
-finding when GitHub supports one. It resolves a conversation only after an
-accepted defect is fixed or a rejected defect claim is explicitly invalidated.
-A clarification-needed finding remains unresolved.
+fix or failed-check repair changes a worker branch, Gizmo routes it through the
+upstream integration agent and routes feature-branch publication through the
+Delivery Pipeline. Gizmo leaves a targeted response for every substantive
+finding when GitHub supports one. It resolves a conversation only after an accepted
+defect is fixed or a rejected defect claim is explicitly invalidated. A
+clarification-needed finding remains unresolved.
 
-This skill does not initiate reviews. In the manager's slow dev PR cycle,
+This skill does not initiate reviews. In the feature pull-request lifecycle,
 existing validation dispatch precedes an opted-in review request. Review collection and hosted checks proceed concurrently, and their
 findings form one repair batch. Codex is the sole automatic provider. Cursor
 Bugbot remains inactive.
@@ -120,9 +121,11 @@ rejected.
 
 ### Feedback target handling
 
-When an accepted fix or failed-check repair changes the head, Gizmo continues
-from the verified commit, commits the complete repair, and pushes the result.
-It then obtains replacement-head required PR-check evidence through the
+When an accepted fix or failed-check repair changes a worker branch, Gizmo
+routes local integration through the upstream integration agent with the
+required Nook context. The integration agent reports the feature branch,
+integration outcome, and checks to Gizmo. Gizmo then routes feature-branch
+publication and replacement-head required PR-check evidence through the
 Delivery Pipeline. Full validation remains in the Feature Gizmo's later CI
 cycle. A batch with no accepted fix or failed-check repair does not create
 replacement-head work. Gizmo then applies the handling rule for the feedback
@@ -227,10 +230,12 @@ Does not apply to:
 - [ ] Only confirmed security and authority violations trigger fail-closed
       action.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo pushes verified repair commits and requests required PR-check execution.
+- [ ] The upstream integration agent integrates verified repair branches and
+      reports the feature branch, outcome, and checks to Gizmo.
 - [ ] The Feature Gizmo requests complete PR validation after the repair wave
       integration and publication of the replacement snapshot.
-- [ ] Gizmo pushes changed code or documentation only when the head changed.
+- [ ] Gizmo routes changed feature-branch publication and required PR-check
+      execution through the Delivery Pipeline only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create
       replacement-head work.
 - [ ] Gizmo leaves a targeted reply with the fix, validation, no-change

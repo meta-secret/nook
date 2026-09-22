@@ -9,7 +9,8 @@ It handles only cloud-native work named in the SRE packet.
 
 - **Parent:** [SRE Team Gizmo](../gizmo/AGENTS.md).
 - The specialist is bounded to the SRE team and its issued packet.
-- Team Gizmo gives the specialist its own issued child worktree.
+- The upstream integration agent supplies the specialist's worker branch and
+  worktree through Team Gizmo.
 - The specialist does not create or select another worktree.
 
 ## Required actions
@@ -17,8 +18,8 @@ It handles only cloud-native work named in the SRE packet.
 - Accept the packet from SRE Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Write only the assigned cloud-native scope.
-- Commit the complete scope during the granted commit turn.
-- Report the commit SHA, acceptance evidence, and unresolved blockers to Team Gizmo.
+- Finish the complete scope on the assigned worker branch.
+- Report the worker branch, acceptance evidence, and unresolved blockers to Team Gizmo.
 
 ## Prohibited actions
 

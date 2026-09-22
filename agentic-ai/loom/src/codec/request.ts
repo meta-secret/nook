@@ -40,11 +40,6 @@ import {
   YamlObjectField,
   FieldDecodeProjection,
 } from './object.ts';
-import {
-  type DecodePrLandFamilyArgs,
-  type PrLandLoomRequest,
-  PrLandFamilyDecoder,
-} from './request-pr-land.ts';
 import type { FieldErrorArgs, JoinPathArgs } from './field-error.ts';
 import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 export type LoomRequest =
@@ -61,7 +56,6 @@ export type LoomRequest =
       readonly family: RequestFamily.SkillScaffold;
       readonly skillScaffold: SkillScaffoldRequest;
     }
-  | PrLandLoomRequest
   | {
       readonly family: RequestFamily.DependencyPopularity;
       readonly dependencyPopularity: DependencyPopularityRequest;
@@ -83,7 +77,6 @@ export class LoomRequestSchema {
     RequestFamily.CortexAudit,
     RequestFamily.CortexSessionClean,
     RequestFamily.SkillScaffold,
-    RequestFamily.PrLand,
     RequestFamily.DependencyPopularity,
     RequestFamily.ToolsList,
     RequestFamily.ToolsCall,
@@ -225,13 +218,6 @@ export class LoomRequestSchema {
             }),
           };
         return FieldDecodeProjection.map(mapDecodeArgs4);
-      }
-      case RequestFamily.PrLand: {
-        const decodePrLandFamilyArgs: DecodePrLandFamilyArgs = {
-          value: payload,
-          path,
-        };
-        return PrLandFamilyDecoder.decodePrLandFamily(decodePrLandFamilyArgs);
       }
       case RequestFamily.DependencyPopularity: {
         const decoded = DependencyPopularityRequestDecoder.decode(payload);

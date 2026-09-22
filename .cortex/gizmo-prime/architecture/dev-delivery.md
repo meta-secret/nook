@@ -122,7 +122,7 @@ terminal failure wave starts a new complete inventory and repair cycle.
 Successful delivery reports:
 
 - the canonical feature branch;
-- the fresh `originMainSha` base;
+- the freshly fetched `origin/main` base branch;
 - the final tested feature head;
 - the pull-request identity;
 - terminal results for every required PR check;

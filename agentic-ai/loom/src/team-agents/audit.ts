@@ -439,6 +439,10 @@ const TEAM_AUTHORITY_MARKERS = [
   '../.meta-cortex/AGENTS.md',
   '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
   '../.meta-cortex/meta-cortex.toml',
+  'Nook project root and shared Meta-Cortex library root',
+  'selected base and feature branches',
+  'each worker branch and worktree in dependency order',
+  'applicable Nook checks',
   'gizmo-prime/team-gizmo/AGENTS.md',
   'meta-cortex-integration.md',
 ] as const;
@@ -641,7 +645,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust core SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust core evidence, and blockers to Development Core Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.RustAuth2Developer,
@@ -658,7 +662,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
-        'Reports the committed Rust auth2 SHA, evidence, and blockers to Development Core Team Gizmo.',
+        'Reports its worker branch, focused Rust auth2 evidence, and blockers to Development Core Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.CryptographySpecialist,
@@ -743,7 +747,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed TypeScript SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused TypeScript evidence, and blockers to Web Development Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.SvelteSpecialist,
@@ -760,7 +764,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
-        'Reports the committed Svelte SHA, evidence, and blockers to Web Development Team Gizmo.',
+        'Reports its worker branch, focused Svelte evidence, and blockers to Web Development Team Gizmo.',
     },
     {
       key: TeamInternalAgentKey.PrLifecycle,
@@ -853,8 +857,8 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
       identity: 'Delivery Pipeline',
       contextDirectory: 'delivery-pipeline',
       description:
-        'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
-      capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+        'Owns remote delivery mechanics across CI, feature pull-request lifecycle, workflow execution, validation evidence, squash merge, and release operations.',
+      capabilityBoundary: `Delivery Pipeline executes authorized GitHub, CI, pull-request, merge, and release mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
 ]);

@@ -126,7 +126,7 @@ COPY --from=repository-source / /meta-secret/nook
 # The ignored library is absent from fresh checkouts. Keep this pin aligned with
 # .cortex/meta-cortex-integration.md before any Loom audit or test reads its skills.
 RUN set -eu \
-    && meta_cortex_release=v0.2.0 \
+    && meta_cortex_release=v0.3.0 \
     && meta_cortex_source="$(mktemp -d)" \
     && curl --fail --silent --show-error --location \
       "https://codeload.github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/tar.gz/refs/tags/$meta_cortex_release" \

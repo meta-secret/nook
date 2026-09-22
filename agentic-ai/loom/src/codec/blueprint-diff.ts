@@ -1,23 +1,18 @@
 import { createTwoFilesPatch } from 'diff';
 import {
-  UntrustedYamlPropertyPresence,
   type UntrustedYamlNode,
   UntrustedYamlBoundary,
 } from '../lib/guards.ts';
 import {
   ExampleCatalogPresence,
   type ExampleCatalogEntry,
-  type ExampleCatalogLookup,
-  type FindExampleCatalogEntryArgs,
   LoomRequestExamples,
 } from './example-documents.ts';
 import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-import { PrLandOperation, RequestFamily } from './enums.ts';
+import { RequestFamily } from './enums.ts';
 import { YamlDocument } from './yaml.ts';
-
-import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 
 export { ExampleOperationMarker as BlueprintOperationMarker } from './example-documents.ts';
 
@@ -149,55 +144,11 @@ export class RequestBlueprintComparison {
     if (!family) {
       return RequestBlueprintComparison.DEFAULT_BLUEPRINT;
     }
-    const payloadPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: received,
-      key: family,
-    };
-    const payloadProperty = UntrustedYamlBoundary.property(payloadPropertyArgs);
-    if (
-      family === RequestFamily.PrLand &&
-      payloadProperty.presence === UntrustedYamlPropertyPresence.Present &&
-      UntrustedYamlBoundary.isRecord(payloadProperty.value)
-    ) {
-      const nestedOperationEntryArgs: NestedOperationEntryArgs = {
-        family,
-        operationKeys: Object.keys(payloadProperty.value),
-      };
-      const nestedMatch = RequestBlueprintComparison.nestedOperationEntry(
-        nestedOperationEntryArgs,
-      );
-      if (nestedMatch.presence === ExampleCatalogPresence.Present) {
-        return nestedMatch.entry;
-      }
-    }
     const familyMatch = LoomRequestExamples.familyRootCatalogEntry(family);
     if (familyMatch.presence === ExampleCatalogPresence.Present) {
       return familyMatch.entry;
     }
     return RequestBlueprintComparison.DEFAULT_BLUEPRINT;
-  }
-
-  private static nestedOperationEntry(
-    args: NestedOperationEntryArgs,
-  ): ExampleCatalogLookup {
-    const { family, operationKeys } = args;
-    const operations = Object.values(PrLandOperation);
-    for (const operation of operations) {
-      if (!operationKeys.includes(operation)) {
-        continue;
-      }
-      const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs = {
-        family,
-        operation,
-      };
-      const match = LoomRequestExamples.findExampleCatalogEntry(
-        findExampleCatalogEntryArgs,
-      );
-      if (match.presence === ExampleCatalogPresence.Present) {
-        return match;
-      }
-    }
-    return { presence: ExampleCatalogPresence.Absent };
   }
 }
 
@@ -215,9 +166,4 @@ type YamlUnifiedDiffArgs = {
   readonly blueprintPath: string;
   readonly blueprintYaml: string;
   readonly receivedYaml: string;
-};
-
-type NestedOperationEntryArgs = {
-  readonly family: RequestFamily.PrLand;
-  readonly operationKeys: readonly string[];
 };

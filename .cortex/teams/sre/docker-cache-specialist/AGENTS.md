@@ -149,9 +149,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Require changed-head runtime evidence to report compiler hits, and keep
   no-BuildKit-export verification at zero registry exports while retaining
   sccache access.
-- Commit the complete bounded iteration.
-- Report the commit SHA, evidence, latency measurements, and blockers to SRE
-  Team Gizmo.
+- Finish the complete bounded iteration on the assigned worker branch.
+- Report the worker branch, evidence, latency measurements, and blockers to
+  SRE Team Gizmo.
 
 ## Validation boundary
 

@@ -1,10 +1,6 @@
 import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
 import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
-import {
-  PullRequestValidationCommand,
-  type PrLandFailure,
-} from '../commands/pr-land.ts';
 import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
 import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
 import { err, ok, type Result } from 'neverthrow';
@@ -12,17 +8,12 @@ import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { CORTEX_SESSION_CLEAN_INPUT_SCHEMA } from '../codec/args/cortex-session-clean.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
-import {
-  PR_LAND_PR_INPUT_SCHEMA,
-  PR_LAND_VALIDATE_INPUT_SCHEMA,
-} from '../codec/args/pr-land.ts';
 import { SKILL_SCAFFOLD_INPUT_SCHEMA } from '../codec/args/skill-scaffold.ts';
 import { TOOLS_LIST_INPUT_SCHEMA } from '../codec/args/tools-list.ts';
-import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
+import { RequestFamily } from '../codec/enums.ts';
 import {
   ExampleCatalogPresence,
   ExampleOperationMarker,
-  type FindExampleCatalogEntryArgs,
   LoomRequestExamples,
 } from '../codec/example-documents.ts';
 import type { ObjectJsonSchema } from '../codec/json-schema.ts';
@@ -40,10 +31,6 @@ import {
   DependencyPopularityCommand,
 } from '../commands/dependency-popularity.ts';
 import {
-  type PrLandReport,
-  PullRequestDeliveryCommand,
-} from '../commands/pr-land.ts';
-import {
   type SkillScaffoldReport,
   SkillScaffoldCommand,
 } from '../commands/skill-scaffold.ts';
@@ -53,7 +40,6 @@ import { RepositoryRoot } from '../lib/repo.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
-  readonly operation?: PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
@@ -64,7 +50,6 @@ export type LoomCommandResult =
   | CortexAuditReport
   | CortexSessionCleanReport
   | SkillScaffoldReport
-  | PrLandReport
   | DependencyPopularityReport;
 
 type RetiredRequestFailure = {
@@ -128,21 +113,6 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     inputSchema: SKILL_SCAFFOLD_INPUT_SCHEMA,
   },
   {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Status,
-    description: 'Show PR status via gh.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_PR_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Validate,
-    description:
-      'Dispatch remote build-only work and later manager-owned CI validation, then return hosted check evidence to the dev manager.',
-    exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
-    inputSchema: PR_LAND_VALIDATE_INPUT_SCHEMA,
-  },
-  {
     family: RequestFamily.DependencyPopularity,
     description:
       'Reject low-popularity npm packages and crates.io crates against thresholds.',
@@ -159,7 +129,6 @@ export class LoomRequestExecution {
       | CortexAuditFailure
       | CortexSessionFailure
       | SkillScaffoldFailure
-      | PrLandFailure
       | RetiredRequestFailure
       | RegistryFailure
       | ManifestFailure
@@ -171,7 +140,7 @@ export class LoomRequestExecution {
         return err({
           code: LoomFailureCode.CommandFailed,
           message:
-            'prePush is deprecated and does not execute; use remote build:compile and the manager-owned CI validation cycle',
+            'prePush is deprecated and does not execute; use remote build:compile and the feature PR lifecycle validation checks',
         });
       }
       case RequestFamily.CortexAudit:
@@ -190,27 +159,6 @@ export class LoomRequestExecution {
           request: request.skillScaffold,
           repoRoot: discovery5.value,
         }).execute();
-      }
-      case RequestFamily.PrLand: {
-        switch (request.operation) {
-          case PrLandOperation.Status: {
-            const discovery6 = new RepositoryRoot().locate();
-            if (discovery6.isErr()) return err(discovery6.error);
-            return new PullRequestDeliveryCommand({
-              repoRoot: discovery6.value,
-              prNumber: request.status.prNumber,
-            }).status();
-          }
-          case PrLandOperation.Validate: {
-            const discovery7 = new RepositoryRoot().locate();
-            if (discovery7.isErr()) return err(discovery7.error);
-            return new PullRequestValidationCommand({
-              repoRoot: discovery7.value,
-              request: request.validate,
-            }).execute();
-          }
-        }
-        break;
       }
       case RequestFamily.DependencyPopularity:
         return new DependencyPopularityCommand(
@@ -234,17 +182,10 @@ class DiscoverableRequestExample {
   constructor(private readonly definition: DiscoverableRequestDefinition) {}
   yaml(): Result<string, RepositoryDiscoveryFailure> {
     const definition = this.definition;
-    const operation = definition.operation;
-    const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs =
-      typeof operation === 'string'
-        ? { family: definition.family, operation }
-        : {
-            family: definition.family,
-            operation: ExampleOperationMarker.FamilyRoot,
-          };
-    const lookup = LoomRequestExamples.findExampleCatalogEntry(
-      findExampleCatalogEntryArgs,
-    );
+    const lookup = LoomRequestExamples.findExampleCatalogEntry({
+      family: definition.family,
+      operation: ExampleOperationMarker.FamilyRoot,
+    });
     if (lookup.presence === ExampleCatalogPresence.Present) {
       return ok(LoomRequestExamples.exampleDocumentYaml(lookup.entry.document));
     }

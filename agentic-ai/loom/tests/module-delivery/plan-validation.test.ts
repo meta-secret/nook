@@ -1,6 +1,5 @@
 import {
   ModuleDeliveryPlanValidationScenario,
-  SOURCE_COMMIT,
   PARENT_OWNED_RESOURCES,
   CORE_ROOT,
 } from './plan-validation.fixture.ts';
@@ -37,8 +36,7 @@ import type {
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV4,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -229,6 +227,17 @@ describe('reviewed module delivery plan', () => {
       team: TeamKey.Sre,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
+      workspace: {
+        ...ModuleDeliveryPlanValidationScenario.writeNode({
+          ...CORE_FIXTURE,
+          expert: ModuleDeliveryTaskProfile.Ordinary,
+          moduleRoot: 'infra',
+          write: ['infra/**'],
+        }).workspace,
+        workerRole: 'provisioning',
+        workerBranch:
+          'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
+      },
     };
     expect(ModuleDeliveryPlanValidationScenario.acceptsNode(sreWrite)).toBe(
       true,
@@ -288,75 +297,23 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('decodes the historical v2 root without upgrading it to v4', () => {
-    const historical = ModuleDeliveryPlanValidationScenario.historicalV2Plan({
+  test('rejects every pre-v6 plan version at the compatibility boundary', () => {
+    const canonical = ModuleDeliveryPlanValidationScenario.plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
     });
-    const compatibility =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        JSON.stringify(historical),
-      );
-    expect(compatibility.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
-    );
-    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
-      expect(compatibility.inputVersion).toBe(2);
-      expect(compatibility.plan).toEqual(historical);
-      expect(Object.hasOwn(compatibility.plan, 'originMainSha')).toBe(false);
-      expect(Object.hasOwn(compatibility.plan, 'pinnedLocalDevSha')).toBe(
-        false,
-      );
+    for (const version of [1, 2, 3, 4, 5]) {
+      const historical = {
+        ...canonical,
+        version,
+        parentJoin: { ...canonical.parentJoin, kind: 'direct-commits' },
+      };
+      const result =
+        ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+          JSON.stringify(historical),
+        );
+      expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
     }
-    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
-      JSON.stringify(historical),
-    );
-    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
-  });
-
-  test('decodes and migrates the historical v3 root without mutating it', () => {
-    const historical = ModuleDeliveryPlanValidationScenario.historicalV3Plan({
-      nodes: [CORE_NODE],
-      edgeContracts: [],
-    });
-    const before = structuredClone(historical);
-    const compatibility =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        JSON.stringify(historical),
-      );
-    expect(compatibility.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
-    );
-    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
-      expect(compatibility.inputVersion).toBe(3);
-      expect(compatibility.plan).toEqual(historical);
-      expect(Object.hasOwn(compatibility.plan, 'featureHeadSha')).toBe(false);
-    }
-    const historicalV4: ModuleDeliveryPlanV4 = {
-      ...historical,
-      version: 4,
-      featureHeadSha: '4'.repeat(40),
-    };
-    const historicalV4Before = structuredClone(historicalV4);
-    const migrated = ModuleDeliveryPlanSchema.migrateModuleDeliveryPlan(
-      historicalV4,
-      'codex/module-delivery-test',
-    );
-    expect(historical).toEqual(before);
-    expect(historicalV4).toEqual(historicalV4Before);
-    expect(migrated.version).toBe(5);
-    expect(migrated.featureBranch).toBe('codex/module-delivery-test');
-    expect(Object.hasOwn(migrated, 'featureHeadSha')).toBe(false);
-    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
-      JSON.stringify(historical),
-    );
-    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
-    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
-      ModuleDeliveryIssueCode.InvalidField,
-    );
   });
 
   test('freezes owner acceptance and typed synthesis producer identities', () => {
@@ -374,7 +331,6 @@ describe('reviewed module delivery plan', () => {
       team: TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: 'core_expert',
       moduleRoot: CORE_ROOT,
       consumerOutcome: 'Accepted provider evidence is synthesized.',
@@ -382,7 +338,6 @@ describe('reviewed module delivery plan', () => {
         kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
         providerTaskIds: [provider.taskId],
       },
-      agentDepthLimit: 2,
       dependencies: [provider.taskId],
       resources: { read: [], write: [], evidenceSurface: [] },
       parentOwnedExclusions: PARENT_OWNED_RESOURCES,
@@ -531,7 +486,7 @@ describe('reviewed module delivery plan', () => {
         ],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV5 = {
+    const reversedNodePlan: ModuleDeliveryPlanV6 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -595,25 +550,48 @@ describe('reviewed module delivery plan', () => {
     );
   });
 
-  test('rejects non-exact commits and execution limits above policy', () => {
+  test('rejects an invalid base branch', () => {
     const fixture: PlanFixture = {
       nodes: DEFAULT_NODES,
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV5 = {
+    const invalidPlan: ModuleDeliveryPlanV6 = {
       ...validPlan,
-      sourceCommit: 'main',
-      maxAgentDepth: 4,
-      maxAttempts: 6,
+      baseBranch: 'main',
     };
     const result = ModuleDeliveryPlanValidationScenario.validate(invalidPlan);
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.InvalidField,
     );
-    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
-      ModuleDeliveryIssueCode.LimitExceeded,
+  });
+
+  test('rejects retired harness lifecycle admission fields', () => {
+    const validPlan = ModuleDeliveryPlanValidationScenario.plan({
+      nodes: DEFAULT_NODES,
+      edgeContracts: DEFAULT_EDGES,
+    });
+    const retiredRoot = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify({ ...validPlan, maxAgentDepth: 3, maxAttempts: 2 }),
     );
+    const retiredNode = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify({
+        ...validPlan,
+        nodes: [
+          {
+            ...validPlan.nodes[0],
+            parentLineage: { kind: 'workflow-root' },
+            agentDepthLimit: 2,
+          },
+          ...validPlan.nodes.slice(1),
+        ],
+      }),
+    );
+    for (const result of [retiredRoot, retiredNode]) {
+      expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+        ModuleDeliveryIssueCode.InvalidField,
+      );
+    }
   });
 
   test('rejects numeric capacity from the plan boundary', () => {
@@ -897,8 +875,8 @@ describe('task execution and canonical ownership', () => {
     const wrongBaseline: ModuleDeliveryWriteNodeV2 = {
       ...CORE_NODE,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: 'fedcba9876543210fedcba9876543210fedcba98',
+        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+        providerTaskIds: ['unplanned-provider'],
       },
     };
     const cases: readonly NodeFailureFixture[] = [
@@ -930,12 +908,11 @@ describe('task execution and canonical ownership', () => {
     }
   });
 
-  test('validates dependency baseline policy and inherited agent depth', () => {
+  test('validates dependency baseline policy', () => {
     const sourceBasedDependent: ModuleDeliveryWriteNodeV2 = {
       ...WASM_NODE,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE_COMMIT,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
     };
     const wrongProviders: ModuleDeliveryWriteNodeV2 = {
@@ -945,14 +922,9 @@ describe('task execution and canonical ownership', () => {
         providerTaskIds: ['web-consumer'],
       },
     };
-    const excessiveDepth: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      agentDepthLimit: 4,
-    };
     const cases: readonly ModuleDeliveryWriteNodeV2[] = [
       sourceBasedDependent,
       wrongProviders,
-      excessiveDepth,
     ];
     for (const node of cases) {
       const nodes = node.taskId === 'wasm-adapter' ? [CORE_NODE, node] : [node];
@@ -961,12 +933,8 @@ describe('task execution and canonical ownership', () => {
       const result = ModuleDeliveryPlanValidationScenario.validate(
         ModuleDeliveryPlanValidationScenario.plan(fixture),
       );
-      const expected =
-        node === excessiveDepth
-          ? ModuleDeliveryIssueCode.LimitExceeded
-          : ModuleDeliveryIssueCode.BaselineMismatch;
       expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
-        expected,
+        ModuleDeliveryIssueCode.BaselineMismatch,
       );
     }
   });

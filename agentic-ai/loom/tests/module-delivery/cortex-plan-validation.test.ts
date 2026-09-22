@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -22,7 +20,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -46,15 +44,12 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       team: request.team,
       functionalOwner: request.team,
       acceptanceOwner: request.team,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: CORTEX_TEAM_WRITER_EXPERT,
       moduleRoot: TeamAuthorityCatalog.teamCortexRoot(request.team),
       consumerOutcome: `${request.taskId} Cortex guidance is current.`,
       baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: PINNED_LOCAL_DEV_SHA,
+        kind: ModuleDeliveryBaselineKind.FeatureBranch,
       },
-      agentDepthLimit: 2,
       dependencies: [],
       resources: {
         read: request.selectedSkillPaths,
@@ -80,30 +75,29 @@ export class ModuleDeliveryCortexPlanValidationScenario {
         evidence: [`${request.taskId} guidance is audited.`],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerRole:
+          request.team === TeamKey.Sre ? 'cloud-native' : 'cortex-specialist',
+        workerBranch: `codex/child/${request.team === TeamKey.Sre ? 'sre/cloud-native' : 'ai/cortex-specialist'}/module-delivery-test/${request.taskId}-cortex-authoring-work`,
+        worktreePath: `/tmp/nook-module-delivery/${request.taskId}`,
       },
     };
   }
 
-  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV5 {
+  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV6 {
     return new ModuleDeliveryCortexPlanValidationScenario(nodes).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV5 {
+  private execute(): ModuleDeliveryPlanV6 {
     const nodes = this.request;
     return {
-      version: 5,
+      version: 6,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      maxAgentDepth: 2,
-      maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'gizmo-prime',
         validationCommands: ['task loom:verify'],
       },
@@ -157,15 +151,15 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       expert: ModuleDeliveryTaskProfile.Ordinary,
       moduleRoot: 'nook-app/nook-platform/nook-core',
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      workspace: {
+        ...node.workspace,
+        workerRole: 'rust-core-developer',
+        workerBranch:
+          'codex/child/dev-core/rust-core-developer/module-delivery-test/dev-core-write-cortex-authoring-work',
+      },
     };
   }
 }
-
-const SOURCE_COMMIT = '3'.repeat(40);
-
-const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const SRE_SKILL = '.cortex/teams/sre/dynamic-skills/quality.md';
 

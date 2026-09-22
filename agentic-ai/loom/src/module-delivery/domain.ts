@@ -1,19 +1,15 @@
 import { TeamKey } from '../team-agents/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
-import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
-import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 5;
+export const MODULE_DELIVERY_PLAN_VERSION = 6;
 export type ModuleDeliveryPlanInputVersion =
-  1 | 2 | 3 | 4 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 /** A plan can describe every directed edge between distinct task nodes. */
 export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
   MAX_MODULE_DELIVERY_NODES * (MAX_MODULE_DELIVERY_NODES - 1);
 /** Evidence synthesis may name each task node at most once. */
 export const MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS = MAX_MODULE_DELIVERY_NODES;
-export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
-export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
 
 export enum ModuleDeliveryOwner {
@@ -236,21 +232,20 @@ export enum ModuleDeliveryEvidenceInputSchema {
 }
 
 export enum ModuleDeliveryWorkspaceKind {
-  SharedCheckout = 'shared-checkout',
+  WorkerWorktree = 'worker-worktree',
 }
 
 export enum ModuleDeliveryJoinKind {
-  DirectCommits = 'direct-commits',
+  WorkerBranches = 'worker-branches',
 }
 
 export enum ModuleDeliveryBaselineKind {
-  SourceCommit = 'source-commit',
+  FeatureBranch = 'feature-branch',
   IntegratedDependencies = 'integrated-dependencies',
 }
 
-export type SourceCommitBaseline = {
-  readonly kind: ModuleDeliveryBaselineKind.SourceCommit;
-  readonly sourceCommit: string;
+export type FeatureBranchBaseline = {
+  readonly kind: ModuleDeliveryBaselineKind.FeatureBranch;
 };
 
 export type IntegratedDependenciesBaseline = {
@@ -259,7 +254,7 @@ export type IntegratedDependenciesBaseline = {
 };
 
 export type ModuleDeliveryBaseline =
-  SourceCommitBaseline | IntegratedDependenciesBaseline;
+  FeatureBranchBaseline | IntegratedDependenciesBaseline;
 
 export type ModuleDeliveryResourceClaims = {
   readonly read: readonly string[];
@@ -306,12 +301,10 @@ type ModuleDeliveryNodeFields = {
   readonly team: TeamKey;
   readonly functionalOwner: ModuleDeliveryOwnerIdentity;
   readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  readonly parentLineage: AgentAttemptParent;
   readonly expert: string;
   readonly moduleRoot: string;
   readonly consumerOutcome: string;
   readonly baseline: ModuleDeliveryBaseline;
-  readonly agentDepthLimit: number;
   readonly dependencies: readonly string[];
   readonly resources: ModuleDeliveryResourceClaims;
   readonly parentOwnedExclusions: readonly string[];
@@ -331,8 +324,10 @@ export type ModuleDeliveryWriteNodeV2 = ModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly cortexAuthoring?: ModuleDeliveryCortexAuthoring;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
-    readonly expectedCommitHandoff: true;
+    readonly kind: ModuleDeliveryWorkspaceKind.WorkerWorktree;
+    readonly workerRole: string;
+    readonly workerBranch: string;
+    readonly worktreePath: string;
   };
 };
 
@@ -354,7 +349,7 @@ export type ModuleDeliveryEdgeContract = {
 };
 
 export type ModuleDeliveryParentJoin = {
-  readonly kind: ModuleDeliveryJoinKind.DirectCommits;
+  readonly kind: ModuleDeliveryJoinKind.WorkerBranches;
   readonly owner: string;
   readonly validationCommands: readonly string[];
 };
@@ -388,7 +383,7 @@ export type ModuleDeliveryPlanV3 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-/** Historical V4 plan shape. Its feature head is retained only for migration. */
+/** Historical V4 root shape retained only for compatibility decoding. */
 export type ModuleDeliveryPlanV4 = {
   readonly version: 4;
   readonly generation: number;
@@ -404,14 +399,12 @@ export type ModuleDeliveryPlanV4 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-/** Current plan authority: the canonical branch moves; Delivery resolves its head per stage. */
-export type ModuleDeliveryPlanV5 = PinnedDevBaseEvidence & {
+/** Current plan authority uses named branches and prepared worker worktrees. */
+export type ModuleDeliveryPlanV6 = {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly baseBranch: string;
   readonly featureBranch: string;
   readonly generation: number;
-  readonly sourceCommit: string;
-  readonly maxAgentDepth: number;
-  readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
   readonly parentJoin: ModuleDeliveryParentJoin;
   readonly nodes: readonly ModuleDeliveryNodeV2[];
@@ -450,8 +443,10 @@ export type LegacyReadOnlyModuleDeliveryNode =
 export type LegacyWriteModuleDeliveryNode = LegacyModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
-    readonly expectedCommitHandoff: true;
+    readonly kind: ModuleDeliveryWorkspaceKind.WorkerWorktree;
+    readonly workerRole: string;
+    readonly workerBranch: string;
+    readonly worktreePath: string;
   };
 };
 
@@ -482,7 +477,7 @@ export type ModuleDeliveryPlanInput =
   | ModuleDeliveryPlanV2
   | ModuleDeliveryPlanV3
   | ModuleDeliveryPlanV4
-  | ModuleDeliveryPlanV5;
+  | ModuleDeliveryPlanV6;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -506,7 +501,6 @@ export enum ModuleDeliveryIssueCode {
   LimitExceeded = 'limit-exceeded',
   EvidenceSurfaceMismatch = 'evidence-surface-mismatch',
   TeamOwnershipMismatch = 'team-ownership-mismatch',
-  ParentLineageMismatch = 'parent-lineage-mismatch',
   EvidenceInputMismatch = 'evidence-input-mismatch',
   AcceptanceOwnershipMismatch = 'acceptance-ownership-mismatch',
 }
@@ -527,32 +521,11 @@ export enum ModuleDeliveryCompatibilityStatus {
   Rejected = 'rejected',
 }
 
-export type DecodedCompatibleModuleDeliveryPlan =
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 1;
-      readonly plan: LegacyModuleDeliveryPlan;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 2;
-      readonly plan: ModuleDeliveryPlanV2;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 3;
-      readonly plan: ModuleDeliveryPlanV3;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 4;
-      readonly plan: ModuleDeliveryPlanV4;
-    }
-  | {
-      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-      readonly plan: ModuleDeliveryPlanV5;
-    };
+export type DecodedCompatibleModuleDeliveryPlan = {
+  readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+  readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly plan: ModuleDeliveryPlanV6;
+};
 
 export type RejectedCompatibleModuleDeliveryPlan = {
   readonly status: ModuleDeliveryCompatibilityStatus.Rejected;
@@ -565,7 +538,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV5;
+  readonly plan: ModuleDeliveryPlanV6;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

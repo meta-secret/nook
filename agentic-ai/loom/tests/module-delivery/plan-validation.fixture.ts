@@ -1,5 +1,3 @@
-import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
-
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -17,9 +15,7 @@ import type {
   ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
-  ModuleDeliveryPlanV3,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -33,8 +29,7 @@ export class ModuleDeliveryPlanValidationScenario {
     const baseline: ModuleDeliveryBaseline =
       fixture.dependencies.length === 0
         ? {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -49,12 +44,10 @@ export class ModuleDeliveryPlanValidationScenario {
           : TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: fixture.expert,
       moduleRoot: fixture.moduleRoot,
       consumerOutcome: `${fixture.taskId} publishes its accepted capability.`,
       baseline,
-      agentDepthLimit: 2,
       dependencies: fixture.dependencies,
       resources: {
         read: fixture.read,
@@ -74,8 +67,13 @@ export class ModuleDeliveryPlanValidationScenario {
         evidence: [`${fixture.taskId} behavior passes`],
       },
       workspace: {
-        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-        expectedCommitHandoff: true,
+        kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerRole:
+          fixture.expert === 'web_expert'
+            ? 'typescript-specialist'
+            : 'rust-core-developer',
+        workerBranch: `codex/child/${fixture.expert === 'web_expert' ? 'web-dev/typescript-specialist' : 'dev-core/rust-core-developer'}/module-delivery-test/${fixture.taskId}-implementation-work`,
+        worktreePath: `/tmp/nook-module-delivery/${fixture.taskId}`,
       },
     };
   }
@@ -86,8 +84,7 @@ export class ModuleDeliveryPlanValidationScenario {
     const baseline: ModuleDeliveryBaseline =
       fixture.dependencies.length === 0
         ? {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: PINNED_LOCAL_DEV_SHA,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -99,12 +96,10 @@ export class ModuleDeliveryPlanValidationScenario {
       team: TeamKey.DevelopmentCore,
       functionalOwner: TeamKey.Ai,
       acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
       expert: fixture.expert,
       moduleRoot: fixture.moduleRoot,
       consumerOutcome: `${fixture.taskId} reports reviewed evidence.`,
       baseline,
-      agentDepthLimit: 2,
       dependencies: fixture.dependencies,
       resources: {
         read: [`${fixture.moduleRoot}/**`],
@@ -140,57 +135,20 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV6 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  static historicalV2Plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
-    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    return {
-      version: 2,
-      generation: plan.generation,
-      sourceCommit: plan.sourceCommit,
-      maxConcurrency: 1,
-      maxAgentDepth: plan.maxAgentDepth,
-      maxAttempts: plan.maxAttempts,
-      parentOwnedResources: plan.parentOwnedResources,
-      parentJoin: plan.parentJoin,
-      nodes: plan.nodes,
-      edgeContracts: plan.edgeContracts,
-    };
-  }
-
-  static historicalV3Plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
-    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    return {
-      version: 3,
-      generation: plan.generation,
-      sourceCommit: plan.sourceCommit,
-      originMainSha: plan.originMainSha,
-      pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      maxAgentDepth: plan.maxAgentDepth,
-      maxAttempts: plan.maxAttempts,
-      parentOwnedResources: plan.parentOwnedResources,
-      parentJoin: plan.parentJoin,
-      nodes: plan.nodes,
-      edgeContracts: plan.edgeContracts,
-    };
-  }
-
-  private execute(): ModuleDeliveryPlanV5 {
+  private execute(): ModuleDeliveryPlanV6 {
     const fixture = this.request;
     return {
-      version: 5,
+      version: 6,
+      baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
-      sourceCommit: SOURCE_COMMIT,
-      originMainSha: ORIGIN_MAIN_SHA,
-      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      maxAgentDepth: 3,
-      maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -199,7 +157,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV6): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 
@@ -240,7 +198,7 @@ export class ModuleDeliveryPlanValidationScenario {
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
       parentJoin: {
-        kind: ModuleDeliveryJoinKind.DirectCommits,
+        kind: ModuleDeliveryJoinKind.WorkerBranches,
         owner: 'delivery-owner',
         validationCommands: ['task loom:verify'],
       },
@@ -252,8 +210,7 @@ export class ModuleDeliveryPlanValidationScenario {
           moduleRoot: CORE_ROOT,
           consumerOutcome: 'The parent receives reviewed legacy evidence.',
           baseline: {
-            kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            kind: ModuleDeliveryBaselineKind.FeatureBranch,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -277,11 +234,7 @@ export class ModuleDeliveryPlanValidationScenario {
   }
 }
 
-export const SOURCE_COMMIT = '3'.repeat(40);
-
-export const ORIGIN_MAIN_SHA = '1'.repeat(40);
-
-export const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
+const SOURCE_COMMIT = '3'.repeat(40);
 
 export const PARENT_OWNED_RESOURCES: readonly string[] = [
   ...REQUIRED_PARENT_OWNED_RESOURCES,

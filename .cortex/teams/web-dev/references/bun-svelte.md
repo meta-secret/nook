@@ -81,12 +81,17 @@ and `preflight` sources. Unused-code ownership is split as follows:
   [regression-before-fix procedure](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#mandatory-regression-coverage-for-bug-fixes)
   and uses the applicable
   [existing browser harness](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#existing-browser-harnesses).
-- Before integration, the Web worker authors focused behavior tests and commits
-  a coherent scoped handoff. Local feedback permits only bounded inexpensive
-  diagnostics or formatting. Browser and behavior tests execute in the dev
-  manager's slow PR stage against the published SHA.
-- Gizmo pushes feature commits and requests required PR-check evidence.
-- Tests and required browser E2E execute in the manager's slow dev PR stage.
+- Before integration, the Web worker authors focused behavior tests, finishes
+  the assigned worker branch, and reports focused evidence. Local feedback
+  permits only bounded inexpensive diagnostics or formatting. Browser and
+  behavior tests execute in the feature PR validation stage against the
+  published branch head.
+- The upstream integration agent integrates the worker branch and reports its
+  feature branch, integration outcome, and checks to Gizmo.
+- Gizmo routes feature-branch publication and required PR-check evidence through
+  the Delivery Pipeline.
+- Tests and required browser E2E execute in the feature PR validation stage.
 - Web development owns browser acceptance requirements.
-- The manager owns snapshot publication and promotion.
+- The Feature Gizmo owns readiness; Delivery Pipeline owns authorized GitHub
+  publication and squash-merge mechanics.
 - Missing build-only tooling does not authorize feature tests.

@@ -73,7 +73,7 @@ export class ModuleDeliveryCli {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical CLI admission requires plan version 5.',
+        message: 'Canonical CLI admission requires plan version 6.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
