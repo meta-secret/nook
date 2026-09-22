@@ -117,7 +117,7 @@ describe('automatic vault sync', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+    expect(state.errorMsg).toBe(state.t(I18N_KEYS.AuthStorageSyncFailed))
   })
 
   test('does not carry a join polling failure into the newly unlocked session', async () => {
@@ -156,7 +156,7 @@ describe('automatic vault sync', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+    expect(state.errorMsg).toBe(state.t(I18N_KEYS.AuthStorageSyncFailed))
   })
 
   test('does not promote a late background failure into a replacement session', async () => {

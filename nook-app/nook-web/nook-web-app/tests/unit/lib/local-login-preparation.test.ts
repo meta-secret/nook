@@ -20,8 +20,10 @@ describe('local login preparation', () => {
 
     await new VaultLoginActions(state).prepareLocalLogin()
 
-    expect(state.errorMsg).toBe(I18N_KEYS.ErrorsVaultUnlockMetadataUnavailable)
-    expect(state.errorMsg).not.toBe(I18N_KEYS.AuthStorageSyncFailed)
+    expect(state.errorMsg).toBe(
+      state.t(I18N_KEYS.ErrorsVaultUnlockMetadataUnavailable),
+    )
+    expect(state.errorMsg).not.toBe(state.t(I18N_KEYS.AuthStorageSyncFailed))
     expect(state.localLoginPreparation).toBe(LocalLoginPreparationState.Idle)
   })
 })
