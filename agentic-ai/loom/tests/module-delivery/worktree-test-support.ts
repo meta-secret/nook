@@ -1,0 +1,298 @@
+import { spawnSync } from 'node:child_process';
+
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+
+import { tmpdir } from 'node:os';
+
+import { join } from 'node:path';
+
+import type {
+  SpawnSyncOptionsWithStringEncoding,
+  SpawnSyncReturns,
+} from 'node:child_process';
+
+import type {
+  ModuleWorktreeHandle,
+  PrepareModuleWorktreeRequest,
+} from '../../src/module-delivery/index.ts';
+
+enum FixtureTemplateStateKind {
+  Empty = 'empty',
+  Ready = 'ready',
+}
+
+type FixtureTemplateState =
+  | { readonly kind: FixtureTemplateStateKind.Empty }
+  | {
+      readonly kind: FixtureTemplateStateKind.Ready;
+      readonly fixture: GitFixture;
+    };
+
+export class ModuleDeliveryWorktreeTestSupportScenario {
+  private constructor(private readonly request: GitFixture) {}
+
+  private static readonly FIXTURE_GIT_TIMEOUT_MILLISECONDS = 4_500;
+
+  private static fixtureTemplate: FixtureTemplateState = {
+    kind: FixtureTemplateStateKind.Empty,
+  };
+
+  static executeGit(command: GitExecution): string {
+    const options: SpawnSyncOptionsWithStringEncoding = {
+      cwd: command.cwd,
+      encoding: 'utf8',
+      env: process.env,
+      killSignal: 'SIGKILL',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout:
+        ModuleDeliveryWorktreeTestSupportScenario.FIXTURE_GIT_TIMEOUT_MILLISECONDS,
+    };
+    const result: SpawnSyncReturns<string> = spawnSync(
+      'git',
+      [...command.args],
+      options,
+    );
+    if (result.status !== 0) {
+      throw new Error(result.stderr.trim() || 'Fixture Git command failed.');
+    }
+    return result.stdout.trim();
+  }
+
+  static createGitFixture(): GitFixture {
+    const template =
+      ModuleDeliveryWorktreeTestSupportScenario.getFixtureTemplate();
+    const createdRoot = mkdtempSync(join(tmpdir(), 'nook-module-worktree-'));
+    const root = realpathSync(createdRoot);
+    const sourceRoot = join(root, 'source');
+    const workspaceRoot = join(root, 'workspaces');
+    cpSync(template.sourceRoot, sourceRoot, { recursive: true });
+    mkdirSync(workspaceRoot);
+    return {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: template.baselineCommit,
+      originMainSha: template.originMainSha,
+      pinnedLocalDevSha: template.pinnedLocalDevSha,
+      sourceCommit: template.sourceCommit,
+    };
+  }
+
+  private static getFixtureTemplate(): GitFixture {
+    const existing = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (existing.kind === FixtureTemplateStateKind.Ready)
+      return existing.fixture;
+    const createdRoot = mkdtempSync(
+      join(tmpdir(), 'nook-module-worktree-template-'),
+    );
+    const root = realpathSync(createdRoot);
+    const sourceRoot = join(root, 'source');
+    const workspaceRoot = join(root, 'workspaces');
+    mkdirSync(sourceRoot);
+    mkdirSync(workspaceRoot);
+    const provisional: GitFixture = {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: '',
+      originMainSha: '',
+      pinnedLocalDevSha: '',
+      sourceCommit: '',
+    };
+    const git =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(provisional);
+    git(['init', '--quiet']);
+    git(['config', 'user.name', 'Nook Test']);
+    git(['config', 'user.email', 'nook-test@example.invalid']);
+    const initialWrite: FixtureFileWrite = {
+      fixture: provisional,
+      relativePath: 'module/seed.txt',
+      contents: 'seed\n',
+    };
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(initialWrite);
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'baseline']);
+    const originMainSha = git(['rev-parse', 'HEAD']);
+    git(['update-ref', 'refs/remotes/origin/main', originMainSha]);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/pinned-local-dev.txt',
+      contents: 'pinned local dev\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'pinned local dev']);
+    const pinnedLocalDevSha = git(['rev-parse', 'HEAD']);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/source.txt',
+      contents: 'source commit\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'source']);
+    const sourceCommit = git(['rev-parse', 'HEAD']);
+    const template: GitFixture = {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
+      sourceCommit,
+    };
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Ready,
+      fixture: template,
+    };
+    process.once('exit', () =>
+      ModuleDeliveryWorktreeTestSupportScenario.disposeFixtureTemplate(),
+    );
+    return template;
+  }
+
+  private static disposeFixtureTemplate(): void {
+    const state = ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate;
+    if (state.kind === FixtureTemplateStateKind.Empty) return;
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureTemplate = {
+      kind: FixtureTemplateStateKind.Empty,
+    };
+    rmSync(state.fixture.root, { recursive: true, force: true });
+  }
+
+  static disposeGitFixture(fixture: GitFixture): void {
+    return new ModuleDeliveryWorktreeTestSupportScenario(fixture).execute();
+  }
+
+  static disposeGitFixtureWithoutWorktrees(fixture: GitFixture): void {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+
+  private execute(): void {
+    const fixture = this.request;
+    const git = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    try {
+      git(['worktree', 'prune', '--expire', 'now']);
+    } catch {
+      // The fixture may intentionally corrupt its source registration.
+    }
+    const removalOptions = { recursive: true, force: true } as const;
+    rmSync(fixture.root, removalOptions);
+  }
+
+  static fixtureGit(fixture: GitFixture): GitRunner {
+    return (args: readonly string[]) => {
+      const execution: GitExecution = { cwd: fixture.sourceRoot, args };
+      return ModuleDeliveryWorktreeTestSupportScenario.executeGit(execution);
+    };
+  }
+
+  static worktreeGit(workspace: ModuleWorktreeHandle): GitRunner {
+    return (args: readonly string[]) => {
+      const execution: GitExecution = { cwd: workspace.worktreePath, args };
+      return ModuleDeliveryWorktreeTestSupportScenario.executeGit(execution);
+    };
+  }
+
+  static writeFixtureFile(write: FixtureFileWrite): void {
+    const path = join(write.fixture.sourceRoot, write.relativePath);
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(join(path, '..'), directoryOptions);
+    writeFileSync(path, write.contents);
+  }
+
+  static writeWorktreeFile(write: WorktreeFileWrite): void {
+    const path = join(write.workspace.worktreePath, write.relativePath);
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(join(path, '..'), directoryOptions);
+    writeFileSync(path, write.contents);
+  }
+
+  static fixtureFileWriter(fixture: GitFixture): FixtureFileWriter {
+    return (entry: FixtureFileEntry) => {
+      const write: FixtureFileWrite = {
+        fixture,
+        relativePath: entry[0],
+        contents: entry[1],
+      };
+      ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(write);
+    };
+  }
+
+  static worktreeFileWriter(
+    workspace: ModuleWorktreeHandle,
+  ): FixtureFileWriter {
+    return (entry: FixtureFileEntry) => {
+      const write: WorktreeFileWrite = {
+        workspace,
+        relativePath: entry[0],
+        contents: entry[1],
+      };
+      ModuleDeliveryWorktreeTestSupportScenario.writeWorktreeFile(write);
+    };
+  }
+
+  static prepareRequest(fixture: GitFixture): PrepareModuleWorktreeRequest {
+    return {
+      repositoryRoot: fixture.sourceRoot,
+      workspaceRoot: fixture.workspaceRoot,
+      planDigest: PLAN_DIGEST,
+      taskId: 'core-provider',
+      attempt: 1,
+      baselineCommit: fixture.baselineCommit,
+    };
+  }
+
+  static installCheckoutHook(fixture: GitFixture): string {
+    const hooksDirectory = join(fixture.sourceRoot, '.git', 'hooks');
+    const markerPath = join(fixture.root, 'hook-ran');
+    const hookPath = join(hooksDirectory, 'post-checkout');
+    writeFileSync(hookPath, `#!/bin/sh\ntouch '${markerPath}'\n`);
+    chmodSync(hookPath, 0o755);
+    return markerPath;
+  }
+}
+
+const PLAN_DIGEST = 'a'.repeat(64);
+
+export type GitFixture = {
+  readonly root: string;
+  readonly sourceRoot: string;
+  readonly workspaceRoot: string;
+  readonly baselineCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly sourceCommit: string;
+};
+
+type GitExecution = {
+  readonly cwd: string;
+  readonly args: readonly string[];
+};
+
+export type GitRunner = (args: readonly string[]) => string;
+
+export type FixtureFileEntry = readonly [
+  relativePath: string,
+  contents: string,
+];
+
+export type FixtureFileWriter = (entry: FixtureFileEntry) => void;
+
+export type FixtureFileWrite = {
+  readonly fixture: GitFixture;
+  readonly relativePath: string;
+  readonly contents: string;
+};
+
+export type WorktreeFileWrite = {
+  readonly workspace: ModuleWorktreeHandle;
+  readonly relativePath: string;
+  readonly contents: string;
+};
