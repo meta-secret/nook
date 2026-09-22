@@ -894,6 +894,8 @@ pub const ERRORS_VAULT_CREATION_FAILED: &str = "errors.vault_creation_failed";
 pub const ERRORS_VAULT_PASSWORD_REQUIRED: &str = "errors.vault_password_required";
 pub const ERRORS_VAULT_RENAME_FAILED: &str = "errors.vault_rename_failed";
 pub const ERRORS_VAULT_SELECTION_FAILED: &str = "errors.vault_selection_failed";
+pub const ERRORS_VAULT_UNLOCK_METADATA_UNAVAILABLE: &str =
+    "errors.vault_unlock_metadata_unavailable";
 pub const ERRORS_WHOLE_VAULT_CONFLICT_RESOLUTION_RETIRED: &str =
     "errors.whole_vault_conflict_resolution_retired";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESCRIPTION: &str =

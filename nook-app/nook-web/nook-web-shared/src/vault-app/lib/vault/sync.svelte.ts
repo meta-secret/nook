@@ -712,11 +712,21 @@ export class VaultSyncActions {
         : state.runtimeConfig.resolve_default_vault_sync_interval_ms();
     log.info("vault sync timer started");
     if (state.isAuthenticated) {
+      const sessionEpoch = state.sessionEpoch;
       void state
         .syncFromStorage(ProviderSyncFreshness.Scheduled)
         .then((synchronized) => {
-          if (synchronized.isErr())
-            state.errorMsg = state.t(synchronized.error.translationKey);
+          if (synchronized.isErr()) {
+            if (
+              state.isAuthenticated &&
+              state.sessionEpoch === sessionEpoch
+            )
+              state.errorMsg = state.t(synchronized.error.translationKey);
+            else
+              log.warn(
+                `discarded late automatic sync failure: ${synchronized.error.kind}`,
+              );
+          }
         });
     }
     const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
@@ -734,11 +744,21 @@ export class VaultSyncActions {
         if (tickDecision !== VaultSyncTimerTickDecision.Sync) {
           return;
         }
+        const sessionEpoch = state.sessionEpoch;
         void state
           .syncFromStorage(ProviderSyncFreshness.Scheduled)
           .then((synchronized) => {
-            if (synchronized.isErr())
-              state.errorMsg = state.t(synchronized.error.translationKey);
+            if (synchronized.isErr()) {
+              if (
+                state.isAuthenticated &&
+                state.sessionEpoch === sessionEpoch
+              )
+                state.errorMsg = state.t(synchronized.error.translationKey);
+              else
+                log.warn(
+                  `discarded late automatic sync failure: ${synchronized.error.kind}`,
+                );
+            }
           });
       },
       intervalMs,

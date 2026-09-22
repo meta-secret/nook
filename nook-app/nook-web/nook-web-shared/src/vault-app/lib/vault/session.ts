@@ -111,6 +111,7 @@ export class VaultSessionActions {
   clearUnlockedSession({ resetManager }: UnlockedSessionClearRequest): void {
     const state = this.state;
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
+    state.sessionEpoch += 1;
     state.secretPageGeneration += 1;
     state.stopIdleSessionTracking();
     state.stopVaultSync();

@@ -1197,6 +1197,7 @@
     "shared_provider_access_required": "Shared-provider enrollment requires this browser to have matching provider access before connecting.",
     "shared_provider_oauth_required": "Shared-provider enrollment requires OAuth configuration.",
     "vault_selection_failed": "Failed to select vault.",
+    "vault_unlock_metadata_unavailable": "Nook could not load the information needed to unlock this vault. Reload the page and try again.",
     "vault_creation_failed": "Failed to create local vault.",
     "vault_rename_failed": "Failed to rename vault.",
     "conflict_resolution_failed": "Could not resolve conflict.",

@@ -1,17 +1,29 @@
-import { describe, expect, test } from 'vitest'
+import { err } from 'neverthrow'
+import { describe, expect, test, vi } from 'vitest'
 import {
+  DeviceProtectionStatus,
   NookClientRunModeUtil,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
   NookRuntimeConfig,
   NookSyncConflictReview,
+  ProviderSyncFreshness,
   VaultSyncConflictKind,
 } from '$app-wasm'
-import { SyncConflictPresentation } from '$lib/vault/sync.svelte'
+import {
+  SyncConflictPresentation,
+  VaultSyncActions,
+} from '$lib/vault/sync.svelte'
 import {
   TranslationMessage,
   type TranslationRequest,
 } from '$lib/vault/translation'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
   const revision = NookProviderSyncRevision.untracked()
@@ -85,6 +97,47 @@ describe('resolveVaultSyncIntervalMs', () => {
       false,
     )
     expect(config.resolve_vault_sync_interval_ms('500')).toBe(500)
+  })
+})
+
+describe('automatic vault sync', () => {
+  test('keeps an actionable background failure visible while unlocked', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.syncFromStorage = vi.fn(async () =>
+      err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    )
+    state.scheduleSync = vi.fn()
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+  })
+
+  test('does not promote a late background failure into a replacement session', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.errorMsg = ''
+    state.syncFromStorage = vi.fn(async () => {
+      state.sessionEpoch += 1
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
+    })
+    state.scheduleSync = vi.fn()
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.syncFromStorage).toHaveBeenCalledWith(
+      ProviderSyncFreshness.Scheduled,
+    )
+    expect(state.errorMsg).toBe('')
   })
 })
 

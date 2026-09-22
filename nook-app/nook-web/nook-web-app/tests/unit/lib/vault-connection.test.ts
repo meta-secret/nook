@@ -1,4 +1,4 @@
-import { ok, type Result } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   GITHUB_PROVIDER_TYPE,
@@ -29,6 +29,10 @@ import {
   RosterHydrationKind,
 } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 
 type ConnectionScenario = {
   readonly manager: NookVaultManager
@@ -163,6 +167,21 @@ afterEach(() => {
 })
 
 describe('vault connection', () => {
+  test('keeps an old post-unlock sync failure out of a replacement session', async () => {
+    const scenario = connectionScenario(ProviderSyncOutcome.Synced)
+    scenario.state.syncFromStorage = vi.fn(async () => {
+      scenario.state.sessionEpoch += 1
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
+    })
+
+    await new VaultConnectionActions(scenario.state).loadDb()
+
+    expect(scenario.state.isAuthenticated).toBe(true)
+    expect(scenario.state.errorMsg).toBe('')
+  })
+
   test.each([
     ['a skipped sync', ProviderSyncOutcome.Skipped],
     ['a captured sync failure', ProviderSyncOutcome.FailureCaptured],
