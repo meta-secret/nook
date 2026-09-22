@@ -367,10 +367,12 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
           [
             facts.sourceOrigin,
             facts.formIdentity,
-            facts.destinationIdentity,
             facts.label,
             ((v) => (v ? v : ""))(facts.machineIdentity),
           ],
+        ) &&
+        authenticationSubmissionControls.authenticationDestinationFits(
+          facts.destinationIdentity,
         ) &&
         (companionExtensionRuntimePresent()
           ? true

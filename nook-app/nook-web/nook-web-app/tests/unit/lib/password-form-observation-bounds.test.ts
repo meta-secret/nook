@@ -65,7 +65,7 @@ afterEach(() => {
 })
 
 describe('authentication observation bounds', () => {
-  test('does not strip destructive query evidence from an oversized destination', () => {
+  test('preserves destructive query evidence within the destination bound', () => {
     const query = `action=delete-account&state=${'a'.repeat(600)}`
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login?${query}">
@@ -81,8 +81,30 @@ describe('authentication observation bounds', () => {
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'absent',
+      kind: 'observed',
     })
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toContain(
+      'action=delete-account',
+    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('rejects a destination above its dedicated transport bound', () => {
+    const query = `state=${'a'.repeat(4_100)}`
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/login?${query}">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'absent' })
     expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })

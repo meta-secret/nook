@@ -45,6 +45,7 @@ export enum BookingAuthPresentationState {
 
 export type BookingAuthSubmission = {
   readonly email: string
+  readonly hiddenPasswordUntouched: boolean
   readonly submittedControl: BookingAuthControl
   readonly primaryActivation: BookingAuthPrimaryActivationState
   readonly googleInteraction: BookingAuthInteractionState
@@ -53,7 +54,6 @@ export type BookingAuthSubmission = {
   readonly recoveryInteraction: BookingAuthInteractionState
   readonly brandInteraction: BookingAuthInteractionState
   readonly disclosureInteraction: BookingAuthInteractionState
-  readonly helpInteraction: BookingAuthInteractionState
   readonly languageInteraction: BookingAuthInteractionState
 }
 
@@ -93,6 +93,7 @@ export class BookingAuthMockScenario {
     submission: BookingAuthSubmission,
   ): BookingAuthTransitionKind {
     return submission.email === BOOKING_MOCK_EMAIL &&
+      submission.hiddenPasswordUntouched &&
       submission.submittedControl === BookingAuthControl.ContinueWithEmail &&
       submission.primaryActivation ===
         BookingAuthPrimaryActivationState.Activated &&
@@ -105,7 +106,6 @@ export class BookingAuthMockScenario {
       submission.brandInteraction === BookingAuthInteractionState.Untouched &&
       submission.disclosureInteraction ===
         BookingAuthInteractionState.Untouched &&
-      submission.helpInteraction === BookingAuthInteractionState.Untouched &&
       submission.languageInteraction === BookingAuthInteractionState.Untouched
       ? BookingAuthTransitionKind.Completed
       : BookingAuthTransitionKind.Rejected

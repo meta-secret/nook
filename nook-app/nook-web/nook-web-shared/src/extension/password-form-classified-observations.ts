@@ -74,8 +74,10 @@ export class AuthenticationWorkflowClassification {
           [
             authenticationContext.sourceOrigin,
             authenticationContext.formIdentity,
-            authenticationContext.destinationIdentity,
           ],
+        ) &&
+        authenticationSubmissionControls.authenticationDestinationFits(
+          authenticationContext.destinationIdentity,
         ) &&
         [
           fields.usernameFieldCount,

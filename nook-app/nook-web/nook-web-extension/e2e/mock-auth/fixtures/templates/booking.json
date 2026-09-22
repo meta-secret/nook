@@ -3,6 +3,9 @@
   "quirks": [
     "form-method-omitted",
     "form-action-omitted",
+    "oauth-state-query",
+    "aria-hidden-password-decoy",
+    "zero-height-overflow-password-container",
     "provider-alternatives-inside-form",
     "account-recovery-inside-form"
   ],
@@ -10,11 +13,20 @@
     {
       "fields": [
         {
+          "id": "hidden-password",
+          "type": "password",
+          "name": "password",
+          "autocomplete": "current-password",
+          "aria-hidden": "true",
+          "tabindex": "-1"
+        },
+        {
+          "id": "username",
           "type": "email",
           "name": "username",
           "autocomplete": "username webauthn",
           "placeholder": "Enter your email address",
-          "aria-label": "Email address"
+          "label": "Email address"
         }
       ],
       "submit": {

@@ -73,12 +73,24 @@ impl AuthenticationAdvanceControlObservation {
                         | AuthenticationUsernameEvidence::Explicit
                 ),
                 PageControlSubmissionDestinationSource::Omitted => {
-                    self.form_identity.is_empty()
-                        && matches!(
-                            self.authentication_username,
-                            AuthenticationUsernameEvidence::WebAuthnEmail
-                                | AuthenticationUsernameEvidence::Explicit
-                        )
+                    match self.authentication_username {
+                        AuthenticationUsernameEvidence::WebAuthnEmail => {
+                            self.form_identity.is_empty()
+                        }
+                        AuthenticationUsernameEvidence::Explicit => {
+                            self.form_identity.is_empty()
+                                || (AuthenticationRouteIdentity::new(&self.form_identity)
+                                    .indicates_authentication()
+                                    && AuthenticationControlText::new(&self.label)
+                                        .expand_identity_text()
+                                        == "continue with email")
+                        }
+                        AuthenticationUsernameEvidence::Absent
+                        | AuthenticationUsernameEvidence::Generic
+                        | AuthenticationUsernameEvidence::StandardsBasedEmail
+                        | AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::MixedPhoneOrEmail => false,
+                    }
                 }
             }
             && self.password_field_count.is_zero()
@@ -300,6 +312,7 @@ impl CheckedAuthenticationControl<'_> {
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES;
 
     struct BookingDefaultGetScenario;
 
@@ -493,6 +506,20 @@ mod tests {
     #[test]
     fn booking_owned_identifier_default_get_is_narrowly_admitted() {
         assert!(BookingDefaultGetScenario::observation().authentication_advance_control_is_safe());
+        let mut oauth_state = BookingDefaultGetScenario::observation();
+        oauth_state.destination_identity = format!(
+            "https://account.booking.com/sign-in?op_token={}",
+            "a".repeat(700)
+        );
+        oauth_state.form_identity = "nw-signin".to_owned();
+        assert!(oauth_state.authentication_advance_control_is_safe());
+
+        let mut oversized = BookingDefaultGetScenario::observation();
+        oversized.destination_identity = format!(
+            "https://account.booking.com/sign-in?op_token={}",
+            "a".repeat(MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
+        );
+        assert!(!oversized.authentication_advance_control_is_safe());
         BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
     }
 

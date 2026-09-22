@@ -25,6 +25,9 @@ pub(crate) use input_role::AuthenticationInputRole;
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
 
+/// Maximum byte length for a browser-resolved authentication destination URL.
+pub const MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES: usize = 4096;
+
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
@@ -245,9 +248,10 @@ impl OneTimeCodeRouteEvidence<'_> {
             form_identity,
             destination_identity,
         } = self;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
         {
             return OneTimeCodeRouteDecision::Rejected;
         }
@@ -416,9 +420,10 @@ impl AuthenticationAdvanceControlObservation {
             form_identity,
             destination_identity,
         } = request;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
         {
             return false;
         }
@@ -459,9 +464,10 @@ impl AuthenticationAdvanceControlObservation {
             form_identity,
             destination_identity,
         } = request;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
         {
             return false;
         }

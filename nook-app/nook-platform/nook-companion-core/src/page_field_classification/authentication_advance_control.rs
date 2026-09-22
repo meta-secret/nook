@@ -174,7 +174,7 @@ impl AuthenticationAdvanceControlObservation {
     pub fn is_bounded(&self) -> bool {
         self.source_origin.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.destination_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.destination_identity.len() <= super::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
             && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.machine_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && [

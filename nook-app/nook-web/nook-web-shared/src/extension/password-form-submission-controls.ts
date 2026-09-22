@@ -135,6 +135,7 @@ type ImplicitAuthenticationSubmitRequest = {
 type AuthenticationFactTexts = string[];
 
 export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
+export const MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES = 4096;
 
 export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 
@@ -187,8 +188,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     return values.every(this.authenticationPolicyTextFits.bind(this));
   }
 
+  authenticationDestinationFits(value: string): boolean {
+    return (
+      this.utf8ByteLength(value) <= MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
+    );
+  }
+
   boundedAuthenticationDestination(identity: string): string {
-    return this.authenticationPolicyTextFits(identity) ? identity : "";
+    return this.authenticationDestinationFits(identity) ? identity : "";
   }
 
   rawOwnedFormIdentity(form: HTMLFormElement): string {
@@ -574,13 +581,12 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     hasAuthenticationUsername,
     hasAuthenticationPassword,
   }: ImplicitAuthenticationSubmitCapabilityRequest): boolean {
-    const transportableFacts: AuthenticationFactTexts = [
-      sourceOrigin,
-      this.rawOwnedFormIdentity(form),
-      destinationIdentity,
-    ];
     return (
-      this.authenticationFactStringsAreTransportable(transportableFacts) &&
+      this.authenticationFactStringsAreTransportable([
+        sourceOrigin,
+        this.rawOwnedFormIdentity(form),
+      ]) &&
+      this.authenticationDestinationFits(destinationIdentity) &&
       can_activate_authentication_route_control(
         sourceOrigin,
         this.ownedFormIdentity(form),
@@ -718,10 +724,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       !this.authenticationFactStringsAreTransportable([
         sourceOrigin,
         formIdentity,
-        destinationIdentity,
         controlLabel,
         machineIdentity,
-      ])
+      ]) ||
+      !this.authenticationDestinationFits(destinationIdentity)
     ) {
       return false;
     }
@@ -908,13 +914,14 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
       };
-      const transportable = this.authenticationFactStringsAreTransportable([
-        observation.sourceOrigin,
-        observation.formIdentity,
-        observation.destinationIdentity,
-        observation.label,
-        ((v) => (v ? v : ""))(observation.machineIdentity),
-      ]);
+      const transportable =
+        this.authenticationFactStringsAreTransportable([
+          observation.sourceOrigin,
+          observation.formIdentity,
+          observation.label,
+          ((v) => (v ? v : ""))(observation.machineIdentity),
+        ]) &&
+        this.authenticationDestinationFits(observation.destinationIdentity);
       if (!transportable) return false;
       // The shortlist grants no action authority. In extension content worlds,
       // retain the candidate for the subsequent offscreen Rust policy batch.
