@@ -141,7 +141,10 @@ describe('authentication observation bounds', () => {
       backupCodesHint: false,
     }).observations
     expect(classified).toHaveLength(1)
-    expect(ownedFormId(classified[0]!.observation)).toBe('valid-login')
+    const validObservation = classified.at(0)
+    if (!validObservation)
+      throw new Error('expected one valid login observation')
+    expect(ownedFormId(validObservation.observation)).toBe('valid-login')
   })
 
   test('isolates a candidate whose raw form identity exceeds the bound', () => {
