@@ -383,10 +383,7 @@ export class VaultConnectionActions {
           ProviderSyncFreshness.Forced,
         );
         if (synchronized.isErr()) {
-          if (
-            state.isAuthenticated &&
-            state.sessionEpoch === sessionEpoch
-          )
+          if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
             state.errorMsg = state.t(synchronized.error.translationKey);
           else
             log.warn(

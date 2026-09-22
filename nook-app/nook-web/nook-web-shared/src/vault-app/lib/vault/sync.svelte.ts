@@ -717,10 +717,7 @@ export class VaultSyncActions {
         .syncFromStorage(ProviderSyncFreshness.Scheduled)
         .then((synchronized) => {
           if (synchronized.isErr()) {
-            if (
-              state.isAuthenticated &&
-              state.sessionEpoch === sessionEpoch
-            )
+            if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
               state.errorMsg = state.t(synchronized.error.translationKey);
             else
               log.warn(
@@ -749,10 +746,7 @@ export class VaultSyncActions {
           .syncFromStorage(ProviderSyncFreshness.Scheduled)
           .then((synchronized) => {
             if (synchronized.isErr()) {
-              if (
-                state.isAuthenticated &&
-                state.sessionEpoch === sessionEpoch
-              )
+              if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
                 state.errorMsg = state.t(synchronized.error.translationKey);
               else
                 log.warn(
