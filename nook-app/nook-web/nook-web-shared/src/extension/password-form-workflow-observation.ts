@@ -133,6 +133,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         backupCodesHint: boolean;
       }
     | false = false;
+  private collectingSettledPageFacts:
+    AuthenticationPageObservationFacts[] | false = false;
   private readonly transportabilityPolicies = new Map<string, boolean>();
   private readonly advanceControlPolicies = new Map<string, boolean>();
   private readonly passkeyCandidatePolicies = new Map<string, boolean>();
@@ -304,14 +306,44 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       const progress = response.activityProgress[index];
       if (progress) this.activityProgress.set(activity, progress);
     });
-    const settledWorkflowForms = this.summarizeAuthenticationWorkflowForms();
-    const settledPageFacts = settledWorkflowForms.map((observation) =>
-      this.authenticationPageObservationFacts({
-        observation,
-        authenticatorSetupHint,
-        backupCodesCopy: backupCodesHint ? "Save backup codes" : "",
-      }),
+    const settledPageFacts: AuthenticationPageObservationFacts[] = [];
+    this.collectingSettledPageFacts = settledPageFacts;
+    try {
+      this.summarizeAuthenticationWorkflowForms();
+    } finally {
+      this.collectingSettledPageFacts = false;
+    }
+    const settledDelivery = await evaluateCompanionAuthenticationPolicies(
+      this.browser,
+      {
+        transportability: [],
+        advanceControls: [],
+        passkeyCandidates: [],
+        pageFacts: settledPageFacts,
+        implicitSubmissions: [],
+      },
     );
+    if (
+      settledDelivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
+      !settledDelivery.response ||
+      typeof settledDelivery.response !== "object" ||
+      !("pageFactsPriorities" in settledDelivery.response) ||
+      !("pageFactsAdmissibility" in settledDelivery.response)
+    ) {
+      return;
+    }
+    const settledResponse = settledDelivery.response;
+    settledPageFacts.forEach((request, index) => {
+      const priority = settledResponse.pageFactsPriorities[index];
+      if (typeof priority === "number") {
+        this.pageFactsPriorities.set(this.policyKey(request), priority);
+      }
+      this.pageFactsAdmissibility.set(
+        this.policyKey(request),
+        settledResponse.pageFactsAdmissibility[index] === true,
+      );
+    });
+    const settledWorkflowForms = this.summarizeAuthenticationWorkflowForms();
     const implicitSubmissions = settledWorkflowForms.map(
       (observation): AuthenticationImplicitSubmitActuationObservation => {
         const facts = this.authenticationPageObservationFacts({
@@ -332,7 +364,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         transportability: [],
         advanceControls: [],
         passkeyCandidates: [],
-        pageFacts: settledPageFacts,
+        pageFacts: [],
         implicitSubmissions,
       },
     );
@@ -340,23 +372,11 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       implicitDelivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
       !implicitDelivery.response ||
       typeof implicitDelivery.response !== "object" ||
-      !("pageFactsPriorities" in implicitDelivery.response) ||
-      !("pageFactsAdmissibility" in implicitDelivery.response) ||
       !("implicitSubmissions" in implicitDelivery.response)
     ) {
       return;
     }
     const implicitResponse = implicitDelivery.response;
-    settledPageFacts.forEach((request, index) => {
-      const priority = implicitResponse.pageFactsPriorities[index];
-      if (typeof priority === "number") {
-        this.pageFactsPriorities.set(this.policyKey(request), priority);
-      }
-      this.pageFactsAdmissibility.set(
-        this.policyKey(request),
-        implicitResponse.pageFactsAdmissibility[index] === true,
-      );
-    });
     const implicitResponses: readonly boolean[] =
       implicitResponse.implicitSubmissions;
     implicitSubmissions.forEach((request, index) =>
@@ -368,6 +388,21 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
   }
 
   private passwordFormPriority(observation: PasswordFormObservation): number {
+    const facts = this.passwordFormPageFacts(observation);
+    if (this.collectingPolicies || this.collectingSettledPageFacts) {
+      this.collectPageFactsPolicy(facts);
+      return 0;
+    }
+    const cached = this.pageFactsPriorities.get(this.policyKey(facts));
+    if (typeof cached === "number") return cached;
+    return companionExtensionRuntimePresent()
+      ? 0
+      : authentication_page_observation_facts_priority(facts);
+  }
+
+  private passwordFormPageFacts(
+    observation: PasswordFormObservation,
+  ): AuthenticationPageObservationFacts {
     const preparedHints = this.collectingPolicies || this.preparedWorkflowHints;
     const factsRequest: AuthenticationObservationFactsRequest = {
       observation,
@@ -379,16 +414,31 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
           ? "Save backup codes"
           : "",
     };
-    const facts = this.authenticationPageObservationFacts(factsRequest);
-    if (this.collectingPolicies) {
-      this.collectingPolicies.pageFacts.push(facts);
-      return 0;
+    return this.authenticationPageObservationFacts(factsRequest);
+  }
+
+  private collectPageFactsPolicy(
+    facts: AuthenticationPageObservationFacts,
+  ): void {
+    const collection = this.collectingPolicies
+      ? this.collectingPolicies.pageFacts
+      : this.collectingSettledPageFacts;
+    if (!collection) return;
+    const key = this.policyKey(facts);
+    if (!collection.some((candidate) => this.policyKey(candidate) === key)) {
+      collection.push(facts);
     }
-    const cached = this.pageFactsPriorities.get(this.policyKey(facts));
-    if (typeof cached === "number") return cached;
-    return companionExtensionRuntimePresent()
-      ? 0
-      : authentication_page_observation_facts_priority(facts);
+  }
+
+  private passwordFormIsAdmissible(
+    observation: PasswordFormObservation,
+  ): boolean {
+    const facts = this.passwordFormPageFacts(observation);
+    if (this.collectingPolicies || this.collectingSettledPageFacts) {
+      this.collectPageFactsPolicy(facts);
+      return true;
+    }
+    return this.authenticationPageObservationFactsIsAdmissible(facts);
   }
 
   authenticationPageObservationFactsIsAdmissible(
@@ -897,6 +947,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         browser: this.browser,
         summarizeRoot: this.summarizeRoot.bind(this),
         observationPriority: this.passwordFormPriority.bind(this),
+        observationIsAdmissible: this.passwordFormIsAdmissible.bind(this),
         passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
       };
     return new PasswordAuthenticationWorkflowFormSummary(
