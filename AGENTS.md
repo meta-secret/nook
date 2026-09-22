@@ -1,8 +1,13 @@
 # Nook Agent Entry Point
 
 Read [`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md) before every
-other Cortex document. Then read [`.cortex/AGENTS.md`](.cortex/AGENTS.md) and
-[`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
+other Cortex document. Meta-Cortex is a required tool. Before normal repository
+work, follow the canonical [bootstrap contract](.cortex/meta-cortex-integration.md#required-bootstrap)
+to verify or initialize `.meta-cortex/`. Stop all repository work and report
+the exact blocker if the bootstrap does not succeed.
+
+After the bootstrap succeeds, read [`.cortex/AGENTS.md`](.cortex/AGENTS.md)
+and [`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
 changes in this repository. Nook context composes with
 [Meta-Cortex](.meta-cortex/AGENTS.md) through the
 [integration contract](.cortex/meta-cortex-integration.md). Meta-Cortex owns
@@ -22,3 +27,12 @@ generic agents and skills; Nook owns product context and delivery constraints.
   domain tests.
 - Flag authored TypeScript/Svelte `null`, visible inline English instead of the
   shared translation catalogs, and undocumented schema or storage migrations.
+
+
+---
+meta-cortex: instructions
+---
+
+Read and follow [.meta-cortex/AGENTS.md](.meta-cortex/AGENTS.md).
+
+---

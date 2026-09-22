@@ -3,8 +3,10 @@
 ## Required entry
 
 Read [the circuit breaker](CIRCUIT-BREAKER.md) before every other Cortex document.
-Then read [Meta-Cortex integration](meta-cortex-integration.md) and the
-[root knowledge graph](knowledge-graph.md).
+Then enforce the Meta-Cortex integration
+[required bootstrap](meta-cortex-integration.md#required-bootstrap). Do not
+plan, edit, validate, or launch agents until the bootstrap succeeds. After it
+succeeds, read the [root knowledge graph](knowledge-graph.md).
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
@@ -26,7 +28,9 @@ ownership boundary.
 - [Nook Gizmo Prime](gizmo-prime/AGENTS.md) wraps upstream Prime.
 - [Nook Team Gizmo](gizmo-prime/team-gizmo/AGENTS.md) wraps the single upstream coordinator.
 - [Nook agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to roles.
-- [Agent configuration](../.meta-cortex/meta-cortex.toml) owns all active launch settings.
+- [Agent configuration](../.meta-cortex/meta-cortex.toml) is the sole source of
+  active launch settings; pass each role's exact `model` and
+  `reasoning_effort` values.
 
 ## Mandatory context selection
 
