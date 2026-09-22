@@ -922,9 +922,10 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         root.querySelectorAll?.<HTMLElement>(passkeyControlSelector),
       ),
     );
+    const htmlElement = globalThis.HTMLElement || false;
     const rooted =
-      typeof HTMLElement !== "undefined" &&
-      root instanceof HTMLElement &&
+      htmlElement &&
+      root instanceof htmlElement &&
       root.matches(passkeyControlSelector)
         ? [root]
         : [];

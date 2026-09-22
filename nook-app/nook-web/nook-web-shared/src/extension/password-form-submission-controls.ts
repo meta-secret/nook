@@ -703,12 +703,13 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
+    const elementConstructor = globalThis.Element || false;
     const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
           query.formScope.kind === PasswordFormScopeKind.Unowned &&
-          typeof Element !== "undefined" &&
-          query.root instanceof Element
+          elementConstructor &&
+          query.root instanceof elementConstructor
         ? query.root
         : false;
     const formIdentity = [
@@ -942,10 +943,12 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     field,
     control,
   }: UnownedLocalScopeRequest): boolean {
-    if (typeof Element !== "undefined" && root instanceof Element) {
+    const elementConstructor = globalThis.Element || false;
+    const documentConstructor = globalThis.Document || false;
+    if (elementConstructor && root instanceof elementConstructor) {
       return root.contains(control) && root.contains(field);
     }
-    if (typeof Document !== "undefined" && !(root instanceof Document))
+    if (documentConstructor && !(root instanceof documentConstructor))
       return false;
     const containerRequest: UnownedAuthContainerRequest = {
       field,
@@ -954,8 +957,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const container =
       passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
     return (
-      typeof Element !== "undefined" &&
-      container instanceof Element &&
+      elementConstructor &&
+      container instanceof elementConstructor &&
       container.contains(control)
     );
   }
