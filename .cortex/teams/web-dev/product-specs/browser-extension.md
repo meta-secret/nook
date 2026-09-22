@@ -45,7 +45,7 @@ application capability checks enforce the vault-type boundary.
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
 - **Extension toolbar action**
-  - **Responsibility:** Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault
+  - **Responsibility:** Create or unlock the extension device; companion home explains readiness, vault linkage, and the next available action
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
@@ -140,13 +140,18 @@ private identity.
 
 - The toolbar always opens the extension-owned launcher.
 - Before approval, the popup shows device setup or device unlock. Completing
-  that action lands on a companion-home choice: connect/pair with Simple Vault,
-  open Simple Vault, or stay ready without opening a vault tab.
+  that action lands on a companion home that explains the protected browser
+  identity, its vault connection, and the actions available next.
 - After a grant and usable encrypted event-log projection are persisted, unlock
-  or a ready session shows the same companion home: stay ready for site auth,
-  with Open Simple Vault as an explicit secondary option. Grant metadata by
+  or a ready session shows the same companion home. Open Simple Vault is the
+  primary management action; pairing another vault is secondary. Closing the
+  popup leaves the companion ready for site authentication. Grant metadata by
   itself never produces connected state, and a connected unlock never auto-opens
   Simple Vault.
+- The companion home summarizes the current secret total and whether the
+  protected extension app key is linked to an authorized Simple Vault. These
+  values come from the unlocked Rust/WASM vault projection; unavailable state
+  remains visible instead of treating event-log history as a secret count.
 - The popup starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
