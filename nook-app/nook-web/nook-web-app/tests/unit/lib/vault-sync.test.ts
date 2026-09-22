@@ -109,7 +109,9 @@ describe('automatic vault sync', () => {
     state.syncFromStorage = vi.fn(async () =>
       err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
     )
-    state.scheduleSync = vi.fn(({ callback }) => callback())
+    state.scheduleSync = vi.fn(
+      (request: Parameters<typeof state.scheduleSync>[0]) => request.callback(),
+    )
 
     new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
@@ -130,7 +132,9 @@ describe('automatic vault sync', () => {
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       )
     })
-    state.scheduleSync = vi.fn(({ callback }) => callback())
+    state.scheduleSync = vi.fn(
+      (request: Parameters<typeof state.scheduleSync>[0]) => request.callback(),
+    )
 
     new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
