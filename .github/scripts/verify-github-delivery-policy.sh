@@ -62,6 +62,7 @@ for branch in main; do
   verify_github_branch_protection_policy "$branch" allow_force_pushes.enabled false
   verify_github_branch_protection_policy "$branch" allow_deletions.enabled false
   verify_github_branch_protection_policy "$branch" required_linear_history.enabled true
+  verify_github_branch_protection_policy "$branch" required_pull_request_reviews missing
 done
 
 echo "GitHub delivery policy is compatible with squash-only feature delivery."

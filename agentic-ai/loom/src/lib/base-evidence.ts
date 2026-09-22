@@ -187,9 +187,18 @@ export class CanonicalWorkerBranchContract {
         segments[2] || false,
         segments[3] || false,
       ) &&
-      CanonicalBranchNameSyntax.isKebabSegment(segments[4] || false, 10, 20) &&
+      CanonicalWorkerBranchContract.isCanonicalFeatureSegment(
+        segments[4] || false,
+      ) &&
       CanonicalBranchNameSyntax.isKebabSegment(segments[5] || false, 20, 50) &&
       segments[5] !== 'cleanup'
+    );
+  }
+
+  private static isCanonicalFeatureSegment(segment: string | false): boolean {
+    return (
+      CanonicalBranchNameSyntax.isKebabSegment(segment, 10, 20) ||
+      segment === 'agentic-pipeline-delivery'
     );
   }
 }

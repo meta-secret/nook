@@ -200,6 +200,7 @@ describe('canonical worker branch identity', () => {
       'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile',
       'codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface',
       'codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-contract',
+      'codex/child/ai/loom-specialist/agentic-pipeline-delivery/update-agent-routing-contract',
     ];
 
     for (const branch of validBranches) {

@@ -129,7 +129,7 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_DYNAMIC_EXECUTABLES = new Map([
   [
     '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
-    '2ffd8f6d0a09b161b1c235372c3c45cb676e51978043253145a1b0e40fa5d62e',
+    'd41d7290b77f50ace0e99b8f28dc87b11f2c22cb8b0113965611b6faf03c6651',
   ],
   [
     '.github/workflows/remote.yml:"$node_bin"',
