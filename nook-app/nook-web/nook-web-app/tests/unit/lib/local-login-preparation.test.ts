@@ -26,4 +26,53 @@ describe('local login preparation', () => {
     expect(state.errorMsg).not.toBe(state.t(I18N_KEYS.AuthStorageSyncFailed))
     expect(state.localLoginPreparation).toBe(LocalLoginPreparationState.Idle)
   })
+
+  test('discards a stale metadata failure after the vault session unlocks', async () => {
+    const state = VaultStateTestFixture.create()
+    state.localVaultPresent = true
+    state.localLoginPreparation = LocalLoginPreparationState.Idle
+    let rejectRefresh: () => void = () => {}
+    const refreshResult = new Promise<
+      Awaited<ReturnType<typeof state.refreshPasswordEntriesList>>
+    >((resolve) => {
+      rejectRefresh = () =>
+        resolve(
+          err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+        )
+    })
+    state.refreshPasswordEntriesList = vi.fn(async () => refreshResult)
+
+    const preparation = new VaultLoginActions(state).prepareLocalLogin()
+    state.sessionEpoch += 1
+    state.isAuthenticated = true
+    rejectRefresh()
+    await preparation
+
+    expect(state.errorMsg).toBe('')
+    expect(state.localLoginPreparation).toBe(LocalLoginPreparationState.Idle)
+  })
+
+  test('discards a metadata failure during device authorization', async () => {
+    const state = VaultStateTestFixture.create()
+    state.localVaultPresent = true
+    state.localLoginPreparation = LocalLoginPreparationState.Idle
+    let rejectRefresh: () => void = () => {}
+    const refreshResult = new Promise<
+      Awaited<ReturnType<typeof state.refreshPasswordEntriesList>>
+    >((resolve) => {
+      rejectRefresh = () =>
+        resolve(
+          err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+        )
+    })
+    state.refreshPasswordEntriesList = vi.fn(async () => refreshResult)
+
+    const preparation = new VaultLoginActions(state).prepareLocalLogin()
+    state.isVerifying = true
+    rejectRefresh()
+    await preparation
+
+    expect(state.errorMsg).toBe('')
+    expect(state.localLoginPreparation).toBe(LocalLoginPreparationState.Idle)
+  })
 })
