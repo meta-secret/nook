@@ -3,15 +3,19 @@ export class AuthenticationInputSurface {
   constructor(protected readonly browser: typeof globalThis) {}
   protected isRenderedInput(field: HTMLInputElement): boolean {
     if (field.type === "hidden") return false;
-    if (field.closest("dialog:not([open])")) return false;
+    return this.isRenderedElement(field);
+  }
+
+  protected isRenderedElement(candidate: HTMLElement): boolean {
+    if (candidate.closest("dialog:not([open])")) return false;
     // Cookie/consent layers often mark large subtrees aria-hidden while the
     // login fields remain CSS-visible and focusable (common on Meta). Only the
-    // field itself is rejected for aria-hidden; ancestors still fail on hidden /
-    // display:none / visibility:hidden so closed header menus stay ignored.
-    if (field.getAttribute("aria-hidden") === "true") {
+    // candidate itself is rejected for aria-hidden; ancestors still fail on
+    // hidden / display:none / visibility:hidden so closed menus stay ignored.
+    if (candidate.getAttribute("aria-hidden") === "true") {
       return false;
     }
-    let element = field as HTMLElement;
+    let element = candidate;
     while (true) {
       if (
         element.hidden ||
@@ -25,6 +29,16 @@ export class AuthenticationInputSurface {
       const style =
         element.ownerDocument.defaultView?.getComputedStyle(element);
       if (style?.display === "none" || style?.visibility === "hidden") {
+        return false;
+      }
+      if (
+        style &&
+        (style.overflow === "hidden" ||
+          style.overflow === "clip" ||
+          style.overflowY === "hidden" ||
+          style.overflowY === "clip") &&
+        style.height === "0px"
+      ) {
         return false;
       }
       const parent = element.parentElement;

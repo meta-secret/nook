@@ -264,9 +264,14 @@ describe('authentication fact rescans', () => {
     ).toBe(false)
     document.querySelector('#email-label')?.setAttribute('for', 'contact')
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+    document.querySelector('#gate')?.setAttribute('style', 'visibility:hidden')
     document
       .querySelector('#gate')
       ?.setAttribute('src', 'about:blank#https://hcaptcha.test')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(false)
+    document.querySelector('#gate')?.removeAttribute('style')
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(true)
@@ -277,6 +282,18 @@ describe('authentication fact rescans', () => {
     document
       .querySelector('#gate')
       ?.setAttribute('data-nook-manual-checkpoint', '')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(true)
+    document
+      .querySelector('#gate')
+      ?.removeAttribute('data-nook-manual-checkpoint')
+    const explicitSvgCheckpoint = document.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'svg',
+    )
+    explicitSvgCheckpoint.setAttribute('data-nook-manual-checkpoint', '')
+    document.querySelector('form')?.append(explicitSvgCheckpoint)
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(true)
