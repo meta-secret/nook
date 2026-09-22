@@ -1,4 +1,5 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- Diagnostic observations are assembled into generated Rust request records here. */
+import { AuthenticationInputSurface } from "./authentication-input-surface";
 export enum AuthenticationFieldCandidateDisposition {
   Accepted = "accepted",
   Rejected = "rejected",
@@ -194,7 +195,7 @@ export class AuthenticationFieldCandidateDiagnosticBuilder {
       }
       if (current.hasAttribute("inert") || current.inert === true)
         return AuthenticationFieldCandidateRenderability.InertAncestor;
-      if (current instanceof HTMLDialogElement && !current.open)
+      if (AuthenticationInputSurface.isDialogElement(current) && !current.open)
         return AuthenticationFieldCandidateRenderability.ClosedDialog;
       const style =
         current.ownerDocument.defaultView?.getComputedStyle(current);

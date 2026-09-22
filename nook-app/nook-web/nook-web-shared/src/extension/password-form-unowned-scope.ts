@@ -85,8 +85,8 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       })
       .join(" ");
     const value =
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLButtonElement
+      AuthenticationInputSurface.isInputElement(control) ||
+      AuthenticationInputSurface.isButtonElement(control)
         ? control.value
         : "";
     return [
@@ -184,7 +184,7 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
     container,
     field,
   }: TypeButtonPromotionScopeRequest): boolean {
-    if (!(field instanceof HTMLInputElement)) return false;
+    if (!AuthenticationInputSurface.isInputElement(field)) return false;
     const promotionRequest: TypeButtonPromotionScopeRequest = {
       container,
       field,
@@ -332,7 +332,7 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       container = container.parentElement;
     }
     const parent = field.parentElement;
-    if (parent instanceof HTMLElement && parent !== root) {
+    if (parent && parent !== root) {
       const parentScopeRequest: TypeButtonPromotionScopeRequest = {
         container: parent,
         field,
@@ -361,8 +361,8 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       return false;
     }
     if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
+      (AuthenticationInputSurface.isButtonElement(control) ||
+        AuthenticationInputSurface.isInputElement(control)) &&
       control.form
     ) {
       return false;
@@ -383,8 +383,8 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
         owner: formScope.owner,
       };
       if (
-        control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement
+        AuthenticationInputSurface.isButtonElement(control) ||
+        AuthenticationInputSurface.isInputElement(control)
       ) {
         return (
           control.form === formScope.owner ||
@@ -397,8 +397,8 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       );
     }
     if (
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
+      AuthenticationInputSurface.isButtonElement(control) ||
+      AuthenticationInputSurface.isInputElement(control)
     ) {
       return !control.form;
     }
@@ -442,7 +442,7 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
     if (
       Array.from(doc.querySelectorAll(checkpointSelector)).some(
         (checkpoint) =>
-          checkpoint instanceof HTMLElement &&
+          AuthenticationInputSurface.isHTMLElement(checkpoint) &&
           this.isRenderedElement(checkpoint),
       )
     ) {

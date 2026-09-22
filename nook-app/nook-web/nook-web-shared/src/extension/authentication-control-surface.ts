@@ -1,3 +1,5 @@
+import { AuthenticationInputSurface } from "./authentication-input-surface";
+
 /** Owns the host rendering and disabled-state observations shared by authentication controls. */
 enum DisabledPropertyControlDecodeKind {
   Unsupported = "unsupported",
@@ -25,16 +27,13 @@ export class AuthenticationControlSurface {
     let ancestor = control.parentElement;
     while (ancestor) {
       if (
-        ancestor instanceof HTMLFieldSetElement &&
+        AuthenticationInputSurface.isFieldSetElement(ancestor) &&
         ancestor.hasAttribute("disabled")
       ) {
         const firstLegend = [...ancestor.children].find(
-          (child) => child instanceof HTMLLegendElement,
+          AuthenticationInputSurface.isLegendElement,
         );
-        if (!(
-          firstLegend instanceof HTMLLegendElement &&
-          firstLegend.contains(control)
-        )) {
+        if (!(firstLegend && firstLegend.contains(control))) {
           return true;
         }
       }
@@ -46,12 +45,12 @@ export class AuthenticationControlSurface {
   protected decodeDisabledPropertyControl(
     control: HTMLElement,
   ): DisabledPropertyControlDecode {
-    return control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLSelectElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLFieldSetElement ||
-      control instanceof HTMLOptionElement
+    return AuthenticationInputSurface.isButtonElement(control) ||
+      AuthenticationInputSurface.isInputElement(control) ||
+      AuthenticationInputSurface.isSelectElement(control) ||
+      AuthenticationInputSurface.isTextAreaElement(control) ||
+      AuthenticationInputSurface.isFieldSetElement(control) ||
+      AuthenticationInputSurface.isOptionElement(control)
       ? {
           kind: DisabledPropertyControlDecodeKind.Supported,
           control,
@@ -101,13 +100,14 @@ export class AuthenticationControlSurface {
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (element instanceof HTMLDialogElement && !element.open) ||
+        (AuthenticationInputSurface.isDialogElement(element) &&
+          !element.open) ||
         !rendered
       ) {
         return false;
       }
       const parent = element.parentElement;
-      if (!(parent instanceof HTMLElement)) return true;
+      if (!parent) return true;
       element = parent;
     }
   }

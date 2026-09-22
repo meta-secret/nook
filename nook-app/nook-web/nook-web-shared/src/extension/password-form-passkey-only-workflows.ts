@@ -107,7 +107,7 @@ type IndexedPasskeyCandidates = {
 };
 
 export type SummarizePasskeyOnlyWorkflowFormsRequest<Summary> = {
-  root: Document;
+  root: ParentNode;
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary;
   observationPriority: (
     observation: PasskeyOnlyWorkflowObservation<Summary>,
@@ -121,7 +121,7 @@ export type SummarizePasskeyOnlyWorkflowFormsRequest<Summary> = {
 export type AppendIndependentPasskeyOnlyWorkflowsRequest<
   Observation extends RankableWorkflowObservation,
 > = {
-  document: Document;
+  document: ParentNode;
   fieldBearing: Observation[];
   passkeyOnly: Observation[];
   observationPriority: (observation: Observation) => number;
@@ -138,7 +138,7 @@ type ShortlistWorkflowsRequest<
 };
 
 type CollectPasskeyOnlyScopesRequest = {
-  root: Document;
+  root: ParentNode;
   passkeyCandidates: PasskeyControlCandidate[];
 };
 

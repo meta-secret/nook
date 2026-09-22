@@ -6,6 +6,7 @@ import {
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
 } from "./password-form-unowned-scope";
+import { AuthenticationInputSurface } from "./authentication-input-surface";
 
 export {
   PasswordFormScopeKind,
@@ -80,7 +81,7 @@ type CompanionWasmFieldClassification = DirectFieldClassification;
 
 type AssociatedFormFieldSelectorRequest = {
   selector: string;
-  formId: string;
+  escapedFormId: string;
 };
 
 export type LocalOwnedLoginObservationRootRequest = {
@@ -264,8 +265,8 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
           ),
         ).filter(
           (control) =>
-            (control instanceof HTMLButtonElement ||
-              control instanceof HTMLInputElement) &&
+            (AuthenticationInputSurface.isButtonElement(control) ||
+              AuthenticationInputSurface.isInputElement(control)) &&
             control.form === form,
         )
       : this.formlessAuthenticationAdvanceControlCandidates(field);
@@ -445,11 +446,11 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
 
   private associatedFormFieldSelector({
     selector,
-    formId,
+    escapedFormId,
   }: AssociatedFormFieldSelectorRequest): string {
     return selector
       .split(",")
-      .map((part) => `${part.trim()}[form="${CSS.escape(formId)}"]`)
+      .map((part) => `${part.trim()}[form="${escapedFormId}"]`)
       .join(",");
   }
 
@@ -562,16 +563,17 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         if (
           field.form === owner &&
           (root === owner.ownerDocument ||
-            (root instanceof Node && root.contains(field)))
+            ("contains" in root && root.contains(field)))
         ) {
           seen.add(field);
           fields.push(field);
         }
       }
       if (owner.id) {
+        const css = owner.ownerDocument.defaultView?.CSS;
         const associatedSelectorRequest: AssociatedFormFieldSelectorRequest = {
           selector,
-          formId: owner.id,
+          escapedFormId: css ? css.escape(owner.id) : owner.id,
         };
         const associated =
           owner.ownerDocument.querySelectorAll<HTMLInputElement>(
@@ -582,7 +584,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
             !seen.has(field) &&
             field.form === owner &&
             (root === owner.ownerDocument ||
-              (root instanceof Node && root.contains(field)))
+              ("contains" in root && root.contains(field)))
           ) {
             seen.add(field);
             fields.push(field);
@@ -593,10 +595,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         const left = pair[0];
         const right = pair[1];
         if (left === right) return 0;
-        return left.compareDocumentPosition(right) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-          ? -1
-          : 1;
+        return left.compareDocumentPosition(right) & 4 ? -1 : 1;
       });
       return fields;
     }
@@ -807,7 +806,9 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const selectorEntryDiagnosticRequest: Parameters<
       AuthenticationSelectorEntryDiagnosticBuilder["build"]
     >[0] = {
-      origin: this.browser.location.origin,
+      origin: ((v) => (v ? v : ""))(
+        root.ownerDocument?.defaultView?.location.origin,
+      ),
       root,
       inputCount: selectorEntryInputCount,
       identifierIdPresent: selectorEntryIdentifierIdPresent,
@@ -919,7 +920,8 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       ),
     );
     const rooted =
-      root instanceof HTMLElement && root.matches(passkeyControlSelector)
+      AuthenticationInputSurface.isElementParentNode(root) &&
+      root.matches(passkeyControlSelector)
         ? [root]
         : [];
     const controls = [...rooted, ...descendants];

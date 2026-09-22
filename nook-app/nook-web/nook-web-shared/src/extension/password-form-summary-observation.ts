@@ -9,9 +9,15 @@ import {
 } from "./password-form-submission-controls";
 import type { PasswordFormSummary } from "./password-forms";
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
+export type PasswordFormSummaryObservationBrowser = {
+  document: ParentNode;
+  location: { href: string; origin: string };
+};
 /** Owns browser observations shared by the concrete authentication interaction. */
-export class PasswordFormSummaryObservation {
-  constructor(protected readonly browser: typeof globalThis) {}
+export class PasswordFormSummaryObservation<
+  Browser extends PasswordFormSummaryObservationBrowser = typeof globalThis,
+> {
+  constructor(protected readonly browser: Browser) {}
   summarizeRoot(request: PasswordFormSummaryRequest): PasswordFormSummary {
     const { root } = request;
     const passwordFields = passwordFieldDiscovery.findPasswordFields(

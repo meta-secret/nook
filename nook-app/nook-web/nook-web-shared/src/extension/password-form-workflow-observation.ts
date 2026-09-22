@@ -123,7 +123,9 @@ function companionExtensionRuntimePresent(): boolean {
 }
 
 /** Owns this browser host’s resources and interaction lifecycle. */
-export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservation {
+export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservation<
+  typeof globalThis
+> {
   private collectingPolicies:
     | {
         transportability: AuthenticationControlTransportability[];
