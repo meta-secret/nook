@@ -6,7 +6,6 @@ import {
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
 } from "./password-form-unowned-scope";
-import { AuthenticationInputSurface } from "./authentication-input-surface";
 
 export {
   PasswordFormScopeKind,
@@ -265,8 +264,12 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
           ),
         ).filter(
           (control) =>
-            (AuthenticationInputSurface.isButtonElement(control) ||
-              AuthenticationInputSurface.isInputElement(control)) &&
+            ((control.ownerDocument.defaultView?.HTMLButtonElement &&
+              control instanceof
+                control.ownerDocument.defaultView.HTMLButtonElement) ||
+              (control.ownerDocument.defaultView?.HTMLInputElement &&
+                control instanceof
+                  control.ownerDocument.defaultView.HTMLInputElement)) &&
             control.form === form,
         )
       : this.formlessAuthenticationAdvanceControlCandidates(field);
@@ -920,7 +923,8 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       ),
     );
     const rooted =
-      AuthenticationInputSurface.isElementParentNode(root) &&
+      typeof HTMLElement !== "undefined" &&
+      root instanceof HTMLElement &&
       root.matches(passkeyControlSelector)
         ? [root]
         : [];

@@ -1,49 +1,6 @@
 /** Owns browser observations shared by the concrete authentication interaction. */
 export class AuthenticationInputSurface {
   constructor(protected readonly browser: typeof globalThis) {}
-  static isDialogElement(element: Element): element is HTMLDialogElement {
-    return element.localName === "dialog";
-  }
-  static isFieldSetElement(element: Element): element is HTMLFieldSetElement {
-    return element.localName === "fieldset";
-  }
-  static isLegendElement(element: Element): element is HTMLLegendElement {
-    return element.localName === "legend";
-  }
-  static isInputElement(element: Element): element is HTMLInputElement {
-    return element.localName === "input";
-  }
-  static isButtonElement(element: Element): element is HTMLButtonElement {
-    return element.localName === "button";
-  }
-  static isFormElement(element: Element): element is HTMLFormElement {
-    return element.localName === "form";
-  }
-  static isSelectElement(element: Element): element is HTMLSelectElement {
-    return element.localName === "select";
-  }
-  static isTextAreaElement(element: Element): element is HTMLTextAreaElement {
-    return element.localName === "textarea";
-  }
-  static isOptionElement(element: Element): element is HTMLOptionElement {
-    return element.localName === "option";
-  }
-  static isAnchorElement(element: Element): element is HTMLAnchorElement {
-    return element.localName === "a";
-  }
-  static isHTMLElement(element: Element): element is HTMLElement {
-    return element.namespaceURI === "http://www.w3.org/1999/xhtml";
-  }
-  static isElementParentNode(value: ParentNode): value is HTMLElement {
-    return (
-      "localName" in value &&
-      "namespaceURI" in value &&
-      value.namespaceURI === "http://www.w3.org/1999/xhtml"
-    );
-  }
-  static isDocumentParentNode(value: ParentNode): value is Document {
-    return "nodeType" in value && value.nodeType === 9;
-  }
   protected isRenderedInput(field: HTMLInputElement): boolean {
     if (field.type === "hidden") return false;
     return this.isRenderedElement(field);
@@ -60,12 +17,14 @@ export class AuthenticationInputSurface {
     }
     let element = candidate;
     while (true) {
+      const dialogElement =
+        element.ownerDocument.defaultView?.HTMLDialogElement;
       if (
         element.hidden ||
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (AuthenticationInputSurface.isDialogElement(element) && !element.open)
+        (dialogElement && element instanceof dialogElement && !element.open)
       ) {
         return false;
       }
@@ -98,14 +57,19 @@ export class AuthenticationInputSurface {
       ancestor;
       ancestor = ancestor.parentElement
     ) {
+      const fieldSetElement =
+        ancestor.ownerDocument.defaultView?.HTMLFieldSetElement;
       if (
-        !AuthenticationInputSurface.isFieldSetElement(ancestor) ||
+        !fieldSetElement ||
+        !(ancestor instanceof fieldSetElement) ||
         !ancestor.disabled
       ) {
         continue;
       }
+      const legendElement =
+        ancestor.ownerDocument.defaultView?.HTMLLegendElement;
       const firstLegend = Array.from(ancestor.children).flatMap((child) =>
-        AuthenticationInputSurface.isLegendElement(child) ? [child] : [],
+        legendElement && child instanceof legendElement ? [child] : [],
       )[0];
       if (!firstLegend?.contains(field)) return true;
     }

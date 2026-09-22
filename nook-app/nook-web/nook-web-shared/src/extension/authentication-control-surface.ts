@@ -1,5 +1,3 @@
-import { AuthenticationInputSurface } from "./authentication-input-surface";
-
 /** Owns the host rendering and disabled-state observations shared by authentication controls. */
 enum DisabledPropertyControlDecodeKind {
   Unsupported = "unsupported",
@@ -26,12 +24,17 @@ export class AuthenticationControlSurface {
   protected isDisabledByAncestorFieldset(control: HTMLElement): boolean {
     let ancestor = control.parentElement;
     while (ancestor) {
+      const fieldSetElement =
+        ancestor.ownerDocument.defaultView?.HTMLFieldSetElement;
       if (
-        AuthenticationInputSurface.isFieldSetElement(ancestor) &&
+        fieldSetElement &&
+        ancestor instanceof fieldSetElement &&
         ancestor.hasAttribute("disabled")
       ) {
+        const legendElement =
+          ancestor.ownerDocument.defaultView?.HTMLLegendElement;
         const firstLegend = [...ancestor.children].find(
-          AuthenticationInputSurface.isLegendElement,
+          (child) => legendElement && child instanceof legendElement,
         );
         if (!(firstLegend && firstLegend.contains(control))) {
           return true;
@@ -45,17 +48,26 @@ export class AuthenticationControlSurface {
   protected decodeDisabledPropertyControl(
     control: HTMLElement,
   ): DisabledPropertyControlDecode {
-    return AuthenticationInputSurface.isButtonElement(control) ||
-      AuthenticationInputSurface.isInputElement(control) ||
-      AuthenticationInputSurface.isSelectElement(control) ||
-      AuthenticationInputSurface.isTextAreaElement(control) ||
-      AuthenticationInputSurface.isFieldSetElement(control) ||
-      AuthenticationInputSurface.isOptionElement(control)
-      ? {
-          kind: DisabledPropertyControlDecodeKind.Supported,
-          control,
-        }
-      : { kind: DisabledPropertyControlDecodeKind.Unsupported };
+    const view = control.ownerDocument.defaultView;
+    const buttonElement = view?.HTMLButtonElement;
+    if (buttonElement && control instanceof buttonElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const inputElement = view?.HTMLInputElement;
+    if (inputElement && control instanceof inputElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const selectElement = view?.HTMLSelectElement;
+    if (selectElement && control instanceof selectElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const textAreaElement = view?.HTMLTextAreaElement;
+    if (textAreaElement && control instanceof textAreaElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const fieldSetElement = view?.HTMLFieldSetElement;
+    if (fieldSetElement && control instanceof fieldSetElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const optionElement = view?.HTMLOptionElement;
+    if (optionElement && control instanceof optionElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    return { kind: DisabledPropertyControlDecodeKind.Unsupported };
   }
 
   controlIsEffectivelyDisabled(control: HTMLElement): boolean {
@@ -100,7 +112,9 @@ export class AuthenticationControlSurface {
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (AuthenticationInputSurface.isDialogElement(element) &&
+        (element.ownerDocument.defaultView?.HTMLDialogElement &&
+          element instanceof
+            element.ownerDocument.defaultView.HTMLDialogElement &&
           !element.open) ||
         !rendered
       ) {

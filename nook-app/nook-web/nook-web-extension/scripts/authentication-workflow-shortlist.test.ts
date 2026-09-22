@@ -10,6 +10,7 @@ import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/passw
 import { initSync } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const testWindow = new Window()
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- happy-dom exposes a separate DOM realm whose document has the same query capabilities.
 const isolatedDocument = testWindow.document as unknown as ParentNode
 const testBrowser = {
   document: isolatedDocument,
