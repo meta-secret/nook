@@ -289,12 +289,14 @@ mod tests {
             nook_companion_core::AuthenticationControlTransportability {
                 submission_method: nook_companion_core::PageControlSubmissionMethod::Post,
                 username_field_count: 0.into(),
+                password_field_count: 0.into(),
             }
         ));
         assert!(!super::authentication_control_transportable(
             nook_companion_core::AuthenticationControlTransportability {
                 submission_method: nook_companion_core::PageControlSubmissionMethod::Dialog,
                 username_field_count: 1.into(),
+                password_field_count: 0.into(),
             }
         ));
         assert!(super::is_authentication_navigation_path("/account/login"));

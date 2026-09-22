@@ -19,6 +19,7 @@ import {
 import {
   TeslaAuthControl,
   TeslaAuthEmailMatch,
+  TeslaAuthPasswordMatch,
   TeslaAuthPrimaryActivationState,
 } from './mock-auth/src/lib/tesla-auth-flow'
 
@@ -610,7 +611,7 @@ export class MockAuthProviderScenarios {
   }
 
   private static registerTesla(): void {
-    test('fills Tesla Email and activates only Next', async ({
+    test('fills Tesla Email and Password through both native controls', async ({
       browserName,
     }, testInfo) => {
       test.skip(
@@ -647,7 +648,8 @@ export class MockAuthProviderScenarios {
           )
           await route.fulfill({ response: localResponse })
         })
-        const teslaUrl = 'https://auth.tesla.com/oauth2/v1/authorize'
+        const teslaUrl =
+          'https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US'
         await page.goto(teslaUrl)
         expect(interceptedTeslaRequestCount).toBeGreaterThan(0)
         await expect(page).toHaveURL(teslaUrl)
@@ -657,7 +659,7 @@ export class MockAuthProviderScenarios {
         )
 
         const form = page.getByTestId('tesla-auth-form')
-        const email = form.getByLabel('Email')
+        const email = form.locator('#identity')
         const next = form.getByRole('button', { name: 'Next' })
         await expect(page.locator('form')).toHaveCount(1)
         await expect(form).not.toHaveAttribute('method')
@@ -667,17 +669,24 @@ export class MockAuthProviderScenarios {
         await expect(form.locator('input')).toHaveCount(1)
         await expect(email).not.toHaveAttribute('type')
         await expect(email).toHaveJSProperty('type', 'text')
+        await expect(email).toHaveAttribute('id', 'identity')
         await expect(email).toHaveAttribute('name', 'identity')
         await expect(email).toHaveAttribute('autocomplete', 'email webauthn')
+        await expect(email).toHaveAttribute('autocapitalize', 'none')
+        await expect(email).toHaveAttribute('autocorrect', 'off')
+        await expect(email).toHaveAttribute('spellcheck', 'false')
+        await expect(email).toHaveAttribute('dir', 'ltr')
+        await expect(email).not.toHaveAttribute('aria-label')
         await expect(email).toHaveValue('')
         await expect(next).toHaveAttribute('type', 'submit')
+        await expect(next).toHaveAttribute('aria-label', 'Next')
         await expect(next).not.toHaveAttribute('formaction')
         await expect(next).toBeDisabled()
         await expect(form.locator('button[type="submit"]')).toHaveCount(1)
         await expect(page.locator('input[type="password"]')).toHaveCount(0)
         await expect(page.getByText('Trouble Signing In?')).toBeVisible()
         await expect(
-          page.getByRole('button', { name: 'Create Account' }),
+          page.getByRole('button', { name: 'Cancel' }),
         ).toHaveAttribute('type', 'button')
         await expect(
           page.getByRole('button', { name: 'Select Language' }),
@@ -691,6 +700,29 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'tesla-password-second',
+        )
+        await expect(page).toHaveURL(teslaUrl)
+        const password = form.locator('#password')
+        const signIn = form.getByRole('button', {
+          name: 'Sign In',
+          exact: true,
+        })
+        await expect(form.locator('input')).toHaveCount(1)
+        await expect(password).toHaveAttribute('type', 'password')
+        await expect(password).toHaveAttribute('name', 'password')
+        await expect(password).toHaveAttribute(
+          'autocomplete',
+          'current-password',
+        )
+        await expect(password).toHaveValue('')
+        await expect(signIn).toBeDisabled()
+        await expect(page.getByText('Forgot password?')).toBeVisible()
+        await expect(widget.getByText('Ready to sign in')).toBeVisible({
+          timeout: 20_000,
+        })
         await widget.getByRole('button', { name: 'Continue with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
@@ -719,9 +751,12 @@ export class MockAuthProviderScenarios {
           .toEqual({
             kind: SubmissionEvidencePollKind.Present,
             value: JSON.stringify({
-              submittedControl: TeslaAuthControl.Next,
+              identifierControl: TeslaAuthControl.Next,
               emailMatch: TeslaAuthEmailMatch.Matched,
-              primaryActivation: TeslaAuthPrimaryActivationState.Activated,
+              identifierActivation: TeslaAuthPrimaryActivationState.Activated,
+              passwordControl: TeslaAuthControl.SignIn,
+              passwordMatch: TeslaAuthPasswordMatch.Matched,
+              passwordActivation: TeslaAuthPrimaryActivationState.Activated,
               auxiliaryControlsUntouched: true,
             }),
           })

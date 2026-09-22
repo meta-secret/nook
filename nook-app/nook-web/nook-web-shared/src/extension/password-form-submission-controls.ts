@@ -115,6 +115,7 @@ type BoundedAuthenticationControlObservationsRequest<
 type SelectedSubmitterDisclosureRequest = {
   form: HTMLFormElement;
   selectedSubmitter: LoginAdvanceControl | false;
+  scriptedGetPasswordDisclosureApproved: boolean;
 };
 
 type ImplicitAuthenticationSubmitCapabilityRequest = {
@@ -389,17 +390,21 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       })
       .join(" ");
     return [
-      ((v) => (v ? v : ""))(control.textContent),
-      ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
-      ((v) => (v ? v : ""))(control.getAttribute("title")),
-      ((v) => (v ? v : ""))(control.getAttribute("alt")),
-      control instanceof HTMLInputElement
-        ? control.value || control.getAttribute("alt") || "submit"
-        : "",
-      labelledBy,
-    ]
-      .join(" ")
-      .trim();
+      ...new Set(
+        [
+          ((v) => (v ? v : ""))(control.textContent),
+          ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
+          ((v) => (v ? v : ""))(control.getAttribute("title")),
+          ((v) => (v ? v : ""))(control.getAttribute("alt")),
+          control instanceof HTMLInputElement
+            ? control.value || control.getAttribute("alt") || "submit"
+            : "",
+          labelledBy,
+        ]
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ].join(" ");
   }
 
   formSubmissionMethod(form: HTMLFormElement): PageControlSubmissionMethod {
@@ -502,7 +507,17 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   selectedSubmitterBlocksCredentialDisclosure({
     form,
     selectedSubmitter,
+    scriptedGetPasswordDisclosureApproved,
   }: SelectedSubmitterDisclosureRequest): boolean {
+    if (
+      scriptedGetPasswordDisclosureApproved &&
+      selectedSubmitter &&
+      this.controlHasNativeSubmitSemantics(selectedSubmitter) &&
+      this.controlSubmissionMethod(selectedSubmitter) ===
+        PageControlSubmissionMethod.Get
+    ) {
+      return false;
+    }
     if (selectedSubmitter) {
       if (this.controlHasNativeSubmitSemantics(selectedSubmitter)) {
         const formmethodRequest: HtmlSubmissionMethodRequest = {
@@ -961,6 +976,15 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       approval,
       expectedSubmitter,
       directRouteApproved: directRouteMatches,
+      // A framework-owned GET form may consume a synthetic submit, but Nook
+      // must never replay a native GET that would serialize a password.
+      allowNativeReplay: !(
+        this.formSubmissionMethod(form) === PageControlSubmissionMethod.Get &&
+        Array.from(form.elements).some(
+          (element) =>
+            element instanceof HTMLInputElement && element.type === "password",
+        )
+      ),
     };
     return authenticationSubmissionBridge.observeAuthenticationSubmission(
       observation,

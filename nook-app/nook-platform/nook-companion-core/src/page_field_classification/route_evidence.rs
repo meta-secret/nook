@@ -70,19 +70,25 @@ impl From<PageLoginContext> for bool {
     }
 }
 
+/// Current extension producers and the offscreen WASM consumer ship atomically.
+/// Migration decision: the added password count is required; mixed-version
+/// payloads are unsupported and older shapes intentionally fail closed.
 #[derive(Debug, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct AuthenticationControlTransportability {
     pub submission_method: crate::PageControlSubmissionMethod,
     pub username_field_count: crate::AuthenticationFieldCount,
+    pub password_field_count: crate::AuthenticationFieldCount,
 }
 impl AuthenticationControlTransportability {
     #[must_use]
     pub fn is_transportable(self) -> bool {
         match self.submission_method {
             crate::PageControlSubmissionMethod::Dialog => false,
-            crate::PageControlSubmissionMethod::Get => self.username_field_count.is_single(),
+            crate::PageControlSubmissionMethod::Get => {
+                self.username_field_count.is_single() || self.password_field_count.is_single()
+            }
             _ => true,
         }
     }
@@ -106,6 +112,7 @@ mod tests {
                     AuthenticationControlTransportability {
                         submission_method: method,
                         username_field_count: count.into(),
+                        password_field_count: 0.into(),
                     }
                     .is_transportable(),
                     expected,
@@ -113,5 +120,13 @@ mod tests {
                 );
             }
         }
+        assert!(
+            AuthenticationControlTransportability {
+                submission_method: PageControlSubmissionMethod::Get,
+                username_field_count: 0.into(),
+                password_field_count: 1.into(),
+            }
+            .is_transportable()
+        );
     }
 }

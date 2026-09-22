@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { authenticationSubmissionBridge } from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import {
+  authenticationSubmissionBridge,
+  type AuthenticationSubmissionObservation,
+} from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 import {
   FormSubmissionResult,
   PasswordFormQueryKind,
   passwordFormCredentialInteraction,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 
 function observedAuthenticationWorkflow() {
   const observation =
@@ -353,6 +357,76 @@ describe('credential submission observation facts', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
+  })
+
+  test('rejects a page direct submit when native GET replay is blocked', () => {
+    document.body.innerHTML = `
+      <form method="get" id="login" action="/capture">
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const button = form?.querySelector<HTMLButtonElement>('button')
+    if (!form || !button) throw new Error('expected GET login form')
+    testCleanups.push(
+      authenticationSubmissionBridge.installIsolatedAuthenticationDirectSubmitBridge(),
+      authenticationSubmissionBridge.installPageAuthenticationDirectSubmitBridge(),
+    )
+    const pageSubmit = HTMLFormElement.prototype.submit
+    form.addEventListener('submit', () => pageSubmit.call(form))
+    let rejected = false
+    const observation: AuthenticationSubmissionObservation = {
+      form,
+      action: () => button.click(),
+      approval: {
+        isApproved: () => true,
+        reject: () => {
+          rejected = true
+        },
+      },
+      expectedSubmitter: button,
+      directRouteApproved: () => true,
+      allowNativeReplay: false,
+    }
+
+    expect(
+      authenticationSubmissionBridge.observeAuthenticationSubmission(
+        observation,
+      ),
+    ).toBe(FormSubmissionResult.Rejected)
+    expect(rejected).toBe(true)
+  })
+
+  test('blocks GET replay for a password associated outside the form subtree', () => {
+    document.body.innerHTML = `
+      <form method="get" id="login" action="/capture">
+        <button type="submit">Sign in</button>
+      </form>
+      <input form="login" type="password" autocomplete="current-password" />
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const button = form?.querySelector<HTMLButtonElement>('button')
+    if (!form || !button) throw new Error('expected associated GET login form')
+    let rejected = false
+    const request: Parameters<
+      typeof authenticationSubmissionControls.observeSubmit
+    >[0] = {
+      form,
+      action: () => button.click(),
+      approval: {
+        isApproved: () => true,
+        reject: () => {
+          rejected = true
+        },
+      },
+      expectedSubmitter: button,
+    }
+
+    expect(authenticationSubmissionControls.observeSubmit(request)).toBe(
+      FormSubmissionResult.Rejected,
+    )
+    expect(rejected).toBe(true)
   })
 
   test('preserves cancellation from a window bubble submit handler', () => {
