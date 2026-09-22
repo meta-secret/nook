@@ -143,6 +143,21 @@ export type RosterHydrationResult = Result<
 export class VaultSyncActions {
   constructor(private readonly state: SyncActionsContext) {}
 
+  private automaticSyncFailureBelongsToCurrentSession(
+    sessionEpoch: number,
+  ): boolean {
+    const state = this.state;
+    return (
+      state.sessionEpoch === sessionEpoch &&
+      state.clientPolicy.vault_sync_timer_start_decision(
+        state.isAuthenticated,
+        state.deviceProtectionReady,
+        state.joinEnrollmentPrompt,
+        state.awaitingJoinApproval,
+      ) === VaultSyncTimerStartDecision.Start
+    );
+  }
+
   async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
     const state = this.state;
     if (!state.hasManager || !state.isAuthenticated) {
@@ -717,7 +732,7 @@ export class VaultSyncActions {
         .syncFromStorage(ProviderSyncFreshness.Scheduled)
         .then((synchronized) => {
           if (synchronized.isErr()) {
-            if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
+            if (this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch))
               state.errorMsg = state.t(synchronized.error.translationKey);
             else
               log.warn(
@@ -746,7 +761,9 @@ export class VaultSyncActions {
           .syncFromStorage(ProviderSyncFreshness.Scheduled)
           .then((synchronized) => {
             if (synchronized.isErr()) {
-              if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
+              if (
+                this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch)
+              )
                 state.errorMsg = state.t(synchronized.error.translationKey);
               else
                 log.warn(

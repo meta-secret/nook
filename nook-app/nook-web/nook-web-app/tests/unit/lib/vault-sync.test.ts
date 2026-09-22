@@ -7,6 +7,7 @@ import {
   NookProviderSyncRevision,
   NookRuntimeConfig,
   NookSyncConflictReview,
+  JoinEnrollmentState,
   ProviderSyncFreshness,
   VaultSyncConflictKind,
 } from '$app-wasm'
@@ -101,6 +102,22 @@ describe('resolveVaultSyncIntervalMs', () => {
 })
 
 describe('automatic vault sync', () => {
+  test('keeps a join-approval polling failure visible while unauthenticated', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = false
+    state.joinEnrollmentPrompt = JoinEnrollmentState.Pending
+    state.syncFromStorage = vi.fn(async () =>
+      err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    )
+    state.scheduleSync = vi.fn(({ callback }) => callback())
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+  })
+
   test('keeps an actionable background failure visible while unlocked', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
