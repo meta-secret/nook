@@ -79,7 +79,7 @@ export class MockAuthProviderScenarios {
           await route.fulfill({ response: localResponse })
         })
         const amazonUrl =
-          'https://www.amazon.com/ap/signin?openid.mode=checkid_setup&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F'
+          'https://www.amazon.com/ap/signin?openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_ya_signin&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.assoc_handle=usflex&openid.mode=checkid_setup&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0'
         await page.goto(amazonUrl)
         expect(interceptedAmazonRequestCount).toBeGreaterThan(0)
         await expect(page).toHaveURL(amazonUrl)

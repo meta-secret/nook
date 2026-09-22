@@ -101,7 +101,7 @@
       value="FullPageUnifiedClaimCollect"
     />
     <input type="hidden" name="claimCollectionWorkflow" value="unified" />
-    <input type="hidden" name="metadata1" value="captured-metadata" />
+    <input type="hidden" name="metadata1" value="true" />
     <input type="hidden" name="claimType" value="" />
     <input type="hidden" name="countryCode" value="" />
     <input type="hidden" name="isServerSideRouting" value="true" />
