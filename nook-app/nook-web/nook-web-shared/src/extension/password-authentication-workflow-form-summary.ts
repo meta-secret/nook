@@ -72,32 +72,16 @@ export class PasswordAuthenticationWorkflowFormSummary {
     if (authFieldCount === 0) {
       return passkeyOnly;
     }
+    const authenticationFormOwners = new Set(
+      [
+        ...allPasswordFields,
+        ...authUsernameFields,
+        ...allOneTimeCodeFields,
+      ].flatMap((field) => (field.form ? [field.form] : [])),
+    );
     const forms = Array.from(
       root.querySelectorAll<HTMLFormElement>("form"),
-    ).filter((form) => {
-      const formScope: PasswordFormScope = {
-        kind: PasswordFormScopeKind.Owned,
-        owner: form,
-      };
-      const formScopeQuery: PasswordFormScopeQuery = {
-        kind: PasswordFormQueryKind.Scoped,
-        root,
-        formScope,
-      };
-      const summary = this.dependencies.summarizeRoot(formScopeQuery);
-
-      return (
-        summary.passwordFieldCount > 0 ||
-        summary.oneTimeCodeFieldCount > 0 ||
-        passwordFieldDiscovery
-          .findUsernameFields(formScopeQuery)
-          .some(
-            passwordFieldDiscovery.isAuthUsernameField.bind(
-              passwordFieldDiscovery,
-            ),
-          )
-      );
-    });
+    ).filter((form) => authenticationFormOwners.has(form));
     const observations: PasswordFormObservation[] = forms.flatMap((form) => {
       const formScope: PasswordFormScope = {
         kind: PasswordFormScopeKind.Owned,
