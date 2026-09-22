@@ -29,12 +29,12 @@ If the command cannot be installed or initialization fails, stop all repository
 work. Report the exact failure as a blocker. Do not plan, edit, validate, launch
 agents, or substitute copied framework files.
 
-**Prohibited:** continue a product change after `meta-cortex init` fails, using
-only the Nook documents or a manually copied partial framework.
+- **Prohibited:** continue a product change after `meta-cortex init` fails, using
+  only the Nook documents or a manually copied partial framework.
 
-**Preferred:** install the official command, initialize the repository, verify
-both required files, load the upstream entry point, and only then begin the
-requested work.
+- **Preferred:** install the official command, initialize the repository, verify
+  both required files, load the upstream entry point, and only then begin the
+  requested work.
 
 ### Roots and ownership
 
@@ -129,10 +129,10 @@ procedure. Preserve any intentional configuration while replacing the installed
 framework, then review upstream path changes against the thin wrapper and
 catalog mappings in this document.
 
-**Prohibited:** update the command and assume the already installed framework
-changed with it, or overwrite a locally changed framework without reviewing the
-upstream procedure.
+- **Prohibited:** update the command and assume the already installed framework
+  changed with it, or overwrite a locally changed framework without reviewing
+  the upstream procedure.
 
-**Preferred:** treat command upgrades and installed-framework replacement as
-separate operations, reinitialize through the official command when required,
-and verify Nook's upstream links afterward.
+- **Preferred:** treat command upgrades and installed-framework replacement as
+  separate operations, reinitialize through the official command when required,
+  and verify Nook's upstream links afterward.
