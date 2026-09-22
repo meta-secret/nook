@@ -135,7 +135,7 @@ output instead of copying request bodies into guidance.
 
 ## TypeScript domain structure
 
-Loom authored TypeScript follows [typescript-domain-structure.md](../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md):
+Loom authored TypeScript follows [typescript-domain-structure.md](../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md):
 
 - field-name enums for deny-unknown-key checks
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
@@ -145,12 +145,12 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.meta-co
 - prefer popular libraries over hand-rolled commodity helpers
   ([prefer-popular-libraries.md](../../.cortex/shared/dynamic-skills/prefer-popular-libraries.md))
 - at most one function/method parameter; multi-value inputs use a typed object
-  ([typescript-single-parameter.md](../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md))
+  ([typescript-single-parameter.md](../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md))
 - no authored `unknown`, `object`, or generic domain values; the only narrow
   exception is `UntrustedYamlNode` / `UntrustedYamlMap` inside YAML, JSON, or
   host-response adapters, where it must be decoded immediately into a domain
   value
-  ([typescript-no-unknown.md](../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md))
+  ([typescript-no-unknown.md](../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
 - reusable and public object contracts use semantic types or interfaces;

@@ -98,8 +98,8 @@ It returns validated data only; the active harness owns agent lifecycle.
 
 ## TypeScript domain structure
 
-Loom follows [typescript-domain-structure.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
-and the [TypeScript Effect Workflows](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
+Loom follows [typescript-domain-structure.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
+and the [TypeScript Effect Workflows](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
 policy for new and materially changed TypeScript workflows:
 
 - field-name enums passed into deny-unknown checks (never string sets)
@@ -111,10 +111,10 @@ policy for new and materially changed TypeScript workflows:
 - raw `new Set(['field', ...])` allow-lists remain prohibited
 
 Loom also follows
-[typescript-explicit-state.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md),
-[typescript-single-parameter.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md)
-[typescript-no-unknown.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md),
-and [typescript-named-args.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md):
+[typescript-explicit-state.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md),
+[typescript-single-parameter.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md)
+[typescript-no-unknown.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md),
+and [typescript-named-args.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md):
 
 - every authored function/method takes at most one parameter
 - multi-value inputs use a typed object argument

@@ -36,8 +36,8 @@ read-only. Do not load the consumer team's complete graph.
 For authored JavaScript or TypeScript under `.github/` or SRE-owned scripts,
 load these web-owned skills directly as read-only engineering policy:
 
-- [TypeScript domain structure](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
-- [TypeScript explicit state](../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)
+- [TypeScript domain structure](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
+- [TypeScript explicit state](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)
 
 Do not open the web-development graph. Applying these linked skills does not
 create a web-development expertise provider.

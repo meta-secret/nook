@@ -89,7 +89,7 @@ export class TeamAgentsAuditScenario {
     );
     await writeFile(
       join(cortexRoot, 'AGENTS.md'),
-      authority.replace(invariant, 'Autonomous mission invariant removed.'),
+      authority.replaceAll(invariant, 'Autonomous mission invariant removed.'),
       'utf8',
     );
     return fixtureRoot;
@@ -431,7 +431,7 @@ describe('canonical Cortex team authority', () => {
   test('rejects removal of the Meta-Cortex role bindings', async () => {
     const invariants = [
       '../.meta-cortex/AGENTS.md',
-      '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+      '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
       '../.meta-cortex/meta-cortex.toml',
       'Nook project root and shared Meta-Cortex library root',
       'selected base and feature branches',

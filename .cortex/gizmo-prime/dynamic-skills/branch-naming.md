@@ -1,7 +1,7 @@
 # Branch Naming Contract
 
 This contract adds Nook naming rules to the upstream
-[local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md).
+[local feature workflow](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md).
 Branch identity stays tied to the feature, team, role, and bounded outcome.
 
 ## Outcome

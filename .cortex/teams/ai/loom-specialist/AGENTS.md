@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Apply the [upstream role](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/AGENTS.md) with the project context
+Apply the [upstream role](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/AGENTS.md) with the project context
 and skill prerequisites supplied by Nook Team Gizmo.
 
 Nook scope: Nook Loom and executable-skill implementation. Documentation goes to the tech writer.

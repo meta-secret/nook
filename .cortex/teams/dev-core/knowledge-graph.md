@@ -37,10 +37,10 @@ Open the narrow design authority for the affected Rust or WASM contract.
 
 ## Development skills
 
-- [Rust coding](../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/SKILL.md)
-- [Rust macro minimization](../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/tooling/rust-macro-minimization.md)
-- [Rust and TypeScript separation](../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-typescript-code-separation.md)
-- [Rust/WASM name coherence](../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-wasm-name-coherence.md)
+- [Rust coding](../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/SKILL.md)
+- [Rust macro minimization](../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/tooling/rust-macro-minimization.md)
+- [Rust and TypeScript separation](../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-typescript-code-separation.md)
+- [Rust/WASM name coherence](../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-wasm-name-coherence.md)
 
 ## Reference
 

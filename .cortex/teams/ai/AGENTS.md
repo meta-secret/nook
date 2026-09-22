@@ -75,8 +75,9 @@ will implement named files.
 ## Authored implementation routing
 
 Use the responsible upstream role for every authored language, including
-executable skills and tests. The assignment supplies the role's common coding
-skill, language skill, and any secret or Rust/WASM boundary requirements.
+executable skills and tests. The assignment supplies the development team's
+programming requirements, the role's language skill, and any secret or Rust/WASM
+boundary requirements.
 Nook's validation section below identifies the separate enforcement surfaces.
 
 Documentation goes to the upstream tech writer with the subject owner's
@@ -139,7 +140,7 @@ packet must name the authoritative checks below:
   value-or-`void`, generic optional-state, and closed-discriminant violations.
 - `task preflight:source-architecture` checks source-language and source-size
   policy.
-- A focused review against [function ownership](../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/function-ownership.md)
+- A focused review against [function ownership](../../../.meta-cortex/teams/dev-team/docs/programming/function-ownership.md)
   checks TypeScript ownership because no static TypeScript checker proves
   semantic ownership. An unowned function or a missing required result is a
   P1 failure and the acceptance must fail closed.

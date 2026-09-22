@@ -31,13 +31,13 @@ catalogs the linked authorities without copying their policies.
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
-- **[function-ownership.md](../../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/function-ownership.md)**
+- **[function-ownership.md](../../../../.meta-cortex/teams/dev-team/docs/programming/function-ownership.md)**
   - Purpose: **P1 / primary action-structure rule**
     - Require every authored function in every implementation language to
       belong to a meaningful owner.
     - Reject free functions, module-only ownership, and catch-all utility
       containers.
-- **[domain-api-integrity.md](../../../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/domain-api-integrity.md)**
+- **[domain-api-integrity.md](../../../../.meta-cortex/teams/dev-team/docs/programming/domain-api-integrity.md)**
   - Purpose: **P1 / universal domain API rule**
     - Require named domain types, concrete values, one-parameter request APIs,
       validated capabilities, typed failures, and exhaustive states.
@@ -89,23 +89,23 @@ catalogs the linked authorities without copying their policies.
   - Purpose: Audit Cortex complexity, conflicts, duplication, legacy guidance, ownership drift, and deterministic extraction candidates
 - **[system-coherence-synthesizer.md](system-coherence-synthesizer.md)**
   - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
-- **[rust-coding.md](../../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/SKILL.md)**
+- **[rust-coding.md](../../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/SKILL.md)**
   - Purpose: Keep Rust domain models precise with enums and per-variant structs instead of booleans, string tags, sentinel values, and cross-workflow `Option<T>` fields. Require one non-receiver parameter and named request aggregates for multi-value APIs and command handlers. Outside `use` declarations, limit paths to two inline segments and retain meaningful owning module or type context.
-- **[rust-macro-minimization.md](../../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/tooling/rust-macro-minimization.md)**
+- **[rust-macro-minimization.md](../../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/tooling/rust-macro-minimization.md)**
   - Purpose: Prohibit repository-defined Rust macros; prefer explicit structs, implementations, functions, and control flow over hidden code generation
-- **[rust-typescript-code-separation.md](../../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-typescript-code-separation.md)**
+- **[rust-typescript-code-separation.md](../../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-typescript-code-separation.md)**
   - Purpose: Keep app and extension policy in Rust/WASM; reserve TypeScript for UI, browser observation, and lifecycle glue
-- **[rust-wasm-name-coherence.md](../../../../.meta-cortex/agents/teams/dev-team/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-wasm-name-coherence.md)**
+- **[rust-wasm-name-coherence.md](../../../../.meta-cortex/teams/dev-team/agents/rust-dev/skills/rust-dev-skill/practices/boundaries/rust-wasm-name-coherence.md)**
   - Purpose: Keep exported Rust WASM functions and methods directly searchable under their authored names across generated bindings and TypeScript
-- **[svelte-state-modeling.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/svelte-state-modeling.md)**
+- **[svelte-state-modeling.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/svelte-state-modeling.md)**
   - Purpose: Model browser and visual lifecycle state explicitly while keeping closed portable domain states in Rust/WASM
-- **[typescript-serial-operation-queues.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-serial-operation-queues.md)**
+- **[typescript-serial-operation-queues.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-serial-operation-queues.md)**
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
-- **[typescript-explicit-state.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)**
+- **[typescript-explicit-state.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)**
   - Purpose: Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns
-- **[typescript-enums-over-booleans.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-enums-over-booleans.md)**
+- **[typescript-enums-over-booleans.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-enums-over-booleans.md)**
   - Purpose: Replace authored domain, state, policy, mode, configuration, and owned-contract booleans with semantic enums; retain booleans only at required boundaries or as immediately consumed predicates
-- **[typescript-domain-structure.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)**
+- **[typescript-domain-structure.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)**
   - Purpose:
     - Require named domain types and named unions instead of raw primitives or
       inline alternatives.
@@ -116,15 +116,15 @@ catalogs the linked authorities without copying their policies.
     - Use field enums instead of string sets.
     - Use Effect's typed error channel for effectful workflows; prohibit new
       `neverthrow` and hand-rolled Promise error workflows.
-- **[typescript-effect.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)**
+- **[typescript-effect.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)**
   - Purpose: Require Effect for new or materially changed TypeScript workflows
     that model async work, expected failure, resources, concurrency, services,
     or untrusted boundary decoding while preserving Rust/WASM ownership.
-- **[typescript-single-parameter.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md)**
+- **[typescript-single-parameter.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
-- **[typescript-no-unknown.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md)**
+- **[typescript-no-unknown.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md)**
   - Purpose: Ban `unknown`, `object`, and generic domain values; allow `unknown` only for immediate boundary narrowing
-- **[typescript-named-args.md](../../../../.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md)**
+- **[typescript-named-args.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md)**
   - Purpose: Require semantic named object parameter contracts and named typed values at object call boundaries
 - **[prefer-popular-libraries.md](../../../shared/dynamic-skills/prefer-popular-libraries.md)**
   - Purpose: Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity`

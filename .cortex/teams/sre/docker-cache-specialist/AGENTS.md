@@ -16,6 +16,8 @@ behavior for packets issued by SRE Team Gizmo.
 
 ## Required actions
 
+- Apply the [upstream Docker specialist](../../../../.meta-cortex/teams/sre-team/agents/docker-specialist/AGENTS.md)
+  and its skill with Nook's cache-health requirements and validation boundary.
 - Accept cache and remote-build performance packets from SRE Team Gizmo.
 - Own Docker and BuildKit cache architecture within the assigned scope.
 - Enforce a five-minute remote-build latency SLO and workflow timeout.

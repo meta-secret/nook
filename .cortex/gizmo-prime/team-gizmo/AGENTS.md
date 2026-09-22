@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Apply [Meta-Cortex Team Gizmo](../../../.meta-cortex/agents/teams/gizmo/AGENTS.md).
+Apply [Meta-Cortex Team Gizmo](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md).
 Use the supplied upstream team catalogs together with the
 [Nook agent catalog](role-catalog.md). Read both before selecting agents.
 The Nook catalog supplies project context and roles absent from upstream.
@@ -10,7 +10,7 @@ The Nook catalog supplies project context and roles absent from upstream.
 There is one Team Gizmo per feature. Existing team-specific Gizmo paths are
 context adapters for this same coordinator, not additional coordinator launches.
 Use the upstream
-[integration agent](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
+[integration agent](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 for local branch and worktree mechanics. Give it the project and shared-library
 roots, selected base and feature branches, worker branches and worktrees,
 dependency order, and applicable Nook checks. Preserve Nook's functional

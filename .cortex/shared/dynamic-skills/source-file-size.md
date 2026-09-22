@@ -1,6 +1,7 @@
 # Nook Source Architecture Enforcement
 
-Generic source-size and decomposition policy comes from Meta-Cortex common coding.
+Generic source-size and decomposition policy comes from Meta-Cortex
+[programming requirements](../../../.meta-cortex/teams/dev-team/docs/programming/source-file-size.md).
 
 ## Required actions
 

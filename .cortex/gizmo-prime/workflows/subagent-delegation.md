@@ -2,9 +2,9 @@
 
 ## Required actions
 
-- Use [upstream Team Gizmo](../../../.meta-cortex/agents/teams/gizmo/AGENTS.md)
+- Use [upstream Team Gizmo](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
   for assignment and coordination.
-- Use the upstream [integration agent](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
+- Use the upstream [integration agent](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
   for local branches, worktrees, integration, validation, and cleanup.
 - Preserve Nook's functional team identity, bounded file scope, dependency
   order, product constraints, and acceptance evidence in each assignment.

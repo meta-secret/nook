@@ -83,7 +83,9 @@ Model text.
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
   expect(markdown).toContain('meta-cortex-integration.md');
-  expect(markdown).toContain('../.meta-cortex/agents/teams/gizmo/AGENTS.md');
+  expect(markdown).toContain(
+    '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
+  );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });
@@ -370,7 +372,7 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
     root.indexOf('../.meta-cortex/AGENTS.md'),
   );
   expect(root).toContain(
-    '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+    '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
   );
   expect(root).toContain(
     'Nook project root and shared Meta-Cortex library root',
@@ -379,10 +381,14 @@ test('composes upstream roles with Nook delivery instead of duplicating policies
   expect(root).toContain('each worker branch and worktree in dependency order');
   expect(root).toContain('applicable Nook checks');
   expect(ai).not.toContain('owns shared-branch sequencing');
-  expect(prime).toContain('../../.meta-cortex/agents/gizmo-prime/AGENTS.md');
-  expect(team).toContain('../../../.meta-cortex/agents/teams/gizmo/AGENTS.md');
+  expect(prime).toContain(
+    '../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
+  );
   expect(team).toContain(
-    '../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+    '../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
+  );
+  expect(team).toContain(
+    '../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
   );
   expect(team).toContain('project and shared-library');
   expect(team).toContain('roots, selected base and feature branches');

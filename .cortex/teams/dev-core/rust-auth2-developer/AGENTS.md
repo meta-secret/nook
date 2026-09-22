@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Apply the [upstream role](../../../../.meta-cortex/agents/teams/dev-team/rust-dev/AGENTS.md) with the project context
+Apply the [upstream role](../../../../.meta-cortex/teams/dev-team/agents/rust-dev/AGENTS.md) with the project context
 and skill prerequisites supplied by Nook Team Gizmo.
 
 Nook scope: Rust Auth2 behavior and its typed provider contracts.

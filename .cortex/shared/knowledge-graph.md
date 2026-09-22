@@ -29,8 +29,8 @@ These catalogs route cross-team lookup without transferring ownership.
 
 These rules apply across two or more implementation teams.
 
-- [Domain API integrity](../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/domain-api-integrity.md)
-- [Function ownership](../../.meta-cortex/agents/teams/dev-team/common/coding-skill/practices/function-ownership.md)
+- [Domain API integrity](../../.meta-cortex/teams/dev-team/docs/programming/domain-api-integrity.md)
+- [Function ownership](../../.meta-cortex/teams/dev-team/docs/programming/function-ownership.md)
 - [Prefer popular libraries](dynamic-skills/prefer-popular-libraries.md)
 - [Source file size](dynamic-skills/source-file-size.md)
 - [Testing pyramid and regression coverage](dynamic-skills/testing-pyramid-and-regression.md)

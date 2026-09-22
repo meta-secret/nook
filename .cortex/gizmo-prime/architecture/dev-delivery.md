@@ -47,7 +47,7 @@ follows the latest head and reruns the affected checks.
 
 ### Feature implementation
 
-- Apply the upstream [local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md).
+- Apply the upstream [local feature workflow](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md).
 - Use one canonical feature branch for the feature.
 - Keep worker branches local.
 - Author meaningful Rust behavior tests and targeted web flow tests with the
