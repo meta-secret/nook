@@ -294,7 +294,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       {
         path: '/login/',
         field:
-          '[data-testid="linkedin-active-surface"] [autocomplete="username"]',
+          '[data-testid="linkedin-active-surface"] [autocomplete~="username" i]',
       },
       { path: '/x', field: '[name="username_or_email"]' },
     ]
