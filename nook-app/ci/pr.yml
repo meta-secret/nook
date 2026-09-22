@@ -98,7 +98,6 @@ tasks:
             ;;
         esac
         wasm_artifact_dir='{{.PR_ARTIFACT_DIR}}/wasm/'"$commit_id"
-        rm -rf "$wasm_artifact_dir"
         mkdir -p "$wasm_artifact_dir"
         {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} \
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
