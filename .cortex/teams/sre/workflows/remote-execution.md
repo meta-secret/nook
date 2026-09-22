@@ -95,7 +95,9 @@ policy or readiness. Single-agent sessions perform these responsibilities locall
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.
-- Complete PR validation with `task pr:validate PR=<number>`.
+- PR Lifecycle requests label-triggered validation with `task pr:validate PR=<number>`
+  (or `FULL_E2E=1` for a Main-fix browser gate). CI/CD owns only the resulting
+  workflow execution and observation; it does not mutate pull-request labels.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - `loom:verify` uses the general `nook-k0s` scale set.
