@@ -70,6 +70,9 @@ impl From<PageLoginContext> for bool {
     }
 }
 
+/// Current extension producers and the offscreen WASM consumer ship atomically.
+/// Migration decision: the added password count is required; mixed-version
+/// payloads are unsupported and older shapes intentionally fail closed.
 #[derive(Debug, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]

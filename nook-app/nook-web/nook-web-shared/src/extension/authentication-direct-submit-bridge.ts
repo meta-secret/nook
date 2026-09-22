@@ -158,7 +158,12 @@ const AuthenticationSubmissionBridge = class {
     const stopDirectObservation = this.observeAuthenticationDirectSubmits(
       (submittedForm) => {
         if (submittedForm !== form) return true;
-        if (!approval || !directRouteApproved() || !approval.isApproved()) {
+        if (
+          !allowNativeReplay ||
+          !approval ||
+          !directRouteApproved() ||
+          !approval.isApproved()
+        ) {
           reject();
           return false;
         }

@@ -99,7 +99,28 @@ impl AuthenticationAdvanceControlObservation {
             && self.new_password_field_count.is_zero()
             && self.one_time_code_field_count.is_zero()
             && !self.semantic_submit_control_count.is_multiple()
-            && AuthenticationControlText::new(&self.label).expand_identity_text() == "sign in"
+            && matches!(
+                AuthenticationControlText::new(&self.label)
+                    .expand_identity_text()
+                    .as_str(),
+                "sign in"
+                    | "anmelden"
+                    | "se connecter"
+                    | "iniciar sesión"
+                    | "accedi"
+                    | "aanmelden"
+                    | "entrar"
+                    | "logga in"
+                    | "logg inn"
+                    | "log ind"
+                    | "kirjaudu sisään"
+                    | "zaloguj się"
+                    | "přihlásit se"
+                    | "サインイン"
+                    | "로그인"
+                    | "登录"
+                    | "登入"
+            )
             && AuthenticationControlText::new(&self.machine_identity).expand_identity_text()
                 == "tds btn"
     }
@@ -656,6 +677,21 @@ mod tests {
         inert.actionability = PageControlActionability::Inert;
         assert!(!inert.authentication_advance_control_is_safe());
         assert!(inert.allows_tesla_password_disclosure_planning());
+
+        for (locale, label) in [
+            ("de-DE", "Anmelden"),
+            ("fr-FR", "Se connecter"),
+            ("es-ES", "Iniciar sesión"),
+        ] {
+            let mut localized = observation.clone();
+            localized.destination_identity = localized
+                .destination_identity
+                .replace("locale=en-US", &format!("locale={locale}"));
+            localized.label = label.to_owned();
+            assert!(localized.authentication_advance_control_is_safe());
+            localized.actionability = PageControlActionability::Inert;
+            assert!(localized.allows_tesla_password_disclosure_planning());
+        }
 
         for mutate in [
             |control: &mut AuthenticationAdvanceControlObservation| {

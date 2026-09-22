@@ -980,7 +980,10 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       // must never replay a native GET that would serialize a password.
       allowNativeReplay: !(
         this.formSubmissionMethod(form) === PageControlSubmissionMethod.Get &&
-        form.querySelector('input[type="password"]')
+        Array.from(form.elements).some(
+          (element) =>
+            element instanceof HTMLInputElement && element.type === "password",
+        )
       ),
     };
     return authenticationSubmissionBridge.observeAuthenticationSubmission(

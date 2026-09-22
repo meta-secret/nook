@@ -47,6 +47,24 @@ impl CanonicalControlDestination {
             && url.host_str().is_some()
     }
 
+    fn is_bounded_tesla_locale(locale: &str) -> bool {
+        if locale.len() > 16 {
+            return false;
+        }
+        let mut parts = locale.split('-');
+        let Some(language) = parts.next() else {
+            return false;
+        };
+        let Some(region) = parts.next() else {
+            return false;
+        };
+        parts.next().is_none()
+            && (2..=3).contains(&language.len())
+            && language.bytes().all(|byte| byte.is_ascii_lowercase())
+            && ((region.len() == 2 && region.bytes().all(|byte| byte.is_ascii_uppercase()))
+                || (region.len() == 3 && region.bytes().all(|byte| byte.is_ascii_digit())))
+    }
+
     fn tesla_account_authorization_route(url: &Url) -> Option<String> {
         if url.scheme() != "https"
             || url.host_str() != Some("auth.tesla.com")
@@ -67,11 +85,15 @@ impl CanonicalControlDestination {
                 .map(|(_, value)| value.as_ref())
                 .eq([expected])
         };
+        let locale = pairs
+            .iter()
+            .find(|(candidate, _)| candidate == "locale")
+            .map(|(_, value)| value.as_ref());
         if !exactly_one("response_type", "code")
             || !exactly_one("client_id", "accounts")
             || !exactly_one("redirect_uri", "https://accounts.tesla.com/oauth2/callback")
             || !exactly_one("scope", "offline_access user profile ou_code email")
-            || !exactly_one("locale", "en-US")
+            || !locale.is_some_and(Self::is_bounded_tesla_locale)
         {
             return None;
         }
@@ -579,6 +601,24 @@ mod tests {
             "/oauth2/v1/authorize"
         );
 
+        for locale in ["de-DE", "fr-FR", "es-ES", "pt-BR", "zh-CN"] {
+            let localized = destination.replace("locale=en-US", &format!("locale={locale}"));
+            let canonical = CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: "https://auth.tesla.com",
+                    destination_identity: &localized,
+                },
+            );
+            assert!(canonical.is_ok(), "{locale}");
+            let Ok(canonical) = canonical else {
+                continue;
+            };
+            assert_eq!(
+                canonical.authentication_policy_route_identity(),
+                "/oauth2/v1/authorize"
+            );
+        }
+
         for hostile in [
             destination.replace("client_id=accounts", "client_id=attacker"),
             destination.replace(
@@ -586,6 +626,9 @@ mod tests {
                 "attacker.example%2Fcallback",
             ),
             destination.replace("profile", "delete-account"),
+            destination.replace("locale=en-US", "locale=english-US"),
+            destination.replace("locale=en-US", "locale=en-us"),
+            destination.replace("locale=en-US", "locale=en-US-extra"),
             format!("{destination}&provider=google"),
         ] {
             let canonical = CanonicalControlDestination::canonicalize_control_destination(
