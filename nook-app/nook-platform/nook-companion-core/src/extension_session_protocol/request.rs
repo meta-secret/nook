@@ -211,6 +211,16 @@ pub struct UpdateVaultPayload {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct VaultSummaryPayload {
+    vault_store_id: String,
+    app_id: String,
+    app_public_key: String,
+    app_signing_public_key: String,
+    queue: QueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PasskeyLookupPayload {
     vault_store_id: String,
     device_id: String,
@@ -405,6 +415,8 @@ pub enum ExtensionSessionRequest {
     ImportVault(ImportVaultPayload),
     #[serde(rename = "nook:extension-session-update-vault")]
     UpdateVault(UpdateVaultPayload),
+    #[serde(rename = "nook:extension-session-vault-summary")]
+    VaultSummary(VaultSummaryPayload),
     #[serde(rename = "nook:extension-session-list-passkeys")]
     ListPasskeys(PasskeyLookupPayload),
     #[serde(rename = "nook:extension-session-list-logins")]
@@ -509,6 +521,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::UnlockOptions(_)
             | ExtensionSessionRequest::ImportVault(_)
             | ExtensionSessionRequest::UpdateVault(_)
+            | ExtensionSessionRequest::VaultSummary(_)
             | ExtensionSessionRequest::ListPasskeys(_)
             | ExtensionSessionRequest::ListLogins(_)
             | ExtensionSessionRequest::RevealLogin(_)
@@ -727,6 +740,11 @@ mod tests {
                 "identity handoff",
                 r#"{"type":"nook:extension-session-seal-identity-handoff","payload":{"recipientPublicKey":"recipient","nonce":"nonce","expectedDeviceId":"device","expectedDevicePublicKey":"public","expectedDeviceSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
                 r#""nonce":"nonce","#,
+            ),
+            (
+                "vault summary",
+                r#"{"type":"nook:extension-session-vault-summary","payload":{"vaultStoreId":"vault","appId":"app","appPublicKey":"public","appSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
+                r#""vaultStoreId":"vault","#,
             ),
             (
                 "passkey lookup",

@@ -15,6 +15,7 @@ export const ExtensionSessionMessageType = {
   SealIdentityHandoff: 'nook:extension-session-seal-identity-handoff',
   ImportVault: 'nook:extension-session-import-vault',
   UpdateVault: 'nook:extension-session-update-vault',
+  VaultSummary: 'nook:extension-session-vault-summary',
   ListPasskeys: 'nook:extension-session-list-passkeys',
   ListLogins: 'nook:extension-session-list-logins',
   RevealLogin: 'nook:extension-session-reveal-login',

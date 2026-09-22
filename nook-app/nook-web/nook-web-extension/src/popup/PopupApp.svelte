@@ -32,6 +32,8 @@
   import {
     PairingCandidateKind,
     type PairingCandidate,
+    CompanionSecretCountKind,
+    type CompanionSecretCount,
   } from './popup-app-state'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
@@ -39,6 +41,7 @@
     i18n,
     isConnected,
     vaultName,
+    vaultStoreId,
     pairingRequested = false,
     protectionStatus,
     activeSessionDevice,
@@ -46,6 +49,7 @@
     i18n: ExtensionI18n
     isConnected: boolean
     vaultName?: string
+    vaultStoreId?: string
     pairingRequested?: boolean
     protectionStatus: DeviceProtectionStatus
     activeSessionDevice: ExtensionSessionDeviceState
@@ -70,6 +74,9 @@
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
+  let secretCount = $state<CompanionSecretCount>({
+    kind: CompanionSecretCountKind.Unavailable,
+  })
 
   const needsSetup = $derived(
     status === DeviceProtectionStatus.Missing ||
@@ -85,6 +92,49 @@
       replacements: { vault },
     }
     return i18n.t(request)
+  }
+
+  function readyDescription(vault: string): string {
+    const request: ExtensionTranslationRequest = {
+      kind: ExtensionTranslationRequestKind.WithReplacements,
+      key: I18N_KEYS.ExtensionCompanionReadyDescription,
+      replacements: { vault },
+    }
+    return i18n.t(request)
+  }
+
+  function secretCountValue(): string {
+    if (secretCount.kind === CompanionSecretCountKind.Available)
+      return String(secretCount.count)
+    return translatePlain(
+      secretCount.kind === CompanionSecretCountKind.Loading
+        ? I18N_KEYS.ExtensionCompanionLoading
+        : I18N_KEYS.ExtensionCompanionUnavailable,
+    )
+  }
+
+  async function loadSecretCount(
+    device: ExtensionSessionDeviceWire,
+  ): Promise<void> {
+    if (!isConnected || !vaultStoreId) {
+      secretCount = { kind: CompanionSecretCountKind.Unavailable }
+      return
+    }
+    secretCount = { kind: CompanionSecretCountKind.Loading }
+    try {
+      const summary = await extensionWasmRuntime.extensionVaultSummary({
+        vaultStoreId,
+        appId: device.deviceId,
+        appPublicKey: device.devicePublicKey,
+        appSigningPublicKey: device.deviceSigningPublicKey,
+      })
+      secretCount = {
+        kind: CompanionSecretCountKind.Available,
+        count: summary.secretCount,
+      }
+    } catch {
+      secretCount = { kind: CompanionSecretCountKind.Unavailable }
+    }
   }
 
   function isOkResponse(response: unknown): boolean {
@@ -122,7 +172,7 @@
       window.close()
     })
   }
-  function stayReady(): void {
+  function closeCompanion(): void {
     window.close()
   }
 
@@ -154,6 +204,7 @@
     status = DeviceProtectionStatus.Unlocked
     busy = false
     error = ''
+    void loadSecretCount(device)
   }
 
   $effect(() => {
@@ -250,81 +301,145 @@
 
 {#if showToolbarMenu}
   <main class="toolbar-menu" data-testid="extension-toolbar-menu">
-    <header class="toolbar-menu-header">
-      <NookIcon src="../icons/nook.png" alt="" class="popup-logo menu-logo" />
-      <div class="toolbar-menu-summary">
-        <p class="step-label">
-          {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
-        </p>
-        <h1
-          data-testid="companion-vault-status"
-          data-connected={showExistingConnection}
-        >
-          {showExistingConnection && vaultName
-            ? connectedVaultLabel(vaultName)
-            : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
-        </h1>
+    <header class="companion-header">
+      <div class="companion-brand-row">
+        <NookIcon src="../icons/nook.png" alt="" class="popup-logo menu-logo" />
+        <div class="companion-brand-copy">
+          <p class="step-label">
+            {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
+          </p>
+          <div
+            class:connected={isConnected}
+            class="companion-state"
+            data-testid="companion-vault-status"
+            data-connected={isConnected}
+          >
+            <span aria-hidden="true"></span>
+            {isConnected && vaultName
+              ? connectedVaultLabel(vaultName)
+              : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
+          </div>
+        </div>
       </div>
+
+      <h1 data-testid="companion-title">
+        {translatePlain(
+          isConnected
+            ? I18N_KEYS.ExtensionCompanionReadyTitle
+            : I18N_KEYS.ExtensionCompanionConnectTitle,
+        )}
+      </h1>
+      <p class="companion-description" data-testid="companion-description">
+        {isConnected && vaultName
+          ? readyDescription(vaultName)
+          : translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)}
+      </p>
     </header>
 
-    {#if showExistingConnection}
-      <button type="button" data-testid="stay-ready-btn" onclick={stayReady}>
-        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
-      </button>
-      <button
-        type="button"
-        class="menu-secondary-action"
-        data-testid="open-simple-vault-btn"
-        onclick={openSimpleVault}
-      >
-        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
-      </button>
-      {#if pairingCandidate.kind === PairingCandidateKind.Selected}
+    <section class="secret-summary" aria-live="polite">
+      <div>
+        <span
+          >{translatePlain(I18N_KEYS.ExtensionCompanionSecretsAvailable)}</span
+        >
+        <strong data-testid="companion-secret-count"
+          >{secretCountValue()}</strong
+        >
+      </div>
+    </section>
+
+    <section
+      class:connected={isConnected}
+      class="companion-relationship"
+      aria-label={translatePlain(I18N_KEYS.ExtensionCompanionRelationship)}
+    >
+      <div class="relationship-node">
+        <span>{translatePlain(I18N_KEYS.ExtensionCompanionIdentity)}</span>
+        <strong data-testid="companion-identity-status">
+          {translatePlain(
+            isConnected
+              ? I18N_KEYS.ExtensionCompanionLinked
+              : I18N_KEYS.ExtensionCompanionProtected,
+          )}
+        </strong>
+      </div>
+      <div class="relationship-connector" aria-hidden="true">
+        <span></span>
+      </div>
+      <div class="relationship-node">
+        <span>{translatePlain(I18N_KEYS.ExtensionCompanionVault)}</span>
+        <strong data-testid="companion-connection-status">
+          {translatePlain(
+            isConnected
+              ? I18N_KEYS.ExtensionCompanionConnected
+              : I18N_KEYS.ExtensionCompanionNotConnected,
+          )}
+        </strong>
+      </div>
+    </section>
+
+    <div class="companion-actions">
+      {#if showExistingConnection}
         <button
           type="button"
-          class="menu-secondary-action"
-          disabled={busy}
-          data-testid="pair-another-vault-btn"
+          data-testid="open-simple-vault-btn"
+          onclick={openSimpleVault}
+        >
+          {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
+        </button>
+      {:else}
+        <button
+          type="button"
+          disabled={busy ||
+            pairingCandidate.kind !== PairingCandidateKind.Selected}
+          data-testid="connect-simple-vault-btn"
           onclick={() => {
             if (pairingCandidate.kind === PairingCandidateKind.Selected)
               beginPairing(pairingCandidate.device)
           }}
         >
-          {translatePlain(I18N_KEYS.ExtensionCompanionPairAnotherVault)}
+          {busy
+            ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
+            : translatePlain(
+                pairingRequested
+                  ? I18N_KEYS.ExtensionCompanionPairAnotherVault
+                  : I18N_KEYS.ExtensionSetupConnectSimpleVault,
+              )}
+        </button>
+        <button
+          type="button"
+          class="secondary-button"
+          data-testid="open-simple-vault-btn"
+          onclick={openSimpleVault}
+        >
+          {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
         </button>
       {/if}
-    {:else}
-      <button
-        type="button"
-        hidden={pairingCandidate.kind !== PairingCandidateKind.Selected}
-        disabled={busy}
-        data-testid="connect-simple-vault-btn"
-        onclick={() => {
-          if (pairingCandidate.kind === PairingCandidateKind.Selected)
-            beginPairing(pairingCandidate.device)
-        }}
-      >
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.ExtensionSetupConnectSimpleVault)}
-      </button>
-      <button
-        type="button"
-        class="menu-secondary-action"
-        data-testid="stay-ready-btn"
-        onclick={stayReady}
-      >
-        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
-      </button>
-      <button
-        type="button"
-        class="menu-secondary-action"
-        data-testid="open-simple-vault-btn"
-        onclick={openSimpleVault}
-      >
-        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
-      </button>
-    {/if}
+
+      <div class="companion-footer-actions">
+        {#if showExistingConnection && pairingCandidate.kind === PairingCandidateKind.Selected}
+          <button
+            type="button"
+            class="menu-secondary-action"
+            disabled={busy}
+            data-testid="pair-another-vault-btn"
+            onclick={() => {
+              if (pairingCandidate.kind === PairingCandidateKind.Selected)
+                beginPairing(pairingCandidate.device)
+            }}
+          >
+            {translatePlain(I18N_KEYS.ExtensionCompanionPairAnotherVault)}
+          </button>
+        {/if}
+        <button
+          type="button"
+          class="menu-secondary-action"
+          data-testid="companion-done-btn"
+          onclick={closeCompanion}
+        >
+          {translatePlain(I18N_KEYS.ExtensionCompanionDone)}
+        </button>
+      </div>
+    </div>
 
     {#if error}
       <p class="error-message" role="alert">{error}</p>

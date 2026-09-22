@@ -23,11 +23,16 @@ async function loadCompanionVaultConnection(): Promise<
   | {
       isConnected: true
       vaultName: string
+      vaultStoreId: string
     }
 > {
   const setup = await extensionPairingStateLoader.loadExtensionSetupState()
   return setup.kind === ExtensionSetupLoadKind.Ready
-    ? { isConnected: true, vaultName: setup.setup.selectedVaultName }
+    ? {
+        isConnected: true,
+        vaultName: setup.setup.selectedVaultName,
+        vaultStoreId: setup.setup.selectedVaultStoreId,
+      }
     : { isConnected: false }
 }
 
@@ -76,7 +81,10 @@ async function main() {
       i18n,
       isConnected: vaultConnection.isConnected,
       ...(vaultConnection.isConnected
-        ? { vaultName: vaultConnection.vaultName }
+        ? {
+            vaultName: vaultConnection.vaultName,
+            vaultStoreId: vaultConnection.vaultStoreId,
+          }
         : {}),
       pairingRequested: searchParams.get('intent') === 'pair',
       protectionStatus,
