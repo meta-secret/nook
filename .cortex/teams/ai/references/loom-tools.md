@@ -191,7 +191,7 @@ Consume that output instead of maintaining request bodies in Cortex.
 The historical request identifier is retained only for compatibility and fails
 closed without executing commands. Follow [dev
 delivery](../../../gizmo-prime/architecture/dev-delivery.md) for the remote
-build-only compilation stage and the manager-owned CI validation stage.
+build-only compilation stage and the feature PR required-check stage.
 
 ### cortexAudit
 

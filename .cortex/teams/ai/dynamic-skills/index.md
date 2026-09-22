@@ -70,7 +70,7 @@ catalogs the linked authorities without copying their policies.
 - **[efficient-pr-delivery.md](../../../gizmo-prime/dynamic-skills/efficient-pr-delivery.md)**
   - Purpose: Route current dev delivery and retain prior PR runtime reference
 - **[github-actions-only-validation.md](../../sre/dynamic-skills/github-actions-only-validation.md)**
-  - Purpose: Route feature compilation and manager slow checks to remote execution
+  - Purpose: Route feature compilation and feature PR required checks to remote execution
 - **[kubernetes-native-cluster-execution.md](../../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
 - **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**

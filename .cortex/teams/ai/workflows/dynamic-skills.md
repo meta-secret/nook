@@ -57,7 +57,7 @@ completion and sets issue lifecycle state. For feature build or check
 mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
 Gizmo Prime authorizes Team Gizmo (Delivery Pipeline context). The Team Gizmo dispatches
 PR Lifecycle Agent through the active harness and returns the evidence. The
-Feature Gizmo authorizes manager-stage publication, slow checks, and promotion
+Feature Gizmo authorizes feature-branch publication, required checks, and merge
 through the same route.
 
 For Workbench publication, Feature Gizmo approves the exact feature summary or

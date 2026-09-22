@@ -1,4 +1,5 @@
-import { isAbsolute, normalize } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
 
 import {
   CanonicalFeatureBranchContract,
@@ -6,10 +7,7 @@ import {
 } from '../lib/base-evidence.ts';
 import { ModuleDeliveryIssueCode, ModuleDeliveryTaskKind } from './domain.ts';
 import type { ModuleDeliveryIssue } from './domain.ts';
-import {
-  TEAM_INTERNAL_AGENT_CATALOG,
-  TeamKey,
-} from '../team-agents/catalog.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
 import type {
   IssueRequest,
   ValidationState,
@@ -43,7 +41,9 @@ export class ModuleDeliveryBranchAssignmentValidation {
       if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
       const workspacePath = `$.nodes[${index}].workspace`;
       const branchSegments = node.workspace.workerBranch.split('/');
-      const normalizedWorktreePath = normalize(node.workspace.worktreePath);
+      const normalizedWorktreePath = this.canonicalWorktreePath(
+        node.workspace.worktreePath,
+      );
       try {
         CanonicalWorkerBranchContract.parse(node.workspace.workerBranch);
       } catch {
@@ -56,10 +56,6 @@ export class ModuleDeliveryBranchAssignmentValidation {
       if (
         branchSegments[2] !== this.workerTeamSegment(node.team) ||
         branchSegments[3] !== node.workspace.workerRole ||
-        !this.roleBelongsToTeam({
-          role: node.workspace.workerRole,
-          team: node.team,
-        }) ||
         branchSegments[4] !== featureSegment ||
         workerBranches.has(node.workspace.workerBranch)
       )
@@ -100,14 +96,13 @@ export class ModuleDeliveryBranchAssignmentValidation {
     }
   }
 
-  private static roleBelongsToTeam(request: {
-    readonly role: string;
-    readonly team: TeamKey;
-  }): boolean {
-    return TEAM_INTERNAL_AGENT_CATALOG.some(
-      (profile) =>
-        profile.key === request.role && profile.team === request.team,
-    );
+  private static canonicalWorktreePath(path: string): string {
+    const resolved = resolve(path);
+    try {
+      return realpathSync.native(resolved);
+    } catch {
+      return resolved;
+    }
   }
 
   private static addIssue(request: BranchIssueRequest): void {

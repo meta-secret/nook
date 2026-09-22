@@ -39,7 +39,7 @@ nook-core → nook-wasm → nook-web
   - `wasm-bindgen` annotations on simple core DTOs and enums are allowed when
     they preserve one typed domain model across Rust and web.
 - Use Bun for Nook web and Loom JavaScript tooling.
-- Use remote Task execution for compilation and the manager's slow checks.
+- Use remote Task execution for compilation and feature PR required checks.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
 
 ## New vault item type checklist

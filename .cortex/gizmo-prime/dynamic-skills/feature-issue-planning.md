@@ -45,7 +45,7 @@ Nook feature.
      sufficient to start.
    - Set `automation: agent` only when automated execution is explicitly
      intended.
-11. Return records for manager-stage validation and authorized publication.
+11. Return records for feature PR required checks and authorized publication.
 
 ## Safety
 

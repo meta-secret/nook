@@ -15,8 +15,8 @@ Keep local implementation feedback bounded under the
   integration. Route feature-branch publication and the required PR-check
   request through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle
   Agent.
-- Execute formatting gates, audits, tests, and preflight in the manager's slow
-  PR validation stage.
+- Execute formatting gates, audits, tests, and preflight only through the
+  feature PR required-check stage routed to PR Lifecycle Agent.
 
 ## Prohibited actions
 

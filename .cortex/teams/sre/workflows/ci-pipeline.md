@@ -58,7 +58,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Verification completes before test compilation; failure stops later phases.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
-- Dev PRs and research changes request product validation automatically.
+- Feature PRs and research changes request product validation automatically.
 - Policy-only PRs run tooling verification, preflight and Loom in the same job.
 - UI-demo execution remains disabled, with its focused-spec contract retained.
 - Pages preview uses a same-runner composite action; coverage remains inside
@@ -465,7 +465,7 @@ git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-The manager's slow PR stage runs this contract. Local feature formatting stays
+The feature PR required-check stage runs this contract. Local feature formatting stays
 bounded — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 

@@ -1,4 +1,13 @@
 import { expect, test } from 'bun:test';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   ModuleDeliveryIssueCode,
@@ -69,6 +78,34 @@ test('binds every canonical worker branch to its assigned role', () => {
   );
 });
 
+test('accepts canonical roles outside the Loom runtime catalog', () => {
+  const webNode = ModuleDeliveryPlanValidationScenario.writeNode({
+    taskId: 'web-designer',
+    expert: 'web_expert',
+    moduleRoot: 'nook-app/nook-web/nook-web-app',
+    dependencies: [],
+    read: ['nook-app/nook-web/nook-web-app/**'],
+    write: ['nook-app/nook-web/nook-web-app/**'],
+  });
+  const assignedWebDesigner: ModuleDeliveryWriteNodeV2 = {
+    ...webNode,
+    workspace: {
+      ...webNode.workspace,
+      workerRole: 'web-designer',
+      workerBranch:
+        'codex/child/web-dev/web-designer/module-delivery-test/web-designer-implementation',
+    },
+  };
+  expect(
+    ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan({
+        nodes: [assignedWebDesigner],
+        edgeContracts: [],
+      }),
+    ).status,
+  ).toBe(ModuleDeliveryValidationStatus.Accepted);
+});
+
 test('rejects equivalent normalized worker worktree paths', () => {
   const first = ModuleDeliveryPlanValidationScenario.writeNode({
     taskId: 'core-provider',
@@ -105,6 +142,58 @@ test('rejects equivalent normalized worker worktree paths', () => {
   expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
     ModuleDeliveryIssueCode.InvalidField,
   );
+});
+
+test('rejects trailing-separator and symlink aliases of one worktree', () => {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'nook-worktree-identity-'));
+  try {
+    const worktree = join(temporaryRoot, 'worker');
+    const alias = join(temporaryRoot, 'worker-alias');
+    mkdirSync(worktree);
+    symlinkSync(worktree, alias);
+    const first = ModuleDeliveryPlanValidationScenario.writeNode({
+      taskId: 'core-provider',
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      dependencies: [],
+      read: [`${CORE_ROOT}/**`],
+      write: [`${CORE_ROOT}/provider/**`],
+    });
+    const second = ModuleDeliveryPlanValidationScenario.writeNode({
+      taskId: 'core-consumer',
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      dependencies: [],
+      read: [`${CORE_ROOT}/**`],
+      write: [`${CORE_ROOT}/consumer/**`],
+    });
+    for (const duplicatePath of [`${worktree}/`, alias]) {
+      const result = ModuleDeliveryPlanValidationScenario.validate(
+        ModuleDeliveryPlanValidationScenario.plan({
+          nodes: [
+            {
+              ...first,
+              workspace: { ...first.workspace, worktreePath: worktree },
+            },
+            {
+              ...second,
+              workspace: {
+                ...second.workspace,
+                worktreePath: duplicatePath,
+              },
+            },
+          ],
+          edgeContracts: [],
+        }),
+      );
+      expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+        ModuleDeliveryIssueCode.InvalidField,
+      );
+    }
+    expect(realpathSync(alias)).toBe(realpathSync(worktree));
+  } finally {
+    rmSync(temporaryRoot, { recursive: true });
+  }
 });
 
 test('returns a typed rejection for a retired child feature ref', () => {
