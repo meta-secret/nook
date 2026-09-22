@@ -161,7 +161,7 @@ behavior for packets issued by SRE Team Gizmo.
   inspection.
 - The specialist must not run local tests, Docker, preflight, or product
   compilation during feature work.
-- Delivery Pipeline owns remote `build:compile` execution.
+- Upstream CI/CD with Nook SRE context owns remote `build:compile` execution.
 - Delivery resolves and validates the latest canonical feature-branch head.
 - A warm replay is accepted only when it completes within five minutes and
   proves the required cache behavior.

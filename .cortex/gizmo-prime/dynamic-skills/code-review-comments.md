@@ -234,8 +234,9 @@ Does not apply to:
       reports the feature branch, outcome, and checks to Gizmo.
 - [ ] The Feature Gizmo requests complete PR validation after the repair wave
       integration and publication of the replacement snapshot.
-- [ ] Gizmo routes changed feature-branch publication and required PR-check
-      execution through the Delivery Pipeline only when the head changed.
+- [ ] Gizmo routes changed feature-branch publication through PR Lifecycle and
+      required workflow execution through upstream CI/CD with Nook SRE context
+      only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create
       replacement-head work.
 - [ ] Gizmo leaves a targeted reply with the fix, validation, no-change

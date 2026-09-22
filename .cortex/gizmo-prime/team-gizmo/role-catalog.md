@@ -36,13 +36,15 @@
 ## Operations
 
 The upstream [SRE catalog](../../../.meta-cortex/teams/sre-team/AGENTS.md)
-owns generic Docker and Kubernetes expertise. Nook supplies operational context
-and retains provisioning and GitHub delivery roles.
+owns generic Docker, Kubernetes, and CI/CD expertise. The upstream
+[delivery catalog](../../../.meta-cortex/teams/delivery-team/AGENTS.md) owns PR
+mechanics. Nook adapters supply project policy and Loom's existing role identities.
 
-- [Provisioning](../../teams/sre/provisioning/AGENTS.md): infrastructure provisioning.
+- [Provisioning and CI/CD](../../teams/sre/provisioning/AGENTS.md): upstream
+  CI/CD execution and infrastructure repairs with Nook provider runbooks.
 - [Cloud native](../../teams/sre/cloud-native/AGENTS.md): upstream Kubernetes
   specialist with Nook cluster and deployment context.
 - [Docker cache](../../teams/sre/docker-cache-specialist/AGENTS.md): upstream Docker
   specialist with Nook cache-health requirements.
 - [PR Lifecycle](../../teams/delivery-pipeline/pr-lifecycle/AGENTS.md):
-  authorized GitHub delivery mechanics.
+  upstream PR agent with Nook authorization and delivery policy.

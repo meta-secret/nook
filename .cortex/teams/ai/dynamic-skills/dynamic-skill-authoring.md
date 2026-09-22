@@ -12,10 +12,11 @@ for future refactors.
   - Authorizes feature delivery when a card is applied.
   - Retains feature policy and readiness decisions.
 - **Team Gizmo**
-  - The single coordinator assigns GitHub mechanics to PR Lifecycle with
-    Delivery Pipeline context through the active harness.
+  - The single coordinator assigns PR mechanics to PR Lifecycle with
+    Delivery Pipeline context and workflow execution to upstream CI/CD with
+    Nook SRE context through the active harness.
 - **PR Lifecycle**
-  - Performs authorized PR creation, updates, validation, and delivery operations.
+  - Performs authorized PR creation, updates, check observation, and delivery operations.
 
 **Prohibited:** have a skill author create a PR outside the assigned delivery route.
 
@@ -116,6 +117,6 @@ every resulting mutation in the allowed paths. Return the branch and focused
 evidence to Gizmo. Do not run a local pre-push or broad validation gate. Prime
 authorizes hosted validation. Gizmo routes local integration through the
 upstream integration agent and waits for its feature branch, integration
-outcome, and checks. Team Gizmo then assigns the packet to PR Lifecycle with
-Delivery Pipeline context through the active harness. Prime owns readiness
-based on the returned CI evidence.
+outcome, and checks. Team Gizmo assigns publication to PR Lifecycle with
+Delivery Pipeline context and workflow execution to upstream CI/CD with Nook
+SRE context. Prime owns readiness based on the returned CI evidence.

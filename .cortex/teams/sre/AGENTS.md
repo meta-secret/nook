@@ -17,6 +17,16 @@ broad pre-push commands are not local or feature-stage permissions.
 SRE owns Nook's build, validation, cluster, deployment, and operational
 infrastructure.
 
+Use the upstream [CI/CD agent](../../../.meta-cortex/teams/sre-team/agents/cicd-agent/AGENTS.md)
+through the [provisioning adapter](provisioning/AGENTS.md) for assigned workflow
+execution and pipeline repairs. Nook's commands, validation venue, provider
+runbooks, and deployment authorization remain the execution contract.
+
+**Prohibited:** interpret green PR checks as authorization for a deployment.
+
+**Preferred:** run the separately authorized existing deployment procedure and
+return its actual revision and outcome to the feature owner.
+
 ## Context loading
 
 1. Read [the SRE knowledge graph](knowledge-graph.md).

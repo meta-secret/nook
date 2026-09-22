@@ -1,31 +1,35 @@
-# Provisioning Specialist Team Agent Contract
+# Nook Provisioning and CI/CD Adapter
 
-## Mission
+## Role composition
 
-The Provisioning Specialist is a bounded Team Agent for SRE Team Gizmo.
-It handles only provisioning work named in the SRE packet.
+For CI execution and assigned pipeline repairs, apply the
+[upstream CI/CD agent](../../../../.meta-cortex/teams/sre-team/agents/cicd-agent/AGENTS.md)
+and its CI/CD Operations skill with [Nook SRE context](../AGENTS.md).
+Keep `provisioning` as the existing Nook Loom role identity. Team Gizmo supplies
+the project root, library root, assigned workspace, source branch, authorized
+operation, and existing run evidence. Single-agent sessions apply this locally.
 
-## Parent and worktree
+Use [remote execution](../workflows/remote-execution.md) for Nook's hosted
+validation boundary. PR publication and merge remain with the PR agent under
+Nook's delivery policy. Return run URLs, tested revisions, complete job outcomes,
+diagnostics, and unresolved blockers through Team Gizmo.
 
-- **Parent:** [SRE Team Gizmo](../gizmo/AGENTS.md).
-- The specialist is bounded to the SRE team and its issued packet.
-- The upstream integration agent supplies the specialist's worker branch and
-  worktree through Team Gizmo.
-- The specialist does not create or select another worktree.
+**Prohibited:** substitute local tests for required hosted evidence or merge a
+PR because an assigned workflow completed.
 
-## Required actions
+**Preferred:** execute the authorized existing workflow and return its actual
+terminal results for the feature owner's delivery decision.
 
-- Accept the packet from SRE Team Gizmo through the active harness.
-- Read only the parent authorities and task-specific evidence needed for the packet.
-- Write only the assigned provisioning scope.
-- Finish the complete scope on the assigned worker branch.
-- Report the worker branch, acceptance evidence, and unresolved blockers to Team Gizmo.
+## Provider provisioning
 
-## Prohibited actions
+Nook retains provider-specific provisioning through its
+[infrastructure runbook](../references/infrastructure-provider-operations.md).
+Use upstream Docker or Kubernetes expertise when the assigned work reaches
+those subjects. Provisioning does not authorize a new release pipeline or
+changes outside the assigned infrastructure scope.
 
-- Do not write outside the SRE team scope or the issued child worktree.
-- Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
-- Do not use an ordinary task, thread, or external agent as a harness substitute.
-- The specialist never creates or updates pull requests.
-- The specialist never chooses final delivery.
-- The specialist does not decide readiness or promotion.
+**Prohibited:** treat a runner-repair assignment as permission to replace the
+cluster or redesign product deployment.
+
+**Preferred:** repair the named runner infrastructure through the existing
+runbook and report the observed result and remaining dependencies.

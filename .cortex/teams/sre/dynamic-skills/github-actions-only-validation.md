@@ -10,9 +10,9 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 
 - **Feature compilation**
   - The owning Feature Gizmo publishes the canonical feature branch.
-  - Gizmo Prime authorizes the canonical feature branch request; Delivery Pipeline
-    Team Gizmo dispatches PR Lifecycle Agent through the active harness for
-    required PR-check execution.
+  - Gizmo Prime authorizes the canonical feature branch request. Team Gizmo
+    assigns publication to PR Lifecycle and hosted execution to upstream CI/CD
+    with Nook SRE context.
   - Each stage re-fetches and resolves the latest committed branch head for
     build-only and type-compilation work, recording the exact SHA as
     observational evidence only. A stale caller-provided feature SHA does not
@@ -24,7 +24,8 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
   - The manually run Feature Gizmo selects the published feature branch.
   - The Feature Gizmo authorizes Team Gizmo (Delivery Pipeline context) to route the
     publication and validation packet through the active harness to internal
-    PR Lifecycle Agent for bounded execution.
+    PR Lifecycle Agent for publication and check observation. Upstream CI/CD
+    handles required workflow dispatches, reruns, and pipeline diagnostics.
   - The Feature Gizmo retains readiness policy authority, and
     `feature PR lifecycle` remains the sole pull-request creation/update path; Team
     Gizmo routes authorized mechanics and PR Lifecycle Agent creates or updates

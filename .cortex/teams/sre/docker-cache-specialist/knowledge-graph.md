@@ -23,5 +23,6 @@ Load only the authority needed for the assigned Docker cache packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-Remote execution, GitHub status, and landing remain Delivery Pipeline
-mechanics. The specialist owns cache implementation and evidence requirements.
+Upstream CI/CD with Nook SRE context owns remote execution. PR Lifecycle owns
+PR check observation and authorized merge mechanics. The Docker specialist
+owns cache implementation and evidence requirements.

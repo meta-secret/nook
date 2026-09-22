@@ -12,11 +12,11 @@ Keep local implementation feedback bounded under the
 - Preserve unrelated changes and finish only the assigned worker-branch scope.
 - Author meaningful tests and required UI flow evidence.
 - Return the worker branch and focused evidence to Team Gizmo for upstream local
-  integration. Route feature-branch publication and the required PR-check
-  request through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle
-  Agent.
+  integration. Team Gizmo assigns feature-branch publication and PR check
+  observation to PR Lifecycle, and required workflow execution to upstream
+  CI/CD with Nook SRE context.
 - Execute formatting gates, audits, tests, and preflight only through the
-  feature PR required-check stage routed to PR Lifecycle Agent.
+  feature PR required-check stage under Nook's hosted execution policy.
 
 ## Prohibited actions
 

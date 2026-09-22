@@ -15,7 +15,8 @@ flowchart LR
     Team --> Writer["Tech writer + Nook context"]
     Team --> Security["Security agent + Nook context"]
     Team --> Integration["Upstream integration agent"]
-    Team --> Operations["Nook SRE and PR Lifecycle"]
+    Team --> Operations["Upstream SRE + Nook operations context"]
+    Team --> PR["Upstream PR agent + Nook PR Lifecycle context"]
 ```
 
 **Prohibited:** start an AI Gizmo, a Web Gizmo, and an SRE Gizmo for one feature.

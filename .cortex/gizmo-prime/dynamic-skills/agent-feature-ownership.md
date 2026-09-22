@@ -14,8 +14,8 @@ owns local feature and task branches, worktrees, integration, and cleanup.
 - Give each worker a functional team identity, bounded file scope, dependencies,
   product constraints, and acceptance evidence.
 - Keep knowledge routing separate from write authority.
-- Route GitHub mutations only through Nook PR Lifecycle under Prime's explicit
-  authorization.
+- Route GitHub PR mutations through Nook PR Lifecycle and workflow execution
+  through upstream CI/CD with Nook SRE context under Prime's explicit authorization.
 - Recheck task ownership before each push, review resolution, close, reopen, or
   merge action.
 - Do not reply to or resolve another task's review threads. Do not close,
@@ -35,7 +35,7 @@ inspection, explicit handoffs, and repository automation acting within its
 documented machine-owned scope remain allowed.
 
 Local Git completion follows the upstream integration agent. GitHub publication,
-checks, merge, and remote cleanup remain the separate responsibility of
+check observation, merge, and remote cleanup remain the separate responsibility of
 [PR Lifecycle](../../teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
 
 ## Automated worker ownership

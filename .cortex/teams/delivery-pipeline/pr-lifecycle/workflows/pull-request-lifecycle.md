@@ -7,29 +7,24 @@ feature branch is deleted after merge.
 
 ## Procedure
 
-1. Fetch and prune origin.
-2. Resolve fresh `origin/main` and the canonical feature head.
-3. Push the canonical feature branch.
-4. Create or update one pull request targeting `main`.
-5. Observe every required PR check for the current head.
-6. Wait for the complete required-check wave.
-7. On failure, return every failed or cancelled required job.
-8. Wait for the upstream integration agent to return the repaired feature
-   branch, integration outcome, and checks, then push the new head.
-9. Rerun every required check.
-10. When all required checks are green, re-fetch PR, main, and head state.
-11. If the head changed, invalidate affected evidence and repeat checks. If
-    `main` advanced, have the upstream integration agent integrate the new
-    frontier into the feature branch, return its outcome and checks, push that
-    replacement head, and repeat every invalidated check.
-12. Squash-merge the pull request.
-13. Verify GitHub's actual merged state.
-14. Verify the squash result on `origin/main`.
-15. Delete the remote feature branch.
-16. Return merge and cleanup evidence.
+1. Load the [authorization packet](authorization-handshake.md) and Nook's
+   [feature-delivery policy](../../../../gizmo-prime/architecture/dev-delivery.md).
+2. Apply upstream
+   [Pull Request Delivery](../../../../../.meta-cortex/teams/delivery-team/agents/pr-agent/skills/pull-request-delivery/SKILL.md)
+   for publication, check observation, authorized merge, and remote cleanup.
+3. Use the Nook event subscriber below for live observation. Route workflow
+   execution or rerun needs through Team Gizmo to upstream CI/CD with SRE context.
+4. Return the complete required-check inventory and the authorized operation's
+   actual result. Report merge and cleanup results separately.
 
 Reviews and approvals are optional. The owning Feature Gizmo may merge its own
 pull request. Required checks and unresolved known defects remain mandatory.
+
+**Prohibited:** substitute an upstream example's merge strategy for Nook's
+squash policy, or report only the first failed job.
+
+**Preferred:** gather the complete terminal check inventory, coordinate one
+repair wave, and merge only under Nook's unchanged-head delivery requirements.
 
 ## Required actions
 

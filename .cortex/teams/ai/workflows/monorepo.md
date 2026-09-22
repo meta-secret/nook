@@ -21,8 +21,8 @@ AI workers do not publish or promote branches.
 10. Return authored tests and interface evidence to Team Gizmo.
 11. Have the integration agent merge the finished worker branch and validate
     the combined feature.
-12. Have Gizmo route feature-branch publication and required PR-check execution
-    through the PR Lifecycle Agent.
+12. Have Gizmo route feature-branch publication through PR Lifecycle and required
+    workflow execution through upstream CI/CD with Nook SRE context.
 13. Route corrections through the responsible team and repeat validation.
 14. Hand publication and full slow checks to the Feature Gizmo.
 

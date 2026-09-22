@@ -54,11 +54,10 @@ scope, and apply the pattern with normal coding workflow and validation.
 AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
 authors Workbench feature summaries and focused issues. It records feature
 completion and sets issue lifecycle state. For feature build or check
-mechanics, the owning Feature Gizmo submits the exact head to Gizmo Prime.
-Gizmo Prime authorizes Team Gizmo (Delivery Pipeline context). The Team Gizmo dispatches
-PR Lifecycle Agent through the active harness and returns the evidence. The
-Feature Gizmo authorizes feature-branch publication, required checks, and merge
-through the same route.
+mechanics, the owning Feature Gizmo submits the canonical branch to Gizmo Prime.
+Team Gizmo assigns upstream CI/CD with Nook SRE context to execute authorized
+workflows and return tested-head evidence. Feature-branch publication, PR check
+observation, and merge use upstream PR behavior through Nook PR Lifecycle.
 
 For Workbench publication, Feature Gizmo approves the exact feature summary or
 focused issue content, including feature completion status or issue lifecycle
@@ -66,9 +65,9 @@ state. Gizmo Prime routes the approved packet through Delivery Pipeline Team
 Gizmo. The Team Gizmo dispatches PR Lifecycle Agent through the active harness
 to publish only that controller-authored content.
 
-Team Gizmo and PR Lifecycle Agent perform only packetized mechanics. They do
-not create or update pull requests, author Workbench content, or decide policy,
-readiness, promotion, or Workbench state.
+Team Gizmo and PR Lifecycle Agent perform only assigned mechanics. PR Lifecycle
+creates or updates pull requests when authorized. Neither authors Workbench
+content nor decides policy, readiness, promotion, or Workbench state.
 
 ## Intake Workflow
 
@@ -158,6 +157,6 @@ When applying a skill to code:
    Feature Gizmo routes local integration through the upstream integration agent
    and waits for its feature branch, integration outcome, and checks. For
    applicable feature build or check mechanics, Gizmo Prime authorizes the Team
-   Gizmo (Delivery Pipeline context) packet; Team Gizmo then dispatches PR
-   Lifecycle Agent through the active harness for the required PR-check task.
+   Gizmo packet; Team Gizmo then assigns upstream CI/CD with Nook SRE context
+   for the required workflow execution.
    The Feature Gizmo owns later CI validation.
