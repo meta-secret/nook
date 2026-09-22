@@ -41,29 +41,37 @@ type PolicyPayloadBatch = {
   implicitSubmissionIndices: number[];
 };
 
+enum PolicyPayloadEntryKind {
+  Transportability = "transportability",
+  AdvanceControl = "advanceControl",
+  PasskeyCandidate = "passkeyCandidate",
+  PageFacts = "pageFacts",
+  ImplicitSubmission = "implicitSubmission",
+}
+
 type PolicyPayloadEntry =
   | {
-      kind: "transportability";
+      kind: PolicyPayloadEntryKind.Transportability;
       index: number;
       value: AuthenticationControlTransportability;
     }
   | {
-      kind: "advanceControl";
+      kind: PolicyPayloadEntryKind.AdvanceControl;
       index: number;
       value: AuthenticationAdvanceControlObservation;
     }
   | {
-      kind: "passkeyCandidate";
+      kind: PolicyPayloadEntryKind.PasskeyCandidate;
       index: number;
       value: AuthenticationDetailedPasskeyControlCandidateObservation;
     }
   | {
-      kind: "pageFacts";
+      kind: PolicyPayloadEntryKind.PageFacts;
       index: number;
       value: AuthenticationPageObservationFacts;
     }
   | {
-      kind: "implicitSubmission";
+      kind: PolicyPayloadEntryKind.ImplicitSubmission;
       index: number;
       value: AuthenticationImplicitSubmitActuationObservation;
     };
@@ -105,23 +113,23 @@ function appendPolicyPayloadEntry(
   entry: PolicyPayloadEntry,
 ): boolean {
   switch (entry.kind) {
-    case "transportability":
+    case PolicyPayloadEntryKind.Transportability:
       batch.payload.transportability.push(entry.value);
       batch.transportabilityIndices.push(entry.index);
       break;
-    case "advanceControl":
+    case PolicyPayloadEntryKind.AdvanceControl:
       batch.payload.advanceControls.push(entry.value);
       batch.advanceControlIndices.push(entry.index);
       break;
-    case "passkeyCandidate":
+    case PolicyPayloadEntryKind.PasskeyCandidate:
       batch.payload.passkeyCandidates.push(entry.value);
       batch.passkeyCandidateIndices.push(entry.index);
       break;
-    case "pageFacts":
+    case PolicyPayloadEntryKind.PageFacts:
       batch.payload.pageFacts.push(entry.value);
       batch.pageFactsIndices.push(entry.index);
       break;
-    case "implicitSubmission":
+    case PolicyPayloadEntryKind.ImplicitSubmission:
       batch.payload.implicitSubmissions.push(entry.value);
       batch.implicitSubmissionIndices.push(entry.index);
   }
@@ -132,23 +140,23 @@ function appendPolicyPayloadEntry(
     return true;
   }
   switch (entry.kind) {
-    case "transportability":
+    case PolicyPayloadEntryKind.Transportability:
       batch.payload.transportability.pop();
       batch.transportabilityIndices.pop();
       break;
-    case "advanceControl":
+    case PolicyPayloadEntryKind.AdvanceControl:
       batch.payload.advanceControls.pop();
       batch.advanceControlIndices.pop();
       break;
-    case "passkeyCandidate":
+    case PolicyPayloadEntryKind.PasskeyCandidate:
       batch.payload.passkeyCandidates.pop();
       batch.passkeyCandidateIndices.pop();
       break;
-    case "pageFacts":
+    case PolicyPayloadEntryKind.PageFacts:
       batch.payload.pageFacts.pop();
       batch.pageFactsIndices.pop();
       break;
-    case "implicitSubmission":
+    case PolicyPayloadEntryKind.ImplicitSubmission:
       batch.payload.implicitSubmissions.pop();
       batch.implicitSubmissionIndices.pop();
   }
@@ -159,28 +167,28 @@ function policyPayloadEntries(
   request: CompanionAuthenticationPolicyEvaluationRequest,
 ): PolicyPayloadEntry[] {
   return [
-    ...request.transportability.map((value, index) => ({
-      kind: "transportability" as const,
+    ...request.transportability.map((value, index): PolicyPayloadEntry => ({
+      kind: PolicyPayloadEntryKind.Transportability,
       index,
       value,
     })),
-    ...request.advanceControls.map((value, index) => ({
-      kind: "advanceControl" as const,
+    ...request.advanceControls.map((value, index): PolicyPayloadEntry => ({
+      kind: PolicyPayloadEntryKind.AdvanceControl,
       index,
       value,
     })),
-    ...request.passkeyCandidates.map((value, index) => ({
-      kind: "passkeyCandidate" as const,
+    ...request.passkeyCandidates.map((value, index): PolicyPayloadEntry => ({
+      kind: PolicyPayloadEntryKind.PasskeyCandidate,
       index,
       value,
     })),
-    ...request.pageFacts.map((value, index) => ({
-      kind: "pageFacts" as const,
+    ...request.pageFacts.map((value, index): PolicyPayloadEntry => ({
+      kind: PolicyPayloadEntryKind.PageFacts,
       index,
       value,
     })),
-    ...request.implicitSubmissions.map((value, index) => ({
-      kind: "implicitSubmission" as const,
+    ...request.implicitSubmissions.map((value, index): PolicyPayloadEntry => ({
+      kind: PolicyPayloadEntryKind.ImplicitSubmission,
       index,
       value,
     })),

@@ -37,6 +37,11 @@ type PolicyRuntimeCallback = (response: {
   result: PolicyRuntimeResult
 }) => void
 
+enum TestGlobalPropertyName {
+  Chrome = 'chrome',
+  Location = 'location',
+}
+
 function authenticationFacts(
   destinationIdentity: string,
 ): AuthenticationPageObservationFacts {
@@ -76,7 +81,7 @@ function authenticationFacts(
 }
 
 function restoreGlobalProperty(
-  name: 'chrome' | 'location',
+  name: TestGlobalPropertyName,
   descriptor: PropertyDescriptor | false,
 ): void {
   if (descriptor) {
@@ -87,8 +92,14 @@ function restoreGlobalProperty(
 }
 
 afterAll(() => {
-  restoreGlobalProperty('chrome', originalChromeDescriptor || false)
-  restoreGlobalProperty('location', originalLocationDescriptor || false)
+  restoreGlobalProperty(
+    TestGlobalPropertyName.Chrome,
+    originalChromeDescriptor || false,
+  )
+  restoreGlobalProperty(
+    TestGlobalPropertyName.Location,
+    originalLocationDescriptor || false,
+  )
 })
 
 describe('authentication policy transport batching', () => {
