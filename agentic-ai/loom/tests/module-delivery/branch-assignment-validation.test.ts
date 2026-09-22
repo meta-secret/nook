@@ -40,6 +40,35 @@ test('binds every canonical worker branch to its assigned team and feature', () 
   );
 });
 
+test('binds every canonical worker branch to its assigned role', () => {
+  const node = ModuleDeliveryPlanValidationScenario.writeNode({
+    taskId: 'core-provider',
+    expert: 'core_expert',
+    moduleRoot: CORE_ROOT,
+    dependencies: [],
+    read: [`${CORE_ROOT}/**`],
+    write: [`${CORE_ROOT}/**`],
+  });
+  const mismatchedWorker: ModuleDeliveryWriteNodeV2 = {
+    ...node,
+    workspace: {
+      ...node.workspace,
+      workerBranch:
+        'codex/child/dev-core/rust-auth2-developer/module-delivery-test/core-provider-implementation-work',
+    },
+  };
+  const result = ModuleDeliveryPlanValidationScenario.validate(
+    ModuleDeliveryPlanValidationScenario.plan({
+      nodes: [mismatchedWorker],
+      edgeContracts: [],
+    }),
+  );
+  expect(result.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+  expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+    ModuleDeliveryIssueCode.InvalidField,
+  );
+});
+
 test('rejects equivalent normalized worker worktree paths', () => {
   const first = ModuleDeliveryPlanValidationScenario.writeNode({
     taskId: 'core-provider',

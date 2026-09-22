@@ -13,7 +13,6 @@ import {
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
 import { ReadOnlyExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
-import { DelegationLifecycleLease } from '../../src/agent-workflow/delegation-run-journal.ts';
 
 /** Compile-only examples: never invoked by the runtime test harness. */
 export class ForbiddenExpertTransitions {
@@ -68,7 +67,5 @@ export class ForbiddenExpertTransitions {
     void session;
     // @ts-expect-error Only successful isolation setup can construct live resources.
     new ReadOnlyExpertRuntimeIsolation({});
-    // @ts-expect-error A lock cannot be fabricated from a raw database handle.
-    new DelegationLifecycleLease({});
   }
 }

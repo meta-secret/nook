@@ -89,7 +89,6 @@ export default tseslint.config(
       'src/codec/yaml.ts',
       'src/codec/external.ts',
       'src/agent-workflow/attempt-codec.ts',
-      'src/agent-workflow/delegation-codec.ts',
       'src/agent-workflow/structural-result-codec.ts',
       'src/agent-workflow/structured-result-codec.ts',
       'src/agent-workflow/structural-evidence-codec.ts',

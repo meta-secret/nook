@@ -165,10 +165,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'c4414d19cc693f76f5d282109af62b24336052a34780476fd13d7671a7b9117d',
   ],
   [
-    'agentic-ai/loom/src/agent-workflow/delegation-aggregation.ts',
-    'd91c6bda5de0c6285849d09868467b8520b4bf55f8587d9afe9ea411791e6311',
-  ],
-  [
     'agentic-ai/loom/src/commands/pr-authored-budget.ts',
     'c72e41342aa7fe2ae312e90a9f28e3baad62600c24d8744ac6b26962b1d55376',
   ],

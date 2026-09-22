@@ -22,7 +22,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -80,20 +80,22 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       },
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerRole:
+          request.team === TeamKey.Sre ? 'cloud-native' : 'cortex-specialist',
         workerBranch: `codex/child/${request.team === TeamKey.Sre ? 'sre/cloud-native' : 'ai/cortex-specialist'}/module-delivery-test/${request.taskId}-cortex-authoring-work`,
         worktreePath: `/tmp/nook-module-delivery/${request.taskId}`,
       },
     };
   }
 
-  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV5 {
+  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV6 {
     return new ModuleDeliveryCortexPlanValidationScenario(nodes).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV5 {
+  private execute(): ModuleDeliveryPlanV6 {
     const nodes = this.request;
     return {
-      version: 5,
+      version: 6,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
@@ -157,6 +159,7 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       workspace: {
         ...node.workspace,
+        workerRole: 'rust-core-developer',
         workerBranch:
           'codex/child/dev-core/rust-core-developer/module-delivery-test/dev-core-write-cortex-authoring-work',
       },

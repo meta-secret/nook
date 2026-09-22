@@ -6,7 +6,10 @@ import {
 } from '../lib/base-evidence.ts';
 import { ModuleDeliveryIssueCode, ModuleDeliveryTaskKind } from './domain.ts';
 import type { ModuleDeliveryIssue } from './domain.ts';
-import { TeamKey } from '../team-agents/catalog.ts';
+import {
+  TEAM_INTERNAL_AGENT_CATALOG,
+  TeamKey,
+} from '../team-agents/catalog.ts';
 import type {
   IssueRequest,
   ValidationState,
@@ -52,6 +55,11 @@ export class ModuleDeliveryBranchAssignmentValidation {
       }
       if (
         branchSegments[2] !== this.workerTeamSegment(node.team) ||
+        branchSegments[3] !== node.workspace.workerRole ||
+        !this.roleBelongsToTeam({
+          role: node.workspace.workerRole,
+          team: node.team,
+        }) ||
         branchSegments[4] !== featureSegment ||
         workerBranches.has(node.workspace.workerBranch)
       )
@@ -59,7 +67,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
           state,
           path: `${workspacePath}.workerBranch`,
           message:
-            'workerBranch must match the assigned team, name the canonical feature segment, and be unique.',
+            'workerBranch must match the assigned team and role, name the canonical feature segment, and be unique.',
         });
       if (
         !isAbsolute(node.workspace.worktreePath) ||
@@ -90,6 +98,16 @@ export class ModuleDeliveryBranchAssignmentValidation {
       case TeamKey.DeliveryPipeline:
         return 'delivery-pipeline';
     }
+  }
+
+  private static roleBelongsToTeam(request: {
+    readonly role: string;
+    readonly team: TeamKey;
+  }): boolean {
+    return TEAM_INTERNAL_AGENT_CATALOG.some(
+      (profile) =>
+        profile.key === request.role && profile.team === request.team,
+    );
   }
 
   private static addIssue(request: BranchIssueRequest): void {

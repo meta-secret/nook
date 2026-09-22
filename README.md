@@ -511,7 +511,6 @@ and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
 task loom:cortex-session-clean # assert temporary agent memory is removed
-task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
